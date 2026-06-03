@@ -411,33 +411,54 @@ Approximate alternatives if we want to stay on `bm25s`: rebuild on a schedule (e
 
 Discovered during cancellable-commit work (2026-04-27).
 
-## webfetch GUI affordances (Librarian chat renderer)
+## webfetch "approve denied host" button relocates in brief 03
 
-The webfetch tool (briefs/summer_2026_librarian_extension/01) ships its backend and
-access-control logic first; two GUI affordances in Librarian's chat-history renderer are
-deferred to a follow-up pass:
+The brief-01 override affordance (approve a denied host for the session, then re-run the fetch on
+a new branch — `scaffold.retry_tool_calls`) is wired to a button in `chat_controller.build_buttons`,
+attached to the denied `role="tool"` node's button row. That attachment point is **provisional**:
+brief 03 (content-parts) moves tool-result rendering into the assistant message body (tool calls
+become gear-icon sub-elements, results become content-parts). When that lands, relocate the approve
+button to wherever the denied fetch's result then renders, and drop the special `role == "tool"`
+button-row branch. The backend (`retry_tool_calls`, `approve_host_for_session`, the
+`webfetch_denied_host` marker) is rendering-independent and stays as-is.
 
-- **"Send to AI" on every rendered URL.** A small inline icon next to each URL in the
-  chat-history widget that, on click, appends the URL to the user's pending input draft (the
-  user can add context and send). This closes the auto-allow workflow gap: when the model
-  presents search results, the user currently has no one-click way to get a URL back into a
-  user-role message (the markdown renderer's only URL action today is click-to-open). The
-  resulting user-role message goes through the existing auto-allow logic with no special-
-  casing — the click is structurally identical to the user typing the URL. From the brief (§2).
+Discovered while implementing the brief-01 GUI override (2026-06-04).
 
-- **"Allow this fetch" when a fetch is denied by the allowlist.** When `webfetch` refuses a
-  host that is neither on `webfetch_allowlist` nor user-typed this turn, surface the denial in
-  the GUI with a one-click override, so the user doesn't have to edit `config.py` and restart.
-  Open design questions: (a) does "allow" add the host to the *turn's* auto-allow set only, or
-  persist it to the allowlist (and if persist — session-only, or written back to config)?
-  (b) Synchronous mid-tool-call approval (block the agent loop on user input) is more involved
-  than the fire-and-forget "send to AI" button; an async "it was denied; allow + re-ask" flow
-  may be simpler. Ties in with the brief's planned "reload allowlist on the fly" (v1).
+## webfetch: batch-approve several denied hosts at once
 
-The backend already cooperates: a denied fetch returns a canonical refusal string naming the
-host, so the GUI has what it needs to offer the override.
+The "approve denied host & retry" override creates a NEW branch per approval (correct, given the
+chat store is a forest). But approving several denied fetches one at a time leaves all-but-the-last
+branch as noise — each intermediate branch is a dead end the user doesn't want. For a v1 follow-up:
+let the user approve a *set* of denied hosts in one action (e.g. multi-select the denied tool nodes,
+or an "approve all denials in this turn" button), then re-run all of them on a single new branch.
+`retry_tool_calls` currently re-runs exactly one call; the batch version would re-run the union of
+approved calls and copy/share the rest — a natural generalization of the same branch-and-rebuild logic.
 
-Discovered during webfetch implementation (2026-06-03).
+Discovered during the brief-01 GUI override session (2026-06-04).
+
+## "Internet" toggle: scope `tools_enabled` to a clear security boundary in the GUI
+
+`scaffold.ai_turn`'s `tools_enabled` is a blunt all-or-nothing hammer (standing TODO on the param).
+The intent behind the GUI toggle is to make the **network/security boundary blindingly obvious** to
+the user. Direction: rename/scope the toggle to "Internet" and have it gate the network-reaching tools
+(`websearch`, `webfetch`) specifically, rather than all tools indiscriminately. A separate toggle for
+MCP tools is likely wanted later (different trust surface). This needs `ai_turn` to accept a per-tool
+enable set (or an allowed-tool-name list) instead of a single bool, and the controller/app to map each
+GUI toggle onto the relevant tool names. Pairs with the brief's tool-description-generation work.
+
+Discovered during the brief-01 GUI override session (2026-06-04).
+
+## scaffold: collect `ai_turn`'s callbacks into a single bundle object
+
+`ai_turn` (and now `retry_tool_calls`) take ~12 individual `on_*` callback parameters, threaded
+verbatim through the controller, the test helpers (`run_ai_turn` / `run_retry` rebuild the same dict),
+and `retry_tool_calls` → `ai_turn`. The brief flags this as a later cleanup: replace the loose
+parameters with one callback-bundle object (an `unpythonic.env` namespace or a small frozen dataclass
+of optional callables), constructed once and passed as a unit. Shrinks every signature and call site,
+and makes "the AI-turn callback set" a named thing. Do it as a focused refactor so the diff is
+mechanical (one bundle type, update each producer/consumer), not entangled with feature work.
+
+Discovered during the brief-01 GUI override session (2026-06-04).
 
 ## Headless agent-harness mode for `ai_turn` (scriptable agent layer)
 
@@ -469,4 +490,70 @@ later brief's agent behavior far easier to verify. Likely lands near `scaffold` 
 
 Discovered during webfetch implementation (2026-06-03), when validating the agent loop required
 a live Qwen backend that wasn't available.
+
+## Markdown ATX headings (`### ...`) don't render in the chat view
+
+LLM replies that use ATX headings (`# `, `## `, `### `) show the literal `#` markers in
+Librarian's chat history instead of rendering as headings. Confirmed it is NOT a data/websearch
+problem: the stored content is valid markdown, and `mistletoe.markdown()` produces a correct
+`<h3>...</h3>` even with the `<font color='...'>` wrapper that `chat_controller._render_text`
+(chat_controller.py ~455) adds. So the heading is lost downstream, in the adopted
+`raven/vendor/DearPyGui_Markdown` renderer's HTML→widget stage (`_HTMLToParser.handle_starttag`
+in `parser.py` plus the entity rendering) — it doesn't appear to map `<h1>`–`<h6>` to heading
+entities. Raven's own help text sidesteps this by using `**bold**` as pseudo-headings instead of
+`###`, consistent with headings never having rendered.
+
+Fix when convenient: add `<h1>`–`<h6>` handling to the renderer's HTML parser, wiring them to the
+existing `H1`–`H6` font attributes (already defined in `font_attributes.py`; the markdown path may
+just not be connecting them). Separately, emoji in replies render as tofu/`?` because the body font
+has no emoji glyphs — cosmetic, lower priority (would need an emoji fallback font).
+
+Discovered while smoke-testing the webfetch send-to-AI affordance (2026-06-03).
+
+## Colored-glyph / emoji and super/subscript font coverage in the GUI
+
+Two related font-rendering gaps across the constellation:
+
+- **Emoji** in LLM replies render as tofu/`?` — the body font has no emoji glyphs. Note DPG's font
+  atlas (Dear ImGui) is **monochrome by default**; full-color emoji need the FreeType backend with
+  `LoadColor` (COLR/CPAL or CBDT/CBLC), which DPG does not expose. Realistic options: (a) ship a
+  *monochrome outline* emoji font with a permissive license (e.g. an OpenMoji-Black or Twemoji-mono
+  build) and accept flat glyphs; or (b) detect emoji codepoints and splice **image widgets** into the
+  markdown renderer (same per-run hook used for the webfetch URL icon) from a pre-rasterized,
+  permissively-licensed emoji set (made offline, since the image-gen models don't co-reside in VRAM).
+- **Super/subscripts** (Visualizer): math superscripts and chemistry subscripts for the
+  letters/numbers Unicode provides (U+2070–U+209F etc.) need a font that actually carries those
+  glyphs. Raven currently has no single font covering both well.
+
+Both reduce to "font with the right Unicode coverage (and possibly color)" plus, for color emoji, the
+DPG/ImGui monochrome-atlas limitation. Worth a dedicated session: survey permissive fonts, decide
+font-vs-image-injection, and (for emoji) whether a flat monochrome glyph is acceptable.
+
+Raised during webfetch GUI smoke-testing (2026-06-03); flagged for a dedicated discussion.
+
+## webfetch local (client-side) mode
+
+`websearch` and `webfetch` currently live server-side only. `webfetch` is a candidate for running
+client-side too (e.g. to fetch from the client's network vantage — VPN-internal sites the server
+can't reach; the SSRF `allow_private_networks` opt-out would come into play there). Two constraints
+shape how, and they say "defer", not "do now":
+
+- **Licensing splits the two.** `websearch` is AGPL (a Python port of the SillyTavern-Selenium
+  extension) and MUST stay server-side — pulling it into a client process would infect Raven's
+  otherwise-BSD client. `webfetch` is Raven's own and could be BSD'd — EXCEPT its Tier-2 fallback
+  currently borrows websearch's Selenium driver (`_fetch_tier2` → `websearch.get_driver()`), which is
+  in the AGPL module. So a prerequisite is a **clean-room BSD Selenium driver factory** (e.g.
+  `raven.common.webdriver`) that both webfetch and websearch use.
+
+- **Not a `MaybeRemoteService` — the imagefx pattern.** webfetch is *stateless* (no cache, like
+  nlp/stt/embeddings), so the 4-layer transparent-dispatch machinery (which earns its keep only when
+  there's cache/shape state to hide, as in tts) is overkill. If local mode is built, do it
+  imagefx-style: a clean `raven.common.webfetch` impl the client can call explicitly, with the server
+  module delegating to it. No mayberemote class.
+
+- **Low urgency.** Librarian already hard-depends on the server for websearch and RAG embeddings, so
+  client-local webfetch does not unlock a standalone Librarian. Build only when a concrete
+  client-vantage need appears.
+
+Discovered while wrapping up brief 01 webfetch (2026-06-03).
 

@@ -134,3 +134,29 @@ class TestNetworkSafetyGate:
         refusal = webfetch._classify_url_network_safety("https://no-such-host.invalid/x", allow_private=False)
         assert refusal is not None
         assert "Could not resolve the host name" in refusal
+
+
+class TestFormatFetchedResult:
+    def test_includes_header_title_and_separator(self):
+        out = webfetch._format_fetched_result("https://x.com/p", "Cool Page", "the body")
+        assert out.startswith("**Webfetch result from** [https://x.com/p](https://x.com/p):")
+        assert "**Cool Page**" in out
+        assert "-----" in out
+        assert out.rstrip().endswith("the body")
+
+    def test_omits_title_block_when_none(self):
+        out = webfetch._format_fetched_result("https://x.com/p", None, "the body")
+        assert "[https://x.com/p](https://x.com/p)" in out
+        assert "-----" in out
+        assert out.rstrip().endswith("the body")
+        assert out.count("**") == 2  # only the "**Webfetch result from**" emphasis, no title block
+
+
+class TestExtractTitle:
+    def test_extracts_and_normalizes_title(self):
+        html = "<html><head><title>My Title | Some Site</title></head><body><h1>My Title</h1><p>" + ("word " * 60) + "</p></body></html>"
+        assert webfetch._extract_title(html) == "My Title"  # trafilatura strips the site suffix
+
+    def test_none_without_html(self):
+        assert webfetch._extract_title(None) is None
+        assert webfetch._extract_title("") is None

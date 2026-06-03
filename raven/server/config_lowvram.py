@@ -31,4 +31,5 @@ enabled_modules = {
                   "dtype": torch.float32},
     "tts": {"device_string": "cpu"},
     "websearch": {},
+    "webfetch": {},
 }

@@ -124,10 +124,10 @@ def _rewrite_url(url: str) -> Tuple[str, Optional[Callable[[str], str]]]:
     Returns `(effective_url, maybe_special_extractor)`:
 
     - `effective_url`: the URL the standard two-tier fetch should hit (possibly rewritten).
-    - `maybe_special_extractor`: if not `None`, a function `(effective_url) -> str` that
-      produces the content directly, bypassing the standard fetch (used when the content
-      doesn't come from the page's static HTML, e.g. a YouTube transcript, or needs a
-      custom fallback, e.g. arXiv HTML→abstract).
+    - `maybe_special_extractor`: if not `None`, a function `(effective_url) -> (content, title)`
+      that produces the content directly, bypassing the standard fetch (used when the content
+      doesn't come from the page's static HTML, e.g. a YouTube transcript, or needs a custom
+      fallback, e.g. arXiv HTML→abstract). `title` may be `None`.
 
     Pure: no network access here. Rewriting and extraction are separated so the rewrite
     decision is unit-testable without hitting the network.
@@ -154,32 +154,34 @@ def _rewrite_url(url: str) -> Tuple[str, Optional[Callable[[str], str]]]:
 
     return url, None
 
-def _extract_arxiv(url: str) -> str:
+def _extract_arxiv(url: str) -> Tuple[str, Optional[str]]:
     """Fetch an arXiv paper, preferring the HTML rendering, falling back to the abstract page.
 
-    `url` is the `arxiv.org/html/ID` form produced by `_rewrite_url`. Older papers have no
-    HTML rendering (404); for those, fall back to `arxiv.org/abs/ID` (the abstract page).
+    Returns `(content, title)`. `url` is the `arxiv.org/html/ID` form produced by `_rewrite_url`.
+    Older papers have no HTML rendering (404); for those, fall back to `arxiv.org/abs/ID`.
     """
     html, status = _http_get(url)
     if status == 404 and (m := _ARXIV_ID_RE.search(url)) is not None:
         arxiv_id = m.group("arxiv_id")
         logger.info(f"_extract_arxiv: HTML form 404 for arXiv {arxiv_id}, falling back to abstract page.")
         html, status = _http_get(f"https://arxiv.org/abs/{arxiv_id}")
-    return _extract_clean_text(html, url=url) if html else ""
+    if not html:
+        return "", None
+    return _extract_clean_text(html, url=url), _extract_title(html)
 
-def _extract_youtube_transcript(url: str) -> str:
-    """Return the transcript text of a YouTube video, or "" if no transcript is available."""
+def _extract_youtube_transcript(url: str) -> Tuple[str, Optional[str]]:
+    """Return `(transcript_text, None)` for a YouTube video, or `("", None)` if no transcript."""
     m = _YOUTUBE_WATCH_RE.search(url)
     if m is None:
-        return ""
+        return "", None
     video_id = m.group("video_id")
     from youtube_transcript_api import YouTubeTranscriptApi  # noqa: PLC0415 -- deferred: keep yt-api out of pure-helper imports
     try:
         fetched = YouTubeTranscriptApi().fetch(video_id)
     except Exception as exc:
         logger.info(f"_extract_youtube_transcript: no transcript for video '{video_id}', reason {type(exc)}: {exc}")
-        return ""
-    return " ".join(snippet.text for snippet in fetched)
+        return "", None
+    return " ".join(snippet.text for snippet in fetched), None
 
 # --------------------------------------------------------------------------------
 # SSRF defense and scheme check (pure helpers + a thin DNS-resolving wrapper).
@@ -266,6 +268,22 @@ def _extract_clean_text(html: Optional[str], *, url: str, output_format: str = "
                                     favor_recall=True)
     return extracted or ""
 
+def _extract_title(html: Optional[str]) -> Optional[str]:
+    """Best-effort page title via `trafilatura`'s metadata extractor. Returns `None` if unavailable.
+
+    The readability extraction drops the title; we recover it separately so the result can name the
+    page (a bare body without a title can lead the model astray). Normalized, like the body.
+    """
+    if not html:
+        return None
+    import trafilatura  # noqa: PLC0415 -- deferred: keep trafilatura out of pure-helper imports
+    try:
+        metadata = trafilatura.extract_metadata(html)
+    except Exception:
+        return None
+    title = getattr(metadata, "title", None) if metadata is not None else None
+    return common_text.normalize(title).strip() if title else None
+
 def _fetch_tier2(url: str, *, output_format: str) -> str:
     """Tier 2: render `url` in a real headless browser, then extract. Returns "" if unavailable.
 
@@ -291,21 +309,37 @@ def _fetch_tier2(url: str, *, output_format: str) -> str:
             return ""
     return _extract_clean_text(html, url=url, output_format=output_format)
 
-def _make_result(content: str, *, url: str, spa_suspected: bool = False) -> Dict:
+def _make_result(content: str, *, url: str, spa_suspected: bool = False, title: Optional[str] = None) -> Dict:
     """Build the structured result dict returned by `fetch`.
 
-    `content` is the LLM-facing text (extracted content, or a canonical message for
-    refusals / limits). `spaSuspected` flags a page neither tier could extract.
+    `content` is the LLM-facing text (extracted content with a source header, or a canonical message
+    for refusals / limits). `spaSuspected` flags a page neither tier could extract. `title` is the
+    page title for a successful fetch (a structured field; also surfaced in `content`'s header),
+    `None` for refusals / titleless pages.
     """
-    return {"content": content, "url": url, "spaSuspected": spa_suspected}
+    return {"content": content, "url": url, "spaSuspected": spa_suspected, "title": title}
+
+def _format_fetched_result(url: str, title: Optional[str], body: str) -> str:
+    """Prepend a source header (URL, plus the page title if any) and a separator to fetched `body`.
+
+    A bare readability extraction gives the model the text with no provenance and no title, which can
+    lead it astray. This restores both — for the model, and for the user if the tool result is shown.
+    Applied only to successful fetches; refusals / limit messages are returned bare.
+    """
+    header = f"**Webfetch result from** [{url}]({url}):"
+    if title:
+        header = f"{header}\n\n**{title}**"
+    return f"{header}\n\n-----\n\n{body}"
 
 def fetch(url: str, output_format: str = "markdown") -> Dict:
     """Retrieve a web page's main content as clean text/markdown.
 
-    Returns a dict `{"content": str, "url": str, "spaSuspected": bool}`. `content` is the
-    text the model reads; for any refusal or limit case it is the canonical user-facing
-    string. `url` is the effective URL after rewriting. `spaSuspected` is True when neither
-    fetch tier could extract usable content (heavy SPA, login wall, captcha).
+    Returns a dict `{"content": str, "url": str, "spaSuspected": bool, "title": str | None}`.
+    `content` is the text the model reads: on success, the extracted content prefixed with a source
+    header (URL + page title) and a separator; for any refusal or limit case, the canonical
+    user-facing string (no header). `url` is the effective URL after rewriting. `spaSuspected` is True
+    when neither fetch tier could extract usable content (heavy SPA, login wall, captcha). `title` is
+    the page title on success, else `None`.
 
     `output_format` is "markdown" (default, preserves headings/lists/links) or "text".
 
@@ -323,14 +357,16 @@ def fetch(url: str, output_format: str = "markdown") -> Dict:
         return _make_result(refusal, url=effective_url)
 
     if special_extractor is not None:
-        content = special_extractor(effective_url)
+        content, title = special_extractor(effective_url)
         if len(content) >= server_config.webfetch_min_content_chars:
-            return _make_result(common_text.normalize(content), url=effective_url)
+            body = common_text.normalize(content)
+            return _make_result(_format_fetched_result(effective_url, title, body), url=effective_url, title=title)
         # A special extractor that came up short (e.g. no YouTube transcript) falls through
         # to the standard two-tier fetch on the same URL, which may still find something.
 
     html, status = _http_get(effective_url)
     content = _extract_clean_text(html, url=effective_url, output_format=trafilatura_format)
+    title = _extract_title(html)  # from the (Tier 1) static HTML; usually present even on SPAs, whose shell carries a <title>
 
     if len(content) < server_config.webfetch_min_content_chars:
         tier2_content = _fetch_tier2(effective_url, output_format=trafilatura_format)
@@ -343,4 +379,5 @@ def fetch(url: str, output_format: str = "markdown") -> Dict:
             return _make_result(CANONICAL_HTTP_ERROR.format(status=status, url=effective_url), url=effective_url)
         return _make_result(CANONICAL_SPA_SUSPECTED, url=effective_url, spa_suspected=True)
 
-    return _make_result(common_text.normalize(content), url=effective_url)
+    body = common_text.normalize(content)
+    return _make_result(_format_fetched_result(effective_url, title, body), url=effective_url, title=title)

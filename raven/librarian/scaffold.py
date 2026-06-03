@@ -1,7 +1,7 @@
 """Scaffolding for a multi-turn conversation with automatic RAG search and tool-calling."""
 
 __all__ = ["user_turn",
-           "ai_turn", "action_ack", "action_stop"]
+           "ai_turn", "retry_tool_calls", "action_ack", "action_stop"]
 
 import logging
 logger = logging.getLogger(__name__)
@@ -206,6 +206,76 @@ def _perform_injects(llm_settings: env,
                                                           role="system",
                                                           text=chatutil.format_reminder_to_use_information_from_context_only())
         inject(message_to_inject)
+
+
+def _perform_and_store_tool_calls(llm_settings: env,
+                                  datastore: chattree.Forest,
+                                  assistant_message: Dict,
+                                  parent_node_id: str,
+                                  on_tools_start: Optional[Callable] = None,
+                                  on_call_lowlevel_start: Optional[Callable] = None,
+                                  on_call_lowlevel_done: Optional[Callable] = None,
+                                  on_tool_done: Optional[Callable] = None,
+                                  on_tools_done: Optional[Callable] = None) -> str:
+    """Execute the tool calls in `assistant_message`, storing each result as a `role="tool"` chat node.
+
+    The result nodes are chained under `parent_node_id` (normally the assistant message that requested
+    the calls), one node per call, in call order. Returns the node ID of the last one created — the new HEAD.
+
+    Shared by `ai_turn`'s agent loop and by `retry_tool_calls` (the GUI "approve denied host" override),
+    so the per-turn request-context binding (`dyn.tool_context`), the `perform_tool_calls` dispatch, and
+    the result→`generation_metadata` mapping all live in exactly one place.
+
+    The tool-call request context (harness-supplied, NOT model-supplied) is assembled and bound here for
+    the dynamic extent of the dispatch — the request-context pattern (cf. Racket's `parameterize`, Flask's
+    `g`). Entrypoints that need it read `dyn.tool_context`; see the field registry at
+    `llmclient.make_dynvar(tool_context=...)`. It is computed from `parent_node_id`, so the walk sees this
+    turn's user message and any prior tool results on the branch (e.g. a websearch whose result hosts may
+    inform a later webfetch auto-allow).
+    """
+    head_node_id = parent_node_id
+    if on_tools_start is not None:
+        on_tools_start(assistant_message["tool_calls"])
+
+    tool_context = env(webfetch_allowed_hosts=chatutil.compute_auto_allowed_hosts(
+        datastore, head_node_id,
+        trust_search_results=librarian_config.webfetch_trust_search_results))
+
+    # Each tool call produces exactly one response. No-ops if the message contains no tool calls.
+    with dyn.let(tool_context=tool_context):
+        tool_response_records = llmclient.perform_tool_calls(llm_settings,
+                                                             message=assistant_message,
+                                                             on_call_start=on_call_lowlevel_start,
+                                                             on_call_done=on_call_lowlevel_done)
+
+    for tool_response_record in tool_response_records:
+        def create_tool_payload() -> Dict:
+            payload = chatutil.create_payload(llm_settings=llm_settings,
+                                              message=tool_response_record.data)
+
+            generation_metadata = {"status": tool_response_record.status}  # status is "success" or "error"
+            if "toolcall_id" in tool_response_record:
+                generation_metadata["toolcall_id"] = tool_response_record.toolcall_id
+            if "function_name" in tool_response_record:
+                generation_metadata["function_name"] = tool_response_record.function_name
+            if "dt" in tool_response_record:
+                generation_metadata["dt"] = tool_response_record.dt  # elapsed wall time, seconds
+            if "tool_metadata" in tool_response_record:  # structured metadata the entrypoint attached (e.g. webfetch_denied_host)
+                generation_metadata.update(tool_response_record.tool_metadata)
+
+            payload["generation_metadata"] = generation_metadata
+            return payload
+
+        tool_response_message_node_id = datastore.create_node(payload=create_tool_payload(),
+                                                              parent_id=head_node_id)
+        head_node_id = tool_response_message_node_id
+
+        if on_tool_done is not None:
+            on_tool_done(head_node_id)
+
+    if on_tools_done is not None:
+        on_tools_done()
+    return head_node_id
 
 
 # TODO: `tools_enabled` is a blunt hammer; maybe have also an optional tool name list for fine-grained control?
@@ -526,57 +596,155 @@ def ai_turn(llm_settings: env,
         #
         have_tool_calls = (out.data["tool_calls"] is not None and len(out.data["tool_calls"]))
         if have_tool_calls:
-            if on_tools_start is not None:
-                on_tools_start(out.data["tool_calls"])
-
-            # Assemble this turn's tool-call request context (harness-supplied, NOT model-supplied)
-            # and bind it for the dynamic extent of the tool dispatch — the request-context pattern
-            # (cf. Racket's `parameterize`, Flask's `g`). Tool entrypoints that need this context read
-            # `dyn.tool_context`; see the field registry at `llmclient.make_dynvar(tool_context=...)`.
-            #
-            # Recomputed each loop iteration so that a websearch in an earlier iteration can inform the
-            # webfetch auto-allow in a later one. `head_node_id` is the assistant message that requested
-            # these calls, so the walk sees this turn's user message and any prior-iteration tool results.
-            tool_context = env(webfetch_allowed_hosts=chatutil.compute_auto_allowed_hosts(
-                datastore, head_node_id,
-                trust_search_results=librarian_config.webfetch_trust_search_results))
-
-            # Each tool call produces exactly one response.
-            # This will no-op if the message contains no tool calls.
-            with dyn.let(tool_context=tool_context):
-                tool_response_records = llmclient.perform_tool_calls(llm_settings,
-                                                                     message=out.data,
-                                                                     on_call_start=on_call_lowlevel_start,
-                                                                     on_call_done=on_call_lowlevel_done)
-
-            # Add the tool response messages to the chat.
-            for tool_response_record in tool_response_records:
-                def create_tool_payload() -> Dict:
-                    payload = chatutil.create_payload(llm_settings=llm_settings,
-                                                      message=tool_response_record.data)
-
-                    generation_metadata = {"status": tool_response_record.status}  # status is "success" or "error"
-                    if "toolcall_id" in tool_response_record:
-                        generation_metadata["toolcall_id"] = tool_response_record.toolcall_id
-                    if "function_name" in tool_response_record:
-                        generation_metadata["function_name"] = tool_response_record.function_name
-                    if "dt" in tool_response_record:
-                        generation_metadata["dt"] = tool_response_record.dt  # elapsed wall time, seconds
-
-                    payload["generation_metadata"] = generation_metadata
-                    return payload
-
-                tool_response_message_node_id = datastore.create_node(payload=create_tool_payload(),
-                                                                      parent_id=head_node_id)
-                head_node_id = tool_response_message_node_id
-
-                if on_tool_done is not None:
-                    on_tool_done(head_node_id)
-
-            if have_tool_calls and on_tools_done is not None:
-                on_tools_done()
+            head_node_id = _perform_and_store_tool_calls(llm_settings=llm_settings,
+                                                         datastore=datastore,
+                                                         assistant_message=out.data,
+                                                         parent_node_id=head_node_id,
+                                                         on_tools_start=on_tools_start,
+                                                         on_call_lowlevel_start=on_call_lowlevel_start,
+                                                         on_call_lowlevel_done=on_call_lowlevel_done,
+                                                         on_tool_done=on_tool_done,
+                                                         on_tools_done=on_tools_done)
         else:
             # When there are no more tool calls, the LLM is done replying.
             break
 
     return head_node_id
+
+
+def _next_tool_node_on_branch(datastore: chattree.Forest, node_id: str) -> Optional[str]:
+    """Return the (single) `role="tool"` child of `node_id`, or `None`.
+
+    A tool-result node created by the agent loop has at most one tool-role child (the next tool result
+    of the same assistant turn); the assistant's reply that follows the tool round is `role="assistant"`,
+    which stops the walk. Used to collect the suffix of a tool-call chain in `retry_tool_calls`.
+    """
+    for child_id in datastore.get_children(node_id):
+        if datastore.get_payload(child_id)["message"]["role"] == "tool":
+            return child_id
+    return None
+
+
+def retry_tool_calls(llm_settings: env,
+                     datastore: chattree.Forest,
+                     retriever: "Optional[hybridir.HybridIR]",
+                     tool_node_id: str,
+                     tools_enabled: bool,
+                     speculate: bool,
+                     markup: Optional[str],
+                     docs_num_results: Optional[int],
+                     on_docs_start: Optional[Callable] = None,
+                     on_docs_done: Optional[Callable] = None,
+                     on_prompt_ready: Optional[Callable] = None,
+                     on_llm_start: Optional[Callable] = None,
+                     on_llm_progress: Optional[Callable] = None,
+                     on_llm_done: Optional[Callable] = None,
+                     on_nomatch_done: Optional[Callable] = None,
+                     on_tools_start: Optional[Callable] = None,
+                     on_call_lowlevel_start: Optional[Callable] = None,
+                     on_call_lowlevel_done: Optional[Callable] = None,
+                     on_tool_done: Optional[Callable] = None,
+                     on_tools_done: Optional[Callable] = None) -> str:
+    """Re-run a single previously-denied tool call on a NEW branch, then continue the AI's turn.
+
+    This is the backend of the GUI "approve this denied host & retry" override. The user has just approved
+    a host (via `llmclient.approve_host_for_session`) that `webfetch` refused; this re-runs *only* that one
+    call so the now-allowed fetch can succeed, WITHOUT re-invoking the LLM — the AI's decision to call those
+    tools is preserved.
+
+    `tool_node_id` is the denied `role="tool"` node (the one carrying `webfetch_denied_host` in its
+    `generation_metadata`). Mechanism:
+
+      1. Walk up past the contiguous tool-result chain to the assistant that requested the calls, and read
+         that one call (matched by `toolcall_id`) from its `tool_calls`.
+      2. Re-run ONLY that call, as a new sibling of the old denied node (branching at its parent). Every
+         other tool result of the same turn is preserved verbatim, NOT re-run: the nodes *before* the denied
+         one are shared ancestors of the new branch, and any *after* it are copied across (step 3). This is
+         deliberate — re-running a websearch would re-query the engine (the server-side `@memoize` is in-RAM
+         and empty after a restart / on a chat reloaded from disk), yielding a SERP the model never reasoned
+         about. "Approve this fetch" must change only this fetch.
+      3. Copy the suffix tool results (those after the denied one in the same turn — rare; present only if
+         the model ordered another call after `webfetch` in one message) onto the new branch. The turn's
+         calls are issued together, so a suffix result cannot depend on the re-run call's new output.
+      4. Continue from the rebuilt tool head via `ai_turn(continue_=False)` — the LLM responds to the now-
+         complete results and the agent loop proceeds. No new RAG search (matches loop continuation).
+
+    Returns the new HEAD node ID.
+    """
+    denied_payload = datastore.get_payload(tool_node_id)
+    if denied_payload["message"]["role"] != "tool":
+        raise ValueError(f"retry_tool_calls: node '{tool_node_id}' is not a tool-result node (role is '{denied_payload['message']['role']}').")
+    denied_toolcall_id = denied_payload.get("generation_metadata", {}).get("toolcall_id")
+
+    # 1. Walk up the tool-result chain to the assistant that requested the calls.
+    parent_node_id = datastore.get_parent(tool_node_id)
+    assistant_node_id = parent_node_id
+    while assistant_node_id is not None and datastore.get_payload(assistant_node_id)["message"]["role"] == "tool":
+        assistant_node_id = datastore.get_parent(assistant_node_id)
+    if assistant_node_id is None:
+        raise ValueError(f"retry_tool_calls: could not find the tool-calling assistant above tool node '{tool_node_id}'.")
+    assistant_message = datastore.get_payload(assistant_node_id)["message"]
+    all_tool_calls = assistant_message.get("tool_calls") or []
+
+    # Resolve the single call to re-run. Match by stored toolcall id; fall back to the lone call only if
+    # the assistant issued exactly one (older nodes may predate the stored id).
+    if denied_toolcall_id is not None:
+        calls_to_rerun = [tc for tc in all_tool_calls if tc.get("id") == denied_toolcall_id]
+    else:
+        calls_to_rerun = list(all_tool_calls) if len(all_tool_calls) == 1 else []
+    if not calls_to_rerun:
+        raise ValueError(f"retry_tool_calls: could not match denied tool node '{tool_node_id}' to a call on assistant '{assistant_node_id}'.")
+
+    # 3 (collect, before mutating). The suffix tool nodes after the denied one on this branch.
+    suffix_node_ids: List[str] = []
+    node_id = _next_tool_node_on_branch(datastore, tool_node_id)
+    while node_id is not None:
+        suffix_node_ids.append(node_id)
+        node_id = _next_tool_node_on_branch(datastore, node_id)
+
+    # 2. Re-run only the denied call, as a new sibling branch under the assistant's tool chain. Fire
+    #    `on_tools_start` (GUI: tools starting), but defer `on_tools_done` until the suffix is also in place.
+    synthetic_message = {**assistant_message, "tool_calls": calls_to_rerun}
+    head_node_id = _perform_and_store_tool_calls(llm_settings=llm_settings,
+                                                 datastore=datastore,
+                                                 assistant_message=synthetic_message,
+                                                 parent_node_id=parent_node_id,
+                                                 on_tools_start=on_tools_start,
+                                                 on_call_lowlevel_start=on_call_lowlevel_start,
+                                                 on_call_lowlevel_done=on_call_lowlevel_done,
+                                                 on_tool_done=on_tool_done,
+                                                 on_tools_done=None)
+
+    # 3. Copy the suffix tool results verbatim onto the new branch (reboot-safe: not re-fetched).
+    #    `copy_node` duplicates the whole node (full revision history + names + timestamp), not just the
+    #    active payload — the Forest-aware way to clone a node into a new place.
+    for old_node_id in suffix_node_ids:
+        head_node_id = datastore.copy_node(old_node_id, new_parent_id=head_node_id)
+        if on_tool_done is not None:
+            on_tool_done(head_node_id)
+    if on_tools_done is not None:
+        on_tools_done()
+
+    # 4. Continue the AI turn from the rebuilt tool head.
+    return ai_turn(llm_settings=llm_settings,
+                   datastore=datastore,
+                   retriever=retriever,
+                   head_node_id=head_node_id,
+                   tools_enabled=tools_enabled,
+                   continue_=False,
+                   docs_query=None,
+                   docs_num_results=docs_num_results,
+                   speculate=speculate,
+                   markup=markup,
+                   on_docs_start=on_docs_start,
+                   on_docs_done=on_docs_done,
+                   on_prompt_ready=on_prompt_ready,
+                   on_llm_start=on_llm_start,
+                   on_llm_progress=on_llm_progress,
+                   on_llm_done=on_llm_done,
+                   on_nomatch_done=on_nomatch_done,
+                   on_tools_start=on_tools_start,
+                   on_call_lowlevel_start=on_call_lowlevel_start,
+                   on_call_lowlevel_done=on_call_lowlevel_done,
+                   on_tool_done=on_tool_done,
+                   on_tools_done=on_tools_done)

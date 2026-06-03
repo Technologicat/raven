@@ -112,6 +112,21 @@ with timer() as tim:
                                                                 font_basename=gui_config.subtitle_font_basename,
                                                                 variant=gui_config.subtitle_font_variant)
 
+    # "Send a link to the chat input" affordance: each URL in the chat history gets a small icon to
+    # its left; clicking it appends the URL to the user's input draft (e.g. to forward a websearch
+    # result to the AI for a webfetch). The markdown renderer is generic; this action is Librarian-
+    # specific. The callback fires only on click, so referring to the not-yet-created `chat_field`
+    # tag here is fine.
+    def _append_url_to_chat_input(url: str) -> None:
+        current = dpg.get_value("chat_field")  # tag
+        separator = "" if (not current or current.endswith((" ", "\n"))) else " "
+        dpg.set_value("chat_field", f"{current}{separator}{url}")  # tag
+        dpg.focus_item("chat_field")  # tag
+    dpg_markdown.set_url_secondary_action(_append_url_to_chat_input,
+                                          glyph=fa.ICON_ARROW_RIGHT_TO_BRACKET,
+                                          font=themes_and_fonts.icon_font_solid,
+                                          tooltip="Send to chat input:\n{url}")
+
     # animation for document database and web access indicators (cyclic, runs in the background)
     with dpg.theme(tag="my_pulsating_gray_text_theme"):
         with dpg.theme_component(dpg.mvAll):

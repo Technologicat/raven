@@ -16,7 +16,8 @@ __all__ = ["list_models",
            "token_count",
            "invoke", "action_ack", "action_stop",
            "perform_throwaway_task", "make_console_progress_handler",
-           "perform_tool_calls"]
+           "perform_tool_calls",
+           "approve_host_for_session"]
 
 import logging
 logger = logging.getLogger(__name__)
@@ -145,7 +146,37 @@ make_dynvar(tool_context=env())
 CANONICAL_NOT_ON_ALLOWLIST = ("The host {host} is not on the configured allowlist. The user can add it to the "
                               "webfetch_allowlist setting if you should be able to access this site.")
 
-def webfetch_wrapper(url: str) -> str:
+# Hosts the user has explicitly approved during this session (in-memory; NOT persisted). Populated by
+# the GUI "allow this fetch" override when the user approves a host that `webfetch` denied. Consulted
+# by `webfetch_wrapper`'s gate alongside the configured allowlist and the per-turn auto-allow set.
+# Session-scoped by design: persisting approvals is deferred to a future JSON-config migration — we do
+# NOT programmatically rewrite the `.py` config files (that reads as dangerous and is fragile).
+_session_approved_hosts: set[str] = set()
+
+def approve_host_for_session(host: str) -> None:
+    """Approve `host` for `webfetch` for the rest of this session (in-memory, not persisted).
+
+    Used by the GUI override when the user allows a host the allowlist denied. Afterward,
+    `webfetch_wrapper` fetches from `host` even if it is not on `librarian_config.webfetch_allowlist`.
+    """
+    _session_approved_hosts.add(host.lower())
+
+# !!! DO NOT memoize `webfetch_wrapper` (or anything that wraps it). !!!
+#
+# It is deliberately IMPURE: its result depends on two pieces of hidden state that are NOT in its
+# argument list — `dyn.tool_context.webfetch_allowed_hosts` (per-turn, set by the harness) and the
+# `_session_approved_hosts` module global (mutated by `approve_host_for_session`). A `@memoize` keys
+# on `url` alone, so it would:
+#   - cache a denial forever, so the GUI "approve host & retry" override would re-serve the stale
+#     refusal even after the user approved the host (the whole override mechanism would silently break); and
+#   - cache a per-turn auto-allow, leaking a one-turn permission into later turns.
+# The gate is a security boundary; memoizing it turns a transient decision into a permanent one.
+#
+# This composes safely with the @memoize that DOES exist (server-side `websearch`,
+# `raven.server.modules.websearch`) precisely because the two never touch: the memoized function
+# (websearch) does not read the allowlist, and the allowlist-reading function (this one) is not
+# memoized. Keep it that way.
+def webfetch_wrapper(url: str) -> str | tuple[str, dict]:
     """Fetch a web page's main content, gated by the client-side domain allowlist.
 
     Tool entrypoint for the LLM's `webfetch` tool. Enforces the allowlist policy (which constrains
@@ -159,14 +190,18 @@ def webfetch_wrapper(url: str) -> str:
     """
     host = netutil.url_host(url)
 
-    # Allowlist gate. `None` means unrestricted (subject only to the server-side network checks);
-    # when a list is configured, the host must be on it, or have been auto-allowed by the user this turn.
+    # Allowlist gate. `None` means unrestricted (subject only to the server-side network checks); when
+    # a list is configured, the host must be on it, auto-allowed by the user this turn, or approved by
+    # the user earlier this session (via the GUI override).
     allowlist = librarian_config.webfetch_allowlist
     if allowlist is not None:
         auto_allowed_hosts = getattr(dyn.tool_context, "webfetch_allowed_hosts", frozenset())
-        if not (netutil.host_matches_allowlist(host, allowlist) or host in auto_allowed_hosts):
-            logger.info(f"webfetch_wrapper: refusing '{url}': host '{host}' not on allowlist and not user-allowed this turn.")
-            return CANONICAL_NOT_ON_ALLOWLIST.format(host=(host or "(none)"))
+        if not (netutil.host_matches_allowlist(host, allowlist) or host in auto_allowed_hosts or host in _session_approved_hosts):
+            logger.info(f"webfetch_wrapper: refusing '{url}': host '{host}' not on allowlist, not user-allowed this turn, not session-approved.")
+            # Structured return: the canonical refusal for the model, plus metadata the GUI override reads
+            # (on the resulting tool node) to offer "approve this host" and re-run with the fetch allowed.
+            return (CANONICAL_NOT_ON_ALLOWLIST.format(host=(host or "(none)")),
+                    {"webfetch_denied_host": host})
 
     result = api.webfetch_fetch(url)  # server enforces SSRF/scheme, fetches, returns {"content", "url", "spaSuspected"}
     if result.get("spaSuspected"):
@@ -808,7 +843,8 @@ def perform_tool_calls(settings: env,
                                  status: str,
                                  toolcall_id: Optional[str],
                                  function_name: Optional[str],
-                                 dt: Optional[float]) -> None:
+                                 dt: Optional[float],
+                                 tool_metadata: Optional[Dict] = None) -> None:
         """Add a tool response record to `tool_response_records`.
 
         The record is an `unpythonic.env.env` with the following attributes:
@@ -828,6 +864,11 @@ def perform_tool_calls(settings: env,
             `dt`: Optional[float]: Duration of this tool call, in seconds. Recommended to be included whenever
                                    the request was valid enough to actually proceed to call the function
                                    (so that the call timing can be measured).
+
+            `tool_metadata`: Optional[Dict]: Structured metadata the entrypoint attached to this result
+                             (by returning `(text, metadata)` instead of a plain string). The caller
+                             (`scaffold`) merges it into the tool node's `generation_metadata`. Used e.g.
+                             by `webfetch_wrapper` to record `webfetch_denied_host` for the GUI override.
         """
         tool_response_message = chatutil.create_chat_message(llm_settings=settings,
                                                              role="tool",
@@ -841,6 +882,8 @@ def perform_tool_calls(settings: env,
             record.function_name = function_name
         if dt is not None:
             record.dt = dt
+        if tool_metadata is not None:
+            record.tool_metadata = tool_metadata
         tool_response_records.append(record)
         if on_call_done is not None:
             try:
@@ -900,12 +943,21 @@ def perform_tool_calls(settings: env,
             logger.warning(f"perform_tool_calls: {toolcall_id}: function '{function_name}': ignoring exception from event handler `on_call_start`", exc_info=True)
         try:
             with timer() as tim:
-                tool_output_text = function(**kwargs)
+                tool_output = function(**kwargs)
         except Exception as exc:
             logger.warning(f"perform_tool_calls: {toolcall_id}: function '{function_name}': exited with exception", exc_info=True)
             add_tool_response_record(f"Tool call failed. Function '{function_name}' exited with exception {type(exc)}: {exc}", status="error", toolcall_id=toolcall_id, function_name=function_name, dt=tim.dt)
         else:  # success!
             logger.debug(f"perform_tool_calls: {toolcall_id}: Function '{function_name}' returned successfully.")
-            add_tool_response_record(tool_output_text, status="success", toolcall_id=toolcall_id, function_name=function_name, dt=tim.dt)
+            # An entrypoint returns either a plain string, or `(text, metadata_dict)` to attach structured
+            # metadata to the tool-response node (e.g. webfetch records a denied host for the GUI override).
+            # This `str | (str, dict)` shape is deliberately interim — it will fold into a single structured
+            # tool-result type (text + content parts + is_error + metadata) when the content-parts and MCP
+            # work lands; at that point this branch goes away.
+            if isinstance(tool_output, tuple):
+                tool_output_text, tool_metadata = tool_output
+            else:
+                tool_output_text, tool_metadata = tool_output, None
+            add_tool_response_record(tool_output_text, status="success", toolcall_id=toolcall_id, function_name=function_name, dt=tim.dt, tool_metadata=tool_metadata)
 
     return tool_response_records
