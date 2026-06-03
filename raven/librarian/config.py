@@ -30,6 +30,95 @@ llm_api_key_file = llmclient_userdata_dir / "api_key.txt"  # will be used it it 
 web_num_results = 10
 
 # --------------------------------------------------------------------------------
+# webfetch tool — client-side access policy
+#
+# The network-level safety of webfetch (refusing private-network addresses and non-HTTP(S)
+# schemes) is enforced server-side; see `raven.server.config`. The settings here constrain
+# the AI's *initiative* — which public sites the model may decide to visit on its own — and
+# live client-side because they need the conversation context.
+
+# Suggested baseline allowlist for the median scientific user — the starting point you extend
+# with field-specific entries (e.g. "lesswrong.com", "transformer-circuits.pub" for AI alignment).
+# Not active unless you assign it to `webfetch_allowlist` below.
+#
+# Declared before `webfetch_allowlist` so that you can opt in with `webfetch_allowlist =
+# webfetch_default_allowlist` (this is a plain Python module, evaluated top to bottom).
+#
+webfetch_default_allowlist = [
+    # Citation / metadata
+    "doi.org",
+    "api.crossref.org",
+
+    # Preprints and open peer review
+    "*.arxiv.org",
+    "*.biorxiv.org",
+    "*.medrxiv.org",
+    "openreview.net",
+
+    # Major publishers / journals
+    "*.nature.com",
+    "*.science.org",
+    "*.pnas.org",
+    "*.plos.org",
+    "*.cell.com",
+    "*.springer.com",
+    "link.springer.com",
+
+    # Search / discovery
+    "scholar.google.com",
+    "*.semanticscholar.org",
+    "researchgate.net",
+    "www.researchgate.net",
+
+    # Biomedical
+    "*.ncbi.nlm.nih.gov",
+
+    # Code / models / data
+    "github.com",
+    "raw.githubusercontent.com",
+    "gist.github.com",
+    "huggingface.co",
+
+    # General reference
+    "*.wikipedia.org",
+    "*.wikimedia.org",
+]
+
+# Domain allowlist for the webfetch tool.
+#
+# - `None` (default): unrestricted. The model may fetch any public URL (still subject to the
+#   server-side private-network / scheme blocks).
+# - A list of host patterns: the model may only fetch listed hosts. Patterns are either an
+#   exact host ("doi.org") or a wildcard ("*.arxiv.org", which matches the apex and any
+#   subdomain). URLs the *user* types into their latest message are auto-allowed for that turn
+#   regardless of this list (a user-typed URL is the user's intent, not the model's).
+#
+# To enable the curated scientific baseline above, set this to `webfetch_default_allowlist`
+# (optionally extended with your own field-specific entries).
+#
+# Setting an allowlist switches on an opt-in "constrain the AI's initiative" mode. While it is
+# `None`, that whole mode is dormant: the auto-allow-of-user-typed-URLs logic and the
+# `webfetch_trust_search_results` setting below have no effect, because there is no gate for them
+# to relax. They become meaningful only once you set an allowlist here.
+#
+webfetch_allowlist = None
+
+# DANGEROUS — leave this off unless you understand the risk.
+#
+# This setting only has an effect when `webfetch_allowlist` (above) is set; with the default
+# `None` allowlist there is no gate, so the model can already follow any link. Within the
+# allowlist mode, it relaxes one specific restriction:
+#
+# When True, URLs appearing in `websearch` tool-results are auto-allowed for the current turn,
+# so the model can "search, then follow a link" even if the host is not on `webfetch_allowlist`.
+# This is a real prompt-injection vector: a poisoned search-result snippet could embed a URL
+# crafted to make the model fetch it, which could then inject further instructions. Off by
+# default; even with an allowlist set, the model can still follow a search-result link if you add
+# its host to the allowlist, or if you forward the URL yourself.
+#
+webfetch_trust_search_results = False
+
+# --------------------------------------------------------------------------------
 # Document database (retrieval-augmented generation, RAG)
 
 # Raven-librarian and Raven-minichat: When searching the document database, up to how many best matches to return.

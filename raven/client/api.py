@@ -60,6 +60,7 @@ __all__ = ["initialize",
            "tts_speak", "tts_speak_lipsynced",
            "tts_warmup",
            "websearch_search",
+           "webfetch_fetch",
 
            "require"]
 
@@ -832,6 +833,30 @@ def websearch_search(query: str, engine: str = "duckduckgo", max_links: int = 10
                   "engine": engine,
                   "max_links": max_links}
     response = requests.post(f"{util.api_config.raven_server_url}/api/websearch2", headers=headers, json=input_data)
+    util.yell_on_error(response)
+
+    output_data = response.json()
+    return output_data
+
+# --------------------------------------------------------------------------------
+# Webfetch
+
+def webfetch_fetch(url: str, output_format: str = "markdown") -> Dict:
+    """Retrieve a web page's main content as clean text/markdown, via Raven-server.
+
+    Uses the "/api/webfetch" endpoint on the server, which see. The server handles the
+    two-tier fetch (requests + readability, then a headless browser for JS-rendered pages),
+    SSRF / scheme blocking, URL rewriting, and content normalization.
+
+    Returns the server's result dict `{"content": str, "url": str, "spaSuspected": bool}`.
+    `content` is the extracted text (or a canonical user-facing message for a refusal / limit).
+    """
+    util.require()
+    headers = copy.copy(util.api_config.raven_default_headers)
+    headers["Content-Type"] = "application/json"
+    input_data = {"url": url,
+                  "format": output_format}
+    response = requests.post(f"{util.api_config.raven_server_url}/api/webfetch", headers=headers, json=input_data)
     util.yell_on_error(response)
 
     output_data = response.json()

@@ -4,11 +4,14 @@ This module is licensed under the 2-clause BSD license.
 """
 
 __all__ = ["multipart_x_mixed_replace_payload_extractor",
-           "pack_parameters_into_json_file_attachment", "unpack_parameters_from_json_file_attachment"]
+           "pack_parameters_into_json_file_attachment", "unpack_parameters_from_json_file_attachment",
+           "extract_urls", "url_host", "host_matches_allowlist"]
 
 import io
 import json
-from typing import Any, Dict, Generator, Iterator, Optional, Tuple
+import re
+from typing import Any, Dict, Generator, Iterator, List, Optional, Tuple
+import urllib.parse
 
 from unpythonic.net.util import ReceiveBuffer
 
@@ -159,3 +162,55 @@ def unpack_parameters_from_json_file_attachment(stream) -> Dict[str, Any]:
     # parameters_python = json.loads(parameters_bytes)
 
     return parameters_python
+
+# --------------------------------------------------------------------------------
+# URL / host utilities
+
+# Match http(s) URLs in free text. We stop at whitespace and at characters that commonly
+# *delimit* a URL rather than belong to it — quotes, angle brackets, and the closing
+# delimiters of Markdown/parenthetical contexts (`)`, `]`) — so a URL inside `[text](url)`
+# or "(see https://example.com)" extracts cleanly. Trailing sentence punctuation is trimmed
+# separately in `extract_urls`.
+_URL_RE = re.compile(r"""https?://[^\s<>"'`)\]}]+""", re.IGNORECASE)
+
+# Trailing characters trimmed from a matched URL: sentence punctuation that almost never
+# ends a real URL but routinely follows one in prose.
+_URL_TRAILING_TRIM = ".,;:!?"
+
+def extract_urls(text: str) -> List[str]:
+    """Return the http(s) URLs found in `text`, in order of appearance (duplicates kept).
+
+    Trailing sentence punctuation (`.`, `,`, `;`, `:`, `!`, `?`) is trimmed from each match.
+    Intended for pulling URLs out of chat prose (e.g. a user-typed message), not for
+    validating or normalizing them.
+    """
+    return [m.group(0).rstrip(_URL_TRAILING_TRIM) for m in _URL_RE.finditer(text)]
+
+def url_host(url: str) -> str:
+    """Return the lowercased host of `url`, or "" if it has none (e.g. a relative or malformed URL)."""
+    return (urllib.parse.urlsplit(url).hostname or "").lower()
+
+def host_matches_allowlist(host: str, allowlist: List[str]) -> bool:
+    """Return whether `host` is permitted by `allowlist`.
+
+    An allowlist entry matches case-insensitively, in one of two ways:
+
+    - Exact: `"example.com"` matches only `example.com`.
+    - Wildcard: `"*.example.com"` matches the apex `example.com` *and* any subdomain
+      (`sub.example.com`). The apex match matters in practice — e.g. `*.arxiv.org` must
+      admit a bare `arxiv.org` host (the arXiv HTML rewrite targets `arxiv.org/html/...`).
+
+    An empty `host` never matches.
+    """
+    if not host:
+        return False
+    host = host.lower()
+    for entry in allowlist:
+        entry = entry.lower()
+        if entry.startswith("*."):
+            apex = entry[2:]
+            if host == apex or host.endswith(f".{apex}"):
+                return True
+        elif host == entry:
+            return True
+    return False

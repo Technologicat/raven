@@ -74,6 +74,7 @@ with timer() as tim:
     from .modules import translate
     from .modules import tts
     from .modules import websearch
+    from .modules import webfetch
 logger.info(f"Libraries loaded in {tim.dt:0.6g}s.")
 
 # --------------------------------------------------------------------------------
@@ -192,6 +193,8 @@ def get_modules():
         modules.append("tts")
     if websearch.is_available():
         modules.append("websearch")
+    if webfetch.is_available():
+        modules.append("webfetch")
     return jsonify({"modules": modules})
 
 # ----------------------------------------
@@ -1520,6 +1523,47 @@ def api_websearch2():
               "data": structured_results}
     return jsonify(output)
 
+# ----------------------------------------
+# module: webfetch
+
+@app.route("/api/webfetch", methods=["POST"])
+def api_webfetch():
+    """Retrieve a web page's main content as clean text/markdown.
+
+    Input is JSON::
+
+        {"url": "https://example.com/article",
+         "format": "markdown"}
+
+    In the input:
+      - "url" is required.
+      - "format" is optional: "markdown" (default) or "text".
+
+    Output is JSON::
+
+        {"content": "...",        # extracted text/markdown, or a canonical user-facing message for a refusal/limit
+         "url": "...",            # the effective URL after rewriting (e.g. arXiv abstract -> HTML form)
+         "spaSuspected": false}   # true if neither fetch tier could extract usable content
+
+    Network-level safety (refusing private-network addresses and non-HTTP(S) schemes) is
+    enforced here, server-side. The domain allowlist is enforced client-side, before the call.
+    """
+    if not webfetch.is_available():
+        abort(403, "Module 'webfetch' not running")
+    data = request.get_json()
+    if "url" not in data or not isinstance(data["url"], str):
+        abort(400, '"url" is required')
+    url = data["url"]
+    output_format = data.get("format", "markdown")
+    if output_format not in ("markdown", "text"):
+        abort(400, '"format", if provided, must be one of "markdown", "text"')
+    try:
+        result = webfetch.fetch(url, output_format=output_format)
+    except Exception as exc:
+        traceback.print_exc()
+        abort(400, f"api_webfetch: failed, reason: {type(exc)}: {exc}")
+    return jsonify(result)
+
 
 # --------------------------------------------------------------------------------
 # Main program
@@ -1639,6 +1683,8 @@ def init_server_modules():  # keep global namespace clean
 
     if (record := server_config.enabled_modules.get("websearch", None)) is not None:  # no device/dtype settings; if a record exists (regardless of whether blank), this module is enabled.
         websearch.init_module(config_module_name)
+    if (record := server_config.enabled_modules.get("webfetch", None)) is not None:  # no device/dtype settings; if a record exists (regardless of whether blank), this module is enabled.
+        webfetch.init_module(config_module_name)
 init_server_modules()
 
 # ----------------------------------------

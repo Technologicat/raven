@@ -209,3 +209,67 @@ class TestMultipartExtractor:
         next(gen)  # first part OK
         with pytest.raises(EOFError):
             next(gen)
+
+
+# --------------------------------------------------------------------------------
+# URL / host utilities
+
+class TestExtractUrls:
+    def test_plain_url(self):
+        assert netutil.extract_urls("see https://example.com/x here") == ["https://example.com/x"]
+
+    def test_trailing_punctuation_trimmed(self):
+        assert netutil.extract_urls("go to https://example.com/x.") == ["https://example.com/x"]
+        assert netutil.extract_urls("https://example.com/x, and more") == ["https://example.com/x"]
+
+    def test_markdown_link(self):
+        assert netutil.extract_urls("[paper](https://arxiv.org/abs/2301.1)") == ["https://arxiv.org/abs/2301.1"]
+
+    def test_parenthetical(self):
+        assert netutil.extract_urls("(see https://foo.org/y)") == ["https://foo.org/y"]
+
+    def test_multiple_in_order_with_duplicates(self):
+        text = "https://a.com https://b.com https://a.com"
+        assert netutil.extract_urls(text) == ["https://a.com", "https://b.com", "https://a.com"]
+
+    def test_non_http_ignored(self):
+        assert netutil.extract_urls("ftp://host/x and file:///etc/passwd") == []
+
+    def test_no_urls(self):
+        assert netutil.extract_urls("just some prose, no links") == []
+
+
+class TestUrlHost:
+    def test_lowercased(self):
+        assert netutil.url_host("https://Old.Reddit.COM/r/x/") == "old.reddit.com"
+
+    def test_strips_port_and_path(self):
+        assert netutil.url_host("http://example.com:8080/a/b?c=d") == "example.com"
+
+    def test_no_host(self):
+        assert netutil.url_host("/relative/path") == ""
+
+
+class TestHostMatchesAllowlist:
+    def test_exact(self):
+        assert netutil.host_matches_allowlist("doi.org", ["doi.org"]) is True
+        assert netutil.host_matches_allowlist("evil.com", ["doi.org"]) is False
+
+    def test_wildcard_matches_apex(self):
+        # The apex match matters: the arXiv HTML rewrite targets a bare arxiv.org host.
+        assert netutil.host_matches_allowlist("arxiv.org", ["*.arxiv.org"]) is True
+
+    def test_wildcard_matches_subdomain(self):
+        assert netutil.host_matches_allowlist("export.arxiv.org", ["*.arxiv.org"]) is True
+
+    def test_wildcard_does_not_match_suffix_lookalike(self):
+        assert netutil.host_matches_allowlist("notarxiv.org", ["*.arxiv.org"]) is False
+
+    def test_case_insensitive(self):
+        assert netutil.host_matches_allowlist("ARXIV.ORG", ["*.Arxiv.Org"]) is True
+
+    def test_empty_host_never_matches(self):
+        assert netutil.host_matches_allowlist("", ["*.arxiv.org", "doi.org"]) is False
+
+    def test_empty_allowlist(self):
+        assert netutil.host_matches_allowlist("arxiv.org", []) is False

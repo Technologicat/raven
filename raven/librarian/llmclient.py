@@ -35,11 +35,12 @@ import sseclient  # pip install sseclient-py
 
 from mcpyrate import colorizer
 
-from unpythonic import sym, timer
+from unpythonic import dyn, make_dynvar, sym, timer
 from unpythonic.env import env
 
 from ..client import api
 from ..client import config as client_config
+from ..common import netutil
 
 from . import chattree
 from . import chatutil
@@ -113,6 +114,64 @@ def websearch_wrapper(query: str,
 
     formatted_text = "\n\n".join(format_result(result) for result in structured_results)
     return formatted_text  # TODO: our LLM scaffolding doesn't currently accept anything else but preformatted text
+
+# --------------------------------------------------------------------------------
+# Webfetch integration (requires `raven.server` to be running)
+
+# Per-turn "request context" passed to tool entrypoints, in the manner of Racket's `parameterize`
+# (https://docs.racket-lang.org/reference/parameters.html) or Flask's request-global `g`: state
+# that comes from the harness, not the model, scoped to one agent turn. `raven.librarian.scaffold`
+# binds it (via `dyn.let`) around the agent loop's tool dispatch; an entrypoint that needs
+# harness-supplied (NOT model-supplied) context reads it here. The model never sees or sets it —
+# that separation is the point: a host the user auto-allowed must not be something the LLM can
+# forge through its tool-call arguments.
+#
+# Keep this to a single `dyn.tool_context` env that grows fields over time — one request-context
+# object, never a scatter of dyn vars.
+#
+# Fields currently carried (and the entrypoint that reads each):
+#   webfetch_allowed_hosts : frozenset[str]  — hosts auto-allowed for this turn (URLs the user typed,
+#                                              plus, if `webfetch_trust_search_results`, this turn's
+#                                              websearch-result hosts). Read by `webfetch_wrapper`.
+#                                              Absent -> treated as empty (fail closed: no auto-allow).
+#
+# The process-wide default (an empty env) means a thread that never entered a `dyn.let` — e.g. a
+# direct unit-test call of an entrypoint — still reads a valid, empty context instead of erroring.
+make_dynvar(tool_context=env())
+
+# Canonical user-facing string for an allowlist refusal — the client-side counterpart to the
+# server-side SSRF / scheme / SPA strings in `raven.server.modules.webfetch`. Pre-templated so the
+# model copies it verbatim instead of improvising an explanation.
+CANONICAL_NOT_ON_ALLOWLIST = ("The host {host} is not on the configured allowlist. The user can add it to the "
+                              "webfetch_allowlist setting if you should be able to access this site.")
+
+def webfetch_wrapper(url: str) -> str:
+    """Fetch a web page's main content, gated by the client-side domain allowlist.
+
+    Tool entrypoint for the LLM's `webfetch` tool. Enforces the allowlist policy (which constrains
+    the AI's *initiative*), then delegates the actual fetch to Raven-server, which enforces the
+    network-level safety (SSRF / scheme blocking) and does the two-tier extraction.
+
+    Reads `dyn.tool_context.webfetch_allowed_hosts` — the per-turn set of hosts the user auto-allowed
+    by typing their URLs this turn (and, with `librarian_config.webfetch_trust_search_results`, this
+    turn's websearch-result hosts). `raven.librarian.scaffold` binds `tool_context` around the agent
+    loop's tool dispatch; the set itself is computed by `chatutil.compute_auto_allowed_hosts`.
+    """
+    host = netutil.url_host(url)
+
+    # Allowlist gate. `None` means unrestricted (subject only to the server-side network checks);
+    # when a list is configured, the host must be on it, or have been auto-allowed by the user this turn.
+    allowlist = librarian_config.webfetch_allowlist
+    if allowlist is not None:
+        auto_allowed_hosts = getattr(dyn.tool_context, "webfetch_allowed_hosts", frozenset())
+        if not (netutil.host_matches_allowlist(host, allowlist) or host in auto_allowed_hosts):
+            logger.info(f"webfetch_wrapper: refusing '{url}': host '{host}' not on allowlist and not user-allowed this turn.")
+            return CANONICAL_NOT_ON_ALLOWLIST.format(host=(host or "(none)"))
+
+    result = api.webfetch_fetch(url)  # server enforces SSRF/scheme, fetches, returns {"content", "url", "spaSuspected"}
+    if result.get("spaSuspected"):
+        logger.info(f"webfetch_wrapper: '{result.get('url', url)}' flagged spaSuspected (neither fetch tier extracted usable content).")
+    return result["content"]
 
 # --------------------------------------------------------------------------------
 # Utilities
@@ -222,9 +281,18 @@ def setup(backend_url: str,
                       "parameters": {"type": "object",
                                      "required": ["query"],
                                      "properties": {"query": {"type": "string",
-                                                              "description": "The search query."}}}}}
+                                                              "description": "The search query."}}}}},
+        {"type": "function",
+         "function": {"name": "webfetch",
+                      "description": "Retrieve a web page's main content as clean text.",
+                      "parameters": {"type": "object",
+                                     "additionalProperties": False,
+                                     "required": ["url"],
+                                     "properties": {"url": {"type": "string",
+                                                            "description": "The URL to fetch."}}}}}
     ]
-    tool_entrypoints = {"websearch": websearch_wrapper}
+    tool_entrypoints = {"websearch": websearch_wrapper,
+                        "webfetch": webfetch_wrapper}
 
     # Write tool-calling instructions for legacy models.
     #

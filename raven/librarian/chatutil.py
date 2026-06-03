@@ -12,6 +12,7 @@ __all__ = ["format_message_number",
            "create_initial_system_message",
            "create_payload",
            "linearize_chat",
+           "compute_auto_allowed_hosts",
            "upgrade_datastore",
            "remove_persona_from_start_of_line",
            "get_node_message_text_without_persona",
@@ -26,6 +27,8 @@ from typing import Any, Dict, List, Optional, Tuple
 from mcpyrate import colorizer
 
 from unpythonic.env import env
+
+from ..common import netutil
 
 from . import chattree
 
@@ -385,6 +388,59 @@ def linearize_chat(datastore: chattree.Forest, node_id: str) -> List[Dict]:
     payload_history = [datastore.get_payload(node_id=node_id) for node_id in node_id_history]  # this auto-selects the active revision of the payload of each node
     message_history = [payload["message"] for payload in payload_history]
     return message_history
+
+def compute_auto_allowed_hosts(datastore: chattree.Forest,
+                               node_id: str,
+                               *,
+                               trust_search_results: bool = False) -> frozenset:
+    """Return the set of hosts to *auto-allow* for `webfetch` during the current turn.
+
+    The `webfetch` domain allowlist constrains the AI's *initiative* — the sites the model
+    may decide to visit on its own. A URL the user explicitly typed is the user's intent, not
+    the model's, so its host is allowed for that turn without the user having to edit config.
+    This computes those temporarily-allowed hosts by walking the branch ending at `node_id`
+    (same convention as `linearize_chat`).
+
+    Scope is the **current turn only** — from the most recent user-role message onward. A URL
+    the user pasted in an *earlier* turn does not keep widening the trust surface (one-hop
+    trust: trust user input one step, never transitively).
+
+    - Always: hosts of URLs found in the latest user-role message.
+    - If `trust_search_results` (the DANGEROUS, default-off power-user opt-in): also hosts of
+      URLs found in this turn's `websearch` tool-results. Tool-result provenance is read from
+      `generation_metadata.function_name`; only `websearch` results count. Crucially, `webfetch`'s
+      *own* output is excluded, so a URL the model discovered inside a fetched page never gains
+      auto-allow — content discovered by tools is not user intent.
+
+    Returns a `frozenset` of lowercased hosts (possibly empty).
+    """
+    node_id_history = datastore.linearize_up(node_id)
+    payload_history = [datastore.get_payload(node_id=nid) for nid in node_id_history]
+
+    # Find the turn boundary: the most recent user-role message.
+    last_user_index = None
+    for index in range(len(payload_history) - 1, -1, -1):
+        if payload_history[index]["message"].get("role") == "user":
+            last_user_index = index
+            break
+    if last_user_index is None:
+        return frozenset()
+
+    def hosts_in(text: str):
+        return (host for url in netutil.extract_urls(text) if (host := netutil.url_host(url)))
+
+    hosts = set(hosts_in(payload_history[last_user_index]["message"].get("content", "")))
+
+    if trust_search_results:
+        for payload in payload_history[last_user_index + 1:]:  # this-turn tool results only
+            message = payload["message"]
+            if message.get("role") != "tool":
+                continue
+            if payload.get("generation_metadata", {}).get("function_name") != "websearch":
+                continue  # one-hop trust: search results yes, webfetch's own output (or anything else) no
+            hosts.update(hosts_in(message.get("content", "")))
+
+    return frozenset(hosts)
 
 # v0.2.3+: data format change
 def upgrade_datastore(llm_settings: env,

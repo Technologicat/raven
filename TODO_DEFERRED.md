@@ -411,3 +411,31 @@ Approximate alternatives if we want to stay on `bm25s`: rebuild on a schedule (e
 
 Discovered during cancellable-commit work (2026-04-27).
 
+## webfetch GUI affordances (Librarian chat renderer)
+
+The webfetch tool (briefs/summer_2026_librarian_extension/01) ships its backend and
+access-control logic first; two GUI affordances in Librarian's chat-history renderer are
+deferred to a follow-up pass:
+
+- **"Send to AI" on every rendered URL.** A small inline icon next to each URL in the
+  chat-history widget that, on click, appends the URL to the user's pending input draft (the
+  user can add context and send). This closes the auto-allow workflow gap: when the model
+  presents search results, the user currently has no one-click way to get a URL back into a
+  user-role message (the markdown renderer's only URL action today is click-to-open). The
+  resulting user-role message goes through the existing auto-allow logic with no special-
+  casing — the click is structurally identical to the user typing the URL. From the brief (§2).
+
+- **"Allow this fetch" when a fetch is denied by the allowlist.** When `webfetch` refuses a
+  host that is neither on `webfetch_allowlist` nor user-typed this turn, surface the denial in
+  the GUI with a one-click override, so the user doesn't have to edit `config.py` and restart.
+  Open design questions: (a) does "allow" add the host to the *turn's* auto-allow set only, or
+  persist it to the allowlist (and if persist — session-only, or written back to config)?
+  (b) Synchronous mid-tool-call approval (block the agent loop on user input) is more involved
+  than the fire-and-forget "send to AI" button; an async "it was denied; allow + re-ask" flow
+  may be simpler. Ties in with the brief's planned "reload allowlist on the fly" (v1).
+
+The backend already cooperates: a denied fetch returns a canonical refusal string naming the
+host, so the GUI has what it needs to offer the override.
+
+Discovered during webfetch implementation (2026-06-03).
+

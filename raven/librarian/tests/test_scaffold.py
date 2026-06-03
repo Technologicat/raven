@@ -439,3 +439,39 @@ class TestAITurnToolCalls:
         # tool_done fires once (one tool response), tools_done fires once,
         # llm_done fires twice (once per LLM response).
         assert counters == {"tools_start": 1, "tool_done": 1, "tools_done": 1, "llm_done": 2}
+
+    def test_tool_context_bound_with_user_typed_url(self, monkeypatch, llm_settings, populated_forest):
+        """The agent loop binds `dyn.tool_context` so a tool entrypoint can see the hosts the user
+        auto-allowed by typing a URL this turn. Asserts the wiring between `user_turn` (the typed URL),
+        `compute_auto_allowed_hosts`, and the `dyn.let` around the tool dispatch.
+        """
+        from unpythonic import dyn  # noqa: PLC0415 -- local to this test
+
+        forest, head = populated_forest
+        user_head = scaffold.user_turn(llm_settings=llm_settings,
+                                       datastore=forest,
+                                       head_node_id=head,
+                                       user_message_text="please look at https://example.com/article")
+
+        responses = iter([
+            make_invoke_result(content="",
+                               tool_calls=[{"type": "function",
+                                            "function": {"name": "webfetch",
+                                                         "arguments": '{"url": "https://example.com/article"}'},
+                                            "id": "call_abc",
+                                            "index": "0"}]),
+            make_invoke_result(content="Done."),
+        ])
+        monkeypatch.setattr("raven.librarian.llmclient.invoke",
+                            lambda **kw: next(responses))
+
+        captured = {}
+        def capture_perform(settings, message, on_call_start, on_call_done):
+            # The binding under test is live here; read what an entrypoint would read.
+            captured["hosts"] = getattr(dyn.tool_context, "webfetch_allowed_hosts", None)
+            return [make_tool_response(content="fetched content")]
+        monkeypatch.setattr("raven.librarian.llmclient.perform_tool_calls", capture_perform)
+
+        run_ai_turn(forest, llm_settings, user_head)
+
+        assert captured["hosts"] == frozenset({"example.com"})

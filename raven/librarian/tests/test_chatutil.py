@@ -611,3 +611,88 @@ class TestFactoryResetDatastore:
         # Factory reset should purge and recreate
         chatutil.factory_reset_datastore(forest, llm_settings)
         assert len(forest.nodes) == 2  # only system prompt + greeting
+
+
+# ---------------------------------------------------------------------------
+# compute_auto_allowed_hosts
+# ---------------------------------------------------------------------------
+
+def _build_chain(forest, messages):
+    """Create a linear chain of nodes from `messages` and return the head (last) node id.
+
+    `messages`: list of `(role, content, generation_metadata_or_None)`.
+    """
+    parent = None
+    for role, content, gen_meta in messages:
+        payload = {"message": {"role": role, "content": content, "tool_calls": []}}
+        if gen_meta is not None:
+            payload["generation_metadata"] = gen_meta
+        parent = forest.create_node(payload=payload, parent_id=parent)
+    return parent
+
+
+class TestComputeAutoAllowedHosts:
+    def test_no_user_message_empty(self, forest):
+        head = _build_chain(forest, [("system", "you are an AI", None)])
+        assert chatutil.compute_auto_allowed_hosts(forest, head) == frozenset()
+
+    def test_user_typed_urls_allowed(self, forest):
+        head = _build_chain(forest, [
+            ("user", "look at https://arxiv.org/abs/2301.1 and https://example.com/x please", None),
+        ])
+        assert chatutil.compute_auto_allowed_hosts(forest, head) == frozenset({"arxiv.org", "example.com"})
+
+    def test_persona_prefixed_user_message(self, forest):
+        # create_chat_message prepends "User: " for the user role; URL extraction must still work.
+        head = _build_chain(forest, [("user", "User: see https://foo.org/y", None)])
+        assert chatutil.compute_auto_allowed_hosts(forest, head) == frozenset({"foo.org"})
+
+    def test_user_message_without_urls(self, forest):
+        head = _build_chain(forest, [("user", "what is the capital of France?", None)])
+        assert chatutil.compute_auto_allowed_hosts(forest, head) == frozenset()
+
+    def test_only_current_turn_user_message_counts(self, forest):
+        # A URL pasted in an earlier turn must NOT keep widening the trust surface.
+        head = _build_chain(forest, [
+            ("user", "earlier https://old-turn.com/x", None),
+            ("assistant", "ok", None),
+            ("user", "now a question with no link", None),
+        ])
+        assert chatutil.compute_auto_allowed_hosts(forest, head) == frozenset()
+
+    def test_search_results_excluded_by_default(self, forest):
+        head = _build_chain(forest, [
+            ("user", "find cosmology news", None),
+            ("assistant", "", None),
+            ("tool", "result: https://news-site.com/article", {"function_name": "websearch"}),
+        ])
+        assert chatutil.compute_auto_allowed_hosts(forest, head) == frozenset()
+
+    def test_search_results_included_when_trusted(self, forest):
+        head = _build_chain(forest, [
+            ("user", "find cosmology news", None),
+            ("assistant", "", None),
+            ("tool", "result: https://news-site.com/article", {"function_name": "websearch"}),
+        ])
+        result = chatutil.compute_auto_allowed_hosts(forest, head, trust_search_results=True)
+        assert result == frozenset({"news-site.com"})
+
+    def test_webfetch_output_never_auto_allowed(self, forest):
+        # One-hop trust: a URL the model found *inside* a fetched page is not user intent,
+        # so it must not gain auto-allow even with trust_search_results on.
+        head = _build_chain(forest, [
+            ("user", "fetch the news", None),
+            ("assistant", "", None),
+            ("tool", "page body links to https://attacker.com/inject", {"function_name": "webfetch"}),
+        ])
+        result = chatutil.compute_auto_allowed_hosts(forest, head, trust_search_results=True)
+        assert result == frozenset()
+
+    def test_user_url_plus_trusted_search_url(self, forest):
+        head = _build_chain(forest, [
+            ("user", "compare https://user-typed.com with search results", None),
+            ("assistant", "", None),
+            ("tool", "found https://searched.com/p", {"function_name": "websearch"}),
+        ])
+        result = chatutil.compute_auto_allowed_hosts(forest, head, trust_search_results=True)
+        assert result == frozenset({"user-typed.com", "searched.com"})
