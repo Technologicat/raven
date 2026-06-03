@@ -62,6 +62,8 @@ dependencies = [
     "feedparser>=6.0",  # papers: arXiv search
     "requests>=2.31",  # client, librarian, papers (arXiv tools)
     "tqdm>=4.0",  # server.stt, papers (arXiv download)
+    "trafilatura>=2.0.0",  # server.webfetch; readability extraction (HTML -> clean text/markdown)
+    "youtube-transcript-api>=1.0.0",  # server.webfetch; transcript extraction for YouTube URLs
 ]
 
 keywords=["visualization", "semantic-analysis", "application", "AI", "NLP", "GUI"]

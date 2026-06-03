@@ -44,11 +44,35 @@ enabled_modules = {
                   "dtype": torch.float16},
     "tts": {"device_string": "gpu"},
     "websearch": {},  # websearch doesn't use any heavy compute; this is here only to provide the option to turn the module off.
+    "webfetch": {},  # webfetch retrieves a single page's content; no heavy compute. Listed here to provide the option to turn it off.
 }
 
 # The port Raven-server listens to. Can be overridden on the command line.
 #
 default_port = 5100
+
+# --------------------------------------------------------------------------------
+# webfetch module
+
+# SSRF (Server-Side Request Forgery) defense: by default, `webfetch` refuses to fetch URLs
+# whose host resolves to a private-network address (LAN devices, loopback, link-local /
+# cloud-metadata, etc.), because the AI — not the user — chooses which URLs to fetch.
+#
+# Set this to True ONLY if you knowingly want `webfetch` to reach private addresses, e.g. a
+# local Hindsight HTTP server on 127.0.0.1. Named explicitly so it's clear what is being relaxed.
+#
+webfetch_allow_private_networks = False
+
+# Two-tier fetch escalation threshold. Tier 1 (`requests` + readability extraction) runs first;
+# if it yields fewer than this many characters of main text, `webfetch` escalates to Tier 2
+# (Selenium, for JS-rendered pages). If Tier 2 is also below threshold, the result is flagged
+# `spaSuspected`. Bias this low so genuinely short pages don't needlessly spawn a browser.
+#
+webfetch_min_content_chars = 300
+
+# Network timeout (seconds) for the Tier 1 `requests` GET.
+#
+webfetch_request_timeout = 10.0
 
 # --------------------------------------------------------------------------------
 # Miscellaneous AI model config
