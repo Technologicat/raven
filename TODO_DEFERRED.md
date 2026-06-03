@@ -411,33 +411,54 @@ Approximate alternatives if we want to stay on `bm25s`: rebuild on a schedule (e
 
 Discovered during cancellable-commit work (2026-04-27).
 
-## webfetch GUI affordances (Librarian chat renderer)
+## webfetch "approve denied host" button relocates in brief 03
 
-The webfetch tool (briefs/summer_2026_librarian_extension/01) ships its backend and
-access-control logic first; two GUI affordances in Librarian's chat-history renderer are
-deferred to a follow-up pass:
+The brief-01 override affordance (approve a denied host for the session, then re-run the fetch on
+a new branch — `scaffold.retry_tool_calls`) is wired to a button in `chat_controller.build_buttons`,
+attached to the denied `role="tool"` node's button row. That attachment point is **provisional**:
+brief 03 (content-parts) moves tool-result rendering into the assistant message body (tool calls
+become gear-icon sub-elements, results become content-parts). When that lands, relocate the approve
+button to wherever the denied fetch's result then renders, and drop the special `role == "tool"`
+button-row branch. The backend (`retry_tool_calls`, `approve_host_for_session`, the
+`webfetch_denied_host` marker) is rendering-independent and stays as-is.
 
-- **"Send to AI" on every rendered URL.** A small inline icon next to each URL in the
-  chat-history widget that, on click, appends the URL to the user's pending input draft (the
-  user can add context and send). This closes the auto-allow workflow gap: when the model
-  presents search results, the user currently has no one-click way to get a URL back into a
-  user-role message (the markdown renderer's only URL action today is click-to-open). The
-  resulting user-role message goes through the existing auto-allow logic with no special-
-  casing — the click is structurally identical to the user typing the URL. From the brief (§2).
+Discovered while implementing the brief-01 GUI override (2026-06-04).
 
-- **"Allow this fetch" when a fetch is denied by the allowlist.** When `webfetch` refuses a
-  host that is neither on `webfetch_allowlist` nor user-typed this turn, surface the denial in
-  the GUI with a one-click override, so the user doesn't have to edit `config.py` and restart.
-  Open design questions: (a) does "allow" add the host to the *turn's* auto-allow set only, or
-  persist it to the allowlist (and if persist — session-only, or written back to config)?
-  (b) Synchronous mid-tool-call approval (block the agent loop on user input) is more involved
-  than the fire-and-forget "send to AI" button; an async "it was denied; allow + re-ask" flow
-  may be simpler. Ties in with the brief's planned "reload allowlist on the fly" (v1).
+## webfetch: batch-approve several denied hosts at once
 
-The backend already cooperates: a denied fetch returns a canonical refusal string naming the
-host, so the GUI has what it needs to offer the override.
+The "approve denied host & retry" override creates a NEW branch per approval (correct, given the
+chat store is a forest). But approving several denied fetches one at a time leaves all-but-the-last
+branch as noise — each intermediate branch is a dead end the user doesn't want. For a v1 follow-up:
+let the user approve a *set* of denied hosts in one action (e.g. multi-select the denied tool nodes,
+or an "approve all denials in this turn" button), then re-run all of them on a single new branch.
+`retry_tool_calls` currently re-runs exactly one call; the batch version would re-run the union of
+approved calls and copy/share the rest — a natural generalization of the same branch-and-rebuild logic.
 
-Discovered during webfetch implementation (2026-06-03).
+Discovered during the brief-01 GUI override session (2026-06-04).
+
+## "Internet" toggle: scope `tools_enabled` to a clear security boundary in the GUI
+
+`scaffold.ai_turn`'s `tools_enabled` is a blunt all-or-nothing hammer (standing TODO on the param).
+The intent behind the GUI toggle is to make the **network/security boundary blindingly obvious** to
+the user. Direction: rename/scope the toggle to "Internet" and have it gate the network-reaching tools
+(`websearch`, `webfetch`) specifically, rather than all tools indiscriminately. A separate toggle for
+MCP tools is likely wanted later (different trust surface). This needs `ai_turn` to accept a per-tool
+enable set (or an allowed-tool-name list) instead of a single bool, and the controller/app to map each
+GUI toggle onto the relevant tool names. Pairs with the brief's tool-description-generation work.
+
+Discovered during the brief-01 GUI override session (2026-06-04).
+
+## scaffold: collect `ai_turn`'s callbacks into a single bundle object
+
+`ai_turn` (and now `retry_tool_calls`) take ~12 individual `on_*` callback parameters, threaded
+verbatim through the controller, the test helpers (`run_ai_turn` / `run_retry` rebuild the same dict),
+and `retry_tool_calls` → `ai_turn`. The brief flags this as a later cleanup: replace the loose
+parameters with one callback-bundle object (an `unpythonic.env` namespace or a small frozen dataclass
+of optional callables), constructed once and passed as a unit. Shrinks every signature and call site,
+and makes "the AI-turn callback set" a named thing. Do it as a focused refactor so the diff is
+mechanical (one bundle type, update each producer/consumer), not entangled with feature work.
+
+Discovered during the brief-01 GUI override session (2026-06-04).
 
 ## Headless agent-harness mode for `ai_turn` (scriptable agent layer)
 

@@ -161,6 +161,21 @@ def approve_host_for_session(host: str) -> None:
     """
     _session_approved_hosts.add(host.lower())
 
+# !!! DO NOT memoize `webfetch_wrapper` (or anything that wraps it). !!!
+#
+# It is deliberately IMPURE: its result depends on two pieces of hidden state that are NOT in its
+# argument list — `dyn.tool_context.webfetch_allowed_hosts` (per-turn, set by the harness) and the
+# `_session_approved_hosts` module global (mutated by `approve_host_for_session`). A `@memoize` keys
+# on `url` alone, so it would:
+#   - cache a denial forever, so the GUI "approve host & retry" override would re-serve the stale
+#     refusal even after the user approved the host (the whole override mechanism would silently break); and
+#   - cache a per-turn auto-allow, leaking a one-turn permission into later turns.
+# The gate is a security boundary; memoizing it turns a transient decision into a permanent one.
+#
+# This composes safely with the @memoize that DOES exist (server-side `websearch`,
+# `raven.server.modules.websearch`) precisely because the two never touch: the memoized function
+# (websearch) does not read the allowlist, and the allowlist-reading function (this one) is not
+# memoized. Keep it that way.
 def webfetch_wrapper(url: str) -> str | tuple[str, dict]:
     """Fetch a web page's main content, gated by the client-side domain allowlist.
 

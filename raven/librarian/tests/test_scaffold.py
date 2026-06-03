@@ -50,6 +50,36 @@ def make_tool_response(content="tool result",
                dt=dt)
 
 
+def make_denial_response(host="blocked.com", toolcall_id="call_0"):
+    """A faked webfetch denial record: carries `tool_metadata={'webfetch_denied_host': host}`,
+    the structured marker the GUI override reads to offer "approve this host & retry"."""
+    return env(data={"role": "tool",
+                     "content": f"The host {host} is not on the configured allowlist.",
+                     "tool_calls": None},
+               status="success",
+               toolcall_id=toolcall_id,
+               function_name="webfetch",
+               dt=0.01,
+               tool_metadata={"webfetch_denied_host": host})
+
+
+def tool_call(name, call_id, index="0"):
+    """An OpenAI-format tool call request, as it appears in an assistant message's `tool_calls`."""
+    return {"type": "function",
+            "function": {"name": name, "arguments": "{}"},
+            "id": call_id,
+            "index": index}
+
+
+def roles_up(forest, node_id):
+    """List of message roles walking from `node_id` up to the root (node first)."""
+    out = []
+    while node_id is not None:
+        out.append(forest.get_payload(node_id)["message"]["role"])
+        node_id = forest.get_parent(node_id)
+    return out
+
+
 class FakeRetriever:
     """Minimal stand-in for `raven.librarian.hybridir.HybridIR`.
 
@@ -475,3 +505,155 @@ class TestAITurnToolCalls:
         run_ai_turn(forest, llm_settings, user_head)
 
         assert captured["hosts"] == frozenset({"example.com"})
+
+
+# ---------------------------------------------------------------------------
+# retry_tool_calls — the "approve denied host & retry" override
+# ---------------------------------------------------------------------------
+
+def run_retry(forest, llm_settings, tool_node_id, *,
+              retriever=None,
+              tools_enabled=True,
+              speculate=True,
+              markup=None,
+              docs_num_results=None,
+              **callbacks):
+    """Call `scaffold.retry_tool_calls` with `None` defaults for unspecified callbacks."""
+    cb_kwargs = {name: callbacks.get(name, None) for name in _AI_TURN_CALLBACKS}
+    return scaffold.retry_tool_calls(llm_settings=llm_settings,
+                                     datastore=forest,
+                                     retriever=retriever,
+                                     tool_node_id=tool_node_id,
+                                     tools_enabled=tools_enabled,
+                                     speculate=speculate,
+                                     markup=markup,
+                                     docs_num_results=docs_num_results,
+                                     **cb_kwargs)
+
+
+class TestRetryToolCalls:
+    def _make_denied_state(self, monkeypatch, llm_settings, forest, head, *, tool_calls, records):
+        """Drive one `ai_turn` that issues `tool_calls`, runs `records`, then a giving-up reply.
+
+        Returns `(first_head, tool_done_nodes)` — the giving-up assistant and the tool-result node ids
+        (in creation order), so a test can pick the denied one.
+        """
+        user_head = scaffold.user_turn(llm_settings=llm_settings,
+                                       datastore=forest,
+                                       head_node_id=head,
+                                       user_message_text="please fetch some pages")
+        responses = iter([make_invoke_result(content="", tool_calls=tool_calls),
+                          make_invoke_result(content="Sorry, I could not reach that.")])
+        monkeypatch.setattr("raven.librarian.llmclient.invoke", lambda **kw: next(responses))
+        monkeypatch.setattr("raven.librarian.llmclient.perform_tool_calls",
+                            lambda settings, message, on_call_start, on_call_done: list(records))
+        tool_done_nodes = []
+        first_head = run_ai_turn(forest, llm_settings, user_head,
+                                 on_tool_done=lambda nid: tool_done_nodes.append(nid))
+        return first_head, tool_done_nodes
+
+    def test_single_denied_fetch_reruns_only_that_call_on_a_branch(self, monkeypatch, llm_settings, populated_forest):
+        forest, head = populated_forest
+        _first, tool_nodes = self._make_denied_state(
+            monkeypatch, llm_settings, forest, head,
+            tool_calls=[tool_call("webfetch", "call_0")],
+            records=[make_denial_response(host="blocked.com", toolcall_id="call_0")])
+        denied_node = tool_nodes[0]
+        assert forest.get_payload(denied_node)["generation_metadata"]["webfetch_denied_host"] == "blocked.com"
+
+        # Approve + retry: the re-run now succeeds. Capture what perform_tool_calls is asked to run.
+        rerun_messages = []
+        def capture_perform(settings, message, on_call_start, on_call_done):
+            rerun_messages.append(message)
+            return [make_tool_response(content="FETCHED OK", toolcall_id="call_0", function_name="webfetch")]
+        monkeypatch.setattr("raven.librarian.llmclient.perform_tool_calls", capture_perform)
+        monkeypatch.setattr("raven.librarian.llmclient.invoke",
+                            lambda **kw: make_invoke_result(content="Here is the page content."))
+
+        new_head = run_retry(forest, llm_settings, denied_node)
+
+        # Exactly the denied call was re-run (one call in the synthetic message).
+        assert len(rerun_messages) == 1
+        assert [tc["id"] for tc in rerun_messages[0]["tool_calls"]] == ["call_0"]
+
+        # New branch: continuation assistant -> tool(webfetch success) -> first (tool-calling) assistant.
+        assert roles_up(forest, new_head)[:3] == ["assistant", "tool", "assistant"]
+        new_tool_node = forest.get_parent(new_head)
+        assert "FETCHED OK" in forest.get_payload(new_tool_node)["message"]["content"]
+        assert "webfetch_denied_host" not in forest.get_payload(new_tool_node)["generation_metadata"]
+
+        # It is a real branch: the new tool node and the old denied node share a parent (the assistant)...
+        assert forest.get_parent(new_tool_node) == forest.get_parent(denied_node)
+        assert new_tool_node != denied_node
+        # ...and the old denial is preserved untouched.
+        assert forest.get_payload(denied_node)["generation_metadata"]["webfetch_denied_host"] == "blocked.com"
+
+    def test_websearch_prefix_is_shared_not_rerun(self, monkeypatch, llm_settings, populated_forest):
+        """Assistant issues [websearch, webfetch] in one message; webfetch is denied. The retry must
+        re-run ONLY webfetch and reuse the existing websearch node (no re-query — reboot-safe)."""
+        forest, head = populated_forest
+        _first, tool_nodes = self._make_denied_state(
+            monkeypatch, llm_settings, forest, head,
+            tool_calls=[tool_call("websearch", "call_0"), tool_call("webfetch", "call_1")],
+            records=[make_tool_response(content="websearch result text", toolcall_id="call_0", function_name="websearch"),
+                     make_denial_response(host="blocked.com", toolcall_id="call_1")])
+        websearch_node, denied_node = tool_nodes  # creation order: websearch, then denied webfetch
+        assert forest.get_parent(denied_node) == websearch_node  # chained
+
+        rerun_messages = []
+        def capture_perform(settings, message, on_call_start, on_call_done):
+            rerun_messages.append(message)
+            return [make_tool_response(content="FETCHED OK", toolcall_id="call_1", function_name="webfetch")]
+        monkeypatch.setattr("raven.librarian.llmclient.perform_tool_calls", capture_perform)
+        monkeypatch.setattr("raven.librarian.llmclient.invoke",
+                            lambda **kw: make_invoke_result(content="Combined answer."))
+
+        new_head = run_retry(forest, llm_settings, denied_node)
+
+        # Only webfetch (call_1) re-run; websearch (call_0) was NOT.
+        assert len(rerun_messages) == 1
+        assert [tc["id"] for tc in rerun_messages[0]["tool_calls"]] == ["call_1"]
+
+        # The new webfetch node branches off the SAME (shared) websearch node — not a copy.
+        new_tool_node = forest.get_parent(new_head)
+        assert forest.get_parent(new_tool_node) == websearch_node
+        assert "FETCHED OK" in forest.get_payload(new_tool_node)["message"]["content"]
+
+    def test_suffix_tool_results_are_copied_verbatim(self, monkeypatch, llm_settings, populated_forest):
+        """Assistant issues [webfetch, websearch] in one message; webfetch (first) is denied. The retry
+        re-runs webfetch and COPIES the trailing websearch result verbatim (not re-run) onto the branch."""
+        forest, head = populated_forest
+        _first, tool_nodes = self._make_denied_state(
+            monkeypatch, llm_settings, forest, head,
+            tool_calls=[tool_call("webfetch", "call_0"), tool_call("websearch", "call_1")],
+            records=[make_denial_response(host="blocked.com", toolcall_id="call_0"),
+                     make_tool_response(content="ORIGINAL websearch result", toolcall_id="call_1", function_name="websearch")])
+        denied_node, websearch_node = tool_nodes  # creation order: denied webfetch, then websearch
+
+        rerun_messages = []
+        def capture_perform(settings, message, on_call_start, on_call_done):
+            rerun_messages.append(message)
+            return [make_tool_response(content="FETCHED OK", toolcall_id="call_0", function_name="webfetch")]
+        monkeypatch.setattr("raven.librarian.llmclient.perform_tool_calls", capture_perform)
+        monkeypatch.setattr("raven.librarian.llmclient.invoke",
+                            lambda **kw: make_invoke_result(content="Combined answer."))
+
+        new_head = run_retry(forest, llm_settings, denied_node)
+
+        # Only the denied webfetch (call_0) re-run; the websearch was copied, never re-run.
+        assert len(rerun_messages) == 1
+        assert [tc["id"] for tc in rerun_messages[0]["tool_calls"]] == ["call_0"]
+
+        # New branch: continuation -> tool(websearch copy) -> tool(webfetch success) -> assistant.
+        assert roles_up(forest, new_head)[:4] == ["assistant", "tool", "tool", "assistant"]
+        websearch_copy = forest.get_parent(new_head)
+        assert forest.get_payload(websearch_copy)["generation_metadata"]["function_name"] == "websearch"
+        assert forest.get_payload(websearch_copy)["message"]["content"] == "ORIGINAL websearch result"
+        assert websearch_copy != websearch_node  # a copy, distinct node id (not a reparent)
+
+    def test_non_tool_node_raises(self, monkeypatch, llm_settings, populated_forest):
+        forest, head = populated_forest
+        user_head = scaffold.user_turn(llm_settings=llm_settings, datastore=forest,
+                                       head_node_id=head, user_message_text="Hello")
+        with pytest.raises(ValueError):
+            run_retry(forest, llm_settings, user_head)  # a user node, not a tool node

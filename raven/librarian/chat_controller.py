@@ -780,6 +780,53 @@ class DPGChatMessage:
         delete_subtree_tooltip = dpg.add_tooltip(f"message_delete_branch_button_{self.gui_uuid}")  # tag
         delete_subtree_tooltip_text = dpg.add_text("Delete branch (subtree starting from this node, ALL descendants!)", parent=delete_subtree_tooltip)
 
+        # "Approve denied host & retry" override. Appears ONLY on a webfetch tool result that the client-side
+        # allowlist refused (such a node carries `webfetch_denied_host` in its generation_metadata, set by
+        # `llmclient.webfetch_wrapper`). Clicking it approves the host for this session and re-runs that one
+        # fetch on a new branch — see `scaffold.retry_tool_calls`.
+        #
+        # This is a conditional, rare button, so it is intentionally NOT counted in `number_of_message_buttons`
+        # (bumping that would add left margin to EVERY message row for a button almost never shown). The cost:
+        # the leading right-align spacer reserves space for the fixed button count, so the extra button pushes
+        # the sibling counter ("1 / 2") further right and possibly off-view on a denied tool row. Acceptable
+        # for this provisional affordance; revisit if/when it gets a permanent home (brief 03).
+        #
+        # NOTE: provisional placement. Brief 03 (content-parts) moves tool-result rendering into the assistant
+        # message body; when that lands, this affordance relocates there. See briefs/summer_2026_librarian_extension/.
+        maybe_denied_host = None
+        if role == "tool" and node_id is not None:
+            denied_node_payload = self.parent_view.chat_controller.datastore.get_payload(node_id)
+            maybe_denied_host = denied_node_payload.get("generation_metadata", {}).get("webfetch_denied_host")
+        if maybe_denied_host is not None:
+            def approve_and_retry_callback():
+                chat_controller = self.parent_view.chat_controller
+                llmclient.approve_host_for_session(maybe_denied_host)
+
+                # Rewind the GUI to the branch point: pop every message after the denied tool result, then the
+                # denied result itself. `retry_tool_calls` re-adds the new branch via the ai_turn callbacks.
+                for k, dpg_chat_message in enumerate(reversed(chat_controller.current_chat_history)):
+                    if dpg_chat_message.node_id == node_id:
+                        break
+                else:  # not found (shouldn't happen — the button lives on this message)
+                    return
+                for _ in range(k + 1):  # +1 to also pop the denied tool result itself
+                    old_dpg_chat_message = chat_controller.current_chat_history.pop(-1)
+                    old_dpg_chat_message.demolish()
+
+                # Re-run the denied fetch on a new branch and continue. HEAD is updated by the callbacks.
+                chat_controller.ai_turn(docs_query=None,
+                                        continue_=False,
+                                        _retry_tool_node_id=node_id)
+            approve_retry_button = dpg.add_button(label=fa.ICON_UNLOCK,
+                                                  callback=approve_and_retry_callback,
+                                                  width=gui_config.toolbutton_w,
+                                                  tag=f"message_approve_retry_button_{self.gui_uuid}",  # tag
+                                                  parent=g)
+            dpg.bind_item_font(approve_retry_button, self.parent_view.themes_and_fonts.icon_font_solid)
+            dpg.bind_item_theme(approve_retry_button, "disablable_widget_theme")  # tag
+            approve_retry_tooltip = dpg.add_tooltip(approve_retry_button)
+            dpg.add_text(f"Approve host '{maybe_denied_host}' for this session, and retry the fetch (on a new branch)", parent=approve_retry_tooltip)
+
         # # TODO: Meh, `raven.common.gui.animation.ButtonFlash` doesn't play together with `dpg_markdown`.
         # c_red = '<font color="(255, 96, 96)">'
         # c_end = '</font>'
@@ -1522,7 +1569,8 @@ class DPGChatController:
 
     def ai_turn(self,
                 docs_query: Optional[str],
-                continue_: bool) -> None:
+                continue_: bool,
+                _retry_tool_node_id: Optional[str] = None) -> None:
         """Run the AI's response part of a chat round.
 
         This spawns a background task to avoid hanging GUI event handlers,
@@ -1532,6 +1580,11 @@ class DPGChatController:
 
         `continue_`: If `False`, create a new AI message. Most of the time, this is what you want.
                      If `True`, continue the AI's current message.
+
+        `_retry_tool_node_id`: Internal. If set, this is the "approve denied host & retry" override: instead
+                               of a normal AI turn, re-run the previously-denied tool call at this node on a
+                               new branch (`scaffold.retry_tool_calls`) and continue from there. The same GUI
+                               callback bundle is reused; `docs_query`/`continue_` are ignored in this mode.
         """
         docs_query = docs_query if self.app_state["docs_enabled"] else None
 
@@ -1762,30 +1815,44 @@ class DPGChatController:
                     # logger.info("=" * 80)
                     pass
 
-                # `scaffold.ai_turn` is a synchronous call, which allows us to use the context manager for the idle-off override.
+                # `scaffold.ai_turn` / `scaffold.retry_tool_calls` are synchronous calls, which lets us use
+                # the context manager for the idle-off override. The same callback bundle serves both: the
+                # override re-runs one denied tool call on a new branch, then continues via `ai_turn`.
+                common_callbacks = dict(on_docs_start=on_docs_start,
+                                        on_docs_done=on_docs_done,
+                                        on_llm_start=on_llm_start,
+                                        on_prompt_ready=on_prompt_ready,  # debug/info hook
+                                        on_llm_progress=on_llm_progress,
+                                        on_llm_done=on_done,
+                                        on_nomatch_done=on_done,
+                                        on_tools_start=on_tools_start,
+                                        on_call_lowlevel_start=on_call_lowlevel_start,
+                                        on_call_lowlevel_done=on_call_lowlevel_done,
+                                        on_tool_done=on_tool_done,
+                                        on_tools_done=on_tools_done)
                 with self.avatar_controller.idle_override(config=self.avatar_record):
-                    new_head_node_id = scaffold.ai_turn(llm_settings=self.llm_settings,
-                                                        datastore=self.datastore,
-                                                        retriever=self.retriever,
-                                                        head_node_id=self.app_state["HEAD"],
-                                                        tools_enabled=self.app_state["tools_enabled"],
-                                                        continue_=continue_,
-                                                        docs_query=docs_query,
-                                                        docs_num_results=librarian_config.docs_num_results,
-                                                        speculate=self.app_state["speculate_enabled"],
-                                                        markup="markdown",  # TODO: check if we actually use the `markup` argument for anything but thought blocks - those are in any case emitted as-is (and formatted at render time).
-                                                        on_docs_start=on_docs_start,
-                                                        on_docs_done=on_docs_done,
-                                                        on_llm_start=on_llm_start,
-                                                        on_prompt_ready=on_prompt_ready,  # debug/info hook
-                                                        on_llm_progress=on_llm_progress,
-                                                        on_llm_done=on_done,
-                                                        on_nomatch_done=on_done,
-                                                        on_tools_start=on_tools_start,
-                                                        on_call_lowlevel_start=on_call_lowlevel_start,
-                                                        on_call_lowlevel_done=on_call_lowlevel_done,
-                                                        on_tool_done=on_tool_done,
-                                                        on_tools_done=on_tools_done)
+                    if _retry_tool_node_id is None:
+                        new_head_node_id = scaffold.ai_turn(llm_settings=self.llm_settings,
+                                                            datastore=self.datastore,
+                                                            retriever=self.retriever,
+                                                            head_node_id=self.app_state["HEAD"],
+                                                            tools_enabled=self.app_state["tools_enabled"],
+                                                            continue_=continue_,
+                                                            docs_query=docs_query,
+                                                            docs_num_results=librarian_config.docs_num_results,
+                                                            speculate=self.app_state["speculate_enabled"],
+                                                            markup="markdown",  # TODO: check if we actually use the `markup` argument for anything but thought blocks - those are in any case emitted as-is (and formatted at render time).
+                                                            **common_callbacks)
+                    else:
+                        new_head_node_id = scaffold.retry_tool_calls(llm_settings=self.llm_settings,
+                                                                     datastore=self.datastore,
+                                                                     retriever=self.retriever,
+                                                                     tool_node_id=_retry_tool_node_id,
+                                                                     tools_enabled=self.app_state["tools_enabled"],
+                                                                     speculate=self.app_state["speculate_enabled"],
+                                                                     markup="markdown",
+                                                                     docs_num_results=librarian_config.docs_num_results,
+                                                                     **common_callbacks)
                 self.app_state["HEAD"] = new_head_node_id
             finally:
                 if self.gui_updates_safe:
