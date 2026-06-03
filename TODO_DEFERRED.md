@@ -510,3 +510,29 @@ font-vs-image-injection, and (for emoji) whether a flat monochrome glyph is acce
 
 Raised during webfetch GUI smoke-testing (2026-06-03); flagged for a dedicated discussion.
 
+## webfetch local (client-side) mode
+
+`websearch` and `webfetch` currently live server-side only. `webfetch` is a candidate for running
+client-side too (e.g. to fetch from the client's network vantage — VPN-internal sites the server
+can't reach; the SSRF `allow_private_networks` opt-out would come into play there). Two constraints
+shape how, and they say "defer", not "do now":
+
+- **Licensing splits the two.** `websearch` is AGPL (a Python port of the SillyTavern-Selenium
+  extension) and MUST stay server-side — pulling it into a client process would infect Raven's
+  otherwise-BSD client. `webfetch` is Raven's own and could be BSD'd — EXCEPT its Tier-2 fallback
+  currently borrows websearch's Selenium driver (`_fetch_tier2` → `websearch.get_driver()`), which is
+  in the AGPL module. So a prerequisite is a **clean-room BSD Selenium driver factory** (e.g.
+  `raven.common.webdriver`) that both webfetch and websearch use.
+
+- **Not a `MaybeRemoteService` — the imagefx pattern.** webfetch is *stateless* (no cache, like
+  nlp/stt/embeddings), so the 4-layer transparent-dispatch machinery (which earns its keep only when
+  there's cache/shape state to hide, as in tts) is overkill. If local mode is built, do it
+  imagefx-style: a clean `raven.common.webfetch` impl the client can call explicitly, with the server
+  module delegating to it. No mayberemote class.
+
+- **Low urgency.** Librarian already hard-depends on the server for websearch and RAG embeddings, so
+  client-local webfetch does not unlock a standalone Librarian. Build only when a concrete
+  client-vantage need appears.
+
+Discovered while wrapping up brief 01 webfetch (2026-06-03).
+
