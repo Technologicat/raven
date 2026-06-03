@@ -8,11 +8,12 @@ logger = logging.getLogger(__name__)
 
 from typing import Callable, Dict, List, Optional, TYPE_CHECKING
 
-from unpythonic import sym, Values
+from unpythonic import dyn, sym, Values
 from unpythonic.env import env
 
 from . import chattree
 from . import chatutil
+from . import config as librarian_config
 from . import llmclient
 
 # `hybridir` is only referenced by scaffold for type annotations (retriever
@@ -528,12 +529,25 @@ def ai_turn(llm_settings: env,
             if on_tools_start is not None:
                 on_tools_start(out.data["tool_calls"])
 
+            # Assemble this turn's tool-call request context (harness-supplied, NOT model-supplied)
+            # and bind it for the dynamic extent of the tool dispatch — the request-context pattern
+            # (cf. Racket's `parameterize`, Flask's `g`). Tool entrypoints that need this context read
+            # `dyn.tool_context`; see the field registry at `llmclient.make_dynvar(tool_context=...)`.
+            #
+            # Recomputed each loop iteration so that a websearch in an earlier iteration can inform the
+            # webfetch auto-allow in a later one. `head_node_id` is the assistant message that requested
+            # these calls, so the walk sees this turn's user message and any prior-iteration tool results.
+            tool_context = env(webfetch_allowed_hosts=chatutil.compute_auto_allowed_hosts(
+                datastore, head_node_id,
+                trust_search_results=librarian_config.webfetch_trust_search_results))
+
             # Each tool call produces exactly one response.
             # This will no-op if the message contains no tool calls.
-            tool_response_records = llmclient.perform_tool_calls(llm_settings,
-                                                                 message=out.data,
-                                                                 on_call_start=on_call_lowlevel_start,
-                                                                 on_call_done=on_call_lowlevel_done)
+            with dyn.let(tool_context=tool_context):
+                tool_response_records = llmclient.perform_tool_calls(llm_settings,
+                                                                     message=out.data,
+                                                                     on_call_start=on_call_lowlevel_start,
+                                                                     on_call_done=on_call_lowlevel_done)
 
             # Add the tool response messages to the chat.
             for tool_response_record in tool_response_records:

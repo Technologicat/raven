@@ -381,7 +381,7 @@ In particular, `torchaudio` should be part of the CUDA dep set, pinned to the ma
 
 CPU-only path: someone who just wants Raven-visualizer on a laptop without a GPU shouldn't have to learn about extra-dep groups. The default install (`pdm install` with no extras) should pull the CPU build of torch/torchaudio/torchvision; the `-G cudaXX` extras only add CUDA-build alternates. Today GPU support being opt-in is fine (it's the heavy/optional capability), but the CPU torch build still has to *appear*, otherwise `import torch` fails outright. Probably means listing the CPU-build versions in the base `[project] dependencies` (with PyTorch's CPU index URL) and having the `-G cudaXX` extras override the base pins via a higher-priority constraint.
 
-Discovered during the logsetup smoke test (2026-04-29) when a routine `pdm install` (run to refresh a console-script entry point) bumped torchaudio and broke the visualizer's import path.
+Discovered during the logsetup smoke test (2026-04-29) when a routine `pdm install` (run to refresh a console-script entry point) bumped torchaudio and broke the visualizer's import path. Recurred 2026-06-03 on maia (CUDA 12.8): adding `trafilatura` triggered a re-resolve that again bumped `torchaudio 2.10.0+cu128 → 2.11.0` (CUDA-13 build, `OSError: libcudart.so.13`); restored with `python -m pip install "torchaudio==2.10.0" --index-url https://download.pytorch.org/whl/cu128`. Second occurrence — this is a recurring tax on every dependency change, not a one-off.
 
 ## Convert startup `print()`s to `logger.info()` where appropriate
 
@@ -410,4 +410,63 @@ Plan when this becomes necessary:
 Approximate alternatives if we want to stay on `bm25s`: rebuild on a schedule (every Nth commit, or every M seconds of accumulated edits) rather than on every commit — relevance drifts a tiny bit between rebuilds in exchange for cheaper writes. Cheaper than a full backend swap; doesn't help asymptotically.
 
 Discovered during cancellable-commit work (2026-04-27).
+
+## webfetch GUI affordances (Librarian chat renderer)
+
+The webfetch tool (briefs/summer_2026_librarian_extension/01) ships its backend and
+access-control logic first; two GUI affordances in Librarian's chat-history renderer are
+deferred to a follow-up pass:
+
+- **"Send to AI" on every rendered URL.** A small inline icon next to each URL in the
+  chat-history widget that, on click, appends the URL to the user's pending input draft (the
+  user can add context and send). This closes the auto-allow workflow gap: when the model
+  presents search results, the user currently has no one-click way to get a URL back into a
+  user-role message (the markdown renderer's only URL action today is click-to-open). The
+  resulting user-role message goes through the existing auto-allow logic with no special-
+  casing — the click is structurally identical to the user typing the URL. From the brief (§2).
+
+- **"Allow this fetch" when a fetch is denied by the allowlist.** When `webfetch` refuses a
+  host that is neither on `webfetch_allowlist` nor user-typed this turn, surface the denial in
+  the GUI with a one-click override, so the user doesn't have to edit `config.py` and restart.
+  Open design questions: (a) does "allow" add the host to the *turn's* auto-allow set only, or
+  persist it to the allowlist (and if persist — session-only, or written back to config)?
+  (b) Synchronous mid-tool-call approval (block the agent loop on user input) is more involved
+  than the fire-and-forget "send to AI" button; an async "it was denied; allow + re-ask" flow
+  may be simpler. Ties in with the brief's planned "reload allowlist on the fly" (v1).
+
+The backend already cooperates: a denied fetch returns a canonical refusal string naming the
+host, so the GUI has what it needs to offer the override.
+
+Discovered during webfetch implementation (2026-06-03).
+
+## Headless agent-harness mode for `ai_turn` (scriptable agent layer)
+
+`llmclient` already acts as an LLM *scripting* layer — a non-interactive way to drive the model
+for one-shot tasks (used by `raven-pdf2bib` and friends). What's missing is the equivalent one
+level up: a way to drive the full **agent** loop (`scaffold.ai_turn`) — LLM plus tool-calling,
+branching chat tree, RAG — programmatically, with **no UI of any kind**.
+
+Note the distinction from the existing frontends: Librarian (`app.py`) is the GUI client and
+`minichat` is a TUI client, but *both* are interactive UIs. `scaffold` is already
+*frontend*-agnostic (its ~15 callbacks are the seam — `minichat` proves the same backend drives
+a terminal as well as the GUI), so the building blocks exist. The harness is not a third
+frontend; it's the *no-frontend*, non-interactive, programmatic caller. What's wanted is a small,
+ergonomic layer: feed it a backend (real or scripted), a datastore, and an initial message; let
+it run `user_turn` + `ai_turn` to completion with tools enabled; return the resulting nodes /
+tool transcript. Think "`llmclient` for agents".
+
+Value:
+- **Testing**: exercise agentic flows end-to-end without a live, nondeterministic LLM — e.g. the
+  websearch -> webfetch chain, canonical-phrase copying, multi-step tool loops. Today the
+  structural tests mock `invoke` / `perform_tool_calls`; a harness with a *scripted* backend
+  could drive the real `ai_turn` against canned model turns deterministically.
+- **Automation**: headless agent runs for batch/offline tasks, cron-style jobs, evaluation
+  harnesses — the same way `raven-pdf2bib` scripts the plain LLM today.
+
+Natural to build somewhere in the summer 2026 librarian six-part sprint; it would make every
+later brief's agent behavior far easier to verify. Likely lands near `scaffold` / `minichat`
+(a programmatic sibling of the CLI client) or as a thin `raven.librarian.agentharness`.
+
+Discovered during webfetch implementation (2026-06-03), when validating the agent loop required
+a live Qwen backend that wasn't available.
 
