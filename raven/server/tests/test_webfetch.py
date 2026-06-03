@@ -9,7 +9,11 @@ import socket
 
 import pytest
 
-from raven.server.modules import webfetch
+# webfetch imports `colorama` at module top (and, lazily, trafilatura/selenium/youtube-transcript-api).
+# The CI test job installs a hand-picked minimal dep subset that omits colorama; skip this whole
+# module when the import can't be satisfied. Mirrors test_scaffold.py / test_hybridir.py.
+webfetch = pytest.importorskip("raven.server.modules.webfetch",
+                               reason="webfetch needs colorama (not in the CI minimal dep subset)")
 
 
 class TestSchemeCheck:

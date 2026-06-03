@@ -7,10 +7,14 @@ The actual fetch (`api.webfetch_fetch`, HTTP to the server) is monkeypatched.
 
 import pytest
 
-from unpythonic import dyn
-from unpythonic.env import env
+# llmclient transitively imports `raven.client.api`, which pulls the heavy client dep stack
+# (qoi, spaCy, the TTS stack) that the CI test job's minimal subset omits. Skip this whole module
+# when the import can't be satisfied. Mirrors test_scaffold.py's importorskip on scaffold.
+llmclient = pytest.importorskip("raven.librarian.llmclient",
+                                reason="llmclient transitively needs the full raven-client dep stack")
 
-from raven.librarian import llmclient
+from unpythonic import dyn  # noqa: E402 -- after importorskip by design
+from unpythonic.env import env  # noqa: E402 -- after importorskip by design
 
 
 @pytest.fixture
