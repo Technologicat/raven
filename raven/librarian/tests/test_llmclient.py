@@ -76,3 +76,37 @@ class TestWebfetchWrapperGating:
         with dyn.let(tool_context=env(webfetch_allowed_hosts=frozenset())):
             result = llmclient.webfetch_wrapper("https://blocked.example/path")
         assert "blocked.example" in result
+
+
+@pytest.fixture
+def clean_session_approvals():
+    """Isolate the module-level session-approved-hosts set across tests."""
+    llmclient._session_approved_hosts.clear()
+    yield
+    llmclient._session_approved_hosts.clear()
+
+
+class TestSessionApprovedHosts:
+    def test_approve_lets_non_allowlisted_host_through(self, monkeypatch, fake_fetch, clean_session_approvals):
+        _set_allowlist(monkeypatch, ["*.arxiv.org"])
+        with dyn.let(tool_context=env(webfetch_allowed_hosts=frozenset())):
+            denied = llmclient.webfetch_wrapper("https://blog.example/post")
+            assert "not on the configured allowlist" in denied
+            assert fake_fetch == []  # denied before approval
+
+            llmclient.approve_host_for_session("blog.example")
+            allowed = llmclient.webfetch_wrapper("https://blog.example/post")
+            assert "CONTENT of" in allowed
+            assert fake_fetch == ["https://blog.example/post"]  # goes through after approval
+
+    def test_approve_is_case_insensitive(self, monkeypatch, fake_fetch, clean_session_approvals):
+        _set_allowlist(monkeypatch, ["doi.org"])
+        llmclient.approve_host_for_session("Example.COM")
+        with dyn.let(tool_context=env(webfetch_allowed_hosts=frozenset())):
+            assert "CONTENT of" in llmclient.webfetch_wrapper("https://example.com/x")
+
+    def test_approval_does_not_apply_when_allowlist_is_none(self, monkeypatch, fake_fetch, clean_session_approvals):
+        # With no allowlist there is no gate anyway; approval is simply irrelevant (everything passes).
+        _set_allowlist(monkeypatch, None)
+        assert "CONTENT of" in llmclient.webfetch_wrapper("https://anything.example/x")
+        assert fake_fetch == ["https://anything.example/x"]

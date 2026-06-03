@@ -16,7 +16,8 @@ __all__ = ["list_models",
            "token_count",
            "invoke", "action_ack", "action_stop",
            "perform_throwaway_task", "make_console_progress_handler",
-           "perform_tool_calls"]
+           "perform_tool_calls",
+           "approve_host_for_session"]
 
 import logging
 logger = logging.getLogger(__name__)
@@ -145,6 +146,21 @@ make_dynvar(tool_context=env())
 CANONICAL_NOT_ON_ALLOWLIST = ("The host {host} is not on the configured allowlist. The user can add it to the "
                               "webfetch_allowlist setting if you should be able to access this site.")
 
+# Hosts the user has explicitly approved during this session (in-memory; NOT persisted). Populated by
+# the GUI "allow this fetch" override when the user approves a host that `webfetch` denied. Consulted
+# by `webfetch_wrapper`'s gate alongside the configured allowlist and the per-turn auto-allow set.
+# Session-scoped by design: persisting approvals is deferred to a future JSON-config migration — we do
+# NOT programmatically rewrite the `.py` config files (that reads as dangerous and is fragile).
+_session_approved_hosts: set[str] = set()
+
+def approve_host_for_session(host: str) -> None:
+    """Approve `host` for `webfetch` for the rest of this session (in-memory, not persisted).
+
+    Used by the GUI override when the user allows a host the allowlist denied. Afterward,
+    `webfetch_wrapper` fetches from `host` even if it is not on `librarian_config.webfetch_allowlist`.
+    """
+    _session_approved_hosts.add(host.lower())
+
 def webfetch_wrapper(url: str) -> str:
     """Fetch a web page's main content, gated by the client-side domain allowlist.
 
@@ -159,13 +175,14 @@ def webfetch_wrapper(url: str) -> str:
     """
     host = netutil.url_host(url)
 
-    # Allowlist gate. `None` means unrestricted (subject only to the server-side network checks);
-    # when a list is configured, the host must be on it, or have been auto-allowed by the user this turn.
+    # Allowlist gate. `None` means unrestricted (subject only to the server-side network checks); when
+    # a list is configured, the host must be on it, auto-allowed by the user this turn, or approved by
+    # the user earlier this session (via the GUI override).
     allowlist = librarian_config.webfetch_allowlist
     if allowlist is not None:
         auto_allowed_hosts = getattr(dyn.tool_context, "webfetch_allowed_hosts", frozenset())
-        if not (netutil.host_matches_allowlist(host, allowlist) or host in auto_allowed_hosts):
-            logger.info(f"webfetch_wrapper: refusing '{url}': host '{host}' not on allowlist and not user-allowed this turn.")
+        if not (netutil.host_matches_allowlist(host, allowlist) or host in auto_allowed_hosts or host in _session_approved_hosts):
+            logger.info(f"webfetch_wrapper: refusing '{url}': host '{host}' not on allowlist, not user-allowed this turn, not session-approved.")
             return CANONICAL_NOT_ON_ALLOWLIST.format(host=(host or "(none)"))
 
     result = api.webfetch_fetch(url)  # server enforces SSRF/scheme, fetches, returns {"content", "url", "spaSuspected"}
