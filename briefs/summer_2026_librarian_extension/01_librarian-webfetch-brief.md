@@ -260,8 +260,8 @@ false-positive risk to scientific prose.
 
 ## 3. Tool spec
 
-OpenAI function shape, matching the existing `websearch` style and the verified spec (compat
-brief + MCP brief §3):
+OpenAI function shape, matching the existing `websearch` style and the verified spec (the compat
+brief, and the MCP client brief's schema-translation section):
 
 ```python
 {
@@ -304,8 +304,8 @@ the page, discussion proceeds against actual content rather than the model's pri
 
 ## 5. Result format — points at the content-parts refactor
 
-`webfetch` v0 returns text/markdown — a single text part under the content-parts model the MCP
-brief §5 introduces. Compatible with both:
+`webfetch` v0 returns text/markdown — a single text part under the content-parts model
+introduced in the content-parts brief. Compatible with both:
 
 - The current text-only `perform_tool_calls` (today): return the extracted string.
 - The future content-parts representation (when the refactor lands): wrap the extracted text as

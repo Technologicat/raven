@@ -436,11 +436,14 @@ when each handles its proper role.
 
 ### Composition with existing infrastructure
 
-The lorebook brief already established a **candidate-injection interface**: multiple sources
-emit candidates `{content, source_tag, priority_hint, dedup_key}` into a context-assembly
-stage that merges + dedups + injects. **Hindsight autosearch is one more source feeding into
-that same assembler.** No new architecture; same shape as lorebook, glossary, HybridIR. The
-assembler doesn't know or care which backend produced any given candidate.
+The lorebook brief (which runs before this one) already established a **candidate-injection
+interface**: multiple sources emit candidates `{content, source_tag, priority_hint, dedup_key}`
+into a context-assembly stage that merges + dedups + injects, plus a trivial v0 assembler.
+**Hindsight autosearch is one more source feeding into that same assembler** — and, as the first
+*second* ranked source alongside HybridIR, this brief is where the assembler grows the cross-source
+tiering and rank fusion the lorebook brief deferred (see "Context assembler tiering" and "Ranking
+strategy across retrieval sources" below). No new architecture; same candidate shape as lorebook,
+glossary, HybridIR. The assembler doesn't know or care which backend produced any given candidate.
 
 Per-user-turn flow:
 
@@ -507,9 +510,9 @@ considerations are worth recording so the moment of decision is informed):
       scaffold without the desktop-app layer; if scaffold accidentally grows an import
       from DPG / `chat_controller` / `gui_shutdown` / etc., `minichat` breaks at import
       time, providing CI-checkable enforcement. **Verify `minichat` continues to start
-      and function through phase-4 and phase-5 changes** — cheap to run, immediate fail
-      signal. The same canary will protect headless batch-eval use later (identical
-      constraint).
+      and function through the MCP-client and Hindsight integration changes** — cheap to run,
+      immediate fail signal. The same canary will protect headless batch-eval use later
+      (identical constraint).
 
 2. **Cancellation grouping: most likely share the AI-turn manager, but decide deliberately.**
 
@@ -652,12 +655,12 @@ debug and inspection are first-class.
 **Locked in: `payload.context_assembly`, replacing the legacy `payload.retrieval`.** The
 legacy field carries existing RAG hits today; it gets superseded by a broader
 `context_assembly` field holding everything the assembler did this turn across all sources.
-Auto-migrate existing chattree data via `chatutil.upgrade_datastore` (same hook content-parts
-uses for its V4 migration): on load, rewrite each payload's `retrieval` field into the new
-`context_assembly` shape with `source: "rag"` per entry, drop the old field. Atomic
-conversion (no transitional shim accepting both shapes) — same discipline as the embeddings
-config migration: small user base, minimal customization in the wild, cleaner schema worth
-the forced rewrite.
+Auto-migrate existing chattree data via `chatutil.upgrade_datastore` (the same load-time hook
+the compat and content-parts briefs use for their migration stanzas): on load, rewrite each
+payload's `retrieval` field into the new `context_assembly` shape with `source: "rag"` per
+entry, drop the old field. Atomic conversion (no transitional shim accepting both shapes) —
+same discipline as the embeddings config migration: small user base, minimal customization in
+the wild, cleaner schema worth the forced rewrite.
 
 The unified schema: **one container for "what the assembler put into context this turn,"
 across all sources**, with `source: "hindsight" | "rag" | "lorebook" | "glossary" | ...` as
@@ -785,7 +788,7 @@ TEMPR retrieval surface to the protocol's `query()` shape). Payoff: switching to
 - *Hindsight-specific config fields* (URL, auth, bank IDs) stay in Hindsight's config block;
   the protocol abstracts call shapes, not configuration.
 
-**The discipline in one sentence**: phase-5 work is "stand up Hindsight" + "implement the
+**The discipline in one sentence**: this brief's work is "stand up Hindsight" + "implement the
 MemoryBackend protocol with Hindsight as first implementation," not "wire Hindsight directly
 into the assembler."
 

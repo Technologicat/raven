@@ -223,6 +223,13 @@ intelligence when that use case actually pushes the limit, not before.
 So: fix the candidate-emitting *interface* now (the lorebook, and later HybridIR/Hindsight, are
 clients of an assembler); defer the assembler's logic to a prototype-informed second pass.
 
+**Where the assembler's intelligence gets specified:** the Hindsight standup brief (which runs
+after this one) is the first feature to add a *second* ranked retrieval source alongside HybridIR,
+so it's where cross-source tiering (deterministic/triggered vs. ranked) and rank fusion (RRF with
+per-source floors) are worked out. This brief owns the candidate-emitting interface and the
+trivial v0 assembler; that brief owns the ranking that becomes necessary once more than one ranked
+source competes for budget. Two briefs, one assembler, clean seam.
+
 ---
 
 ## Relationship to the other briefs

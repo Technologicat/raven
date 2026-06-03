@@ -66,7 +66,8 @@ accumulator a superset that also handles the "whole object in one delta" case (a
 fragment that already contains complete `arguments`). Prefer the unified accumulator.
 
 **The exact delta shape and a reference accumulator are in the LM Studio tools doc**
-(`00_stuff/lmstudio_api_docs/oai_03_tools_and_function_calling.md`, "Streaming" section): the
+(local copy `00_stuff/lmstudio_api_docs/oai_03_tools_and_function_calling.md`, "Streaming"
+section; online at https://lmstudio.ai/docs/developer/openai-compat/tools#streaming): the
 first fragment carries
 `id`, `type`, and `function.name` with empty `arguments`; subsequent fragments carry only
 `function.arguments` pieces with `id`/`name`/`type` as `None`. Their accumulator concatenates
@@ -572,7 +573,8 @@ first asking Juha to start it.
   different (extra framing) → `mode: instruct` is doing work, keep on ooba path.
 - **V2 — tool-call delta shape on LM Studio (sanity-confirm only).** The shape is documented
   (§2); just confirm the target model behaves as the doc
-  (`00_stuff/lmstudio_api_docs/oai_03_tools_and_function_calling.md`) says. **Protocol:**
+  (local copy `00_stuff/lmstudio_api_docs/oai_03_tools_and_function_calling.md`; online at
+  https://lmstudio.ai/docs/developer/openai-compat/tools) says. **Protocol:**
   start LM Studio
   with `lms log stream` in a second terminal. From a quick Python script using the `openai`
   client pointed at `http://localhost:1234/v1`, send a chat completion with `stream=True`, a

@@ -179,9 +179,51 @@ After this, `perform_tool_calls` is unchanged — it looks up the entrypoint by 
 The closure happens to dispatch over MCP instead of calling a local function. That's the whole
 point of the design: the loop doesn't know or care.
 
-The `mcp` SDK is `asyncio`; `llmclient` is sync. Wrap the SDK calls through the async-bridge
-utility established in an earlier phase — no new design work needed here, just consume the
-existing facade.
+The `mcp` SDK is `asyncio`; `llmclient` is sync. This is the one part of the work that needs
+careful design rather than mechanical typing — see the sync/async impedance subsection below.
+
+### Sync/async impedance — the async bridge
+
+**Do not** thread async through `llmclient` — `invoke`, `perform_tool_calls`, and the scaffold
+must stay sync. Isolate all async behind a sync facade.
+
+**Shape: a small generic utility module, not an MCP-specific bridge.** Put it at
+`raven.common.async_bridge` — one class, ~60 lines, owning a background thread + event loop and
+exposing `submit(coro) -> result` (blocking) and `shutdown(timeout)`. The MCP client is its first
+consumer; later asyncio consumers (the `lmstudio` SDK if it ever earns its way in, a
+`playwright`-based browser tool, async arXiv clients, any other async library Raven absorbs)
+reuse it. Generic to the *bridging pattern*, not generic to async paradigms — there's no good
+cross-paradigm abstraction (asyncio vs. trio vs. anyio vs. threading vs. native CPS genuinely
+don't compose, and every attempt at a Unified Async Theory has either lost to network effects or
+gone baroque), so don't try; just keep this bridge tight enough that wiring a new asyncio
+dependency through it is mechanical.
+
+Concretely:
+
+- Dedicated background thread runs an asyncio event loop.
+- `submit(coro)` → `asyncio.run_coroutine_threadsafe(coro, loop).result()`, blocking.
+- `shutdown(timeout)` cancels pending tasks, stops the loop, joins the thread (this is the
+  `shutdown(timeout)` the lifecycle section relies on for force-terminating hung sessions).
+- The MCP client wraps this: `list_tools()` and `call_tool()` are sync methods that internally
+  `bridge.submit(session.list_tools())` etc.
+
+**Why a bare daemon thread rather than `bgtask`** (the obvious question, so answered here):
+`bgtask.TaskManager` groups *completable, cooperatively-cancellable* callables for cancellation —
+typically several managers sharing one `ThreadPoolExecutor`. A `run_forever()` event loop is none
+of those things: it never completes, it ignores the `env.cancelled` poll that cooperative
+cancellation relies on (only `loop.call_soon_threadsafe(loop.stop)` breaks it), and it would pin
+a pool worker for the entire app lifetime. The loop's real units of work are the coroutines,
+tracked by asyncio and by the `concurrent.futures.Future` that `run_coroutine_threadsafe` returns
+— not by `bgtask`. So routing it through `bgtask` would engage none of `bgtask`'s machinery while
+leaking asyncio into the shared task manager. `bgtask` and `async_bridge` are *sibling*
+`raven.common` primitives — one backgrounds a callable, the other crosses into asyncio — not one
+built on the other. (Note thread *creation* isn't `bgtask`'s job either: it takes an executor as
+a dependency.)
+
+Everything upstream of the facade stays exactly as sync as it is now. This is also the boundary
+between Raven's thread-based concurrency world (`bgtask.TaskManager` over `ThreadPoolExecutor`,
+GIL-tolerated because the work is I/O- or GPU-bound) and the asyncio-shaped dependency — Raven
+doesn't adopt asyncio internally, it just talks to it at this one boundary.
 
 ---
 
@@ -189,7 +231,8 @@ existing facade.
 
 The OpenAI function spec Raven builds was reverse-engineered from an informal DeepSeek example
 and never checked against the real thing. It is now verified against the LM Studio tools doc
-(`00_stuff/lmstudio_api_docs/oai_03_tools_and_function_calling.md`): the shape
+(local copy `00_stuff/lmstudio_api_docs/oai_03_tools_and_function_calling.md`; online at
+https://lmstudio.ai/docs/developer/openai-compat/tools): the shape
 
 ```json
 {"type": "function",
@@ -303,8 +346,8 @@ phase 4 touches scaffold internals.
   registered closure routes it through `perform_tool_calls` → MCP session → result back to the
   model; a multi-turn tool exchange completes.
 - Works over both stdio and HTTP transports.
-- `llmclient`/`scaffold` remain synchronous; all async stays behind the bridge facade from
-  the earlier phase.
+- `llmclient`/`scaffold` remain synchronous; all async stays behind the `raven.common.async_bridge`
+  facade (the sync/async impedance subsection in the adapter section).
 - A dead or reloading MCP server degrades gracefully and does not crash the chat.
 - Hindsight reachable as a live test target.
 
