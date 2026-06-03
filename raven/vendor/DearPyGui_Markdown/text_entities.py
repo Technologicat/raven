@@ -7,7 +7,7 @@ from . import CallInNextFrame
 from . import get_text_size
 from .font_attributes import Attribute, Bold, BoldItalic, Default, Font, Italic, H1, H2, H3, H4, H5, H6
 from .line_atributes import Blockquote, List, Separator
-from .text_attributes import Code, Pre, Strike, Underline, Url
+from .text_attributes import Code, Pre, Strike, Underline, Url, render_url_secondary_action_icon
 
 from ...common.gui import utils as guiutils
 
@@ -89,6 +89,9 @@ class AttributeController(list[Attribute]):
 
         self.get_font()
         self.get_color()
+
+        if Url in self:  # Raven: inline secondary-action icon, to the left of the URL's first run (no-op if unconfigured)
+            render_url_secondary_action_icon(self[self.index(Url)], parent=parent, body_font=self.font)
 
         parent_text_group = parent
         if max_text_height > 0:

@@ -97,6 +97,7 @@ from . import text_attributes
 from . import text_entities
 from .attribute_types import set_font_registry, set_add_font_function  # noqa: F401: for export
 from .font_attributes import set_font  # noqa: F401: for export
+from .text_attributes import set_url_secondary_action  # noqa: F401: for export
 
 
 def wrap_text_entity(text: text_entities.StrEntity | text_entities.TextEntity, width: int | float = -1) -> text_entities.LineEntity:

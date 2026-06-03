@@ -1,9 +1,86 @@
+from typing import Callable
+
 from . import get_text_size
 from .attribute_types import Attribute, AttributeConnector, CallInNextFrame, HoverAttribute
 
 import dearpygui.dearpygui as dpg
 
 from ...common.gui import utils as guiutils
+
+
+# --------------------------------------------------------------------------------
+# Raven extension: optional per-URL "secondary action".
+#
+# When configured via `set_url_secondary_action`, each rendered URL gets a small clickable icon
+# immediately to its left; clicking it invokes `callback(url)`. Raven-librarian uses this to offer
+# a "send this link to the chat input" affordance, distinct from the URL's normal left/middle
+# click (open in browser). Unset by default, so the upstream renderer behavior is unchanged.
+
+_url_secondary_action: Callable[[str], None] | None = None
+_url_secondary_glyph: str = ""
+_url_secondary_font: int | str | None = None
+_url_secondary_color: list[int, int, int, int] = (140, 160, 200, 255)
+_url_secondary_tooltip: str = "{url}"
+
+def set_url_secondary_action(callback: Callable[[str], None] | None,
+                             *,
+                             glyph: str = "",
+                             font: int | str | None = None,
+                             color: list[int, int, int, int] = (140, 160, 200, 255),
+                             tooltip: str = "{url}") -> None:
+    """Configure an optional secondary action, shown as a clickable icon to the left of each URL.
+
+    `callback`: called with the URL string when the icon is clicked. `None` (default) disables the
+                feature entirely — no icon, upstream behavior.
+    `glyph`: the icon character to display (e.g. a FontAwesome glyph). Empty also disables.
+    `font`: DPG font bound to the icon (e.g. an icon font); `None` uses the current font.
+    `color`: icon color.
+    `tooltip`: tooltip text; `{url}` is substituted with the URL.
+    """
+    global _url_secondary_action, _url_secondary_glyph, _url_secondary_font
+    global _url_secondary_color, _url_secondary_tooltip
+    _url_secondary_action = callback
+    _url_secondary_glyph = glyph
+    _url_secondary_font = font
+    _url_secondary_color = color
+    _url_secondary_tooltip = tooltip
+
+def render_url_secondary_action_icon(url_attribute: "Url", parent: int | str, body_font: int | str | None = None) -> None:
+    """Render the secondary-action icon to the left of a URL's first text run, if configured.
+
+    No-op when no action is configured. Idempotent per URL: emits at most one icon even when the
+    URL wraps across several runs, tracked via the shared `attribute_connector` (which survives the
+    per-run deep-copy of the `Url` attribute). Called from `AttributeController.render`.
+
+    `body_font`: the URL run's text font, used to render the non-breaking space that separates the
+    icon from the link text — a real body font reliably has a space advance, whereas the icon font
+    and the DPG default font may not.
+    """
+    if _url_secondary_action is None or not _url_secondary_glyph:
+        return
+    connector = url_attribute.attribute_connector
+    if getattr(connector, "_raven_secondary_icon_done", False):
+        return
+    connector._raven_secondary_icon_done = True  # one icon per URL, not per wrapped run
+
+    action = _url_secondary_action
+    url = url_attribute.url
+    with guiutils.nonexistent_ok():
+        icon = dpg.add_text(_url_secondary_glyph, parent=parent, color=_url_secondary_color)
+        if _url_secondary_font is not None:
+            dpg.bind_item_font(icon, _url_secondary_font)
+        icon_tooltip = dpg.add_tooltip(parent=icon)
+        dpg.add_text(_url_secondary_tooltip.format(url=url), parent=icon_tooltip)
+        handler = dpg.add_item_handler_registry()
+        def on_secondary_icon_clicked(_sender, _app_data, _user_data) -> None:  # DPG click-callback signature; args unused (url/action captured from the closure)
+            action(url)
+        dpg.add_item_clicked_handler(parent=handler, callback=on_secondary_icon_clicked)
+        dpg.bind_item_handler_registry(icon, handler)
+        # One non-breaking space between the icon and the link text, in the body font (which has a
+        # reliable space advance). The group's ItemSpacing is 0, so this is the only gap.
+        gap = dpg.add_text(chr(0x00A0), parent=parent)
+        if body_font is not None:
+            dpg.bind_item_font(gap, body_font)
 
 
 class Underline(Attribute):
