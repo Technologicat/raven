@@ -1,3 +1,31 @@
+"""Background task management: task tracking and cancellation grouping over a `ThreadPoolExecutor`.
+
+Mental model, worth having before reaching for this:
+
+  - A `TaskManager` owns no threads. It is a thin bookkeeping layer over a
+    `concurrent.futures.ThreadPoolExecutor` *supplied by the caller*; its job is to track
+    submitted tasks and to group them for cancellation. The executor is the thread pool;
+    the manager is a cancellation boundary over part of it.
+
+  - Several `TaskManager`s commonly share one executor. The intended pattern is one manager
+    per *kind* of task, all bound to the same pool. The grouping is for cancellation, not
+    for isolation.
+
+  - Two modes:
+      - "concurrent": plain grouping. Task tracking on top of the executor; nothing is
+        auto-cancelled, tasks run as submitted.
+      - "sequential": There Can Be Only One. Submitting a new task debounces and auto-cancels
+        any earlier task in the same manager — for "only the latest matters" work such as GUI
+        updates driven by rapid input (search-as-you-type, resize de-spamming).
+
+  - Tasks must be *completable*. A task is expected to run, finish (or observe the cooperative
+    `cancelled` flag and return), and release its worker. A `run_forever`-style loop is the
+    wrong shape for this module: it never releases its worker, so it permanently pins one slot
+    of a fixed-size pool — submit enough of those and ordinary completable work silently starves
+    (queued, never run). Persistent services (event loops, render/playback loops) belong on a
+    dedicated thread of their own, not here. This is a work queue, not a host for actors.
+"""
+
 __all__ = ["TaskManager",
            "ManagedTask", "make_managed_task",
            "status_stopped", "status_pending", "status_running"]
