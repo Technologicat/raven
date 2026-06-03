@@ -470,3 +470,43 @@ later brief's agent behavior far easier to verify. Likely lands near `scaffold` 
 Discovered during webfetch implementation (2026-06-03), when validating the agent loop required
 a live Qwen backend that wasn't available.
 
+## Markdown ATX headings (`### ...`) don't render in the chat view
+
+LLM replies that use ATX headings (`# `, `## `, `### `) show the literal `#` markers in
+Librarian's chat history instead of rendering as headings. Confirmed it is NOT a data/websearch
+problem: the stored content is valid markdown, and `mistletoe.markdown()` produces a correct
+`<h3>...</h3>` even with the `<font color='...'>` wrapper that `chat_controller._render_text`
+(chat_controller.py ~455) adds. So the heading is lost downstream, in the adopted
+`raven/vendor/DearPyGui_Markdown` renderer's HTML→widget stage (`_HTMLToParser.handle_starttag`
+in `parser.py` plus the entity rendering) — it doesn't appear to map `<h1>`–`<h6>` to heading
+entities. Raven's own help text sidesteps this by using `**bold**` as pseudo-headings instead of
+`###`, consistent with headings never having rendered.
+
+Fix when convenient: add `<h1>`–`<h6>` handling to the renderer's HTML parser, wiring them to the
+existing `H1`–`H6` font attributes (already defined in `font_attributes.py`; the markdown path may
+just not be connecting them). Separately, emoji in replies render as tofu/`?` because the body font
+has no emoji glyphs — cosmetic, lower priority (would need an emoji fallback font).
+
+Discovered while smoke-testing the webfetch send-to-AI affordance (2026-06-03).
+
+## Colored-glyph / emoji and super/subscript font coverage in the GUI
+
+Two related font-rendering gaps across the constellation:
+
+- **Emoji** in LLM replies render as tofu/`?` — the body font has no emoji glyphs. Note DPG's font
+  atlas (Dear ImGui) is **monochrome by default**; full-color emoji need the FreeType backend with
+  `LoadColor` (COLR/CPAL or CBDT/CBLC), which DPG does not expose. Realistic options: (a) ship a
+  *monochrome outline* emoji font with a permissive license (e.g. an OpenMoji-Black or Twemoji-mono
+  build) and accept flat glyphs; or (b) detect emoji codepoints and splice **image widgets** into the
+  markdown renderer (same per-run hook used for the webfetch URL icon) from a pre-rasterized,
+  permissively-licensed emoji set (made offline, since the image-gen models don't co-reside in VRAM).
+- **Super/subscripts** (Visualizer): math superscripts and chemistry subscripts for the
+  letters/numbers Unicode provides (U+2070–U+209F etc.) need a font that actually carries those
+  glyphs. Raven currently has no single font covering both well.
+
+Both reduce to "font with the right Unicode coverage (and possibly color)" plus, for color emoji, the
+DPG/ImGui monochrome-atlas limitation. Worth a dedicated session: survey permissive fonts, decide
+font-vs-image-injection, and (for emoji) whether a flat monochrome glyph is acceptable.
+
+Raised during webfetch GUI smoke-testing (2026-06-03); flagged for a dedicated discussion.
+
