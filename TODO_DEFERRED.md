@@ -439,3 +439,34 @@ host, so the GUI has what it needs to offer the override.
 
 Discovered during webfetch implementation (2026-06-03).
 
+## Headless agent-harness mode for `ai_turn` (scriptable agent layer)
+
+`llmclient` already acts as an LLM *scripting* layer — a non-interactive way to drive the model
+for one-shot tasks (used by `raven-pdf2bib` and friends). What's missing is the equivalent one
+level up: a way to drive the full **agent** loop (`scaffold.ai_turn`) — LLM plus tool-calling,
+branching chat tree, RAG — programmatically, with **no UI of any kind**.
+
+Note the distinction from the existing frontends: Librarian (`app.py`) is the GUI client and
+`minichat` is a TUI client, but *both* are interactive UIs. `scaffold` is already
+*frontend*-agnostic (its ~15 callbacks are the seam — `minichat` proves the same backend drives
+a terminal as well as the GUI), so the building blocks exist. The harness is not a third
+frontend; it's the *no-frontend*, non-interactive, programmatic caller. What's wanted is a small,
+ergonomic layer: feed it a backend (real or scripted), a datastore, and an initial message; let
+it run `user_turn` + `ai_turn` to completion with tools enabled; return the resulting nodes /
+tool transcript. Think "`llmclient` for agents".
+
+Value:
+- **Testing**: exercise agentic flows end-to-end without a live, nondeterministic LLM — e.g. the
+  websearch -> webfetch chain, canonical-phrase copying, multi-step tool loops. Today the
+  structural tests mock `invoke` / `perform_tool_calls`; a harness with a *scripted* backend
+  could drive the real `ai_turn` against canned model turns deterministically.
+- **Automation**: headless agent runs for batch/offline tasks, cron-style jobs, evaluation
+  harnesses — the same way `raven-pdf2bib` scripts the plain LLM today.
+
+Natural to build somewhere in the summer 2026 librarian six-part sprint; it would make every
+later brief's agent behavior far easier to verify. Likely lands near `scaffold` / `minichat`
+(a programmatic sibling of the CLI client) or as a thin `raven.librarian.agentharness`.
+
+Discovered during webfetch implementation (2026-06-03), when validating the agent loop required
+a live Qwen backend that wasn't available.
+
