@@ -161,7 +161,7 @@ def approve_host_for_session(host: str) -> None:
     """
     _session_approved_hosts.add(host.lower())
 
-def webfetch_wrapper(url: str) -> str:
+def webfetch_wrapper(url: str) -> str | tuple[str, dict]:
     """Fetch a web page's main content, gated by the client-side domain allowlist.
 
     Tool entrypoint for the LLM's `webfetch` tool. Enforces the allowlist policy (which constrains
@@ -183,7 +183,10 @@ def webfetch_wrapper(url: str) -> str:
         auto_allowed_hosts = getattr(dyn.tool_context, "webfetch_allowed_hosts", frozenset())
         if not (netutil.host_matches_allowlist(host, allowlist) or host in auto_allowed_hosts or host in _session_approved_hosts):
             logger.info(f"webfetch_wrapper: refusing '{url}': host '{host}' not on allowlist, not user-allowed this turn, not session-approved.")
-            return CANONICAL_NOT_ON_ALLOWLIST.format(host=(host or "(none)"))
+            # Structured return: the canonical refusal for the model, plus metadata the GUI override reads
+            # (on the resulting tool node) to offer "approve this host" and re-run with the fetch allowed.
+            return (CANONICAL_NOT_ON_ALLOWLIST.format(host=(host or "(none)")),
+                    {"webfetch_denied_host": host})
 
     result = api.webfetch_fetch(url)  # server enforces SSRF/scheme, fetches, returns {"content", "url", "spaSuspected"}
     if result.get("spaSuspected"):
@@ -825,7 +828,8 @@ def perform_tool_calls(settings: env,
                                  status: str,
                                  toolcall_id: Optional[str],
                                  function_name: Optional[str],
-                                 dt: Optional[float]) -> None:
+                                 dt: Optional[float],
+                                 tool_metadata: Optional[Dict] = None) -> None:
         """Add a tool response record to `tool_response_records`.
 
         The record is an `unpythonic.env.env` with the following attributes:
@@ -845,6 +849,11 @@ def perform_tool_calls(settings: env,
             `dt`: Optional[float]: Duration of this tool call, in seconds. Recommended to be included whenever
                                    the request was valid enough to actually proceed to call the function
                                    (so that the call timing can be measured).
+
+            `tool_metadata`: Optional[Dict]: Structured metadata the entrypoint attached to this result
+                             (by returning `(text, metadata)` instead of a plain string). The caller
+                             (`scaffold`) merges it into the tool node's `generation_metadata`. Used e.g.
+                             by `webfetch_wrapper` to record `webfetch_denied_host` for the GUI override.
         """
         tool_response_message = chatutil.create_chat_message(llm_settings=settings,
                                                              role="tool",
@@ -858,6 +867,8 @@ def perform_tool_calls(settings: env,
             record.function_name = function_name
         if dt is not None:
             record.dt = dt
+        if tool_metadata is not None:
+            record.tool_metadata = tool_metadata
         tool_response_records.append(record)
         if on_call_done is not None:
             try:
@@ -917,12 +928,21 @@ def perform_tool_calls(settings: env,
             logger.warning(f"perform_tool_calls: {toolcall_id}: function '{function_name}': ignoring exception from event handler `on_call_start`", exc_info=True)
         try:
             with timer() as tim:
-                tool_output_text = function(**kwargs)
+                tool_output = function(**kwargs)
         except Exception as exc:
             logger.warning(f"perform_tool_calls: {toolcall_id}: function '{function_name}': exited with exception", exc_info=True)
             add_tool_response_record(f"Tool call failed. Function '{function_name}' exited with exception {type(exc)}: {exc}", status="error", toolcall_id=toolcall_id, function_name=function_name, dt=tim.dt)
         else:  # success!
             logger.debug(f"perform_tool_calls: {toolcall_id}: Function '{function_name}' returned successfully.")
-            add_tool_response_record(tool_output_text, status="success", toolcall_id=toolcall_id, function_name=function_name, dt=tim.dt)
+            # An entrypoint returns either a plain string, or `(text, metadata_dict)` to attach structured
+            # metadata to the tool-response node (e.g. webfetch records a denied host for the GUI override).
+            # This `str | (str, dict)` shape is deliberately interim — it will fold into a single structured
+            # tool-result type (text + content parts + is_error + metadata) when the content-parts and MCP
+            # work lands; at that point this branch goes away.
+            if isinstance(tool_output, tuple):
+                tool_output_text, tool_metadata = tool_output
+            else:
+                tool_output_text, tool_metadata = tool_output, None
+            add_tool_response_record(tool_output_text, status="success", toolcall_id=toolcall_id, function_name=function_name, dt=tim.dt, tool_metadata=tool_metadata)
 
     return tool_response_records

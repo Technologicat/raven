@@ -562,6 +562,8 @@ def ai_turn(llm_settings: env,
                         generation_metadata["function_name"] = tool_response_record.function_name
                     if "dt" in tool_response_record:
                         generation_metadata["dt"] = tool_response_record.dt  # elapsed wall time, seconds
+                    if "tool_metadata" in tool_response_record:  # structured metadata the entrypoint attached (e.g. webfetch_denied_host)
+                        generation_metadata.update(tool_response_record.tool_metadata)
 
                     payload["generation_metadata"] = generation_metadata
                     return payload
