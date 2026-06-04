@@ -668,3 +668,22 @@ while a turn is in flight as a cheap interim guard.
 
 Discovered during brief 02 LM Studio live validation (2026-06-04).
 
+## Idle prefill fires even when the HEAD's token count is already exact (redundant, and slows the next turn)
+
+`DPGChatController._context_prefill_entrypoint` schedules an idle prefill (5 s after a HEAD change) to get an
+exact `usage.prompt_tokens` count and warm the backend KV cache. But it doesn't check whether the current
+count is *already exact* — after a normal chat turn, the just-completed `invoke` already returned real `usage`
+for this HEAD's prompt, so the indicator is already `X%` (exact) and the KV cache is already warm. The idle
+prefill then fires anyway 5 s later, which is pure cost: a second full prompt-processing pass with no benefit.
+Worse, if the user sends the next message while that redundant prefill is mid-flight, the two prefills (the
+idle one and the real turn's) compete for backend compute and *slow down* the next turn. Observed live with
+LM Studio: two expensive prefills running simultaneously.
+
+Fix: the prefill entrypoint should cancel itself (no-op) when the current HEAD's count is already known-exact —
+i.e. track whether the last count for this HEAD came from real `usage` (exact) vs. the calibrated estimate, and
+only prefill when it's an estimate (or when the HEAD's prompt has changed since the last exact reading). The
+exact/estimate bit already drives the `X%` vs `~X%` typography, so the signal is in hand; it just needs to gate
+the prefill too.
+
+Discovered during brief 02 PR-B work, reported by Juha from live LM Studio use (2026-06-04).
+
