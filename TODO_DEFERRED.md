@@ -704,3 +704,25 @@ in hand; this is purely a streaming-renderer presentation change.
 
 Discovered during brief 02 §9 live validation, suggested by Juha (2026-06-04).
 
+## DearPyGui_Markdown inline-code background boxes are stranded on dynamic reflow
+
+Inline-code spans (`` `like this` ``) render a grey rounded background box behind the text. The box position is
+correct on first render, but when the layout above the span *reflows* — e.g. expanding/collapsing a message's
+thinking trace, which pushes the whole answer down — the text moves but the background box stays put, leaving
+empty grey rectangles stranded mid-paragraph (observed live: three stranded boxes after expanding a thought
+bubble whose answer contained `` `code` `` spans).
+
+Root cause in the vendored renderer: `DearPyGui_Markdown/text_attributes.py` `Code.render` captures the text
+group's **absolute** screen position once via `dpg.get_item_pos(dpg_text_group)` and creates the background as
+an absolutely-positioned `dpg.add_group(pos=pos)` + drawlist quad. Absolute position doesn't track normal-flow
+reflow, so any layout change above the span leaves the box behind. (The thought-bubble show/hide toggle is the
+easy repro now that §9/§10 made thinking traces prominent, but window-resize reflow and message edits would
+trigger it too.)
+
+Same class as the list-item bullet-point position bug fixed earlier — a decoration positioned from a captured
+absolute pos rather than following the live layout. Fix directions: draw the background relative to the text in
+normal flow instead of an absolute-pos group, or recompute/redraw the Code (and Pre) backgrounds when the
+containing layout changes (the renderer's `post_render` / `CallInNextFrame` machinery already exists for `Pre`).
+
+Discovered during brief 02 §9/§10 live validation (2026-06-04).
+
