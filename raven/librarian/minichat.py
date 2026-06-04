@@ -541,32 +541,39 @@ def minimal_chat_client(backend_url) -> None:
                 print(chatutil.format_message_number(ai_message_number, markup="ansi"))
 
             chars = 0
-            inside_think_block = False
-            def on_llm_progress(n_chunks: int, chunk_text: str) -> None:
+            was_thought = False  # whether the previous rendered event was a thought (to print the thought-bubble delimiters on transitions)
+            def on_llm_progress(event):
                 nonlocal chars
-                nonlocal inside_think_block
+                nonlocal was_thought
+
+                # `invoke` is the single parser (brief 02 §9); dispatch on the typed event. Tool calls aren't
+                # streamed to the terminal; they appear in the completed message / tool-result output.
+                if event["type"] == "tool_call":
+                    return llmclient.action_ack
+                chunk_text = event["text"]
+                is_thought = (event["type"] == "reasoning")
+
+                # Mark the thought-bubble boundaries on the channel transition (the reasoning text is no longer
+                # delimited by inline <think> tags — it arrives on its own typed channel).
+                prefix = ""
+                if is_thought and not was_thought:
+                    prefix = colorizer.colorize("⊳⊳⊳Thought⊳⊳⊳\n", colorizer.Fore.BLUE)
+                    chars = 0
+                elif was_thought and not is_thought:
+                    prefix = colorizer.colorize("\n⊲⊲⊲Thought⊲⊲⊲\n", colorizer.Fore.BLUE)
+                    chars = 0
+                was_thought = is_thought
+
+                colorful_chunk_text = colorizer.colorize(chunk_text, colorizer.Style.DIM) if is_thought else chunk_text
 
                 chars += len(chunk_text)
-
-                # Detect think block state (TODO: improve; very rudimentary and brittle for now) and determine text color
-                if "<think>" in chunk_text:
-                    inside_think_block = True
-                    colorful_chunk_text = colorizer.colorize("⊳⊳⊳Thought⊳⊳⊳", colorizer.Fore.BLUE)
-                elif "</think>" in chunk_text:
-                    inside_think_block = False
-                    colorful_chunk_text = colorizer.colorize("⊲⊲⊲Thought⊲⊲⊲", colorizer.Fore.BLUE)
-                elif inside_think_block:
-                    colorful_chunk_text = colorizer.colorize(chunk_text, colorizer.Style.DIM)
-                else:
-                    colorful_chunk_text = chunk_text
-
                 if "\n" in chunk_text:  # one token at a time; should have either one linefeed or no linefeed
                     chars = 0  # good enough?
                 elif chars >= librarian_config.llm_line_wrap_width:  # TODO: think of a better way to split to lines
                     print()
                     chars = 0
 
-                print(colorful_chunk_text, end="")
+                print(f"{prefix}{colorful_chunk_text}", end="")
                 sys.stdout.flush()
                 return llmclient.action_ack  # let the LLM keep generating (we could return `action_stop` to interrupt the LLM, keeping the content received so far)
 

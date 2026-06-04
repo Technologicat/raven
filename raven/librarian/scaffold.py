@@ -400,13 +400,11 @@ def ai_turn(llm_settings: env,
                        Each element of the list is a chat message in the format accepted by the LLM backend,
                        with "role" and "content" fields.
 
-    `on_llm_progress`: 2-argument callable, with arguments `(n_chunks: int, chunk_text: str)`.
-                       Called while streaming the response from the LLM, typically once per generated token.
-
-           `n_chunks: int`: How many chunks have been generated so far, for this invocation.
-                            Useful for live UI updates.
-
-           `chunk_text: str`: The text of the current chunk (typically a token).
+    `on_llm_progress`: 1-argument callable taking a typed stream event `event: Dict`; forwarded verbatim to
+                       `llmclient.invoke`'s `on_progress` (which see for the event shapes — `content`,
+                       `reasoning`, `tool_call`). Called while streaming the response, typically once per
+                       generated token. `invoke` is the single parser; this callback just dispatches on
+                       `event["type"]`.
 
            Return value: `action_ack` to let the LLM keep generating, `action_stop` to interrupt and finish forcibly.
 

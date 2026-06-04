@@ -276,15 +276,15 @@ class TestInvokeStreamRobustness:
 
     def test_token_count_falls_back_to_chunks_without_usage(self, monkeypatch, invoke_settings):
         # A backend that reports no usage (e.g. ignores stream_options, or an interrupt closed the stream
-        # early): n_tokens estimates from the chunk count minus the single priming/overhead delta.
+        # early): n_tokens estimates from the count of text-bearing deltas (the empty priming delta is not counted).
         _fake_stream(monkeypatch, [
-            {"choices": [{"delta": {"role": "assistant", "content": None}}]},  # priming overhead
+            {"choices": [{"delta": {"role": "assistant", "content": None}}]},  # priming overhead (empty -> not counted)
             {"choices": [{"delta": {"content": "one"}}]},
             {"choices": [{"delta": {"content": " two"}}]},
         ])
         out = llmclient.invoke(invoke_settings, [{"role": "user", "content": "hi"}], tools_enabled=False)
         assert out.usage is None
-        assert out.n_tokens == 2  # 3 chunks - 1 overhead
+        assert out.n_tokens == 2  # two text-bearing deltas
 
 
 # ---------------------------------------------------------------------------
@@ -491,3 +491,160 @@ class TestSetupOutputCap:
         monkeypatch.setattr(llmclient.librarian_config, "llm_sampler_config", {"max_tokens": 800, "min_p": None})
         settings = llmclient.setup("http://test-backend", quiet=True)
         assert "min_p" not in settings.request_data  # None -> field omitted (use backend default)
+
+
+class TestStreamParser:
+    """The `StreamParser` — `invoke`'s single parser of the response stream (brief 02 §9)."""
+
+    @staticmethod
+    def _run(deltas, native_tool_calls=None):
+        """Feed `(content, reasoning)` tuples through a parser and finalize; return the flat event list."""
+        parser = llmclient.StreamParser()
+        events = []
+        for content, reasoning in deltas:
+            events.extend(parser.feed(content, reasoning))
+        events.extend(parser.finalize(native_tool_calls))
+        return events
+
+    @staticmethod
+    def _texts(events, etype):
+        return "".join(e["text"] for e in events if e["type"] == etype)
+
+    def test_plain_content_passes_through(self):
+        events = self._run([("Hello", ""), (" world", "")])
+        assert self._texts(events, "content") == "Hello world"
+        assert not any(e["type"] == "reasoning" for e in events)
+
+    def test_native_reasoning_channel(self):
+        # reasoning_content deltas (LM Studio / llama.cpp) become reasoning events, content stays separate.
+        events = self._run([("", "thinking"), ("", " hard"), ("answer", "")])
+        assert self._texts(events, "reasoning") == "thinking hard"
+        assert self._texts(events, "content") == "answer"
+
+    def test_inline_think_extracted_from_content(self):
+        # ooba-style: <think> arrives inline in the content stream; the parser routes it to reasoning and strips the tags.
+        events = self._run([("<think>pondering</think>the answer", "")])
+        assert self._texts(events, "reasoning") == "pondering"
+        assert self._texts(events, "content") == "the answer"
+
+    def test_inline_think_split_across_chunks(self):
+        # Tags split at chunk boundaries (`</thi` | `nk>`) must still be recognized; no tag text leaks to content.
+        events = self._run([("<thi", ""), ("nk>secret th", ""), ("oughts</thi", ""), ("nk>visible", "")])
+        assert self._texts(events, "reasoning") == "secret thoughts"
+        assert self._texts(events, "content") == "visible"
+        assert "<think>" not in self._texts(events, "content")
+        assert "think" not in self._texts(events, "content")
+
+    def test_less_than_that_is_not_a_tag_passes_through(self):
+        # A bare '<' (e.g. an inequality) is not a tag prefix worth holding forever; it streams as content.
+        events = self._run([("if a < b then", "")])
+        assert self._texts(events, "content") == "if a < b then"
+
+    def test_inline_tool_call_emits_event(self):
+        events = self._run([('<tool_call>{"name": "websearch", "arguments": {"query": "ravens"}}</tool_call>', "")])
+        calls = [e for e in events if e["type"] == "tool_call"]
+        assert len(calls) == 1
+        assert calls[0]["name"] == "websearch"
+        assert json.loads(calls[0]["arguments"]) == {"query": "ravens"}
+        assert calls[0]["id"].startswith("inline_")  # inline calls get a synthetic id
+        assert not self._texts(events, "content")  # the tag span is fully consumed
+
+    def test_inline_tool_call_split_across_chunks(self):
+        events = self._run([("<tool_call>{\"name\": \"web", ""), ("search\", \"arguments\": {}}</tool", ""), ("_call>", "")])
+        calls = [e for e in events if e["type"] == "tool_call"]
+        assert len(calls) == 1
+        assert calls[0]["name"] == "websearch"
+
+    def test_native_tool_call_emitted_at_finalize(self):
+        native = [{"id": "call_9", "type": "function", "function": {"name": "get_weather", "arguments": '{"city":"Tokyo"}'}}]
+        events = self._run([("", "")], native_tool_calls=native)
+        calls = [e for e in events if e["type"] == "tool_call"]
+        assert len(calls) == 1
+        assert calls[0]["id"] == "call_9"
+        assert calls[0]["name"] == "get_weather"
+
+    def test_dedup_inline_and_native_same_call(self):
+        # Some backends emit a call BOTH inline and in the structured field — exactly one event must result.
+        native = [{"id": "call_x", "type": "function",
+                   "function": {"name": "websearch", "arguments": '{"query": "ravens"}'}}]
+        events = self._run(
+            [('<tool_call>{"name": "websearch", "arguments": {"query": "ravens"}}</tool_call>', "")],
+            native_tool_calls=native)
+        calls = [e for e in events if e["type"] == "tool_call"]
+        assert len(calls) == 1  # the structured duplicate is suppressed
+        assert calls[0]["id"].startswith("inline_")  # the inline one (emitted first) wins
+
+    def test_two_genuinely_distinct_native_calls_both_survive(self):
+        # No inline duplication: two native calls (even same name) are both real and must both emit.
+        native = [{"id": "c1", "type": "function", "function": {"name": "f", "arguments": '{"x": 1}'}},
+                  {"id": "c2", "type": "function", "function": {"name": "f", "arguments": '{"x": 2}'}}]
+        events = self._run([("", "")], native_tool_calls=native)
+        assert len([e for e in events if e["type"] == "tool_call"]) == 2
+
+    def test_unterminated_think_flushed_at_finalize(self):
+        # Stream ends mid-think (interrupt): the buffered thinking is not lost — it flushes as a reasoning event.
+        events = self._run([("<think>cut off mid-thou", "")])
+        assert self._texts(events, "reasoning") == "cut off mid-thou"
+
+    def test_think_then_content_ordering(self):
+        events = self._run([("", "step one"), ("", "step two"), ("Final.", "")])
+        types = [e["type"] for e in events if e["text"]]
+        assert types == ["reasoning", "reasoning", "content"]
+
+
+class TestInvokeTypedEvents:
+    """`invoke` end-to-end: typed events to `on_progress`, reasoning into `message["reasoning_content"]`."""
+
+    @staticmethod
+    def _collect(monkeypatch, invoke_settings, payloads, native_in_message_check=False):
+        _fake_stream(monkeypatch, payloads)
+        events = []
+        out = llmclient.invoke(invoke_settings, [{"role": "user", "content": "hi"}],
+                               on_progress=lambda ev: events.append(ev) or llmclient.action_ack,
+                               tools_enabled=False)
+        return out, events
+
+    def test_native_reasoning_lands_in_reasoning_content(self, monkeypatch, invoke_settings):
+        # LM Studio streams thinking via delta.reasoning_content — it must surface as reasoning events AND be
+        # stored in message["reasoning_content"], never in content. This is the headline brief-02 §9 driver.
+        out, events = self._collect(monkeypatch, invoke_settings, [
+            {"choices": [{"delta": {"role": "assistant", "reasoning_content": "let me think"}}]},
+            {"choices": [{"delta": {"reasoning_content": " about it"}}]},
+            {"choices": [{"delta": {"content": "The answer is 42."}}]},
+            {"choices": [], "usage": {"prompt_tokens": 5, "completion_tokens": 7, "total_tokens": 12}},
+            "[DONE]",
+        ])
+        assert out.data["reasoning_content"] == "let me think about it"
+        assert out.data["content"] == "The answer is 42."
+        assert "think" not in out.data["content"]
+        reasoning_events = [e for e in events if e["type"] == "reasoning"]
+        assert "".join(e["text"] for e in reasoning_events) == "let me think about it"
+        assert all("n_chunks" in e for e in events if e["type"] in ("content", "reasoning"))
+
+    def test_inline_think_routed_to_reasoning_content(self, monkeypatch, invoke_settings):
+        # ooba-style inline <think> in content: same destination as the native channel, content left clean.
+        out, events = self._collect(monkeypatch, invoke_settings, [
+            {"choices": [{"delta": {"role": "assistant", "content": "<think>hmm</think>Done."}}]},
+            "[DONE]",
+        ])
+        assert out.data["reasoning_content"] == "hmm"
+        assert out.data["content"] == "Done."
+
+    def test_no_reasoning_means_no_field(self, monkeypatch, invoke_settings):
+        # A plain answer with no thinking: reasoning_content is omitted entirely (not stored as "").
+        out, events = self._collect(monkeypatch, invoke_settings, [
+            {"choices": [{"delta": {"role": "assistant", "content": "Just answering."}}]},
+            "[DONE]",
+        ])
+        assert "reasoning_content" not in out.data
+
+    def test_inline_tool_call_in_message(self, monkeypatch, invoke_settings):
+        out, events = self._collect(monkeypatch, invoke_settings, [
+            {"choices": [{"delta": {"role": "assistant",
+                                    "content": '<tool_call>{"name": "websearch", "arguments": {"query": "x"}}</tool_call>'}}]},
+            "[DONE]",
+        ])
+        assert len(out.data["tool_calls"]) == 1
+        assert out.data["tool_calls"][0]["function"]["name"] == "websearch"
+        assert not out.data["content"]  # the tag span never leaks into content
+        assert any(e["type"] == "tool_call" for e in events)

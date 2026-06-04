@@ -15,6 +15,7 @@ __all__ = ["list_models",
            "detect_backend_flavor",
            "setup",
            "count_tokens",
+           "StreamParser",
            "invoke", "prefill", "action_ack", "action_stop",
            "perform_throwaway_task", "make_console_progress_handler",
            "perform_tool_calls",
@@ -635,6 +636,193 @@ def _materialize_tool_calls(accumulator: Dict[int, Dict[str, str]]) -> Optional[
             for idx, slot in sorted(accumulator.items())]
 
 # --------------------------------------------------------------------------------
+# Streaming parser: raw deltas -> typed events (`invoke`'s single source of truth)
+
+# Inline-tag tokens that some models/backends emit in the *content* stream. `invoke` parses them out
+# and re-routes them into typed events, so the chat client never has to regex-sniff the text. See brief 02 §9.
+_THINK_OPEN = "<think>"
+_THINK_CLOSE = "</think>"
+_TOOLCALL_OPEN = "<tool_call>"
+_TOOLCALL_CLOSE = "</tool_call>"
+
+# Parser states.
+_PS_TEXT = "text"          # outside any special block
+_PS_THINK = "think"        # inside an inline <think>...</think> block
+_PS_TOOLCALL = "toolcall"  # inside an inline <tool_call>...</tool_call> block
+
+def _longest_partial_tag_suffix(buf: str, tags: Tuple[str, ...]) -> int:
+    """Length of the longest suffix of `buf` that is a *proper* prefix of some tag in `tags`.
+
+    This is the look-ahead the streaming parser holds back at a chunk boundary: a tag may arrive split
+    across two stream chunks (`</thi` then `nk>`), so the trailing bytes that could begin a tag must wait
+    for the next chunk before being emitted as plain text. Returns 0 when nothing needs holding back.
+    """
+    best = 0
+    for tag in tags:
+        maxk = min(len(buf), len(tag) - 1)  # a *proper* prefix is shorter than the whole tag
+        for k in range(maxk, best, -1):
+            if buf.endswith(tag[:k]):
+                best = k
+                break
+    return best
+
+def _scan_for_tags(buf: str, tags: Tuple[str, ...]) -> Tuple[str, Optional[str], str]:
+    """Scan `buf` for the earliest complete tag from `tags`.
+
+    Returns `(emit, tag, rest)`:
+      - complete tag found: `emit` is the text before it, `tag` is the matched tag, `rest` is the text after.
+      - no complete tag: `tag` is `None`, `emit` is the text safe to emit now, and `rest` is a held-back
+        trailing partial (a possible tag split across the chunk boundary), to be reconsidered next chunk.
+        `rest` may be empty.
+    """
+    best_pos = None
+    best_tag = None
+    for tag in tags:
+        pos = buf.find(tag)
+        if pos != -1 and (best_pos is None or pos < best_pos):
+            best_pos = pos
+            best_tag = tag
+    if best_tag is not None:
+        return buf[:best_pos], best_tag, buf[best_pos + len(best_tag):]
+    hold = _longest_partial_tag_suffix(buf, tags)
+    if hold:
+        return buf[:-hold], None, buf[-hold:]
+    return buf, None, ""
+
+def _tool_call_dedup_key(name: str, arguments: str) -> Tuple[str, str]:
+    """Stable identity for dedup: `(name, normalized-JSON arguments)`.
+
+    Used to suppress double-emitted tool calls — some backends emit a call both as an inline `<tool_call>`
+    tag in the content stream *and* in the structured `tool_calls` field at EOS. Normalizing the arguments
+    JSON (sorted keys) makes the two representations compare equal despite whitespace/key-order differences.
+    """
+    try:
+        normalized = json.dumps(json.loads(arguments), sort_keys=True)
+    except (json.JSONDecodeError, ValueError, TypeError):
+        normalized = (arguments or "").strip()
+    return (name, normalized)
+
+class StreamParser:
+    """Turn raw streamed deltas into typed events; `invoke`'s single source of truth for the response stream.
+
+    Feed each delta's `content` and `reasoning_content` (either may be empty) via `feed`. The parser:
+
+      - routes `reasoning_content` deltas straight to `reasoning` events (the native separate channel that
+        llama.cpp / LM Studio use for Qwen / Gemma / GPT-OSS);
+      - parses inline `<think>...</think>` out of the `content` stream into `reasoning` events;
+      - parses inline `<tool_call>...</tool_call>` out of the `content` stream into `tool_call` events;
+      - emits everything else as `content` events;
+
+    stripping the inline tags from the content stream as it goes. A small look-ahead buffer
+    (see `_scan_for_tags`) handles tags split across chunk boundaries.
+
+    Events are dicts:
+
+        {"type": "content",   "text": str}
+        {"type": "reasoning", "text": str}
+        {"type": "tool_call", "id": str, "name": str, "arguments": str}   # `arguments` is a JSON string
+
+    At stream end, call `finalize(native_tool_calls)` to flush any buffered text and emit native (OpenAI
+    `tool_calls` field) calls that weren't already seen inline — deduped against inline-parsed calls by
+    `(name, normalized arguments)`, so a backend that double-emits the same call (inline tag AND structured
+    field, as some ooba builds do) yields exactly one `tool_call` event.
+    """
+    def __init__(self):
+        self._state = _PS_TEXT
+        self._buf = ""                  # content look-ahead buffer (may hold a split tag at a chunk boundary)
+        self._toolcall_json = ""        # accumulates the raw JSON inside an inline <tool_call> block
+        self._inline_call_keys = set()  # (name, normalized args) of inline-emitted calls, for native dedup
+        self._synthetic_id_counter = 0  # inline tool calls carry no id; assign a synthetic one
+
+    def feed(self, content: str, reasoning: str) -> List[Dict]:
+        """Feed one delta's content and reasoning_content (either may be empty). Returns the typed events produced."""
+        events: List[Dict] = []
+        if reasoning:  # native reasoning channel: never contains inline tags
+            events.append({"type": "reasoning", "text": reasoning})
+        if content:
+            self._buf += content
+            events.extend(self._drain())
+        return events
+
+    def _drain(self) -> List[Dict]:
+        events: List[Dict] = []
+        progressing = True
+        while progressing and self._buf:
+            progressing = False
+            if self._state == _PS_TEXT:
+                emit, tag, rest = _scan_for_tags(self._buf, (_THINK_OPEN, _TOOLCALL_OPEN))
+                if emit:
+                    events.append({"type": "content", "text": emit})
+                self._buf = rest
+                if tag == _THINK_OPEN:
+                    self._state = _PS_THINK
+                    progressing = True
+                elif tag == _TOOLCALL_OPEN:
+                    self._state = _PS_TOOLCALL
+                    self._toolcall_json = ""
+                    progressing = True
+            elif self._state == _PS_THINK:
+                emit, tag, rest = _scan_for_tags(self._buf, (_THINK_CLOSE,))
+                if emit:
+                    events.append({"type": "reasoning", "text": emit})
+                self._buf = rest
+                if tag == _THINK_CLOSE:
+                    self._state = _PS_TEXT
+                    progressing = True
+            else:  # _PS_TOOLCALL: accumulate raw JSON until the closing tag
+                idx = self._buf.find(_TOOLCALL_CLOSE)
+                if idx != -1:
+                    self._toolcall_json += self._buf[:idx]
+                    self._buf = self._buf[idx + len(_TOOLCALL_CLOSE):]
+                    maybe_event = self._inline_tool_call_event(self._toolcall_json)
+                    if maybe_event is not None:
+                        events.append(maybe_event)
+                    self._toolcall_json = ""
+                    self._state = _PS_TEXT
+                    progressing = True
+                else:  # no closing tag yet — accumulate, but hold back a possible split closing tag at the end
+                    hold = _longest_partial_tag_suffix(self._buf, (_TOOLCALL_CLOSE,))
+                    cut = len(self._buf) - hold
+                    self._toolcall_json += self._buf[:cut]
+                    self._buf = self._buf[cut:]
+        return events
+
+    def _inline_tool_call_event(self, raw_json: str) -> Optional[Dict]:
+        raw = raw_json.strip()
+        try:
+            parsed = json.loads(raw)
+        except (json.JSONDecodeError, ValueError):
+            logger.warning(f"StreamParser: failed to parse inline <tool_call> JSON; dropping. Raw: {raw!r}")
+            return None
+        name = parsed.get("name", "")
+        arguments = parsed.get("arguments", {})
+        if not isinstance(arguments, str):  # OAI convention stores `arguments` as a JSON *string*
+            arguments = json.dumps(arguments)
+        self._synthetic_id_counter += 1
+        self._inline_call_keys.add(_tool_call_dedup_key(name, arguments))
+        return {"type": "tool_call", "id": f"inline_{self._synthetic_id_counter}", "name": name, "arguments": arguments}
+
+    def finalize(self, native_tool_calls: Optional[List[Dict]]) -> List[Dict]:
+        """Flush buffered text and emit native tool calls not already seen inline. Returns the trailing events."""
+        events: List[Dict] = []
+        if self._buf:  # an unterminated block at stream end — emit what we have so nothing is silently lost
+            if self._state == _PS_THINK:
+                events.append({"type": "reasoning", "text": self._buf})
+            elif self._state == _PS_TOOLCALL:
+                logger.warning("StreamParser.finalize: stream ended inside an unterminated <tool_call> block; dropping partial JSON.")
+            else:
+                events.append({"type": "content", "text": self._buf})
+            self._buf = ""
+        for call in native_tool_calls or []:
+            function = call.get("function") or {}
+            name = function.get("name", "")
+            arguments = function.get("arguments", "")
+            if _tool_call_dedup_key(name, arguments) in self._inline_call_keys:
+                continue  # double-emission: this call already surfaced inline; suppress the structured copy
+            events.append({"type": "tool_call", "id": call.get("id", ""), "name": name, "arguments": arguments})
+        return events
+
+# --------------------------------------------------------------------------------
 # The most important function - call LLM, parse result
 
 def invoke(settings: env,
@@ -668,15 +856,23 @@ def invoke(settings: env,
                        Each element of the list is a chat message in the format accepted by the LLM backend,
                        with "role" and "content" fields.
 
-    `on_progress`: 2-argument callable with arguments `(n_chunks: int, chunk_text: str)`.
-                   Called while streaming the response from the LLM, typically once per generated token.
+    `on_progress`: 1-argument callable with argument `event: Dict`, a typed event from the parsed response
+                   stream (`invoke` is the single parser — see brief 02 §9; consumers dispatch on `event["type"]`
+                   and never sniff raw text). Called while streaming, typically once per generated token. The
+                   event is one of:
 
-           `n_chunks: int`: How many chunks have been generated so far, for this invocation.
-                            Useful for live UI updates.
+           `{"type": "content",   "text": str, "n_chunks": int}`: a piece of the visible answer.
+           `{"type": "reasoning", "text": str, "n_chunks": int}`: a piece of the thinking trace — whether it
+                            arrived via the native `reasoning_content` channel or as an inline `<think>` block
+                            (both unified here). Render as a thought bubble, not as the answer.
+           `{"type": "tool_call", "id": str, "name": str, "arguments": str}`: one completed tool call (emitted
+                            once, deduped across inline-tag and native channels). `arguments` is a JSON string.
 
-           `chunk_text: str`: The text of the current chunk (typically a token).
+           `n_chunks` (on content / reasoning events) is how many chunks have been generated so far this
+           invocation — useful for live UI throttling.
 
-           Return value: `action_ack` to let the LLM keep generating, `action_stop` to interrupt and finish forcibly.
+           Return value: `action_ack` to let the LLM keep generating, `action_stop` to interrupt and finish
+           forcibly (meaningful on content / reasoning events; ignored on tool-call events).
 
            If you interrupt the LLM by returning `action_stop`, normal finalization still takes place, and you'll get
            a chat message populated with the content received so far. It is up to the caller what to do with that data.
@@ -713,12 +909,16 @@ def invoke(settings: env,
     """
     data = copy.deepcopy(settings.request_data)
 
-    # Scrub thought blocks.
+    # Normalize message content for resend.
     #
-    # TODO: `llmclient.invoke`: Do we need to scrub thought blocks manually? Doesn't the Jinja chat template inside most modern models do that already?
-    #                           OTOH, by doing this manually, we get the (hopefully) final prompt, so that calling `token_count` on it returns the correct final total.
+    # Reasoning (thinking) is carried out-of-band in each message's `reasoning_content` sibling field (brief 02
+    # §9/§10), which rides along untouched here — we only rewrite `content`. The supported families' chat
+    # templates (Qwen 3, Gemma 4) read `reasoning_content` on input and apply their own strip-prior /
+    # preserve-current-turn policy via the last-user-message boundary, so Raven doesn't second-guess them.
     #
-    # For most thinking models, thought blocks are just inference-time compute, and should not be included in the previous messages in the chat log.
+    # The `scrub(thoughts_mode="discard")` below is now a legacy safety net: it strips any inline `<think>`
+    # blocks still embedded in OLD `content` (pre-§11-migration data). For messages produced by the new parser,
+    # `content` has no think tags, so this is a no-op on content; it still normalizes the persona prefix.
     history = copy.deepcopy(history)
     end_idx = -1 if continue_ else None  # Don't scrub the current AI message when continuing; else scrub all messages.
     for message in history[:end_idx]:
@@ -768,8 +968,14 @@ def invoke(settings: env,
         # Alternatively, in oobabooga, we could call the undocumented "/v1/internal/stop-generation" endpoint.
         client.close()
 
-    llm_output_text = io.StringIO()
-    last_few_chunks = collections.deque([""] * 10)  # ring buffer for quickly checking a short amount of text at the current end; prepopulate with empty strings since `popleft` requires at least one element to be present
+    # `invoke` is the single parser of the response stream: the `StreamParser` turns raw deltas — content,
+    # the native `reasoning_content` channel, and inline `<think>` / `<tool_call>` tags alike — into typed
+    # events. Consumers (`on_progress`) dispatch on event type; they never regex-sniff the text. See brief 02 §9.
+    parser = StreamParser()
+    llm_output_text = io.StringIO()       # accumulates `content` events -> message["content"]
+    reasoning_output_text = io.StringIO()  # accumulates `reasoning` events -> message["reasoning_content"]
+    collected_tool_calls: List[Dict] = []  # `tool_call` events in arrival order -> message["tool_calls"]
+    last_few_chunks = collections.deque([""] * 10)  # ring buffer over recent *content* for stopping-string checks; prepopulate with empties since `popleft` needs an element
     n_chunks = 0
     stopped = False  # whether one of the stop strings triggered
     interrupted = False  # whether the progress callback interrupted generation
@@ -779,6 +985,19 @@ def invoke(settings: env,
     # Streaming tool-call accumulator, keyed by `tool_calls[i].index`. Unifies ooba's whole-object-in-one-delta
     # with LM Studio's / OpenAI's incremental fragments (see `_accumulate_tool_call_delta`).
     tool_call_acc: Dict[int, Dict[str, str]] = {}
+
+    def handle_event(parsed_event: Dict) -> sym:
+        """Accumulate one typed event into the response, notify `on_progress`, return its action (default ack)."""
+        etype = parsed_event["type"]
+        if etype == "content":
+            llm_output_text.write(parsed_event["text"])
+        elif etype == "reasoning":
+            reasoning_output_text.write(parsed_event["text"])
+        elif etype == "tool_call":
+            collected_tool_calls.append(parsed_event)
+        if on_progress is not None:
+            return on_progress({**parsed_event, "n_chunks": n_chunks})
+        return action_ack
 
     try:
         with timer() as tim:
@@ -806,25 +1025,31 @@ def invoke(settings: env,
                     usage = payload["usage"]
 
                 delta = payload["choices"][0]["delta"]
-                # Standard OpenAI streaming sends `"content": null` on the role-priming first delta and on
-                # tool-call deltas; ooba sends "". The `or ""` coerces {absent, null, ""} all to "" — a plain
-                # `.get("content", "")` returns `None` for the present-but-null case and crashes `io.write`.
-                chunk = delta.get("content") or ""
-                n_chunks += 1
-                llm_output_text.write(chunk)
+                # `or ""` coerces {absent, null, ""} all to "": standard OpenAI streaming sends `content: null`
+                # (and `reasoning_content: null`) on the role-priming first delta and on tool-call deltas, and a
+                # plain `.get(..., "")` returns `None` for the present-but-null case, which would crash the parser.
+                content_chunk = delta.get("content") or ""
+                reasoning_chunk = delta.get("reasoning_content") or ""  # native reasoning channel (llama.cpp / LM Studio)
 
                 if delta.get("tool_calls"):
                     _accumulate_tool_call_delta(tool_call_acc, delta["tool_calls"])
 
-                # Check for stopping strings (helps with some models that start talking on behalf of the user)
-                last_few_chunks.append(chunk)
-                last_few_chunks.popleft()
-                recent_text = "".join(last_few_chunks)  # Note start-of-word LLM tokens begin with a space.
-                stop = [stopping_string in recent_text for stopping_string in settings.stopping_strings]  # check which stopping strings match (if any)
+                # Count a delta as a chunk when it carried any generated text (content or reasoning): keeps the
+                # `n_chunks - 1` fallback token count meaningful, and feeds the GUI's chunk-rate throttle.
+                if content_chunk or reasoning_chunk:
+                    n_chunks += 1
 
                 action = action_ack
-                if on_progress is not None:
-                    action = on_progress(n_chunks, chunk)
+                for parsed_event in parser.feed(content_chunk, reasoning_chunk):
+                    if handle_event(parsed_event) is action_stop:
+                        action = action_stop
+                    # Stopping strings guard the *visible* answer (model talking as the user) — check on content only.
+                    if parsed_event["type"] == "content":
+                        last_few_chunks.append(parsed_event["text"])
+                        last_few_chunks.popleft()
+
+                recent_text = "".join(last_few_chunks)  # Note start-of-word LLM tokens begin with a space.
+                stop = [stopping_string in recent_text for stopping_string in settings.stopping_strings]  # check which stopping strings match (if any)
 
                 if any(stop):  # should stop due to a stopping string?
                     stop_generating()
@@ -840,9 +1065,17 @@ def invoke(settings: env,
     except requests.exceptions.ChunkedEncodingError:
         logger.exception(f"invoke: Connection lost. Please check if your LLM backend is still alive (was at {settings.backend_url}). Original error message follows.")
         raise
-    llm_output_text = llm_output_text.getvalue()
 
-    tool_calls = None
+    # Flush the parser's buffers (any unterminated trailing block) and emit native `tool_calls`-field calls not
+    # already seen inline. Materialize the native accumulator only on a clean finish, matching the prior behaviour
+    # of not attributing tool calls to a stopping-string-interrupted turn.
+    native_tool_calls = None if stopped else _materialize_tool_calls(tool_call_acc)
+    for parsed_event in parser.finalize(native_tool_calls):
+        handle_event(parsed_event)
+
+    llm_output_text = llm_output_text.getvalue()
+    reasoning_content = reasoning_output_text.getvalue()
+
     if stopped:  # due to a stopping string
         # From the final LLM output, remove the longest suffix that is in the stopping strings
         matched_stopping_strings = [stopping_string for is_match, stopping_string in zip(stop, settings.stopping_strings) if is_match]
@@ -851,22 +1084,28 @@ def invoke(settings: env,
         assert not any(start_position == -1 for start_position in stopping_string_start_positions)  # we only checked matching strings
         chop_position = min(stopping_string_start_positions)
         llm_output_text = llm_output_text[:chop_position]
-    else:  # normal finish by the LLM server, or callback interrupt: materialize any accumulated tool calls
-        tool_calls = _materialize_tool_calls(tool_call_acc)
+
+    # Materialize the collected `tool_call` events (inline-parsed + deduped native) into OAI tool-call dicts.
+    tool_calls = None
+    if collected_tool_calls:
+        tool_calls = [{"type": "function",
+                       "function": {"name": ev["name"], "arguments": ev["arguments"]},
+                       "id": ev["id"],
+                       "index": str(idx)}
+                      for idx, ev in enumerate(collected_tool_calls)]
 
     # Completion token count: prefer the backend's real `usage` (exact, server-side). With
     # `stream_options.include_usage` requested above, a normal completion reports it on both ooba and LM Studio,
     # so the fallbacks are reached only when an interrupt (stopping string / callback / Ctrl-C) closed the stream
     # before the final usage chunk, or a generic backend ignores the opt-in. Then: count the generated text with
-    # a local tokenizer if one is configured (exact), else use the streamed delta count (deltas ≈ tokens) minus
-    # the one priming/overhead delta — backend-agnostic, since the per-backend framing difference lives entirely
-    # in the trailing chunks an interrupt never receives.
+    # a local tokenizer if one is configured (exact), else use the streamed delta count — `n_chunks` already
+    # counts only text-bearing deltas (one ≈ one token), so the empty role-priming delta is excluded for free.
     if usage is not None and usage.get("completion_tokens") is not None:
         n_tokens = usage["completion_tokens"]
     elif settings.tokenizer is not None:
         n_tokens = len(settings.tokenizer.encode(llm_output_text))
     else:
-        n_tokens = max(0, n_chunks - 1)
+        n_tokens = n_chunks
 
     # Refine the char->token calibration from this call's real prompt usage (the estimate path in
     # `count_tokens`), and cross-check a configured local tokenizer against the backend: if the tokenizer counts
@@ -885,7 +1124,8 @@ def invoke(settings: env,
                                            role="assistant",
                                            text=llm_output_text,
                                            add_persona=False,
-                                           tool_calls=tool_calls)
+                                           tool_calls=tool_calls,
+                                           reasoning_content=(reasoning_content or None))
     return env(data=message,
                model=settings.model,
                n_tokens=n_tokens,
@@ -983,9 +1223,15 @@ def perform_throwaway_task(llm_settings: env,
                  tools_enabled=False)
 
     # Postprocess the AI's response.
-    raw_output_text = out.data["content"]
+    #
+    # `invoke` now returns think-free `content` with the thinking trace separated into `reasoning_content`
+    # (brief 02 §9). Reassemble the inline `<think>...</think>` form for `raw_output_text` to keep the
+    # debugging/logging contract; the scrubbed final answer comes from the already-think-free content.
+    content = out.data["content"]
+    reasoning = out.data.get("reasoning_content") or ""
+    raw_output_text = f"<think>{reasoning}</think>\n{content}" if reasoning else content
     scrubbed_output_text = chatutil.scrub(persona=llm_settings.personas.get("assistant", None),
-                                          text=raw_output_text,
+                                          text=content,
                                           thoughts_mode="discard",
                                           markup=None,
                                           add_persona=False)
@@ -1004,9 +1250,9 @@ def make_console_progress_handler(progress_symbol: str) -> Callable:
     This progress function will never cancel the generation; it always returns `action_ack`.
     If you need something more customized, you'll need to supply a custom `on_progress` handler.
     """
-    def console_progress(n_chunks: int,
-                         chunk_text: str) -> sym:
+    def console_progress(event: Dict) -> sym:
         """Progress indicator while the LLM is processing. Callback for `llmclient.invoke`."""
+        n_chunks = event.get("n_chunks", 0)  # tool-call events carry no chunk count
         if (n_chunks == 1 or n_chunks % 10 == 0):  # in any message being written by the AI, print a progress symbol for the first chunk, and then again every 10 chunks.
             print(progress_symbol, end="", file=sys.stderr)
             sys.stderr.flush()

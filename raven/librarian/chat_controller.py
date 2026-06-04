@@ -25,7 +25,7 @@ import numpy as np
 
 import dearpygui.dearpygui as dpg
 
-from unpythonic import flatten, memoize
+from unpythonic import flatten, memoize, sym
 from unpythonic.env import env
 
 from ..vendor.IconsFontAwesome6 import IconsFontAwesome6 as fa  # https://github.com/juliettef/IconFontCppHeaders
@@ -997,6 +997,15 @@ class DPGCompleteChatMessage(DPGChatMessage):
                       persona=persona,
                       node_id=self.node_id)
 
+        # Reasoning (thinking) trace lives in the message's `reasoning_content` sibling field (brief 02 §9/§10),
+        # not in `content`. Render it first, as a single collapsible thought paragraph. For not-yet-migrated old
+        # data `reasoning_content` is absent and the thinking is still inline `<think>` in `content`, handled by
+        # the splitter below (which consolidates it into its own thought paragraph the same way).
+        message = self.parent_view.chat_controller.datastore.get_payload(self.node_id)["message"]
+        reasoning_content = message.get("reasoning_content") or ""
+        if reasoning_content.strip():
+            self.add_paragraph(reasoning_content, is_thought=True)
+
         paragraph_accumulator = io.StringIO()
         def commit_paragraph():
             nonlocal paragraph_accumulator
@@ -1769,7 +1778,8 @@ class DPGChatController:
                 task_env.t0 = time.monotonic()  # timestamp of last GUI update
                 task_env.n_chunks0 = 0  # chunks received since last GUI update
 
-                task_env.inside_think_block = False
+                task_env.current_is_thought = False  # which channel the in-progress paragraph belongs to (thought bubble vs visible answer)
+                task_env.seen_content = False  # whether any visible-answer content has arrived yet (to fire the talking animation once)
 
                 task_env.emotion_update_interval = 5  # how many lines of text to wait between emotion updates (NOTE: Qwen3 uses a double newline as its paragraph separator, so that eats an extra line)
                 task_env.emotion_recent_paragraphs = collections.deque([""] * (4 * task_env.emotion_update_interval))  # buffer with 75% overlap between updates, to stabilize the detection
@@ -1784,9 +1794,9 @@ class DPGChatController:
                                                                         text=text)
                     task_env.emotion_update_calls += 1
 
-                def on_llm_progress(n_chunks: int, chunk_text: str) -> None:
-                    if self.gui_updates_safe and chunk_text:  # avoid triggering on the initial empty chunk (ACK)
-                        dpg.hide_item(self.llm_indicator_widget)  # hide prompt processing indicator
+                def on_llm_progress(event: Dict[str, Any]) -> Optional[sym]:
+                    # `invoke` is the single parser; this handler is a pure renderer dispatching on the typed
+                    # event (brief 02 §9). No regex-sniffing of the text stream; the event type *is* the state.
 
                     # If the task is cancelled (`stop_ai_turn` was called), interrupt the LLM, keeping the content received so far.
                     # The scaffold will automatically send the content to `on_llm_done`.
@@ -1795,31 +1805,44 @@ class DPGChatController:
                         logger.info(f"ai_turn.ai_turn_task.on_llm_progress: {reason}, stopping text generation.")
                         return llmclient.action_stop
 
-                    # Detect think block state (TODO: improve; very rudimentary and brittle for now)
-                    if "<think>" in chunk_text:
-                        task_env.inside_think_block = True
-                        logger.info("ai_turn.ai_turn_task.on_llm_progress: AI entered thinking state.")
-                    elif "</think>" in chunk_text:
-                        logger.info("ai_turn.ai_turn_task.on_llm_progress: AI exited thinking state.")
-                        task_env.inside_think_block = False
+                    event_type = event["type"]
+                    if event_type == "tool_call":
+                        # Structured tool-call invocations render when the completed message reloads. Nothing to stream live.
+                        return llmclient.action_ack
 
-                        if not speech_enabled:  # If TTS is NOT enabled, show the generic talking animation while the LLM is writing (after it is no longer thinking)
+                    chunk_text = event["text"]
+                    n_chunks = event.get("n_chunks", 0)
+                    is_thought = (event_type == "reasoning")  # reasoning -> thought bubble; content -> visible answer
+
+                    if self.gui_updates_safe and chunk_text:  # avoid triggering on an empty event
+                        dpg.hide_item(self.llm_indicator_widget)  # hide prompt processing indicator
+
+                    # Fire the generic talking animation once, when the model transitions from thinking to the
+                    # visible answer (replaces the old "</think> seen" trigger).
+                    if not is_thought and not task_env.seen_content:
+                        task_env.seen_content = True
+                        logger.info("ai_turn.ai_turn_task.on_llm_progress: AI started writing the visible answer.")
+                        if not speech_enabled:  # If TTS is NOT enabled, show the generic talking animation while the LLM is writing
                             api.avatar_start_talking(self.avatar_record.avatar_instance_id)
 
-                    # HACK: Detect whether *whatever we're about to send to the GUI next* is part of a think block.
-                    #
-                    # `task_env.inside_think_block` is not the whole truth, because the closing tag "</think>"
-                    # should be treated as part of the think block. Qwen3 sends the token "</think>" (on a new line)
-                    # and then a separate token "\n\n" (paragraph break), so it's not enough to look for "</think>"
-                    # in the last received token (`chunk_text`), either.
-                    #
-                    # So for detecting whether we are about to send the closing tag to the GUI,
-                    # we must look at the *accumulated text* since the last send.
-                    paragraph_text = task_env.text.getvalue()
-                    is_thought = (task_env.inside_think_block or ("</think>" in paragraph_text))
-                    # logger.debug(f"'''{chunk_text}'''")  # DEBUG: Print the raw tokens as they come in. A token may contain newlines, so we display the token in triple quotes for clarity.
+                    # If the channel changed mid-paragraph (thought <-> answer), commit the in-progress paragraph
+                    # and start a fresh one in the new channel — the renderer colors per paragraph, so a thought
+                    # and the answer must never share one.
+                    if task_env.text.getvalue() and (is_thought != task_env.current_is_thought):
+                        streaming_chat_message.replace_last_paragraph(task_env.text.getvalue(),
+                                                                      is_thought=task_env.current_is_thought)
+                        streaming_chat_message.add_paragraph("", is_thought=is_thought)
+                        task_env.text = io.StringIO()
+                        task_env.t0 = time.monotonic()
+                        task_env.n_chunks0 = n_chunks
+                        dpg.split_frame()
+                        self.view.scroll_view()
+                    task_env.current_is_thought = is_thought
 
+                    # Accumulate the chunk, then render. Write *before* reading the paragraph so the chunk is
+                    # never lost when it carries the paragraph-break newline (the trailing newline is stripped at render time).
                     task_env.text.write(chunk_text)
+                    paragraph_text = task_env.text.getvalue()
                     time_now = time.monotonic()
                     dt = time_now - task_env.t0  # seconds since last GUI update
                     dchunks = n_chunks - task_env.n_chunks0  # chunks since last GUI update
@@ -1828,15 +1851,10 @@ class DPGChatController:
                         task_env.n_chunks0 = n_chunks
                         # NOTE: The last paragraph of the AI's reply - for thinking models, commonly the final response - often never gets a "\n", and must be handled in `on_done`.
                         _update_avatar_emotion_from_incoming_text(paragraph_text)  # update emotion from recent received text (thoughts too)
-                        # if speech_enabled:  # If TTS enabled, send complete paragraph to TTS preprocess queue
-                        #     if not task_env.inside_think_block and "</think>" not in chunk_text:  # not enough, "</think>" can be in the previous chunk(s) in the same "paragraph".
-                        #         avatar_controller.send_text_to_tts(config=avatar_record,
-                        #                                            text=paragraph_accumulator,
-                        #                                            video_offset=librarian_config.avatar_config.video_offset)
                         streaming_chat_message.replace_last_paragraph(paragraph_text,
                                                                       is_thought=is_thought)
                         streaming_chat_message.add_paragraph("",
-                                                             is_thought=task_env.inside_think_block)
+                                                             is_thought=is_thought)
                         task_env.text = io.StringIO()
                         dpg.split_frame()
                         self.view.scroll_view()
