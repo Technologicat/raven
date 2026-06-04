@@ -1213,6 +1213,13 @@ class DPGLinearizedChatView:
           - If `head_node_id` is an AI message, update the avatar's emotion from that
             (using the node's current payload revision).
         """
+        # Shutdown guard (catch-all). `build` creates chat-message widgets, and several callers reach it on
+        # background threads — the startup frame callback, but also the debounced resize-rebuild task, which
+        # can be *submitted* after teardown has begun and so slip past the cancel. Creating widgets once the
+        # app is tearing down races `destroy_context` → segfault. `gui_updates_safe` goes False as the very
+        # first action of shutdown, so bailing on it here covers every path.
+        if not self.chat_controller.gui_updates_safe:
+            return
         if head_node_id is None:  # use current HEAD from app_state?
             head_node_id = self.chat_controller.app_state["HEAD"]
         node_id_history = self.chat_controller.datastore.linearize_up(head_node_id)
@@ -1236,8 +1243,12 @@ class DPGLinearizedChatView:
                                                                             text=text)
         self.chat_controller.avatar_controller.ping(config=self.chat_controller.avatar_record)  # wake up the AI avatar when the chat view is re-rendered
         self.chat_controller.update_context_fill_indicator()  # HEAD changed (rebuild / branch switch / initial load)
-        dpg.split_frame()
-        self.scroll_view(scroll_target_node_id=scroll_target_node_id)
+        # Skip the final settle-and-scroll during shutdown: once the render loop has stopped, `split_frame`
+        # blocks forever (it waits for a frame that will never come). `gui_updates_safe` goes False as the very
+        # first action of teardown, so a startup `build()` that races the close bails here instead of parking.
+        if self.chat_controller.gui_updates_safe:
+            dpg.split_frame()
+            self.scroll_view(scroll_target_node_id=scroll_target_node_id)
 
 # --------------------------------------------------------------------------------
 # Scaffold to GUI integration
@@ -1457,6 +1468,22 @@ class DPGChatController:
         self.gui_updates_safe = False
         if self.retriever is not None:
             self.retriever.set_indexing_callbacks(on_start=None, on_done=None)
+
+    def cancel_tasks(self) -> None:
+        """Signal all background tasks to stop, WITHOUT waiting. Idempotent.
+
+        The non-blocking first phase of shutdown, meant to run from the app's DPG exit callback — i.e.
+        from inside a render frame. A task parked in `dpg.split_frame` (e.g. the chat-streaming updater)
+        can only be released by the render loop completing one more frame; waiting for it *here* would
+        deadlock, because the render loop is currently sitting in the exit callback. So we only signal
+        cancellation now (so the final frame releases the `split_frame` waiters, which then observe the
+        flag and exit), and leave the blocking drain to `shutdown()`, called from the render loop's
+        `finally` once the loop has exited.
+        """
+        self.disable_gui_updates()
+        self.task_manager.clear(wait=False)
+        self.ai_turn_task_manager.clear(wait=False)
+        self.context_prefill_task_manager.clear(wait=False)
 
     def shutdown(self):
         """Prepare module for app shutdown.

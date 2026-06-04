@@ -844,7 +844,7 @@ def _resize_panels() -> None:
 
 def _resize_gui_task(task_env: env) -> None:
     """We run this in the background. Expensive parts of the GUI update benefit from the "there can be only one" mechanism."""
-    if task_env.cancelled:  # while waiting in queue
+    if task_env.cancelled or _shutting_down:  # while waiting in queue, or app tearing down (this task can be submitted *after* the shutdown cancel)
         return
     logger.debug(f"_resize_gui_task: {task_env.task_name}: Updating main window GUI element sizes.")
     _resize_panels()
@@ -856,6 +856,8 @@ def _resize_gui_task(task_env: env) -> None:
 
 def _resize_gui() -> None:
     """Resize dynamically sized GUI elements, RIGHT NOW (unless overridden by another call shortly in succession)."""
+    if _shutting_down:  # a resize event (incl. the window close itself) must not kick off GUI rebuilds during teardown
+        return
     logger.debug("_resize_gui: Entered.")
     logger.debug("_resize_gui: Recentering help window.")
     help_window.reposition()
@@ -1053,23 +1055,55 @@ chat_controller = DPGChatController(llm_settings=llm_settings,
                                     web_indicator_widget=web_indicator_group,
                                     executor=bg)
 
-# Set once, at the very start of `gui_shutdown`. The two startup frame callbacks below
-# (`_load_initial_animator_settings`, `_build_initial_chat_view`) run on DPG's callback thread and can race
-# app teardown: if the user closes the window mid-boot, the callback may still be in flight while the context
-# is being destroyed, and creating widgets then segfaults the process (no Python `try/except` can catch a crash
-# in DPG's C side — the only safe move is to not make the call). The callbacks check this flag and bail.
+# Set in `_gui_cancel_tasks` (the DPG exit callback) and again, defensively, in `gui_shutdown`. The two
+# startup frame callbacks (`_load_initial_animator_settings`, `_build_initial_chat_view`) run on DPG's
+# callback thread and can race app teardown: if the user closes the window mid-boot, a callback may still be
+# in flight while the context is being destroyed, and creating widgets then segfaults the process (no Python
+# `try/except` can catch a crash in DPG's C side — the only safe move is to not make the call). The callbacks
+# check this flag and bail.
 _shutting_down = False
 
-def gui_shutdown() -> None:
-    """App exit: gracefully shut down parts that access DPG."""
+# Two-phase shutdown (the pattern raven-cherrypick uses; see `raven.cherrypick.app`):
+#   1. `_gui_cancel_tasks` — the DPG exit callback. Runs inside `render_dearpygui_frame`, so it may only
+#      *signal* cancellation, never wait (see its docstring).
+#   2. `gui_shutdown` — called from the render loop's `finally`, on the main thread, once the loop has exited.
+#      Does the blocking drains and resource teardown, then the caller destroys the context.
+def _gui_cancel_tasks() -> None:
+    """DPG exit callback: signal background work to stop, WITHOUT waiting.
+
+    DPG dispatches the exit callback from inside `render_dearpygui_frame`, so this must NOT wait. A background
+    task parked in `dpg.split_frame` — the avatar renderer's OpenGL task and the chat-streaming updater both
+    do this — can only be released by the render loop completing one more frame, and the render loop is right
+    now sitting in this callback. So we only *cancel* here. The frame that fired this callback then completes,
+    releasing the `split_frame` waiters; the tasks observe their cancelled flags and exit. The blocking drain
+    happens in `gui_shutdown`. Without this split, `destroy_context()` in the `finally` could run while the
+    renderer thread is still touching OpenGL — destroying the context under it segfaults the process (notably
+    when closing the window mid-boot, where the renderer was just started and is busy).
+    """
     global _shutting_down
-    _shutting_down = True  # first thing: tell any in-flight startup frame callback to bail before it touches DPG
+    _shutting_down = True  # also tells any in-flight startup frame callback to bail before it touches DPG
+    chat_controller.cancel_tasks()        # cancel chat / AI-turn / context-prefill tasks (no wait)
+    gui_resize_task_manager.clear(wait=False)  # cancel any in-flight GUI resize (it can use split_frame)
+    dpg_avatar_renderer.stop(wait=False)  # signal the avatar renderer's background (OpenGL) task to stop (no wait)
+    avatar_controller.stop_tts()          # stop TTS playback (no wait)
+dpg.set_exit_callback(_gui_cancel_tasks)
+
+def gui_shutdown() -> None:
+    """App exit, second phase: wait for background work to finish and release GUI/server resources.
+
+    Call from the render loop's `finally`, on the main thread, AFTER the loop has exited and AFTER
+    `_gui_cancel_tasks` (the exit callback) has already signalled cancellation during the final frame — so the
+    `wait=True` drains below complete instead of deadlocking on `split_frame` waiters. Must run before
+    `dpg.destroy_context()`, so no background thread is still touching DPG/OpenGL when the context goes away.
+    """
+    global _shutting_down
+    _shutting_down = True  # defensive; normally already set by `_gui_cancel_tasks`
     avatar_controller.stop_tts()  # Stop the TTS speaking so that the speech background thread (if any) exits.
     logger.info("gui_shutdown: entered")
-    # Phase 1: silence the GUI side. The cancelled commit's `finally` will fire `on_indexing_done`
-    # from a worker thread, and in-flight chat tasks can fire `on_docs_done` similarly — both would
-    # then call `dpg.show/hide_item` on widgets that are already being torn down. Disabling the
-    # controller's GUI hooks here sidesteps that race.
+    # Silence the GUI side (idempotent; `_gui_cancel_tasks` already did this, via `chat_controller.cancel_tasks()`,
+    # whose first action is `disable_gui_updates()`). The cancelled commit's `finally` will fire `on_indexing_done`
+    # from a worker thread, and in-flight chat tasks can fire `on_docs_done` similarly — both would then call
+    # `dpg.show/hide_item` on widgets that are already being torn down.
     chat_controller.disable_gui_updates()
     # Stop the watchdog observer first so no new ingest/commit tasks land while we're tearing down,
     # then cancel any in-flight RAG indexing. `hybridir.shutdown` waits for the running commit to exit
@@ -1084,7 +1118,6 @@ def gui_shutdown() -> None:
     dpg_avatar_renderer.stop(wait=True)
     gui_animation.animator.clear()
     logger.info("gui_shutdown: done")
-dpg.set_exit_callback(gui_shutdown)
 
 def app_shutdown() -> None:
     """App exit: gracefully shut down parts that don't need DPG.
@@ -1177,6 +1210,20 @@ except Exception:
     logger.exception("Unhandled exception in render loop")
 finally:
     logger.info("App render loop exited.")
+
+    # Drive BOTH shutdown phases here, on the main thread — we must NOT rely on DPG having run the exit
+    # callback. On a fast (e.g. mid-boot) close, DPG's callback-thread slot can be occupied by a startup
+    # frame callback parked in `split_frame`, so the exit callback never fires.
+    #   1. `_gui_cancel_tasks` — signal cancellation, no waiting. Sets `_shutting_down` (so a late startup
+    #      frame callback bails), flips `gui_updates_safe` off, and cancels the avatar renderer + chat tasks,
+    #      so they stop before parking in `split_frame` (which would hang now that the loop is stopped). The
+    #      renderer's `split_frame`s self-skip once its task is cancelled (see `_split_frame_unless_stopping`).
+    #      Idempotent with the exit-callback invocation, if DPG did run it.
+    #   2. `gui_shutdown` — the blocking drain + resource teardown. Safe to wait now: phase 1 already signalled
+    #      everything, so nothing remains parked in `split_frame`.
+    # Then destroy the context, with no background thread still touching DPG/OpenGL.
+    _gui_cancel_tasks()
+    gui_shutdown()
 
     try:
         dpg.destroy_context()

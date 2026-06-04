@@ -385,6 +385,20 @@ class DPGAvatarRenderer:
             self.backdrop_image = None
             self.backdrop_path = None
 
+    def _split_frame_unless_stopping(self) -> None:
+        """`dpg.split_frame()`, but skipped when this renderer's background task has been cancelled (app shutting down).
+
+        `split_frame` waits for the render loop to complete a frame; once the loop has stopped (during app
+        teardown) it would block forever, hanging the shutdown drain. The renderer's `split_frame`s are
+        anti-flicker niceties, irrelevant during teardown — so once the task is cancelled (the app's exit path
+        calls `stop(wait=False)` first thing, which sets this) we skip them, letting the code fall through and
+        the task loop reach its `while not cancelled` check and exit instead of parking. Outside teardown
+        (`_task_env` absent at pre-start, or present and not cancelled) it behaves as a normal `split_frame`.
+        """
+        if self._task_env is not None and self._task_env.cancelled:
+            return
+        dpg.split_frame()
+
     def configure_backdrop(self,
                            new_width: int,
                            new_height: int,
@@ -449,7 +463,7 @@ class DPGAvatarRenderer:
                                                         tag=f"avatar_backdrop_texture_{new_texture_id}",
                                                         parent=self.texture_registry)
             self.backdrop_texture_id_counter += 1
-            dpg.split_frame()  # For some reason, waiting for a frame here eliminates flicker when the background image is replaced.
+            self._split_frame_unless_stopping()  # For some reason, waiting for a frame here eliminates flicker when the background image is replaced.
             dpg.delete_item("avatar_backdrop_drawlist", children_only=True)  # delete old draw items
             dpg.configure_item("avatar_backdrop_drawlist", width=new_width, height=new_height)
             dpg.draw_image(f"avatar_backdrop_texture_{new_texture_id}", (0, 0), (new_width, new_height), uv_min=(0, 0), uv_max=(1, 1), parent="avatar_backdrop_drawlist")
@@ -543,10 +557,10 @@ class DPGAvatarRenderer:
         self.reposition()
 
         if not first_time:
-            dpg.split_frame()  # For some reason, waiting for a frame here eliminates flicker when the texture object is replaced.
+            self._split_frame_unless_stopping()  # For some reason, waiting for a frame here eliminates flicker when the texture object is replaced.
         with guiutils.nonexistent_ok():
             dpg.hide_item(f"avatar_live_image_{old_texture_id}")  # tag
-            dpg.split_frame()  # Only safe after startup, once the GUI render loop is running. At startup, the old image widget doesn't exist, so we detect the situation from that.
+            self._split_frame_unless_stopping()  # Only safe after startup, once the GUI render loop is running. At startup, the old image widget doesn't exist, so we detect the situation from that.
         # Now the old image widget is guaranteed to be hidden, so we can delete it without breaking GUI render
         guiutils.maybe_delete_item(f"avatar_live_image_{old_texture_id}")  # tag
         guiutils.maybe_delete_item(f"avatar_live_texture_{old_texture_id}")  # tag
@@ -675,7 +689,7 @@ class DPGAvatarRenderer:
                 # position offscreen and render, to compute size
                 dpg.set_item_pos(self.paused_text_gui_widget, (0, -100))
                 dpg.show_item(self.paused_text_gui_widget)
-                dpg.split_frame()  # wait for the text to show so that DPG computes its size
+                self._split_frame_unless_stopping()  # wait for the text to show so that DPG computes its size
                 self._reposition_paused_text()
                 dpg.hide_item(f"avatar_live_image_{self.live_texture_id_counter}")
                 dpg.hide_item(self.backdrop_drawlist_gui_widget)

@@ -586,3 +586,64 @@ wants a sensible default height + growth behaviour). Pairs with the eventual fil
 
 Discovered during brief 02 GUI work (2026-06-04).
 
+## Fleet-wide: shared two-phase DPG shutdown helper + audit
+
+The DPG apps each hand-roll their render-loop teardown, and the pattern is fragile — `raven-librarian`
+and `raven-avatar-settings-editor` both got it *wrong* independently, which is the signal it should be a
+shared utility, not copy-pasted boilerplate. The correct shape (already in `raven.cherrypick.app`):
+
+1. **Exit callback = cancel only, NO waiting.** DPG dispatches it from inside `render_dearpygui_frame`; a
+   `wait=True` there deadlocks any task parked in `dpg.split_frame` (the frame can't complete while we wait,
+   and `split_frame` needs the frame to complete). Signal cancellation only.
+2. **Blocking drain + teardown in the render-loop `finally`,** on the main thread, BEFORE `destroy_context()`.
+   And **drive both phases from the `finally` yourself** — do NOT rely on DPG having run the exit callback: on
+   a fast/mid-boot close its callback-thread slot can be occupied, so it may never fire (this was the librarian
+   hang). Call the cancel explicitly at the top of the `finally`, then the waiting drain, then `destroy_context`.
+
+The librarian fix (commits TBD on `feature/librarian-lmstudio-compat`, 2026-06-04) also surfaced gotchas any
+shared helper / per-app conversion must handle, beyond the two-phase skeleton:
+- **`split_frame` after loop-exit hangs forever** (no frame will ever complete). Any background task that calls
+  it (avatar renderer texture reconfigure; chat-view rebuild) must skip it once cancelled/shutting-down — see
+  `DPGAvatarRenderer._split_frame_unless_stopping` and the `gui_updates_safe` guards in
+  `DPGLinearizedChatView.build`.
+- **Late submissions slip past the cancel.** A startup callback's tail can *submit* a debounced rebuild task
+  AFTER teardown's cancel ran (librarian's `_resize_gui` → `_resize_gui_task` → `view.build`). Guard the
+  GUI-mutating op itself (a top-level `gui_updates_safe`/`_shutting_down` bail), not just the task manager.
+- **Startup frame callbacks race teardown.** `set_frame_callback`-deferred startup work runs on DPG's callback
+  thread and can fire mid-teardown; guard each on a `_shutting_down` flag set at the very first action of shutdown.
+- **In-flight GUI builds.** A top-of-function `gui_updates_safe` guard catches builds that *start* during
+  shutdown, but not one already running when teardown begins; for full coverage the build loop must re-check
+  per-iteration (currently `DPGLinearizedChatView.build` only guards entry + the scroll tail).
+- **The `DearPyGui_Markdown` render worker is the worst offender — STILL OPEN.** `CallInNextFrame._worker`
+  (`raven/vendor/DearPyGui_Markdown/__init__.py`) is a *persistent daemon* thread (not a managed task, no
+  cancellation hook) that pulls a render queue and calls DPG — including `dpg.split_frame()` — on its own thread.
+  Nothing stops it at shutdown, so on a mid-boot close with a URL-heavy message mid-render it keeps touching DPG
+  across `destroy_context` → segfault (and its `split_frame` would park post-loop-exit). It needs a stop flag the
+  worker checks (skip `split_frame` + stop processing when set), an app-side `markdown.shutdown()` called in the
+  cancel phase, and ideally a drain (worker sets a "stopped" flag; teardown waits for it before `destroy_context`).
+  This is the boundary layer the librarian whack-a-mole bottomed out on (2026-06-04) — the reason the shared
+  helper must own a *global* "all DPG-touching threads stop before `destroy_context`" barrier, not just per-task
+  drains. A `does_item_exist`/`nonexistent_ok` guard was added at the worker's `bind_item_handler_registry`
+  (quieted the "Item not found" spam) but does NOT fix the segfault (other DPG calls + `split_frame` remain).
+
+Per-app exposure (the bug needs a waiting drain in the exit callback AND a `split_frame`-using background task
+that can be busy at close):
+
+| App | Status |
+|---|---|
+| `cherrypick` | ✅ correct (the reference) |
+| `librarian` | ✅ fixed 2026-06-04 (this saga) |
+| `avatar-settings-editor` | 🔴 **identical bug** — only other `DPGAvatarRenderer` user, `stop(wait=True)` in exit callback, bare `finally` |
+| `visualizer` | 🟠 partial — `finally` does `clear_background_tasks(wait=False)`, but no waiting drain there; `split_frame` in annotation/info_panel (interaction-triggered, narrower window) |
+| `avatar-pose-editor` | 🟡 anti-pattern + 1 `split_frame`; exposure TBD |
+| `xdot-viewer` | 🟢 anti-pattern structure, but no `split_frame` anywhere → this bug can't bite |
+| `conference-timer` | 🟢 no exit callback, no heavy bg tasks |
+
+Plan for a focused session: extract a shared `raven.common` helper that owns the cancel-in-exit-callback /
+drain-in-finally / then-destroy_context sequence (and ideally the `split_frame`-skip-when-stopping idiom),
+convert each exposed app to it, and test each with the finicky mid-boot-close repro. `avatar-settings-editor`
+first (confirmed identical bug). Dovetails with the existing "extract `raven.common` into a toolkit" item.
+
+Discovered during brief 02 §7 live testing (2026-06-04), when an accidental mid-boot Alt+F4 exposed the
+librarian shutdown races.
+
