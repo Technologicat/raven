@@ -12,6 +12,7 @@ If you want to see the final prompt in instruct or chat mode, start your server 
 
 __all__ = ["list_models",
            "test_connection",
+           "detect_backend_flavor",
            "setup",
            "token_count",
            "invoke", "action_ack", "action_stop",
@@ -29,14 +30,13 @@ import json
 import os
 import requests
 import sys
-from textwrap import dedent
 from typing import Callable, Dict, List, Optional, Tuple
 
 import sseclient  # pip install sseclient-py
 
 from mcpyrate import colorizer
 
-from unpythonic import dyn, make_dynvar, sym, timer
+from unpythonic import dyn, make_dynvar, si_prefix, sym, timer
 from unpythonic.env import env
 
 from ..client import api
@@ -49,6 +49,11 @@ from . import config as librarian_config
 
 action_ack = sym("ack")  # acknowledge LLM progress, keep generating
 action_stop = sym("stop")  # interrupt the LLM, stop generating now
+
+# Canonical identity string injected into the character card when the loaded model can't be determined.
+# The card asserts the model's identity as a fact, so saying "unknown" is correct; guessing would make the
+# assistant broadcast something false if a user asks "which model are you?".
+NO_MODEL_INFO = "No model information is available"
 
 # --------------------------------------------------------------------------------
 # Module bootup
@@ -212,12 +217,18 @@ def webfetch_wrapper(url: str) -> str | tuple[str, dict]:
 # Utilities
 
 def list_models(backend_url: str) -> List[str]:
-    """List all models available at `backend_url`."""
-    response = requests.get(f"{backend_url}/v1/internal/model/list",
+    """List the model ids available at `backend_url`, via the standard OpenAI `/v1/models` endpoint.
+
+    Used for a model picker and the connection probe (order irrelevant). For the *loaded* model's identity,
+    see `_resolve_model_info` instead — this list can't tell you which model is actually loaded on LM Studio
+    under just-in-time loading.
+    """
+    response = requests.get(f"{backend_url}/v1/models",
                             headers=headers,
                             verify=False)
     payload = response.json()
-    return [model_name for model_name in sorted(payload["model_names"], key=lambda s: s.lower())]
+    ids = [model["id"] for model in payload.get("data", []) if model.get("id")]
+    return sorted(ids, key=lambda s: s.lower())
 
 def test_connection(backend_url: str,
                     quiet: bool = False) -> bool:
@@ -240,6 +251,86 @@ def test_connection(backend_url: str,
         print(colorizer.colorize(f"Connected to LLM backend at {backend_url}", colorizer.Style.BRIGHT, colorizer.Fore.GREEN))
         return True
 
+def detect_backend_flavor(backend_url: str) -> str:
+    """Probe `backend_url` to determine which OpenAI-compatible backend it is.
+
+    Returns "lmstudio", "oobabooga", or "generic". Detection is by *payload shape*, not HTTP status: LM
+    Studio answers unknown endpoints with HTTP 200 and an `{"error": ...}` body, so a status check would
+    misfire. The probe *order* is load-bearing — the LM-Studio-native endpoint is tried first, because the
+    ooba-private endpoint is not a clean discriminator (LM Studio returns 200 for it too, just without the
+    expected field).
+    """
+    # LM Studio: the native `/api/v0/models` returns {"data": [{id, state, arch, loaded_context_length, ...}]}.
+    # No other backend serves this namespace.
+    try:
+        models = requests.get(f"{backend_url}/api/v0/models", headers=headers, verify=False, timeout=10).json().get("data")
+        if isinstance(models, list) and models and "state" in models[0]:
+            return "lmstudio"
+    except (requests.RequestException, ValueError, AttributeError):  # connection / non-JSON / unexpected shape -> not LM Studio
+        pass
+    # oobabooga: the private `/v1/internal/model/info` returns {"model_name": ...}. Check the field, not the
+    # status — LM Studio returns 200 here too, but with {"error": ...} and no `model_name`.
+    try:
+        if "model_name" in requests.get(f"{backend_url}/v1/internal/model/info", headers=headers, verify=False, timeout=10).json():
+            return "oobabooga"
+    except (requests.RequestException, ValueError, AttributeError):
+        pass
+    return "generic"
+
+def _format_lmstudio_model_label(model_record: Dict) -> str:
+    """Assemble a rich identity line from an LM Studio `/api/v0/models` record.
+
+    E.g. `qwen3.5-4b, Q4_K_XL, 128 Ki context` — accurate, structured, better than a bare GGUF filename.
+    The context length uses an IEC binary prefix (`si_prefix` with `binary=True`), since model context
+    windows are powers of two (131072 -> "128 Ki", exactly).
+    """
+    parts = [model_record["id"]]
+    if model_record.get("quantization"):
+        parts.append(model_record["quantization"])
+    ctx = model_record.get("loaded_context_length")
+    if ctx:
+        parts.append(f"{si_prefix(ctx, precision=0, binary=True)} context")
+    return ", ".join(parts)
+
+def _resolve_model_info(backend_url: str, flavor: str) -> env:
+    """Resolve the loaded model's identity and context window for `flavor`.
+
+    Returns an `env` with:
+      `label`: human-facing model identity for the character card. The card asserts this as a *fact* about
+               the model's own identity, so a wrong value is worse than none — when a generic backend can't
+               disambiguate the loaded model, this is the literal string "No model information is available"
+               rather than a guess.
+      `model_id`: the model id to send in requests (relevant for LM Studio JIT), or `None`.
+      `context_length`: the loaded context window in tokens, or `None` if the backend doesn't report it.
+    """
+    if flavor == "oobabooga":
+        # ooba reports the GGUF filename (fine — the model can interpret `name-size-quant.gguf` itself) but
+        # not the active context length here; the latter falls through to the default in `setup`.
+        model_name = requests.get(f"{backend_url}/v1/internal/model/info", headers=headers, verify=False).json().get("model_name")
+        return env(label=model_name or NO_MODEL_INFO,
+                   model_id=model_name,
+                   context_length=None)
+    if flavor == "lmstudio":
+        # `/api/v0/models` lists all downloaded models; exactly the `state == "loaded"` one is resident under
+        # JIT, and only that record carries `loaded_context_length`.
+        models = requests.get(f"{backend_url}/api/v0/models", headers=headers, verify=False).json().get("data", [])
+        loaded = [m for m in models if m.get("state") == "loaded"]
+        if loaded:
+            record = loaded[0]
+            return env(label=_format_lmstudio_model_label(record),
+                       model_id=record.get("id"),
+                       context_length=record.get("loaded_context_length"))
+        # JIT idle: nothing resident right now. If the user named a model, trust that; else say so honestly.
+        if librarian_config.llm_model:
+            return env(label=librarian_config.llm_model, model_id=librarian_config.llm_model, context_length=None)
+        return env(label=NO_MODEL_INFO, model_id=None, context_length=None)
+    # generic: best-effort from the standard list; never guess identity.
+    ids = [m.get("id") for m in requests.get(f"{backend_url}/v1/models", headers=headers, verify=False).json().get("data", [])]
+    ids = [model_id for model_id in ids if model_id]
+    if len(ids) == 1:
+        return env(label=ids[0], model_id=ids[0], context_length=None)
+    return env(label=NO_MODEL_INFO, model_id=librarian_config.llm_model, context_length=None)
+
 def setup(backend_url: str,
           quiet: bool = False) -> env:
     """Connect to LLM at `backend_url`.
@@ -253,7 +344,21 @@ def setup(backend_url: str,
 
         `char: str`: AI persona name (name of the AI's character).
 
-        `model: str`: Name of model running at `backend_url`, queried automatically from the backend.
+        `model: str`: Human-facing identity of the loaded model, for the character card — a rich line on
+                      LM Studio (id, quant, context), the GGUF filename on ooba, or "No model information is
+                      available" when a generic backend can't disambiguate (never a guess). See `_resolve_model_info`.
+
+        `model_id: Optional[str]`: The model id sent in each request's `model` field (LM Studio JIT loads it on
+                                   demand), or `None`. Distinct from `model`, which is the display identity.
+
+        `backend_flavor: str`: Which OpenAI-compatible backend this is — "oobabooga", "lmstudio", or "generic".
+                               Autodetected (or forced via `config.llm_backend_flavor`); gates a few request details.
+
+        `context_length: int`: The loaded context window in tokens — backend-reported where available, else a
+                               conservative 64k default (a warning is logged when defaulted).
+
+        `backend_supports_continue: bool`: Whether the backend supports continuing an existing assistant message
+                                           (ooba does, via an explicit flag; lmstudio/generic don't).
 
         `system_prompt: str`: Currently empty. Used to be a generic system prompt for the LLM (the LLaMA 3 preset from SillyTavern), to make it follow the character card.
 
@@ -268,8 +373,6 @@ def setup(backend_url: str,
 
         `tools: List[Dict[str, Any]]`: JSON specifications of available tools (for LLMs capable of tool-calling).
 
-        `legacy_tools_prompt: str`: Tool-calling instructions for legacy models, automatically injected by `invoke` in legacy mode.
-
         `tool_entrypoints: Dict[str, Callable]`: The Python functions that implement the tools.
 
         `backend_url: str`: The `backend_url` argument, as-is.
@@ -281,16 +384,20 @@ def setup(backend_url: str,
 
                                               The "system" and "tool" roles typically have no persona; for them, the persona is stored as `None`.
     """
-    # Fill the model name from the backend, for the character card.
-    #
-    # https://github.com/oobabooga/text-generation-webui/discussions/1713
-    # https://stackoverflow.com/questions/78690284/oobabooga-textgen-web-ui-how-to-get-authorization-to-view-model-list-from-port-5
-    # https://github.com/oobabooga/text-generation-webui/blob/main/extensions/openai/script.py
-    response = requests.get(f"{backend_url}/v1/internal/model/info",
-                            headers=headers,
-                            verify=False)
-    payload = response.json()
-    model = payload["model_name"]
+    # Identify the backend, then resolve the loaded model's identity and context window for the character card.
+    # A few request/response details differ between backends (see `detect_backend_flavor`, `_resolve_model_info`).
+    backend_flavor = librarian_config.llm_backend_flavor or detect_backend_flavor(backend_url)
+    model_info = _resolve_model_info(backend_url, backend_flavor)
+    model = model_info.label  # human-facing identity for the character card (never a guess)
+    request_model = librarian_config.llm_model or model_info.model_id  # id sent in requests (LM Studio JIT), or None
+
+    # Context window: report the *loaded* length, never the model's theoretical max. When the backend doesn't
+    # expose it (ooba doesn't here; a generic backend can't), default conservatively to 64k and warn — smaller
+    # than that isn't useful for discussing a scientific fulltext, so we can assume at least that much.
+    context_length = model_info.context_length
+    if context_length is None:
+        context_length = 64 * 1024
+        logger.warning(f"setup: backend '{backend_flavor}' at {backend_url} did not report a loaded context length; defaulting to {context_length} tokens.")
 
     user = librarian_config.llm_user_name
     char = librarian_config.llm_char_name
@@ -329,46 +436,21 @@ def setup(backend_url: str,
     tool_entrypoints = {"websearch": websearch_wrapper,
                         "webfetch": webfetch_wrapper}
 
-    # Write tool-calling instructions for legacy models.
-    #
-    # This comes from the template built into QwQ-32B.
-    #
-    # Recent models (e.g. QwQ-32B, Qwen3) don't need this, because they have a tool-calling template built in.
-    # This is for slightly older models that support tool-calling but lack the built-in template,
-    # such as DeepSeek-R1-Distill-Qwen-7B.
-    #
-    # This template is automatically dynamically injected by `invoke` into the system prompt
-    # when the legacy mode is enabled (config flag `librarian_config.llm_send_toolcall_instructions`).
-    #
-    # `invoke` also automatically provides the "tools" field in the request or strips it,
-    # depending on whether tool-calling is enabled for that invocation.
-    #
-    tools_json = "\n".join(json.dumps(tool) for tool in tools)
-    legacy_tools_prompt = dedent(f"""
-    # Tools
-
-    You may call one or more functions to assist with the user query.
-
-    You are provided with function signatures within <tools></tools> XML tags:
-    <tools>
-    {tools_json}
-    </tools>
-
-    For each function call, return a json object with function name and arguments within <tool_call></tool_call> XML tags:
-    <tool_call>
-    {{"name": <function-name>, "arguments": <args-json-object>}}
-    </tool_call>
-    """).strip()
-
-    # Set up the chat completion request metadata template.
+    # Set up the chat completion request metadata template. Tool-calling instructions are NOT injected
+    # client-side: every tool-capable model new enough to matter carries them in its own chat template, and the
+    # backend builds them from the `tools` field below. `invoke` provides or strips `tools` per invocation.
     request_data = {
-        "mode": "instruct",  # instruct mode: when invoking the LLM, send it instructions (system prompt and character card), followed by a chat transcript to continue.
-        "stream": True,  # When the LLM is generating text, send each token to the client as soon as it is available. For live-updating the UI.
-        "messages": [],  # Chat transcript, including system messages. Populated later by `invoke`.
-        "tools": tools,  # Tools available for tool-calling, for models that support that (as of 16 May 2025, need dev branch of ooba).
-        "name1": user,  # Name of user's persona in the chat.
-        "name2": char,  # Name of AI's persona in the chat.
+        "stream": True,  # stream each token to the client as it is generated, for live UI updates
+        "messages": [],  # chat transcript including system messages; populated per-call by `invoke`
+        "tools": tools,  # tools available for tool-calling, for models that support it
     }
+    if request_model is not None:
+        request_data["model"] = request_model  # names the model (LM Studio JIT loads it on demand); harmless elsewhere
+    if backend_flavor == "oobabooga":
+        # ooba's API default mode is already "instruct" (verified), but other installs/versions can default to
+        # "chat-instruct" (which adds roleplay framing), so send it explicitly. lmstudio/generic have no `mode`
+        # field — there, messages -> the baked-in chat template is the only behaviour.
+        request_data["mode"] = "instruct"
     request_data.update(librarian_config.llm_sampler_config)
 
     # See `raven.librarian.chatutil.create_chat_message`.
@@ -382,12 +464,15 @@ def setup(backend_url: str,
     stopping_strings = [f"\n{user}:"]
 
     settings = env(user=user, char=char, model=model,
+                   model_id=request_model,  # model id sent in requests (LM Studio JIT), or None
+                   backend_flavor=backend_flavor,
+                   context_length=context_length,  # loaded context window in tokens (backend-reported, or the 64k default)
+                   backend_supports_continue=(backend_flavor == "oobabooga"),  # ooba has an explicit continue flag; others don't
                    system_prompt=system_prompt,
                    character_card=character_card,
                    stopping_strings=stopping_strings,
                    greeting=greeting,
                    tools=tools,  # for inspection
-                   legacy_tools_prompt=legacy_tools_prompt,  # for old models (see `invoke`)
                    tool_entrypoints=tool_entrypoints,  # for our implementation to be able to call them
                    backend_url=backend_url,
                    request_data=request_data,
@@ -609,14 +694,8 @@ def invoke(settings: env,
 
     if tools_enabled:
         logger.info("llmclient.invoke: Tool calling is enabled. Providing tool specifications in request.")
-        # It's already there in the default `settings.request_data`, so we don't need to do anything.
-
-        # Dynamically inject toolcall instructions for legacy models.
-        if librarian_config.llm_send_toolcall_instructions:
-            logger.info("llmclient.invoke: Injecting toolcall instructions for legacy model.")
-            data["messages"][0] = copy.deepcopy(data["messages"][0])
-            system_prompt_instance = data["messages"][0]
-            system_prompt_instance["content"] = f"{system_prompt_instance['content']}\n\n{settings.legacy_tools_prompt}"
+        # The `tools` field is already in `settings.request_data`, so there's nothing to do. The backend builds
+        # the tool-calling instructions from it, using the model's own chat template.
     else:
         logger.info("llmclient.invoke: Tool calling is disabled. Stripping tool specifications from request.")
         data.pop("tools")  # Tools? What tools? (Pretend to LLM backend we don't have any -> no tool-calls.)

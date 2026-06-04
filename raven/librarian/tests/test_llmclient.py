@@ -282,3 +282,92 @@ class TestInvokeStreamRobustness:
         out = llmclient.invoke(invoke_settings, [{"role": "user", "content": "hi"}], tools_enabled=False)
         assert out.usage is None
         assert out.n_tokens == 2  # 3 chunks - 1 overhead
+
+
+# ---------------------------------------------------------------------------
+# Backend detection + model identity (brief 02 §0/§3/§4/§5)
+# ---------------------------------------------------------------------------
+
+class _FakeGetResponse:
+    def __init__(self, payload):
+        self._payload = payload
+    def json(self):
+        return self._payload
+
+
+def _route_get(routes):
+    """A fake `requests.get` mapping URL-substring -> payload. Unmatched URLs return LM Studio's
+    200-with-error-body shape (so they look like an unknown endpoint, not a discriminating field)."""
+    def _get(url, *args, **kwargs):
+        for key, payload in routes.items():
+            if key in url:
+                return _FakeGetResponse(payload)
+        return _FakeGetResponse({"error": {"message": "Unexpected endpoint or method."}})
+    return _get
+
+
+class TestDetectBackendFlavor:
+    def test_lmstudio_via_native_endpoint(self, monkeypatch):
+        monkeypatch.setattr(llmclient.requests, "get", _route_get({
+            "/api/v0/models": {"data": [{"id": "qwen3.5-4b", "state": "loaded", "arch": "qwen35"}]}}))
+        assert llmclient.detect_backend_flavor("http://x") == "lmstudio"
+
+    def test_oobabooga_when_native_endpoint_absent(self, monkeypatch):
+        # /api/v0/models hits the default error-body (not LM Studio); /v1/internal/model/info has model_name.
+        monkeypatch.setattr(llmclient.requests, "get", _route_get({
+            "/v1/internal/model/info": {"model_name": "Qwen3-4B.gguf"}}))
+        assert llmclient.detect_backend_flavor("http://x") == "oobabooga"
+
+    def test_generic_when_neither_field_present(self, monkeypatch):
+        # Both probes return the error-body default — neither `data` list nor `model_name`.
+        monkeypatch.setattr(llmclient.requests, "get", _route_get({}))
+        assert llmclient.detect_backend_flavor("http://x") == "generic"
+
+    def test_status_200_with_error_body_is_not_oobabooga(self, monkeypatch):
+        # The real gotcha: LM Studio returns 200 + {"error": ...} for /v1/internal/model/info. Detection keys
+        # on the `model_name` field, not the status, so this must NOT be misread as ooba.
+        monkeypatch.setattr(llmclient.requests, "get", _route_get({
+            "/api/v0/models": {"data": [{"id": "m", "state": "loaded"}]},
+            "/v1/internal/model/info": {"error": {"message": "Unexpected endpoint"}}}))
+        assert llmclient.detect_backend_flavor("http://x") == "lmstudio"
+
+
+class TestModelInfoResolution:
+    def test_lmstudio_rich_label_and_context(self, monkeypatch):
+        monkeypatch.setattr(llmclient.requests, "get", _route_get({
+            "/api/v0/models": {"data": [
+                {"id": "other", "state": "not-loaded", "quantization": "Q8", "max_context_length": 262144},
+                {"id": "qwen3.5-4b", "state": "loaded", "quantization": "Q4_K_XL", "loaded_context_length": 131072}]}}))
+        info = llmclient._resolve_model_info("http://x", "lmstudio")
+        assert info.label == "qwen3.5-4b, Q4_K_XL, 128 Ki context"
+        assert info.model_id == "qwen3.5-4b"
+        assert info.context_length == 131072
+
+    def test_oobabooga_filename_label_no_context(self, monkeypatch):
+        monkeypatch.setattr(llmclient.requests, "get", _route_get({
+            "/v1/internal/model/info": {"model_name": "Qwen3-4B-Thinking.gguf"}}))
+        info = llmclient._resolve_model_info("http://x", "oobabooga")
+        assert info.label == "Qwen3-4B-Thinking.gguf"
+        assert info.model_id == "Qwen3-4B-Thinking.gguf"
+        assert info.context_length is None
+
+    def test_generic_single_model_named(self, monkeypatch):
+        monkeypatch.setattr(llmclient.requests, "get", _route_get({
+            "/v1/models": {"data": [{"id": "the-only-model"}]}}))
+        info = llmclient._resolve_model_info("http://x", "generic")
+        assert info.label == "the-only-model"
+
+    def test_generic_ambiguous_never_guesses(self, monkeypatch):
+        monkeypatch.setattr(llmclient.requests, "get", _route_get({
+            "/v1/models": {"data": [{"id": "a"}, {"id": "b"}]}}))
+        info = llmclient._resolve_model_info("http://x", "generic")
+        assert info.label == llmclient.NO_MODEL_INFO
+
+    def test_lmstudio_jit_idle_nothing_loaded(self, monkeypatch):
+        # No model resident (all not-loaded) and no configured llm_model -> honest "no info", not a guess.
+        monkeypatch.setattr(llmclient.requests, "get", _route_get({
+            "/api/v0/models": {"data": [{"id": "a", "state": "not-loaded"}, {"id": "b", "state": "not-loaded"}]}}))
+        monkeypatch.setattr(llmclient.librarian_config, "llm_model", None)
+        info = llmclient._resolve_model_info("http://x", "lmstudio")
+        assert info.label == llmclient.NO_MODEL_INFO
+        assert info.context_length is None

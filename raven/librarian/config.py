@@ -26,6 +26,20 @@ llmclient_userdata_dir = global_config.toplevel_userdata_dir / "llmclient"
 llm_backend_url = "http://localhost:5000"
 llm_api_key_file = llmclient_userdata_dir / "api_key.txt"  # will be used it it exists, ignored if not.
 
+# Which OpenAI-compatible backend `llm_backend_url` points at, or `None` to autodetect (the default).
+#
+# A few request/response details differ between backends; the flavor is determined once at connection time
+# (see `llmclient.detect_backend_flavor`) by probing endpoints. One of "oobabooga", "lmstudio", "generic", or
+# `None` (autodetect). Set explicitly only to override a misdetection.
+llm_backend_flavor = None
+
+# Which model to use, or `None` (default) to use whatever the backend reports as currently loaded.
+#
+# When set, the name is sent in each request's `model` field. On LM Studio with just-in-time (JIT) model
+# loading, this tells the server which downloaded model to load on demand. The string should match a model id
+# the backend knows (see the list at `GET {llm_backend_url}/v1/models`).
+llm_model = None
+
 # How many web search results to return, when the LLM uses the websearch tool.
 web_num_results = 10
 
@@ -298,24 +312,6 @@ llm_sampler_config = {
     "min_p": 0.02,
     "seed": -1,  # 558614238,  # RNG seed, -1 = random. If T = 0, this is unused. Except testing/debugging, should always be set to random!
 }
-
-# Tool-calling requires instructions for the model, as part of its system prompt.
-# Typically the instructions state that tools are available, and include a dynamically
-# generated list of available functions and their call signatures.
-#
-# Newer models, e.g. QwQ-32B as well as Qwen3, include a template for these instructions
-# in their built-in prompt template. In this case, the LLM backend builds the instructions
-# automatically, based on data sent by the LLM client (see `tools` in `llmclient.setup`).
-#
-# However, there exist LLMs that are capable of tool-calling, but have no instruction template
-# for that. E.g. the DeepSeek-R1-Distill-Qwen-7B model is like this.
-#
-# Hence this setting:
-#   - If `True`, our system prompt builder generates the tool-calling instructions. (For older models.)
-#   - If `False`, we just send the data, and let the LLM backend build the instructions. (For newer models.)
-#
-# llm_send_toolcall_instructions = True  # for DeepSeek-R1-Distill-Qwen-7B
-llm_send_toolcall_instructions = False  # for QwQ-32B, Qwen3, ...
 
 # ----------------------------------------
 # Names, AI's greeting
