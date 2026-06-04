@@ -134,13 +134,25 @@ Same shape applies to `nlp` (`nlptools` ↔ `natlang`), `stt`, `embeddings`, `sa
 - `raven/common/audio/` - Player, recorder, codec (PyAV streaming)
 - `raven/common/gui/` - Custom DearPyGui widgets (VU meter, GUI animation framework, messagebox)
 
-### Vendored Dependencies
-- `tha3/` - Talking Head Anime 3 neural network (avatar animation)
-- `DearPyGui_Markdown/` - MD renderer (robustified for background threads, has one remaining URL highlight bug)
-- `file_dialog/` - File dialog, extended (sortable, animated OK button, click twice when overwriting)
-- `anime4k/` - PyTorch port of Anime4K upscaler (extracts kernels from GLSL), slightly cleaned up
-- `kokoro_fastapi/` - Streaming audio writer for TTS over network
-- `IconsFontAwesome6.py` - Icon font (note: outdated version)
+### Vendored / adopted dependencies (`raven/vendor/`)
+
+**`raven/vendor/` is *adopted* code — effectively ours to fix and extend, not pristine upstream snapshots.**
+Each of these has already diverged from upstream with Raven-specific robustifications and features (see notes
+below). So when you hit a bug *in* vendored code, fix it like any other Raven code (with the usual care for a
+foreign-API layer — match the wrapped library's conventions). We may upstream a given change later, or not;
+either way, treat the in-tree copy as the source of truth. Don't reach for "it's vendored, leave it alone."
+
+- `tha3/` - Talking Head Anime 3 neural network (avatar animation). Switched `no_grad` → `inference_mode` in the
+  hot paths for a few-percent speedup.
+- `DearPyGui_Markdown/` - MD renderer, substantially robustified for Raven's background-threaded rendering
+  (most call sites guarded with `guiutils.nonexistent_ok` / `does_item_exist` against DPG's lazy GC). Known
+  remaining issue: the persistent render worker thread (`CallInNextFrame._worker`) doesn't participate in app
+  shutdown — it keeps calling DPG (incl. `split_frame`) during teardown, which can segfault on a mid-boot close
+  while a URL-heavy message is mid-render. Tracked in `TODO_DEFERRED.md` (fleet shutdown item).
+- `file_dialog/` - File dialog, extended (sortable, animated OK button, click twice when overwriting).
+- `anime4k/` - PyTorch port of Anime4K upscaler (extracts kernels from GLSL), slightly cleaned up.
+- `kokoro_fastapi/` - Streaming audio writer for TTS over network.
+- `IconsFontAwesome6.py` - Icon font (note: outdated version).
 
 ## Code Style
 All new and modified code must follow `raven-style-guide.md` (in the project root). **Read the full guide before implementing a new app.** The summary below covers the most commonly needed conventions.

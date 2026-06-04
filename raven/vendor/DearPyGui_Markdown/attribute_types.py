@@ -2,6 +2,8 @@ import traceback
 
 import dearpygui.dearpygui as dpg
 
+from ...common.gui import utils as guiutils
+
 from . import CallInNextFrame
 
 font_registry = 0
@@ -141,7 +143,15 @@ class HoverAttribute(Attribute):
     def add_item_to_handler(self, item):
         if self._handler is None:
             self._create_handler()
-        dpg.bind_item_handler_registry(item, self._handler)
+        # The markdown rendering runs on a background worker (see `__init__.py`), so the text item can be
+        # deleted (e.g. the chat view is rebuilt, or the app is torn down) between its creation and this
+        # deferred handler binding. Binding to a now-missing item raises a SystemError ("Item not found");
+        # guard it like the sibling attribute renderers do. The hover/click handler is moot once the item
+        # is gone, so skipping is correct.
+        with guiutils.nonexistent_ok():
+            if not dpg.does_item_exist(item):
+                return
+            dpg.bind_item_handler_registry(item, self._handler)
 
     def render(self, *args, **kwargs):
         self.attribute_connector.append(self)
