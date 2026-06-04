@@ -315,7 +315,7 @@ avatar_config = env(source_image_size=512,  # THA3 engine hardcoded input image 
 # E.g. Qwen3-30B-A3B-Thinking-2507 was tuned for T = 0.6, top_k = 20, top_p = 0.95, min_p = 0.
 #
 llm_sampler_config = {
-    "max_tokens": 6400,  # Per-turn output cap. 800 is usually good; thinking models may need (much) more (1600/3200, or 6400 to be sure). `None` = no cap (generate up to the full context window). Any other `None`-valued sampler key is dropped (= use the backend default).
+    "max_tokens": None,  # Per-turn output cap. `None` (default) = no cap: generate until EOS, or until the context window fills. Modern models reliably emit EOS, interactive use has a Stop button, and not truncating removes the need to "continue" a cut-off reply. Set an integer (e.g. 6400) to impose a cap. Any other `None`-valued sampler key is likewise dropped (= use the backend default).
     # Correct sampler order is tail-cutters (such as top_k, top_p, min_p) first, then temperature. In oobabooga, this is also the default.
     #
     # T = 1: Use the predicted logits as-is.
