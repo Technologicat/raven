@@ -51,6 +51,17 @@ llm_model = None
 # LM Studio / generic when you co-locate the model files with the client.
 llm_tokenizer_path = None
 
+# Idle delay (seconds) before the GUI fires a background "context prefill" on the current branch.
+#
+# When the chat HEAD settles (new message, branch switch, reroll, ...), the context-fill indicator first
+# shows a quick *approximate* token count. After this many seconds of inactivity, the controller sends the
+# current prompt to the backend generating essentially no output, which (a) reads back the backend's exact
+# `prompt_tokens` — upgrading the indicator from `~X%` to `X%` — and (b) warms the backend KV cache, so the
+# user's next turn starts faster. The delay debounces rapid branch hopping (each HEAD change supersedes the
+# previous pending prefill); a real generation also cancels it (the live turn warms the cache and reports its
+# own exact count). Set to `None` to disable the feature entirely.
+context_prefill_idle_delay = 5.0
+
 # How many web search results to return, when the LLM uses the websearch tool.
 web_num_results = 10
 
@@ -304,7 +315,7 @@ avatar_config = env(source_image_size=512,  # THA3 engine hardcoded input image 
 # E.g. Qwen3-30B-A3B-Thinking-2507 was tuned for T = 0.6, top_k = 20, top_p = 0.95, min_p = 0.
 #
 llm_sampler_config = {
-    "max_tokens": 6400,  # 800 is usually good, but thinking models may need (much) more. For them, 1600 or 3200 are good. 6400 if you want to be sure.
+    "max_tokens": 6400,  # Per-turn output cap. 800 is usually good; thinking models may need (much) more (1600/3200, or 6400 to be sure). `None` = no cap (generate up to the full context window). Any other `None`-valued sampler key is dropped (= use the backend default).
     # Correct sampler order is tail-cutters (such as top_k, top_p, min_p) first, then temperature. In oobabooga, this is also the default.
     #
     # T = 1: Use the predicted logits as-is.

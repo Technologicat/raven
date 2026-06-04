@@ -15,7 +15,7 @@ __all__ = ["list_models",
            "detect_backend_flavor",
            "setup",
            "count_tokens",
-           "invoke", "action_ack", "action_stop",
+           "invoke", "prefill", "action_ack", "action_stop",
            "perform_throwaway_task", "make_console_progress_handler",
            "perform_tool_calls",
            "approve_host_for_session"]
@@ -451,7 +451,16 @@ def setup(backend_url: str,
         # "chat-instruct" (which adds roleplay framing), so send it explicitly. lmstudio/generic have no `mode`
         # field — there, messages -> the baked-in chat template is the only behaviour.
         request_data["mode"] = "instruct"
-    request_data.update(librarian_config.llm_sampler_config)
+    # Merge the sampler settings. A `None` value drops the field — the Pythonic "use the backend default" signal,
+    # rather than literally sending `null` (which some backends reject).
+    request_data.update({key: value for key, value in librarian_config.llm_sampler_config.items() if value is not None})
+    # Per-turn output cap. `None` (or an absent key) in the sampler config means "no cap": let the model generate
+    # up to the full context window, the backend clamping to whatever the prompt leaves free. We send this as an
+    # explicit ceiling rather than omitting the field, because omission is NOT backend-uniform — LM Studio treats
+    # an absent `max_tokens` as unbounded, but ooba's OpenAI layer falls back to its own small default. `prefill`
+    # overrides this per-call (see `invoke`'s `max_tokens`), so it doesn't affect token counting.
+    if request_data.get("max_tokens") is None:
+        request_data["max_tokens"] = context_length
 
     # See `raven.librarian.chatutil.create_chat_message`.
     personas = {"user": user,
@@ -632,7 +641,8 @@ def invoke(settings: env,
            on_progress: Optional[Callable] = None,
            on_prompt_ready: Optional[Callable] = None,
            tools_enabled: bool = True,
-           continue_: bool = False) -> env:
+           continue_: bool = False,
+           max_tokens: Optional[int] = None) -> env:
     """Invoke the LLM with the given chat history.
 
     This is typically done after adding the user's message to the chat history, to ask the LLM to generate a reply.
@@ -679,6 +689,11 @@ def invoke(settings: env,
                  If `True`, continue an incomplete AI message. The last message in `history` should be the AI message
                  that you want the AI to continue. The updated (continued) message is returned.
 
+    `max_tokens`: If given, override the configured generation length cap (`config.llm_sampler_config["max_tokens"]`)
+                  for this one call. The main use is `prefill`, which sets it to a minimal value to measure the
+                  prompt size and warm the backend KV cache without producing a real reply. `None` (default) keeps
+                  the configured cap.
+
     Returns an `unpythonic.env.env` WITHOUT adding the LLM's reply to `history`.
 
     The returned `env` has the following attributes:
@@ -717,6 +732,9 @@ def invoke(settings: env,
     #  `text-generation-webui/extensions/openai/typing.py`, classes `ChatCompletionRequest` and `ChatCompletionRequestParams`
     #  `text-generation-webui/extensions/openai/completions.py`, function `chat_completions_common`
     data["continue_"] = continue_
+
+    if max_tokens is not None:
+        data["max_tokens"] = max_tokens  # override the configured generation cap (used by `prefill`)
 
     data["messages"] = history
 
@@ -873,6 +891,40 @@ def invoke(settings: env,
                usage=usage,
                dt=tim.dt,
                interrupted=interrupted)
+
+def prefill(settings: env,
+            history: List[Dict],
+            tools_enabled: bool = True) -> Optional[env]:
+    """Send `history` to the backend generating essentially no output. Returns the `invoke` env, or `None` on failure.
+
+    Two purposes, both side effects of submitting the real prompt:
+
+      1. **Exact prompt size.** The returned env's `usage["prompt_tokens"]` is the backend's own count of the whole
+         templated prompt (system prompt + character card + history + tool definitions) — exact on every backend,
+         including LM Studio / generic, which have no offline token-count endpoint. This upgrades the GUI context-fill
+         indicator from a calibrated estimate (`~X%`) to the real figure (`X%`).
+
+      2. **KV-cache warm-up.** The backend processes (prefills) the prompt, so when the user's next turn sends the
+         same prefix, the expensive prompt-processing pass is already cached and generation starts sooner.
+
+    `tools_enabled` should match the next turn's setting, so the tool definitions are counted (and cached) identically.
+
+    We cap generation at one token rather than zero: a single token is negligible compute, while `max_tokens == 0` is
+    below the OpenAI-documented minimum and some backends reject it. The prompt-processing pass — the part that matters
+    for both the count and the cache — happens regardless of the cap.
+
+    Failures (backend down, template render error surfaced as an SSE error, ...) are logged and return `None`; callers
+    keep showing the estimate. This is a best-effort enhancement, never load-bearing.
+    """
+    try:
+        return invoke(settings,
+                      history,
+                      on_progress=None,
+                      tools_enabled=tools_enabled,
+                      max_tokens=1)
+    except Exception as exc:  # noqa: BLE001 -- best-effort; any failure just leaves the estimate in place
+        logger.warning(f"prefill: backend prefill failed; keeping the token estimate. Reason {type(exc)}: {exc}")
+        return None
 
 # --------------------------------------------------------------------------------
 # Agentic workflow utility

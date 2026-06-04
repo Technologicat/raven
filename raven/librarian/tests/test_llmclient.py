@@ -434,3 +434,60 @@ class TestUsageCalibration:
         caplog.set_level(logging.WARNING, logger="raven.librarian.llmclient")
         llmclient.invoke(invoke_settings, [{"role": "user", "content": "x" * 100}], tools_enabled=False)
         assert any("does not match the served model" in rec.message for rec in caplog.records)
+
+
+# ---------------------------------------------------------------------------
+# Idle context-prefill (brief 02 §7, tier 3)
+# ---------------------------------------------------------------------------
+
+class TestPrefill:
+    def test_prefill_caps_at_one_token_and_returns_usage(self, monkeypatch, invoke_settings):
+        # prefill must minimize generation (one token) while reading back the exact prompt size.
+        sent = {}
+        def capturing_post(url, **kwargs):
+            sent["data"] = kwargs["json"]
+            return _FakeResponse()
+        monkeypatch.setattr(llmclient.requests, "post", capturing_post)
+        monkeypatch.setattr(llmclient.sseclient, "SSEClient",
+                            lambda resp: _FakeSSEClient([json.dumps(
+                                {"choices": [], "usage": {"prompt_tokens": 123, "completion_tokens": 1, "total_tokens": 124}})]))
+        out = llmclient.prefill(invoke_settings, [{"role": "user", "content": "hi"}], tools_enabled=False)
+        assert sent["data"]["max_tokens"] == 1  # overrides the configured cap for this call
+        assert out.usage["prompt_tokens"] == 123
+
+    def test_prefill_returns_none_on_failure(self, monkeypatch, invoke_settings):
+        # Backend down / template render error: prefill swallows it and returns None (caller keeps the estimate).
+        def boom(*a, **k):
+            raise RuntimeError("backend down")
+        monkeypatch.setattr(llmclient.requests, "post", boom)
+        assert llmclient.prefill(invoke_settings, [{"role": "user", "content": "hi"}]) is None
+
+
+class TestSetupOutputCap:
+    """The per-turn `max_tokens` cap merge in `setup` (a `None` value means 'no cap')."""
+
+    def _patch_generic_backend(self, monkeypatch):
+        # Minimal generic backend: one model listed, neither the LM-Studio-native nor the ooba endpoint present.
+        monkeypatch.setattr(llmclient.requests, "get", _route_get({
+            "/v1/models": {"data": [{"id": "test-model"}]},
+        }))
+        monkeypatch.setattr(llmclient.librarian_config, "llm_backend_flavor", None)
+        monkeypatch.setattr(llmclient.librarian_config, "llm_tokenizer_path", None)
+
+    def test_none_max_tokens_becomes_context_length(self, monkeypatch):
+        self._patch_generic_backend(monkeypatch)
+        monkeypatch.setattr(llmclient.librarian_config, "llm_sampler_config", {"max_tokens": None, "temperature": 1})
+        settings = llmclient.setup("http://test-backend", quiet=True)
+        assert settings.request_data["max_tokens"] == settings.context_length
+
+    def test_real_max_tokens_is_preserved(self, monkeypatch):
+        self._patch_generic_backend(monkeypatch)
+        monkeypatch.setattr(llmclient.librarian_config, "llm_sampler_config", {"max_tokens": 1234})
+        settings = llmclient.setup("http://test-backend", quiet=True)
+        assert settings.request_data["max_tokens"] == 1234
+
+    def test_none_valued_sampler_key_is_dropped(self, monkeypatch):
+        self._patch_generic_backend(monkeypatch)
+        monkeypatch.setattr(llmclient.librarian_config, "llm_sampler_config", {"max_tokens": 800, "min_p": None})
+        settings = llmclient.setup("http://test-backend", quiet=True)
+        assert "min_p" not in settings.request_data  # None -> field omitted (use backend default)

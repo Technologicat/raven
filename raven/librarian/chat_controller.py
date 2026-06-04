@@ -1422,6 +1422,9 @@ class DPGChatController:
         self.ai_turn_task_manager = bgtask.TaskManager(name="librarian_chat_controller_ai_turn",  # for running the AI's turn, specifically (so that we can easily cancel just that one task when needed)
                                                        mode="concurrent",
                                                        executor=executor)  # same thread pool
+        self.context_prefill_task_manager = bgtask.TaskManager(name="librarian_chat_controller_context_prefill",  # for the debounced idle context-prefill (its own manager so a HEAD change can cancel just it)
+                                                               mode="concurrent",
+                                                               executor=executor)  # same thread pool
 
     def disable_gui_updates(self) -> None:
         """Stop the controller from firing GUI events.
@@ -1456,6 +1459,7 @@ class DPGChatController:
         self.disable_gui_updates()
         self.task_manager.clear(wait=True)
         self.ai_turn_task_manager.clear(wait=True)
+        self.context_prefill_task_manager.clear(wait=True)
 
     def _on_indexing_start(self) -> None:
         """Show the INDEXING indicator. Called from `HybridIR.commit()`'s worker thread."""
@@ -1513,13 +1517,28 @@ class DPGChatController:
         dpg_chat_message = self.current_chat_history[-1]
         return dpg_chat_message
 
+    def _render_context_fill(self, count: int, is_exact: bool) -> None:
+        """Set the bottom-toolbar context-fill readout text from a token `count`. Low-level; does no scheduling.
+
+        `is_exact` drives the typography: `X%` when the count is exact (a local tokenizer, ooba's token-count
+        endpoint, or a backend-reported `prompt_tokens` from `_context_prefill_task`), `~X%` when it is a
+        calibrated estimate.
+        """
+        if not self.gui_updates_safe:
+            return
+        context_length = self.llm_settings.context_length
+        percent = round(100 * count / context_length) if context_length else 0
+        prefix = "" if is_exact else "~"
+        with guiutils.nonexistent_ok():  # the readout widget may vanish under a shutdown race (background prefill caller)
+            dpg.set_value("context_fill_text", f"{prefix}{percent}%  ({count} / {context_length})")  # tag
+
     def update_context_fill_indicator(self) -> None:
         """Refresh the bottom-toolbar context-fill readout: the current chat's token size vs the loaded window.
 
-        Approximates the prompt by the visible conversation content — the system prompt, RAG injects, and tool
-        definitions add some tokens not counted here, so this slightly under-reports; a future idle-prefill
-        upgrade will report the exact full-prompt total. The readout shows `X%` when the count is exact (a local
-        tokenizer, or ooba's token-count endpoint) and `~X%` when it is a calibrated estimate.
+        Two-stage: this immediate pass approximates the prompt by the visible conversation content — the system
+        prompt, RAG injects, and tool definitions add some tokens not counted here, so it slightly under-reports —
+        and then schedules a debounced background prefill (`_schedule_context_prefill`) that, once the chat settles,
+        replaces the estimate with the backend's exact full-prompt `prompt_tokens` (and warms the KV cache).
         """
         if not self.gui_updates_safe:
             return
@@ -1527,12 +1546,65 @@ class DPGChatController:
             node_ids = self.datastore.linearize_up(self.app_state["HEAD"])
             text = "".join((self.datastore.get_payload(node_id)["message"].get("content") or "") for node_id in node_ids)
             count, is_exact = llmclient.count_tokens(self.llm_settings, text)
-            context_length = self.llm_settings.context_length
-            percent = round(100 * count / context_length) if context_length else 0
-            prefix = "" if is_exact else "~"
-            dpg.set_value("context_fill_text", f"{prefix}{percent}%  ({count} / {context_length})")  # tag
+            self._render_context_fill(count, is_exact)
         except Exception:  # noqa: BLE001 -- a status readout must never break the GUI or a chat turn
             logger.exception("DPGChatController.update_context_fill_indicator: failed to update the context-fill readout")
+        self._schedule_context_prefill()
+
+    def _schedule_context_prefill(self) -> None:
+        """(Re)arm the debounced background context-prefill for the current HEAD.
+
+        Each call supersedes any pending/in-flight prefill (a HEAD change invalidates the previous one), so this
+        is safe to call from every HEAD-change site — it's driven from `update_context_fill_indicator`. The actual
+        backend round-trip happens only after `config.context_prefill_idle_delay` seconds of quiet; see
+        `_context_prefill_task`. Disabled (no-op) when that config value is `None`.
+        """
+        if not self.gui_updates_safe:
+            return
+        if librarian_config.context_prefill_idle_delay is None:
+            return
+        self.context_prefill_task_manager.clear()  # cancel the previous pending/in-flight prefill (HEAD moved or content changed)
+        self.context_prefill_task_manager.submit(self._context_prefill_task,
+                                                 env(head_node_id=self.app_state["HEAD"]))
+
+    def _context_prefill_task(self, task_env: env) -> None:
+        """Background task: after an idle delay, ask the backend for the exact prompt size of the captured branch.
+
+        Waits `config.context_prefill_idle_delay` seconds (cooperatively cancellable), then — if still relevant —
+        sends the linearized branch to the backend via `llmclient.prefill`, which generates ~nothing but reports
+        the exact templated `prompt_tokens` and warms the KV cache. On success, upgrades the indicator to `X%`.
+
+        Bails (leaving the estimate in place) if cancelled, if the app is shutting down, if a real generation is
+        in flight (that turn warms the cache and reports its own exact count), or if HEAD has moved off the branch
+        this task captured — including a final re-check after the round-trip, so a late reply can't overwrite a
+        newer branch's readout.
+        """
+        idle_delay = librarian_config.context_prefill_idle_delay
+        deadline = time.monotonic() + idle_delay
+        while time.monotonic() < deadline:
+            if task_env.cancelled or not self.gui_updates_safe:
+                return
+            time.sleep(min(0.25, idle_delay))
+
+        if task_env.cancelled or not self.gui_updates_safe or self.is_generating():
+            return
+        if self.app_state["HEAD"] != task_env.head_node_id:  # HEAD moved during the idle wait
+            return
+
+        history = chatutil.linearize_chat(datastore=self.datastore,
+                                          node_id=task_env.head_node_id)
+        out = llmclient.prefill(self.llm_settings,
+                                history,
+                                tools_enabled=self.app_state["tools_enabled"])  # match the next turn, so tool defs are counted/cached identically
+
+        if task_env.cancelled or not self.gui_updates_safe:
+            return
+        if out is None or out.usage is None or out.usage.get("prompt_tokens") is None:
+            return  # backend didn't report usage; keep the estimate
+        if self.app_state["HEAD"] != task_env.head_node_id:  # branch switched while we were waiting on the backend
+            return
+        logger.info(f"DPGChatController._context_prefill_task: exact prompt size for HEAD '{task_env.head_node_id}': {out.usage['prompt_tokens']} tokens")
+        self._render_context_fill(out.usage["prompt_tokens"], is_exact=True)
 
     def chat_round(self, user_message_text: str) -> None:
         """Run a chat round (user and AI).
@@ -1614,6 +1686,11 @@ class DPGChatController:
         def ai_turn_task(task_env: env) -> None:
             if task_env.cancelled:  # while the task was in the queue
                 return
+
+            # A live turn supersedes any pending idle-prefill: it warms the KV cache itself and reports its own
+            # exact `prompt_tokens`, so a concurrent prefill round-trip would be wasted (and would contend with
+            # the real request on a single-model backend).
+            self.context_prefill_task_manager.clear()
 
             if self.gui_updates_safe:
                 dpg.enable_item(self.chat_stop_generation_button_widget)
