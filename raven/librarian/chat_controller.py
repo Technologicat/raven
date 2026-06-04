@@ -1235,6 +1235,7 @@ class DPGLinearizedChatView:
             self.chat_controller.avatar_controller.update_emotion_from_text(config=self.chat_controller.avatar_record,
                                                                             text=text)
         self.chat_controller.avatar_controller.ping(config=self.chat_controller.avatar_record)  # wake up the AI avatar when the chat view is re-rendered
+        self.chat_controller.update_context_fill_indicator()  # HEAD changed (rebuild / branch switch / initial load)
         dpg.split_frame()
         self.scroll_view(scroll_target_node_id=scroll_target_node_id)
 
@@ -1512,6 +1513,27 @@ class DPGChatController:
         dpg_chat_message = self.current_chat_history[-1]
         return dpg_chat_message
 
+    def update_context_fill_indicator(self) -> None:
+        """Refresh the bottom-toolbar context-fill readout: the current chat's token size vs the loaded window.
+
+        Approximates the prompt by the visible conversation content — the system prompt, RAG injects, and tool
+        definitions add some tokens not counted here, so this slightly under-reports; a future idle-prefill
+        upgrade will report the exact full-prompt total. The readout shows `X%` when the count is exact (a local
+        tokenizer, or ooba's token-count endpoint) and `~X%` when it is a calibrated estimate.
+        """
+        if not self.gui_updates_safe:
+            return
+        try:
+            node_ids = self.datastore.linearize_up(self.app_state["HEAD"])
+            text = "".join((self.datastore.get_payload(node_id)["message"].get("content") or "") for node_id in node_ids)
+            count, is_exact = llmclient.count_tokens(self.llm_settings, text)
+            context_length = self.llm_settings.context_length
+            percent = round(100 * count / context_length) if context_length else 0
+            prefix = "" if is_exact else "~"
+            dpg.set_value("context_fill_text", f"{prefix}{percent}%  ({count} / {context_length})")  # tag
+        except Exception:  # noqa: BLE001 -- a status readout must never break the GUI or a chat turn
+            logger.exception("DPGChatController.update_context_fill_indicator: failed to update the context-fill readout")
+
     def chat_round(self, user_message_text: str) -> None:
         """Run a chat round (user and AI).
 
@@ -1565,6 +1587,7 @@ class DPGChatController:
                                                   user_message_text=text)
             self.app_state["HEAD"] = new_head_node_id  # as soon as possible, so that not affected by any errors during GUI building
             self.view.add_complete_message(new_head_node_id)
+            self.update_context_fill_indicator()  # user message added -> context grew
         self.task_manager.submit(user_turn_task, env())
 
     def ai_turn(self,
@@ -1755,6 +1778,7 @@ class DPGChatController:
                         logger.info("ai_turn.ai_turn_task.on_done: updating chat view with final message")
                         delete_streaming_chat_message()  # if we are called by docs nomatch, the in-progress message shouldn't exist in the GUI; then this no-ops.
                         self.view.add_complete_message(node_id)
+                        self.update_context_fill_indicator()  # AI message completed -> context grew
 
                         logger.info("ai_turn.ai_turn_task.on_done: all done.")
 
@@ -1801,6 +1825,7 @@ class DPGChatController:
                     if self.gui_updates_safe:
                         delete_streaming_chat_message()  # it shouldn't exist when this triggers, but robustness.
                         self.view.add_complete_message(node_id)
+                        self.update_context_fill_indicator()  # tool result added -> context grew
 
                 def on_tools_done() -> None:
                     if self.gui_updates_safe:

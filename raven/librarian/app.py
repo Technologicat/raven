@@ -657,6 +657,17 @@ with timer() as tim:
                     dpg.add_text("Open the Help card [F1]",
                                  tag="help_tooltip_text")
 
+                add_separator(line=False)
+
+                # Context-fill readout: how full the model's loaded context window is for the current chat.
+                # Updated by `DPGChatController.update_context_fill_indicator`. Provisional placement in the
+                # bottom toolbar; revisit when the multiline input / file-upload work reshapes this area.
+                context_fill_text_widget = dpg.add_text("", color=(160, 160, 160), tag="context_fill_text")  # tag
+                with dpg.tooltip("context_fill_text"):  # tag
+                    dpg.add_text("Conversation size vs the model's loaded context window.\n"
+                                 "A leading '~' means an estimate (no exact tokenizer configured for this backend).",
+                                 tag="context_fill_tooltip_text")
+
                 # # DEBUG / TESTING button
                 # _testing_data_eyes_enabled = False
                 # def testing_callback() -> None:
@@ -683,8 +694,9 @@ with timer() as tim:
                 # testing_tooltip_text = dpg.add_text("Developer button for testing purposes. What will it do today?!", parent=testing_tooltip)
 
                 number_of_below_chat_buttons = 7
-                number_of_separators = 2
-                ai_warning_spacer_base_size = gui_config.chat_panel_w - number_of_below_chat_buttons * (gui_config.toolbutton_w + 8) - number_of_separators * (gui_config.toolbar_separator_w) + 60
+                number_of_separators = 3  # +1 for the separator before the context-fill readout
+                context_fill_reserve_w = 170  # provisional: horizontal room for the context-fill readout text
+                ai_warning_spacer_base_size = gui_config.chat_panel_w - number_of_below_chat_buttons * (gui_config.toolbutton_w + 8) - number_of_separators * (gui_config.toolbar_separator_w) - context_fill_reserve_w + 60
                 dpg.add_spacer(width=ai_warning_spacer_base_size, tag="ai_warning_spacer")
 
                 with dpg.group(horizontal=True):

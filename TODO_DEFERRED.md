@@ -574,3 +574,15 @@ usage-calibration / idle-prefill) are the measurement substrate this would build
 
 Discovered during brief 02 (LM Studio compat) kickoff (2026-06-04).
 
+## Librarian chat input: make it multiline (Shift+Enter = newline)
+
+The chat input (`app.py`, `dpg.add_input_text(tag="chat_field", ...)`) is single-line. This blocks
+serious usage — pasting or composing a multi-paragraph prompt (a fulltext excerpt, a structured
+question) is impractical. Make it a multiline input (`multiline=True`), with **Enter = send** and
+**Shift+Enter = newline**. The send hotkey handler already intercepts Enter; it needs to check the
+Shift modifier and insert a newline instead of sending when Shift is held (and a multiline box also
+wants a sensible default height + growth behaviour). Pairs with the eventual file-upload affordance
+(both feed larger prompts into the box).
+
+Discovered during brief 02 GUI work (2026-06-04).
+
