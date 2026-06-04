@@ -250,12 +250,16 @@ def _perform_and_store_tool_calls(llm_settings: env,
 
     for tool_response_record in tool_response_records:
         def create_tool_payload() -> Dict:
+            # OAI spec puts the tool-call linkage on the tool-response *message* as `tool_call_id` (matching the
+            # `id` of the assistant's `tool_calls[i]` entry). The tool *execution* metadata (status, function
+            # name, timing) stays in `generation_metadata`. See brief 02 §11.
+            if "tool_call_id" in tool_response_record:
+                tool_response_record.data["tool_call_id"] = tool_response_record.tool_call_id
+
             payload = chatutil.create_payload(llm_settings=llm_settings,
                                               message=tool_response_record.data)
 
             generation_metadata = {"status": tool_response_record.status}  # status is "success" or "error"
-            if "tool_call_id" in tool_response_record:
-                generation_metadata["toolcall_id"] = tool_response_record.tool_call_id  # storage key relocated/renamed to message.tool_call_id in §11 migration
             if "function_name" in tool_response_record:
                 generation_metadata["function_name"] = tool_response_record.function_name
             if "dt" in tool_response_record:
@@ -672,7 +676,7 @@ def retry_tool_calls(llm_settings: env,
     denied_payload = datastore.get_payload(tool_node_id)
     if denied_payload["message"]["role"] != "tool":
         raise ValueError(f"retry_tool_calls: node '{tool_node_id}' is not a tool-result node (role is '{denied_payload['message']['role']}').")
-    denied_tool_call_id = denied_payload.get("generation_metadata", {}).get("toolcall_id")  # storage key relocated/renamed to message.tool_call_id in §11 migration
+    denied_tool_call_id = denied_payload["message"].get("tool_call_id")  # OAI: linkage lives on the tool message (brief 02 §11)
 
     # 1. Walk up the tool-result chain to the assistant that requested the calls.
     parent_node_id = datastore.get_parent(tool_node_id)

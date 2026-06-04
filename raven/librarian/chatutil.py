@@ -18,8 +18,12 @@ __all__ = ["format_message_number",
            "get_node_message_text_without_persona",
            "scrub"]
 
+import logging
+logger = logging.getLogger(__name__)
+
 import copy
 import datetime
+import json
 import re
 import time
 from typing import Any, Dict, List, Optional, Tuple
@@ -457,6 +461,91 @@ def compute_auto_allowed_hosts(datastore: chattree.Forest,
 
     return frozenset(hosts)
 
+# --------------------------------------------------------------------------------
+# Datastore migration helpers (brief 02 §11): inline reasoning / tool-call normalization.
+#
+# Old chats stored reasoning inline as `<think>...</think>` in `message["content"]`, and (for tool-response
+# messages) the tool-call linkage under `generation_metadata["toolcall_id"]`. The current format keeps reasoning
+# in a `reasoning_content` sibling field, tool calls in structured `message["tool_calls"]`, and the linkage on
+# `message["tool_call_id"]` (OAI spelling). These helpers normalize old payloads to the current format, each
+# guarded for idempotency (a second pass over already-migrated data produces no changes).
+
+# `\s*<think>(.*?)</think>\s*` (DOTALL): captures the inner reasoning and consumes the surrounding whitespace
+# (incl. newlines) on both sides, so replacing with a single space preserves a persona prefix cleanly
+# (`"Aria: <think>...</think>\nBla"` -> `"Aria: Bla"`).
+_migration_think_block = re.compile(r"\s*<think>(.*?)</think>\s*", flags=re.DOTALL | re.IGNORECASE)
+_migration_tool_call_block = re.compile(r"\s*<tool_call>(.*?)</tool_call>\s*", flags=re.DOTALL | re.IGNORECASE)
+
+def _normalize_tool_call_arguments(arguments: str) -> str:
+    """Normalize a tool call's JSON-string `arguments` for dedup comparison (sorted keys); fall back to stripped raw."""
+    try:
+        return json.dumps(json.loads(arguments), sort_keys=True)
+    except (json.JSONDecodeError, ValueError, TypeError):
+        return (arguments or "").strip()
+
+def _migrate_inline_reasoning(message: Dict[str, Any]) -> None:
+    """Extract inline `<think>...</think>` blocks from `message["content"]` into `message["reasoning_content"]`.
+
+    Idempotent: once the tags are stripped from content, a later pass finds nothing to do. Mutates `message`.
+    """
+    content = message.get("content")
+    if not isinstance(content, str) or "<think>" not in content.lower():
+        return
+    blocks = [block.strip() for block in _migration_think_block.findall(content)]
+    blocks = [block for block in blocks if block]  # drop empty (e.g. Gemma's ghost `<think></think>`)
+    message["content"] = _migration_think_block.sub(" ", content).strip()
+    if blocks:
+        extracted = "\n\n".join(blocks)
+        existing = message.get("reasoning_content") or ""
+        message["reasoning_content"] = f"{existing}\n\n{extracted}" if existing else extracted
+
+def _migrate_inline_tool_calls(message: Dict[str, Any]) -> None:
+    """Dedup inline `<tool_call>...</tool_call>` blocks in content against `message["tool_calls"]`, then strip them.
+
+    If a block isn't already represented structurally, parse and add it. On malformed JSON, leave the message's
+    content unchanged (lossless fallback — better to show the literal tags than to crash on load). Idempotent.
+    Mutates `message`.
+    """
+    content = message.get("content")
+    if not isinstance(content, str) or "<tool_call>" not in content.lower():
+        return
+    existing = message.get("tool_calls") or []
+    seen_keys = {(((tc.get("function") or {}).get("name", "")),
+                  _normalize_tool_call_arguments((tc.get("function") or {}).get("arguments", "")))
+                 for tc in existing}
+    new_calls: List[Dict] = []
+    for raw in _migration_tool_call_block.findall(content):
+        try:
+            parsed = json.loads(raw.strip())
+        except (json.JSONDecodeError, ValueError):
+            logger.warning("upgrade_datastore: malformed inline <tool_call> JSON; leaving this message's content unchanged.")
+            return  # §11.4: degraded but lossless — don't strip, don't extract
+        name = parsed.get("name", "")
+        arguments = parsed.get("arguments", {})
+        if not isinstance(arguments, str):  # OAI convention stores arguments as a JSON *string*
+            arguments = json.dumps(arguments)
+        key = (name, _normalize_tool_call_arguments(arguments))
+        if key not in seen_keys:  # not already in the structured tool_calls -> add it
+            seen_keys.add(key)
+            position = len(existing) + len(new_calls)
+            new_calls.append({"type": "function",
+                              "function": {"name": name, "arguments": arguments},
+                              "id": f"migrated_{position}",
+                              "index": str(position)})
+    message["content"] = _migration_tool_call_block.sub(" ", content).strip()
+    if new_calls:
+        message["tool_calls"] = existing + new_calls
+
+def _migrate_tool_call_id(payload: Dict[str, Any]) -> None:
+    """Move `generation_metadata["toolcall_id"]` -> `message["tool_call_id"]` (OAI spelling). Idempotent. Mutates `payload`."""
+    message = payload.get("message", {})
+    if message.get("role") != "tool":
+        return
+    generation_metadata = payload.get("generation_metadata")
+    if not generation_metadata or "toolcall_id" not in generation_metadata:
+        return
+    message["tool_call_id"] = generation_metadata.pop("toolcall_id")  # full move: single source of truth on the message
+
 # v0.2.3+: data format change
 def upgrade_datastore(llm_settings: env,
                       datastore: chattree.Forest,
@@ -479,6 +568,18 @@ def upgrade_datastore(llm_settings: env,
                              to each existing data revision on the node (independent deepcopy for
                              each revision), and deleted from the top level of the node, so that
                              the top level contains only the system keys.
+
+    This also normalizes reasoning and tool-call storage to the current format (brief 02 §11), independently
+    of the v0.2.3 payload-format change above:
+
+      - inline `<think>...</think>` reasoning in `message["content"]` is moved to the `reasoning_content`
+        sibling field;
+      - inline `<tool_call>...</tool_call>` blocks in content are deduped against / merged into the structured
+        `message["tool_calls"]`, then stripped from content;
+      - the tool-response linkage moves from `generation_metadata["toolcall_id"]` to `message["tool_call_id"]`
+        (OAI spelling).
+
+    Every step is idempotent, so a second load over already-migrated data produces no changes.
 
     NOTE: There are two upgrade functions for the chat datastore.
 
@@ -550,6 +651,16 @@ def upgrade_datastore(llm_settings: env,
                     payload["general_metadata"] = {"timestamp": timestamp,
                                                    "datetime": f"{isodate} {isotime}",
                                                    "persona": llm_settings.personas.get(role, None)}
+
+            # brief 02 §11: normalize reasoning + tool-call storage to the current format. Move inline
+            # `<think>` reasoning into the `reasoning_content` sibling field; dedup/extract inline `<tool_call>`
+            # into structured `tool_calls`; move the tool-response linkage onto `message["tool_call_id"]`.
+            # Each step is idempotent, so this is safe to run on every load (old data and already-migrated alike).
+            for payload in payload_revisions.values():
+                message = payload["message"]
+                _migrate_inline_reasoning(message)
+                _migrate_inline_tool_calls(message)
+                _migrate_tool_call_id(payload)
 
 def factory_reset_datastore(datastore: chattree.Forest, llm_settings: env) -> str:
     """Reset `datastore` to its "factory-default" state.

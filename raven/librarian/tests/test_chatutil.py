@@ -1,6 +1,8 @@
 """Unit tests for raven.librarian.chatutil."""
 
+import copy
 import datetime
+import json
 import re
 import time
 
@@ -696,3 +698,173 @@ class TestComputeAutoAllowedHosts:
         ])
         result = chatutil.compute_auto_allowed_hosts(forest, head, trust_search_results=True)
         assert result == frozenset({"user-typed.com", "searched.com"})
+
+
+# ---------------------------------------------------------------------------
+# Datastore migration (brief 02 §11): inline reasoning / tool-call normalization
+# ---------------------------------------------------------------------------
+
+class TestMigrateInlineReasoning:
+    def test_extracts_think_block(self):
+        message = {"role": "assistant", "content": "Aria: <think>hmm</think>\nBla...", "tool_calls": []}
+        chatutil._migrate_inline_reasoning(message)
+        assert message["reasoning_content"] == "hmm"
+        assert message["content"] == "Aria: Bla..."  # persona prefix preserved, tag+whitespace collapsed
+
+    def test_inline_think_after_some_text(self):
+        message = {"role": "assistant", "content": "Aria: Let me think. <think>pondering</think>\nMy answer"}
+        chatutil._migrate_inline_reasoning(message)
+        assert message["reasoning_content"] == "pondering"
+        assert message["content"] == "Aria: Let me think. My answer"
+
+    def test_only_thinking_yields_empty_content(self):
+        message = {"role": "assistant", "content": "<think>only thinking</think>"}
+        chatutil._migrate_inline_reasoning(message)
+        assert message["reasoning_content"] == "only thinking"
+        assert message["content"] == ""
+
+    def test_multiple_blocks_concatenated(self):
+        message = {"role": "assistant", "content": "<think>one</think>middle<think>two</think>end"}
+        chatutil._migrate_inline_reasoning(message)
+        assert message["reasoning_content"] == "one\n\ntwo"
+        assert message["content"] == "middle end"
+
+    def test_empty_ghost_block_dropped(self):
+        # Gemma's `<think></think>` ghost: tag stripped, no reasoning_content field added.
+        message = {"role": "assistant", "content": "<think></think>Just the answer."}
+        chatutil._migrate_inline_reasoning(message)
+        assert message["content"] == "Just the answer."
+        assert "reasoning_content" not in message
+
+    def test_no_think_is_noop(self):
+        message = {"role": "assistant", "content": "plain answer"}
+        chatutil._migrate_inline_reasoning(message)
+        assert message == {"role": "assistant", "content": "plain answer"}
+
+    def test_idempotent(self):
+        message = {"role": "assistant", "content": "<think>x</think>y"}
+        chatutil._migrate_inline_reasoning(message)
+        once = dict(message)
+        chatutil._migrate_inline_reasoning(message)
+        assert message == once
+
+
+class TestMigrateInlineToolCalls:
+    def test_extracts_and_strips(self):
+        message = {"role": "assistant",
+                   "content": '<tool_call>{"name": "websearch", "arguments": {"query": "ravens"}}</tool_call>',
+                   "tool_calls": []}
+        chatutil._migrate_inline_tool_calls(message)
+        assert message["content"] == ""
+        assert len(message["tool_calls"]) == 1
+        assert message["tool_calls"][0]["function"]["name"] == "websearch"
+        assert json.loads(message["tool_calls"][0]["function"]["arguments"]) == {"query": "ravens"}
+
+    def test_dedup_against_existing_structured_call(self):
+        # Already in tool_calls (structured) AND inline in content: strip the inline copy, don't double-add.
+        existing = [{"type": "function", "id": "call_1",
+                     "function": {"name": "websearch", "arguments": '{"query": "ravens"}'}}]
+        message = {"role": "assistant",
+                   "content": '<tool_call>{"name": "websearch", "arguments": {"query": "ravens"}}</tool_call>',
+                   "tool_calls": list(existing)}
+        chatutil._migrate_inline_tool_calls(message)
+        assert message["content"] == ""
+        assert len(message["tool_calls"]) == 1  # no duplicate added
+
+    def test_malformed_json_leaves_content_unchanged(self):
+        # §11.4 lossless fallback: broken inline JSON -> don't strip, don't extract.
+        original = '<tool_call>{"name": "websearch", arguments oops}</tool_call>'
+        message = {"role": "assistant", "content": original, "tool_calls": []}
+        chatutil._migrate_inline_tool_calls(message)
+        assert message["content"] == original
+        assert message["tool_calls"] == []
+
+    def test_no_tool_call_is_noop(self):
+        message = {"role": "assistant", "content": "no calls here", "tool_calls": []}
+        chatutil._migrate_inline_tool_calls(message)
+        assert message["content"] == "no calls here"
+
+    def test_idempotent(self):
+        message = {"role": "assistant",
+                   "content": 'pre <tool_call>{"name": "f", "arguments": {}}</tool_call> post',
+                   "tool_calls": []}
+        chatutil._migrate_inline_tool_calls(message)
+        once = {"content": message["content"], "tool_calls": list(message["tool_calls"])}
+        chatutil._migrate_inline_tool_calls(message)
+        assert message["content"] == once["content"]
+        assert len(message["tool_calls"]) == len(once["tool_calls"])
+
+
+class TestMigrateToolCallId:
+    def test_moves_to_message(self):
+        payload = {"message": {"role": "tool", "content": "result"},
+                   "generation_metadata": {"status": "success", "toolcall_id": "call_7", "function_name": "websearch"}}
+        chatutil._migrate_tool_call_id(payload)
+        assert payload["message"]["tool_call_id"] == "call_7"
+        assert "toolcall_id" not in payload["generation_metadata"]
+        assert payload["generation_metadata"]["function_name"] == "websearch"  # other fields stay
+
+    def test_non_tool_role_untouched(self):
+        payload = {"message": {"role": "assistant", "content": "hi"},
+                   "generation_metadata": {"toolcall_id": "call_x"}}
+        chatutil._migrate_tool_call_id(payload)
+        assert "tool_call_id" not in payload["message"]
+        assert payload["generation_metadata"]["toolcall_id"] == "call_x"
+
+    def test_idempotent(self):
+        payload = {"message": {"role": "tool", "content": "r"},
+                   "generation_metadata": {"status": "success", "toolcall_id": "call_7"}}
+        chatutil._migrate_tool_call_id(payload)
+        chatutil._migrate_tool_call_id(payload)  # second pass: nothing left to move
+        assert payload["message"]["tool_call_id"] == "call_7"
+        assert "toolcall_id" not in payload["generation_metadata"]
+
+
+class TestUpgradeDatastoreReasoningAndToolCallId:
+    def _old_format_forest(self, llm_settings):
+        f = chattree.Forest()
+        system_id = f.create_node(payload={"message": {"role": "system", "content": "sys", "tool_calls": []}},
+                                  parent_id=None)
+        assistant_id = f.create_node(
+            payload={"message": {"role": "assistant",
+                                 "content": 'Aria: <think>let me search</think>\n<tool_call>{"name": "websearch", "arguments": {"query": "x"}}</tool_call>',
+                                 "tool_calls": []}},
+            parent_id=system_id)
+        tool_id = f.create_node(
+            payload={"message": {"role": "tool", "content": "search result"},
+                     "generation_metadata": {"status": "success", "toolcall_id": "call_9", "function_name": "websearch"}},
+            parent_id=assistant_id)
+        return f, system_id, assistant_id, tool_id
+
+    def test_end_to_end_migration(self, llm_settings):
+        f, system_id, assistant_id, tool_id = self._old_format_forest(llm_settings)
+        chatutil.upgrade_datastore(llm_settings, f, system_id)
+
+        assistant_msg = f.get_payload(assistant_id)["message"]
+        assert assistant_msg["reasoning_content"] == "let me search"
+        assert "<think>" not in assistant_msg["content"]
+        assert "<tool_call>" not in assistant_msg["content"]
+        assert len(assistant_msg["tool_calls"]) == 1
+        assert assistant_msg["tool_calls"][0]["function"]["name"] == "websearch"
+
+        tool_msg = f.get_payload(tool_id)["message"]
+        assert tool_msg["tool_call_id"] == "call_9"
+        assert "toolcall_id" not in f.get_payload(tool_id)["generation_metadata"]
+
+    def test_migration_is_idempotent(self, llm_settings):
+        # The brief's repeat-safety check: a second migration over migrated data produces no changes.
+        f, system_id, assistant_id, tool_id = self._old_format_forest(llm_settings)
+        chatutil.upgrade_datastore(llm_settings, f, system_id)
+        snapshot = {nid: copy.deepcopy(f.get_payload(nid)) for nid in (system_id, assistant_id, tool_id)}
+        chatutil.upgrade_datastore(llm_settings, f, system_id)
+        for nid, before in snapshot.items():
+            assert f.get_payload(nid) == before
+
+    def test_no_think_or_tool_call_substrings_remain(self, llm_settings):
+        # Idempotency invariant from the brief: no message content retains the inline tags after migration.
+        f, system_id, assistant_id, tool_id = self._old_format_forest(llm_settings)
+        chatutil.upgrade_datastore(llm_settings, f, system_id)
+        for nid in (system_id, assistant_id, tool_id):
+            content = f.get_payload(nid)["message"].get("content", "")
+            assert "<think>" not in content
+            assert "<tool_call>" not in content
