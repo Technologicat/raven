@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 import collections
 import concurrent.futures
 import io
+import json
 import pathlib
 import os
 import threading
@@ -490,6 +491,42 @@ class DPGChatMessage:
                     paragraph["widget"] = widget
                     dpg.set_item_alias(widget, f"chat_message_text_{role}_paragraph_{idx}_{self.gui_uuid}")  # tag
                 paragraph["rendered"] = True
+
+    def add_tool_call_invocation(self, index: int, name: str, arguments: str) -> None:
+        """Render one tool-call invocation as a visible sub-element: a meshing-cogs icon + the call signature.
+
+        Raven's what-you-see-is-what-you-get design surfaces what the model did, so a tool-calling turn is not
+        silently swallowed between an (often empty) assistant message and the subsequent tool result. The
+        invocation may have arrived as a native `tool_calls` entry or as an inline `<tool_call>` tag — by the
+        time it reaches here it's the same structured form (the `invoke` parser unified them; see brief 02 §9).
+
+        The icon is `ICON_GEARS` (meshing cogs), matching the tool-role result message's three-cogs badge
+        (`icons/tool.png`) — invocation and result read as the same family. Deliberately *not* the single-gear
+        `ICON_GEAR`, which is the universal "settings" glyph (reserved for the future settings dialog).
+
+        `index`: position among this message's tool calls (for unique widget tags).
+        `name`: the function name.
+        `arguments`: the call arguments as a JSON string (OAI convention).
+        """
+        tool_color = role_to_colors["tool"]["front"]
+        try:
+            parsed_args = json.loads(arguments) if arguments else {}
+        except (json.JSONDecodeError, ValueError):
+            parsed_args = None
+        if isinstance(parsed_args, dict):
+            signature = ", ".join(f"{key}={value!r}" for key, value in parsed_args.items())
+        else:  # non-dict / unparseable: show the raw arguments rather than nothing
+            signature = (arguments or "").strip()
+
+        with self.paragraphs_lock:
+            row = dpg.add_group(horizontal=True, parent=self.gui_text_group)
+            icon_tag = f"chat_message_toolcall_icon_{index}_{self.gui_uuid}"  # tag
+            dpg.add_text(fa.ICON_GEARS, color=tool_color, tag=icon_tag, parent=row)  # tag
+            dpg.bind_item_font(icon_tag, self.parent_view.themes_and_fonts.icon_font_solid)  # tag
+            dpg.add_text(f"{name}({signature})",
+                         color=tool_color,
+                         wrap=max(0, self.get_chat_text_width() - 40),  # leave room for the leading icon
+                         parent=row)
 
     def demolish(self) -> None:
         """The opposite of `build`: delete all GUI widgets belonging to this instance.
@@ -1044,6 +1081,15 @@ class DPGCompleteChatMessage(DPGChatMessage):
 
             if exiting_think_block:
                 inside_think_block = False
+
+        # Render any tool-call invocations this assistant message made, as visible sub-elements after the text
+        # (brief 02 §10). Without this, a tool-calling turn — often with empty `content` — would show nothing
+        # between the assistant message and the subsequent tool-result node.
+        for index, tool_call in enumerate(message.get("tool_calls") or []):
+            function = tool_call.get("function") or {}
+            self.add_tool_call_invocation(index=index,
+                                          name=function.get("name", "?"),
+                                          arguments=function.get("arguments", ""))
 
 
 class DPGStreamingChatMessage(DPGChatMessage):
