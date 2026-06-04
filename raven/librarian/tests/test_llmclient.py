@@ -216,6 +216,9 @@ def invoke_settings(llm_settings):
     llm_settings.request_data = {"stream": True, "messages": [], "tools": []}
     llm_settings.stopping_strings = []
     llm_settings.backend_url = "http://test-backend"
+    llm_settings.backend_flavor = "lmstudio"
+    llm_settings.tokenizer = None
+    llm_settings.char_to_token_ratio = 0.27
     return llm_settings
 
 
@@ -371,3 +374,63 @@ class TestModelInfoResolution:
         info = llmclient._resolve_model_info("http://x", "lmstudio")
         assert info.label == llmclient.NO_MODEL_INFO
         assert info.context_length is None
+
+
+# ---------------------------------------------------------------------------
+# Token counting tiers + usage calibration (brief 02 §7)
+# ---------------------------------------------------------------------------
+
+class _FakeTokenizer:
+    """Deterministic stand-in: one 'token' per character, so counts are easy to assert."""
+    def encode(self, text):
+        return list(text)
+
+
+class TestCountTokens:
+    def test_tier1_local_tokenizer_is_exact(self, invoke_settings):
+        invoke_settings.tokenizer = _FakeTokenizer()
+        count, is_exact = llmclient.count_tokens(invoke_settings, "hello")
+        assert (count, is_exact) == (5, True)  # 5 chars -> 5 fake tokens, exact
+
+    def test_tier2_oobabooga_endpoint_is_exact(self, monkeypatch, invoke_settings):
+        invoke_settings.tokenizer = None
+        invoke_settings.backend_flavor = "oobabooga"
+        monkeypatch.setattr(llmclient.requests, "post", lambda *a, **k: _FakeGetResponse({"length": 42}))
+        assert llmclient.count_tokens(invoke_settings, "whatever") == (42, True)
+
+    def test_tier3_calibrated_estimate_is_not_exact(self, invoke_settings):
+        invoke_settings.tokenizer = None
+        invoke_settings.backend_flavor = "lmstudio"
+        invoke_settings.char_to_token_ratio = 0.25
+        count, is_exact = llmclient.count_tokens(invoke_settings, "x" * 40)
+        assert (count, is_exact) == (10, False)  # round(40 * 0.25) = 10, estimate
+
+
+class TestUsageCalibration:
+    def test_ratio_refined_from_prompt_usage(self, monkeypatch, invoke_settings):
+        # Calibration divides prompt_tokens by the chars actually sent. invoke scrubs the history (which adds
+        # the "User: " persona prefix), so compute the expected ratio from what `on_prompt_ready` reports.
+        sent = {}
+        def capture(history):
+            sent["chars"] = sum(len(m.get("content") or "") for m in history)
+        _fake_stream(monkeypatch, [
+            {"choices": [{"delta": {"content": "ok"}}]},
+            {"choices": [], "usage": {"prompt_tokens": 10, "completion_tokens": 1, "total_tokens": 11}},
+            "[DONE]",
+        ])
+        llmclient.invoke(invoke_settings, [{"role": "user", "content": "x" * 40}], tools_enabled=False, on_prompt_ready=capture)
+        assert invoke_settings.char_to_token_ratio == pytest.approx(10 / sent["chars"])
+
+    def test_mismatched_tokenizer_warns(self, monkeypatch, caplog, invoke_settings):
+        # Tokenizer counts 100 tokens for the content alone; backend reports only 50 for the full prompt ->
+        # the tokenizer over-counts (wrong vocab) and must warn.
+        invoke_settings.tokenizer = _FakeTokenizer()  # one token per char -> 100 for a 100-char prompt
+        _fake_stream(monkeypatch, [
+            {"choices": [{"delta": {"content": "ok"}}]},
+            {"choices": [], "usage": {"prompt_tokens": 50, "completion_tokens": 1, "total_tokens": 51}},
+            "[DONE]",
+        ])
+        import logging
+        caplog.set_level(logging.WARNING, logger="raven.librarian.llmclient")
+        llmclient.invoke(invoke_settings, [{"role": "user", "content": "x" * 100}], tools_enabled=False)
+        assert any("does not match the served model" in rec.message for rec in caplog.records)

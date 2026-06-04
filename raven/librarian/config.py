@@ -40,6 +40,17 @@ llm_backend_flavor = None
 # the backend knows (see the list at `GET {llm_backend_url}/v1/models`).
 llm_model = None
 
+# Optional local HuggingFace tokenizer for *exact* token counting against backends without a token-count
+# endpoint (LM Studio, generic). `None` (default) disables it; counts then fall back to the backend's `usage`
+# stats and a calibrated char->token estimate.
+#
+# Value: a path to a directory containing `tokenizer.json` + `tokenizer_config.json`, or a HuggingFace repo id
+# (e.g. "Qwen/Qwen3.5-4B"). The tokenizer files are tiny (~10-15 MB) and load in milliseconds. It MUST match
+# the served model, or counts will be confidently wrong — `invoke` cross-checks against the backend's reported
+# `usage` and logs a warning on a large mismatch. ooba has its own exact endpoint, so this is mainly for
+# LM Studio / generic when you co-locate the model files with the client.
+llm_tokenizer_path = None
+
 # How many web search results to return, when the LLM uses the websearch tool.
 web_num_results = 10
 

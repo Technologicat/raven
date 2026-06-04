@@ -14,7 +14,7 @@ __all__ = ["list_models",
            "test_connection",
            "detect_backend_flavor",
            "setup",
-           "token_count",
+           "count_tokens",
            "invoke", "action_ack", "action_stop",
            "perform_throwaway_task", "make_console_progress_handler",
            "perform_tool_calls",
@@ -463,11 +463,17 @@ def setup(backend_url: str,
     # Useful mainly with older models that tend to speak on behalf of the user.
     stopping_strings = [f"\n{user}:"]
 
+    # Token counting: load the optional local tokenizer for exact counts, and seed the char->token ratio used
+    # by the estimate path (`count_tokens` tier 3) until real `usage` refines it (see `invoke`).
+    tokenizer = _load_local_tokenizer(librarian_config.llm_tokenizer_path) if librarian_config.llm_tokenizer_path else None
+
     settings = env(user=user, char=char, model=model,
                    model_id=request_model,  # model id sent in requests (LM Studio JIT), or None
                    backend_flavor=backend_flavor,
                    context_length=context_length,  # loaded context window in tokens (backend-reported, or the 64k default)
                    backend_supports_continue=(backend_flavor == "oobabooga"),  # ooba has an explicit continue flag; others don't
+                   tokenizer=tokenizer,  # local HF tokenizer for exact counts, or None (see `count_tokens`)
+                   char_to_token_ratio=_DEFAULT_CHAR_TO_TOKEN_RATIO,  # estimate-path calibration; refined from usage in `invoke`
                    system_prompt=system_prompt,
                    character_card=character_card,
                    stopping_strings=stopping_strings,
@@ -536,18 +542,47 @@ def setup(backend_url: str,
 # "num_predict": 800,
 # "num_ctx": 65536,
 
-def token_count(settings: env, text: str) -> int:
-    """Get number of tokens in `text`, according to the model currently loaded at the LLM backend.
+_DEFAULT_CHAR_TO_TOKEN_RATIO = 0.27  # tokens per character; rough English/markup default, refined from real usage
+_tokenizer_cache = {}  # path -> loaded tokenizer (or None if loading failed); avoids reloading the same tokenizer
 
-    This is useful for checking how long the prompt is (after you have injected all RAG context etc.).
+def _load_local_tokenizer(path: str):
+    """Load (and cache) a local HuggingFace tokenizer for exact token counting, or return `None` on failure.
+
+    `path` is a directory with `tokenizer.json` + `tokenizer_config.json`, or a HF repo id. Failures (missing
+    files, network, version skew) are logged and degrade to the calibrated estimate rather than raising.
     """
-    # In oobabooga, undocumented web API endpoints can be found at `text-generation-webui/extensions/openai/script.py`
-    data = {"text": text}
-    response = requests.post(f"{settings.backend_url}/v1/internal/token-count",
-                             headers=headers,
-                             json=data)
-    output_data = response.json()
-    return output_data["length"]
+    if path in _tokenizer_cache:
+        return _tokenizer_cache[path]
+    try:
+        from transformers import AutoTokenizer  # noqa: PLC0415 -- heavy import, deferred to first use
+        tokenizer = AutoTokenizer.from_pretrained(path)
+    except Exception as exc:  # noqa: BLE001 -- any load failure just means "no local tokenizer; use the estimate"
+        logger.warning(f"_load_local_tokenizer: could not load tokenizer from '{path}': {type(exc)}: {exc}. Falling back to usage-calibrated token estimates.")
+        tokenizer = None
+    _tokenizer_cache[path] = tokenizer
+    return tokenizer
+
+def _ooba_token_count(backend_url: str, text: str) -> int:
+    """Exact token count from oobabooga's `/v1/internal/token-count` endpoint."""
+    # ooba's undocumented web API endpoints are listed in `text-generation-webui/extensions/openai/script.py`.
+    response = requests.post(f"{backend_url}/v1/internal/token-count", headers=headers, json={"text": text})
+    return response.json()["length"]
+
+def count_tokens(settings: env, text: str) -> Tuple[int, bool]:
+    """Count tokens in `text` for the loaded model. Returns `(count, is_exact)`.
+
+    Useful for checking prompt length after injecting RAG context etc. Tiers, in order of preference:
+      1. A configured local tokenizer (`config.llm_tokenizer_path`) — exact, offline, works on any backend.
+      2. oobabooga's `/v1/internal/token-count` endpoint — exact.
+      3. A calibrated char->token ratio (refined from each call's real `usage`; see `invoke`) — an *estimate*.
+    The `is_exact` flag drives the GUI context-fill indicator's `X%` (exact) vs `~X%` (estimate) typography.
+    Callers that only want the number use `count_tokens(...)[0]`.
+    """
+    if settings.tokenizer is not None:
+        return len(settings.tokenizer.encode(text)), True
+    if settings.backend_flavor == "oobabooga":
+        return _ooba_token_count(settings.backend_url, text), True
+    return round(len(text) * settings.char_to_token_ratio), False
 
 # --------------------------------------------------------------------------------
 # Streaming tool-call accumulation (shared by `invoke`)
@@ -800,19 +835,32 @@ def invoke(settings: env,
     else:  # normal finish by the LLM server, or callback interrupt: materialize any accumulated tool calls
         tool_calls = _materialize_tool_calls(tool_call_acc)
 
-    # Token count: prefer the backend's real `usage` (exact, server-side, includes the whole prompt). With
+    # Completion token count: prefer the backend's real `usage` (exact, server-side). With
     # `stream_options.include_usage` requested above, a normal completion reports it on both ooba and LM Studio,
-    # so the heuristic below is reached only when an interrupt (stopping string / callback / Ctrl-C) closed the
-    # stream before the final usage chunk, or a generic backend ignores the opt-in. On interrupt we've seen one
-    # overhead delta (the empty/role-priming first chunk) plus partial content and never reached the trailing
-    # framing+usage chunk on either backend — so the overhead to discount is 1, not 2, and it's backend-agnostic
-    # (the per-backend framing difference lives entirely in the trailing chunks an interrupt never receives).
-    # This is a rough figure for the tokens/sec display; counting the generated text with a local tokenizer
-    # would make it exact — a planned token-counting upgrade.
+    # so the fallbacks are reached only when an interrupt (stopping string / callback / Ctrl-C) closed the stream
+    # before the final usage chunk, or a generic backend ignores the opt-in. Then: count the generated text with
+    # a local tokenizer if one is configured (exact), else use the streamed delta count (deltas ≈ tokens) minus
+    # the one priming/overhead delta — backend-agnostic, since the per-backend framing difference lives entirely
+    # in the trailing chunks an interrupt never receives.
     if usage is not None and usage.get("completion_tokens") is not None:
         n_tokens = usage["completion_tokens"]
+    elif settings.tokenizer is not None:
+        n_tokens = len(settings.tokenizer.encode(llm_output_text))
     else:
         n_tokens = max(0, n_chunks - 1)
+
+    # Refine the char->token calibration from this call's real prompt usage (the estimate path in
+    # `count_tokens`), and cross-check a configured local tokenizer against the backend: if the tokenizer counts
+    # MORE tokens for the message content alone than the backend reported for the whole templated prompt, it
+    # almost certainly doesn't match the served model.
+    if usage is not None and usage.get("prompt_tokens"):
+        prompt_content = "".join(message.get("content") or "" for message in history)
+        if prompt_content:
+            settings.char_to_token_ratio = usage["prompt_tokens"] / len(prompt_content)
+            if settings.tokenizer is not None:
+                tokenizer_count = len(settings.tokenizer.encode(prompt_content))
+                if tokenizer_count > usage["prompt_tokens"] * 1.1:
+                    logger.warning(f"invoke: local tokenizer counted {tokenizer_count} tokens for the prompt content, exceeding the backend's reported {usage['prompt_tokens']} for the full templated prompt — the configured tokenizer likely does not match the served model; token counts may be wrong.")
 
     message = chatutil.create_chat_message(llm_settings=settings,
                                            role="assistant",

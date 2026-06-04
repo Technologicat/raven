@@ -570,7 +570,7 @@ def ai_turn(llm_settings: env,
             payload = chatutil.create_payload(llm_settings=llm_settings,
                                               message=out.data)
             payload["generation_metadata"] = {"model": out.model,
-                                              "n_tokens": out.n_tokens,  # could count final tokens with `llmclient.token_count(settings, out.data["content"])`
+                                              "n_tokens": out.n_tokens,
                                               "dt": out.dt}
             if docs_query is not None:
                 payload["retrieval"] = {"query": docs_query,
