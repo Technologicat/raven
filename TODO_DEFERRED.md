@@ -687,3 +687,20 @@ the prefill too.
 
 Discovered during brief 02 PR-B work, reported by Juha from live LM Studio use (2026-06-04).
 
+## Render the streaming thinking trace inside a bubble from the start, not just on completion
+
+The thinking trace renders in two different shapes across a message's lifetime. *While streaming*, reasoning
+paragraphs (`is_thought=True`) render as inline blue text — same flow as the visible answer, just tinted (blue
+being, as we all know, the color of thoughts). *On completion*, `DPGCompleteChatMessage._render_text` turns the
+same thought paragraph into a collapsible bubble with a cloud-icon toggle (Ctrl+T). So the user watches the
+thinking stream inline, then it visually "snaps" into a bubble when the message finalizes.
+
+It would be more coherent to render the streaming thinking inside a bubble *from the first reasoning token* —
+the live thought bubble grows in place, then just gains its collapse toggle on completion, with no shape change.
+`DPGStreamingChatMessage` would need its own thought-bubble container (analogous to the complete-message one)
+that reasoning paragraphs render into, while content paragraphs render in the normal flow. Cosmetic/UX, not
+correctness — the typed-event stream already cleanly separates the two channels (brief 02 §9), so the data is
+in hand; this is purely a streaming-renderer presentation change.
+
+Discovered during brief 02 §9 live validation, suggested by Juha (2026-06-04).
+
