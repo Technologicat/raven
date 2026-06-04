@@ -557,3 +557,20 @@ shape how, and they say "defer", not "do now":
 
 Discovered while wrapping up brief 01 webfetch (2026-06-03).
 
+## Context-window budgeting and conversation compaction (Librarian)
+
+Librarian does not yet budget the prompt against the model's context window, nor compact long
+conversations. After brief 02 (LM Studio compat), the loaded context-window figure captured per
+backend in `llmclient.setup` (§5) feeds only two consumers: the identity/context line in the
+character card (what Librarian *tells the model*) and the context-fill GUI indicator (§7). There
+is no enforcement — nothing trims or summarizes history as the prompt approaches the window.
+
+This will start to matter as the tool set grows and a direct file-upload affordance lands (a
+scientific fulltext can push the user against the ceiling). When built: budget against the
+*loaded* context length (never the model's theoretical max), prefer real `usage.prompt_tokens`
+where the backend reports it, and add a compaction strategy (summarize-older-turns or
+sliding-window) gated on the fill fraction. The §7 token-counting tiers (local tokenizer /
+usage-calibration / idle-prefill) are the measurement substrate this would build on.
+
+Discovered during brief 02 (LM Studio compat) kickoff (2026-06-04).
+

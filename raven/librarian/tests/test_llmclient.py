@@ -5,6 +5,8 @@ the security-critical decision of whether a URL the model wants to fetch is perm
 The actual fetch (`api.webfetch_fetch`, HTTP to the server) is monkeypatched.
 """
 
+import json
+
 import pytest
 
 # llmclient transitively imports `raven.client.api`, which pulls the heavy client dep stack
@@ -143,3 +145,140 @@ class TestPerformToolCallsMetadata:
         records = llmclient.perform_tool_calls(settings, self._message(), on_call_start=None, on_call_done=None)
         assert records[0].data["content"] == "just text"
         assert "tool_metadata" not in records[0]
+
+
+# ---------------------------------------------------------------------------
+# Streaming tool-call accumulator (brief 02 §2) — pure helpers
+# ---------------------------------------------------------------------------
+
+class TestToolCallAccumulator:
+    def test_incremental_fragments_concatenate_arguments(self):
+        # LM Studio / OpenAI shape: first fragment carries id/type/name + empty args; later fragments
+        # carry only `function.arguments` pieces to concatenate.
+        acc = {}
+        llmclient._accumulate_tool_call_delta(acc, [{"index": 0, "id": "call_1", "type": "function",
+                                                     "function": {"name": "get_weather", "arguments": ""}}])
+        llmclient._accumulate_tool_call_delta(acc, [{"index": 0, "type": "function",
+                                                     "function": {"arguments": '{"location":'}}])
+        llmclient._accumulate_tool_call_delta(acc, [{"index": 0, "function": {"arguments": '"Tokyo"}'}}])
+        assert llmclient._materialize_tool_calls(acc) == [
+            {"type": "function", "function": {"name": "get_weather", "arguments": '{"location":"Tokyo"}'},
+             "id": "call_1", "index": "0"}]
+
+    def test_whole_object_in_one_delta_ooba(self):
+        acc = {}
+        llmclient._accumulate_tool_call_delta(acc, [{"index": 0, "id": "call_x", "type": "function",
+                                                     "function": {"name": "websearch", "arguments": '{"query":"raven"}'}}])
+        assert llmclient._materialize_tool_calls(acc) == [
+            {"type": "function", "function": {"name": "websearch", "arguments": '{"query":"raven"}'},
+             "id": "call_x", "index": "0"}]
+
+    def test_parallel_calls_keyed_by_index(self):
+        acc = {}
+        llmclient._accumulate_tool_call_delta(acc, [{"index": 0, "id": "a", "type": "function", "function": {"name": "get_weather", "arguments": ""}}])
+        llmclient._accumulate_tool_call_delta(acc, [{"index": 1, "id": "b", "type": "function", "function": {"name": "get_weather", "arguments": ""}}])
+        llmclient._accumulate_tool_call_delta(acc, [{"index": 0, "function": {"arguments": '{"location":"Tokyo"}'}}])
+        llmclient._accumulate_tool_call_delta(acc, [{"index": 1, "function": {"arguments": '{"location":"Paris"}'}}])
+        out = llmclient._materialize_tool_calls(acc)
+        assert [c["id"] for c in out] == ["a", "b"]
+        assert [c["index"] for c in out] == ["0", "1"]
+        assert out[0]["function"]["arguments"] == '{"location":"Tokyo"}'
+        assert out[1]["function"]["arguments"] == '{"location":"Paris"}'
+
+    def test_empty_accumulator_is_none(self):
+        assert llmclient._materialize_tool_calls({}) is None
+
+
+# ---------------------------------------------------------------------------
+# invoke stream robustness (brief 02 §1) — [DONE] sentinel, error events, null content
+# ---------------------------------------------------------------------------
+
+class _FakeEvent:
+    def __init__(self, data):
+        self.data = data
+
+class _FakeSSEClient:
+    def __init__(self, datas):
+        self._datas = datas
+    def events(self):
+        for d in self._datas:
+            yield _FakeEvent(d)
+    def close(self):
+        pass
+
+class _FakeResponse:
+    status_code = 200
+
+
+@pytest.fixture
+def invoke_settings(llm_settings):
+    """Augment the shared `llm_settings` with the fields `invoke` reads off the wire path."""
+    llm_settings.request_data = {"stream": True, "messages": [], "tools": []}
+    llm_settings.stopping_strings = []
+    llm_settings.backend_url = "http://test-backend"
+    return llm_settings
+
+
+def _fake_stream(monkeypatch, payloads):
+    """Make `invoke` read `payloads` as its SSE stream. Each item is a dict (JSON-encoded) or a raw
+    string like '[DONE]'. Patches the HTTP POST and the SSE client."""
+    datas = [p if isinstance(p, str) else json.dumps(p) for p in payloads]
+    monkeypatch.setattr(llmclient.requests, "post", lambda *a, **k: _FakeResponse())
+    monkeypatch.setattr(llmclient.sseclient, "SSEClient", lambda resp: _FakeSSEClient(datas))
+
+
+class TestInvokeStreamRobustness:
+    def test_done_sentinel_null_content_and_usage(self, monkeypatch, invoke_settings):
+        # `content: null` on the priming delta (must not crash io.write), a usage-only final chunk
+        # (empty `choices`), and a `[DONE]` sentinel (not JSON — must be skipped).
+        _fake_stream(monkeypatch, [
+            {"choices": [{"delta": {"role": "assistant", "content": None}}]},
+            {"choices": [{"delta": {"content": "Hello"}}]},
+            {"choices": [{"delta": {"content": " world"}}]},
+            {"choices": [], "usage": {"prompt_tokens": 10, "completion_tokens": 2, "total_tokens": 12}},
+            "[DONE]",
+        ])
+        out = llmclient.invoke(invoke_settings, [{"role": "user", "content": "hi"}], tools_enabled=False)
+        assert "Hello world" in out.data["content"]
+        assert out.n_tokens == 2  # from real usage, not the n_chunks-2 heuristic
+        assert out.usage["prompt_tokens"] == 10
+        assert not out.data["tool_calls"]  # create_chat_message normalizes "no tool calls" to []
+
+    def test_error_event_raises_runtimeerror(self, monkeypatch, invoke_settings):
+        # LM Studio reports backend errors as HTTP 200 + an SSE error payload with no `choices`.
+        _fake_stream(monkeypatch, [
+            {"choices": [{"delta": {"content": "partial"}}]},
+            {"error": {"message": "Error rendering prompt with jinja template"}},
+        ])
+        with pytest.raises(RuntimeError, match="jinja template"):
+            llmclient.invoke(invoke_settings, [{"role": "user", "content": "hi"}], tools_enabled=False)
+
+    def test_streamed_tool_call_materialized(self, monkeypatch, invoke_settings):
+        _fake_stream(monkeypatch, [
+            {"choices": [{"delta": {"role": "assistant", "content": None,
+                                    "tool_calls": [{"index": 0, "id": "call_1", "type": "function",
+                                                    "function": {"name": "get_weather", "arguments": ""}}]}}]},
+            {"choices": [{"delta": {"content": None,
+                                    "tool_calls": [{"index": 0, "type": "function",
+                                                    "function": {"arguments": '{"location":"Tokyo"}'}}]}}]},
+            {"choices": [{"index": 0, "delta": {}, "finish_reason": "tool_calls"}],
+             "usage": {"prompt_tokens": 291, "completion_tokens": 27, "total_tokens": 318}},
+            "[DONE]",
+        ])
+        out = llmclient.invoke(invoke_settings, [{"role": "user", "content": "weather?"}], tools_enabled=True)
+        assert out.data["tool_calls"] == [
+            {"type": "function", "function": {"name": "get_weather", "arguments": '{"location":"Tokyo"}'},
+             "id": "call_1", "index": "0"}]
+        assert out.n_tokens == 27
+
+    def test_token_count_falls_back_to_chunks_without_usage(self, monkeypatch, invoke_settings):
+        # A backend that reports no usage (e.g. ignores stream_options, or an interrupt closed the stream
+        # early): n_tokens estimates from the chunk count minus the single priming/overhead delta.
+        _fake_stream(monkeypatch, [
+            {"choices": [{"delta": {"role": "assistant", "content": None}}]},  # priming overhead
+            {"choices": [{"delta": {"content": "one"}}]},
+            {"choices": [{"delta": {"content": " two"}}]},
+        ])
+        out = llmclient.invoke(invoke_settings, [{"role": "user", "content": "hi"}], tools_enabled=False)
+        assert out.usage is None
+        assert out.n_tokens == 2  # 3 chunks - 1 overhead
