@@ -736,16 +736,23 @@ as HTTP 400. Client-side this surfaces at `client/tts.py:234 tts_prepare` → `u
 `RuntimeError`, caught in `preprocess_task`; `stop_tts` then power-cycles the queues and the app recovers (the
 avatar just doesn't speak that response). Not fatal, but it aborts the whole utterance.
 
-Root cause is server-side in the TTS synthesis path (Kokoro / phonemizer in `raven.server.modules.tts` →
-`raven.common.audio.speech.tts`): a sentence that reduces to no phonemes/tokens after cleaning indexes into an
-empty list. The TTS path is NOT touched by brief 02 — this is a pre-existing robustness gap, just newly triggered
-by a response that happened to end on a lone bullet.
+Server-side root cause pinned (from the server traceback): the synthesizer correctly produces **0 segments**
+for `*` (`text_to_speech: ... Got 0 TTS response segments, total audio duration 0s`), but `text_to_speech`
+(`raven/server/modules/tts.py:179`) then unconditionally calls `audio_codec.encode(audio_data=segment_audios_s16,
+...)` on the empty list, and `encode` (`raven/common/audio/codec.py:52`) does `np.shape(audio_data[0])` →
+`IndexError: list index out of range`. So the crash is in the **encode step on zero segments**, not in the
+phonemizer. The TTS path is NOT touched by brief 02 — pre-existing robustness gap, newly triggered by a response
+ending on a lone bullet.
 
-Two fix angles (likely both): (a) **client-side filter** — in `avatar_controller`'s sentence preprocessing, skip
-sentences with no speakable (alphanumeric) content before sending; markdown punctuation like `*`, `-`, `---`
-shouldn't be spoken anyway. (b) **server-side guard** — `api_tts_speak` / the synthesis path should handle
-empty-after-cleaning input gracefully (return empty/silent audio, not a 400 + IndexError). (a) is the cleaner
-primary fix; (b) is defense in depth so no client can crash the endpoint with empty input.
+Three robustification points (the input-strip *should* have caught `*` before any of this — that's the primary
+gap Juha flagged: "the TTS should already be stripping its input"):
+- (a) **Input stripping (primary)** — the existing TTS input cleaning (client `avatar_controller` sentence
+  preprocessing and/or the server-side text sanitize) should drop sentences with no speakable (alphanumeric)
+  content, so `*` / `-` / `---` never reach synthesis. Find why the current stripping lets a lone `*` through.
+- (b) **Server: guard zero segments** — `text_to_speech` should short-circuit when it gets 0 segments (return an
+  empty/silent response) instead of calling `audio_codec.encode` on an empty list.
+- (c) **codec.encode defense-in-depth** — `audio_codec.encode` should handle an empty `audio_data` list
+  gracefully rather than `audio_data[0]`-ing into an IndexError.
 
 Discovered during brief 02 live testing, reported by Juha (2026-06-04).
 
