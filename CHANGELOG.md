@@ -38,6 +38,7 @@
 - `dpg_markdown` bullet lists and blockquotes now render correctly inside tooltips (and any other initially-hidden container). Previously every bullet glyph in a tooltip stacked at the top-left, because DPG reports `get_item_pos() == (0, 0)` for children of a hidden container; the bullet drawlists are now deferred until their row has been laid out.
 
 - `deviceinfo.validate`: `device_name` label now reflects the actual running backend. Previously a working MPS / XPU / Vulkan setup was logged as `'CPU'` in the startup "Compute device for ..." line because the labeling block was tied to a CUDA-prefix check it shouldn't have been. Cosmetic — the actual compute device was always correct.
+- *Raven-librarian*: closing the window while the app is still starting up no longer crashes the process (segfault). The deferred startup steps (avatar backdrop, initial chat view) run on DearPyGui's callback thread and could race the context teardown, creating widgets against a half-destroyed context; they now bail out if shutdown has begun.
 
 ---
 

@@ -1053,8 +1053,17 @@ chat_controller = DPGChatController(llm_settings=llm_settings,
                                     web_indicator_widget=web_indicator_group,
                                     executor=bg)
 
+# Set once, at the very start of `gui_shutdown`. The two startup frame callbacks below
+# (`_load_initial_animator_settings`, `_build_initial_chat_view`) run on DPG's callback thread and can race
+# app teardown: if the user closes the window mid-boot, the callback may still be in flight while the context
+# is being destroyed, and creating widgets then segfaults the process (no Python `try/except` can catch a crash
+# in DPG's C side — the only safe move is to not make the call). The callbacks check this flag and bail.
+_shutting_down = False
+
 def gui_shutdown() -> None:
     """App exit: gracefully shut down parts that access DPG."""
+    global _shutting_down
+    _shutting_down = True  # first thing: tell any in-flight startup frame callback to bail before it touches DPG
     avatar_controller.stop_tts()  # Stop the TTS speaking so that the speech background thread (if any) exits.
     logger.info("gui_shutdown: entered")
     # Phase 1: silence the GUI side. The cancelled commit's `finally` will fire `on_indexing_done`
@@ -1105,6 +1114,9 @@ _animator_settings = None
 def _load_initial_animator_settings() -> None:
     global _animator_settings
 
+    if _shutting_down:  # window closed before this deferred startup callback even started
+        return
+
     animator_json_path = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "avatar", "assets", "settings", "animator.json")).expanduser().resolve()
 
     try:
@@ -1121,6 +1133,12 @@ def _load_initial_animator_settings() -> None:
 
     animator_settings.update(librarian_config.avatar_config.animator_settings_overrides)
 
+    # Re-check after the (possibly slow) JSON load: this callback runs on DPG's callback thread, so the user
+    # may have closed the window while we were here. Everything below starts the avatar and creates DPG widgets
+    # (e.g. `configure_backdrop` -> `add_raw_texture`); doing that against a context being torn down segfaults.
+    if _shutting_down:
+        return
+
     api.avatar_load_animator_settings(avatar_instance_id, animator_settings)  # send settings to server
     api.avatar_start(avatar_instance_id)
     dpg_avatar_renderer.start(avatar_instance_id)
@@ -1134,6 +1152,8 @@ def _load_initial_animator_settings() -> None:
 dpg.set_frame_callback(2, _load_initial_animator_settings)
 
 def _build_initial_chat_view(sender, app_data) -> None:
+    if _shutting_down:  # window closed during startup; building chat widgets now would race context teardown (segfault)
+        return
     chat_controller.view.build()
 dpg.set_frame_callback(3, _build_initial_chat_view)
 
