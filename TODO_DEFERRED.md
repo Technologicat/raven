@@ -726,3 +726,26 @@ containing layout changes (the renderer's `post_render` / `CallInNextFrame` mach
 
 Discovered during brief 02 §9/§10 live validation (2026-06-04).
 
+## TTS crashes (server 400, IndexError) on a degenerate sentence like a lone `*`
+
+When the avatar speaks an AI response, `avatar_controller.preprocess_task` splits it into lines/sentences and
+sends each to Raven-server `/api/tts/speak`. A "sentence" that is just a markdown artifact with no speakable
+content — observed: a bare `*` (the trailing bullet of a markdown list, e.g. an answer ending `...naked eye:\n*`)
+— makes the server fail: `api_tts_speak: failed, reason: <class 'IndexError'>: list index out of range`, returned
+as HTTP 400. Client-side this surfaces at `client/tts.py:234 tts_prepare` → `util.yell_on_error` →
+`RuntimeError`, caught in `preprocess_task`; `stop_tts` then power-cycles the queues and the app recovers (the
+avatar just doesn't speak that response). Not fatal, but it aborts the whole utterance.
+
+Root cause is server-side in the TTS synthesis path (Kokoro / phonemizer in `raven.server.modules.tts` →
+`raven.common.audio.speech.tts`): a sentence that reduces to no phonemes/tokens after cleaning indexes into an
+empty list. The TTS path is NOT touched by brief 02 — this is a pre-existing robustness gap, just newly triggered
+by a response that happened to end on a lone bullet.
+
+Two fix angles (likely both): (a) **client-side filter** — in `avatar_controller`'s sentence preprocessing, skip
+sentences with no speakable (alphanumeric) content before sending; markdown punctuation like `*`, `-`, `---`
+shouldn't be spoken anyway. (b) **server-side guard** — `api_tts_speak` / the synthesis path should handle
+empty-after-cleaning input gracefully (return empty/silent audio, not a 400 + IndexError). (a) is the cleaner
+primary fix; (b) is defense in depth so no client can crash the endpoint with empty input.
+
+Discovered during brief 02 live testing, reported by Juha (2026-06-04).
+
