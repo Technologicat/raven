@@ -112,6 +112,12 @@ class HoverAttribute(Attribute):
     @classmethod
     def _check_hovered_items(cls):
         for item in list(cls._hovered_items):
+            # The tracked item may have been deleted (chat view rebuilt, branch switched, ...) since it was
+            # registered as hovered; `is_item_hovered` raises a SystemError ("Item not found") on a missing
+            # item. Treat "gone" as "no longer hovered, nothing to restore" — just drop it from tracking.
+            if not dpg.does_item_exist(item):
+                del cls._hovered_items[item]
+                continue
             if not dpg.is_item_hovered(item):
                 callback = cls._hovered_items[item]
                 try:
