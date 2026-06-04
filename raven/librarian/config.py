@@ -424,6 +424,7 @@ def setup_character_card_juha(template_vars: env) -> str:
 
 def setup_interaction_style(template_vars: env) -> str:
     model = template_vars.model  # noqa: F841, for documentation purposes
+    context_length = template_vars.context_length  # noqa: F841, for documentation purposes
     weekday_and_date = template_vars.weekday_and_date  # noqa: F841, for documentation purposes
     return textwrap.dedent(f"""
     **About the system**
@@ -454,7 +455,7 @@ def setup_interaction_style(template_vars: env) -> str:
 
     - You are NOT automatically updated with new data.
     - You have limited long-term memory within each chat session.
-    - The length of your context window is 65536 tokens.
+    - The length of your context window is {context_length} tokens.
 
     **Data sources**
 
