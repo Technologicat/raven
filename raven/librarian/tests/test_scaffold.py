@@ -36,7 +36,7 @@ def make_invoke_result(content="Hello from the LLM.",
 
 
 def make_tool_response(content="tool result",
-                       toolcall_id="call_0",
+                       tool_call_id="call_0",
                        function_name="websearch",
                        status="success",
                        dt=0.01):
@@ -45,19 +45,19 @@ def make_tool_response(content="tool result",
                      "content": content,
                      "tool_calls": None},
                status=status,
-               toolcall_id=toolcall_id,
+               tool_call_id=tool_call_id,
                function_name=function_name,
                dt=dt)
 
 
-def make_denial_response(host="blocked.com", toolcall_id="call_0"):
+def make_denial_response(host="blocked.com", tool_call_id="call_0"):
     """A faked webfetch denial record: carries `tool_metadata={'webfetch_denied_host': host}`,
     the structured marker the GUI override reads to offer "approve this host & retry"."""
     return env(data={"role": "tool",
                      "content": f"The host {host} is not on the configured allowlist.",
                      "tool_calls": None},
                status="success",
-               toolcall_id=toolcall_id,
+               tool_call_id=tool_call_id,
                function_name="webfetch",
                dt=0.01,
                tool_metadata={"webfetch_denied_host": host})
@@ -557,7 +557,7 @@ class TestRetryToolCalls:
         _first, tool_nodes = self._make_denied_state(
             monkeypatch, llm_settings, forest, head,
             tool_calls=[tool_call("webfetch", "call_0")],
-            records=[make_denial_response(host="blocked.com", toolcall_id="call_0")])
+            records=[make_denial_response(host="blocked.com", tool_call_id="call_0")])
         denied_node = tool_nodes[0]
         assert forest.get_payload(denied_node)["generation_metadata"]["webfetch_denied_host"] == "blocked.com"
 
@@ -565,7 +565,7 @@ class TestRetryToolCalls:
         rerun_messages = []
         def capture_perform(settings, message, on_call_start, on_call_done):
             rerun_messages.append(message)
-            return [make_tool_response(content="FETCHED OK", toolcall_id="call_0", function_name="webfetch")]
+            return [make_tool_response(content="FETCHED OK", tool_call_id="call_0", function_name="webfetch")]
         monkeypatch.setattr("raven.librarian.llmclient.perform_tool_calls", capture_perform)
         monkeypatch.setattr("raven.librarian.llmclient.invoke",
                             lambda **kw: make_invoke_result(content="Here is the page content."))
@@ -595,15 +595,15 @@ class TestRetryToolCalls:
         _first, tool_nodes = self._make_denied_state(
             monkeypatch, llm_settings, forest, head,
             tool_calls=[tool_call("websearch", "call_0"), tool_call("webfetch", "call_1")],
-            records=[make_tool_response(content="websearch result text", toolcall_id="call_0", function_name="websearch"),
-                     make_denial_response(host="blocked.com", toolcall_id="call_1")])
+            records=[make_tool_response(content="websearch result text", tool_call_id="call_0", function_name="websearch"),
+                     make_denial_response(host="blocked.com", tool_call_id="call_1")])
         websearch_node, denied_node = tool_nodes  # creation order: websearch, then denied webfetch
         assert forest.get_parent(denied_node) == websearch_node  # chained
 
         rerun_messages = []
         def capture_perform(settings, message, on_call_start, on_call_done):
             rerun_messages.append(message)
-            return [make_tool_response(content="FETCHED OK", toolcall_id="call_1", function_name="webfetch")]
+            return [make_tool_response(content="FETCHED OK", tool_call_id="call_1", function_name="webfetch")]
         monkeypatch.setattr("raven.librarian.llmclient.perform_tool_calls", capture_perform)
         monkeypatch.setattr("raven.librarian.llmclient.invoke",
                             lambda **kw: make_invoke_result(content="Combined answer."))
@@ -626,14 +626,14 @@ class TestRetryToolCalls:
         _first, tool_nodes = self._make_denied_state(
             monkeypatch, llm_settings, forest, head,
             tool_calls=[tool_call("webfetch", "call_0"), tool_call("websearch", "call_1")],
-            records=[make_denial_response(host="blocked.com", toolcall_id="call_0"),
-                     make_tool_response(content="ORIGINAL websearch result", toolcall_id="call_1", function_name="websearch")])
+            records=[make_denial_response(host="blocked.com", tool_call_id="call_0"),
+                     make_tool_response(content="ORIGINAL websearch result", tool_call_id="call_1", function_name="websearch")])
         denied_node, websearch_node = tool_nodes  # creation order: denied webfetch, then websearch
 
         rerun_messages = []
         def capture_perform(settings, message, on_call_start, on_call_done):
             rerun_messages.append(message)
-            return [make_tool_response(content="FETCHED OK", toolcall_id="call_0", function_name="webfetch")]
+            return [make_tool_response(content="FETCHED OK", tool_call_id="call_0", function_name="webfetch")]
         monkeypatch.setattr("raven.librarian.llmclient.perform_tool_calls", capture_perform)
         monkeypatch.setattr("raven.librarian.llmclient.invoke",
                             lambda **kw: make_invoke_result(content="Combined answer."))

@@ -1891,14 +1891,14 @@ class DPGChatController:
 
                 # def _parse_toolcall(request_record: Dict[str, Any]) -> Tuple[Optional[str], Optional[str]]:
                 #     """Given a tool call request record in OpenAI format, return tool call ID and function name."""
-                #     toolcall_id = request_record["id"] if "id" in request_record else None
+                #     tool_call_id = request_record["id"] if "id" in request_record else None
                 #     function_name = None
                 #     if "type" in request_record and request_record["type"] == "function":
                 #         if "function" in request_record:
                 #             function_record = request_record["function"]
                 #             if "name" in function_record:
                 #                 function_name = function_record["name"]
-                #     return toolcall_id, function_name
+                #     return tool_call_id, function_name
 
                 def on_tools_start(tool_calls: List[Dict]) -> None:
                     if self.gui_updates_safe:
@@ -1914,14 +1914,14 @@ class DPGChatController:
                         #         self.indicator_glow_animation.reset()  # start new pulsation cycle
                         #     dpg.show_item(self.web_indicator_widget)
 
-                def on_call_lowlevel_start(toolcall_id: str, function_name: str, arguments: Dict[str, Any]) -> None:
+                def on_call_lowlevel_start(tool_call_id: str, function_name: str, arguments: Dict[str, Any]) -> None:
                     if self.gui_updates_safe:
                         if function_name == "websearch":
                             if self.indicator_glow_animation is not None:
                                 self.indicator_glow_animation.reset()  # start new pulsation cycle
                             dpg.show_item(self.web_indicator_widget)
 
-                def on_call_lowlevel_done(toolcall_id: str, function_name: str, status: str, text: str) -> None:
+                def on_call_lowlevel_done(tool_call_id: str, function_name: str, status: str, text: str) -> None:
                     if self.gui_updates_safe:
                         if function_name == "websearch":
                             dpg.hide_item(self.web_indicator_widget)

@@ -254,8 +254,8 @@ def _perform_and_store_tool_calls(llm_settings: env,
                                               message=tool_response_record.data)
 
             generation_metadata = {"status": tool_response_record.status}  # status is "success" or "error"
-            if "toolcall_id" in tool_response_record:
-                generation_metadata["toolcall_id"] = tool_response_record.toolcall_id
+            if "tool_call_id" in tool_response_record:
+                generation_metadata["toolcall_id"] = tool_response_record.tool_call_id  # storage key relocated/renamed to message.tool_call_id in §11 migration
             if "function_name" in tool_response_record:
                 generation_metadata["function_name"] = tool_response_record.function_name
             if "dt" in tool_response_record:
@@ -656,7 +656,7 @@ def retry_tool_calls(llm_settings: env,
     `generation_metadata`). Mechanism:
 
       1. Walk up past the contiguous tool-result chain to the assistant that requested the calls, and read
-         that one call (matched by `toolcall_id`) from its `tool_calls`.
+         that one call (matched by `tool_call_id`) from its `tool_calls`.
       2. Re-run ONLY that call, as a new sibling of the old denied node (branching at its parent). Every
          other tool result of the same turn is preserved verbatim, NOT re-run: the nodes *before* the denied
          one are shared ancestors of the new branch, and any *after* it are copied across (step 3). This is
@@ -674,7 +674,7 @@ def retry_tool_calls(llm_settings: env,
     denied_payload = datastore.get_payload(tool_node_id)
     if denied_payload["message"]["role"] != "tool":
         raise ValueError(f"retry_tool_calls: node '{tool_node_id}' is not a tool-result node (role is '{denied_payload['message']['role']}').")
-    denied_toolcall_id = denied_payload.get("generation_metadata", {}).get("toolcall_id")
+    denied_tool_call_id = denied_payload.get("generation_metadata", {}).get("toolcall_id")  # storage key relocated/renamed to message.tool_call_id in §11 migration
 
     # 1. Walk up the tool-result chain to the assistant that requested the calls.
     parent_node_id = datastore.get_parent(tool_node_id)
@@ -686,10 +686,10 @@ def retry_tool_calls(llm_settings: env,
     assistant_message = datastore.get_payload(assistant_node_id)["message"]
     all_tool_calls = assistant_message.get("tool_calls") or []
 
-    # Resolve the single call to re-run. Match by stored toolcall id; fall back to the lone call only if
+    # Resolve the single call to re-run. Match by stored tool_call id; fall back to the lone call only if
     # the assistant issued exactly one (older nodes may predate the stored id).
-    if denied_toolcall_id is not None:
-        calls_to_rerun = [tc for tc in all_tool_calls if tc.get("id") == denied_toolcall_id]
+    if denied_tool_call_id is not None:
+        calls_to_rerun = [tc for tc in all_tool_calls if tc.get("id") == denied_tool_call_id]
     else:
         calls_to_rerun = list(all_tool_calls) if len(all_tool_calls) == 1 else []
     if not calls_to_rerun:
