@@ -647,3 +647,24 @@ first (confirmed identical bug). Dovetails with the existing "extract `raven.com
 Discovered during brief 02 §7 live testing (2026-06-04), when an accidental mid-boot Alt+F4 exposed the
 librarian shutdown races.
 
+## Librarian: in-flight AI turn bleeds into a new chat (turn-sequencing race)
+
+Pressing "new chat" (or otherwise switching HEAD) while an `ai_turn` is still streaming doesn't cancel that
+turn. `start_new_chat_callback` (`app.py`) just sets `app_state["HEAD"] = new_chat_HEAD` and rebuilds the
+view; `ai_turn_task_manager` is `mode="concurrent"`, so the old turn keeps running and its `on_done`
+unconditionally `add_complete_message(node_id)` + sets `app_state["HEAD"]` — so the previous chat's reply
+appears in the fresh chat and clobbers the new HEAD. Observed live on a slow LM Studio generation: "new chat
+→ AI starts writing immediately before I type → my message gets injected mid-stream." Same family as the
+shutdown races (GUI state concurrency) — fold into that AoE session.
+
+The fix is NOT just "cancel on new-chat": a cancelled turn still finalizes its partial message in `on_done`
+(the cancellation path returns `action_stop`, then finalization runs), so it would still bleed. It needs (a)
+HEAD-switching user actions (new-chat, branch nav, reroll) to cancel the in-flight turn, AND (b) the turn's
+completion (`on_done`/`on_tool_done`/streaming render) to NOT touch the view or `app_state["HEAD"]` once the
+user has navigated away — while still preserving the *stop-button* case (cancel but keep the partial reply in
+the same chat). Cleanest approach: the turn captures its branch identity at start and its completion is a no-op
+on view/HEAD if HEAD has since been switched to a different branch. Consider also disabling new-chat / nav
+while a turn is in flight as a cheap interim guard.
+
+Discovered during brief 02 LM Studio live validation (2026-06-04).
+
