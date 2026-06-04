@@ -1422,9 +1422,18 @@ class DPGChatController:
         self.ai_turn_task_manager = bgtask.TaskManager(name="librarian_chat_controller_ai_turn",  # for running the AI's turn, specifically (so that we can easily cancel just that one task when needed)
                                                        mode="concurrent",
                                                        executor=executor)  # same thread pool
-        self.context_prefill_task_manager = bgtask.TaskManager(name="librarian_chat_controller_context_prefill",  # for the debounced idle context-prefill (its own manager so a HEAD change can cancel just it)
-                                                               mode="concurrent",
+        self.context_prefill_task_manager = bgtask.TaskManager(name="librarian_chat_controller_context_prefill",  # its own manager so a HEAD change cancels just the prefill
+                                                               mode="sequential",  # only the latest HEAD's prefill matters; submitting a new one auto-cancels the previous
                                                                executor=executor)  # same thread pool
+        # The debounced idle context-prefill. `ManagedTask` supplies the pending-wait debounce (cancellable in
+        # `running_poll_interval` chunks) and the single-in-flight guarantee; we just submit one per HEAD change.
+        # Created only when the feature is enabled (`config.context_prefill_idle_delay is not None`).
+        self.context_prefill_task = None
+        if librarian_config.context_prefill_idle_delay is not None:
+            self.context_prefill_task = bgtask.ManagedTask(category="raven_librarian_chat_controller_context_prefill",
+                                                           entrypoint=self._context_prefill_entrypoint,
+                                                           running_poll_interval=0.25,
+                                                           pending_wait_duration=librarian_config.context_prefill_idle_delay)
 
     def disable_gui_updates(self) -> None:
         """Stop the controller from firing GUI events.
@@ -1554,38 +1563,32 @@ class DPGChatController:
     def _schedule_context_prefill(self) -> None:
         """(Re)arm the debounced background context-prefill for the current HEAD.
 
-        Each call supersedes any pending/in-flight prefill (a HEAD change invalidates the previous one), so this
-        is safe to call from every HEAD-change site — it's driven from `update_context_fill_indicator`. The actual
-        backend round-trip happens only after `config.context_prefill_idle_delay` seconds of quiet; see
-        `_context_prefill_task`. Disabled (no-op) when that config value is `None`.
+        Submits a `ManagedTask`; the sequential `TaskManager` auto-cancels the previous pending/in-flight prefill
+        (a HEAD change invalidates it), so this is safe to call from every HEAD-change site — it's driven from
+        `update_context_fill_indicator`. The actual backend round-trip happens only after the `ManagedTask`'s
+        pending wait (`config.context_prefill_idle_delay` seconds of quiet); see `_context_prefill_entrypoint`.
+        No-op when the feature is disabled (the task wasn't created).
         """
         if not self.gui_updates_safe:
             return
-        if librarian_config.context_prefill_idle_delay is None:
+        if self.context_prefill_task is None:  # feature disabled (config.context_prefill_idle_delay is None)
             return
-        self.context_prefill_task_manager.clear()  # cancel the previous pending/in-flight prefill (HEAD moved or content changed)
-        self.context_prefill_task_manager.submit(self._context_prefill_task,
-                                                 env(head_node_id=self.app_state["HEAD"]))
+        self.context_prefill_task_manager.submit(self.context_prefill_task,
+                                                 env(wait=True, head_node_id=self.app_state["HEAD"]))
 
-    def _context_prefill_task(self, task_env: env) -> None:
-        """Background task: after an idle delay, ask the backend for the exact prompt size of the captured branch.
+    def _context_prefill_entrypoint(self, task_env: env) -> None:
+        """`ManagedTask` entrypoint: after the idle debounce, ask the backend for the exact prompt size of the captured branch.
 
-        Waits `config.context_prefill_idle_delay` seconds (cooperatively cancellable), then — if still relevant —
-        sends the linearized branch to the backend via `llmclient.prefill`, which generates ~nothing but reports
-        the exact templated `prompt_tokens` and warms the KV cache. On success, upgrades the indicator to `X%`.
+        The pending-wait debounce and cancel-on-resubmit are handled by the `ManagedTask` / sequential-`TaskManager`
+        machinery; we reach here only once the wait has elapsed without a newer HEAD superseding us. Sends the
+        linearized branch to the backend via `llmclient.prefill` (generates ~nothing, but reports the exact templated
+        `prompt_tokens` and warms the KV cache). On success, upgrades the indicator to `X%`.
 
-        Bails (leaving the estimate in place) if cancelled, if the app is shutting down, if a real generation is
-        in flight (that turn warms the cache and reports its own exact count), or if HEAD has moved off the branch
-        this task captured — including a final re-check after the round-trip, so a late reply can't overwrite a
-        newer branch's readout.
+        Bails (leaving the estimate in place) if cancelled, if the app is shutting down, if a real generation is in
+        flight (that turn warms the cache and reports its own exact count), or if HEAD has moved off the branch this
+        task captured — including a final re-check after the round-trip, so a late reply can't overwrite a newer
+        branch's readout.
         """
-        idle_delay = librarian_config.context_prefill_idle_delay
-        deadline = time.monotonic() + idle_delay
-        while time.monotonic() < deadline:
-            if task_env.cancelled or not self.gui_updates_safe:
-                return
-            time.sleep(min(0.25, idle_delay))
-
         if task_env.cancelled or not self.gui_updates_safe or self.is_generating():
             return
         if self.app_state["HEAD"] != task_env.head_node_id:  # HEAD moved during the idle wait
@@ -1603,7 +1606,7 @@ class DPGChatController:
             return  # backend didn't report usage; keep the estimate
         if self.app_state["HEAD"] != task_env.head_node_id:  # branch switched while we were waiting on the backend
             return
-        logger.info(f"DPGChatController._context_prefill_task: exact prompt size for HEAD '{task_env.head_node_id}': {out.usage['prompt_tokens']} tokens")
+        logger.info(f"DPGChatController._context_prefill_entrypoint: exact prompt size for HEAD '{task_env.head_node_id}': {out.usage['prompt_tokens']} tokens")
         self._render_context_fill(out.usage["prompt_tokens"], is_exact=True)
 
     def chat_round(self, user_message_text: str) -> None:

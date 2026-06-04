@@ -397,7 +397,14 @@ def make_managed_task(*,
         if env.wait:  # The pending mechanism is optional, so it can be disabled in use cases where "wait for more input" doesn't make sense.
             # logger.debug(f"_managed_task: {env.task_name}: pending")
             status_box << status_pending
-            time.sleep(pending_wait_duration)  # [s], cancellation period
+            # Wait `pending_wait_duration`, but in `running_poll_interval` chunks so cancellation is observed
+            # promptly: a superseded task releases its worker within one poll interval instead of pinning it for
+            # the whole wait. The distinction only matters for long debounces (a several-second `pending_wait_duration`
+            # with rapid resubmission would otherwise stack one pinned worker per cancelled task); for the sub-second
+            # waits this is usually called with, it's indistinguishable from a single `sleep`. [s], cancellation period.
+            deadline = time.monotonic() + pending_wait_duration
+            while not env.cancelled and time.monotonic() < deadline:
+                time.sleep(min(running_poll_interval, pending_wait_duration))
             if env.cancelled:  # Note we only cancel a task when it has been obsoleted by a newer one. So the task status is still pending.
                 # logger.debug(f"_managed_task: {env.task_name}: cancelled (from pending state)")
                 return
