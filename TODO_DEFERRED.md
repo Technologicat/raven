@@ -754,6 +754,23 @@ anchored on the capture. If ooba delivers the call structured instead, close thi
 
 Discovered during the brief-02 Gemma 4 reasoning-channel work (2026-06-05).
 
+## Add built-in calculator and weather LLM tools (parked in brief 01 §6)
+
+Two small built-in tools were scoped out of brief 01 (webfetch) v0 and parked for "after the retrieval
+workstream wraps." Recording here so they survive brief archival:
+
+- **Sandboxed expression calculator** via `simpleeval` — AST-walks the expression and restricts the allowed
+  function set (math, abs, min/max, round, …) plus size limits; "sandboxing" reduces to picking the allowed
+  set. Scope is *expressions*, not statements: `2+2`, `sqrt(...)`, arithmetic, comparisons — not "run a Python
+  script with imports." ~a page of code, not its own brief.
+- **Weather** via OpenMeteo — no API key, no cloud account; mirrors the `webfetch` tool shape. Small.
+
+Both register as built-in tools alongside `websearch` / `webfetch` (tool registry in
+`raven.librarian.llmclient`). Under content-parts (brief 03) their string output wraps as a single text part —
+no special handling. Worked-out design and rationale: brief 01 §6 ("Out of scope for v0").
+
+Flagged by Juha while wrapping brief 02 (2026-06-05).
+
 ## DearPyGui_Markdown inline-code background boxes are stranded on dynamic reflow
 
 Inline-code spans (`` `like this` ``) render a grey rounded background box behind the text. The box position is
