@@ -57,6 +57,9 @@ role_to_colors = {"assistant": {"front": gui_config.chat_color_ai_front, "back":
                   "user": {"front": gui_config.chat_color_user_front, "back": gui_config.chat_color_user_back},
                   }
 
+# Built-in tools that reach out over the network -> light up the WEB (globe) indicator while they run.
+web_access_tool_names = frozenset(("websearch", "webfetch"))
+
 # --------------------------------------------------------------------------------
 
 def format_chat_message_for_clipboard(message_number: Optional[int],
@@ -1994,14 +1997,14 @@ class DPGChatController:
 
                 def on_call_lowlevel_start(tool_call_id: str, function_name: str, arguments: Dict[str, Any]) -> None:
                     if self.gui_updates_safe:
-                        if function_name == "websearch":
+                        if function_name in web_access_tool_names:
                             if self.indicator_glow_animation is not None:
                                 self.indicator_glow_animation.reset()  # start new pulsation cycle
                             dpg.show_item(self.web_indicator_widget)
 
                 def on_call_lowlevel_done(tool_call_id: str, function_name: str, status: str, text: str) -> None:
                     if self.gui_updates_safe:
-                        if function_name == "websearch":
+                        if function_name in web_access_tool_names:
                             dpg.hide_item(self.web_indicator_widget)
 
                 def on_tool_done(node_id: str) -> None:
