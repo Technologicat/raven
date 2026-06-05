@@ -11,6 +11,7 @@ __all__ = ["format_message_number",
            "text_content_part",
            "normalize_content",
            "content_to_text",
+           "create_message_from_parts",
            "create_chat_message",
            "create_initial_system_message",
            "create_payload",
@@ -258,6 +259,32 @@ def make_timestamp(timestamp: Optional[int] = None) -> Tuple[int, str, str, str]
     weekday, isodate, isotime = _format_isodatetime(now)
     return timestamp, weekday, isodate, isotime
 
+def create_message_from_parts(role: str,
+                              content: List[Dict[str, Any]],
+                              *,
+                              tool_calls: Optional[List[Dict]] = None,
+                              reasoning_content: Optional[str] = None) -> Dict:
+    """Build a chat message whose `content` is an already-structured content-parts list.
+
+    The counterpart to `create_chat_message` for callers that have parts in hand rather than a plain string —
+    tool results split into one part per item, multimodal input. No persona prefix, no string wrapping, no
+    `llm_settings` needed. `create_chat_message` builds its single persona-prefixed text part and then delegates
+    here, so the message-dict shape and role validation live in one place.
+
+    `role`: one of "user", "assistant", "system", "tool".
+    `content`: the content-parts list, used as the message content verbatim.
+    `tool_calls`: structured OAI tool-call dicts; `None` -> empty list.
+    `reasoning_content`: thinking-trace string stored as a sibling field; when `None`, no key is added.
+    """
+    if role not in ("user", "assistant", "system", "tool"):
+        raise ValueError(f"Unknown role '{role}'; valid: one of 'user', 'assistant', 'system', 'tool'.")
+    data = {"role": role,
+            "content": content,
+            "tool_calls": tool_calls if tool_calls is not None else []}
+    if reasoning_content is not None:
+        data["reasoning_content"] = reasoning_content
+    return data
+
 def create_chat_message(llm_settings: env,
                         role: str,
                         text: str,
@@ -324,20 +351,15 @@ def create_chat_message(llm_settings: env,
     Returns the new message: `{"role": ..., "content": [<part>, ...], "tool_calls": ...}`, where `content`
     is always a content-parts list (brief 03); plus a `"reasoning_content"` key when `reasoning_content` is given.
     """
-    if role not in ("user", "assistant", "system", "tool"):
-        raise ValueError(f"Unknown role '{role}'; valid: one of 'user', 'assistant', 'system', 'tool'.")
-
     persona_name = llm_settings.personas.get(role, None) if (persona is None) else persona
     if add_persona and persona_name is not None:
         text = f"{persona_name}: {text}"  # e.g. "User: ..."
     # else: system and tool messages typically do not include a persona name in the text content.
 
-    data = {"role": role,
-            "content": [text_content_part(text)],
-            "tool_calls": tool_calls if tool_calls is not None else []}
-    if reasoning_content is not None:
-        data["reasoning_content"] = reasoning_content
-    return data
+    return create_message_from_parts(role,
+                                     [text_content_part(text)],
+                                     tool_calls=tool_calls,
+                                     reasoning_content=reasoning_content)
 
 def create_initial_system_message(llm_settings: env) -> Dict:
     """Create a chat message containing the system prompt and the AI's character card as specified in `llm_settings`.

@@ -1029,21 +1029,49 @@ class DPGCompleteChatMessage(DPGChatMessage):
 
         Automatically parse the content from the chat node, and add the text to the GUI.
         """
-        role, persona, text = chatutil.get_node_message_text_without_persona(self.parent_view.chat_controller.datastore, self.node_id)  # TODO: later (chat editing), we need to set the revision to load
+        node_payload = self.parent_view.chat_controller.datastore.get_payload(self.node_id)  # auto-selects active revision  TODO: later (chat editing), we need to set the revision to load
+        message = node_payload["message"]
+        role = message["role"]
+        persona = node_payload["general_metadata"]["persona"]  # stored persona for this chat message
         super().build(role=role,
                       persona=persona,
                       node_id=self.node_id)
 
         # Reasoning (thinking) trace lives in the message's `reasoning_content` sibling field (brief 02 §9/§10),
         # not in `content`. Render it first, as a single collapsible thought paragraph. For not-yet-migrated old
-        # data `reasoning_content` is absent and the thinking is still inline `<think>` in `content`, handled by
-        # the splitter below (which consolidates it into its own thought paragraph the same way).
-        message = self.parent_view.chat_controller.datastore.get_payload(self.node_id)["message"]
+        # data `reasoning_content` is absent and the thinking is still inline `<think>` in a text part, handled by
+        # the per-part splitter below (which consolidates it into its own thought paragraph the same way).
         reasoning_content = message.get("reasoning_content") or ""
         if reasoning_content.strip():
             self.add_paragraph(reasoning_content, is_thought=True)
 
+        # Render the content parts in order, stacked vertically (brief 03 §4/§6). A text part renders as markdown
+        # paragraphs; multiple text parts (e.g. one per websearch result) stack into the message's vertical
+        # layout, giving per-result visual separation. The persona prefix on the first line of assistant content
+        # ("Aria: ...") is stripped per part — a no-op for tool/system messages, which carry no persona.
+        for part in message.get("content") or []:
+            part_type = part.get("type")
+            if part_type == "text":
+                self._render_text_paragraphs(chatutil.remove_persona_from_start_of_line(persona=persona, text=part["text"]))
+            elif part_type == "image_url":
+                pass  # TODO (brief 03 §6, Half 2): render the image as an inline thumbnail
+            # else: unknown part type — skip (forward-compat)
+
+        # Render any tool-call invocations this assistant message made, as visible sub-elements after the text
+        # (brief 02 §10). Without this, a tool-calling turn — often with empty `content` — would show nothing
+        # between the assistant message and the subsequent tool-result node.
+        for index, tool_call in enumerate(message.get("tool_calls") or []):
+            function = tool_call.get("function") or {}
+            self.add_tool_call_invocation(index=index,
+                                          name=function.get("name", "?"),
+                                          arguments=function.get("arguments", ""))
+
+    def _render_text_paragraphs(self, text: str) -> None:
+        """Render one text content-part: split into paragraphs and add them, consolidating any inline
+        `<think>...</think>` block (legacy / not-yet-migrated content) into a single collapsible thought
+        paragraph, the same way the streaming path tints reasoning."""
         paragraph_accumulator = io.StringIO()
+        inside_think_block = False
         def commit_paragraph():
             nonlocal paragraph_accumulator
             text_to_commit = paragraph_accumulator.getvalue()
@@ -1054,17 +1082,12 @@ class DPGCompleteChatMessage(DPGChatMessage):
             paragraph_accumulator = io.StringIO()
 
         paragraphs = text.split("\n")
-        inside_think_block = False
         for idx, paragraph in enumerate(paragraphs):
             p = paragraph.strip()
 
-            # Detect think block state (TODO: improve; very rudimentary and brittle for now; should detect from token stream, not join it into a single string and then split again, as we do now)
-            entering_think_block = False
-            exiting_think_block = False
-            if p == "<think>":
-                entering_think_block = True
-            elif p == "</think>":
-                exiting_think_block = True
+            # Detect think block state (rudimentary; should detect from the token stream, not re-split a string).
+            entering_think_block = (p == "<think>")
+            exiting_think_block = (p == "</think>")
 
             if entering_think_block:
                 commit_paragraph()  # commit previous text (if any) before start of think block
@@ -1081,15 +1104,6 @@ class DPGCompleteChatMessage(DPGChatMessage):
 
             if exiting_think_block:
                 inside_think_block = False
-
-        # Render any tool-call invocations this assistant message made, as visible sub-elements after the text
-        # (brief 02 §10). Without this, a tool-calling turn — often with empty `content` — would show nothing
-        # between the assistant message and the subsequent tool-result node.
-        for index, tool_call in enumerate(message.get("tool_calls") or []):
-            function = tool_call.get("function") or {}
-            self.add_tool_call_invocation(index=index,
-                                          name=function.get("name", "?"),
-                                          arguments=function.get("arguments", ""))
 
 
 class DPGStreamingChatMessage(DPGChatMessage):

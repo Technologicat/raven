@@ -31,7 +31,7 @@ import json
 import os
 import requests
 import sys
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple, Union
 
 import sseclient  # pip install sseclient-py
 
@@ -43,6 +43,7 @@ from unpythonic.env import env
 from ..client import api
 from ..client import config as client_config
 from ..common import netutil
+from ..common import text as common_text
 
 from . import chattree
 from . import chatutil
@@ -82,45 +83,45 @@ if os.path.exists(librarian_config.llm_api_key_file):  # TODO: test this (implem
 # Websearch integration (requires `raven.server` to be running)
 
 def websearch_wrapper(query: str,
-                      engine: str = "duckduckgo") -> str:
-    """Perform a websearch, using Raven-server to handle the interaction with the search engine and the parsing of the SERP (search engine results page)."""
-    # TODO: The ANSI coloring isn't useful in `websearch_wrapper`, because its output goes to the LLM. We should separate data/presentation if we want to do this. Currently, should always use markdown, which the LLM also understands.
-    markup = "markdown"
-    chatutil._yell_if_unsupported_markup(markup)
+                      engine: Optional[str] = None) -> List[Dict[str, str]]:
+    """Perform a websearch via Raven-server; return the results as content parts, one text part per result.
 
+    `engine`: search backend, "duckduckgo" or "google". `None` (the default) uses the configured
+              `librarian_config.websearch_engine`. The LLM's websearch tool doesn't pass this — engine choice
+              is host configuration, not a model decision.
+
+    Each result becomes a single markdown text part — a `[title](link)` heading followed by the snippet. The
+    GUI renders one part per result (clickable markdown links); the model reads the same markdown text on the
+    wire (brief 03 §4).
+
+    Every text-bearing field (`text`, `title`, `link`) is run through `raven.common.text.normalize`: SERP
+    snippets are scraped HTML from the search engine — external untrusted content, the same hostile-input class
+    that motivated the normalizer (it strips invisible-injection glyphs and control characters). Normalizing
+    the link too is deliberate: a URL carrying zero-width characters is exactly what we want cleaned.
+    """
+    if engine is None:
+        engine = librarian_config.websearch_engine
     websearch_results = api.websearch_search(query,
                                              engine,
                                              librarian_config.web_num_results)  # -> {"results": preformatted_text, "data": structured_results}
     structured_results = websearch_results["data"]
 
-    def highlight(text: str) -> str:
-        if markup == "ansi":
-            text = colorizer.colorize(text, colorizer.Style.BRIGHT)
-        elif markup == "markdown":
-            text = f"**{text}**"
-        return text
-
-    def format_link(url: str) -> str:
-        if markup == "ansi":
-            url = colorizer.colorize(url, colorizer.Style.BRIGHT, colorizer.Fore.BLUE)
-        elif markup == "markdown":
-            url = f"[{url}]({url})"
-        return url
-
-    # See also `raven.server.modules.websearch`, which has a version of this without markup.
-    def format_result(result: dict) -> str:
-        if "title" in result and "link" in result:
-            heading = f"{highlight('Web result from')}: {format_link(result['link'])}\n{highlight(result['title'])}"
-        elif "title" in result:
-            heading = highlight(result["title"])
-        elif "link" in result:
-            heading = f"{highlight('Web result from')}: {format_link(result['link'])}"
+    def format_result_part(result: Dict[str, str]) -> Dict[str, str]:
+        text = common_text.normalize(result.get("text", ""))
+        title = common_text.normalize(result.get("title", ""))
+        link = common_text.normalize(result.get("link", ""))
+        if title and link:
+            heading = f"[{title}]({link})"
+        elif title:
+            heading = title
+        elif link:
+            heading = f"<{link}>"  # bare-URL autolink (markdown)
         else:
-            return f"{result['text']}\n"
-        return f"{heading}\n\n{result['text']}\n"
+            heading = None
+        body = f"{heading}\n\n{text}\n" if heading else f"{text}\n"
+        return chatutil.text_content_part(body)
 
-    formatted_text = "\n\n".join(format_result(result) for result in structured_results)
-    return formatted_text  # TODO: our LLM scaffolding doesn't currently accept anything else but preformatted text
+    return [format_result_part(result) for result in structured_results]
 
 # --------------------------------------------------------------------------------
 # Webfetch integration (requires `raven.server` to be running)
@@ -1370,7 +1371,7 @@ def perform_tool_calls(settings: env,
     logger.info(f"perform_tool_calls: The LLM requested {len(tool_calls)} tool call{plural_s}.")
 
     tool_response_records = []
-    def add_tool_response_record(text: str, *,
+    def add_tool_response_record(output: Union[str, List[Dict]], *,
                                  status: str,
                                  tool_call_id: Optional[str],
                                  function_name: Optional[str],
@@ -1378,9 +1379,13 @@ def perform_tool_calls(settings: env,
                                  tool_metadata: Optional[Dict] = None) -> None:
         """Add a tool response record to `tool_response_records`.
 
+        `output` is the tool result: either a plain string (wrapped as a single text content-part) or an
+        already-built content-parts list — e.g. `websearch_wrapper`'s one-text-part-per-result output
+        (brief 03 §4). Error reports are passed as plain strings.
+
         The record is an `unpythonic.env.env` with the following attributes:
 
-            `data`: dict: chat message object, with `role="tool"`, and `content=text`.
+            `data`: dict: chat message object, with `role="tool"` and `content` the content-parts list.
 
             `status`: str: Values "success" or "error" are recommended.
 
@@ -1397,14 +1402,12 @@ def perform_tool_calls(settings: env,
                                    (so that the call timing can be measured).
 
             `tool_metadata`: Optional[Dict]: Structured metadata the entrypoint attached to this result
-                             (by returning `(text, metadata)` instead of a plain string). The caller
+                             (by returning `(output, metadata)` instead of a bare `output`). The caller
                              (`scaffold`) merges it into the tool node's `generation_metadata`. Used e.g.
                              by `webfetch_wrapper` to record `webfetch_denied_host` for the GUI override.
         """
-        tool_response_message = chatutil.create_chat_message(llm_settings=settings,
-                                                             role="tool",
-                                                             text=text,
-                                                             add_persona=False)
+        content = chatutil.normalize_content(output)  # str -> single text part; parts list -> used verbatim
+        tool_response_message = chatutil.create_message_from_parts("tool", content)
         record = env(data=tool_response_message,
                      status=status)
         if tool_call_id is not None:
@@ -1418,7 +1421,7 @@ def perform_tool_calls(settings: env,
         tool_response_records.append(record)
         if on_call_done is not None:
             try:
-                on_call_done(tool_call_id, function_name, status, text)
+                on_call_done(tool_call_id, function_name, status, chatutil.content_to_text(content))
             except Exception:
                 logger.warning(f"perform_tool_calls: {tool_call_id}: function '{function_name}': ignoring exception from event handler `on_call_done`", exc_info=True)
 
@@ -1480,15 +1483,15 @@ def perform_tool_calls(settings: env,
             add_tool_response_record(f"Tool call failed. Function '{function_name}' exited with exception {type(exc)}: {exc}", status="error", tool_call_id=tool_call_id, function_name=function_name, dt=tim.dt)
         else:  # success!
             logger.debug(f"perform_tool_calls: {tool_call_id}: Function '{function_name}' returned successfully.")
-            # An entrypoint returns either a plain string, or `(text, metadata_dict)` to attach structured
-            # metadata to the tool-response node (e.g. webfetch records a denied host for the GUI override).
-            # This `str | (str, dict)` shape is deliberately interim — it will fold into a single structured
-            # tool-result type (text + content parts + is_error + metadata) when the content-parts and MCP
-            # work lands; at that point this branch goes away.
+            # An entrypoint returns its output as either a plain string (wrapped downstream as a single text
+            # content-part) or a content-parts list (e.g. websearch's one-part-per-result output, brief 03 §4),
+            # optionally wrapped in an `(output, metadata_dict)` tuple to attach structured metadata to the
+            # tool-response node (e.g. webfetch records a denied host for the GUI override). `add_tool_response_record`
+            # normalizes the output to a parts list either way.
             if isinstance(tool_output, tuple):
-                tool_output_text, tool_metadata = tool_output
+                tool_output_value, tool_metadata = tool_output
             else:
-                tool_output_text, tool_metadata = tool_output, None
-            add_tool_response_record(tool_output_text, status="success", tool_call_id=tool_call_id, function_name=function_name, dt=tim.dt, tool_metadata=tool_metadata)
+                tool_output_value, tool_metadata = tool_output, None
+            add_tool_response_record(tool_output_value, status="success", tool_call_id=tool_call_id, function_name=function_name, dt=tim.dt, tool_metadata=tool_metadata)
 
     return tool_response_records

@@ -63,6 +63,13 @@ llm_tokenizer_path = None
 # own exact count). Set to `None` to disable the feature entirely.
 context_prefill_idle_delay = 5.0
 
+# Which search engine the websearch tool uses. One of "duckduckgo" or "google".
+#
+# "duckduckgo" (the default) tolerates automated queries. "google" often serves a CAPTCHA or rate-limits
+# headless / scripted searches, so it may fail intermittently depending on your IP and how often you search.
+# This is host configuration, not a model choice — the LLM's websearch tool only takes a query.
+websearch_engine = "duckduckgo"
+
 # How many web search results to return, when the LLM uses the websearch tool.
 web_num_results = 10
 

@@ -153,6 +153,81 @@ class TestPerformToolCallsMetadata:
         assert chatutil.content_to_text(records[0].data["content"]) == "just text"
         assert "tool_metadata" not in records[0]
 
+    def test_parts_return_becomes_multipart_content(self):
+        # brief 03 §4: an entrypoint may return a content-parts list (one part per result); it is used verbatim
+        # as the tool message's content (not collapsed into a single part).
+        parts = [chatutil.text_content_part("result 1\n"), chatutil.text_content_part("result 2\n")]
+        settings = self._settings(lambda: parts)
+        records = llmclient.perform_tool_calls(settings, self._message(), on_call_start=None, on_call_done=None)
+        assert records[0].data["content"] == parts
+        assert chatutil.content_to_text(records[0].data["content"]) == "result 1\nresult 2\n"
+
+    def test_parts_return_with_metadata_tuple(self):
+        # The `(output, metadata)` tuple form composes with a parts-list output, not just a string.
+        parts = [chatutil.text_content_part("x")]
+        settings = self._settings(lambda: (parts, {"webfetch_denied_host": "example.com"}))
+        records = llmclient.perform_tool_calls(settings, self._message(), on_call_start=None, on_call_done=None)
+        assert records[0].data["content"] == parts
+        assert records[0].tool_metadata == {"webfetch_denied_host": "example.com"}
+
+
+class TestWebsearchWrapper:
+    """brief 03 §4: websearch returns one text content-part per result, with each field normalized."""
+
+    @staticmethod
+    def _patch_search(monkeypatch, data):
+        monkeypatch.setattr(llmclient.api, "websearch_search", lambda *a, **k: {"data": data})
+
+    def test_one_text_part_per_result_with_markdown_links(self, monkeypatch):
+        self._patch_search(monkeypatch, [
+            {"title": "First", "link": "https://example.com/1", "text": "snippet one"},
+            {"title": "Second", "link": "https://example.com/2", "text": "snippet two"},
+        ])
+        parts = llmclient.websearch_wrapper("query")
+        assert len(parts) == 2
+        assert all(p["type"] == "text" for p in parts)
+        assert "[First](https://example.com/1)" in parts[0]["text"]
+        assert "snippet one" in parts[0]["text"]
+        assert "[Second](https://example.com/2)" in parts[1]["text"]
+
+    def test_fields_are_normalized(self, monkeypatch):
+        # Invisible-injection glyphs in scraped SERP content must be stripped (hostile input).
+        zwsp = "\u200b"  # zero-width space — a classic injection glyph that normalize removes
+        self._patch_search(monkeypatch, [
+            {"title": f"Ti{zwsp}tle", "link": f"https://e.com/{zwsp}x", "text": f"bo{zwsp}dy"},
+        ])
+        text = llmclient.websearch_wrapper("q")[0]["text"]
+        assert zwsp not in text  # removed from title, link, and body
+        assert "Title" in text and "body" in text
+
+    def test_result_without_title_falls_back_to_bare_url(self, monkeypatch):
+        self._patch_search(monkeypatch, [{"link": "https://e.com/x", "text": "body"}])
+        text = llmclient.websearch_wrapper("q")[0]["text"]
+        assert "<https://e.com/x>" in text
+
+    @staticmethod
+    def _patch_capture_engine(monkeypatch):
+        """Patch `api.websearch_search` to record the engine it was called with; return the capture dict."""
+        captured = {}
+        def fake_search(query, engine, num):
+            captured["engine"] = engine
+            return {"data": []}
+        monkeypatch.setattr(llmclient.api, "websearch_search", fake_search)
+        return captured
+
+    def test_uses_configured_engine_by_default(self, monkeypatch):
+        # The LLM tool passes only a query; the engine comes from config (host choice, not model choice).
+        captured = self._patch_capture_engine(monkeypatch)
+        monkeypatch.setattr(llmclient.librarian_config, "websearch_engine", "google")
+        llmclient.websearch_wrapper("q")
+        assert captured["engine"] == "google"
+
+    def test_explicit_engine_overrides_config(self, monkeypatch):
+        captured = self._patch_capture_engine(monkeypatch)
+        monkeypatch.setattr(llmclient.librarian_config, "websearch_engine", "google")
+        llmclient.websearch_wrapper("q", engine="duckduckgo")
+        assert captured["engine"] == "duckduckgo"
+
 
 # ---------------------------------------------------------------------------
 # Streaming tool-call accumulator (brief 02 §2) — pure helpers

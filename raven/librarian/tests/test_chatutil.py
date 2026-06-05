@@ -454,6 +454,20 @@ class TestContentParts:
         assert chatutil.content_to_text(None) == ""
         assert chatutil.content_to_text([]) == ""
 
+    def test_create_message_from_parts_uses_content_verbatim(self):
+        parts = [{"type": "text", "text": "result 1\n"}, {"type": "text", "text": "result 2\n"}]
+        msg = chatutil.create_message_from_parts("tool", parts)
+        assert msg == {"role": "tool", "content": parts, "tool_calls": []}  # parts used as-is, no persona
+
+    def test_create_message_from_parts_adds_reasoning_only_when_given(self):
+        assert "reasoning_content" not in chatutil.create_message_from_parts("assistant", [])
+        msg = chatutil.create_message_from_parts("assistant", [], reasoning_content="thinking")
+        assert msg["reasoning_content"] == "thinking"
+
+    def test_create_message_from_parts_rejects_bad_role(self):
+        with pytest.raises(ValueError, match="Unknown role"):
+            chatutil.create_message_from_parts("nope", [])
+
 
 class TestCreateChatMessage:
     def test_user_message_with_persona(self, llm_settings):
