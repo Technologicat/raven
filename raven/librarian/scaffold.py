@@ -557,11 +557,13 @@ def ai_turn(llm_settings: env,
         # `out.data` is now the complete message object (in the format returned by `create_chat_message`)
 
         # Clean up the LLM's reply (heuristically). This version goes into the chat history.
-        out.data["content"] = chatutil.scrub(persona=llm_settings.personas.get("assistant", None),
-                                             text=out.data["content"],
-                                             thoughts_mode="keep",
-                                             markup=markup,
-                                             add_persona=True)
+        # Content-parts (brief 03): the reply carries a single text part; scrub its text, re-wrap as a text part.
+        scrubbed_text = chatutil.scrub(persona=llm_settings.personas.get("assistant", None),
+                                       text=chatutil.content_to_text(out.data["content"]),
+                                       thoughts_mode="keep",
+                                       markup=markup,
+                                       add_persona=True)
+        out.data["content"] = [chatutil.text_content_part(scrubbed_text)]
 
         # Add the LLM's message to the chat.
         #

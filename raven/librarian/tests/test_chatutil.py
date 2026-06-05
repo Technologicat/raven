@@ -427,30 +427,58 @@ class TestScrub:
 # Chat message creation
 # ---------------------------------------------------------------------------
 
+class TestContentParts:
+    """Content-parts helpers (brief 03): `text_content_part` / `normalize_content` / `content_to_text`."""
+
+    def test_text_content_part_shape(self):
+        assert chatutil.text_content_part("hi") == {"type": "text", "text": "hi"}
+
+    def test_normalize_content_wraps_string(self):
+        assert chatutil.normalize_content("hello") == [{"type": "text", "text": "hello"}]
+
+    def test_normalize_content_passes_list_through_unchanged(self):
+        parts = [{"type": "text", "text": "a"}, {"type": "image_url", "image_url": {"url": "sidecar:x.png"}}]
+        assert chatutil.normalize_content(parts) is parts  # idempotent, no copy
+
+    def test_normalize_content_rejects_non_str_non_list(self):
+        with pytest.raises(TypeError):
+            chatutil.normalize_content(42)
+
+    def test_content_to_text_joins_text_parts_and_skips_images(self):
+        parts = [{"type": "text", "text": "Hello "},
+                 {"type": "image_url", "image_url": {"url": "sidecar:x.png"}},
+                 {"type": "text", "text": "world"}]
+        assert chatutil.content_to_text(parts) == "Hello world"
+
+    def test_content_to_text_none_and_empty_yield_empty_string(self):
+        assert chatutil.content_to_text(None) == ""
+        assert chatutil.content_to_text([]) == ""
+
+
 class TestCreateChatMessage:
     def test_user_message_with_persona(self, llm_settings):
         msg = chatutil.create_chat_message(llm_settings, "user", "hello")
         assert msg["role"] == "user"
-        assert msg["content"] == "User: hello"
+        assert msg["content"] == [{"type": "text", "text": "User: hello"}]  # string wrapped as a single text part
         assert msg["tool_calls"] == []
 
     def test_assistant_message(self, llm_settings):
         msg = chatutil.create_chat_message(llm_settings, "assistant", "hi there")
-        assert msg["content"] == "Aria: hi there"
+        assert chatutil.content_to_text(msg["content"]) == "Aria: hi there"
 
     def test_system_message_no_persona(self, llm_settings):
         msg = chatutil.create_chat_message(llm_settings, "system", "prompt text")
         # system has no persona in our fixture
-        assert msg["content"] == "prompt text"
+        assert chatutil.content_to_text(msg["content"]) == "prompt text"
 
     def test_add_persona_false(self, llm_settings):
         msg = chatutil.create_chat_message(llm_settings, "user", "hello", add_persona=False)
-        assert msg["content"] == "hello"
+        assert chatutil.content_to_text(msg["content"]) == "hello"
 
     def test_persona_override(self, llm_settings):
         msg = chatutil.create_chat_message(llm_settings, "assistant", "hi",
                                            persona="CustomName")
-        assert msg["content"] == "CustomName: hi"
+        assert chatutil.content_to_text(msg["content"]) == "CustomName: hi"
 
     def test_tool_calls_passed_through(self, llm_settings):
         calls = ['{"name": "search", "args": {}}']
@@ -466,16 +494,17 @@ class TestCreateChatMessage:
         msg = chatutil.create_chat_message(llm_settings, "tool", "tool result")
         assert msg["role"] == "tool"
         # tool has no persona in our fixture
-        assert msg["content"] == "tool result"
+        assert chatutil.content_to_text(msg["content"]) == "tool result"
 
 
 class TestCreateInitialSystemMessage:
     def test_has_system_prompt_and_character_card(self, llm_settings):
         msg = chatutil.create_initial_system_message(llm_settings)
         assert msg["role"] == "system"
-        assert "helpful assistant" in msg["content"]
-        assert "Aria" in msg["content"]
-        assert "-----" in msg["content"]
+        content = chatutil.content_to_text(msg["content"])
+        assert "helpful assistant" in content
+        assert "Aria" in content
+        assert "-----" in content
 
     def test_system_prompt_only(self):
         settings = env(personas={},
@@ -483,8 +512,9 @@ class TestCreateInitialSystemMessage:
                        character_card="",
                        greeting="Hello!")
         msg = chatutil.create_initial_system_message(settings)
-        assert "Be helpful." in msg["content"]
-        assert "-----" in msg["content"]
+        content = chatutil.content_to_text(msg["content"])
+        assert "Be helpful." in content
+        assert "-----" in content
 
     def test_character_card_only(self):
         settings = env(personas={},
@@ -492,7 +522,7 @@ class TestCreateInitialSystemMessage:
                        character_card="Name: Bot",
                        greeting="Hello!")
         msg = chatutil.create_initial_system_message(settings)
-        assert "Name: Bot" in msg["content"]
+        assert "Name: Bot" in chatutil.content_to_text(msg["content"])
 
     def test_neither_raises(self):
         settings = env(personas={},
@@ -602,7 +632,7 @@ class TestFactoryResetDatastore:
         greeting_id = chatutil.factory_reset_datastore(forest, llm_settings)
         payload = forest.get_payload(greeting_id)
         assert payload["message"]["role"] == "assistant"
-        assert "How can I help you today?" in payload["message"]["content"]
+        assert "How can I help you today?" in chatutil.content_to_text(payload["message"]["content"])
 
     def test_purges_existing_data(self, llm_settings, forest):
         # Create some data first
@@ -626,7 +656,9 @@ def _build_chain(forest, messages):
     """
     parent = None
     for role, content, gen_meta in messages:
-        payload = {"message": {"role": role, "content": content, "tool_calls": []}}
+        # Live (post-migration) format: content is a parts list. `compute_auto_allowed_hosts` reads it via
+        # `content_to_text`, so build the chain the way the datastore holds it after `upgrade_datastore`.
+        payload = {"message": {"role": role, "content": [chatutil.text_content_part(content)], "tool_calls": []}}
         if gen_meta is not None:
             payload["generation_metadata"] = gen_meta
         parent = forest.create_node(payload=payload, parent_id=parent)
@@ -842,8 +874,8 @@ class TestUpgradeDatastoreReasoningAndToolCallId:
 
         assistant_msg = f.get_payload(assistant_id)["message"]
         assert assistant_msg["reasoning_content"] == "let me search"
-        assert "<think>" not in assistant_msg["content"]
-        assert "<tool_call>" not in assistant_msg["content"]
+        assert "<think>" not in chatutil.content_to_text(assistant_msg["content"])
+        assert "<tool_call>" not in chatutil.content_to_text(assistant_msg["content"])
         assert len(assistant_msg["tool_calls"]) == 1
         assert assistant_msg["tool_calls"][0]["function"]["name"] == "websearch"
 
@@ -865,6 +897,19 @@ class TestUpgradeDatastoreReasoningAndToolCallId:
         f, system_id, assistant_id, tool_id = self._old_format_forest(llm_settings)
         chatutil.upgrade_datastore(llm_settings, f, system_id)
         for nid in (system_id, assistant_id, tool_id):
-            content = f.get_payload(nid)["message"].get("content", "")
+            content = chatutil.content_to_text(f.get_payload(nid)["message"]["content"])
             assert "<think>" not in content
             assert "<tool_call>" not in content
+
+    def test_string_content_wrapped_to_text_part(self, llm_settings):
+        # brief 03 §3b: legacy string `content` becomes a single text part, with the persona prefix preserved
+        # verbatim. The wrap runs after the §11 stanzas, so the wrapped text is already think/tool_call-free.
+        f, system_id, assistant_id, tool_id = self._old_format_forest(llm_settings)
+        chatutil.upgrade_datastore(llm_settings, f, system_id)
+        for nid in (system_id, assistant_id, tool_id):
+            content = f.get_payload(nid)["message"]["content"]
+            assert isinstance(content, list)
+            assert all(part["type"] == "text" for part in content)
+        # Messages with nothing to extract are wrapped verbatim (single text part holding the original string).
+        assert f.get_payload(system_id)["message"]["content"] == [{"type": "text", "text": "sys"}]
+        assert f.get_payload(tool_id)["message"]["content"] == [{"type": "text", "text": "search result"}]

@@ -8,6 +8,9 @@ __all__ = ["format_message_number",
            "format_reminder_to_focus_on_latest_input",
            "format_reminder_to_use_information_from_context_only",
            "make_timestamp",
+           "text_content_part",
+           "normalize_content",
+           "content_to_text",
            "create_chat_message",
            "create_initial_system_message",
            "create_payload",
@@ -35,6 +38,48 @@ from unpythonic.env import env
 from ..common import netutil
 
 from . import chattree
+
+# --------------------------------------------------------------------------------
+# Content parts (OpenAI multimodal content schema)
+#
+# A chat message's `content` is a list of typed parts. Even a text-only message is
+# `[{"type": "text", "text": "..."}]`. This is OpenAI's multimodal `content` shape used directly as Raven's
+# internal representation, so the wire format needs no translation. v0 part types: "text" and "image_url"
+# (brief 03 §2). Reading code must never treat `content` as a string — funnel through `content_to_text` for
+# the text, or dispatch on each part's "type".
+
+def text_content_part(text: str) -> Dict[str, str]:
+    """Wrap a plain string as a single text content-part: `{"type": "text", "text": text}`."""
+    return {"type": "text", "text": text}
+
+def normalize_content(content: Any) -> List[Dict[str, Any]]:
+    """Return `content` as a content-parts list: a bare string becomes a single text part; a list passes through.
+
+    This is the *one* place that converts a legacy bare string into parts. It exists for the load-time
+    migration (`upgrade_datastore`) — old datastores stored `content` as a string; the migration wraps each
+    into `[{"type": "text", "text": <string>}]` so that everything in memory, and everything written back, is
+    parts. After migration, readers never see a string; they assume the parts list (see `content_to_text`).
+    Idempotent on already-parts content. Raises on anything that is neither str nor list (datastore
+    corruption), rather than silently coercing — the migration relies on this to surface bad data.
+    """
+    if isinstance(content, str):
+        return [text_content_part(content)]
+    if isinstance(content, list):
+        return content
+    raise TypeError(f"normalize_content: expected message content to be str or list, got {type(content)}")
+
+def content_to_text(content: Optional[List[Dict[str, Any]]]) -> str:
+    """Concatenate the text of a message's content-parts `content` — the universal "give me the text" accessor.
+
+    Text parts are concatenated in order; non-text parts (e.g. images) are skipped. `None` (absent content)
+    yields `""`. Use this anywhere that needs the message's text for counting, matching, scrubbing, or
+    single-string rendering. `content` is a parts list, never a string: legacy bare strings are migrated to a
+    single text part at load time (`upgrade_datastore` via `normalize_content`), so a string reaching here is a
+    bug — it raises loudly rather than being silently tolerated.
+    """
+    if content is None:
+        return ""
+    return "".join(part["text"] for part in content if part.get("type") == "text")
 
 # --------------------------------------------------------------------------------
 # Display formatting utilities (markdown, ansi)
@@ -232,7 +277,12 @@ def create_chat_message(llm_settings: env,
             Because this function creates a new chat message, the persona is always the current
             session's persona for `role`, automatically read from `llm_settings`.
 
-    `text`: The text content of the message.
+    `text`: The text content of the message, as a plain string. Wrapped as a single text content-part
+            (`[{"type": "text", "text": ...}]`); the persona prefix is prepended first if `add_persona` applies.
+
+            Multi-part content (a tool result split into several parts, an image attachment) is not built
+            here — that path is introduced where a real caller needs it. This function is the everyday
+            text-message constructor (user / assistant / system / single-text tool messages).
 
     `add_persona`: If `True`, we prepend the persona of `role` to the text content,
                    if `llm_settings.personas` has a name defined for that role.
@@ -271,20 +321,19 @@ def create_chat_message(llm_settings: env,
                          If `None` (the default), no `reasoning_content` key is added — appropriate for
                          user/system/tool messages and assistant messages with no thinking trace.
 
-    Returns the new message: `{"role": ..., "content": ..., "tool_calls": ...}`,
-    plus a `"reasoning_content"` key when `reasoning_content` is given.
+    Returns the new message: `{"role": ..., "content": [<part>, ...], "tool_calls": ...}`, where `content`
+    is always a content-parts list (brief 03); plus a `"reasoning_content"` key when `reasoning_content` is given.
     """
     if role not in ("user", "assistant", "system", "tool"):
         raise ValueError(f"Unknown role '{role}'; valid: one of 'user', 'assistant', 'system', 'tool'.")
 
     persona_name = llm_settings.personas.get(role, None) if (persona is None) else persona
     if add_persona and persona_name is not None:
-        content = f"{persona_name}: {text}"  # e.g. "User: ..."
-    else:  # System and tool messages typically do not include a persona name in the text content.
-        content = text
+        text = f"{persona_name}: {text}"  # e.g. "User: ..."
+    # else: system and tool messages typically do not include a persona name in the text content.
 
     data = {"role": role,
-            "content": content,
+            "content": [text_content_part(text)],
             "tool_calls": tool_calls if tool_calls is not None else []}
     if reasoning_content is not None:
         data["reasoning_content"] = reasoning_content
@@ -448,7 +497,7 @@ def compute_auto_allowed_hosts(datastore: chattree.Forest,
     def hosts_in(text: str):
         return (host for url in netutil.extract_urls(text) if (host := netutil.url_host(url)))
 
-    hosts = set(hosts_in(payload_history[last_user_index]["message"].get("content", "")))
+    hosts = set(hosts_in(content_to_text(payload_history[last_user_index]["message"].get("content"))))
 
     if trust_search_results:
         for payload in payload_history[last_user_index + 1:]:  # this-turn tool results only
@@ -457,7 +506,7 @@ def compute_auto_allowed_hosts(datastore: chattree.Forest,
                 continue
             if payload.get("generation_metadata", {}).get("function_name") != "websearch":
                 continue  # one-hop trust: search results yes, webfetch's own output (or anything else) no
-            hosts.update(hosts_in(message.get("content", "")))
+            hosts.update(hosts_in(content_to_text(message.get("content"))))
 
     return frozenset(hosts)
 
@@ -545,6 +594,16 @@ def _migrate_tool_call_id(payload: Dict[str, Any]) -> None:
     if not generation_metadata or "toolcall_id" not in generation_metadata:
         return
     message["tool_call_id"] = generation_metadata.pop("toolcall_id")  # full move: single source of truth on the message
+
+def _migrate_content_to_parts(message: Dict[str, Any]) -> None:
+    """Wrap a legacy bare-string `message["content"]` into a single text content-part (brief 03 §3b). Mutates `message`.
+
+    Runs *after* the brief-02 §11 stanzas above, which operate on the string form of `content`; this one changes
+    the shape. The persona prefix in old assistant content (`"Aria: ..."`) rides along inside the wrapped text
+    verbatim — no special handling. Idempotent: already-parts content passes through unchanged. Raises (via
+    `normalize_content`) on content that is neither str nor list, surfacing datastore corruption.
+    """
+    message["content"] = normalize_content(message["content"])
 
 # v0.2.3+: data format change
 def upgrade_datastore(llm_settings: env,
@@ -661,6 +720,7 @@ def upgrade_datastore(llm_settings: env,
                 _migrate_inline_reasoning(message)
                 _migrate_inline_tool_calls(message)
                 _migrate_tool_call_id(payload)
+                _migrate_content_to_parts(message)  # brief 03 §3b: wrap legacy string content as parts (runs last)
 
 def factory_reset_datastore(datastore: chattree.Forest, llm_settings: env) -> str:
     """Reset `datastore` to its "factory-default" state.
@@ -748,7 +808,7 @@ def get_node_message_text_without_persona(datastore: chattree.Forest,
     message = node_payload["message"]
     role = message["role"]
     persona = node_payload["general_metadata"]["persona"]  # stored persona for this chat message
-    text = message["content"]
+    text = content_to_text(message["content"])
     text = remove_persona_from_start_of_line(persona=persona,
                                              text=text)
     return role, persona, text

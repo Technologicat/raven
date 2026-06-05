@@ -323,7 +323,7 @@ def minimal_chat_client(backend_url) -> None:
                     message = node_payload["message"]
                     role = message["role"]
                     persona = node_payload["general_metadata"]["persona"]  # stored persona for this chat message
-                    text = message["content"]
+                    text = chatutil.content_to_text(message["content"])
                     chat_print_message(message_number=k,
                                        role=role,
                                        persona=persona,
@@ -335,7 +335,7 @@ def minimal_chat_client(backend_url) -> None:
                     message = node_payload["message"]
                     role = message["role"]
                     persona = node_payload["general_metadata"]["persona"]  # stored persona for this chat message
-                    text = message["content"]
+                    text = chatutil.content_to_text(message["content"])
                     chat_print_message(message_number=None,
                                        role=role,
                                        persona=persona,
@@ -599,7 +599,7 @@ def minimal_chat_client(backend_url) -> None:
                 chat_print_message(message_number=ai_message_number,
                                    role="assistant",
                                    persona=llm_settings.personas.get("assistant", None),
-                                   text=nomatch_message_node_payload["message"]["content"])
+                                   text=chatutil.content_to_text(nomatch_message_node_payload["message"]["content"]))
                 print()
 
             def on_tool_done(node_id: str) -> None:
@@ -611,7 +611,7 @@ def minimal_chat_client(backend_url) -> None:
                 chat_print_message(message_number=ai_message_number,
                                    role="tool",
                                    persona=llm_settings.personas.get("tool", None),
-                                   text=nomatch_message_node_payload["message"]["content"])
+                                   text=chatutil.content_to_text(nomatch_message_node_payload["message"]["content"]))
                 print()
 
                 ai_message_number += 1

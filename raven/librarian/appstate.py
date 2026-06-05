@@ -124,13 +124,13 @@ def _refresh_greeting(llm_settings: env,
         greeting_message = chatutil.create_chat_message(llm_settings=llm_settings,
                                                         role="assistant",
                                                         text=llm_settings.greeting.strip())
-        greeting_message_content = greeting_message["content"]
+        greeting_message_content = chatutil.content_to_text(greeting_message["content"])
 
         for greeting_node_id in greeting_node_ids:
             payload = datastore.get_payload(greeting_node_id)  # get currently active revision
             message = payload["message"]
             message_role = message["role"]
-            message_text = message["content"]
+            message_text = chatutil.content_to_text(message["content"])
             if message_role != "assistant":  # skip non-AI messages (should not happen, but let's be robust)
                 logger.warning(f"_refresh_greeting: Detected non-AI message node (role = '{message_role}') '{greeting_node_id}' under system prompt node '{system_prompt_node_id}'. Skipping.")
                 continue

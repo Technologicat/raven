@@ -5,7 +5,7 @@ import pathlib
 
 import pytest
 
-from raven.librarian import appstate, chattree
+from raven.librarian import appstate, chattree, chatutil
 
 
 # ---------------------------------------------------------------------------
@@ -75,7 +75,7 @@ class TestLoadEmpty:
         greeting_payload = datastore.get_payload(state["HEAD"])
         assert greeting_payload["message"]["role"] == "assistant"
         # The greeting content is prefixed by the character name (`Aria: ...`).
-        assert llm_settings.greeting in greeting_payload["message"]["content"]
+        assert llm_settings.greeting in chatutil.content_to_text(greeting_payload["message"]["content"])
 
     def test_system_prompt_node_id_points_to_root(self, tmp_path, llm_settings):
         datastore, state, _, _ = _load(tmp_path, llm_settings)
@@ -148,7 +148,7 @@ class TestSystemPromptRefresh:
     def test_system_prompt_content_matches_current_settings(self, tmp_path, llm_settings):
         datastore, state, _, _ = _load(tmp_path, llm_settings)
         payload = datastore.get_payload(state["system_prompt_node_id"])
-        content = payload["message"]["content"]
+        content = chatutil.content_to_text(payload["message"]["content"])
         # The system-prompt payload weaves system_prompt + character_card together.
         assert llm_settings.system_prompt in content
         assert llm_settings.character_card in content
@@ -168,7 +168,7 @@ class TestSystemPromptRefresh:
         llm_settings.system_prompt = "You are an updated assistant."
         datastore, state, _, _ = _load(tmp_path, llm_settings)
         payload = datastore.get_payload(state["system_prompt_node_id"])
-        assert "updated assistant" in payload["message"]["content"]
+        assert "updated assistant" in chatutil.content_to_text(payload["message"]["content"])
 
 
 # ---------------------------------------------------------------------------

@@ -27,7 +27,7 @@ def make_invoke_result(content="Hello from the LLM.",
                        interrupted=False):
     """Build a fake return value for `llmclient.invoke` — the shape scaffold reads."""
     return env(data={"role": "assistant",
-                     "content": content,
+                     "content": chatutil.normalize_content(content),  # content-parts list, as invoke returns
                      "tool_calls": tool_calls},
                n_tokens=n_tokens,
                dt=dt,
@@ -42,7 +42,7 @@ def make_tool_response(content="tool result",
                        dt=0.01):
     """Build a fake tool response record — the shape scaffold reads from `perform_tool_calls`."""
     return env(data={"role": "tool",
-                     "content": content,
+                     "content": chatutil.normalize_content(content),  # content-parts list
                      "tool_calls": None},
                status=status,
                tool_call_id=tool_call_id,
@@ -54,7 +54,7 @@ def make_denial_response(host="blocked.com", tool_call_id="call_0"):
     """A faked webfetch denial record: carries `tool_metadata={'webfetch_denied_host': host}`,
     the structured marker the GUI override reads to offer "approve this host & retry"."""
     return env(data={"role": "tool",
-                     "content": f"The host {host} is not on the configured allowlist.",
+                     "content": chatutil.normalize_content(f"The host {host} is not on the configured allowlist."),
                      "tool_calls": None},
                status="success",
                tool_call_id=tool_call_id,
@@ -179,7 +179,7 @@ class TestUserTurn:
                                       datastore=forest,
                                       head_node_id=head,
                                       user_message_text="Hi there")
-        content = forest.get_payload(new_head)["message"]["content"]
+        content = chatutil.content_to_text(forest.get_payload(new_head)["message"]["content"])
         assert "Hi there" in content
 
 
@@ -201,7 +201,7 @@ class TestAITurnSimple:
         assert forest.get_parent(final_head) == user_head
         payload = forest.get_payload(final_head)
         assert payload["message"]["role"] == "assistant"
-        assert "Hi!" in payload["message"]["content"]
+        assert "Hi!" in chatutil.content_to_text(payload["message"]["content"])
 
     def test_generation_metadata_stored(self, monkeypatch, llm_settings, populated_forest):
         forest, head = populated_forest
@@ -337,7 +337,7 @@ class TestAITurnRAG:
                     on_prompt_ready=lambda history: prompt_snapshot.append(history))
 
         assert len(prompt_snapshot) == 1
-        all_content = "\n".join(msg["content"] for msg in prompt_snapshot[0])
+        all_content = "\n".join(chatutil.content_to_text(msg["content"]) for msg in prompt_snapshot[0])
         assert "SECRET-MARKER-CONTENT-42" in all_content
 
     def test_rag_no_match_bypass_creates_nomatch_node(self, monkeypatch, llm_settings, populated_forest):
@@ -397,7 +397,7 @@ class TestAITurnRAG:
                                  on_nomatch_done=lambda nid: nomatch_done_calls.append(nid))
         assert len(invoke_called) == 1
         assert nomatch_done_calls == []
-        assert "speculate" in forest.get_payload(final_head)["message"]["content"]
+        assert "speculate" in chatutil.content_to_text(forest.get_payload(final_head)["message"]["content"])
 
     def test_docs_query_without_retriever_logs_warning(self, monkeypatch, caplog, llm_settings, populated_forest):
         forest, head = populated_forest
@@ -579,7 +579,7 @@ class TestRetryToolCalls:
         # New branch: continuation assistant -> tool(webfetch success) -> first (tool-calling) assistant.
         assert roles_up(forest, new_head)[:3] == ["assistant", "tool", "assistant"]
         new_tool_node = forest.get_parent(new_head)
-        assert "FETCHED OK" in forest.get_payload(new_tool_node)["message"]["content"]
+        assert "FETCHED OK" in chatutil.content_to_text(forest.get_payload(new_tool_node)["message"]["content"])
         assert "webfetch_denied_host" not in forest.get_payload(new_tool_node)["generation_metadata"]
 
         # It is a real branch: the new tool node and the old denied node share a parent (the assistant)...
@@ -617,7 +617,7 @@ class TestRetryToolCalls:
         # The new webfetch node branches off the SAME (shared) websearch node — not a copy.
         new_tool_node = forest.get_parent(new_head)
         assert forest.get_parent(new_tool_node) == websearch_node
-        assert "FETCHED OK" in forest.get_payload(new_tool_node)["message"]["content"]
+        assert "FETCHED OK" in chatutil.content_to_text(forest.get_payload(new_tool_node)["message"]["content"])
 
     def test_suffix_tool_results_are_copied_verbatim(self, monkeypatch, llm_settings, populated_forest):
         """Assistant issues [webfetch, websearch] in one message; webfetch (first) is denied. The retry
@@ -648,7 +648,7 @@ class TestRetryToolCalls:
         assert roles_up(forest, new_head)[:4] == ["assistant", "tool", "tool", "assistant"]
         websearch_copy = forest.get_parent(new_head)
         assert forest.get_payload(websearch_copy)["generation_metadata"]["function_name"] == "websearch"
-        assert forest.get_payload(websearch_copy)["message"]["content"] == "ORIGINAL websearch result"
+        assert chatutil.content_to_text(forest.get_payload(websearch_copy)["message"]["content"]) == "ORIGINAL websearch result"
         assert websearch_copy != websearch_node  # a copy, distinct node id (not a reparent)
 
     def test_non_tool_node_raises(self, monkeypatch, llm_settings, populated_forest):

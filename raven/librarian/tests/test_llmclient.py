@@ -18,6 +18,13 @@ llmclient = pytest.importorskip("raven.librarian.llmclient",
 from unpythonic import dyn  # noqa: E402 -- after importorskip by design
 from unpythonic.env import env  # noqa: E402 -- after importorskip by design
 
+from raven.librarian import chatutil  # noqa: E402 -- after importorskip by design
+
+
+def _history(text):
+    """A one-message user history in content-parts shape — what `invoke` receives in production."""
+    return [{"role": "user", "content": [chatutil.text_content_part(text)]}]
+
 
 @pytest.fixture
 def fake_fetch(monkeypatch):
@@ -137,13 +144,13 @@ class TestPerformToolCallsMetadata:
         settings = self._settings(lambda: ("the result text", {"webfetch_denied_host": "example.com"}))
         records = llmclient.perform_tool_calls(settings, self._message(), on_call_start=None, on_call_done=None)
         assert len(records) == 1
-        assert records[0].data["content"] == "the result text"
+        assert chatutil.content_to_text(records[0].data["content"]) == "the result text"
         assert records[0].tool_metadata == {"webfetch_denied_host": "example.com"}
 
     def test_plain_string_return_has_no_metadata(self):
         settings = self._settings(lambda: "just text")
         records = llmclient.perform_tool_calls(settings, self._message(), on_call_start=None, on_call_done=None)
-        assert records[0].data["content"] == "just text"
+        assert chatutil.content_to_text(records[0].data["content"]) == "just text"
         assert "tool_metadata" not in records[0]
 
 
@@ -241,8 +248,8 @@ class TestInvokeStreamRobustness:
             {"choices": [], "usage": {"prompt_tokens": 10, "completion_tokens": 2, "total_tokens": 12}},
             "[DONE]",
         ])
-        out = llmclient.invoke(invoke_settings, [{"role": "user", "content": "hi"}], tools_enabled=False)
-        assert "Hello world" in out.data["content"]
+        out = llmclient.invoke(invoke_settings, _history("hi"), tools_enabled=False)
+        assert "Hello world" in chatutil.content_to_text(out.data["content"])
         assert out.n_tokens == 2  # from real usage, not the n_chunks-2 heuristic
         assert out.usage["prompt_tokens"] == 10
         assert not out.data["tool_calls"]  # create_chat_message normalizes "no tool calls" to []
@@ -254,7 +261,7 @@ class TestInvokeStreamRobustness:
             {"error": {"message": "Error rendering prompt with jinja template"}},
         ])
         with pytest.raises(RuntimeError, match="jinja template"):
-            llmclient.invoke(invoke_settings, [{"role": "user", "content": "hi"}], tools_enabled=False)
+            llmclient.invoke(invoke_settings, _history("hi"), tools_enabled=False)
 
     def test_streamed_tool_call_materialized(self, monkeypatch, invoke_settings):
         _fake_stream(monkeypatch, [
@@ -268,7 +275,7 @@ class TestInvokeStreamRobustness:
              "usage": {"prompt_tokens": 291, "completion_tokens": 27, "total_tokens": 318}},
             "[DONE]",
         ])
-        out = llmclient.invoke(invoke_settings, [{"role": "user", "content": "weather?"}], tools_enabled=True)
+        out = llmclient.invoke(invoke_settings, _history("weather?"), tools_enabled=True)
         assert out.data["tool_calls"] == [
             {"type": "function", "function": {"name": "get_weather", "arguments": '{"location":"Tokyo"}'},
              "id": "call_1", "index": "0"}]
@@ -282,7 +289,7 @@ class TestInvokeStreamRobustness:
             {"choices": [{"delta": {"content": "one"}}]},
             {"choices": [{"delta": {"content": " two"}}]},
         ])
-        out = llmclient.invoke(invoke_settings, [{"role": "user", "content": "hi"}], tools_enabled=False)
+        out = llmclient.invoke(invoke_settings, _history("hi"), tools_enabled=False)
         assert out.usage is None
         assert out.n_tokens == 2  # two text-bearing deltas
 
@@ -412,13 +419,13 @@ class TestUsageCalibration:
         # the "User: " persona prefix), so compute the expected ratio from what `on_prompt_ready` reports.
         sent = {}
         def capture(history):
-            sent["chars"] = sum(len(m.get("content") or "") for m in history)
+            sent["chars"] = sum(len(chatutil.content_to_text(m.get("content"))) for m in history)
         _fake_stream(monkeypatch, [
             {"choices": [{"delta": {"content": "ok"}}]},
             {"choices": [], "usage": {"prompt_tokens": 10, "completion_tokens": 1, "total_tokens": 11}},
             "[DONE]",
         ])
-        llmclient.invoke(invoke_settings, [{"role": "user", "content": "x" * 40}], tools_enabled=False, on_prompt_ready=capture)
+        llmclient.invoke(invoke_settings, _history("x" * 40), tools_enabled=False, on_prompt_ready=capture)
         assert invoke_settings.char_to_token_ratio == pytest.approx(10 / sent["chars"])
 
     def test_mismatched_tokenizer_warns(self, monkeypatch, caplog, invoke_settings):
@@ -432,7 +439,7 @@ class TestUsageCalibration:
         ])
         import logging
         caplog.set_level(logging.WARNING, logger="raven.librarian.llmclient")
-        llmclient.invoke(invoke_settings, [{"role": "user", "content": "x" * 100}], tools_enabled=False)
+        llmclient.invoke(invoke_settings, _history("x" * 100), tools_enabled=False)
         assert any("does not match the served model" in rec.message for rec in caplog.records)
 
 
@@ -451,7 +458,7 @@ class TestPrefill:
         monkeypatch.setattr(llmclient.sseclient, "SSEClient",
                             lambda resp: _FakeSSEClient([json.dumps(
                                 {"choices": [], "usage": {"prompt_tokens": 123, "completion_tokens": 1, "total_tokens": 124}})]))
-        out = llmclient.prefill(invoke_settings, [{"role": "user", "content": "hi"}], tools_enabled=False)
+        out = llmclient.prefill(invoke_settings, _history("hi"), tools_enabled=False)
         assert sent["data"]["max_tokens"] == 1  # overrides the configured cap for this call
         assert out.usage["prompt_tokens"] == 123
 
@@ -460,7 +467,7 @@ class TestPrefill:
         def boom(*a, **k):
             raise RuntimeError("backend down")
         monkeypatch.setattr(llmclient.requests, "post", boom)
-        assert llmclient.prefill(invoke_settings, [{"role": "user", "content": "hi"}]) is None
+        assert llmclient.prefill(invoke_settings, _history("hi")) is None
 
 
 class TestSetupOutputCap:
@@ -620,7 +627,7 @@ class TestInvokeTypedEvents:
     def _collect(monkeypatch, invoke_settings, payloads, native_in_message_check=False):
         _fake_stream(monkeypatch, payloads)
         events = []
-        out = llmclient.invoke(invoke_settings, [{"role": "user", "content": "hi"}],
+        out = llmclient.invoke(invoke_settings, _history("hi"),
                                on_progress=lambda ev: events.append(ev) or llmclient.action_ack,
                                tools_enabled=False)
         return out, events
@@ -636,8 +643,8 @@ class TestInvokeTypedEvents:
             "[DONE]",
         ])
         assert out.data["reasoning_content"] == "let me think about it"
-        assert out.data["content"] == "The answer is 42."
-        assert "think" not in out.data["content"]
+        assert chatutil.content_to_text(out.data["content"]) == "The answer is 42."
+        assert "think" not in chatutil.content_to_text(out.data["content"])
         reasoning_events = [e for e in events if e["type"] == "reasoning"]
         assert "".join(e["text"] for e in reasoning_events) == "let me think about it"
         assert all("n_chunks" in e for e in events if e["type"] in ("content", "reasoning"))
@@ -649,7 +656,7 @@ class TestInvokeTypedEvents:
             "[DONE]",
         ])
         assert out.data["reasoning_content"] == "hmm"
-        assert out.data["content"] == "Done."
+        assert chatutil.content_to_text(out.data["content"]) == "Done."
 
     def test_no_reasoning_means_no_field(self, monkeypatch, invoke_settings):
         # A plain answer with no thinking: reasoning_content is omitted entirely (not stored as "").
@@ -667,5 +674,5 @@ class TestInvokeTypedEvents:
         ])
         assert len(out.data["tool_calls"]) == 1
         assert out.data["tool_calls"][0]["function"]["name"] == "websearch"
-        assert not out.data["content"]  # the tag span never leaks into content
+        assert not chatutil.content_to_text(out.data["content"])  # the tag span never leaks into content
         assert any(e["type"] == "tool_call" for e in events)

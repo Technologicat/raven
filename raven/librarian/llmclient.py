@@ -949,14 +949,19 @@ def invoke(settings: env,
     # The `scrub(thoughts_mode="discard")` below is now a legacy safety net: it strips any inline `<think>`
     # blocks still embedded in OLD `content` (pre-§11-migration data). For messages produced by the new parser,
     # `content` has no think tags, so this is a no-op on content; it still normalizes the persona prefix.
+    #
+    # Content-parts (brief 03): every message here carries a single text part (multi-part tool results and
+    # image parts are later work, and their resend will need to preserve non-text parts rather than collapse).
+    # So extract the text, scrub it, and re-wrap as a single text part.
     history = copy.deepcopy(history)
     end_idx = -1 if continue_ else None  # Don't scrub the current AI message when continuing; else scrub all messages.
     for message in history[:end_idx]:
-        message["content"] = chatutil.scrub(persona=settings.personas.get(message["role"], None),
-                                            text=message["content"],
-                                            thoughts_mode="discard",
-                                            markup=None,
-                                            add_persona=True)
+        scrubbed_text = chatutil.scrub(persona=settings.personas.get(message["role"], None),
+                                       text=chatutil.content_to_text(message["content"]),
+                                       thoughts_mode="discard",
+                                       markup=None,
+                                       add_persona=True)
+        message["content"] = [chatutil.text_content_part(scrubbed_text)]
 
     # Not mentioned in the oobabooga docs, but see:
     #  `text-generation-webui/extensions/openai/script.py`, function `openai_chat_completions`
@@ -1142,7 +1147,7 @@ def invoke(settings: env,
     # MORE tokens for the message content alone than the backend reported for the whole templated prompt, it
     # almost certainly doesn't match the served model.
     if usage is not None and usage.get("prompt_tokens"):
-        prompt_content = "".join(message.get("content") or "" for message in history)
+        prompt_content = "".join(chatutil.content_to_text(message.get("content")) for message in history)
         if prompt_content:
             settings.char_to_token_ratio = usage["prompt_tokens"] / len(prompt_content)
             if settings.tokenizer is not None:
@@ -1257,7 +1262,7 @@ def perform_throwaway_task(llm_settings: env,
     # `invoke` now returns think-free `content` with the thinking trace separated into `reasoning_content`
     # (brief 02 §9). Reassemble the inline `<think>...</think>` form for `raw_output_text` to keep the
     # debugging/logging contract; the scrubbed final answer comes from the already-think-free content.
-    content = out.data["content"]
+    content = chatutil.content_to_text(out.data["content"])
     reasoning = out.data.get("reasoning_content") or ""
     raw_output_text = f"<think>{reasoning}</think>\n{content}" if reasoning else content
     scrubbed_output_text = chatutil.scrub(persona=llm_settings.personas.get("assistant", None),

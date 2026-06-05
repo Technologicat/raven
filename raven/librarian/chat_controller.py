@@ -1210,7 +1210,7 @@ class DPGLinearizedChatView:
                 message = node_payload["message"]
                 role = message["role"]
                 persona = node_payload["general_metadata"]["persona"]  # stored persona for this chat message
-                text = message["content"]
+                text = chatutil.content_to_text(message["content"])
                 formatted_message = format_chat_message_for_clipboard(message_number=message_number,
                                                                       role=role,
                                                                       persona=persona,
@@ -1635,7 +1635,7 @@ class DPGChatController:
             return
         try:
             node_ids = self.datastore.linearize_up(self.app_state["HEAD"])
-            text = "".join((self.datastore.get_payload(node_id)["message"].get("content") or "") for node_id in node_ids)
+            text = "".join(chatutil.content_to_text(self.datastore.get_payload(node_id)["message"].get("content")) for node_id in node_ids)
             count, is_exact = llmclient.count_tokens(self.llm_settings, text)
             self._render_context_fill(count, is_exact)
         except Exception:  # noqa: BLE001 -- a status readout must never break the GUI or a chat turn
