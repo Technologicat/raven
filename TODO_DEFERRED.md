@@ -704,6 +704,36 @@ in hand; this is purely a streaming-renderer presentation change.
 
 Discovered during brief 02 §9 live validation, suggested by Juha (2026-06-04).
 
+## Streaming thinking shows as gray (not blue) for models that pre-fill the opening `<think>` tag
+
+QwQ-32B-style thinking models (and Qwen3-2507 as served by ooba) are trained to *begin thinking immediately*:
+their chat template pre-fills `<think>\n` into the prompt tail, so the generated stream starts already inside
+the think block and emits only the **closing** `</think>`. The `StreamParser` (`llmclient.py`) starts in
+`_PS_TEXT` and only transitions to `_PS_THINK` on seeing an *opening* `<think>` — which never arrives — so the
+entire thinking phase streams as `content` events and renders gray (visible answer), not blue (thought). The
+*completed* message renders correctly: `chatutil.scrub` already recovers the orphan close (detects a `</think>`
+with no matching open and prepends the opening tag — the long-standing QwQ-32B note at `chatutil.py:815-827`),
+so the thinking consolidates into its bubble on finalize. Net effect: thinking is gray while streaming, then
+"snaps" blue/into-a-bubble on completion. Stopping *mid-thinking* leaves it gray (the close never arrived).
+
+**Not a brief-02 regression** — the pre-PR-B `on_llm_progress` had the identical limitation (its
+`inside_think_block` flag also only flipped on a literal `<think>`, so a pre-filled open never registered live);
+confirmed by diffing `09a88a7`. Models that emit the opening tag inline (e.g. ooba's Qwen3-VL-30B) are
+unaffected — they stream blue correctly both before and after PR-B.
+
+The hard part is that the opening tag's *absence is the correct, expected output* for these models, so there is
+no in-stream signal until `</think>` lands — by which point the thinking has already streamed gray. Possible
+fixes, none free: (a) start the parser in `_PS_THINK` when we know the model pre-fills the tag — needs a
+per-model/backend signal we don't currently have at invoke time (the rendered prompt tail would show the open
+`<think>`, but ooba renders server-side; an `/v1/internal/...` prompt-render probe could expose it); (b) on the
+first orphan `</think>`, retroactively re-tint the already-committed streaming paragraphs as thought (recolor +
+flip `is_thought`) — correct but invasive in the streaming renderer. Related to the "bubble from the first
+token" item above, but distinct: there the thinking is *already* detected (blue, just inline); here it is *not
+detected at all* until completion. This is the `chatutil.py:827` TODO ("add the opening `<think>` while
+streaming, or to the prompt?") surfacing in the typed-event parser.
+
+Discovered during the brief-02 ooba cross-backend regression test (2026-06-05).
+
 ## DearPyGui_Markdown inline-code background boxes are stranded on dynamic reflow
 
 Inline-code spans (`` `like this` ``) render a grey rounded background box behind the text. The box position is
