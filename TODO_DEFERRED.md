@@ -794,6 +794,33 @@ Posture decision for Juha (security vs. convenience for the median scientific us
 review (2026-06-05); pre-existing since the webfetch brief (brief 01) shipped, not introduced by the
 content-parts refactor.
 
+## Reasoning traces with indented bullets mis-render (Markdown indented-code-block collision)
+
+A model's reasoning trace that indents its bullets — Gemma 4 emits `    *   Role: ...` with **four leading
+spaces** — collides with standard Markdown semantics: 4+ leading spaces is an **indented code block**, so the
+whole bullet list renders as verbatim/`Pre`, drawing a grey background box around it. Confirmed it is the
+indentation, not stray markup: the stored `reasoning_content` has **zero backticks and zero font tags**
+(grepped `data.json`); the offending lines are literally `'\n    *   Role: Aria...'`.
+
+Two visual manifestations of the same input:
+- **On reload / completed message** (whole reasoning rendered as one Markdown block): the 4-space indent fires
+  the code-block rule → a grey `Pre` box over the bullets, whose border doesn't match its fill — that mismatch
+  is the *existing* stranded-`Pre`-box reflow bug (see the inline-code-box item below), here triggered by the
+  indented-code block instead of an inline-code span.
+- **While streaming** (reasoning built incrementally): the code-block rule doesn't fire consistently, so the
+  `*` markers get mis-parsed as emphasis delimiters across lines — random words tinted pink/teal — and a raw
+  `</font>` leaks at the end (the thought-blue color wrapping broken by the list parse).
+
+Not a content-parts (brief 03) regression: the reasoning-bubble rendering is unchanged
+(`add_paragraph(reasoning_content, is_thought=True)`); the model's indented output simply meets standard
+Markdown. A reroll whose reasoning used `1.`/`2.` numbers at column 0 rendered cleanly. Likely fix: **dedent /
+normalize the reasoning trace's leading indentation before Markdown rendering** (strip the common/per-line
+leading whitespace so indented bullets become real bullets, not code), and/or fix the vendored renderer's
+color-on-list and `Pre`-box-position handling. Separately note: paragraph font color is also not applied to
+list-item *markers* (bullets/numbers keep the default color) even when the list renders correctly.
+
+Discovered during brief 03 §4 live validation, reported by Juha (2026-06-05).
+
 ## DearPyGui_Markdown inline-code background boxes are stranded on dynamic reflow
 
 Inline-code spans (`` `like this` ``) render a grey rounded background box behind the text. The box position is
