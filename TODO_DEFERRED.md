@@ -734,6 +734,26 @@ streaming, or to the prompt?") surfacing in the typed-event parser.
 
 Discovered during the brief-02 ooba cross-backend regression test (2026-06-05).
 
+## Parse Gemma's inline tool-call spelling if a raw-passthrough backend needs it
+
+The `StreamParser` (`raven/librarian/llmclient.py`) parses the generic / Qwen inline tool-call form
+(`<tool_call>{json}</tool_call>`) but not Gemma's: `<|tool_call>call:NAME{...}<tool_call|>` (inner pipes, a
+`call:` prefix, and a non-JSON argument body using Gemma's `<|"|>`-quoted values). On LM Studio — the
+live-verified Gemma 4 backend — tool calls arrive structured in the OpenAI `tool_calls` field, so there is
+nothing to parse inline. The open question is whether a raw-passthrough backend (oobabooga, or a generic
+OpenAI-compat server) serving Gemma emits the tool call inline in `content` instead — exactly the way it does
+for the reasoning channel, which is why we added inline `<|channel>thought` parsing. If one does, Gemma
+tool-calling on that backend would silently break: the call renders as text and never invokes the tool.
+
+Deferred rather than built speculatively, because (a) the need is unverified — we don't yet know that any
+backend we use passes Gemma tool calls inline-raw; and (b) the argument body is not JSON, so a correct parser
+must be written against *real captured output*, not guessed. Resolve by: load Gemma 4 on ooba (currently on
+Qwen3-2507; ooba is also overdue an update), enable tools, and capture the raw streamed `content` of a
+tool-calling turn. If it carries `<|tool_call>call:...` inline, write a parser for that syntax (+ tests)
+anchored on the capture. If ooba delivers the call structured instead, close this item — there is nothing to do.
+
+Discovered during the brief-02 Gemma 4 reasoning-channel work (2026-06-05).
+
 ## DearPyGui_Markdown inline-code background boxes are stranded on dynamic reflow
 
 Inline-code spans (`` `like this` ``) render a grey rounded background box behind the text. The box position is
