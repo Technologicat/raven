@@ -771,6 +771,29 @@ no special handling. Worked-out design and rationale: brief 01 §6 ("Out of scop
 
 Flagged by Juha while wrapping brief 02 (2026-06-05).
 
+## Reconsider the webfetch allowlist default: ship deny-by-default?
+
+`librarian_config.webfetch_allowlist` defaults to `None`, which means **allow-all**: the allowlist gate in
+`webfetch_wrapper` (`raven/librarian/llmclient.py`) is skipped entirely (`if allowlist is not None:`), so the
+model may fetch any public URL — subject only to the server-side SSRF / private-network / scheme blocks. In
+effect the webfetch "constrain the AI's initiative" power switch is **off by default**. This is arguably a
+larger exposure than the opt-in `webfetch_trust_search_results` flag (which only does anything once an
+allowlist is set): with allow-all, the model can already follow any link a poisoned search result or fetched
+page feeds it — the prompt-injection→exfiltration vector the allowlist exists to bound — with no opt-in needed.
+
+A curated, safe baseline already exists in the same config (`webfetch_default_allowlist`: DOI, arXiv, major
+publishers, GitHub, Wikipedia, …); it's just not the default — the user opts in by assigning it. The question
+is whether to flip the shipped default to deny-by-default, e.g. `webfetch_allowlist = webfetch_default_allowlist`,
+so a fresh install is safe out of the box and the user *extends* rather than *enables* the list. Tradeoff:
+convenience (allow-all "just works" for any site) vs. safety (the model can't reach an arbitrary host until the
+user adds it — but user-typed URLs are already auto-allowed per turn, so the common "read this link I pasted"
+flow is unaffected). Server-side network checks remain regardless; this is purely about bounding the model's
+*initiative*.
+
+Posture decision for Juha (security vs. convenience for the median scientific user). Noticed during brief-03
+review (2026-06-05); pre-existing since the webfetch brief (brief 01) shipped, not introduced by the
+content-parts refactor.
+
 ## DearPyGui_Markdown inline-code background boxes are stranded on dynamic reflow
 
 Inline-code spans (`` `like this` ``) render a grey rounded background box behind the text. The box position is
