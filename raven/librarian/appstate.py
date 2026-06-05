@@ -243,6 +243,18 @@ def load(llm_settings: env,
     _refresh_system_prompt(llm_settings,
                            datastore,
                            state)
+
+    # Migrate the datastore to the current format BEFORE anything reads message content. `_refresh_system_prompt`
+    # above only overwrites the system prompt node (it does not read content), and it sets
+    # `state["system_prompt_node_id"]`, which `upgrade_datastore` needs. `_refresh_greeting` below, however,
+    # compares stored greeting content via `chatutil.content_to_text`, which assumes the content-parts format;
+    # a legacy datastore stores `content` as a bare string, so the migration must run first or that comparison
+    # crashes on the un-migrated data. (This updates only if needed.)
+    # v0.2.3+: data format change
+    chatutil.upgrade_datastore(llm_settings,
+                               datastore,
+                               system_prompt_node_id=state["system_prompt_node_id"])
+
     _refresh_greeting(llm_settings,
                       datastore,
                       state)
@@ -254,12 +266,6 @@ def load(llm_settings: env,
     if state["HEAD"] not in datastore.nodes:
         logger.info(f"load: Key 'HEAD' in '{mayberel_state_file}' (resolved to '{state_file}') points to nonexistent chat node '{state['HEAD']}', resetting it to 'new_chat_HEAD'")
         state["HEAD"] = state["new_chat_HEAD"]
-
-    # Migrate datastore (this updates only if needed)
-    # v0.2.3+: data format change
-    chatutil.upgrade_datastore(llm_settings,
-                               datastore,
-                               system_prompt_node_id=state["system_prompt_node_id"])
 
     # Set up auto-persist for app state
     if autosave:

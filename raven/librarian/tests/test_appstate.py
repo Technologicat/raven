@@ -43,6 +43,41 @@ def _load(tmp_path, llm_settings, *,
 
 
 # ---------------------------------------------------------------------------
+# Legacy (string-content) datastore migration on load
+# ---------------------------------------------------------------------------
+
+class TestLegacyContentMigration:
+    """Regression: `load` runs the content-parts migration BEFORE `_refresh_greeting`, which compares stored
+    greeting content via `content_to_text` (now assumes a parts list). A legacy datastore stores `content` as a
+    bare string; if the migration ran after the greeting refresh, that read crashed on the un-migrated string."""
+
+    def test_legacy_string_content_loads_and_migrates(self, tmp_path, llm_settings):
+        datastore_path = tmp_path / "data.json"
+        seed = chattree.PersistentForest(datastore_path, autosave=False)
+        system_id = seed.create_node(
+            payload={"message": {"role": "system", "content": "old system prompt", "tool_calls": []},
+                     "general_metadata": {"persona": None}},
+            parent_id=None)
+        seed.create_node(  # greeting matching the configured one (persona-prefixed string, the legacy form)
+            payload={"message": {"role": "assistant", "content": "Aria: How can I help you today?", "tool_calls": []},
+                     "general_metadata": {"persona": "Aria"}},
+            parent_id=system_id)
+        seed.save()
+
+        # Must not raise — the ordering bug crashed here (TypeError from content_to_text iterating a str).
+        datastore, state, _, _ = _load(tmp_path, llm_settings)
+
+        # Every message's content, across all revisions of all nodes, is now a content-parts list.
+        for node in datastore.nodes.values():
+            for payload in node["data"].values():
+                assert isinstance(payload["message"]["content"], list)
+
+        # The seeded greeting matched the configured one, so it was reused (HEAD points to it), not duplicated.
+        head_content = chatutil.content_to_text(datastore.get_payload(state["new_chat_HEAD"])["message"]["content"])
+        assert "How can I help you today?" in head_content
+
+
+# ---------------------------------------------------------------------------
 # Fresh start: empty datastore, missing state file
 # ---------------------------------------------------------------------------
 
