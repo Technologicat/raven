@@ -642,12 +642,37 @@ def _materialize_tool_calls(accumulator: Dict[int, Dict[str, str]]) -> Optional[
 # and re-routes them into typed events, so the chat client never has to regex-sniff the text. See brief 02 §9.
 _THINK_OPEN = "<think>"
 _THINK_CLOSE = "</think>"
+
+# The generic / Qwen-style inline tool-call spelling: a JSON object between `<tool_call>` and `</tool_call>`.
+# This is the only inline tool-call form we parse. Gemma's spelling is different — `<|tool_call>call:` NAME
+# `{...}<tool_call|>` (inner pipes, a `call:` prefix, and a bespoke non-JSON argument body) — and we don't parse
+# it. On LM Studio (the live-verified Gemma backend) tool calls arrive structured in the OpenAI `tool_calls`
+# field, so there's nothing to parse inline. Whether a raw-passthrough backend (oobabooga / generic) serving
+# Gemma emits this form inline in `content` instead — the way it does for the reasoning channel below — is
+# unverified; if one does, Gemma tool-calling there would need a dedicated parser for the `call:...` syntax.
 _TOOLCALL_OPEN = "<tool_call>"
 _TOOLCALL_CLOSE = "</tool_call>"
 
+# Gemma 3/4 spell the reasoning channel differently from the `<think>` convention: an asymmetric
+# `<|channel>thought` ... `<channel|>` pair (Gemma emits the channel name `thought` right after the opening
+# marker; see the model's chat template). A backend that passes the raw stream through (oobabooga, generic
+# OpenAI-compat) delivers this inline in `content`; llama.cpp / LM Studio split it out into the native
+# `reasoning_content` delta channel instead (handled directly in `StreamParser.feed`). We match the opening
+# marker without a trailing newline so a stray whitespace variation can't hide it — the model's `\n` after
+# `thought` just rides along into the reasoning text, same as the blank line Qwen emits after `<think>`.
+_GEMMA_THINK_OPEN = "<|channel>thought"
+_GEMMA_THINK_CLOSE = "<channel|>"
+
+# Every reasoning-open tag mapped to the close that ends it. `_PS_TEXT` scans for any open; on a match the
+# parser remembers the corresponding close to scan for while in `_PS_THINK` (the `<think>` and Gemma pairs
+# are not interchangeable — `<think>` closes with `</think>`, `<|channel>thought` closes with `<channel|>`).
+_THINK_OPEN_TO_CLOSE = {_THINK_OPEN: _THINK_CLOSE,
+                        _GEMMA_THINK_OPEN: _GEMMA_THINK_CLOSE}
+_THINK_OPEN_TAGS = tuple(_THINK_OPEN_TO_CLOSE.keys())  # just the opens; `.keys()` spelled out for clarity
+
 # Parser states.
 _PS_TEXT = "text"          # outside any special block
-_PS_THINK = "think"        # inside an inline <think>...</think> block
+_PS_THINK = "think"        # inside an inline reasoning block (<think>...</think> or Gemma's channel form)
 _PS_TOOLCALL = "toolcall"  # inside an inline <tool_call>...</tool_call> block
 
 def _longest_partial_tag_suffix(buf: str, tags: Tuple[str, ...]) -> int:
@@ -709,7 +734,10 @@ class StreamParser:
 
       - routes `reasoning_content` deltas straight to `reasoning` events (the native separate channel that
         llama.cpp / LM Studio use for Qwen / Gemma / GPT-OSS);
-      - parses inline `<think>...</think>` out of the `content` stream into `reasoning` events;
+      - parses inline reasoning out of the `content` stream into `reasoning` events — both the `<think>`
+        convention (Qwen and most others) and Gemma's `<|channel>thought` ... `<channel|>` form, for backends
+        (oobabooga, generic OpenAI-compat) that pass the model's raw stream through instead of splitting the
+        reasoning into the native channel above;
       - parses inline `<tool_call>...</tool_call>` out of the `content` stream into `tool_call` events;
       - emits everything else as `content` events;
 
@@ -729,10 +757,11 @@ class StreamParser:
     """
     def __init__(self):
         self._state = _PS_TEXT
-        self._buf = ""                  # content look-ahead buffer (may hold a split tag at a chunk boundary)
-        self._toolcall_json = ""        # accumulates the raw JSON inside an inline <tool_call> block
-        self._inline_call_keys = set()  # (name, normalized args) of inline-emitted calls, for native dedup
-        self._synthetic_id_counter = 0  # inline tool calls carry no id; assign a synthetic one
+        self._buf = ""                   # content look-ahead buffer (may hold a split tag at a chunk boundary)
+        self._think_close = _THINK_CLOSE  # the close tag that ends the current _PS_THINK block (set on open)
+        self._toolcall_json = ""         # accumulates the raw JSON inside an inline <tool_call> block
+        self._inline_call_keys = set()   # (name, normalized args) of inline-emitted calls, for native dedup
+        self._synthetic_id_counter = 0   # inline tool calls carry no id; assign a synthetic one
 
     def feed(self, content: str, reasoning: str) -> List[Dict]:
         """Feed one delta's content and reasoning_content (either may be empty). Returns the typed events produced."""
@@ -750,23 +779,24 @@ class StreamParser:
         while progressing and self._buf:
             progressing = False
             if self._state == _PS_TEXT:
-                emit, tag, rest = _scan_for_tags(self._buf, (_THINK_OPEN, _TOOLCALL_OPEN))
+                emit, tag, rest = _scan_for_tags(self._buf, _THINK_OPEN_TAGS + (_TOOLCALL_OPEN,))
                 if emit:
                     events.append({"type": "content", "text": emit})
                 self._buf = rest
-                if tag == _THINK_OPEN:
+                if tag in _THINK_OPEN_TO_CLOSE:
                     self._state = _PS_THINK
+                    self._think_close = _THINK_OPEN_TO_CLOSE[tag]  # the matching close (<think> and Gemma differ)
                     progressing = True
                 elif tag == _TOOLCALL_OPEN:
                     self._state = _PS_TOOLCALL
                     self._toolcall_json = ""
                     progressing = True
             elif self._state == _PS_THINK:
-                emit, tag, rest = _scan_for_tags(self._buf, (_THINK_CLOSE,))
+                emit, tag, rest = _scan_for_tags(self._buf, (self._think_close,))
                 if emit:
                     events.append({"type": "reasoning", "text": emit})
                 self._buf = rest
-                if tag == _THINK_CLOSE:
+                if tag == self._think_close:
                     self._state = _PS_TEXT
                     progressing = True
             else:  # _PS_TOOLCALL: accumulate raw JSON until the closing tag

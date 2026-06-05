@@ -535,6 +535,27 @@ class TestStreamParser:
         assert "<think>" not in self._texts(events, "content")
         assert "think" not in self._texts(events, "content")
 
+    def test_inline_gemma_channel_extracted_from_content(self):
+        # Gemma 3/4 spell the reasoning channel as `<|channel>thought ... <channel|>`. A passthrough backend
+        # (ooba/generic) delivers it inline; the parser must route it to reasoning, same as `<think>`.
+        events = self._run([("<|channel>thought\nThe user wants Paris weather.\n<channel|>The answer.", "")])
+        assert self._texts(events, "reasoning").strip() == "The user wants Paris weather."
+        assert self._texts(events, "content") == "The answer."
+        assert "channel" not in self._texts(events, "content")  # no marker text leaks
+
+    def test_inline_gemma_channel_split_across_chunks(self):
+        # Both the asymmetric open (`<|channel>thought`) and close (`<channel|>`) markers may straddle a chunk
+        # boundary; the look-ahead must still recognize them without leaking marker text to content.
+        events = self._run([("<|chan", ""), ("nel>thoughtsecret th", ""), ("oughts<chan", ""), ("nel|>visible", "")])
+        assert self._texts(events, "reasoning") == "secret thoughts"
+        assert self._texts(events, "content") == "visible"
+        assert "channel" not in self._texts(events, "content")
+
+    def test_inline_gemma_unterminated_channel_flushed_at_finalize(self):
+        # Stream cut off mid-thought (interrupt): the buffered Gemma reasoning flushes, not lost.
+        events = self._run([("<|channel>thought\ncut off mid-thou", "")])
+        assert self._texts(events, "reasoning").strip() == "cut off mid-thou"
+
     def test_less_than_that_is_not_a_tag_passes_through(self):
         # A bare '<' (e.g. an inequality) is not a tag prefix worth holding forever; it streams as content.
         events = self._run([("if a < b then", "")])
