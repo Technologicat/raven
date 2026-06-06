@@ -104,6 +104,7 @@ _noise_pool_pending_size = None  # deferred noise pool regeneration (tile size)
 _beacon_start_ns: int = 0  # monotonic_ns timestamp of last resize (0 = inactive)
 _pending_nav: "Callable[[], None] | None" = None  # deferred keyboard navigation; applied once per frame
 _last_input_ns: int = 0  # monotonic_ns timestamp of last user input
+_is_fullscreen = False  # tracked across our own toggle; DPG has no fullscreen getter
 
 # Validated at startup.
 _device = None
@@ -203,6 +204,28 @@ def _set_status(text: str) -> None:
         dpg.set_value(_app_state["status_text"], text)
 
 
+def _update_title() -> None:
+    """Set the viewport title to ``app version — folder — filename``.
+
+    The title bar carries the *identity* (which folder, which image); the status
+    bar carries the live *state* (position, dimensions, zoom, counts). In
+    fullscreen the window manager hides the title bar, so `_update_status` adds
+    the filename to the status bar for that mode only.
+    """
+    base = f"raven-cherrypick {__version__}"
+    triage = _app_state["triage"]
+    grid = _app_state["grid"]
+    if triage is None or grid is None or len(triage) == 0:
+        dpg.set_viewport_title(base)
+        return
+    folder_name = triage.base_dir.name
+    idx = grid.current
+    if 0 <= idx < len(triage):
+        dpg.set_viewport_title(f"{base} — {folder_name} — {triage[idx].filename}")
+    else:
+        dpg.set_viewport_title(f"{base} — {folder_name}")
+
+
 def _update_status() -> None:
     """Rebuild the status bar text from current state."""
     parts = []
@@ -229,8 +252,11 @@ def _update_status() -> None:
         if iv is not None and iv.has_image:
             parts.append(f"Zoom: {iv.zoom * 100:.0f}%")
 
-        # Filename.
-        if 0 <= idx < len(triage):
+        # Filename — only in fullscreen, where the title bar (which otherwise
+        # carries it) is hidden by the window manager. Keeps it out of the
+        # status bar in windowed mode, where long autonamed filenames would
+        # crowd out the rest of the readout.
+        if _is_fullscreen and 0 <= idx < len(triage):
             parts.append(triage[idx].filename)
 
         # Counts + filter indicator.
@@ -306,7 +332,7 @@ def _open_folder(folder_path: str) -> None:
     _sync_triage_mark()
 
     # Update window title.
-    dpg.set_viewport_title(f"raven-cherrypick {__version__} \u2014 {folder.name}")
+    _update_title()
     _update_status()
 
 
@@ -690,6 +716,7 @@ def _on_current_changed(idx: int) -> None:
     global _prev_current_idx
     _load_current_image()
     _sync_triage_mark()
+    _update_title()
     _prev_current_idx = idx
 
 
@@ -745,8 +772,13 @@ def _resize_gui(*_args) -> None:
 
 
 def _toggle_fullscreen(*_args) -> None:
+    global _is_fullscreen
     dpg.toggle_viewport_fullscreen()
-    if guiutils.wait_for_resize("cherrypick_main_window"):
+    _is_fullscreen = not _is_fullscreen
+    # The window manager hides the title bar in fullscreen, so move the
+    # filename down into the status bar (and back out again on the way home).
+    _update_status()
+    if guiutils.wait_for_resize("cherrypick_main_window"):  # tag
         _resize_gui()
 
 

@@ -54,6 +54,32 @@ def _next_tag(prefix: str) -> str:
         return f"imageview_{prefix}_{_tag_counter}"
 
 
+def _anchor_beside_image(pmin: tuple[float, float], pmax: tuple[float, float],
+                         view_w: int, view_h: int,
+                         item_w: float, item_h: float,
+                         gap: int, margin: int) -> tuple[float, float]:
+    """Top-left position for an overlay just outside the image's top-right corner.
+
+    `pmin`/`pmax` are the image rectangle in view coordinates. The overlay is
+    placed `gap` pixels to the right of the image's right edge, top-aligned with
+    the image's top edge, then clamped into ``[margin, view − item − margin]``.
+
+    The clamp gives the small-image and large-image cases a single rule: when
+    the image is smaller than the view, the overlay sits in the empty canvas
+    beside it (and stays put as the user browses same-size images at fixed
+    pan/zoom); when the image fills or exceeds the view, the clamp pins the
+    overlay to the view's top-right corner — the original behavior.
+
+    Indicators sharing this anchor keep the same position relative to the image
+    regardless of where that lands on screen.
+    """
+    x = min(pmax[0] + gap, view_w - item_w - margin)
+    x = max(margin, x)
+    y = min(pmin[1], view_h - item_h - margin)
+    y = max(margin, y)
+    return (x, y)
+
+
 class ImageView:
     """Zoomable, pannable image viewer on a DPG drawlist.
 
@@ -1004,9 +1030,10 @@ class ImageView:
                 mark_icon = fa.ICON_LEMON
                 r, g, b = 180, 180, 180
             mark_size = config.TRIAGE_MARK_FONT_SIZE
-            margin = 12
-            ix = self._view_w - mark_size - margin
-            iy = margin
+            margin = 12  # clamp distance from the view edge
+            gap = 4      # space between the image edge and the icon
+            ix, iy = _anchor_beside_image(pmin, pmax, self._view_w, self._view_h,
+                                          mark_size, mark_size, gap, margin)
             item = dpg.draw_text(
                 (ix, iy), mark_icon,
                 color=(r, g, b, 160), size=mark_size,
@@ -1023,9 +1050,10 @@ class ImageView:
             pad_x, pad_y = 14, 6
             box_w = int(font_size * 0.55) + 2 * pad_x
             box_h = int(font_size * 0.75) + 2 * pad_y
-            margin = 16
-            ox = self._view_w - box_w - margin
-            oy = margin
+            margin = 16  # clamp distance from the view edge
+            gap = 4      # space between the image edge and the box
+            ox, oy = _anchor_beside_image(pmin, pmax, self._view_w, self._view_h,
+                                          box_w, box_h, gap, margin)
             # Semi-transparent background for readability.
             item = dpg.draw_rectangle(
                 pmin=(ox, oy),

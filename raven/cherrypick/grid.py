@@ -10,6 +10,7 @@ manually for O(1) hit detection from mouse position.
 
 __all__ = ["ThumbnailGrid", "FilterMode"]
 
+import bisect
 import logging
 import threading
 from enum import Enum
@@ -36,6 +37,36 @@ def _next_tag(prefix: str) -> str:
     with _tag_lock:
         _tag_counter += 1
         return f"grid_{prefix}_{_tag_counter}"
+
+
+def _resolve_nav_target(visible: List[int], current: int, delta: int) -> Optional[int]:
+    """Resolve relative grid navigation to a target image index.
+
+    `visible` is the list of image indices shown under the current filter, in
+    ascending order (always true: it's built from `range(n_images)`). `current`
+    is the global index of the current image, which may or may not be in
+    `visible`. `delta` is the signed step (+1 next, -1 prev, ±n_cols rows, …).
+
+    Returns the global index to navigate to, clamped to the ends of `visible`,
+    or None if `visible` is empty.
+
+    When `current` is hidden by the filter — e.g. just tagged out of a
+    neutral-only view — it no longer occupies a slot in `visible`; it sits in
+    the *gap* at its insertion point `ins`. A forward step must land on the
+    item *after* the gap (`visible[ins]`, the one that took its place), a
+    backward step on the item *before* it (`visible[ins - 1]`). Snapping to the
+    nearest surviving item and then adding the full delta would skip one — the
+    bug this gap arithmetic fixes.
+    """
+    if not visible:
+        return None
+    if current in visible:
+        new_pos = visible.index(current) + delta
+    else:
+        ins = bisect.bisect_left(visible, current)
+        new_pos = (ins - 1 + delta) if delta > 0 else (ins + delta)
+    new_pos = max(0, min(len(visible) - 1, new_pos))
+    return visible[new_pos]
 
 
 class FilterMode(Enum):
@@ -775,21 +806,13 @@ class ThumbnailGrid:
     def _navigate_by(self, delta: int) -> Optional[int]:
         """Move current by *delta* positions in the visible list.
 
-        Respects filter: when the current image is hidden, navigation starts
-        from its virtual position in the full list.
+        Respects the filter: when the current image is hidden (e.g. just tagged
+        out of a neutral-only view), navigation resolves from its gap position
+        in the visible list. See `_resolve_nav_target`.
         """
-        if not self._visible:
+        new_idx = _resolve_nav_target(self._visible, self._current, delta)
+        if new_idx is None:
             return None
-
-        # Find current position in visible list.
-        if self._current in self._visible:
-            vis_pos = self._visible.index(self._current)
-        else:
-            # Current is hidden — find nearest position.
-            vis_pos = self._find_nearest_visible(self._current)
-
-        new_vis_pos = max(0, min(len(self._visible) - 1, vis_pos + delta))
-        new_idx = self._visible[new_vis_pos]
         self.set_current(new_idx)
         return new_idx
 
@@ -808,20 +831,6 @@ class ThumbnailGrid:
                 self.set_current(candidate)
                 return candidate
         return None
-
-    def _find_nearest_visible(self, idx: int) -> int:
-        """Find the visible-list position nearest to *idx* in the full list.
-
-        Used when the current image is hidden by a filter.
-        """
-        best_pos = 0
-        best_dist = abs(self._visible[0] - idx) if self._visible else 0
-        for pos, vis_idx in enumerate(self._visible):
-            dist = abs(vis_idx - idx)
-            if dist < best_dist:
-                best_dist = dist
-                best_pos = pos
-        return best_pos
 
     def _scroll_to_current(self) -> None:
         """Scroll the grid to make the current tile visible."""

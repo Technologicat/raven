@@ -34,11 +34,16 @@
 
 - New `--log <path>` and `--log-level {DEBUG,INFO,WARNING,ERROR,CRITICAL}` CLI options on all major apps (`raven-visualizer`, `raven-importer`, `raven-librarian`, `raven-server`, `raven-minichat`, `raven-xdot-viewer`, `raven-cherrypick`, `raven-conference-timer`, `raven-avatar-pose-editor`, `raven-avatar-settings-editor`) plus the bibliography tools that emit log records (`raven-pdf2bib`, `raven-wos2bib`, `raven-csv2bib`). `--log` mirrors stderr to a file (overwritten each run) so users can capture session logs for bug reports without redirecting their terminal — especially useful for the GUI apps where the launching terminal is often a side window. The logfile path accepts `~` and is resolved to an absolute path. The mirroring survives third-party libraries (notably `flair`) that call `logging.shutdown()` on import.
 
+- *Raven-cherrypick*: the window title bar now shows the current image's filename alongside the folder (`… — folder — filename`), so the open image is identifiable from the taskbar / window switcher. In fullscreen, where the window manager hides the title bar, the filename moves into the status bar instead — so long autonamed filenames don't crowd the rest of the status bar during normal windowed use.
+- *Raven-cherrypick*: the cherry / lemon triage marker now sits just outside the top-right corner of the *image* rather than the corner of the viewer pane, so it stays beside the image when the image is small in a large window. It clamps back to the pane corner when the image fills the view.
+
 **Fixed**:
 
 - *Raven-cherrypick*: triaging an image (cherry / lemon / winner) while its mips were still loading no longer leaves it stuck at a reduced resolution or failing to appear. The triage move relocates the file out from under the in-flight background decode, which then failed with `FileNotFoundError`; the load now restarts from the file's new location, whether it was filling in the full-res level of a preloaded image or doing the initial decode of a cache-miss one.
 
 - *Raven-cherrypick*: triaging then immediately navigating (e.g. `C` then `Right` within one ~16 ms frame) no longer tags the wrong image. DearPyGui dispatches same-frame key presses by keycode, not by press order, so navigation (lower keycode) moved the current image before the triage key read it; keyboard navigation is now deferred by one frame so a same-frame triage key acts on the intended image.
+
+- *Raven-cherrypick*: in a filtered view (e.g. neutral-only), tagging the current image then pressing a navigation key no longer skips the image that took its place. The just-tagged image leaves the filtered set, and navigation was resolving from the nearest surviving tile and then stepping again, overshooting by one.
 
 - *Raven-librarian* RAG: the documents directory is now auto-created at startup if missing. Previously, a fresh install or moved-aside docs dir crashed the app with `FileNotFoundError` from `inotify_add_watch` before the GUI came up.
 - *Raven-librarian* RAG: rapid sequences of file adds and updates no longer crash the indexing pipeline with `TypeError: string indices must be integers`. The pending-edits queue now stores delete entries in the same shape as add/update entries, so the dedup pass can run uniformly.
