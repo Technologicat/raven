@@ -38,6 +38,8 @@
 
 - *Raven-cherrypick*: triaging an image (cherry / lemon / winner) while its mips were still loading no longer leaves it stuck at a reduced resolution or failing to appear. The triage move relocates the file out from under the in-flight background decode, which then failed with `FileNotFoundError`; the load now restarts from the file's new location, whether it was filling in the full-res level of a preloaded image or doing the initial decode of a cache-miss one.
 
+- *Raven-cherrypick*: triaging then immediately navigating (e.g. `C` then `Right` within one ~16 ms frame) no longer tags the wrong image. DearPyGui dispatches same-frame key presses by keycode, not by press order, so navigation (lower keycode) moved the current image before the triage key read it; keyboard navigation is now deferred by one frame so a same-frame triage key acts on the intended image.
+
 - *Raven-librarian* RAG: the documents directory is now auto-created at startup if missing. Previously, a fresh install or moved-aside docs dir crashed the app with `FileNotFoundError` from `inotify_add_watch` before the GUI came up.
 - *Raven-librarian* RAG: rapid sequences of file adds and updates no longer crash the indexing pipeline with `TypeError: string indices must be integers`. The pending-edits queue now stores delete entries in the same shape as add/update entries, so the dedup pass can run uniformly.
 

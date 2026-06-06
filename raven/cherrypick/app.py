@@ -49,7 +49,7 @@ logger = logging.getLogger(__name__)
 
 import pathlib
 import time
-from typing import List
+from typing import Callable, List
 
 import numpy as np
 
@@ -102,6 +102,7 @@ _preload_pending = False
 _prev_current_idx = -1
 _noise_pool_pending_size = None  # deferred noise pool regeneration (tile size)
 _beacon_start_ns: int = 0  # monotonic_ns timestamp of last resize (0 = inactive)
+_pending_nav: "Callable[[], None] | None" = None  # deferred keyboard navigation; applied once per frame
 _last_input_ns: int = 0  # monotonic_ns timestamp of last user input
 
 # Validated at startup.
@@ -664,6 +665,26 @@ def _compare_load_image(idx: int) -> None:
 # Navigation callbacks (for grid -> image view)
 # ---------------------------------------------------------------------------
 
+def _request_nav(action: Callable[[], None]) -> None:
+    """Defer a keyboard navigation action by one frame.
+
+    DPG dispatches every key press that lands in one render frame in ascending
+    keycode order, not in the order the keys were physically struck (ImGui's
+    per-frame edge detection discards sub-frame timing). Every triage letter
+    (`C`=548, `V`=567, `X`=569) sorts after every navigation key (arrows /
+    Home / End / Page = 513–520), so a fast two-handed "cherry, then next"
+    (`C`+`Right`) is dispatched `Right`-first. Since `grid.navigate_*` changes
+    `grid.current` synchronously, the triage key would then act on the *next*
+    image — tagging the wrong one.
+
+    Deferring the navigation to the main loop (applied after all of a frame's
+    key handlers have run) lets a same-frame triage key act on the
+    pre-navigation image. See `dpg-notes.md` "Keyboard input".
+    """
+    global _pending_nav
+    _pending_nav = action
+
+
 def _on_current_changed(idx: int) -> None:
     """Called by the grid when the current tile changes."""
     global _prev_current_idx
@@ -937,31 +958,32 @@ def _on_key(sender, app_data) -> None:
             iv.focused = not iv.focused
             _update_status()
 
-    # Navigation.
+    # Navigation. Deferred via _request_nav so a same-frame triage key still
+    # acts on the current image (see _request_nav for the keycode-order rationale).
     elif key == dpg.mvKey_Left:
         if grid is not None:
-            grid.navigate_prev()
+            _request_nav(grid.navigate_prev)
     elif key == dpg.mvKey_Right:
         if grid is not None:
-            grid.navigate_next()
+            _request_nav(grid.navigate_next)
     elif key == dpg.mvKey_Up:
         if grid is not None:
-            grid.navigate_row_up()
+            _request_nav(grid.navigate_row_up)
     elif key == dpg.mvKey_Down:
         if grid is not None:
-            grid.navigate_row_down()
+            _request_nav(grid.navigate_row_down)
     elif key == dpg.mvKey_Home:
         if grid is not None:
-            grid.navigate_first()
+            _request_nav(grid.navigate_first)
     elif key == dpg.mvKey_End:
         if grid is not None:
-            grid.navigate_last()
+            _request_nav(grid.navigate_last)
     elif key in (dpg.mvKey_Prior, 517):  # page up — DPG 2.0+ delivers 517; mvKey_Prior (266) is a stale 1.x value. See dpg-notes.md "Keyboard input".
         if grid is not None:
-            grid.navigate_page_up()
+            _request_nav(grid.navigate_page_up)
     elif key in (dpg.mvKey_Next, 518):  # page down — DPG 2.0+ delivers 518; mvKey_Next (267) is a stale 1.x value. See dpg-notes.md "Keyboard input".
         if grid is not None:
-            grid.navigate_page_down()
+            _request_nav(grid.navigate_page_down)
 
     # Compare mode.
     elif key == dpg.mvKey_Return:
@@ -1564,6 +1586,15 @@ def main() -> int:
             if _noise_pool_pending_size is not None and grid is not None:
                 grid.set_noise_pool(_generate_noise_pool(_noise_pool_pending_size))
                 _noise_pool_pending_size = None
+
+            # Deferred keyboard navigation (set by _request_nav). Applied here,
+            # after the previous frame's key handlers ran and before grid.update()
+            # dispatches the resulting on_current_changed callback — so a
+            # same-frame triage key already acted on the pre-navigation image.
+            global _pending_nav
+            if _pending_nav is not None:
+                action, _pending_nav = _pending_nav, None
+                action()
 
             # Update components.  Grid first: its deferred callbacks
             # (on_current_changed, on_double_click) trigger image loading

@@ -118,6 +118,15 @@ no deferred upload step to race against. If confirmed, switching from
 `dynamic_texture` to `raw_texture` could eliminate the need for double
 `split_frame` in cherrypick's mip pipeline. Needs investigation.
 
+## Diagnosing background-task races
+
+Raven's DPG apps push decode/mip/texture work onto background threads, guarded by a monotonic generation counter (bumped on each image switch) and cooperative cancellation (`bgtask.TaskManager` sequential mode cancels the prior task when a new one is submitted). Two failure modes recur, and both are **silent** by default:
+
+- **A discarded stale result looks identical to work that never ran.** A task that completes but finds `e.generation != current_generation` (or `e.cancelled`) must drop its result — correct, but invisible. When the symptom is "the image never loaded", you can't tell a discarded result from a task that was never submitted. Log the discard at debug level at *each* generation/cancel guard, including both generation numbers; it collapses a multi-round hunt into a single repro.
+- **Cooperative cancellation only bites where the task checks the flag.** A superseded task keeps running until its next `e.cancelled` check. Check the flag *before* expensive or IO steps (decode, GPU work), not only after — otherwise a cancelled task burns a full decode, or faults on a path that a concurrent triage/file-move relocated out from under it (a `FileNotFoundError` whose traceback points at the *old* image, not the one you're loading). Treat a post-cancellation failure as expected: log it quietly, don't surface a traceback.
+
+Meta-pattern: a single fast user gesture (e.g. cherrypick's `C`+`Right`) exercises several of these seams at once, so one observed symptom often has multiple *independent* causes. You can only see one per repro — fixing cause #1 unmasks #2 — which is why DPG concurrency bugs feel like layered detective work. Instrumenting the silent points up front is what makes the layers visible.
+
 ## Source references
 
 - `mvRunCallbacks()`: `src/mvCallbackRegistry.cpp`
@@ -457,6 +466,16 @@ Also trapped (constant kept its 1.x value, real code is the gap): LWin 343→530
 
 ## Same-frame dispatch is by keycode, not press order
 
-A keyless key-press handler is dispatched once per key pressed *that frame*, in **ascending keycode order** — ImGui's per-frame edge detection discards the sub-frame order in which keys were physically struck. Triage letters all sort after the arrows (`C`=548 … vs `Right`=514), so a fast two-handed `C`+`Right` is processed `Right`+`C`. If correctness depends on the order of two near-simultaneous keys, defer the lower-keycode action by a frame.
+A keyless key-press handler is dispatched once per key pressed *that frame*, in **ascending keycode order** — ImGui's per-frame edge detection discards the sub-frame order in which keys were physically struck. So when a lower-keycode handler mutates state that a higher-keycode handler reads, two keys struck within the same frame interact as if the lower-keycode one came first, regardless of the real press order. (In raven-cherrypick: triage letters all sort after the arrows — `C`=548 vs `Right`=514 — so a fast two-handed `C`+`Right` is dispatched `Right`+`C`; navigation moves the current image synchronously, so the triage key then tags the *next* image.) If correctness depends on the order of two near-simultaneous keys, you cannot rely on dispatch order; see *Mitigation* below.
 
 **Full code↔name table, the trap details, and the reproduction script:** `briefs/dpg-keycodes.md`.
+
+## Mitigation: defer the order-sensitive action
+
+You can't reorder DPG's same-frame dispatch, so make correctness independent of it: keep the higher-priority action synchronous (so it acts on current state) and **defer the lower-priority one by a frame**. In raven-cherrypick the triage keys (`C`/`V`/`X`) stay synchronous, while the navigation keys store a pending thunk (`_request_nav` → `_pending_nav`) that the main loop applies once per frame, before the component-update step consumes the change. A same-frame triage key then runs against the pre-navigation image.
+
+Cost is one frame (~16 ms) of latency on the deferred action — imperceptible, and held-key repeat just gains a constant one-frame offset (no cumulative lag). Apply the deferral in the main loop, **not** via `set_frame_callback`: only one callback can be registered per frame number, so rapid input would silently overwrite it.
+
+## Investigation history
+
+- 2026-06-06: Traced a raven-cherrypick mis-tag (fast `C`+`Right` tagging the next image instead of the current one) to same-frame keycode-order dispatch; confirmed empirically that every triage letter outranks every arrow, so navigation always fires first. Fixed by deferring keyboard navigation one frame (`_request_nav`). Resolved the long-standing "mysterious 517/518" in the same pass — the `mvKey_Prior`/`mvKey_Next` constants are stale DPG-1.x values; the live codes are 517/518.
