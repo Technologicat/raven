@@ -226,7 +226,7 @@ Recommended model: Qwen3-VL-30B-A3B (24GB+ VRAM) or Qwen3-VL-4B (8GB VRAM).
 - FontAwesome version outdated
 - Hindsight integration pending (PDM dependency conflicts; likely separate container with optional backend, keeping BM25+vector backend as primary)
 - TTS engine expansion limited by phoneme timestamp requirement
-- DPG 2.0.0: Page Up/Down key constants changed (mysterious 517/518, `app.py:4316`)
+- DPG 2.0 key-code trap: some `mvKey_*` constants are stale 1.x values that no longer match the runtime code (Page Up arrives as `517` not `mvKey_Prior`=266; Page Down `518` not `mvKey_Next`=267; also LWin/RWin, Quote/Colon/Plus/Tilde). Compare against the literal code for these. Full table + reproduction in `briefs/dpg-keycodes.md`; summarized in `dpg-notes.md` (Keyboard input).
 - Many `# TODO: DRY duplicate definitions for labels` scattered through Visualizer `app.py`
 - Annotation tooltip help section rebuilt every time (could be static with show/hide)
 - `_update_info_panel` race condition: current item highlight sometimes doesn't update immediately after selection change

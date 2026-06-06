@@ -1779,9 +1779,9 @@ def hotkeys_callback(sender, app_data):
             info_panel.go_to_top()
         elif key == dpg.mvKey_End:
             info_panel.go_to_bottom()
-        elif key == dpg.mvKey_Next or key == 518:  # page down  # TODO: fix: in DPG 2.0.0, Page Down is no longer "Next" but a mysterious 518 - what is the new name?
+        elif key == dpg.mvKey_Next or key == 518:  # page down — DPG 2.0+ delivers 518; mvKey_Next (267) is a stale 1.x value that no longer arrives. See dpg-notes.md "Keyboard input".
             info_panel.page_down()
-        elif key == dpg.mvKey_Prior or key == 517:  # page up  # TODO: fix: in DPG 2.0.0, Page Up is no longer "Prior" but a mysterious 517 - what is the new name?
+        elif key == dpg.mvKey_Prior or key == 517:  # page up — DPG 2.0+ delivers 517; mvKey_Prior (266) is a stale 1.x value that no longer arrives. See dpg-notes.md "Keyboard input".
             info_panel.page_up()
         elif key == dpg.mvKey_Down:  # arrow down
             @call
