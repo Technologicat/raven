@@ -266,6 +266,37 @@ class ImageView:
                        debug=self._debug)
         self._augment_task_mgr.submit(self._bg_augment_task, task_env)
 
+    def reload_after_move(self, path: Union[pathlib.Path, str]) -> None:
+        """Re-issue background mip loading for the displayed image from *path*.
+
+        Call when the source file has been relocated (e.g. a triage move in
+        raven-cherrypick) out from under an in-flight load/augment task that
+        captured the old path — that task would fail with ``FileNotFoundError``
+        and leave the image stuck at a reduced resolution (or never appear).
+
+        Picks the recovery from what is already on screen, so the caller only
+        needs to supply the new location:
+
+          - Full-res mip already loaded: no-op (nothing needs the file).
+          - Capped preload mips present: augments them from *path* (keeps them
+            visible, fills in the missing larger levels).
+          - Initial decode still in flight (no mips yet): reloads from scratch
+            from *path*, with the old-mip bridge for display continuity.
+        """
+        with self._mips_lock:
+            has_mips = bool(self._mip_arrays)
+            has_fullres = any(s >= 1.0 for s, _w, _h, _f in self._mip_arrays)
+        if self._debug:
+            mode = "noop(fullres)" if has_fullres else ("augment" if has_mips else "reload")
+            logger.info(f"ImageView.reload_after_move: {mode} path={path} "
+                        f"has_mips={has_mips} has_fullres={has_fullres} gen={self._mips_generation}")
+        if has_fullres:
+            return
+        if has_mips:
+            self.augment_mips(path)
+        else:
+            self.load_from_file(path, old_size=self.image_size)
+
     def set_preloaded_arrays(self, mip_arrays: list[tuple[float, int, int, np.ndarray]],
                              img_w: int, img_h: int) -> None:
         """Display pre-computed mip arrays from the preload cache.
@@ -575,10 +606,18 @@ class ImageView:
         handles zoom-to-fit, then delegates to the standard mip pipeline.
         """
         t0 = time.perf_counter_ns()
+        if e.cancelled:  # superseded before we started; skip the (possibly stale) decode
+            self._set_mip_loading(False)
+            return
         try:
             e.rgba = imageutils.ensure_rgba(imagecodec.decode(e.path))
         except Exception:
-            logger.warning(f"ImageView._bg_file_mip_task: instance {e.task_name}: decode failed for {e.path}", exc_info=True)
+            # See _bg_augment_task: a cancelled task may be decoding a path whose
+            # file has since moved; that failure is expected, log it quietly.
+            if e.cancelled:
+                logger.debug(f"ImageView._bg_file_mip_task: instance {e.task_name}: decode of {e.path} failed after cancellation (file likely moved); ignoring.")
+            else:
+                logger.warning(f"ImageView._bg_file_mip_task: instance {e.task_name}: decode failed for {e.path}", exc_info=True)
             self._set_mip_loading(False)
             self._needs_render = True
             return
@@ -639,6 +678,9 @@ class ImageView:
 
         with self._mips_lock:
             if e.cancelled or self._mips_generation != e.generation:
+                if e.debug:
+                    logger.info(f"ImageView._bg_preloaded_task: instance {e.task_name}: discarding {len(new_mips)} mips "
+                                f"(cancelled={e.cancelled}, task gen={e.generation} current gen={self._mips_generation})")
                 for _s, tag in new_mips:
                     self._release_texture(tag)
                 return
@@ -667,10 +709,19 @@ class ImageView:
         """
         t0 = time.perf_counter_ns()
         try:
+            if e.cancelled:  # superseded before we started; skip the (possibly stale) decode
+                return
             try:
                 rgba = imageutils.ensure_rgba(imagecodec.decode(e.path))
             except Exception:
-                logger.warning(f"ImageView._bg_augment_task: instance {e.task_name}: decode failed for {e.path}", exc_info=True)
+                # A task cancelled mid-flight may be decoding a path whose file
+                # has since moved (e.g. a triage move in raven-cherrypick); that
+                # failure is expected, not a fault — log it quietly. The task's
+                # result is discarded on cancellation anyway.
+                if e.cancelled:
+                    logger.debug(f"ImageView._bg_augment_task: instance {e.task_name}: decode of {e.path} failed after cancellation (file likely moved); ignoring.")
+                else:
+                    logger.warning(f"ImageView._bg_augment_task: instance {e.task_name}: decode failed for {e.path}", exc_info=True)
                 return
             t_decode = time.perf_counter_ns() - t0
 
@@ -718,6 +769,9 @@ class ImageView:
                 # Check-and-insert must be atomic (same reason as _bg_mip_task).
                 with self._mips_lock:
                     if e.cancelled or e.generation != self._mips_generation:
+                        if e.debug:
+                            logger.info(f"ImageView._bg_augment_task: instance {e.task_name}: discarding mip scale={mip_scale} "
+                                        f"(cancelled={e.cancelled}, task gen={e.generation} current gen={self._mips_generation})")
                         self._release_texture(tex_tag)
                         break
                     inserted = False
@@ -811,6 +865,9 @@ class ImageView:
             # flashes on the next navigation.
             with self._mips_lock:
                 if e.cancelled or self._mips_generation != e.generation:
+                    if e.debug:
+                        logger.info(f"ImageView._bg_mip_task: instance {e.task_name}: discarding mip scale={mip_scale} "
+                                    f"(cancelled={e.cancelled}, task gen={e.generation} current gen={self._mips_generation})")
                     self._release_texture(tex_tag)
                     break
                 inserted = False

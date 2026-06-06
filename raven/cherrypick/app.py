@@ -453,6 +453,12 @@ def _mark_triage(state: TriageState, *, use_selection: bool = False) -> None:
         return
     indices = valid
 
+    # Whether the currently displayed image is among those about to move.
+    # Captured before set_state, which mutates the entry's state (and thus
+    # the file location returned by entry.path).
+    current = grid.current
+    current_moved = current in indices and triage[current].state is not state
+
     errors = triage.set_state(indices, state)
     for err in errors:
         logger.warning("_mark_triage: %s", err)
@@ -460,6 +466,11 @@ def _mark_triage(state: TriageState, *, use_selection: bool = False) -> None:
     # Update grid tiles.
     for idx in indices:
         grid.update_triage_state(idx, triage[idx].state)
+
+    # If the displayed image's file just moved, recover its mips from the new
+    # location (the in-flight load/augment task is reading the old path).
+    if current_moved:
+        _reload_current_after_move()
 
     # Sync triage mark overlay if current image was affected.
     _sync_triage_mark()
@@ -481,6 +492,8 @@ def _mark_winner() -> None:
     current = grid.current
     if current < 0:
         return
+    # Captured before set_state mutates the entry (see _mark_triage).
+    current_moved = triage[current].state is not TriageState.CHERRY
     others = [i for i in grid.selected if i != current]
 
     # Lemon the losers (if any), cherry the winner.
@@ -495,6 +508,10 @@ def _mark_winner() -> None:
     for err in errors:
         logger.warning("_mark_winner: %s", err)
     grid.update_triage_state(current, triage[current].state)
+
+    # The winner's file just moved; recover its mips from the new location.
+    if current_moved:
+        _reload_current_after_move()
 
     _sync_triage_mark()
     _update_status()
@@ -512,6 +529,26 @@ def _sync_triage_mark() -> None:
         iv.set_triage_state(triage[idx].state)
     else:
         iv.set_triage_state(TriageState.NEUTRAL)
+
+
+def _reload_current_after_move() -> None:
+    """Recover the current image's mips after a triage move relocated its file.
+
+    A triage state change physically relocates the file (`shutil.move`). Any
+    background task that captured the old path — the full-res augment of a
+    preloaded image, or the initial decode of a cache-miss image — would fail
+    once the file is gone, leaving the image stuck at a reduced resolution or
+    failing to appear. Hand the imageview the new path so it can re-issue the
+    right background work (it no-ops if the image is already fully loaded).
+    """
+    iv = _app_state["image_view"]
+    triage = _app_state["triage"]
+    grid = _app_state["grid"]
+    if iv is None or triage is None or grid is None:
+        return
+    idx = grid.current
+    if 0 <= idx < len(triage):
+        iv.reload_after_move(triage[idx].path)
 
 
 def _toggle_triage_mark() -> None:
@@ -919,10 +956,10 @@ def _on_key(sender, app_data) -> None:
     elif key == dpg.mvKey_End:
         if grid is not None:
             grid.navigate_last()
-    elif key in (dpg.mvKey_Prior, 517):  # Page Up (DPG 2.0 workaround)
+    elif key in (dpg.mvKey_Prior, 517):  # page up — DPG 2.0+ delivers 517; mvKey_Prior (266) is a stale 1.x value. See dpg-notes.md "Keyboard input".
         if grid is not None:
             grid.navigate_page_up()
-    elif key in (dpg.mvKey_Next, 518):  # Page Down (DPG 2.0 workaround)
+    elif key in (dpg.mvKey_Next, 518):  # page down — DPG 2.0+ delivers 518; mvKey_Next (267) is a stale 1.x value. See dpg-notes.md "Keyboard input".
         if grid is not None:
             grid.navigate_page_down()
 
