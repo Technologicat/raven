@@ -69,6 +69,7 @@ from ..vendor.tha3.util import torch_linear_to_srgb
 
 from . import config
 from .triage import TriageState, TriageManager
+from .history import TriageHistory
 from .loader import ThumbnailPipeline
 from .imageview import ImageView
 from .grid import ThumbnailGrid, FilterMode
@@ -105,6 +106,7 @@ _beacon_start_ns: int = 0  # monotonic_ns timestamp of last resize (0 = inactive
 _pending_nav: "Callable[[], None] | None" = None  # deferred keyboard navigation; applied once per frame
 _last_input_ns: int = 0  # monotonic_ns timestamp of last user input
 _is_fullscreen = False  # tracked across our own toggle; DPG has no fullscreen getter
+_history = TriageHistory()  # undo/redo of triage moves; reset on folder open
 
 # Validated at startup.
 _device = None
@@ -319,6 +321,10 @@ def _open_folder(folder_path: str) -> None:
     triage = TriageManager(folder)
     _app_state["triage"] = triage
 
+    # Undo history is per-folder (a rescan renumbers indices; disk is the truth).
+    _history.clear()
+    _refresh_history_buttons()
+
     if len(triage) == 0:
         _set_status(f"No images found in {folder}")
         return
@@ -463,6 +469,58 @@ def _show_open_dialog(*_args) -> None:
 # Triage commands
 # ---------------------------------------------------------------------------
 
+def _apply_triage_changes(batch: "list[tuple[int, TriageState]]") -> "list[tuple[str, TriageState, TriageState]]":
+    """Apply ``(idx, new_state)`` changes: move files, refresh grid/view/status.
+
+    Returns the diff ``[(filename, old_state, new_state), ...]`` of changes that
+    actually took effect (skipping no-ops and failed moves) — the record an undo
+    step is built from. The caller decides whether to record it: a fresh user
+    action does; undo/redo do not, since they shuffle an existing record between
+    the two stacks rather than creating a new one.
+    """
+    grid = _app_state["grid"]
+    triage = _app_state["triage"]
+    if grid is None or triage is None:
+        return []
+
+    # The currently displayed image, captured before set_state mutates entries
+    # (and thus the file location returned by entry.path).
+    current = grid.current
+    current_moved = False
+    diff: "list[tuple[str, TriageState, TriageState]]" = []
+    for idx, new_state in batch:
+        if not (0 <= idx < len(triage)):
+            continue
+        old_state = triage[idx].state
+        if old_state is new_state:
+            continue
+        filename = triage[idx].filename
+        err = triage.set_state(idx, new_state)
+        if err is not None:
+            logger.warning("_apply_triage_changes: %s", err)
+            continue
+        diff.append((filename, old_state, new_state))
+        grid.update_triage_state(idx, triage[idx].state)
+        if idx == current:
+            current_moved = True
+
+    # If the displayed image's file just moved, recover its mips from the new
+    # location (the in-flight load/augment task is reading the old path).
+    if current_moved:
+        _reload_current_after_move()
+
+    _sync_triage_mark()
+    _update_status()
+    return diff
+
+
+def _record_history(diff: "list[tuple[str, TriageState, TriageState]]") -> None:
+    """Push a freshly applied user action onto the undo stack."""
+    if diff:
+        _history.record(diff)
+        _refresh_history_buttons()
+
+
 def _mark_triage(state: TriageState, *, use_selection: bool = False) -> None:
     """Mark images with the given triage state.
 
@@ -484,30 +542,9 @@ def _mark_triage(state: TriageState, *, use_selection: bool = False) -> None:
                        len(indices) - len(valid))
     if not valid:
         return
-    indices = valid
 
-    # Whether the currently displayed image is among those about to move.
-    # Captured before set_state, which mutates the entry's state (and thus
-    # the file location returned by entry.path).
-    current = grid.current
-    current_moved = current in indices and triage[current].state is not state
-
-    errors = triage.set_state(indices, state)
-    for err in errors:
-        logger.warning("_mark_triage: %s", err)
-
-    # Update grid tiles.
-    for idx in indices:
-        grid.update_triage_state(idx, triage[idx].state)
-
-    # If the displayed image's file just moved, recover its mips from the new
-    # location (the in-flight load/augment task is reading the old path).
-    if current_moved:
-        _reload_current_after_move()
-
-    # Sync triage mark overlay if current image was affected.
-    _sync_triage_mark()
-    _update_status()
+    diff = _apply_triage_changes([(idx, state) for idx in valid])
+    _record_history(diff)
 
 
 def _mark_winner() -> None:
@@ -525,29 +562,74 @@ def _mark_winner() -> None:
     current = grid.current
     if current < 0:
         return
-    # Captured before set_state mutates the entry (see _mark_triage).
-    current_moved = triage[current].state is not TriageState.CHERRY
+
+    # Lemon the losers (if any), then cherry the winner — one undoable action.
     others = [i for i in grid.selected if i != current]
+    batch = [(idx, TriageState.LEMON) for idx in others]
+    batch.append((current, TriageState.CHERRY))
+    diff = _apply_triage_changes(batch)
+    _record_history(diff)
 
-    # Lemon the losers (if any), cherry the winner.
-    if others:
-        errors = triage.set_state(others, TriageState.LEMON)
-        for err in errors:
-            logger.warning("_mark_winner: %s", err)
-        for idx in others:
-            grid.update_triage_state(idx, triage[idx].state)
 
-    errors = triage.set_state([current], TriageState.CHERRY)
-    for err in errors:
-        logger.warning("_mark_winner: %s", err)
-    grid.update_triage_state(current, triage[current].state)
+def _undo(*_args) -> None:
+    """Undo the last triage move (Ctrl+Z), navigating to the affected image."""
+    if _app_state["triage"] is None:
+        return
+    batch = _history.undo()  # [(filename, target_state)] or None
+    if batch is None:
+        return
+    _apply_resolved_batch(batch)
 
-    # The winner's file just moved; recover its mips from the new location.
-    if current_moved:
-        _reload_current_after_move()
 
-    _sync_triage_mark()
-    _update_status()
+def _redo(*_args) -> None:
+    """Redo the last undone triage move (Ctrl+Shift+Z)."""
+    if _app_state["triage"] is None:
+        return
+    batch = _history.redo()  # [(filename, target_state)] or None
+    if batch is None:
+        return
+    _apply_resolved_batch(batch)
+
+
+def _apply_resolved_batch(batch: "list[tuple[str, TriageState]]") -> None:
+    """Apply a history batch: resolve filenames to current indices, then show.
+
+    Used by both undo and redo — neither records a new history entry (the entry
+    is already moving between the undo/redo stacks). Navigates to the first
+    affected image by grid position so the user sees what changed, even from a
+    filtered view.
+    """
+    triage = _app_state["triage"]
+    if triage is None:
+        return
+    idx_batch = []
+    for filename, target in batch:
+        idx = triage.index_of(filename)
+        if idx is not None:
+            idx_batch.append((idx, target))
+    _apply_triage_changes(idx_batch)
+    _refresh_history_buttons()
+    _navigate_to_first_affected([filename for filename, _target in batch])
+
+
+def _navigate_to_first_affected(filenames: "list[str]") -> None:
+    """Set current to the affected image with the lowest grid position."""
+    grid = _app_state["grid"]
+    triage = _app_state["triage"]
+    if grid is None or triage is None:
+        return
+    indices = [triage.index_of(fn) for fn in filenames]
+    indices = [i for i in indices if i is not None]
+    if indices:
+        grid.set_current(min(indices))
+
+
+def _refresh_history_buttons() -> None:
+    """Enable/disable the toolbar undo/redo buttons to match the history."""
+    for tag, enabled in (("cherrypick_undo_btn", _history.can_undo()),   # tag
+                         ("cherrypick_redo_btn", _history.can_redo())):  # tag
+        if dpg.does_item_exist(tag):  # tag
+            dpg.configure_item(tag, enabled=enabled)
 
 
 def _sync_triage_mark() -> None:
@@ -871,6 +953,8 @@ def _on_key(sender, app_data) -> None:
             dpg.show_font_manager()
         elif key == dpg.mvKey_L:
             dpg.show_style_editor()
+        elif key == dpg.mvKey_Z:
+            _redo()
         return
 
     # --- Compare mode active: intercept most keys ---
@@ -904,6 +988,10 @@ def _on_key(sender, app_data) -> None:
             _mark_triage(TriageState.CHERRY, use_selection=True)
         elif key == dpg.mvKey_V:
             _mark_triage(TriageState.NEUTRAL, use_selection=True)
+        elif key == dpg.mvKey_Z:
+            _undo()
+        elif key == dpg.mvKey_Y:
+            _redo()
         elif key == dpg.mvKey_A:
             if grid is not None:
                 grid.select_all()
@@ -1372,6 +1460,28 @@ def main() -> int:
 
             dpg.add_spacer(width=8)
 
+            # Undo / redo last triage move. Start disabled (empty history);
+            # _refresh_history_buttons toggles them as moves are made/undone.
+            btn = dpg.add_button(label=fa.ICON_ARROW_ROTATE_LEFT,
+                                 tag="cherrypick_undo_btn",
+                                 callback=_undo,
+                                 width=30, enabled=False)
+            dpg.bind_item_font(btn, themes_and_fonts.icon_font_solid)
+            dpg.bind_item_theme(btn, "disablable_widget_theme")
+            with dpg.tooltip(btn):
+                dpg.add_text("Undo last triage move [Ctrl+Z]")
+
+            btn = dpg.add_button(label=fa.ICON_ARROW_ROTATE_RIGHT,
+                                 tag="cherrypick_redo_btn",
+                                 callback=_redo,
+                                 width=30, enabled=False)
+            dpg.bind_item_font(btn, themes_and_fonts.icon_font_solid)
+            dpg.bind_item_theme(btn, "disablable_widget_theme")
+            with dpg.tooltip(btn):
+                dpg.add_text("Redo triage move [Ctrl+Shift+Z]")
+
+            dpg.add_spacer(width=8)
+
             # Compare mode button.
             btn = dpg.add_button(label=fa.ICON_PLAY,
                                  tag="cherrypick_compare_btn",
@@ -1513,6 +1623,8 @@ def main() -> int:
         env(key_indent=0, key="V", action_indent=0, action="Clear mark", notes=""),
         env(key_indent=1, key="Ctrl+V", action_indent=1, action="...all selected", notes=""),
         env(key_indent=0, key="T", action_indent=0, action="Toggle triage mark", notes="On main image"),
+        env(key_indent=0, key="Ctrl+Z", action_indent=0, action="Undo triage move", notes="Navigates to it"),
+        env(key_indent=0, key="Ctrl+Shift+Z", action_indent=0, action="Redo triage move", notes=""),
         helpcard.hotkey_blank_entry,
         env(key_indent=0, key="B / Shift+B", action_indent=0, action="Next / prev lemon", notes="All view only; wraps"),
         env(key_indent=0, key="N / Shift+N", action_indent=0, action="Next / prev cherry", notes="All view only; wraps"),
