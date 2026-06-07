@@ -881,7 +881,7 @@ Offer a `config.py` option to remap the positional cluster per keyboard layout (
 
 When implementing, sweep the fleet for *every* positional binding, not just cherrypick's WASD. Until then, positional keys stay as aliases beside the layout-independent originals (see `raven-style-guide.md`, "Hotkey discoverability").
 
-Detection mechanics for all three OS families are researched in `briefs/keyboard-layout-detection.md` — including the key finding that DPG reports *layout-translated* keys and hides scancodes (so true physical binding needs a vendored-DPG extension), the recommended strategy ranking (config override → OS position→char query → physical binding), and the Wayland gap. Start there.
+Detection mechanics for all three OS families are researched in `briefs/keyboard-layout-detection.md` — including the key finding that DPG reports *layout-translated* keys and hides scancodes (so physical binding isn't reachable, since Raven won't vendor/patch DPG), the two recommended strategies (config override, then OS position→char query for an auto-default), and the Wayland gap. Start there.
 
 Discovered during cherrypick WASD navigation work (2026-06-07).
 

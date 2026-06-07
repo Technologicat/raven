@@ -29,19 +29,19 @@ a grep of the installed `dearpygui` Python package finds **no scancode and no `g
 DPG's Python API does not expose the physical layer at all. (High confidence from the above; see
 **CONFIRM** below for the cheap local check.)
 
-Consequence: within DPG as it ships, we **cannot** bind by physical position. The physical route would
-require extending our DPG usage to reach ImGui's untranslated/scancode path or GLFW's
-`glfwGetKeyName` (GLFW scancodes are documented as "unique for every key … consistent over time, …
-safe to save to disk"). That's a vendored-DPG extension, not a config tweak — noted as Strategy C
-below.
+Consequence: within DPG as it ships, we **cannot** bind by physical position — DPG's Python API doesn't
+expose ImGui's untranslated/scancode path or GLFW's `glfwGetKeyName`, and patching DPG itself is out of
+scope. (Raven vendors libraries that build *on* DPG — `file_dialog`, `DearPyGui_Markdown` — but
+deliberately does **not** vendor DPG, and won't.) So physical binding is off the table; the practical
+approaches are A and B below.
 
 ### CONFIRM (do this first, ~2 min)
 
 On a dev box: `setxkbmap fr` (X11), launch `raven-cherrypick`, and in `_on_key` log the raw `app_data`
 while pressing the **physical** WASD-up key (top-left letter area). If it reports `mvKey_Z` (not
-`mvKey_W`), DPG is confirmed layout-dependent and Strategy C is the only way to get true physical
-binding. Restore with `setxkbmap us`. (Under Wayland, `setxkbmap` may not take — switch layout via the
-desktop's input-source UI instead.)
+`mvKey_W`), DPG is confirmed layout-dependent — which is what makes Strategy B necessary, and rules out
+the hope that DPG already reports physical positions. Restore with `setxkbmap us`. (Under Wayland,
+`setxkbmap` may not take — switch layout via the desktop's input-source UI instead.)
 
 ## Strategies, ranked
 
@@ -58,20 +58,17 @@ fixed US-QWERTY constants (e.g. Windows scancodes W=0x11, A=0x1E, S=0x1F, D=0x20
 +8). This handles **every** layout (AZERTY, QWERTZ, Dvorak, Colemak, …) with no hardcoded remap table,
 because it reads the actual layout. Per-OS APIs in the appendix. Wayland is the gap (see below).
 
-**C. True physical binding (most robust; biggest lift).**
-Extend the vendored DPG / our key handling to expose scancodes (ImGui untranslated key path) or
-`glfwGetKeyName`, then bind by physical position and read labels from `glfwGetKeyName`. Needs zero
-runtime detection and auto-adapts to all layouts — but it's a real change to how Raven receives key
-events fleet-wide, so it's a separate project, not part of the first pass.
+(True physical binding — bind by scancode so the cluster auto-adapts to every layout with no detection,
+the route web games and Qt use — is **not an option here**: it needs scancodes, DPG doesn't expose
+them, and the only way to reach them would be patching DPG, which Raven won't vendor. Ruled out.)
 
 **Layout-name → lookup-table** (detect "fr" → swap to ZQSD) is the obvious-but-inferior middle path:
 it only covers layouts we enumerate and needs maintenance. Prefer **B** (position→char) over it — same
 per-OS plumbing, strictly more coverage.
 
-Recommendation: ship **A** now (one config knob), layer **B** on top as a best-effort auto-default,
-keep **C** on the someday list. Whatever the binding strategy, the **help card and tooltips must show
-the labels actually on the user's keycaps** — so the label-resolution half of B is needed even if
-binding stays character-based.
+Recommendation: ship **A** now (one config knob), layer **B** on top as a best-effort auto-default.
+Whatever the binding strategy, the **help card and tooltips must show the labels actually on the
+user's keycaps** — so the label-resolution half of B is needed even if binding stays character-based.
 
 ## Per-OS appendix (detection APIs)
 
