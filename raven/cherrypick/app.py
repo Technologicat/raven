@@ -73,6 +73,7 @@ from .history import TriageHistory
 from .loader import ThumbnailPipeline
 from .imageview import ImageView
 from .grid import ThumbnailGrid, FilterMode
+from .gridnav import resolve_undo_nav_target
 from .preload import PreloadCache
 from .compare import CompareMode
 from ..common.image import utils as imageutils
@@ -609,19 +610,25 @@ def _apply_resolved_batch(batch: "list[tuple[str, TriageState]]") -> None:
             idx_batch.append((idx, target))
     _apply_triage_changes(idx_batch)
     _refresh_history_buttons()
-    _navigate_to_first_affected([filename for filename, _target in batch])
+    _navigate_to_affected([filename for filename, _target in batch])
 
 
-def _navigate_to_first_affected(filenames: "list[str]") -> None:
-    """Set current to the affected image with the lowest grid position."""
+def _navigate_to_affected(filenames: "list[str]") -> None:
+    """Put the view on a changed image after an undo/redo, moving minimally.
+
+    Resolves the recorded filenames to current grid indices and applies the
+    minimal-movement rule in `gridnav.resolve_undo_nav_target` — stay on the
+    current image when it's one of the changed ones, otherwise surface the change.
+    """
     grid = _app_state["grid"]
     triage = _app_state["triage"]
     if grid is None or triage is None:
         return
-    indices = [triage.index_of(fn) for fn in filenames]
-    indices = [i for i in indices if i is not None]
-    if indices:
-        grid.set_current(min(indices))
+    affected = [triage.index_of(fn) for fn in filenames]
+    affected = [i for i in affected if i is not None]
+    target = resolve_undo_nav_target(affected, grid.current, set(grid.visible))
+    if target is not None:
+        grid.set_current(target)
 
 
 def _refresh_history_buttons() -> None:

@@ -11,7 +11,7 @@ dependency subset (the `grid` widget itself imports dearpygui).
 
 import pytest
 
-from raven.cherrypick.gridnav import resolve_nav_target
+from raven.cherrypick.gridnav import resolve_nav_target, resolve_undo_nav_target
 
 
 # ---------------------------------------------------------------------------
@@ -86,3 +86,46 @@ def test_hidden_current_after_all_visible():
     visible = [0, 1, 2]
     assert resolve_nav_target(visible, 5, +1) == 2   # nothing after -> clamp to last
     assert resolve_nav_target(visible, 5, -1) == 2   # last item before the gap
+
+
+# ---------------------------------------------------------------------------
+# resolve_undo_nav_target: where the view lands after an undo/redo
+# ---------------------------------------------------------------------------
+
+def test_undo_nav_stays_when_current_is_affected_and_visible():
+    # The winner+losers case: affected = losers (3, 4) + winner (7); current is
+    # the winner, still visible. Stay on the winner — don't hop to a loser.
+    assert resolve_undo_nav_target([3, 4, 7], current=7, visible={3, 4, 7, 9}) is None
+
+
+def test_undo_nav_jumps_when_current_not_affected():
+    # Current is elsewhere; show the change at the first affected (by position).
+    assert resolve_undo_nav_target([3, 4, 7], current=9, visible={3, 4, 7, 9}) == 3
+
+
+def test_undo_nav_prefers_visible_affected():
+    # First-by-position (2) is hidden; land on the first *visible* affected (5).
+    assert resolve_undo_nav_target([2, 5], current=9, visible={5, 9}) == 5
+
+
+def test_undo_nav_falls_back_to_first_when_none_visible():
+    # Nothing affected is visible (all filtered out) — go to the first anyway.
+    assert resolve_undo_nav_target([2, 5], current=9, visible={9}) == 2
+
+
+def test_undo_nav_jumps_when_current_affected_but_hidden_and_another_visible():
+    # Current was affected and got filtered out, but another affected image (5)
+    # is still visible — hop to it rather than stranding on the hidden tile.
+    assert resolve_undo_nav_target([2, 5], current=2, visible={5}) == 5
+
+
+def test_undo_nav_stays_when_current_affected_and_none_visible():
+    # The redo-out-of-filter case: a batch was marked out of the neutral filter
+    # with the last one still current; redoing pushes them all out again, so
+    # current AND every other affected image go hidden. Stay on current (the main
+    # view shows it) — jumping to another equally-hidden tile gains nothing.
+    assert resolve_undo_nav_target([10, 11, 12], current=12, visible={3, 4, 5}) is None
+
+
+def test_undo_nav_empty_affected_stays():
+    assert resolve_undo_nav_target([], current=3, visible={3}) is None
