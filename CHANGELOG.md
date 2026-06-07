@@ -38,6 +38,7 @@
 - *Raven-cherrypick*: the cherry / lemon triage marker now sits just outside the top-right corner of the *image* rather than the corner of the viewer pane, so it stays beside the image when the image is small in a large window. It clamps back to the pane corner when the image fills the view.
 - *Raven-cherrypick*: the current image's position number now shows at the lower-left of the main view (e.g. `13`), mirroring the thumbnail grid's tile numbers and the `[13 / 133]` status readout. Anchored to the image like the triage marker, so it stays put as you browse same-size images.
 - *Raven-cherrypick*: **undo / redo for triage moves** — `Ctrl+Z` / `Ctrl+Shift+Z` (also `Ctrl+Y`), plus toolbar buttons. Reverts the last cherry / lemon / clear / winner action, including a multi-select batch as one step, and keeps the view on the changed image so you see what changed — staying put when you're already on it (e.g. reverting a winner+losers set leaves the winner current), only moving when needed. Works from a filtered view too. Session-only: opening a folder rescans from disk, which is the source of truth.
+- *Raven-cherrypick*: **WASD navigation** as an alias for the arrow keys, plus `Q` / `E` for page up / down — so triage can be done one-handed (left hand on WASD, with the `X` / `C` / `V` triage cluster right below it) on a coffee break. Mirrors the arrows everywhere they work, including panning the focused image pane. The arrow keys keep working unchanged.
 
 **Fixed**:
 

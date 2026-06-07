@@ -896,6 +896,12 @@ def _toggle_zoom_fit_cap() -> None:
 
 # ---------------------------------------------------------------------------
 # Hotkey handler
+#
+# No shared keymap — bindings live here, and the surfaces that make them
+# discoverable mirror them by hand (KISS; hotkeys change rarely). If you add,
+# remove, or rebind a key, update those surfaces too:
+#   - the help card (built inline in `main`; search "HelpWindow")
+#   - any toolbar tooltip naming the key (search its bracketed hint, e.g. "[Ctrl+O]")
 # ---------------------------------------------------------------------------
 
 def _on_key(sender, app_data) -> None:
@@ -1016,22 +1022,22 @@ def _on_key(sender, app_data) -> None:
                 _change_tile_size(config.TILE_SIZES[idx])
         return
 
-    # --- Image pane focused: arrows pan ---
+    # --- Image pane focused: arrows / WASD pan ---
     if iv is not None and iv.focused:
         if key == dpg.mvKey_Escape:
             iv.focused = False
             _update_status()
             return
-        if key == dpg.mvKey_Up:
+        if key in (dpg.mvKey_Up, dpg.mvKey_W):
             iv.pan_by(0, config.PAN_AMOUNT)
             return
-        elif key == dpg.mvKey_Down:
+        elif key in (dpg.mvKey_Down, dpg.mvKey_S):
             iv.pan_by(0, -config.PAN_AMOUNT)
             return
-        elif key == dpg.mvKey_Left:
+        elif key in (dpg.mvKey_Left, dpg.mvKey_A):
             iv.pan_by(config.PAN_AMOUNT, 0)
             return
-        elif key == dpg.mvKey_Right:
+        elif key in (dpg.mvKey_Right, dpg.mvKey_D):
             iv.pan_by(-config.PAN_AMOUNT, 0)
             return
 
@@ -1093,16 +1099,25 @@ def _on_key(sender, app_data) -> None:
 
     # Navigation. Deferred via _request_nav so a same-frame triage key still
     # acts on the current image (see _request_nav for the keycode-order rationale).
-    elif key == dpg.mvKey_Left:
+    #
+    # WASD (move) and Q/E (page) are gaming-idiom aliases that make triage
+    # one-handed: left hand on WASD, with the X/C/V triage cluster sitting right
+    # below it. They MUST stay on this deferred path — one-handed use rolls a nav
+    # key and a triage key with the same hand, which is exactly the same-frame
+    # collision _request_nav defends against (and `A`=546 even sorts before
+    # `C`=548, so a synchronous alias would reintroduce the wrong-image bug).
+    # Letter keycodes are stable across DPG versions, unlike the Page Up/Down
+    # cluster below, so W/A/S/D/Q/E need no literal fallback.
+    elif key in (dpg.mvKey_Left, dpg.mvKey_A):
         if grid is not None:
             _request_nav(grid.navigate_prev)
-    elif key == dpg.mvKey_Right:
+    elif key in (dpg.mvKey_Right, dpg.mvKey_D):
         if grid is not None:
             _request_nav(grid.navigate_next)
-    elif key == dpg.mvKey_Up:
+    elif key in (dpg.mvKey_Up, dpg.mvKey_W):
         if grid is not None:
             _request_nav(grid.navigate_row_up)
-    elif key == dpg.mvKey_Down:
+    elif key in (dpg.mvKey_Down, dpg.mvKey_S):
         if grid is not None:
             _request_nav(grid.navigate_row_down)
     elif key == dpg.mvKey_Home:
@@ -1111,10 +1126,10 @@ def _on_key(sender, app_data) -> None:
     elif key == dpg.mvKey_End:
         if grid is not None:
             _request_nav(grid.navigate_last)
-    elif key in (dpg.mvKey_Prior, 517):  # page up — DPG 2.0+ delivers 517; mvKey_Prior (266) is a stale 1.x value. See dpg-notes.md "Keyboard input".
+    elif key in (dpg.mvKey_Prior, 517, dpg.mvKey_Q):  # page up — DPG 2.0+ delivers 517; mvKey_Prior (266) is a stale 1.x value. Q is the gaming-idiom alias (see nav comment). See dpg-notes.md "Keyboard input".
         if grid is not None:
             _request_nav(grid.navigate_page_up)
-    elif key in (dpg.mvKey_Next, 518):  # page down — DPG 2.0+ delivers 518; mvKey_Next (267) is a stale 1.x value. See dpg-notes.md "Keyboard input".
+    elif key in (dpg.mvKey_Next, 518, dpg.mvKey_E):  # page down — DPG 2.0+ delivers 518; mvKey_Next (267) is a stale 1.x value. E is the gaming-idiom alias (see nav comment). See dpg-notes.md "Keyboard input".
         if grid is not None:
             _request_nav(grid.navigate_page_down)
 
@@ -1647,10 +1662,10 @@ def main() -> int:
         helpcard.hotkey_new_column,
 
         # --- Column 2: Navigation, Selection (17 rows) ---
-        env(key_indent=0, key="Left / Right", action_indent=0, action="Prev / next image", notes="Navigate only"),
-        env(key_indent=0, key="Up / Down", action_indent=0, action="Prev / next row", notes="Navigate only"),
+        env(key_indent=0, key="Left / Right (A / D)", action_indent=0, action="Prev / next image", notes="Navigate only"),
+        env(key_indent=0, key="Up / Down (W / S)", action_indent=0, action="Prev / next row", notes="Navigate only"),
         env(key_indent=0, key="Home / End", action_indent=0, action="First / last image", notes=""),
-        env(key_indent=0, key="Page Up / Down", action_indent=0, action="Scroll by page", notes=""),
+        env(key_indent=0, key="Page Up / Down (Q / E)", action_indent=0, action="Scroll by page", notes=""),
         helpcard.hotkey_blank_entry,
         env(key_indent=0, key="Click", action_indent=0, action="Navigate and select", notes=""),
         env(key_indent=0, key="Ctrl+Click", action_indent=0, action="Toggle in selection", notes=""),
@@ -1661,7 +1676,7 @@ def main() -> int:
         env(key_indent=0, key="Ctrl+I", action_indent=0, action="Invert selection", notes=""),
         helpcard.hotkey_blank_entry,
         env(key_indent=0, key="Tab", action_indent=0, action="Toggle image pane focus", notes=""),
-        env(key_indent=1, key="Arrows", action_indent=0, action="Pan (when focused)", notes=""),
+        env(key_indent=1, key="Arrows / WASD", action_indent=0, action="Pan (when focused)", notes=""),
         env(key_indent=1, key="Esc", action_indent=0, action="Unfocus", notes=""),
 
         helpcard.hotkey_new_column,

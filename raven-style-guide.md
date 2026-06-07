@@ -537,6 +537,32 @@ def is_entry_title_container_group(item):
     return ud is not None and ud[0] == "entry_title_container"
 ```
 
+### Hotkey discoverability
+
+Every hotkey must be discoverable through the GUI, on two surfaces:
+
+1. **The help card** (`F1`, via `helpcard.HelpWindow`) — the full keyboard reference.
+2. **Tooltips** — every GUI control with a hotkey names it in its tooltip, in brackets:
+
+```python
+with dpg.tooltip(btn):
+    dpg.add_text("Open folder [Ctrl+O]")
+```
+
+This is non-negotiable: surfacing the key right on the control it triggers is how users learn the shortcuts in flow. A feature reachable by keyboard but only listed in the help card is a UX miss — most software in the wild gets this wrong; Raven apps don't.
+
+There is no shared keymap — bindings live in the hotkey handler, and these surfaces mirror them by hand (KISS; hotkeys change rarely). Keep a comment at the hotkey handler reminding the next dev to update both surfaces when adding, removing, or rebinding a key:
+
+```python
+# No shared keymap — bindings live here, and the surfaces that make them
+# discoverable mirror them by hand (KISS; hotkeys change rarely). If you add,
+# remove, or rebind a key, update those surfaces too:
+#   - the help card (built inline in `main`; search "HelpWindow")
+#   - any toolbar tooltip naming the key (search its bracketed hint, e.g. "[Ctrl+O]")
+```
+
+**Positional hotkeys** (keys chosen for physical location, e.g. WASD as an arrow-key alias for one-handed use) are keyboard-layout-dependent — WASD lands at ZQSD on AZERTY, and Z/Y swap on QWERTZ. Until the fleet grows layout-aware remapping, keep positional bindings as *aliases* alongside the layout-independent originals (the arrow keys), never as replacements.
+
 ## Layered architecture
 
 ### Dependency direction

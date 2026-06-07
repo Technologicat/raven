@@ -873,3 +873,21 @@ gap Juha flagged: "the TTS should already be stripping its input"):
 
 Discovered during brief 02 live testing, reported by Juha (2026-06-04).
 
+## Keyboard-layout-aware positional hotkeys across the fleet
+
+Some Raven apps bind hotkeys *positionally* — keys chosen for their physical location rather than the letter they produce. The first case is `raven-cherrypick`'s WASD navigation (an alias for the arrow keys, plus `Q`/`E` for page up/down, for one-handed triage). On AZERTY (French) that cluster sits at ZQSD; on QWERTZ (German/Swiss) `Z` and `Y` are swapped — so positional bindings land under the wrong fingers for those users.
+
+Offer a `config.py` option to remap the positional cluster per keyboard layout (at minimum WASD↔ZQSD), and ideally autodetect the active layout on the three OS families we support (Linux: `setxkbmap -query` / XKB, or the Wayland compositor; Windows: `GetKeyboardLayout`; macOS: `TISCopyCurrentKeyboardInputSource`). Same problem class as games that assume `[ ] \ '` exist as single keys and won't accept the AltGr'd equivalents on Nordic layouts — don't impose that UX pain on others.
+
+When implementing, sweep the fleet for *every* positional binding, not just cherrypick's WASD. Until then, positional keys stay as aliases beside the layout-independent originals (see `raven-style-guide.md`, "Hotkey discoverability").
+
+Discovered during cherrypick WASD navigation work (2026-06-07).
+
+## Fleet audit: every hotkey discoverable in a tooltip + help card
+
+Policy (now in `raven-style-guide.md`, "Hotkey discoverability"): every hotkey must be surfaced both in the `F1` help card *and* in the tooltip of the GUI control it triggers (bracketed, e.g. `"Open folder [Ctrl+O]"`). Most apps in the wild miss the tooltip half; Raven apps shouldn't.
+
+Audit each app with a hotkey handler (`visualizer`, `librarian`, `xdot_viewer`, `conference_timer`, `avatar/pose_editor`, `avatar/settings_editor`, `cherrypick`) for keys that have a GUI control but no key hint in its tooltip, and fill the gaps. While there, add the standard "no shared keymap — keep surfaces in sync" warning comment at each hotkey handler (wording already in `raven-style-guide.md` and `raven/cherrypick/app.py`); currently only `visualizer` and `cherrypick` have such a comment.
+
+Discovered during cherrypick WASD navigation work (2026-06-07).
+
