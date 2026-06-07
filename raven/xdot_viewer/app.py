@@ -513,6 +513,12 @@ def _on_key(sender, app_data) -> None:
     ctrl_pressed = dpg.is_key_down(dpg.mvKey_LControl) or dpg.is_key_down(dpg.mvKey_RControl)
     shift_pressed = dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)
 
+    # No shared keymap — bindings live here, and the surfaces that make them
+    # discoverable mirror them by hand (KISS; hotkeys change rarely). If you add,
+    # remove, or rebind a key, update those surfaces too:
+    #   - the help card (search "HelpWindow")
+    #   - any tooltip naming the key (search its bracketed hint, e.g. "[Ctrl+O]")
+
     if dpg.is_item_focused("search_input"):
         if key == dpg.mvKey_Return:  # accept and unfocus
             dpg.focus_item(widget.get_dpg_widget_id())

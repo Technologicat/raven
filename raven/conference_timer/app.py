@@ -260,6 +260,12 @@ def main() -> int:
         # Help card handles its own Escape key; suppress other keys while visible.
         if _help_window is not None and _help_window.is_visible():
             return
+
+        # No shared keymap — bindings live here, and the surfaces that make them
+        # discoverable mirror them by hand (KISS; hotkeys change rarely). If you add,
+        # remove, or rebind a key, update those surfaces too:
+        #   - the help card (search "HelpWindow")
+        #   - any tooltip naming the key (search its bracketed hint, e.g. "[Ctrl+O]")
         if key == dpg.mvKey_Escape:
             dpg.stop_dearpygui()
         elif key == dpg.mvKey_F1:

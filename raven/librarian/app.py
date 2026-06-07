@@ -901,9 +901,11 @@ def librarian_hotkeys_callback(sender, app_data):
 
     # ------------------------------------------------------------
 
-    # NOTE: If you update this, to make the hotkeys discoverable, update also:
-    #  - The tooltips wherever the GUI elements are created or updated (search for e.g. "[F9]", may appear in multiple places)
-    #  - The help window
+    # No shared keymap — bindings live here, and the surfaces that make them
+    # discoverable mirror them by hand (KISS; hotkeys change rarely). If you add,
+    # remove, or rebind a key, update those surfaces too:
+    #   - the help card (search "HelpWindow")
+    #   - any tooltip naming the key (search its bracketed hint, e.g. "[Ctrl+O]")
 
     # Hotkeys that are always available, regardless of any dialogs (even if modal)
     if key == dpg.mvKey_F11:  # de facto standard hotkey for toggle fullscreen

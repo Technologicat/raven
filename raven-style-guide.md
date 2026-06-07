@@ -557,8 +557,8 @@ There is no shared keymap — bindings live in the hotkey handler, and these sur
 # No shared keymap — bindings live here, and the surfaces that make them
 # discoverable mirror them by hand (KISS; hotkeys change rarely). If you add,
 # remove, or rebind a key, update those surfaces too:
-#   - the help card (built inline in `main`; search "HelpWindow")
-#   - any toolbar tooltip naming the key (search its bracketed hint, e.g. "[Ctrl+O]")
+#   - the help card (search "HelpWindow")
+#   - any tooltip naming the key (search its bracketed hint, e.g. "[Ctrl+O]")
 ```
 
 **Positional hotkeys** (keys chosen for physical location, e.g. WASD as an arrow-key alias for one-handed use) are keyboard-layout-dependent — WASD lands at ZQSD on AZERTY, and Z/Y swap on QWERTZ. Until the fleet grows layout-aware remapping, keep positional bindings as *aliases* alongside the layout-independent originals (the arrow keys), never as replacements.

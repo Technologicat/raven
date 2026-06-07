@@ -887,7 +887,11 @@ Discovered during cherrypick WASD navigation work (2026-06-07).
 
 Policy (now in `raven-style-guide.md`, "Hotkey discoverability"): every hotkey must be surfaced both in the `F1` help card *and* in the tooltip of the GUI control it triggers (bracketed, e.g. `"Open folder [Ctrl+O]"`). Most apps in the wild miss the tooltip half; Raven apps shouldn't.
 
-Audit each app with a hotkey handler (`visualizer`, `librarian`, `xdot_viewer`, `conference_timer`, `avatar/pose_editor`, `avatar/settings_editor`, `cherrypick`) for keys that have a GUI control but no key hint in its tooltip, and fill the gaps. While there, add the standard "no shared keymap — keep surfaces in sync" warning comment at each hotkey handler (wording already in `raven-style-guide.md` and `raven/cherrypick/app.py`); currently only `visualizer` and `cherrypick` have such a comment.
+Two prerequisites are already done as of the 2026-06-07 doc sweep, so this item is narrower than it looks:
+- The standard "no shared keymap — keep surfaces in sync" warning comment is present at every hotkey handler.
+- App-level help-card coverage is 100% — all seven DPG GUI apps (`visualizer`, `librarian`, `xdot_viewer`, `conference_timer`, `avatar/pose_editor`, `avatar/settings_editor`, `cherrypick`) construct a `HelpWindow`. No whole app is missing a card.
+
+Remaining work is the *per-key* audit: for every bound key in each of the seven apps, confirm it is (a) listed in that app's help card and (b) named (bracketed) in the tooltip of the control it triggers, then fill the gaps. Note that filling a missing tooltip is a behavior change, not a doc edit — keep it as its own focused pass.
 
 Discovered during cherrypick WASD navigation work (2026-06-07).
 

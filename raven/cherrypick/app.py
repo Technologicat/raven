@@ -900,8 +900,8 @@ def _toggle_zoom_fit_cap() -> None:
 # No shared keymap — bindings live here, and the surfaces that make them
 # discoverable mirror them by hand (KISS; hotkeys change rarely). If you add,
 # remove, or rebind a key, update those surfaces too:
-#   - the help card (built inline in `main`; search "HelpWindow")
-#   - any toolbar tooltip naming the key (search its bracketed hint, e.g. "[Ctrl+O]")
+#   - the help card (search "HelpWindow")
+#   - any tooltip naming the key (search its bracketed hint, e.g. "[Ctrl+O]")
 # ---------------------------------------------------------------------------
 
 def _on_key(sender, app_data) -> None:
