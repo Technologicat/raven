@@ -36,6 +36,7 @@
 
 - *Raven-cherrypick*: the window title bar now shows the current image's filename alongside the folder (`… — folder — filename`), so the open image is identifiable from the taskbar / window switcher. In fullscreen, where the window manager hides the title bar, the filename moves into the status bar instead — so long autonamed filenames don't crowd the rest of the status bar during normal windowed use.
 - *Raven-cherrypick*: the cherry / lemon triage marker now sits just outside the top-right corner of the *image* rather than the corner of the viewer pane, so it stays beside the image when the image is small in a large window. It clamps back to the pane corner when the image fills the view.
+- *Raven-cherrypick*: the current image's position number now shows at the lower-left of the main view (e.g. `13`), mirroring the thumbnail grid's tile numbers and the `[13 / 133]` status readout. Anchored to the image like the triage marker, so it stays put as you browse same-size images.
 
 **Fixed**:
 
@@ -44,6 +45,8 @@
 - *Raven-cherrypick*: triaging then immediately navigating (e.g. `C` then `Right` within one ~16 ms frame) no longer tags the wrong image. DearPyGui dispatches same-frame key presses by keycode, not by press order, so navigation (lower keycode) moved the current image before the triage key read it; keyboard navigation is now deferred by one frame so a same-frame triage key acts on the intended image.
 
 - *Raven-cherrypick*: in a filtered view (e.g. neutral-only), tagging the current image then pressing a navigation key no longer skips the image that took its place. The just-tagged image leaves the filtered set, and navigation was resolving from the nearest surviving tile and then stepping again, overshooting by one.
+
+- *Raven-cherrypick*: a thin colored stripe no longer appears along the image edge when zoomed in past 1:1. Under magnification the GPU's bilinear sampler read just past the texture boundary and wrapped to the opposite edge (a bright bottom row bleeding into the top, etc.); the sampled region is now inset by half a texel when magnifying. Unchanged at 1:1, which samples exactly on the texel grid.
 
 - *Raven-librarian* RAG: the documents directory is now auto-created at startup if missing. Previously, a fresh install or moved-aside docs dir crashed the app with `FileNotFoundError` from `inotify_add_watch` before the GUI came up.
 - *Raven-librarian* RAG: rapid sequences of file adds and updates no longer crash the indexing pipeline with `TypeError: string indices must be integers`. The pending-edits queue now stores delete entries in the same shape as add/update entries, so the dedup pass can run uniformly.

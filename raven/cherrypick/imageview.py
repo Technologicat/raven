@@ -57,26 +57,35 @@ def _next_tag(prefix: str) -> str:
 def _anchor_beside_image(pmin: tuple[float, float], pmax: tuple[float, float],
                          view_w: int, view_h: int,
                          item_w: float, item_h: float,
-                         gap: int, margin: int) -> tuple[float, float]:
-    """Top-left position for an overlay just outside the image's top-right corner.
+                         gap: int, margin: int,
+                         corner: str = "top-right") -> tuple[float, float]:
+    """Top-left position for an overlay just outside one corner of the image.
 
-    `pmin`/`pmax` are the image rectangle in view coordinates. The overlay is
-    placed `gap` pixels to the right of the image's right edge, top-aligned with
-    the image's top edge, then clamped into ``[margin, view − item − margin]``.
+    `pmin`/`pmax` are the image rectangle in view coordinates. `corner` selects
+    placement: "top-right" puts the overlay in the right margin, top-aligned
+    with the image's top edge; "bottom-left" puts it in the left margin,
+    bottom-aligned with the image's bottom edge. Either way it sits `gap` pixels
+    beyond the image edge, then clamps into ``[margin, view − item − margin]``.
 
     The clamp gives the small-image and large-image cases a single rule: when
     the image is smaller than the view, the overlay sits in the empty canvas
     beside it (and stays put as the user browses same-size images at fixed
     pan/zoom); when the image fills or exceeds the view, the clamp pins the
-    overlay to the view's top-right corner — the original behavior.
+    overlay to that corner of the view — the original behavior.
 
     Indicators sharing this anchor keep the same position relative to the image
     regardless of where that lands on screen.
     """
-    x = min(pmax[0] + gap, view_w - item_w - margin)
-    x = max(margin, x)
-    y = min(pmin[1], view_h - item_h - margin)
-    y = max(margin, y)
+    if corner == "top-right":
+        x = pmax[0] + gap
+        y = pmin[1]
+    elif corner == "bottom-left":
+        x = pmin[0] - gap - item_w
+        y = pmax[1] - item_h
+    else:
+        raise ValueError(f"_anchor_beside_image: unknown corner {corner!r}")
+    x = max(margin, min(x, view_w - item_w - margin))
+    y = max(margin, min(y, view_h - item_h - margin))
     return (x, y)
 
 
@@ -168,6 +177,10 @@ class ImageView:
         self._triage_state: TriageState = TriageState.NEUTRAL
         self._show_triage_mark: bool = config.TRIAGE_MARK_DEFAULT_VISIBLE
         self._triage_mark_font = None  # set via set_triage_mark_font()
+
+        # Image-number indicator (bottom-left; mirrors the thumbnail tile
+        # number — the 1-based position in the current filtered view).
+        self._image_number: Optional[int] = None
 
         # Create DPG drawlist inside a wrapper child_window (for spinner overlay).
         # child_window has fixed height, so the spinner doesn't affect layout
@@ -566,6 +579,16 @@ class ImageView:
         """Update the triage state shown by the mark overlay."""
         if state != self._triage_state:
             self._triage_state = state
+            self._needs_render = True
+
+    def set_image_number(self, n: Optional[int]) -> None:
+        """Set the bottom-left image-number indicator, or None to hide.
+
+        Mirrors the thumbnail tile's position number; the app passes the
+        1-based position of the current image in the active filtered view.
+        """
+        if n != self._image_number:
+            self._image_number = n
             self._needs_render = True
 
     @property
@@ -992,7 +1015,25 @@ class ImageView:
         # --- Create new draw items ---
         new_items = []
 
+        # When magnifying (zoom > 1), inset the sampled UV region by half a
+        # texel. Otherwise the GPU's bilinear sampler reads just past the
+        # texture boundary at the edges and wraps to the opposite edge — a
+        # small but visible colored stripe (a bright bottom row bleeding into
+        # the top, etc.). Mapping the quad edges to the outer texel *centers*
+        # keeps sampling inside the texture. Guarded to zoom > 1.0: at 1:1 the
+        # pixel-snapped path above samples exactly on the texel grid and must
+        # not be offset (it would reintroduce subpixel blur).
+        if zoom > 1.0:
+            inset_u = 0.5 / (img_w * mip_scale)
+            inset_v = 0.5 / (img_h * mip_scale)
+            uv_min = (inset_u, inset_v)
+            uv_max = (1.0 - inset_u, 1.0 - inset_v)
+        else:
+            uv_min = (0.0, 0.0)
+            uv_max = (1.0, 1.0)
+
         item = dpg.draw_image(tex_tag, pmin=pmin, pmax=pmax,
+                              uv_min=uv_min, uv_max=uv_max,
                               parent=self._drawlist_tag)
         new_items.append(item)
 
@@ -1033,12 +1074,32 @@ class ImageView:
             margin = 12  # clamp distance from the view edge
             gap = 4      # space between the image edge and the icon
             ix, iy = _anchor_beside_image(pmin, pmax, self._view_w, self._view_h,
-                                          mark_size, mark_size, gap, margin)
+                                          mark_size, mark_size, gap, margin,
+                                          corner="top-right")
             item = dpg.draw_text(
                 (ix, iy), mark_icon,
                 color=(r, g, b, 160), size=mark_size,
                 parent=self._drawlist_tag)
             dpg.bind_item_font(item, self._triage_mark_font)
+            new_items.append(item)
+
+        # Image-number indicator (bottom-left: 1-based position in the view,
+        # mirroring the thumbnail tile number).
+        if self._image_number is not None:
+            num_text = str(self._image_number)
+            num_size = config.FONT_SIZE
+            margin = 12  # clamp distance from the view edge
+            gap = 4      # space between the image edge and the number
+            # draw_text is positioned by its top-left; width estimated for the
+            # anchor clamp (exact glyph metrics aren't readily available here).
+            est_w = len(num_text) * num_size * 0.6
+            nx, ny = _anchor_beside_image(pmin, pmax, self._view_w, self._view_h,
+                                          est_w, num_size, gap, margin,
+                                          corner="bottom-left")
+            item = dpg.draw_text(
+                (nx, ny), num_text,
+                color=(255, 255, 255, 150), size=num_size,
+                parent=self._drawlist_tag)
             new_items.append(item)
 
         # Compare mode number overlay (top-right, near the grid).
@@ -1053,7 +1114,8 @@ class ImageView:
             margin = 16  # clamp distance from the view edge
             gap = 4      # space between the image edge and the box
             ox, oy = _anchor_beside_image(pmin, pmax, self._view_w, self._view_h,
-                                          box_w, box_h, gap, margin)
+                                          box_w, box_h, gap, margin,
+                                          corner="top-right")
             # Semi-transparent background for readability.
             item = dpg.draw_rectangle(
                 pmin=(ox, oy),
