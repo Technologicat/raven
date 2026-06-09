@@ -104,8 +104,15 @@ ZOOM_FIT_CAP = True  # cap zoom-to-fit at 100% (no upscale of small images)
 # Preload
 # ---------------------------------------------------------------------------
 
-PRELOAD_WINDOW = 2  # ±N tiles in cross neighborhood (horizontal + vertical)
-PRELOAD_MAX_SCALE = 0.25  # cap speculative preload at this scale (skip larger mips)
+PRELOAD_WINDOW = 2  # ±N tiles each way: linear (Left/Right, wraps rows) + column (Up/Down)
+# How large a mip a speculative preload reads back to RAM is decided adaptively
+# per navigation: the smallest mip that still displays crisply at the current
+# zoom (see `preload.mip_scale_for_zoom`). A 1 MP image at fit-zoom pulls full
+# res; a multi-MP photo at the same fit-zoom pulls only a small level — so the
+# slow GPU→host readback never moves levels finer than the pane can show. The
+# GPU mip *chain* is computed regardless (see `_preload_one`); the cap only
+# governs the readback, trading a little idle-time readback + RAM for not
+# re-decoding the image on navigation.
 PRELOAD_RAM_FRACTION = 0.25  # fraction of available system RAM for preload cache
 PRELOAD_RAM_BUDGET_MIN_MB = 512  # floor (don't starve the cache on low-RAM systems)
 PRELOAD_RAM_BUDGET_MAX_MB = 16384  # ceiling (diminishing returns beyond this)

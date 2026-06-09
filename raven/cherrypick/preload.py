@@ -10,10 +10,11 @@ they are not drawn. DPG textures are created only on ``take()``, by the
 caller (ImageView), using its texture pool for fast ``set_value`` reuse.
 """
 
-__all__ = ["PreloadCache"]
+__all__ = ["PreloadCache", "mip_scale_for_zoom"]
 
 import concurrent.futures
 import logging
+import math
 import threading
 import time
 from collections.abc import Sequence
@@ -49,32 +50,57 @@ class _CacheEntry:
 
 
 def _compute_targets(vis_pos, n_visible, n_cols, window):
-    """Return visible-list positions in the ±window cross neighborhood.
+    """Return visible-list positions in the ±window neighborhood, nearest-first.
 
-    Plus-shaped: ±window along the row (horizontal) and ±window along
-    the column (vertical).  Sorted by distance from center (nearest first).
+    Two arms, each matching one pair of navigation keys:
+
+      - Horizontal (Left/Right = ±1 in the visible list): linear positions
+        ``vis_pos ± 1 .. ± window``.  Linear — *not* clipped to the current
+        grid row — because Left/Right wrap across row boundaries: the image at
+        the right edge of a row steps to the first image of the next row, and
+        the left edge to the last of the previous row.  Clipping the arm to the
+        row would leave those wrap targets uncached, so every edge-tile step
+        would miss.
+      - Vertical (Up/Down = ±n_cols): same column,
+        ``vis_pos ± n_cols .. ± window*n_cols``.
+
+    Deduplicated (the two arms coincide when ``n_cols == 1``) and sorted by
+    distance from ``vis_pos`` (nearest first), so the caller loads the most
+    likely next image soonest.
     """
-    row = vis_pos // n_cols
-    col = vis_pos % n_cols
-    targets = []
-    # Horizontal: same row, ±window columns.
-    for dc in range(-window, window + 1):
-        if dc == 0:
-            continue
-        c = col + dc
-        if 0 <= c < n_cols:
-            p = row * n_cols + c
-            if 0 <= p < n_visible:
-                targets.append((abs(dc), p))
-    # Vertical: same column, ±window rows.
-    for dr in range(-window, window + 1):
-        if dr == 0:
-            continue
-        p = (row + dr) * n_cols + col
-        if 0 <= p < n_visible:
-            targets.append((abs(dr), p))
-    targets.sort()  # by distance
-    return [p for _, p in targets]
+    nearest: dict[int, int] = {}  # position -> smallest distance seen
+
+    def offer(p, dist):
+        if 0 <= p < n_visible and p != vis_pos and dist < nearest.get(p, dist + 1):
+            nearest[p] = dist
+
+    for d in range(1, window + 1):
+        offer(vis_pos - d, d)              # horizontal (linear), Left
+        offer(vis_pos + d, d)              # horizontal (linear), Right
+        offer(vis_pos - d * n_cols, d)     # vertical (same column), Up
+        offer(vis_pos + d * n_cols, d)     # vertical (same column), Down
+
+    return [p for p, _d in sorted(nearest.items(), key=lambda kv: (kv[1], kv[0]))]
+
+
+def mip_scale_for_zoom(zoom: float) -> float:
+    """Smallest mip scale (1.0, 0.5, 0.25, …) that displays crisply at *zoom*.
+
+    A mip chain halves from 1.0, and the mip engine picks the smallest mip whose
+    scale is ``>= zoom`` so it downsamples a larger level rather than upsampling
+    a smaller one (see ``ImageView._select_mip_from``). The matching preload cap
+    is therefore ``2 ** ceil(log2(zoom))``, clamped to ``<= 1.0`` — no mip
+    exceeds native, so past 1:1 (reachable with the zoom-fit 100% cap off) this
+    returns 1.0 and the *view* magnifies the native level.
+
+    This is the adaptive half of the preload cap: a 1 MP image at fit-zoom
+    (~0.8) needs the 1.0 level, while a multi-MP photo at fit-zoom (~0.2) needs
+    only 0.25 — so we never read back levels finer than the pane can show.
+    Degenerate / unknown zooms (``<= 0``) fall back to full res.
+    """
+    if zoom >= 1.0 or zoom <= 0.0:
+        return 1.0
+    return min(1.0, 2.0 ** math.ceil(math.log2(zoom)))
 
 
 class PreloadCache:
@@ -94,14 +120,12 @@ class PreloadCache:
     def __init__(self, device: torch.device,
                  lanczos_order: int = lanczos.DEFAULT_ORDER,
                  mip_min_size: int = config.MIP_MIN_SIZE,
-                 max_scale: float = config.PRELOAD_MAX_SCALE,
                  ram_budget_mb: int = config.PRELOAD_RAM_BUDGET_FALLBACK_MB,
                  window: int = config.PRELOAD_WINDOW,
                  debug: bool = False):
         self._device = device
         self._order = lanczos_order
         self._mip_min_size = mip_min_size
-        self._max_scale = max_scale
         self._ram_budget = ram_budget_mb * 1024 * 1024  # bytes
         self._window = window
         self._debug = debug
@@ -160,19 +184,26 @@ class PreloadCache:
                         f"ram={ram_bytes / 1e6:.0f}MB "
                         f"total={self._ram_used / 1e6:.0f}MB")
 
-    def schedule_neighbors(self, current_idx, visible, n_cols, triage) -> None:
+    def schedule_neighbors(self, current_idx, visible, n_cols, triage,
+                           display_scale: float = 1.0) -> None:
         """Recompute the preload window and start loading neighbors.
 
         *current_idx*: current image index (in the full list).
         *visible*: ``grid.visible`` — list of indices visible under the filter.
         *n_cols*: ``grid.n_cols`` — column count for 2D neighborhood.
         *triage*: ``TriageManager`` — for file paths.
+        *display_scale*: current image's display zoom (``ImageView.zoom``).
+        Neighbors are preloaded only up to the mip needed to display crisply at
+        this zoom, so multi-MP photos browsed at a small fit-zoom don't read back
+        full-res levels the pane can't show (GPU→host readback is the slow path).
 
         Evicts entries outside the new window (except pinned), submits
         tasks for new targets.
         """
         if current_idx not in visible:
             return  # current is filtered out; don't preload
+
+        max_scale = mip_scale_for_zoom(display_scale)
 
         vis_pos = visible.index(current_idx)
         target_positions = _compute_targets(vis_pos, len(visible), n_cols,
@@ -208,7 +239,7 @@ class PreloadCache:
                                device=self._device,
                                order=self._order,
                                mip_min_size=self._mip_min_size,
-                               max_scale=self._max_scale,
+                               max_scale=max_scale,
                                debug=self._debug,
                                done_callback=self._on_task_done)
                 self._task_mgr.submit(_preload_one, task_env)
@@ -216,6 +247,7 @@ class PreloadCache:
         if self._debug:
             cached = set(self._cache.keys())
             logger.info(f"PreloadCache.schedule_neighbors: current={current_idx} "
+                        f"display_scale={display_scale:.3f} max_scale={max_scale} "
                         f"targets={sorted(target_indices)} "
                         f"cached={sorted(cached)} "
                         f"loading={sorted(self._loading)} "

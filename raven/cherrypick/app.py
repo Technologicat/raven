@@ -74,7 +74,7 @@ from .loader import ThumbnailPipeline
 from .imageview import ImageView
 from .grid import ThumbnailGrid, FilterMode
 from .gridnav import resolve_undo_nav_target
-from .preload import PreloadCache
+from .preload import PreloadCache, mip_scale_for_zoom
 from .compare import CompareMode
 from ..common.image import utils as imageutils
 from ..common.video import postprocessor
@@ -412,11 +412,16 @@ def _load_current_image() -> None:
             if new_size != old_size:
                 iv.zoom_to_fit()
 
-            # If the preloaded mips are capped (missing larger levels),
-            # generate them in the background. Donated entries already
-            # have the full chain, so check before submitting.
-            has_fullres = any(s >= 1.0 for s, _w, _h, _f in cached.mips)
-            if not has_fullres:
+            # If the preloaded mips are too small to display crisply at the
+            # current zoom, generate the larger levels in the background.
+            # Preloads are capped adaptively to the zoom (mip_scale_for_zoom),
+            # so a photo preloaded at a small fit-zoom is already crisp and
+            # skips the augment; only a later zoom-in (or a donated entry that
+            # happens to be smaller) triggers it.
+            needed_scale = mip_scale_for_zoom(iv.zoom)
+            largest_cached = max((s for s, _w, _h, _f in cached.mips),
+                                 default=0.0)
+            if largest_cached < needed_scale:
                 iv.augment_mips(entry.path)
         else:
             # Cache miss — decode + mip generation on background thread.
@@ -830,6 +835,31 @@ def _on_double_click(idx: int) -> None:
 def _on_zoom_changed(zoom: float) -> None:
     """Called by the image view when zoom changes."""
     _update_status()
+    _ensure_mips_for_zoom(zoom)
+
+
+def _ensure_mips_for_zoom(zoom: float) -> None:
+    """Augment the current image to full res when a zoom-in outruns its mips.
+
+    Preloads (and the on-arrival mips) are capped to the scale needed at the
+    *arrival* zoom, to spare the slow GPU→host readback on multi-MP photos. When
+    the user then zooms in on the image they're inspecting, the finer levels
+    aren't present yet — without this it would stay soft with no recovery path.
+    The augment generates the full chain, so one trigger covers any further
+    zoom-in; the loaded-vs-needed guard keeps it from re-firing or thrashing.
+    """
+    iv = _app_state["image_view"]
+    grid = _app_state["grid"]
+    triage = _app_state["triage"]
+    if iv is None or grid is None or triage is None:
+        return
+    if not iv.has_image or iv.mip_loading:
+        return
+    idx = grid.current
+    if not (0 <= idx < len(triage)):
+        return
+    if iv.loaded_max_scale < mip_scale_for_zoom(zoom):
+        iv.augment_mips(triage[idx].path)
 
 
 def _on_selection_changed() -> None:
@@ -1794,7 +1824,8 @@ def main() -> int:
                         and grid is not None and triage is not None):
                     _preload_pending = False
                     preload.schedule_neighbors(grid.current, grid.visible,
-                                               grid.n_cols, triage)
+                                               grid.n_cols, triage,
+                                               display_scale=iv.zoom)
 
             # Beacon fade (resize orientation flash).
             if _beacon_start_ns > 0 and grid is not None:

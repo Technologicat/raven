@@ -9,7 +9,12 @@ import torch
 
 from unpythonic.env import env
 
-from raven.cherrypick.preload import PreloadCache, _CacheEntry, _compute_targets
+from raven.cherrypick.preload import (
+    PreloadCache,
+    _CacheEntry,
+    _compute_targets,
+    mip_scale_for_zoom,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -55,16 +60,63 @@ class TestComputeTargets:
         assert all(0 <= t < 5 for t in targets)
         assert 0 not in targets  # center excluded
 
-    def test_cross_shape_with_grid(self):
-        # 4×4 grid (16 items, 4 cols). Center at (1,1) = position 5.
-        # Horizontal: col 0 → pos 4, col 2 → pos 6, col 3 → pos 7.
-        # Vertical: row 0 → pos 1, row 2 → pos 9, row 3 → pos 13.
+    def test_shape_with_grid(self):
+        # 4×4 grid (16 items, 4 cols). Center at (1,1) = position 5, window=3.
+        # Horizontal (linear, Left/Right): 5±1, 5±2, 5±3 → 2,3,4,6,7,8.
+        # Vertical (same column, Up/Down): 5±4, 5±8(=−3 out, 13) → 1,9,13.
         targets = _compute_targets(vis_pos=5, n_visible=16, n_cols=4, window=3)
-        assert set(targets) == {4, 6, 7, 1, 9, 13}
+        assert set(targets) == {2, 3, 4, 6, 7, 8, 1, 9, 13}
+
+    def test_includes_row_wrap_neighbors(self):
+        # The linear horizontal arm must cover Left/Right's row-wrap targets:
+        # otherwise stepping off a row edge always misses the cache.
+        # 4×4 grid. Pos 3 is the right edge of row 0; Right steps to pos 4
+        # (row 1, col 0). Pos 4 is the left edge of row 1; Left steps to pos 3.
+        right_edge = _compute_targets(vis_pos=3, n_visible=16, n_cols=4, window=2)
+        assert 4 in right_edge  # Right wraps to next row's first tile
+        left_edge = _compute_targets(vis_pos=4, n_visible=16, n_cols=4, window=2)
+        assert 3 in left_edge   # Left wraps to previous row's last tile
+
+    def test_no_duplicates_single_column(self):
+        # n_cols == 1: horizontal and vertical arms coincide. Must dedupe.
+        targets = _compute_targets(vis_pos=5, n_visible=20, n_cols=1, window=3)
+        assert len(targets) == len(set(targets))
+        assert set(targets) == {2, 3, 4, 6, 7, 8}
 
     def test_empty_for_single_item(self):
         targets = _compute_targets(vis_pos=0, n_visible=1, n_cols=1, window=5)
         assert targets == []
+
+
+# ---------------------------------------------------------------------------
+# mip_scale_for_zoom
+# ---------------------------------------------------------------------------
+
+class TestMipScaleForZoom:
+    def test_returns_smallest_mip_not_below_zoom(self):
+        # Smallest mip scale (1.0, 0.5, 0.25, …) that is >= zoom.
+        assert mip_scale_for_zoom(0.8) == 1.0   # needs the 1.0 level
+        assert mip_scale_for_zoom(0.5) == 0.5   # exact boundary
+        assert mip_scale_for_zoom(0.51) == 1.0  # just past 0.5 → 1.0
+        assert mip_scale_for_zoom(0.25) == 0.25
+        assert mip_scale_for_zoom(0.2) == 0.25  # multi-MP photo at small fit
+        assert mip_scale_for_zoom(0.1) == 0.125
+
+    def test_clamps_at_native(self):
+        # No mip exceeds 1.0 — zoom past 1:1 still caps at native res.
+        assert mip_scale_for_zoom(1.0) == 1.0
+        assert mip_scale_for_zoom(2.5) == 1.0
+
+    def test_degenerate_zoom_falls_back_to_full(self):
+        assert mip_scale_for_zoom(0.0) == 1.0
+        assert mip_scale_for_zoom(-1.0) == 1.0
+
+    def test_never_below_zoom(self):
+        # Below 1:1 the chosen mip is >= zoom, so the mip engine downsamples a
+        # larger level rather than upsampling a smaller one. (Past 1:1 it clamps
+        # to native and the *view* magnifies — covered by test_clamps_at_native.)
+        for zoom in (0.01, 0.13, 0.27, 0.49, 0.5, 0.51, 0.99):
+            assert mip_scale_for_zoom(zoom) >= zoom
 
 
 # ---------------------------------------------------------------------------

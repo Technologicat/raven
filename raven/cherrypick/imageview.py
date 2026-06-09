@@ -447,6 +447,17 @@ class ImageView:
         """True while background mip generation is in progress."""
         return self._mip_loading
 
+    @property
+    def loaded_max_scale(self) -> float:
+        """Largest mip scale currently loaded (0.0 if no image).
+
+        Lets the app tell when a zoom-in has outrun the loaded detail and an
+        on-demand augment is warranted — preloads are capped to the arrival
+        zoom, so finer levels aren't present until something asks for them.
+        """
+        with self._mips_lock:
+            return max((s for s, _w, _h, _f in self._mip_arrays), default=0.0)
+
     def _spinner_bottom_y(self, view_h: int) -> int:
         """Y position to place the spinner near the bottom of the view."""
         return max(0, view_h - self._spinner_h - config.DPG_WINDOW_PADDING_Y)

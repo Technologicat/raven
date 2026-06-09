@@ -48,6 +48,10 @@
 
 - *Raven-cherrypick*: in a filtered view (e.g. neutral-only), tagging the current image then pressing a navigation key no longer skips the image that took its place. The just-tagged image leaves the filtered set, and navigation was resolving from the nearest surviving tile and then stepping again, overshooting by one.
 
+- *Raven-cherrypick*: stepping off a grid row edge (`Right` from the last tile of a row, `Left` from the first) no longer reloads the next image's mips from scratch. The neighbor preload cache clipped its horizontal reach to the current row, so the row-wrap target — the actual `Left`/`Right` destination at an edge — was never prefetched; the horizontal reach now follows the linear navigation order across row boundaries.
+
+- *Raven-cherrypick*: navigating to a preloaded neighbor no longer flashes it at low resolution before sharpening. Speculative preloads were capped at a fixed quarter resolution, so even on a cache hit the larger mip levels were regenerated on arrival — a visible re-sharpen on every step. The cap is now adaptive to the current zoom: a neighbor is prefetched at exactly the resolution the pane shows it at, so small images at fit-zoom arrive crisp while multi-MP photos still avoid the slow full-res GPU→host readback they don't need.
+
 - *Raven-cherrypick*: a thin colored stripe no longer appears along the image edge when zoomed in past 1:1. Under magnification the GPU's bilinear sampler read just past the texture boundary and wrapped to the opposite edge (a bright bottom row bleeding into the top, etc.); the sampled region is now inset by half a texel when magnifying. Unchanged at 1:1, which samples exactly on the texel grid.
 
 - *Raven-librarian* RAG: the documents directory is now auto-created at startup if missing. Previously, a fresh install or moved-aside docs dir crashed the app with `FileNotFoundError` from `inotify_add_watch` before the GUI came up.
