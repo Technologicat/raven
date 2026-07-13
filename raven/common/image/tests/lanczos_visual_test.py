@@ -9,10 +9,10 @@ don't spam the disk.
 
 Usage::
 
-    python -m raven.common.tests.lanczos_visual_test --outdir /tmp/lanczos_demo
-    python -m raven.common.tests.lanczos_visual_test --show
-    python -m raven.common.tests.lanczos_visual_test --show --orders 3,4,5
-    python -m raven.common.tests.lanczos_visual_test --bench
+    python -m raven.common.image.tests.lanczos_visual_test --outdir /tmp/lanczos_demo
+    python -m raven.common.image.tests.lanczos_visual_test --show
+    python -m raven.common.image.tests.lanczos_visual_test --show --orders 3,4,5
+    python -m raven.common.image.tests.lanczos_visual_test --bench
 
 What to look for:
 
