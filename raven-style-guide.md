@@ -1,6 +1,6 @@
 # The Raven coding style
 
-Derived from the [unpythonic style guide](https://github.com/Technologicat/unpythonic/blob/master/CONTRIBUTING.md#style-guide), adapted for the Raven codebase. Documents actual patterns observed in the code.
+Documents actual patterns observed in the Raven codebase. Adapted from unpythonic's house style — via [an extract made in 2026-02](briefs/unpythonic-style-extract-2026-02.md), which is archived for provenance; unpythonic's maintained style guide lives in [its `CONTRIBUTING.md`](https://github.com/Technologicat/unpythonic/blob/master/CONTRIBUTING.md#style-guide).
 
 ## Philosophy
 
