@@ -1,5 +1,32 @@
 # Deferred TODOs
 
+## Decide the public name: "Raven" is taken, and the project has outgrown "raven-visualizer"
+
+Raven has no PyPI package, and can't easily get one under either candidate name.
+`raven` on PyPI is Sentry's old client, and the name is common enough to be crowded
+generally — there is now an AI product using it too. Meanwhile `raven-visualizer`
+(the name in `pyproject.toml`) no longer describes the thing: Raven is a constellation
+of apps now, and the visualizer is one of them.
+
+So this is a naming *and* branding decision, not a packaging chore, and it needs an
+in-house discussion before anything is chosen.
+
+What any replacement has to preserve, since the current name is doing several jobs at once:
+
+- **The local in-joke.** Jyväskylä once ran Korppi, a course-management system built
+  in-house at the university before a commercial product replaced it. "Jyväskylä develops
+  ravens" is the tradition — cheekily generalized from a single data point.
+- **The literal aptness.** Ravens collect shiny things, which is precisely what the
+  visualizer does. This is where the name came from, back in the visualizer-only days
+  (~2024).
+- **The constellation pun.** Corvus *is* an actual constellation, which landed retroactively
+  once Raven became a constellation of apps rather than one tool.
+
+Decision inputs: discoverability (a crowded name costs visibility), namespace availability on
+PyPI, and whatever branding constraints the in-house discussion surfaces. Note that keeping
+"Raven" as the *project* name while publishing under a distinct PyPI name is also on the
+table — the two don't have to match.
+
 ## Audit fleet for dict constants that should be `frozendict`
 
 Several modules across Raven hold module-level dict constants that are used as immutable defaults or lookup tables, relying on "don't mutate this" by convention. `unpythonic.frozendict` (already a Raven dep) enforces it with teeth and costs nothing extra; Python 3.15 will also ship a stdlib `frozendict`.
