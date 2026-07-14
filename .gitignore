@@ -16,3 +16,10 @@ pdm.lock
 .coverage
 coverage.xml
 htmlcov/
+
+# Downloaded THA3 model weights (~860 MB). Fetched at setup, not distributed here.
+raven/vendor/tha3/models/
+
+# Parody character assets. Deliberately unpublished.
+raven/avatar/assets/characters/parody/
+raven/avatar/assets/characters/00_workfiles/parody/
