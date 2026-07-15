@@ -8,9 +8,11 @@ import pytest
 from raven.papers import download as download_module
 from raven.papers import httpfetch as httpfetch_module
 from raven.papers.download import (
+    ArxivMetadataError,
     download_papers,
     extract_ids_from_bib,
     format_filename,
+    format_years,
     get_paper_metadata,
     parse_metadata_response,
 )
@@ -193,6 +195,44 @@ class TestFormatFilename:
         assert "Foo - A Subtitle" in filename
         assert ":" not in filename
 
+    def test_title_question_mark_replaced(self):
+        """A mid-title '? ' becomes ' - ' so the question doesn't run into the next clause."""
+        _, _, filename = format_filename(
+            "2301.12345", ["X"], "2023", None, "Is It Enough? A Study", "v1"
+        )
+        assert "Is It Enough - A Study" in filename
+        assert "?" not in filename
+
+    def test_title_trailing_question_mark_dropped(self):
+        """A '?' with nothing after it is just stripped — no dangling separator inserted."""
+        _, _, filename = format_filename(
+            "2301.12345", ["X"], "2023", None, "Is It Enough?", "v1"
+        )
+        assert filename == "X (2023) - Is It Enough - 2301.12345v1.pdf"
+
+    def test_title_exclamation_and_semicolon_replaced(self):
+        """'! ' and '; ' clause boundaries also become ' - '."""
+        _, _, bang = format_filename(
+            "2301.12345", ["X"], "2023", None, "Surprise! A Method", "v1"
+        )
+        assert "Surprise - A Method" in bang
+        _, _, semi = format_filename(
+            "2301.12345", ["X"], "2023", None, "First Part; Second Part", "v1"
+        )
+        assert "First Part - Second Part" in semi
+
+    def test_title_em_and_en_dash_normalized(self):
+        """Em/en dashes become a plain hyphen instead of collapsing to a double space."""
+        _, _, em = format_filename(
+            "2301.12345", ["X"], "2023", None, "Attention — Revisited", "v1"
+        )
+        assert "Attention - Revisited" in em
+        assert "  " not in em  # no double space left behind
+        _, _, en = format_filename(
+            "2301.12345", ["X"], "2023", None, "Results 2020–2023", "v1"
+        )
+        assert "Results 2020-2023" in en
+
     def test_title_sanitized(self):
         """Unsafe characters are stripped."""
         _, _, filename = format_filename(
@@ -225,6 +265,23 @@ class TestFormatFilename:
             "2301.12345v2", ["X"], "2023", None, "T", "v3"
         )
         assert resolved_id == "2301.12345v3"
+
+
+# ---------------------------------------------------------------------------
+# format_years — year parenthetical
+# ---------------------------------------------------------------------------
+
+class TestFormatYears:
+    """Verify the publication-year parenthetical rendering."""
+
+    def test_single_year(self):
+        assert format_years("2023", None) == "(2023)"
+
+    def test_same_revision_year_collapsed(self):
+        assert format_years("2023", "2023") == "(2023)"
+
+    def test_different_revision_year(self):
+        assert format_years("2023", "2024") == "(2023, revised 2024)"
 
 
 # ---------------------------------------------------------------------------
@@ -278,6 +335,22 @@ class TestParseMetadataResponse:
         assert md["abstract"] == "Widgets are interesting."
         assert md["pdf_url"] == "http://arxiv.org/pdf/2301.12345v1"
         assert md["filename"].endswith(".pdf")
+        assert md["citation"] == "Smith, Alice (2023) - A Study of Widgets"
+
+    def test_citation_uses_real_title_not_filename_safe(self):
+        """The citation keeps punctuation the filename would strip (colon, '?')."""
+        xml = _atom_response(title="Is One Layer Enough? A Study: Widgets")
+        md = parse_metadata_response(xml, "2301.12345")
+        assert md["citation"] == "Smith, Alice (2023) - Is One Layer Enough? A Study: Widgets"
+        # ...while the filename sanitizes those same characters away.
+        assert "?" not in md["filename"]
+        assert ":" not in md["filename"]
+
+    def test_citation_includes_revised_year(self):
+        xml = _atom_response(published="2023-01-01T00:00:00Z",
+                             updated="2024-06-01T00:00:00Z")
+        md = parse_metadata_response(xml, "2301.12345")
+        assert md["citation"] == "Smith, Alice (2023, revised 2024) - A Study of Widgets"
 
     def test_updated_different_year(self):
         """When updated year differs from published year, version_year is set."""
@@ -303,6 +376,17 @@ class TestParseMetadataResponse:
         md = parse_metadata_response(xml, "2301.12345")
         assert md["version"] == "v3"
         assert md["resolved_id"] == "2301.12345v3"
+
+    def test_entryless_feed_raises_readable_error(self):
+        """A nonexistent/malformed ID yields an entry-less feed; fail clearly."""
+        empty_feed = (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<feed xmlns="http://www.w3.org/2005/Atom"></feed>'
+        ).encode("utf-8")
+        with pytest.raises(ArxivMetadataError, match="2614.19062"):
+            parse_metadata_response(empty_feed, "2614.19062")
+        # Still a ValueError subclass, so broad handlers keep catching it.
+        assert issubclass(ArxivMetadataError, ValueError)
 
 
 # ---------------------------------------------------------------------------
@@ -420,8 +504,8 @@ class TestDownloadPapers:
         pdf_calls = [u for u in calls if "/pdf/" in u]
         assert len(pdf_calls) == 1  # PDF fetched once, even though ID repeated
 
-    def test_exception_during_fetch_continues(self, tmp_path):
-        """A failure on one ID doesn't abort the whole run."""
+    def test_exception_during_fetch_continues(self, tmp_path, capsys):
+        """An unexpected failure on one ID doesn't abort the run, and prints a traceback."""
         xml_good = _atom_response(arxiv_id="2301.00002")
 
         def flaky_get(url, *a, **kw):
@@ -433,6 +517,28 @@ class TestDownloadPapers:
              patch.object(httpfetch_module.requests, "get", side_effect=flaky_get):
             download_papers(["2301.00001", "2301.00002"], output_dir=str(tmp_path))
         # The good one still lands
+        pdfs = list(tmp_path.glob("*.pdf"))
+        assert len(pdfs) == 1
+        assert "2301.00002" in pdfs[0].name
+        # An unexpected error keeps its traceback for debugging.
+        assert "Traceback" in capsys.readouterr().err
+
+    def test_bad_id_reports_cleanly_and_continues(self, tmp_path, capsys):
+        """A malformed/nonexistent ID prints a one-line failure (no traceback) and the run continues."""
+        empty_feed = (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<feed xmlns="http://www.w3.org/2005/Atom"></feed>'
+        ).encode("utf-8")
+        xml_good = _atom_response(arxiv_id="2301.00002")
+        with patch.object(download_module, "RateLimiter", _NoWaitRateLimiter), \
+             patch.object(httpfetch_module.requests, "get",
+                          side_effect=_mock_requests_get({"2614.19062": empty_feed,
+                                                          "2301.00002": xml_good})):
+            download_papers(["2614.19062", "2301.00002"], output_dir=str(tmp_path))
+        captured = capsys.readouterr()
+        assert "2614.19062 failed" in captured.out
+        assert "Traceback" not in captured.err  # expected error → no traceback
+        # The good one still lands.
         pdfs = list(tmp_path.glob("*.pdf"))
         assert len(pdfs) == 1
         assert "2301.00002" in pdfs[0].name

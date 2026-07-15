@@ -40,6 +40,8 @@
 - *Raven-cherrypick*: **undo / redo for triage moves** — `Ctrl+Z` / `Ctrl+Shift+Z` (also `Ctrl+Y`), plus toolbar buttons. Reverts the last cherry / lemon / clear / winner action, including a multi-select batch as one step, and keeps the view on the changed image so you see what changed — staying put when you're already on it (e.g. reverting a winner+losers set leaves the winner current), only moving when needed. Works from a filtered view too. Session-only: opening a folder rescans from disk, which is the source of truth.
 - *Raven-cherrypick*: **WASD navigation** as an alias for the arrow keys, plus `Q` / `E` for page up / down — so triage can be done one-handed (left hand on WASD, with the `X` / `C` / `V` triage cluster right below it) on a coffee break. Mirrors the arrows everywhere they work, including panning the focused image pane. The arrow keys keep working unchanged.
 
+- *Raven-arxiv-download*: prints the paper's citation (`Authors (Year) - Title`) just before downloading its PDF, so it stays on screen during the rate-limit wait — a mistyped ID that resolved to the wrong paper is caught before the download completes. Only shown when a paper is actually being fetched; already-present papers are reported by their existing one-line status.
+
 **Fixed**:
 
 - *Raven-cherrypick*: triaging an image (cherry / lemon / winner) while its mips were still loading no longer leaves it stuck at a reduced resolution or failing to appear. The triage move relocates the file out from under the in-flight background decode, which then failed with `FileNotFoundError`; the load now restarts from the file's new location, whether it was filling in the full-res level of a preloaded image or doing the initial decode of a cache-miss one.
@@ -58,6 +60,10 @@
 - *Raven-librarian* RAG: rapid sequences of file adds and updates no longer crash the indexing pipeline with `TypeError: string indices must be integers`. The pending-edits queue now stores delete entries in the same shape as add/update entries, so the dedup pass can run uniformly.
 
 - *Raven-visualizer* importer: BibTeX case-preservation grouping braces (`{Word}`, `{ACRONYM}`, `{{nested}}`) are now stripped from titles and abstracts, and common LaTeX diacritics (`\"o` → ö, `\'e` → é, `\c{c}` → ç, `\ae`, `\o`, …) are rendered as Unicode. Escaped literal braces (`\{`, `\}`) are preserved.
+
+- *Raven-arxiv-download*: downloaded-filename titles no longer read as run-on sentences. Clause boundaries that the filename sanitizer used to drop (`:` `?` `!` `;` followed by a space) now become ` - `, and em/en dashes become a plain `-` instead of collapsing to a double space (e.g. `…Own Exploration? Gradient-Guided…` → `…Own Exploration - Gradient-Guided…`).
+
+- *Raven-arxiv-download*: a nonexistent or malformed arXiv ID (e.g. a typoed month, `2614.19062`) now fails with a readable one-line "no arXiv entry for ID …" message — no traceback, since it's an expected user error — instead of an opaque `AttributeError`. The run continues to the remaining IDs; genuinely unexpected errors (network, parse bugs) still print a traceback for debugging.
 
 - *Raven-arxiv-download* / *raven-arxiv-search*: HTTP 429 responses from the arXiv API no longer abort the run. Both tools now retry up to three attempts with backoff (honoring `Retry-After` when set, else exponential 3/6 s) and send an identifying `User-Agent` per arXiv's API TOU. Triggered occasionally on cache-miss bursts even when the caller is within the published 3 s rate limit; `raven-arxiv-download` also now goes straight to HTTPS instead of getting redirected from HTTP.
 

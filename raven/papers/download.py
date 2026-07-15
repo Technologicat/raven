@@ -11,6 +11,8 @@ Thanks to Qwen3-30B-A3B-Thinking-2507 and the documentation:
 from __future__ import annotations
 
 __all__ = [
+    "ArxivMetadataError",
+    "format_years",
     "format_filename",
     "parse_metadata_response",
     "get_paper_metadata",
@@ -44,6 +46,29 @@ CHECKMARK = "\u2713"  # ✓
 CROSS = "\u2717"      # ✗
 
 
+class ArxivMetadataError(ValueError):
+    """Raised when an arXiv API response carries no usable paper metadata.
+
+    Typically a nonexistent or malformed arXiv ID (e.g. a typoed month):
+    arXiv answers with a well-formed but entry-less Atom feed, so there is
+    no paper to parse. Inherits `ValueError` so existing broad handlers
+    still catch it; `download_papers` catches it specifically to report the
+    offending ID without a traceback — an expected user error, not a bug.
+    """
+
+
+def format_years(original_year: str,
+                 version_year: str | None) -> str:
+    """Render the publication-year parenthetical for a reference.
+
+    ``"(2023)"`` normally, or ``"(2023, revised 2024)"`` when *version_year*
+    differs from *original_year* (a later revision of the paper).
+    """
+    if version_year is not None and version_year != original_year:
+        return f"({original_year}, revised {version_year})"
+    return f"({original_year})"
+
+
 def format_filename(arxiv_id: str,
                     authors: list[str],
                     original_year: str,
@@ -65,11 +90,15 @@ def format_filename(arxiv_id: str,
     elif not authors:
         author_str = "Unknown"
 
-    version_year_str = ""
-    if version_year is not None and version_year != original_year:
-        version_year_str = f", revised {version_year}"
-
-    title = title.replace(": ", " - ")
+    # Normalize clause separators that the safe-char filter (below) would
+    # otherwise drop, leaving the title reading as a run-on. A ":" / "?" / "!"
+    # / ";" used as a clause boundary (punctuation + space) becomes " - "
+    # (e.g. "…Own Exploration? Gradient-Guided…" → "…Own Exploration - Gradient-Guided…");
+    # em/en dashes, which the filter would drop leaving a double space, become
+    # a plain "-" (which is in the safe set).
+    for separator in (": ", "? ", "! ", "; "):
+        title = title.replace(separator, " - ")
+    title = title.replace("—", "-").replace("–", "-")
     safe_title = "".join(c for c in title if c.isalnum() or c in stringmaps.filename_safe_nonalphanum)
     safe_title = safe_title[:title_length_limit] + ("..." if len(title) > title_length_limit else "")
 
@@ -80,7 +109,7 @@ def format_filename(arxiv_id: str,
     safe_resolved_id = resolved_id.replace("/", "_")
     safe_resolved_id = "".join(c for c in safe_resolved_id if c.isalnum() or c in stringmaps.filename_safe_nonalphanum)
 
-    filename = f"{author_str} ({original_year}{version_year_str}) - {safe_title} - {safe_resolved_id}.pdf"
+    filename = f"{author_str} {format_years(original_year, version_year)} - {safe_title} - {safe_resolved_id}.pdf"
     return author_str, resolved_id, filename
 
 
@@ -96,6 +125,11 @@ def parse_metadata_response(xml_content: bytes,
     ns = {"atom": "http://www.w3.org/2005/Atom"}
     root = ET.fromstring(xml_content)
     entry = root.find(".//atom:entry", ns)
+    if entry is None:
+        # arXiv returns an entry-less feed for a nonexistent or malformed ID
+        # (e.g. a typoed month, as in "2614.19062"). Fail with something
+        # readable instead of an AttributeError from the next .find().
+        raise ArxivMetadataError(f"no arXiv entry for ID '{arxiv_id}' (nonexistent or malformed ID?)")
 
     title_elem = entry.find(".//atom:title", ns)
     title = title_elem.text.strip() if title_elem is not None else "untitled"
@@ -137,6 +171,11 @@ def parse_metadata_response(xml_content: bytes,
         arxiv_id, authors, original_year, version_year, title, version, title_length_limit
     )
 
+    # Human-readable one-line reference, e.g.
+    # "Zhang and Hu et al. (2026) - Is One Layer Enough? ...". Uses the real
+    # title (not the filename-safe one), so punctuation stays intact.
+    citation = f"{author_str} {format_years(original_year, version_year)} - {title}"
+
     return {
         "original_id": arxiv_id,
         "resolved_id": resolved_id,
@@ -145,6 +184,7 @@ def parse_metadata_response(xml_content: bytes,
         "original_year": original_year,
         "version_year": version_year,
         "title": title,
+        "citation": citation,
         "abstract": abstract,
         "pdf_url": pdf_url,
         "filename": filename,
@@ -208,6 +248,11 @@ def download_papers(arxiv_ids: List[str],
                     if not os.path.exists(save_path):
                         pdf_url = metadata["pdf_url"]
                         if pdf_url is not None:
+                            # Show which paper this resolved to before the
+                            # rate-limit wait — the one branch that actually
+                            # waits, and the one where a wrong-ID typo would
+                            # otherwise cost a full download before you notice.
+                            print(f"  {metadata['citation']}")
                             print(f"{colorizer.colorize(GLOBE, colorizer.Style.BRIGHT, colorizer.Fore.BLUE)} {arxiv_id}{resolved_id_str}: downloading PDF")
                             rate_limiter.wait()
                             pdf_response = httpfetch.arxiv_get(pdf_url)
@@ -225,8 +270,14 @@ def download_papers(arxiv_ids: List[str],
                     print(f"{colorizer.colorize('-', colorizer.Style.BRIGHT, colorizer.Fore.YELLOW)} {arxiv_id}{resolved_id_str} already exists as '{save_path}'")
             else:
                 print(f"{colorizer.colorize('-', colorizer.Style.BRIGHT, colorizer.Fore.YELLOW)} {arxiv_id}{resolved_id_str} already processed (during this session), skipping")
+        except ArxivMetadataError as e:
+            # Expected user error (bad ID) — a one-line message is enough,
+            # no traceback.
+            print(f"{colorizer.colorize(CROSS, colorizer.Style.BRIGHT, colorizer.Fore.RED)} {arxiv_id} failed: {e}")
         except Exception as e:
-            print(f"{colorizer.colorize(CROSS, colorizer.Style.BRIGHT, colorizer.Fore.RED)} {arxiv_id} failed: {str(e)}")
+            # Unexpected (network blip, parse bug, …) — keep the traceback
+            # for debugging.
+            print(f"{colorizer.colorize(CROSS, colorizer.Style.BRIGHT, colorizer.Fore.RED)} {arxiv_id} failed: {type(e).__name__}: {e}")
             traceback.print_exc()
 
 
