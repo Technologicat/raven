@@ -42,6 +42,8 @@
 
 - *Raven-arxiv-download*: prints the paper's citation (`Authors (Year) - Title`) just before downloading its PDF, so it stays on screen during the rate-limit wait — a mistyped ID that resolved to the wrong paper is caught before the download completes. Only shown when a paper is actually being fetched; already-present papers are reported by their existing one-line status.
 
+- *Raven-visualizer*: logs whether *Raven-server* is reachable once at startup, so its presence or absence is explicit from the first line of output rather than only surfacing when the importer first reaches for it. The server is optional for the Visualizer, so both outcomes log at info level.
+
 **Fixed**:
 
 - *Raven-cherrypick*: triaging an image (cherry / lemon / winner) while its mips were still loading no longer leaves it stuck at a reduced resolution or failing to appear. The triage move relocates the file out from under the in-flight background decode, which then failed with `FileNotFoundError`; the load now restarts from the file's new location, whether it was filling in the full-res level of a preloaded image or doing the initial decode of a cache-miss one.
@@ -58,6 +60,10 @@
 
 - *Raven-librarian* RAG: the documents directory is now auto-created at startup if missing. Previously, a fresh install or moved-aside docs dir crashed the app with `FileNotFoundError` from `inotify_add_watch` before the GUI came up.
 - *Raven-librarian* RAG: rapid sequences of file adds and updates no longer crash the indexing pipeline with `TypeError: string indices must be integers`. The pending-edits queue now stores delete entries in the same shape as add/update entries, so the dedup pass can run uniformly.
+
+- *Raven-visualizer*: opening a dataset while the mouse is over the semantic map no longer crashes the tooltip background task with `AttributeError: name 'kdtree' is not defined`. The new dataset was published to the app one field at a time, so a concurrent tooltip render could read it half-built; it is now assembled fully before becoming visible.
+
+- *Raven-visualizer*: running without *Raven-server* (which the Visualizer treats as optional, loading models locally) no longer dumps a multi-frame connection-refused stack trace to the log for every model load. The low-level reachability probe now logs a single concise line at debug level; callers that require the server still report a clear error.
 
 - *Raven-visualizer* importer: BibTeX case-preservation grouping braces (`{Word}`, `{ACRONYM}`, `{{nested}}`) are now stripped from titles and abstracts, and common LaTeX diacritics (`\"o` → ö, `\'e` → é, `\c{c}` → ç, `\ae`, `\o`, …) are rendered as Unicode. Escaped literal braces (`\{`, `\}`) are preserved.
 

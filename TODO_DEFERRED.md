@@ -932,3 +932,11 @@ The preload cap is adaptive to the current zoom (`preload.mip_scale_for_zoom`): 
 Correctness is fine (augment fallback covers it); only the instant-crisp guarantee lapses for that one step, in the non-primary zoom-in-mid-browse workflow. If it ever feels worth closing: have `schedule_neighbors` re-issue a neighbor whose cached largest scale (`entry.mips[0][0]`) is below the current `mip_scale_for_zoom`, mirroring the capped-entry eviction `schedule_compare` already does for full-chain upgrades.
 
 Discovered during cherrypick preload adaptive-cap work (2026-06-09).
+
+## Visualizer: annotation worker reads `app_state.dataset` twice, so a mid-swap dataset change can tear
+
+`annotation._render_worker` reads `app_state.dataset` through two independent global reads per run: once via `plotter.get_data_idxs_at_mouse` (uses `.kdtree` and `.sorted_lowdim_data`) and again via `entry_renderer.get_entries_for_selection` (uses `.sorted_entries`). `open_file` now publishes a new dataset with a single atomic assignment (fixing the half-built-env crash), but if that swap lands *between* the worker's two reads, the indices computed from the old dataset get applied to the new one — an `IndexError` when the new dataset has fewer points.
+
+Much narrower than the crash that was fixed (requires a concurrent `open_file` swap during the microsecond window between the two reads, *and* a smaller new dataset), so left as-is for now. Clean fix: capture `ds = app_state.dataset` once at the top of `_render_worker` and thread it through both helpers (they'd take an optional `dataset` param defaulting to the global), so one worker run always sees one consistent dataset.
+
+Discovered during the `kdtree`-crash fix (2026-07-15).

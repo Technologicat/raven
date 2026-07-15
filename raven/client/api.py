@@ -114,8 +114,12 @@ def raven_server_available() -> bool:
     headers = copy.copy(util.api_config.raven_default_headers)
     try:
         response = requests.get(f"{util.api_config.raven_server_url}/health", headers=headers)
-    except requests.exceptions.ConnectionError:
-        logger.exception("raven_server_available")
+    except requests.exceptions.ConnectionError as exc:
+        # This is a low-level probe: it just reports reachability as a bool. Whether an unreachable server
+        # is an error depends on the caller — Librarian requires the server and reports the failure loudly
+        # via `test_connection`, whereas the Visualizer treats it as optional and loads models locally. So a
+        # full traceback here is noise in every case; log concisely at debug level and let the caller decide.
+        logger.debug(f"raven_server_available: could not connect to Raven-server at '{util.api_config.raven_server_url}': {type(exc)}: {exc}")
         return False
     return response.status_code == 200
 

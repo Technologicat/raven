@@ -133,15 +133,21 @@ def parse_dataset_file(filename):
     """Parse a dataset file and process it for visualization. Public API.
 
     Returns a dataset: `unpythonic.env` with the datafile contents, and some preprocessed fields to facilitate visualization.
+
+    The dataset is built into a fresh local `env` and only returned once complete;
+    it is never written into `app_state.dataset` here. The caller publishes it with a
+    single atomic assignment. This matters because background tasks (e.g. the annotation
+    tooltip render worker) read `app_state.dataset` concurrently — exposing a half-built
+    env would let them read fields that don't exist yet (`kdtree` is populated last).
     """
-    app_state.dataset = env()
+    ds = env()
     absolute_filename = common_utils.absolutize_filename(filename)
-    app_state.dataset.filename = filename
-    app_state.dataset.absolute_filename = absolute_filename
+    ds.filename = filename
+    ds.absolute_filename = absolute_filename
 
     logger.info(f"Reading Raven-visualizer dataset '{filename}' (resolved to '{absolute_filename}')...")
     with timer() as tim:
-        app_state.dataset.file_content = _read_dataset_file(absolute_filename)
+        ds.file_content = _read_dataset_file(absolute_filename)
     logger.info(f"    Done in {tim.dt:0.6g}s.")
 
     # In DPG (as of this writing, DPG v2.0), one scatter series has only a single global color.
@@ -156,28 +162,28 @@ def parse_dataset_file(filename):
     #
     logger.info("Sorting data by cluster...")
     with timer() as tim:  # set up `sorted_xxx`
-        app_state.dataset.sorted_orig_data_idxs = np.argsort(app_state.dataset.file_content.labels)  # sort by label (cluster ID)
-        app_state.dataset.sorted_labels = app_state.dataset.file_content.labels[app_state.dataset.sorted_orig_data_idxs]
-        app_state.dataset.sorted_lowdim_data = app_state.dataset.file_content.lowdim_data[app_state.dataset.sorted_orig_data_idxs, :]  # [data_idx, axis], where axis is 0 (x) or 1 (y).
-        app_state.dataset.sorted_entries = [app_state.dataset.file_content.vis_data[orig_data_idx] for orig_data_idx in app_state.dataset.sorted_orig_data_idxs]  # the actual data records, extracted from BibTeX (Python list)
+        ds.sorted_orig_data_idxs = np.argsort(ds.file_content.labels)  # sort by label (cluster ID)
+        ds.sorted_labels = ds.file_content.labels[ds.sorted_orig_data_idxs]
+        ds.sorted_lowdim_data = ds.file_content.lowdim_data[ds.sorted_orig_data_idxs, :]  # [data_idx, axis], where axis is 0 (x) or 1 (y).
+        ds.sorted_entries = [ds.file_content.vis_data[orig_data_idx] for orig_data_idx in ds.sorted_orig_data_idxs]  # the actual data records, extracted from BibTeX (Python list)
         @call
         def _():
             # Compute normalized titles for searching, and insert a reverse lookup for the item's index in `sorted_xxx`.
-            for data_idx, entry in enumerate(app_state.dataset.sorted_entries):
+            for data_idx, entry in enumerate(ds.sorted_entries):
                 entry.data_idx = data_idx  # index to `sorted_xxx`
                 entry.normalized_title = common_utils.normalize_search_string(entry.title.strip())  # for searching
 
         # Find contiguous blocks with the same label (cluster ID).
-        app_state.dataset.cluster_id_jump_data_idxs = np.where(np.diff(app_state.dataset.sorted_labels, prepend=np.nan))[0]  # https://stackoverflow.com/a/65657397
-        app_state.dataset.cluster_id_jump_data_idxs = list(itertools.chain(list(app_state.dataset.cluster_id_jump_data_idxs), (None,)))  # -> [i0, i1, ..., iN, None] -> used for slices, `None` = end
+        ds.cluster_id_jump_data_idxs = np.where(np.diff(ds.sorted_labels, prepend=np.nan))[0]  # https://stackoverflow.com/a/65657397
+        ds.cluster_id_jump_data_idxs = list(itertools.chain(list(ds.cluster_id_jump_data_idxs), (None,)))  # -> [i0, i1, ..., iN, None] -> used for slices, `None` = end
     logger.info(f"    Done in {tim.dt:0.6g}s.")
 
     # For mouseover support. We need to manually detect the data points closest to the mouse cursor.
     logger.info("Indexing dataset for nearest-neighbors search...")
     with timer() as tim:
-        app_state.dataset.kdtree = scipy.spatial.cKDTree(data=app_state.dataset.sorted_lowdim_data)
+        ds.kdtree = scipy.spatial.cKDTree(data=ds.sorted_lowdim_data)
     logger.info(f"    Done in {tim.dt:0.6g}s.")
-    return app_state.dataset
+    return ds
 
 
 def load_dataset(ds):

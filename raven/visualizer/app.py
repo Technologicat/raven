@@ -1841,6 +1841,15 @@ logger.info("App bootup...")
 api.initialize(raven_server_url=client_config.raven_server_url,
                raven_api_key_file=client_config.raven_api_key_file)
 
+# Probe the server once at startup, so its presence or absence is explicit in the log rather than
+# only surfacing later when the importer first reaches for it. For the Visualizer the server is
+# optional — the importer falls back to loading NLP/embedding models locally — so both outcomes are
+# informational, not errors.
+if api.raven_server_available():
+    logger.info(f"Raven-server is available at '{client_config.raven_server_url}'; server-side acceleration will be used where applicable.")
+else:
+    logger.info(f"Raven-server is not available at '{client_config.raven_server_url}'; running standalone, models will be loaded locally as needed.")
+
 app_state.bg = concurrent.futures.ThreadPoolExecutor()  # for info panel and tooltip annotation updates
 # Subsystem task managers (annotation, info panel, word cloud) are created lazily inside their own modules on first use.
 importer.init(executor=app_state.bg)  # BibTeX importer
