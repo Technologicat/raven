@@ -113,7 +113,7 @@ def raven_server_available() -> bool:
         return False
     headers = copy.copy(util.api_config.raven_default_headers)
     try:
-        response = requests.get(f"{util.api_config.raven_server_url}/health", headers=headers)
+        response = requests.get(f"{util.api_config.raven_server_url}/health", headers=headers, timeout=util.api_config.network_timeout)
     except requests.exceptions.ConnectionError as exc:
         # This is a low-level probe: it just reports reachability as a bool. Whether an unreachable server
         # is an error depends on the caller — Librarian requires the server and reports the failure loudly
@@ -165,7 +165,7 @@ def modules() -> List[str]:
     """Return the list of modules loaded on the running Raven-server."""
     util.require()
     headers = copy.copy(util.api_config.raven_default_headers)
-    response = requests.get(f"{util.api_config.raven_server_url}/api/modules", headers=headers)
+    response = requests.get(f"{util.api_config.raven_server_url}/api/modules", headers=headers, timeout=util.api_config.network_timeout)
     util.yell_on_error(response)
 
     output = response.json()
@@ -199,7 +199,7 @@ def avatar_load(filename: Union[pathlib.Path, str]) -> str:
 
     # Flask expects the file as multipart/form-data. `requests` sets this automatically when we send files, if we don't set a 'Content-Type' header.
     headers = copy.copy(util.api_config.raven_default_headers)
-    response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/load", headers=headers, files=files)
+    response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/load", headers=headers, files=files, timeout=util.api_config.network_timeout)
     util.yell_on_error(response)
 
     output = response.json()
@@ -221,7 +221,7 @@ def avatar_reload(instance_id: str, filename: Union[pathlib.Path, str]) -> None:
 
     # Flask expects the file as multipart/form-data. `requests` sets this automatically when we send files, if we don't set a 'Content-Type' header.
     headers = copy.copy(util.api_config.raven_default_headers)
-    response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/reload", headers=headers, files=files)
+    response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/reload", headers=headers, files=files, timeout=util.api_config.network_timeout)
     util.yell_on_error(response)
 
 def avatar_unload(instance_id: str) -> None:
@@ -230,7 +230,7 @@ def avatar_unload(instance_id: str) -> None:
     headers = copy.copy(util.api_config.raven_default_headers)
     headers["Content-Type"] = "application/json"
     data = {"instance_id": instance_id}
-    response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/unload", json=data, headers=headers)
+    response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/unload", json=data, headers=headers, timeout=util.api_config.network_timeout)
     util.yell_on_error(response)
 
 def avatar_load_emotion_templates(instance_id: str, emotions: Dict) -> None:
@@ -239,7 +239,7 @@ def avatar_load_emotion_templates(instance_id: str, emotions: Dict) -> None:
     headers["Content-Type"] = "application/json"
     data = {"instance_id": instance_id,
             "emotions": emotions}
-    response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/load_emotion_templates", json=data, headers=headers)
+    response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/load_emotion_templates", json=data, headers=headers, timeout=util.api_config.network_timeout)
     util.yell_on_error(response)
 
 def avatar_load_emotion_templates_from_file(instance_id: str, filename: Union[pathlib.Path, str]) -> None:
@@ -254,7 +254,7 @@ def avatar_load_animator_settings(instance_id: str, animator_settings: Dict) -> 
     headers["Content-Type"] = "application/json"
     data = {"instance_id": instance_id,
             "animator_settings": animator_settings}
-    response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/load_animator_settings", json=data, headers=headers)
+    response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/load_animator_settings", json=data, headers=headers, timeout=util.api_config.network_timeout)
     util.yell_on_error(response)
 
 def avatar_load_animator_settings_from_file(instance_id: str, filename: Union[pathlib.Path, str]) -> None:
@@ -269,7 +269,7 @@ def avatar_start(instance_id: str) -> None:
     headers = copy.copy(util.api_config.raven_default_headers)
     headers["Content-Type"] = "application/json"
     data = {"instance_id": instance_id}
-    response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/start", json=data, headers=headers)
+    response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/start", json=data, headers=headers, timeout=util.api_config.network_timeout)
     util.yell_on_error(response)
 
 def avatar_stop(instance_id: str) -> None:
@@ -278,7 +278,7 @@ def avatar_stop(instance_id: str) -> None:
     headers = copy.copy(util.api_config.raven_default_headers)
     headers["Content-Type"] = "application/json"
     data = {"instance_id": instance_id}
-    response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/stop", json=data, headers=headers)
+    response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/stop", json=data, headers=headers, timeout=util.api_config.network_timeout)
     util.yell_on_error(response)
 
 def avatar_start_talking(instance_id: str) -> None:
@@ -286,7 +286,7 @@ def avatar_start_talking(instance_id: str) -> None:
     headers = copy.copy(util.api_config.raven_default_headers)
     headers["Content-Type"] = "application/json"
     data = {"instance_id": instance_id}
-    response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/start_talking", json=data, headers=headers)
+    response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/start_talking", json=data, headers=headers, timeout=util.api_config.network_timeout)
     util.yell_on_error(response)
 
 def avatar_stop_talking(instance_id: str) -> None:
@@ -294,7 +294,7 @@ def avatar_stop_talking(instance_id: str) -> None:
     headers = copy.copy(util.api_config.raven_default_headers)
     headers["Content-Type"] = "application/json"
     data = {"instance_id": instance_id}
-    response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/stop_talking", json=data, headers=headers)
+    response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/stop_talking", json=data, headers=headers, timeout=util.api_config.network_timeout)
     util.yell_on_error(response)
 
 def avatar_set_emotion(instance_id: str, emotion_name: str) -> None:
@@ -303,7 +303,7 @@ def avatar_set_emotion(instance_id: str, emotion_name: str) -> None:
     headers["Content-Type"] = "application/json"
     data = {"instance_id": instance_id,
             "emotion_name": emotion_name}
-    response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/set_emotion", json=data, headers=headers)
+    response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/set_emotion", json=data, headers=headers, timeout=util.api_config.network_timeout)
     util.yell_on_error(response)
 
 def avatar_set_overrides(instance_id: str, overrides: Dict[str, float]) -> None:
@@ -312,7 +312,7 @@ def avatar_set_overrides(instance_id: str, overrides: Dict[str, float]) -> None:
     headers["Content-Type"] = "application/json"
     data = {"instance_id": instance_id,
             "overrides": overrides}
-    response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/set_overrides", json=data, headers=headers)
+    response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/set_overrides", json=data, headers=headers, timeout=util.api_config.network_timeout)
     util.yell_on_error(response)
 
 def avatar_modify_overrides(instance_id: str, action: str, overrides: Dict[str, float]) -> None:
@@ -322,7 +322,7 @@ def avatar_modify_overrides(instance_id: str, action: str, overrides: Dict[str, 
     data = {"instance_id": instance_id,
             "action": action,
             "overrides": overrides}
-    response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/modify_overrides", json=data, headers=headers)
+    response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/modify_overrides", json=data, headers=headers, timeout=util.api_config.network_timeout)
     util.yell_on_error(response)
 
 def avatar_start_data_eyes(instance_id: str) -> None:
@@ -331,7 +331,7 @@ def avatar_start_data_eyes(instance_id: str) -> None:
     headers = copy.copy(util.api_config.raven_default_headers)
     headers["Content-Type"] = "application/json"
     data = {"instance_id": instance_id}
-    response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/start_data_eyes", json=data, headers=headers)
+    response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/start_data_eyes", json=data, headers=headers, timeout=util.api_config.network_timeout)
     util.yell_on_error(response)
 
 def avatar_stop_data_eyes(instance_id: str) -> None:
@@ -340,7 +340,7 @@ def avatar_stop_data_eyes(instance_id: str) -> None:
     headers = copy.copy(util.api_config.raven_default_headers)
     headers["Content-Type"] = "application/json"
     data = {"instance_id": instance_id}
-    response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/stop_data_eyes", json=data, headers=headers)
+    response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/stop_data_eyes", json=data, headers=headers, timeout=util.api_config.network_timeout)
     util.yell_on_error(response)
 
 def avatar_result_feed(instance_id: str, chunk_size: int = 4096, expected_mimetype: Optional[str] = None) -> Generator[Tuple[Optional[str], Dict[str, str], bytes], None, None]:
@@ -364,7 +364,7 @@ def avatar_result_feed(instance_id: str, chunk_size: int = 4096, expected_mimety
     util.require()
     headers = copy.copy(util.api_config.raven_default_headers)
     headers["Accept"] = "multipart/x-mixed-replace"
-    stream_response = requests.get(f"{util.api_config.raven_server_url}/api/avatar/result_feed?instance_id={instance_id}", headers=headers, stream=True)
+    stream_response = requests.get(f"{util.api_config.raven_server_url}/api/avatar/result_feed?instance_id={instance_id}", headers=headers, stream=True, timeout=util.api_config.network_timeout_streaming)
     util.yell_on_error(stream_response)
 
     stream_iterator = stream_response.iter_content(chunk_size=chunk_size)
@@ -382,7 +382,7 @@ def avatar_get_available_filters() -> List[Tuple[str, Dict]]:
     """
     util.require()
     headers = copy.copy(util.api_config.raven_default_headers)
-    response = requests.get(f"{util.api_config.raven_server_url}/api/avatar/get_available_filters", headers=headers)
+    response = requests.get(f"{util.api_config.raven_server_url}/api/avatar/get_available_filters", headers=headers, timeout=util.api_config.network_timeout)
     util.yell_on_error(response)
     output_data = response.json()
     return output_data["filters"]
@@ -399,7 +399,7 @@ def classify_labels() -> List[str]:
     """
     util.require()
     headers = copy.copy(util.api_config.raven_default_headers)
-    response = requests.get(f"{util.api_config.raven_server_url}/api/classify/labels", headers=headers)
+    response = requests.get(f"{util.api_config.raven_server_url}/api/classify/labels", headers=headers, timeout=util.api_config.network_timeout)
     util.yell_on_error(response)
     output_data = response.json()  # -> {"labels": [emotion0, ...]}
     return list(sorted(output_data["labels"]))
@@ -416,7 +416,7 @@ def classify(text: str) -> Dict[str, float]:
     headers = copy.copy(util.api_config.raven_default_headers)
     headers["Content-Type"] = "application/json"
     input_data = {"text": text}
-    response = requests.post(f"{util.api_config.raven_server_url}/api/classify", headers=headers, json=input_data)
+    response = requests.post(f"{util.api_config.raven_server_url}/api/classify", headers=headers, json=input_data, timeout=util.api_config.network_timeout)
     util.yell_on_error(response)
     output_data = response.json()  # -> ["classification": [{"label": "curiosity", "score": 0.5329479575157166}, ...]]
 
@@ -442,7 +442,7 @@ def embeddings_info() -> Dict[str, Any]:
     """
     util.require()
     headers = copy.copy(util.api_config.raven_default_headers)
-    response = requests.get(f"{util.api_config.raven_server_url}/api/embeddings/info", headers=headers)
+    response = requests.get(f"{util.api_config.raven_server_url}/api/embeddings/info", headers=headers, timeout=util.api_config.network_timeout)
     util.yell_on_error(response)
     return response.json()
 
@@ -464,7 +464,7 @@ def embeddings_compute(text: Union[str, List[str]],
     headers["Content-Type"] = "application/json"
     input_data = {"text": text,
                   "model": model}
-    response = requests.post(f"{util.api_config.raven_server_url}/api/embeddings/compute", json=input_data, headers=headers)
+    response = requests.post(f"{util.api_config.raven_server_url}/api/embeddings/compute", json=input_data, headers=headers, timeout=util.api_config.network_timeout)
     util.yell_on_error(response)
     output_data = response.json()
 
@@ -503,7 +503,7 @@ def imagefx_process(stream,
                   "filters": filters}
     files = {"json": netutil.pack_parameters_into_json_file_attachment(parameters),
              "file": ("image.bin", stream, "application/octet-stream")}
-    response = requests.post(f"{util.api_config.raven_server_url}/api/imagefx/process", headers=headers, files=files)
+    response = requests.post(f"{util.api_config.raven_server_url}/api/imagefx/process", headers=headers, files=files, timeout=util.api_config.network_timeout)
     util.yell_on_error(response)
 
     return response.content  # image file encoded in requested format
@@ -595,7 +595,7 @@ def imagefx_upscale(stream,
                   "quality": quality}
     files = {"json": netutil.pack_parameters_into_json_file_attachment(parameters),
              "file": ("image.bin", stream, "application/octet-stream")}
-    response = requests.post(f"{util.api_config.raven_server_url}/api/imagefx/upscale", headers=headers, files=files)
+    response = requests.post(f"{util.api_config.raven_server_url}/api/imagefx/upscale", headers=headers, files=files, timeout=util.api_config.network_timeout)
     util.yell_on_error(response)
 
     return response.content  # image file encoded in requested format
@@ -669,7 +669,7 @@ def natlang_analyze(text: Union[str, List[str]],
         input_data["pipes"] = pipes
     if with_vectors:
         input_data["with_vectors"] = True
-    response = requests.post(f"{util.api_config.raven_server_url}/api/natlang/analyze", json=input_data, headers=headers)
+    response = requests.post(f"{util.api_config.raven_server_url}/api/natlang/analyze", json=input_data, headers=headers, timeout=util.api_config.network_timeout)
     util.yell_on_error(response)
 
     doc_items = response.json()  # list of {lang, doc, vectors?} dicts
@@ -687,7 +687,7 @@ def sanitize_dehyphenate(text: Union[str, List[str]]) -> Union[str, List[str]]:
     headers = copy.copy(util.api_config.raven_default_headers)
     headers["Content-Type"] = "application/json"
     input_data = {"text": text}
-    response = requests.post(f"{util.api_config.raven_server_url}/api/sanitize/dehyphenate", json=input_data, headers=headers)
+    response = requests.post(f"{util.api_config.raven_server_url}/api/sanitize/dehyphenate", json=input_data, headers=headers, timeout=util.api_config.network_timeout)
     util.yell_on_error(response)
     output_data = response.json()
 
@@ -706,7 +706,7 @@ def stt_info() -> Dict[str, Any]:
     """
     util.require()
     headers = copy.copy(util.api_config.raven_default_headers)
-    response = requests.get(f"{util.api_config.raven_server_url}/api/stt/info", headers=headers)
+    response = requests.get(f"{util.api_config.raven_server_url}/api/stt/info", headers=headers, timeout=util.api_config.network_timeout)
     util.yell_on_error(response)
     return response.json()
 
@@ -742,7 +742,7 @@ def stt_transcribe(stream,
         parameters["language"] = language
     files = {"json": netutil.pack_parameters_into_json_file_attachment(parameters),
              "file": ("audio.bin", stream, "application/octet-stream")}
-    response = requests.post(f"{util.api_config.raven_server_url}/api/stt/transcribe", headers=headers, files=files)
+    response = requests.post(f"{util.api_config.raven_server_url}/api/stt/transcribe", headers=headers, files=files, timeout=util.api_config.network_timeout)
     util.yell_on_error(response)
     output_data = response.json()
     output_text = output_data["text"]
@@ -810,7 +810,7 @@ def translate_translate(text: Union[str, List[str]], source_lang: str, target_la
     input_data = {"text": text,
                   "source_lang": source_lang,
                   "target_lang": target_lang}
-    response = requests.post(f"{util.api_config.raven_server_url}/api/translate", json=input_data, headers=headers)
+    response = requests.post(f"{util.api_config.raven_server_url}/api/translate", json=input_data, headers=headers, timeout=util.api_config.network_timeout)
     util.yell_on_error(response)
     output_data = response.json()
 
@@ -836,7 +836,7 @@ def websearch_search(query: str, engine: str = "duckduckgo", max_links: int = 10
     input_data = {"query": query,
                   "engine": engine,
                   "max_links": max_links}
-    response = requests.post(f"{util.api_config.raven_server_url}/api/websearch2", headers=headers, json=input_data)
+    response = requests.post(f"{util.api_config.raven_server_url}/api/websearch2", headers=headers, json=input_data, timeout=util.api_config.network_timeout)
     util.yell_on_error(response)
 
     output_data = response.json()
@@ -860,7 +860,7 @@ def webfetch_fetch(url: str, output_format: str = "markdown") -> Dict:
     headers["Content-Type"] = "application/json"
     input_data = {"url": url,
                   "format": output_format}
-    response = requests.post(f"{util.api_config.raven_server_url}/api/webfetch", headers=headers, json=input_data)
+    response = requests.post(f"{util.api_config.raven_server_url}/api/webfetch", headers=headers, json=input_data, timeout=util.api_config.network_timeout)
     util.yell_on_error(response)
 
     output_data = response.json()

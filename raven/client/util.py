@@ -84,6 +84,11 @@ def initialize_api(raven_server_url: str,
     from . import config as client_config  # noqa: PLC0415 -- intentional deferred import
     deviceinfo.validate(client_config.devices)
 
+    # Network timeouts, sourced from config so `raven.client.api`/`tts` read them from the runtime
+    # config namespace rather than importing `client_config` (which would risk the import cycle above).
+    api_config.network_timeout = client_config.network_timeout
+    api_config.network_timeout_streaming = client_config.network_timeout_streaming
+
     api_initialized = True
 
 def require() -> None:

@@ -1,5 +1,7 @@
 """Client-side-specific config for Raven-avatar."""
 
+from typing import NamedTuple
+
 from ..server import config as server_config  # NOTE: default config location (can be overridden on the command line when starting the server)
 
 # TODO: Assumption: The `userdata_dir` of the client/server pair is local anyway, so we can just as well use the server app's.
@@ -16,6 +18,28 @@ client_userdata_dir = server_config.server_userdata_dir
 # Where to reach Raven-server
 raven_server_url = "http://localhost:5100"
 raven_api_key_file = client_userdata_dir / "api_key.txt"
+
+# Network timeouts for talking to Raven-server. `requests` accepts a `(connect, read)` tuple for its
+# `timeout=` argument; `Timeout` is such a tuple, but with named fields so the call sites and the values
+# below read clearly. (A plain 2-tuple would work too, but "which number is which?" is exactly what we
+# want to avoid.) A `read` of `None` means unbounded (used for streaming endpoints).
+class Timeout(NamedTuple):
+    connect: float
+    read: float | None
+
+# The connect timeout bounds the "server unreachable" case — Raven-server currently runs on the same
+# machine, but it may be configured to run on another machine (e.g. a lab setup), and if that host is
+# down a request would otherwise hang on the OS-level connection attempt. With a connect timeout it
+# fails fast instead.
+#
+# The read timeout is `requests`' *between-bytes* timeout, not a total-request budget; it must
+# comfortably exceed the server's worst-case time-to-first-byte for the heavy endpoints (embeddings,
+# imagefx, stt, translate, natlang), hence the generous default.
+network_timeout = Timeout(connect=10.0, read=300.0)
+
+# Streaming endpoints (avatar `result_feed`, TTS `speak`) legitimately stay open for a long time, so we
+# bound only the connect; a read timeout would abort a healthy long-lived stream mid-flight.
+network_timeout_streaming = Timeout(connect=10.0, read=None)
 
 # Which audio playback device to use for TTS (text to speech, speech synthesizer).
 #

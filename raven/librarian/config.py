@@ -13,6 +13,8 @@ import torch
 
 from .. import config as global_config
 
+from ..client.config import Timeout  # `(connect, read)` timeout tuple with named fields; see `raven.client.config`
+
 from ..common.video import colorspace
 
 llmclient_userdata_dir = global_config.toplevel_userdata_dir / "llmclient"
@@ -26,6 +28,20 @@ llmclient_userdata_dir = global_config.toplevel_userdata_dir / "llmclient"
 llm_backend_url = "http://localhost:5000"  # oobabooga default OAI compatible port
 # llm_backend_url = "http://localhost:1234"  # LM Studio default OAI compatible port
 llm_api_key_file = llmclient_userdata_dir / "api_key.txt"  # will be used it it exists, ignored if not.
+
+# Network timeouts for talking to the LLM backend, as `(connect, read)` second pairs passed to `requests`.
+# Separate from `raven.client.config.network_timeout` because the LLM backend is a distinct service
+# (oobabooga / LM Studio / llama.cpp) with its own latency profile and its own `llm_backend_url`.
+#
+# The connect timeout bounds the "backend unreachable" case so a request fails fast instead of hanging on
+# the OS-level connection attempt. The read timeout is `requests`' *between-bytes* timeout; the
+# non-streaming calls here (model info, token count) respond quickly, so a moderate value suffices.
+llm_network_timeout = Timeout(connect=10.0, read=120.0)
+
+# The chat-completions stream stays open for the whole generation, which can run for minutes (and prompt
+# processing can delay the first token), so bound only the connect; a read timeout would abort a healthy
+# generation mid-stream.
+llm_network_timeout_streaming = Timeout(connect=10.0, read=None)
 
 # Which OpenAI-compatible backend `llm_backend_url` points at, or `None` to autodetect (the default).
 #

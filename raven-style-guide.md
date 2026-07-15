@@ -201,16 +201,23 @@ def ai_turn(llm_settings: env,
 
 ### Type hints
 
-Type hints from `typing` should be used wherever they aid readability, on both public and internal functions. Common patterns:
+Type hints should be used wherever they aid readability, on both public and internal functions.
+
+**Prefer the modern spelling** (PEP 604 unions, PEP 585 builtin generics) over the `typing` aliases:
+
+- `X | None` instead of `Optional[X]`; `X | Y` instead of `Union[X, Y]`.
+- `list[X]`, `dict[K, V]`, `tuple[X, ...]`, `set[X]` instead of `List`, `Dict`, `Tuple`, `Set` from `typing`.
+
+Both are available on our baseline (Python 3.11+), read more cleanly, and need no import. `typing` is still the home for things without a builtin spelling — `Any`, `Callable`, `NamedTuple`, `Protocol`, `TypeVar`, etc. — so import those as needed.
 
 ```python
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
-
 def create_node(self,
                 payload: Any = None,
-                parent_id: Optional[str] = None,
-                timestamp: Optional[int] = None) -> str:
+                parent_id: str | None = None,
+                timestamp: int | None = None) -> str:
 ```
+
+The codebase is mid-migration from the old `typing`-alias spelling. Write new and modified code in the modern spelling; existing old-style hints can be left as-is unless you're already editing that code (same rule as for adding hints to untyped code).
 
 ### Keyword-only arguments
 

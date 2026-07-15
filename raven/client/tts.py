@@ -133,7 +133,7 @@ def tts_info() -> Dict[str, Any]:
     """
     util.require()
     headers = copy.copy(util.api_config.raven_default_headers)
-    response = requests.get(f"{util.api_config.raven_server_url}/api/tts/info", headers=headers)
+    response = requests.get(f"{util.api_config.raven_server_url}/api/tts/info", headers=headers, timeout=util.api_config.network_timeout)
     util.yell_on_error(response)
     return response.json()
 
@@ -146,7 +146,7 @@ def tts_list_voices() -> List[str]:
     """
     util.require()
     headers = copy.copy(util.api_config.raven_default_headers)
-    response = requests.get(f"{util.api_config.raven_server_url}/api/tts/list_voices", headers=headers)
+    response = requests.get(f"{util.api_config.raven_server_url}/api/tts/list_voices", headers=headers, timeout=util.api_config.network_timeout)
     util.yell_on_error(response)
     output_data = response.json()
     return output_data["voices"]
@@ -230,7 +230,7 @@ def tts_prepare(text: str,
                 "speed": speed,
                 "stream": True,
                 "get_metadata": get_metadata}
-        stream_response = requests.post(f"{util.api_config.raven_server_url}/api/tts/speak", headers=headers, json=data, stream=True)
+        stream_response = requests.post(f"{util.api_config.raven_server_url}/api/tts/speak", headers=headers, json=data, stream=True, timeout=util.api_config.network_timeout_streaming)
         util.yell_on_error(stream_response)
 
         # Parse word-level timestamps at the wire boundary: URL-decoded JSON dicts → WordTiming dataclasses.

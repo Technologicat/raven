@@ -227,7 +227,8 @@ def list_models(backend_url: str) -> List[str]:
     """
     response = requests.get(f"{backend_url}/v1/models",
                             headers=headers,
-                            verify=False)
+                            verify=False,
+                            timeout=librarian_config.llm_network_timeout)
     payload = response.json()
     ids = [model["id"] for model in payload.get("data", []) if model.get("id")]
     return sorted(ids, key=lambda s: s.lower())
@@ -265,7 +266,7 @@ def detect_backend_flavor(backend_url: str) -> str:
     # LM Studio: the native `/api/v0/models` returns {"data": [{id, state, arch, loaded_context_length, ...}]}.
     # No other backend serves this namespace.
     try:
-        models = requests.get(f"{backend_url}/api/v0/models", headers=headers, verify=False, timeout=10).json().get("data")
+        models = requests.get(f"{backend_url}/api/v0/models", headers=headers, verify=False, timeout=librarian_config.llm_network_timeout).json().get("data")
         if isinstance(models, list) and models and "state" in models[0]:
             return "lmstudio"
     except (requests.RequestException, ValueError, AttributeError):  # connection / non-JSON / unexpected shape -> not LM Studio
@@ -273,7 +274,7 @@ def detect_backend_flavor(backend_url: str) -> str:
     # oobabooga: the private `/v1/internal/model/info` returns {"model_name": ...}. Check the field, not the
     # status — LM Studio returns 200 here too, but with {"error": ...} and no `model_name`.
     try:
-        if "model_name" in requests.get(f"{backend_url}/v1/internal/model/info", headers=headers, verify=False, timeout=10).json():
+        if "model_name" in requests.get(f"{backend_url}/v1/internal/model/info", headers=headers, verify=False, timeout=librarian_config.llm_network_timeout).json():
             return "oobabooga"
     except (requests.RequestException, ValueError, AttributeError):
         pass
@@ -308,14 +309,14 @@ def _resolve_model_info(backend_url: str, flavor: str) -> env:
     if flavor == "oobabooga":
         # ooba reports the GGUF filename (fine — the model can interpret `name-size-quant.gguf` itself) but
         # not the active context length here; the latter falls through to the default in `setup`.
-        model_name = requests.get(f"{backend_url}/v1/internal/model/info", headers=headers, verify=False).json().get("model_name")
+        model_name = requests.get(f"{backend_url}/v1/internal/model/info", headers=headers, verify=False, timeout=librarian_config.llm_network_timeout).json().get("model_name")
         return env(label=model_name or NO_MODEL_INFO,
                    model_id=model_name,
                    context_length=None)
     if flavor == "lmstudio":
         # `/api/v0/models` lists all downloaded models; exactly the `state == "loaded"` one is resident under
         # JIT, and only that record carries `loaded_context_length`.
-        models = requests.get(f"{backend_url}/api/v0/models", headers=headers, verify=False).json().get("data", [])
+        models = requests.get(f"{backend_url}/api/v0/models", headers=headers, verify=False, timeout=librarian_config.llm_network_timeout).json().get("data", [])
         loaded = [m for m in models if m.get("state") == "loaded"]
         if loaded:
             record = loaded[0]
@@ -327,7 +328,7 @@ def _resolve_model_info(backend_url: str, flavor: str) -> env:
             return env(label=librarian_config.llm_model, model_id=librarian_config.llm_model, context_length=None)
         return env(label=NO_MODEL_INFO, model_id=None, context_length=None)
     # generic: best-effort from the standard list; never guess identity.
-    ids = [m.get("id") for m in requests.get(f"{backend_url}/v1/models", headers=headers, verify=False).json().get("data", [])]
+    ids = [m.get("id") for m in requests.get(f"{backend_url}/v1/models", headers=headers, verify=False, timeout=librarian_config.llm_network_timeout).json().get("data", [])]
     ids = [model_id for model_id in ids if model_id]
     if len(ids) == 1:
         return env(label=ids[0], model_id=ids[0], context_length=None)
@@ -577,7 +578,7 @@ def _load_local_tokenizer(path: str):
 def _ooba_token_count(backend_url: str, text: str) -> int:
     """Exact token count from oobabooga's `/v1/internal/token-count` endpoint."""
     # ooba's undocumented web API endpoints are listed in `text-generation-webui/extensions/openai/script.py`.
-    response = requests.post(f"{backend_url}/v1/internal/token-count", headers=headers, json={"text": text})
+    response = requests.post(f"{backend_url}/v1/internal/token-count", headers=headers, json={"text": text}, timeout=librarian_config.llm_network_timeout)
     return response.json()["length"]
 
 def count_tokens(settings: env, text: str) -> Tuple[int, bool]:
@@ -990,7 +991,7 @@ def invoke(settings: env,
         logger.info("llmclient.invoke: Tool calling is disabled. Stripping tool specifications from request.")
         data.pop("tools")  # Tools? What tools? (Pretend to LLM backend we don't have any -> no tool-calls.)
 
-    stream_response = requests.post(f"{settings.backend_url}/v1/chat/completions", headers=headers, json=data, verify=False, stream=True)
+    stream_response = requests.post(f"{settings.backend_url}/v1/chat/completions", headers=headers, json=data, verify=False, stream=True, timeout=librarian_config.llm_network_timeout_streaming)
 
     if stream_response.status_code != 200:  # not "200 OK"?
         logger.error(f"LLM server returned error: {stream_response.status_code} {stream_response.reason}. Content of error response follows.")
