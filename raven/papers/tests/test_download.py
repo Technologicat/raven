@@ -236,11 +236,17 @@ class TestFormatFilename:
     def test_title_sanitized(self):
         """Unsafe characters are stripped."""
         _, _, filename = format_filename(
-            "2301.12345", ["X"], "2023", None, "Paper/with*special?chars", "v1"
+            "2301.12345", ["X"], "2023", None, "Paper*with*special chars", "v1"
         )
-        assert "/" not in filename
         assert "*" not in filename
-        assert "?" not in filename
+
+    def test_title_slash_becomes_hyphen(self):
+        """'/' is reserved and has no single-word sense; render it as '-' so the sides stay distinct."""
+        _, _, filename = format_filename(
+            "2301.12345", ["X"], "2023", None, "Brain Rot on Twitter/X", "v1"
+        )
+        assert "Brain Rot on Twitter-X" in filename
+        assert "/" not in filename
 
     def test_title_length_limited(self):
         long_title = "A" * 200

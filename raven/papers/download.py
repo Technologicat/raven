@@ -90,15 +90,18 @@ def format_filename(arxiv_id: str,
     elif not authors:
         author_str = "Unknown"
 
-    # Normalize clause separators that the safe-char filter (below) would
-    # otherwise drop, leaving the title reading as a run-on. A ":" / "?" / "!"
-    # / ";" used as a clause boundary (punctuation + space) becomes " - "
-    # (e.g. "…Own Exploration? Gradient-Guided…" → "…Own Exploration - Gradient-Guided…");
-    # em/en dashes, which the filter would drop leaving a double space, become
-    # a plain "-" (which is in the safe set).
+    # Normalize separators that the safe-char filter (below) would otherwise
+    # drop, leaving the title mashed together. A ":" / "?" / "!" / ";" used as
+    # a clause boundary (punctuation + space) becomes " - "
+    # (e.g. "…Own Exploration? Gradient-Guided…" → "…Own Exploration - Gradient-Guided…").
+    # Em/en dashes (dropped, leaving a double space) and a compound-joining "/"
+    # (dropped, mashing the two sides — "Twitter/X" → "TwitterX") become a plain
+    # "-", which is in the safe set. "/" has too many senses (or / and / per /
+    # ratio) for any word to fit, so "-" is a neutral stand-in that at least
+    # keeps the sides distinct.
     for separator in (": ", "? ", "! ", "; "):
         title = title.replace(separator, " - ")
-    title = title.replace("—", "-").replace("–", "-")
+    title = title.replace("—", "-").replace("–", "-").replace("/", "-")
     safe_title = "".join(c for c in title if c.isalnum() or c in stringmaps.filename_safe_nonalphanum)
     safe_title = safe_title[:title_length_limit] + ("..." if len(title) > title_length_limit else "")
 

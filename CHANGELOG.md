@@ -61,7 +61,7 @@
 
 - *Raven-visualizer* importer: BibTeX case-preservation grouping braces (`{Word}`, `{ACRONYM}`, `{{nested}}`) are now stripped from titles and abstracts, and common LaTeX diacritics (`\"o` → ö, `\'e` → é, `\c{c}` → ç, `\ae`, `\o`, …) are rendered as Unicode. Escaped literal braces (`\{`, `\}`) are preserved.
 
-- *Raven-arxiv-download*: downloaded-filename titles no longer read as run-on sentences. Clause boundaries that the filename sanitizer used to drop (`:` `?` `!` `;` followed by a space) now become ` - `, and em/en dashes become a plain `-` instead of collapsing to a double space (e.g. `…Own Exploration? Gradient-Guided…` → `…Own Exploration - Gradient-Guided…`).
+- *Raven-arxiv-download*: downloaded-filename titles no longer read as run-on sentences. Clause boundaries that the filename sanitizer used to drop (`:` `?` `!` `;` followed by a space) now become ` - `, em/en dashes become a plain `-` instead of collapsing to a double space, and a compound-joining `/` becomes `-` instead of mashing the two sides together (`Twitter/X` → `Twitter-X`, not `TwitterX`). Example: `…Own Exploration? Gradient-Guided…` → `…Own Exploration - Gradient-Guided…`.
 
 - *Raven-arxiv-download*: a nonexistent or malformed arXiv ID (e.g. a typoed month, `2614.19062`) now fails with a readable one-line "no arXiv entry for ID …" message — no traceback, since it's an expected user error — instead of an opaque `AttributeError`. The run continues to the remaining IDs; genuinely unexpected errors (network, parse bugs) still print a traceback for debugging.
 
