@@ -115,14 +115,15 @@ def _render_worker(*, task_env):
             return
 
         data_idxs = task_env.data_idxs
+        ds = app_state.dataset  # capture once; a concurrent `open_file` may atomically swap `app_state.dataset` mid-run — keep one consistent view
 
-        if app_state.dataset is None:
+        if ds is None:
             logger.debug(f"_render_worker: {task_env.task_name}: No dataset loaded. Clearing texture.")
             arr = unbox(_image_box)
             arr[:, :, :3] = 0.0
         else:
             # No need to recompute -> just show the window.
-            if id(app_state.dataset) == _last_dataset_addr and set(data_idxs) == _last_data_idxs:
+            if id(ds) == _last_dataset_addr and set(data_idxs) == _last_data_idxs:
                 logger.debug(f"_render_worker: {task_env.task_name}: Same dataset and same selection as last time. Showing word cloud window. Task completed.")
                 dpg.show_item("word_cloud_window")
                 return
@@ -149,7 +150,7 @@ def _render_worker(*, task_env):
                     if task_env.cancelled:
                         logger.debug(f"_render_worker: {task_env.task_name}: Word cloud update task cancelled (while collecting keywords).")
                         return
-                    for kw, count in app_state.dataset.sorted_entries[data_idx].keywords.items():
+                    for kw, count in ds.sorted_entries[data_idx].keywords.items():
                         keywords[kw] += count
 
                 logger.debug(f"_render_worker: {task_env.task_name}: Invoking word cloud generator.")
@@ -169,7 +170,7 @@ def _render_worker(*, task_env):
         dpg.set_value("word_cloud_texture", raw_data)
         dpg.show_item("word_cloud_window")
 
-        _last_dataset_addr = id(app_state.dataset)  # Conserve RAM by not storing the actual dataset object, but only its memory address. If this changes, it means that the dataset has changed.
+        _last_dataset_addr = id(ds)  # Conserve RAM by not storing the actual dataset object, but only its memory address. If this changes, it means that the dataset has changed.
         _last_data_idxs = set(data_idxs)
 
         logger.debug(f"_render_worker: {task_env.task_name}: Word cloud update task completed.")

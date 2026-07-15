@@ -46,20 +46,24 @@ from ..common import utils as common_utils
 from .app_state import app_state
 
 
-def get_entries_for_selection(data_idxs, *, sort_field="title", max_n=None):
+def get_entries_for_selection(data_idxs, *, sort_field="title", max_n=None, dataset=None):
     """Gather item data for visualization, sorting by cluster.
 
     `data_idxs`: `list`, the selection of items to include in the report. Item indices into `sorted_xxx`.
     `sort_field`: `str`, the field to sort by within each cluster. The name of one of the attributes of an entry in `sorted_entries`.
     `max_n`: `int`, how many entries can be displayed reasonably. Default `None` means no limit.
+    `dataset`: the dataset to read entries from. Defaults to the live `app_state.dataset`. Background workers pass an
+               explicitly captured snapshot, so that a concurrent `open_file` swap can't make `data_idxs` (computed
+               against one dataset) index into a different dataset's `sorted_entries`.
 
     Return value is... complicated, see `annotation._render_worker` and `info_panel._update_info_panel` for usage examples.
     """
+    dataset = dataset if dataset is not None else app_state.dataset
 
     # Gather the relevant entries from the vis data.
     entries_by_cluster = collections.defaultdict(lambda: list())
     for data_idx in data_idxs:  # item indices into `sorted_xxx`
-        entry = app_state.dataset.sorted_entries[data_idx]
+        entry = dataset.sorted_entries[data_idx]
         entries_by_cluster[entry.cluster_id].append((data_idx, entry))
 
     # Alphabetize by `sort_field` (e.g. `title`) within each cluster, much faster to glance at.
@@ -78,9 +82,9 @@ def get_entries_for_selection(data_idxs, *, sort_field="title", max_n=None):
     def format_cluster_annotation(cluster_id):
         # The metadata for the cluster.
         if cluster_id != -1:  # the outlier set doesn't have a set of common keywords computed
-            if app_state.dataset.file_content.keywords_available:
+            if dataset.file_content.keywords_available:
                 cluster_title = f"#{cluster_id}"
-                cluster_keywords = f"[{', '.join(app_state.dataset.file_content.vis_keywords_by_cluster[cluster_id])}]\n"
+                cluster_keywords = f"[{', '.join(dataset.file_content.vis_keywords_by_cluster[cluster_id])}]\n"
             else:
                 cluster_title = f"#{cluster_id}"
                 cluster_keywords = ""

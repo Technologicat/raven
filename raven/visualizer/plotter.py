@@ -55,9 +55,16 @@ _cluster_color_themes = []  # DPG theme IDs of the per-cluster scatter-series co
 # --------------------------------------------------------------------------------
 # Plotter-space queries
 
-def get_visible_datapoints():
-    """Return a list of all data points (indices to `sorted_xxx`) currently visible in the plotter."""
-    if app_state.dataset is None:  # nothing plotted when no dataset loaded
+def get_visible_datapoints(dataset: env | None = None) -> np.ndarray:
+    """Return a list of all data points (indices to `sorted_xxx`) currently visible in the plotter.
+
+    `dataset`: the dataset to query. Defaults to the live `app_state.dataset`. Pass an explicitly captured
+               snapshot to keep the result consistent with other dataset reads in the same operation, so a
+               concurrent `open_file` swap can't split them. (This function's own reads are already mutually
+               consistent regardless: the global is read once, into the local below.)
+    """
+    dataset = dataset if dataset is not None else app_state.dataset
+    if dataset is None:  # nothing plotted when no dataset loaded
         return common_utils.make_blank_index_array()
 
     xmin, xmax = dpg.get_axis_limits("axis0")  # in data space  # tag
@@ -68,19 +75,25 @@ def get_visible_datapoints():
     y_range = ymax - ymin
     eps = 1e-5
 
-    filtxmin = app_state.dataset.sorted_lowdim_data[:, 0] >= xmin - eps * x_range
-    filtxmax = app_state.dataset.sorted_lowdim_data[:, 0] <= xmax + eps * x_range
+    filtxmin = dataset.sorted_lowdim_data[:, 0] >= xmin - eps * x_range
+    filtxmax = dataset.sorted_lowdim_data[:, 0] <= xmax + eps * x_range
     filtx = filtxmin * filtxmax
-    filtymin = app_state.dataset.sorted_lowdim_data[:, 1] >= ymin - eps * y_range
-    filtymax = app_state.dataset.sorted_lowdim_data[:, 1] <= ymax + eps * y_range
+    filtymin = dataset.sorted_lowdim_data[:, 1] >= ymin - eps * y_range
+    filtymax = dataset.sorted_lowdim_data[:, 1] <= ymax + eps * y_range
     filty = filtymin * filtymax
     filt = filtx * filty
     return np.where(filt)[0]
 
 
-def get_data_idxs_at_mouse():
-    """Return a list of data points (indices to `sorted_xxx`) that are currently under the mouse cursor."""
-    if app_state.dataset is None:  # nothing plotted when no dataset loaded
+def get_data_idxs_at_mouse(dataset: env | None = None) -> np.ndarray:
+    """Return a list of data points (indices to `sorted_xxx`) that are currently under the mouse cursor.
+
+    `dataset`: the dataset to query. Defaults to the live `app_state.dataset`. Background workers pass an
+               explicitly captured snapshot, so that a concurrent `open_file` swap can't make this read and
+               a later read (of `sorted_lowdim_data`, `sorted_entries`, ...) straddle two different datasets.
+    """
+    dataset = dataset if dataset is not None else app_state.dataset
+    if dataset is None:  # nothing plotted when no dataset loaded
         return common_utils.make_blank_index_array()
     pixels_per_data_unit_x, pixels_per_data_unit_y = guiutils.get_pixels_per_plotter_data_unit("plot", "axis0", "axis1")  # tag
     if pixels_per_data_unit_x == 0.0 or pixels_per_data_unit_y == 0.0:
@@ -97,10 +110,10 @@ def get_data_idxs_at_mouse():
     # Find `k` data points nearest to the mouse cursor.
     # Since the plot aspect ratio is not necessarily square, we need x/y distances separately to judge the pixel distance.
     # Hence the data space distances the `kdtree` gives us are not meaningful for our purposes.
-    data_space_distances_, data_idxs = app_state.dataset.kdtree.query(p, k=gui_config.datapoints_at_mouse_max_neighbors)  # `data_idxs`: item indices into `sorted_xxx`
+    data_space_distances_, data_idxs = dataset.kdtree.query(p, k=gui_config.datapoints_at_mouse_max_neighbors)  # `data_idxs`: item indices into `sorted_xxx`
 
     # Compute pixel distance, from mouse cursor, of each matched data point.
-    deltas = app_state.dataset.sorted_lowdim_data[data_idxs, :] - p  # Distances from mouse cursor in data space, tensor of shape [k, 2].
+    deltas = dataset.sorted_lowdim_data[data_idxs, :] - p  # Distances from mouse cursor in data space, tensor of shape [k, 2].
     deltas[:, 0] *= pixels_per_data_unit_x  # pixel distance, x
     deltas[:, 1] *= pixels_per_data_unit_y  # pixel distance, y
     pixel_distance = (deltas[:, 0]**2 + deltas[:, 1]**2)**0.5

@@ -63,6 +63,8 @@
 
 - *Raven-visualizer*: opening a dataset while the mouse is over the semantic map no longer crashes the tooltip background task with `AttributeError: name 'kdtree' is not defined`. The new dataset was published to the app one field at a time, so a concurrent tooltip render could read it half-built; it is now assembled fully before becoming visible.
 
+- *Raven-visualizer*: opening a dataset while the tooltip, info panel, or word cloud is rebuilding can no longer raise an `IndexError` from indices computed against the old dataset landing on the new one. Each background render now pins one dataset snapshot for the whole build instead of re-reading the shared reference as it can change mid-build.
+
 - *Raven-visualizer*: running without *Raven-server* (which the Visualizer treats as optional, loading models locally) no longer dumps a multi-frame connection-refused stack trace to the log for every model load. The low-level reachability probe now logs a single concise line at debug level; callers that require the server still report a clear error.
 
 - All client HTTP calls to *Raven-server* and to the LLM backend now use connect/read timeouts, so a server or backend that becomes unreachable mid-connection fails fast instead of hanging indefinitely. Matters most when either is configured to run on another machine that is down. Timeouts are configurable in `raven.client.config` (`network_timeout`) and `raven.librarian.config` (`llm_network_timeout`); streaming endpoints bound only the connect, leaving long-lived streams unbounded.

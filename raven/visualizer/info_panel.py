@@ -922,6 +922,8 @@ def _update_info_panel(*, task_env=None, env=None):
     info_panel_content_target = None  # DPG widget for building new content, initialized later
     new_content_swapped_in = False
 
+    ds = app_state.dataset  # capture once; a concurrent `open_file` may atomically swap `app_state.dataset` mid-build — keep one consistent view for this whole build (the two nested closures below capture it lexically)
+
     logger.debug(f"_update_info_panel: {task_env.task_name}: Info panel update task running.")
     logger.debug(f"_update_info_panel: {task_env.task_name}: Info panel build {env.internal_build_number} starting.")
     info_panel_t0 = time.monotonic()
@@ -948,7 +950,7 @@ def _update_info_panel(*, task_env=None, env=None):
             user_data = item_config["user_data"]
             if user_data is not None:
                 kind_, data_idx = user_data
-                entry = app_state.dataset.sorted_entries[data_idx]
+                entry = ds.sorted_entries[data_idx]
                 return f"{entry.author} ({entry.year}): {entry.title}"
         except Exception:
             pass
@@ -1117,7 +1119,7 @@ def _update_info_panel(*, task_env=None, env=None):
         cluster_ids_in_selection_new = []
         cluster_id_to_display_idx_new = {}
 
-        entries_by_cluster, formatter = entry_renderer.get_entries_for_selection(selection_data_idxs, max_n=gui_config.max_items_in_info_panel)
+        entries_by_cluster, formatter = entry_renderer.get_entries_for_selection(selection_data_idxs, max_n=gui_config.max_items_in_info_panel, dataset=ds)
 
         cluster_ids_in_selection_new.clear()
         cluster_id_to_display_idx_new.clear()

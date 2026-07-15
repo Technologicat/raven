@@ -125,13 +125,14 @@ def update(*, force=False, wait=True, wait_duration=0.05, env=None):
     For more notes, see `update_info_panel`, which works the same way.
     """
     # For a more responsive GUI, always update the plotter highlight right now.
+    ds = app_state.dataset  # capture once; a concurrent `open_file` may atomically swap `app_state.dataset` — keep one consistent view for the two reads below
     m = dpg.get_mouse_pos(local=False)
     if force or m != env.m_prev:
         # Highlight the mouse hover items (by plotting them as another series on top).
-        at_mouse = plotter.get_data_idxs_at_mouse()  # item indices into `sorted_xxx`.
+        at_mouse = plotter.get_data_idxs_at_mouse(dataset=ds) if ds is not None else []  # item indices into `sorted_xxx`.
         if len(at_mouse):
-            dpg.set_value("my_mouse_hover_scatter_series", [list(app_state.dataset.sorted_lowdim_data[at_mouse, 0]),  # tag
-                                                            list(app_state.dataset.sorted_lowdim_data[at_mouse, 1])])
+            dpg.set_value("my_mouse_hover_scatter_series", [list(ds.sorted_lowdim_data[at_mouse, 0]),  # tag
+                                                            list(ds.sorted_lowdim_data[at_mouse, 1])])
         else:
             dpg.set_value("my_mouse_hover_scatter_series", [[], []])  # tag
     if m != env.m_prev:  # Hide the annotation tooltip as soon as the mouse moves. This allows the user to move the mouse where the tooltip was, and get correct plot coordinates.
@@ -171,8 +172,9 @@ def _render_worker(*, task_env, env=None):
         # logger.debug(f"_render_worker: {task_env.task_name}: Annotation update task completed. No items under mouse, so nothing to do.")
         return
 
+    ds = app_state.dataset  # capture once; a concurrent `open_file` may atomically swap `app_state.dataset` mid-run — keep one consistent view for this whole build
     mouse_pos = dpg.get_mouse_pos(local=False)
-    at_mouse = plotter.get_data_idxs_at_mouse()  # item indices into `sorted_xxx`.
+    at_mouse = plotter.get_data_idxs_at_mouse(dataset=ds) if ds is not None else []  # item indices into `sorted_xxx`.
 
     with content_lock:
         old_mouse_hover_data_idxs_set = set(data_idxs)  # For checking if we need to resize/reposition (reduces flickering). Ordering doesn't matter, because the tooltip is always populated in the same order.
@@ -199,7 +201,7 @@ def _render_worker(*, task_env, env=None):
             maybe_regex_case_sensitive, maybe_regex_case_insensitive = entry_renderer.compile_search_highlight_regexes(search_string)
 
             # Actual content
-            entries_by_cluster, formatter = entry_renderer.get_entries_for_selection(at_mouse, max_n=gui_config.max_titles_in_tooltip)
+            entries_by_cluster, formatter = entry_renderer.get_entries_for_selection(at_mouse, max_n=gui_config.max_titles_in_tooltip, dataset=ds)
             clusters_at_mouse = entry_renderer.order_cluster_ids(entries_by_cluster.keys())
 
             have_jumpable_item = False  # for whether we should show the help for that
