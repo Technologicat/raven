@@ -7,7 +7,21 @@ from raven.papers.ratelimit import RateLimiter
 
 
 class TestRateLimiter:
-    """Verify rate limiter timing and thread safety."""
+    """Verify rate limiter timing and thread safety.
+
+    The rate limiter's contract is "wait *at least* `delay` between actions",
+    so the lower bounds below are the meaningful assertions. The upper bounds
+    are deliberately loose sanity caps — a shared CI runner can deschedule the
+    process mid-`sleep`, inflating measured wall time by an unbounded amount
+    (a tight 0.35 s cap on a 0.2 s delay flaked on the macOS runner — measured
+    0.351 s). They exist only to catch a hang or a gross units bug, not to
+    tolerance-check.
+    """
+
+    # Loose upper cap for the "it actually waited" tests: generous enough that
+    # runner scheduling jitter never trips it, tight enough to catch a hang or
+    # a seconds/milliseconds mix-up.
+    LOOSE_UPPER = 2.0
 
     def test_first_wait_immediate(self):
         """First call to wait should return immediately (no prior action)."""
@@ -24,7 +38,7 @@ class TestRateLimiter:
         t0 = time.monotonic()
         rl.wait(show_progress=False)
         elapsed = time.monotonic() - t0
-        assert 0.25 <= elapsed <= 0.5
+        assert 0.25 <= elapsed <= self.LOOSE_UPPER
 
     def test_no_delay_if_enough_time_passed(self):
         """If enough wall time has passed, wait returns immediately."""
@@ -42,7 +56,7 @@ class TestRateLimiter:
         t0 = time.monotonic()
         rl.wait(show_progress=False)
         elapsed = time.monotonic() - t0
-        assert 0.15 <= elapsed <= 0.35
+        assert 0.15 <= elapsed <= self.LOOSE_UPPER
 
     def test_show_progress_branch(self):
         """The ``show_progress=True`` path runs the tqdm loop to completion."""
@@ -51,7 +65,7 @@ class TestRateLimiter:
         t0 = time.monotonic()
         rl.wait(show_progress=True)
         elapsed = time.monotonic() - t0
-        assert 0.15 <= elapsed <= 0.5
+        assert 0.15 <= elapsed <= self.LOOSE_UPPER
 
     def test_thread_safety(self):
         """Multiple threads waiting should each respect the delay."""
