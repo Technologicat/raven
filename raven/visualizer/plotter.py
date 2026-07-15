@@ -61,7 +61,7 @@ def get_visible_datapoints(dataset: env | None = None) -> np.ndarray:
     `dataset`: the dataset to query. Defaults to the live `app_state.dataset`. Pass an explicitly captured
                snapshot to keep the result consistent with other dataset reads in the same operation, so a
                concurrent `open_file` swap can't split them. (This function's own reads are already mutually
-               consistent regardless: the global is read once, into the local below.)
+               consistent regardless: it dereferences the global exactly once per call.)
     """
     dataset = dataset if dataset is not None else app_state.dataset
     if dataset is None:  # nothing plotted when no dataset loaded
