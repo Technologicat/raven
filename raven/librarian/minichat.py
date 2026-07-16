@@ -546,7 +546,7 @@ def minimal_chat_client(backend_url) -> None:
                 nonlocal chars
                 nonlocal was_thought
 
-                # `invoke` is the single parser (brief 02 §9); dispatch on the typed event. Tool calls aren't
+                # `invoke` is the single parser; dispatch on the typed event. Tool calls aren't
                 # streamed to the terminal; they appear in the completed message / tool-result output.
                 if event["type"] == "tool_call":
                     return llmclient.action_ack

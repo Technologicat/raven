@@ -252,7 +252,7 @@ def _perform_and_store_tool_calls(llm_settings: env,
         def create_tool_payload() -> Dict:
             # OAI spec puts the tool-call linkage on the tool-response *message* as `tool_call_id` (matching the
             # `id` of the assistant's `tool_calls[i]` entry). The tool *execution* metadata (status, function
-            # name, timing) stays in `generation_metadata`. See brief 02 §11.
+            # name, timing) stays in `generation_metadata`.
             if "tool_call_id" in tool_response_record:
                 tool_response_record.data["tool_call_id"] = tool_response_record.tool_call_id
 
@@ -558,7 +558,7 @@ def ai_turn(llm_settings: env,
         # `out.data` is now the complete message object (in the format returned by `create_chat_message`)
 
         # Clean up the LLM's reply (heuristically). This version goes into the chat history.
-        # Content-parts (brief 03): the reply carries a single text part; scrub its text, re-wrap as a text part.
+        # Content-parts: the reply carries a single text part; scrub its text, re-wrap as a text part.
         scrubbed_text = chatutil.scrub(persona=llm_settings.personas.get("assistant", None),
                                        text=chatutil.content_to_text(out.data["content"]),
                                        thoughts_mode="keep",
@@ -679,7 +679,7 @@ def retry_tool_calls(llm_settings: env,
     denied_payload = datastore.get_payload(tool_node_id)
     if denied_payload["message"]["role"] != "tool":
         raise ValueError(f"retry_tool_calls: node '{tool_node_id}' is not a tool-result node (role is '{denied_payload['message']['role']}').")
-    denied_tool_call_id = denied_payload["message"].get("tool_call_id")  # OAI: linkage lives on the tool message (brief 02 §11)
+    denied_tool_call_id = denied_payload["message"].get("tool_call_id")  # OAI: linkage lives on the tool message
 
     # 1. Walk up the tool-result chain to the assistant that requested the calls.
     parent_node_id = datastore.get_parent(tool_node_id)

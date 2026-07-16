@@ -93,7 +93,7 @@ def websearch_wrapper(query: str,
 
     Each result becomes a single markdown text part — a `[title](link)` heading followed by the snippet. The
     GUI renders one part per result (clickable markdown links); the model reads the same markdown text on the
-    wire (brief 03 §4).
+    wire.
 
     Every text-bearing field (`text`, `title`, `link`) is run through `raven.common.text.normalize`: SERP
     snippets are scraped HTML from the search engine — external untrusted content, the same hostile-input class
@@ -658,7 +658,7 @@ def _materialize_tool_calls(accumulator: Dict[int, Dict[str, str]]) -> Optional[
 # Streaming parser: raw deltas -> typed events (`invoke`'s single source of truth)
 
 # Inline-tag tokens that some models/backends emit in the *content* stream. `invoke` parses them out
-# and re-routes them into typed events, so the chat client never has to regex-sniff the text. See brief 02 §9.
+# and re-routes them into typed events, so the chat client never has to regex-sniff the text.
 _THINK_OPEN = "<think>"
 _THINK_CLOSE = "</think>"
 
@@ -952,7 +952,7 @@ def invoke(settings: env,
                        with "role" and "content" fields.
 
     `on_progress`: 1-argument callable with argument `event: Dict`, a typed event from the parsed response
-                   stream (`invoke` is the single parser — see brief 02 §9; consumers dispatch on `event["type"]`
+                   stream (`invoke` is the single parser; consumers dispatch on `event["type"]`
                    and never sniff raw text). Called while streaming, typically once per generated token. The
                    event is one of:
 
@@ -1055,7 +1055,7 @@ def invoke(settings: env,
 
     # `invoke` is the single parser of the response stream: the `StreamParser` turns raw deltas — content,
     # the native `reasoning_content` channel, and inline `<think>` / `<tool_call>` tags alike — into typed
-    # events. Consumers (`on_progress`) dispatch on event type; they never regex-sniff the text. See brief 02 §9.
+    # events. Consumers (`on_progress`) dispatch on event type; they never regex-sniff the text.
     parser = StreamParser()
     llm_output_text = io.StringIO()       # accumulates `content` events -> message["content"]
     reasoning_output_text = io.StringIO()  # accumulates `reasoning` events -> message["reasoning_content"]
@@ -1314,8 +1314,8 @@ def perform_throwaway_task(llm_settings: env,
 
     # Postprocess the AI's response.
     #
-    # `invoke` now returns think-free `content` with the thinking trace separated into `reasoning_content`
-    # (brief 02 §9). Reassemble the inline `<think>...</think>` form for `raw_output_text` to keep the
+    # `invoke` now returns think-free `content` with the thinking trace separated into `reasoning_content`.
+    # Reassemble the inline `<think>...</think>` form for `raw_output_text` to keep the
     # debugging/logging contract; the scrubbed final answer comes from the already-think-free content.
     content = chatutil.content_to_text(out.data["content"])
     reasoning = out.data.get("reasoning_content") or ""
@@ -1434,8 +1434,8 @@ def perform_tool_calls(settings: env,
         """Add a tool response record to `tool_response_records`.
 
         `output` is the tool result: either a plain string (wrapped as a single text content-part) or an
-        already-built content-parts list — e.g. `websearch_wrapper`'s one-text-part-per-result output
-        (brief 03 §4). Error reports are passed as plain strings.
+        already-built content-parts list — e.g. `websearch_wrapper`'s one-text-part-per-result output.
+        Error reports are passed as plain strings.
 
         The record is an `unpythonic.env.env` with the following attributes:
 
@@ -1538,7 +1538,7 @@ def perform_tool_calls(settings: env,
         else:  # success!
             logger.debug(f"perform_tool_calls: {tool_call_id}: Function '{function_name}' returned successfully.")
             # An entrypoint returns its output as either a plain string (wrapped downstream as a single text
-            # content-part) or a content-parts list (e.g. websearch's one-part-per-result output, brief 03 §4),
+            # content-part) or a content-parts list (e.g. websearch's one-part-per-result output),
             # optionally wrapped in an `(output, metadata_dict)` tuple to attach structured metadata to the
             # tool-response node (e.g. webfetch records a denied host for the GUI override). `add_tool_response_record`
             # normalizes the output to a parts list either way.

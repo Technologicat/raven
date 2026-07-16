@@ -501,7 +501,7 @@ class DPGChatMessage:
         Raven's what-you-see-is-what-you-get design surfaces what the model did, so a tool-calling turn is not
         silently swallowed between an (often empty) assistant message and the subsequent tool result. The
         invocation may have arrived as a native `tool_calls` entry or as an inline `<tool_call>` tag — by the
-        time it reaches here it's the same structured form (the `invoke` parser unified them; see brief 02 §9).
+        time it reaches here it's the same structured form (the `invoke` parser unified them).
 
         The icon is `ICON_GEARS` (meshing cogs), matching the tool-role result message's three-cogs badge
         (`icons/tool.png`) — invocation and result read as the same family. Deliberately *not* the single-gear
@@ -829,7 +829,7 @@ class DPGChatMessage:
         # (bumping that would add left margin to EVERY message row for a button almost never shown). The cost:
         # the leading right-align spacer reserves space for the fixed button count, so the extra button pushes
         # the sibling counter ("1 / 2") further right and possibly off-view on a denied tool row. Acceptable
-        # for this provisional affordance; revisit if/when it gets a permanent home (brief 03).
+        # for this provisional affordance; revisit if/when it gets a permanent home.
         #
         # NOTE: provisional placement. Brief 03 (content-parts) moves tool-result rendering into the assistant
         # message body; when that lands, this affordance relocates there. See briefs/summer_2026_librarian_extension/.
@@ -1040,15 +1040,16 @@ class DPGCompleteChatMessage(DPGChatMessage):
                       persona=persona,
                       node_id=self.node_id)
 
-        # Reasoning (thinking) trace lives in the message's `reasoning_content` sibling field (brief 02 §9/§10),
-        # not in `content`. Render it first, as a single collapsible thought paragraph. For not-yet-migrated old
-        # data `reasoning_content` is absent and the thinking is still inline `<think>` in a text part, handled by
-        # the per-part splitter below (which consolidates it into its own thought paragraph the same way).
+        # Reasoning (thinking) trace lives in the message's `reasoning_content` sibling field, not in `content`.
+        # Render it first, as a single collapsible thought paragraph. Migration (`upgrade_datastore`, at load)
+        # and the live stream parser both move thinking into `reasoning_content` before it ever reaches here, so
+        # `content` no longer carries inline `<think>`. The per-part splitter below still recognizes inline
+        # `<think>`, but that path is dead — leftover from the pre-June inline handling, not yet removed.
         reasoning_content = message.get("reasoning_content") or ""
         if reasoning_content.strip():
             self.add_paragraph(reasoning_content, is_thought=True)
 
-        # Render the content parts in order, stacked vertically (brief 03 §4/§6). A text part renders as markdown
+        # Render the content parts in order, stacked vertically. A text part renders as markdown
         # paragraphs; multiple text parts (e.g. one per websearch result) stack into the message's vertical
         # layout, giving per-result visual separation. The persona prefix on the first line of assistant content
         # ("Aria: ...") is stripped per part — a no-op for tool/system messages, which carry no persona.
@@ -1060,8 +1061,8 @@ class DPGCompleteChatMessage(DPGChatMessage):
                 pass  # TODO (brief 03 §6, Half 2): render the image as an inline thumbnail
             # else: unknown part type — skip (forward-compat)
 
-        # Render any tool-call invocations this assistant message made, as visible sub-elements after the text
-        # (brief 02 §10). Without this, a tool-calling turn — often with empty `content` — would show nothing
+        # Render any tool-call invocations this assistant message made, as visible sub-elements after the text.
+        # Without this, a tool-calling turn — often with empty `content` — would show nothing
         # between the assistant message and the subsequent tool-result node.
         for index, tool_call in enumerate(message.get("tool_calls") or []):
             function = tool_call.get("function") or {}
@@ -1070,9 +1071,12 @@ class DPGCompleteChatMessage(DPGChatMessage):
                                           arguments=function.get("arguments", ""))
 
     def _render_text_paragraphs(self, text: str) -> None:
-        """Render one text content-part: split into paragraphs and add them, consolidating any inline
-        `<think>...</think>` block (legacy / not-yet-migrated content) into a single collapsible thought
-        paragraph, the same way the streaming path tints reasoning."""
+        """Render one text content-part: split into paragraphs and add them.
+
+        Also consolidates any inline `<think>...</think>` block into a single collapsible thought paragraph, but
+        that handling is dead code: since the June `reasoning_content` migration, thinking is separated out
+        before render (at load by `upgrade_datastore`, live by the stream parser), so `content` no longer
+        carries inline `<think>`. Leftover from the pre-June inline handling; slated for removal."""
         paragraph_accumulator = io.StringIO()
         inside_think_block = False
         def commit_paragraph():
@@ -1860,7 +1864,7 @@ class DPGChatController:
 
                 def on_llm_progress(event: Dict[str, Any]) -> Optional[sym]:
                     # `invoke` is the single parser; this handler is a pure renderer dispatching on the typed
-                    # event (brief 02 §9). No regex-sniffing of the text stream; the event type *is* the state.
+                    # event. No regex-sniffing of the text stream; the event type *is* the state.
 
                     # If the task is cancelled (`stop_ai_turn` was called), interrupt the LLM, keeping the content received so far.
                     # The scaffold will automatically send the content to `on_llm_done`.
