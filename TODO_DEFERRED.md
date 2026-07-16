@@ -932,3 +932,21 @@ The preload cap is adaptive to the current zoom (`preload.mip_scale_for_zoom`): 
 Correctness is fine (augment fallback covers it); only the instant-crisp guarantee lapses for that one step, in the non-primary zoom-in-mid-browse workflow. If it ever feels worth closing: have `schedule_neighbors` re-issue a neighbor whose cached largest scale (`entry.mips[0][0]`) is below the current `mip_scale_for_zoom`, mirroring the capped-entry eviction `schedule_compare` already does for full-chain upgrades.
 
 Discovered during cherrypick preload adaptive-cap work (2026-06-09).
+
+## Sweep the remaining pre-existing brief references out of librarian source
+
+Fleet convention (same class as the existing "don't reference `CLAUDE.md` from source"): source code and comments must not cite briefs by number/section (`brief 03 §5`, `brief 02 §11`, …). Briefs get archived after the work lands, so the pointer rots for a human reading the code in their IDE. Inline a short description, or link a human-discoverable doc.
+
+`chatutil.py` is done (swept during brief-03 Half-2, 2026-07-16). The refs turned out to be package-wide, not chatutil-only — Half-1 (briefs 02 + 03) left ~15 more (excluding live TODO markers, see below) across:
+- `llmclient.py` (~10: lines ~95, ~644, ~892, ~946, ~955, ~1010, ~1265, ~1385, ~1488)
+- `chat_controller.py` (~5: lines ~504, ~832, ~1043, ~1051, ~1862)
+- `scaffold.py` (~3: lines ~255, ~560, ~681)
+- `minichat.py` (~1: line ~549)
+
+Rewrite each to be self-contained (the surrounding comments already explain the mechanics; just drop or inline the citation). Keep it a focused doc-only pass, separate from feature commits.
+
+**Exception — live `# TODO` markers may cite briefs.** A TODO pointing at pending work (e.g. `chat_controller.py:1060`, the Half-2 image-render stub, `# TODO (brief 03 §6, Half 2): ...`) is fine as-is: the marker and its brief-ref both disappear when the work lands, so it never rots. Leave those; the sweep is only for explanatory comments/docstrings that outlive the brief.
+
+Consider promoting the convention itself into `raven-style-guide.md` (or extending the global CLAUDE.md bullet that already covers `CLAUDE.md`) so it's version-controlled fleet-wide.
+
+Discovered during brief-03 Half-2 work (2026-07-16).

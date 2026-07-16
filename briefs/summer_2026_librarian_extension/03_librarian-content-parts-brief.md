@@ -264,10 +264,17 @@ The other half of multimodal: user can attach an image to a message.
   is also kept as a sidecar** at `<hash>.original.<ext>` next to the downsampled primary. This
   makes the datastore truly self-contained (move it to another machine, originals come along)
   and preserves full-resolution data for future use (re-downsample to a different target,
-  re-export at full quality, send to a future higher-resolution VLM). Three cases drop out
-  naturally:
-  1. **No downsampling needed** (image ≤ 1 MP at attach): primary sidecar IS the original.
-     No second file. Sidecars entry's `original_dimensions` absent.
+  re-export at full quality, send to a future higher-resolution VLM).
+
+  **The original is stored byte-for-byte** (the source file's exact bytes, not a decode/re-encode
+  round-trip), so embedded metadata survives — EXIF, ICC profiles, and especially AI-generation
+  parameters (ComfyUI / A1111 workflow data baked into PNG text chunks). The downsampled *primary*
+  is a derived working copy (re-encoded, metadata naturally gone; the original format is recorded
+  in `content_type` regardless). Implemented in `raven.librarian.imagestore.store_image_as_sidecar`.
+  Three cases drop out naturally:
+  1. **No downsampling needed** (image ≤ 1 MP at attach): primary sidecar IS the original —
+     stored verbatim (so metadata is preserved even without a second file). No second file.
+     Sidecars entry's `original_dimensions` absent.
   2. **Downsampled, original kept** (default): primary is downsampled, original at
      `<hash>.original.<ext>`. Sidecars entry has `original_dimensions` and `original_sidecar`.
   3. **Downsampled, original discarded** (`store_original_image=False` in config, for
@@ -570,33 +577,38 @@ Mark-and-sweep, not reference-counting. Composes cleanly with chattree's existin
 3. **Matches the existing convention.** `prune_unreachable_nodes` is an explicit pass, not
    per-op. Sidecar GC slots into the same trigger model.
 
-**The sweep operation** — pseudocode for the new `chattree.prune_unreferenced_sidecars()`:
+**The sweep operation.** `chattree.PersistentForest.prune_unreferenced_sidecars()` (no args) marks
+every reachable sidecar and sweeps the rest; `unreferenced_sidecars()` is the same computation
+without deleting, for the dry-run preview. The mark phase scans two reference sites per revision:
+`sidecar:` URLs in `image_url` content-parts, and `original_sidecar` entries in
+`general_metadata["sidecars"]` (the case-2-preserved originals from §5, which have no content-part
+of their own). Anything in the sidecar directory not referenced by any revision of any reachable
+node gets deleted.
 
-```python
-referenced = set()
-for node in self.nodes.values():           # all reachable nodes (post-tree-GC)
-    for payload in node["data"].values():  # all revisions
-        message = payload.get("message", {})
-        # Primary sidecar refs in image_url parts
-        for part in message.get("content", []):
-            if part.get("type") == "image_url":
-                url = part.get("image_url", {}).get("url", "")
-                if url.startswith("sidecar:"):
-                    referenced.add(url[len("sidecar:"):])
-        # Original-sidecar refs in origin metadata (§5 case 2)
-        sidecars = payload.get("general_metadata", {}).get("sidecars", {})
-        for entry in sidecars.values():
-            if isinstance(entry, dict) and "original_sidecar" in entry:
-                referenced.add(entry["original_sidecar"])
-# Sweep: delete any file in sidecar dir not in `referenced`
-for filename in os.listdir(self.sidecar_dir):
-    if filename not in referenced:
-        os.remove(os.path.join(self.sidecar_dir, filename))
-```
+**Ownership: injected extractor, not a self-scan (design decision, implemented).** The original
+draft above had `prune_unreferenced_sidecars()` reach into `node["data"]` and parse
+`payload["message"]["content"]` itself. That was dropped — it makes the storage layer parse the
+chat-message schema, violating chattree's founding invariant that *payloads are opaque to
+chattree*. But sidecar GC inherently needs to read references out of payloads, so the two are in
+tension, and something has to give. Two coherent resolutions were weighed:
 
-Scans both image-part URLs AND `original_sidecar` references in origin metadata (the
-case-2-preserved originals from §5). Anything in the sidecar directory not referenced by any
-revision of any reachable node gets deleted.
+- **Delegate the read.** chattree drives the revision traversal (unambiguously its job) but calls a
+  `sidecar_extractor` — configured once at construction — to read the refs out of each opaque
+  payload. The extractor (`imagestore.sidecar_refs_in_payload`, a pure `payload -> set[str]`) lives
+  in the message-schema layer that owns the format. chattree stays opaque; GC is a self-contained
+  no-arg op; the reference stays single-sourced in the payload (no drift).
+- **Register the refs.** A payload revision registers its sidecars with chattree at write time,
+  stored as chattree-side metadata. Rejected: it *duplicates* a reference that already lives inside
+  the payload across the opacity boundary, and the two copies can drift — a missed registration
+  silently GCs a live image.
+
+We took the first (delegate). The "leak" it seems to introduce — GC of chattree-owned storage
+needing an imagestore-owned function — is really chattree's opacity invariant asserting itself:
+given opacity, delegating the one forbidden step is the honest move, whereas registration is a
+denormalization workaround. Configuring the extractor at construction (rather than passing it per
+call) lets chattree *own* the GC operation while delegating only the payload read. See the
+docstrings on `PersistentForest.__init__` (`sidecar_extractor`), `prune_unreferenced_sidecars`, and
+`imagestore.sidecar_refs_in_payload` for the implemented contract.
 
 **Two triggers, one operation:**
 

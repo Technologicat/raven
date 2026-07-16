@@ -3,6 +3,7 @@
 Currently used by the `librarian.llmclient` and `tools.pdf2bib` modules.
 """
 
+import math
 import os
 import pathlib
 import textwrap
@@ -177,6 +178,53 @@ webfetch_allowlist = None
 # its host to the allowlist, or if you forward the URL yourself.
 #
 webfetch_trust_search_results = False
+
+# --------------------------------------------------------------------------------
+# Multimodal (image) input and storage
+#
+# When a VLM (vision-capable model) is loaded, the user can attach images to a message. Images are stored as
+# *sidecar files* in a directory next to the chat datastore JSON (`<datastore>.images/`), referenced from
+# messages by a Raven-internal `sidecar:<filename>` URL. On wire-send, `llmclient.invoke` substitutes a real
+# `data:` URL by reading the sidecar bytes. No `https://` URLs ever land in a stored datastore, so a saved
+# chat reloads without network access, survives the source page going away (link rot), and never phones home
+# to a remote host when reopened — even if the image originally came from a remote URL.
+
+# Downsample attached images larger than this many megapixels before storing, aspect ratio preserved, via
+# `raven.common.image.lanczos`. 1.0 MP is right at the resolution most current VLMs natively expect (Gemma 4
+# 1024², Qwen-VL ≈ 1340 patches at 1024²), so anything larger is wasted tokens the model would resize away.
+# Set to `None` to store originals at full resolution (no downsampling).
+image_store_max_megapixels = 1.0
+
+# When an image is downsampled on store, also keep the full-resolution original as a second sidecar
+# (`<hash>.original.<ext>`). Makes the datastore self-contained and future-proof (re-downsample to a different
+# target, re-export at full quality, send to a higher-resolution VLM later). Set `False` on disk-constrained
+# setups to keep only the downsampled copy. No effect on images that don't need downsampling (the primary
+# sidecar IS the original in that case).
+store_original_image = True
+
+# Where per-thumbnail / bulk "Save a copy to staging" rescues land when cleaning up unreferenced sidecars
+# (the manual "Clean up & save" flow). User-level, not per-datastore — recovered images are user data, not
+# chat-specific.
+image_staging_dir = global_config.toplevel_userdata_dir / "staging" / "recovered_images"
+
+# Estimated per-image token cost, for the context-fill budget (a VLM image consumes non-trivial context that a
+# text-only char->token ratio can't see). Keyed by a lowercase substring matched against the loaded model's
+# family / arch / id; first match wins, `None` key is the fallback for unknown families. Each value is either a
+# flat token count (int) or a callable `(height, width) -> int` for models whose cost scales with resolution.
+#
+# These are conservative estimates: the budget self-corrects from the backend's real `usage.prompt_tokens`
+# after the first image-bearing call (same mechanism as the char->token calibration), so over-estimating here
+# only means the pre-send indicator reads slightly high until the first exact count lands. Formulas as of
+# 2026-05, from each family's published image-tiling scheme (Gemma 4's discrete per-image budget, LLaVA's
+# 336-px tiles, Qwen-VL's 28-px patch grid).
+gemma4_visual_token_budget = 1120  # Gemma 4's per-image budget is a server-side knob (70/140/280/560/1120); assume the max unless you know your server's setting.
+llm_image_token_cost = {
+    "gemma4": lambda h, w: gemma4_visual_token_budget,
+    "llava-1.5": 576,                                                  # single 336x336 tile
+    "llava": 2880,                                                     # LLaVA-NeXT: up to 5 tiles x 576; assume the max
+    "qwen": lambda h, w: min(16384, math.ceil(h / 28) * math.ceil(w / 28)),  # Qwen-VL dynamic: ~1340 tokens at 1024x1024
+    None: 1000,                                                        # unknown family: conservative placeholder
+}
 
 # --------------------------------------------------------------------------------
 # Document database (retrieval-augmented generation, RAG)

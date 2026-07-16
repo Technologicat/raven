@@ -12,6 +12,7 @@ import atexit
 import collections
 import contextlib
 import copy
+import hashlib
 import io  # we occasionally need one of Jupiter's moons
 import json
 import pathlib
@@ -697,7 +698,8 @@ class Forest:
 class PersistentForest(Forest):
     def __init__(self,
                  datastore_file: Union[str, pathlib.Path],
-                 autosave: bool = True):
+                 autosave: bool = True,
+                 sidecar_extractor: Callable[[Any], set[str]] | None = None):
         """Exactly like `Forest`, but with persistent storage as JSON.
 
         `datastore_file`: Where to store the data (for the specific collection you're creating/loading).
@@ -711,11 +713,22 @@ class PersistentForest(Forest):
                     This is primarily useful for tests and for ad-hoc inspection of a real datastore file
                     from a Python session, where unconditional autosave would silently rewrite the file
                     at interpreter exit.
+
+        `sidecar_extractor`: How to read the sidecar references out of one (otherwise opaque) node payload —
+                    a callable `payload -> set[str]` returning the sidecar filenames that payload references.
+                    Configured once here by the layer that owns the payload format (for Librarian chats,
+                    `raven.librarian.imagestore.sidecar_refs_in_payload`), because payloads are opaque to
+                    `chattree` by design and only the format owner can read a `sidecar:` reference out of one.
+                    `chattree` drives the revision traversal itself and calls this per revision at GC time; it is
+                    never invoked during load, so it only needs to understand the *current* payload format.
+                    `None` (default) means this datastore does no sidecar GC — `prune_unreferenced_sidecars`
+                    becomes a safe no-op (it will not delete files it can't prove are unreferenced).
         """
         super().__init__()
 
         self.datastore_file = datastore_file
         self._autosave = autosave
+        self._sidecar_extractor = sidecar_extractor
 
         # Load persisted state, if any.
         self._load()
@@ -774,6 +787,123 @@ class PersistentForest(Forest):
                 self.nodes.update(data)
                 plural_s = "s" if len(data) != 1 else ""
                 logger.info(f"PersistentForest._load: PersistentForest loaded successfully ({len(data)} node{plural_s}).")
+
+    # --------------------------------------------------------------------------------
+    # Image sidecar storage
+    #
+    # Images attached to messages are stored as files next to the datastore JSON, in `<datastore>.images/`,
+    # referenced from messages by `sidecar:<filename>` URLs. Files are named by content hash (`<sha256>.<ext>`),
+    # so attaching the same image twice costs one file. These methods own the sidecar *files*; deciding what to
+    # store and which files are still referenced lives one layer up (see `raven.librarian.imagestore`), keeping
+    # this storage layer free of chat-message-schema knowledge.
+
+    def _get_sidecar_dir(self) -> pathlib.Path:
+        return pathlib.Path(self.datastore_file).expanduser().resolve().with_suffix(".images")
+    sidecar_dir = property(fget=_get_sidecar_dir,
+                           doc="Directory holding this datastore's image sidecar files: `<datastore>.images/`, alongside the JSON. Derived from `datastore_file`; created lazily on the first `store_sidecar`.")
+
+    def store_sidecar(self, data: bytes, ext: str) -> str:
+        """Store image bytes `data` as a sidecar file; return its content-hash filename `<sha256>.<ext>`.
+
+        Content-addressed: storing identical bytes twice writes one file and returns the same name (natural
+        dedup). `ext` is the extension without a leading dot (e.g. "png", "jpeg"). Creates `sidecar_dir` if
+        needed. The caller decides *what* bytes to store — the verbatim original, or a re-encoded downsample
+        (see `raven.librarian.imagestore.store_image_as_sidecar`).
+        """
+        filename = f"{hashlib.sha256(data).hexdigest()}.{ext.lstrip('.')}"
+        with self.lock:
+            directory = self.sidecar_dir
+            common_utils.create_directory(directory)
+            path = directory / filename
+            if not path.exists():  # content-addressed: identical bytes -> identical name -> already on disk
+                with open(path, "wb") as sidecar_file:
+                    sidecar_file.write(data)
+        return filename
+
+    def _validate_sidecar_filename(self, filename: str) -> None:
+        # Filenames reaching here come from stored `sidecar:` URLs, i.e. from datastore data — refuse anything
+        # that isn't a bare basename, so a crafted/corrupt datastore can't escape the sidecar directory.
+        if pathlib.Path(filename).name != filename:
+            raise ValueError(f"PersistentForest: unsafe sidecar filename '{filename}' (must be a bare basename, no path separators).")
+
+    def sidecar_path(self, filename: str) -> pathlib.Path:
+        """Absolute path to sidecar file `filename` within `sidecar_dir`. Does not check existence."""
+        self._validate_sidecar_filename(filename)
+        return self.sidecar_dir / filename
+
+    def read_sidecar(self, filename: str) -> bytes:
+        """Read and return the raw bytes of sidecar file `filename`."""
+        with open(self.sidecar_path(filename), "rb") as sidecar_file:
+            return sidecar_file.read()
+
+    def list_sidecar_files(self) -> list[str]:
+        """List the filenames present in `sidecar_dir` (bare names, not paths), sorted. Empty if the directory doesn't exist yet.
+
+        Sorted rather than in raw `iterdir` order so that everything built on it — the GC sweep, its log line,
+        and the dry-run preview — is deterministic and platform-independent (filesystem iteration order is not).
+        A UI is free to re-sort by a more meaningful key (size, provenance URL) on top.
+        """
+        directory = self.sidecar_dir
+        if not directory.is_dir():
+            return []
+        return sorted(entry.name for entry in directory.iterdir() if entry.is_file())
+
+    def _referenced_sidecars(self) -> set[str]:
+        """Union of sidecar filenames referenced by every revision of every node — the GC "mark" phase.
+
+        `chattree` owns this traversal over its own revision model; the per-payload interpretation is delegated
+        to the `sidecar_extractor` configured at construction, because payloads are opaque to `chattree` by design.
+        Returns an empty set if no extractor is configured (callers guard against acting on that).
+        """
+        if self._sidecar_extractor is None:
+            return set()
+        referenced = set()
+        with self.lock:
+            for node in self.nodes.values():
+                for payload in node.get("data", {}).values():  # every revision of every node
+                    referenced |= set(self._sidecar_extractor(payload))
+        return referenced
+
+    def unreferenced_sidecars(self) -> list[str]:
+        """Sidecar filenames present on disk but referenced by no revision — the GC dry-run.
+
+        The same computation as `prune_unreferenced_sidecars` without deleting, for a pre-commit preview
+        ("would delete N files, X MB"). Returns `[]` (deleting nothing) if no `sidecar_extractor` is configured
+        — references can't be determined, so nothing is reported as safe to delete.
+        """
+        with self.lock:
+            if self._sidecar_extractor is None:
+                if self.list_sidecar_files():
+                    logger.warning("PersistentForest.unreferenced_sidecars: no sidecar_extractor configured; cannot determine references.")
+                return []
+            referenced = self._referenced_sidecars()
+            return [filename for filename in self.list_sidecar_files() if filename not in referenced]
+
+    def prune_unreferenced_sidecars(self) -> list[str]:
+        """Delete sidecar files referenced by no revision of any node; return the filenames deleted.
+
+        Mark-and-sweep GC. The mark phase (`_referenced_sidecars`) delegates per-payload reading to the
+        `sidecar_extractor` configured at construction; the sweep deletes everything else in the sidecar
+        directory. Pairs with `prune_unreachable_nodes`: run that first, so images referenced only by
+        now-unreachable nodes become unreferenced here and get swept. If no `sidecar_extractor` is configured
+        this is a safe no-op — it will not delete files it cannot prove are unreferenced (returns `[]`, and
+        warns if any sidecars exist).
+        """
+        with self.lock:
+            if self._sidecar_extractor is None:
+                if self.list_sidecar_files():
+                    logger.warning("PersistentForest.prune_unreferenced_sidecars: no sidecar_extractor configured; skipping sidecar GC to avoid deleting referenced files.")
+                return []
+            referenced = self._referenced_sidecars()
+            deleted = []
+            for filename in self.list_sidecar_files():
+                if filename not in referenced:
+                    (self.sidecar_dir / filename).unlink()
+                    deleted.append(filename)
+            if deleted:
+                plural_s = "s" if len(deleted) != 1 else ""
+                logger.info(f"PersistentForest.prune_unreferenced_sidecars: deleted {len(deleted)} unreferenced sidecar file{plural_s}.")
+            return deleted
 
     def _upgrade(self, nodes: Dict[str, Dict[str, Any]]) -> None:
         """Migrate `nodes` (loaded from a saved datastore) to the latest format.

@@ -9,6 +9,7 @@ __all__ = ["format_message_number",
            "format_reminder_to_use_information_from_context_only",
            "make_timestamp",
            "text_content_part",
+           "image_content_part",
            "normalize_content",
            "content_to_text",
            "create_message_from_parts",
@@ -45,13 +46,23 @@ from . import chattree
 #
 # A chat message's `content` is a list of typed parts. Even a text-only message is
 # `[{"type": "text", "text": "..."}]`. This is OpenAI's multimodal `content` shape used directly as Raven's
-# internal representation, so the wire format needs no translation. v0 part types: "text" and "image_url"
-# (brief 03 §2). Reading code must never treat `content` as a string — funnel through `content_to_text` for
-# the text, or dispatch on each part's "type".
+# internal representation, so the wire format needs no translation. v0 part types: "text" and "image_url".
+# Reading code must never treat `content` as a string — funnel through `content_to_text` for the text, or
+# dispatch on each part's "type".
 
 def text_content_part(text: str) -> Dict[str, str]:
     """Wrap a plain string as a single text content-part: `{"type": "text", "text": text}`."""
     return {"type": "text", "text": text}
+
+def image_content_part(url: str) -> Dict[str, Any]:
+    """Wrap an image URL as an image content-part: `{"type": "image_url", "image_url": {"url": url}}`.
+
+    The multimodal sibling of `text_content_part`. In a *stored* message, `url` is always a Raven-internal
+    `sidecar:<filename>` reference (never an `https://` URL, so stored chats stay offline-reloadable and don't
+    phone home); `llmclient.invoke` substitutes a real `data:` URL from the sidecar bytes just before sending
+    on the wire.
+    """
+    return {"type": "image_url", "image_url": {"url": url}}
 
 def normalize_content(content: Any) -> List[Dict[str, Any]]:
     """Return `content` as a content-parts list: a bare string becomes a single text part; a list passes through.
@@ -349,7 +360,7 @@ def create_chat_message(llm_settings: env,
                          user/system/tool messages and assistant messages with no thinking trace.
 
     Returns the new message: `{"role": ..., "content": [<part>, ...], "tool_calls": ...}`, where `content`
-    is always a content-parts list (brief 03); plus a `"reasoning_content"` key when `reasoning_content` is given.
+    is always a content-parts list; plus a `"reasoning_content"` key when `reasoning_content` is given.
     """
     persona_name = llm_settings.personas.get(role, None) if (persona is None) else persona
     if add_persona and persona_name is not None:
@@ -533,7 +544,7 @@ def compute_auto_allowed_hosts(datastore: chattree.Forest,
     return frozenset(hosts)
 
 # --------------------------------------------------------------------------------
-# Datastore migration helpers (brief 02 §11): inline reasoning / tool-call normalization.
+# Datastore migration helpers: inline reasoning / tool-call normalization.
 #
 # Old chats stored reasoning inline as `<think>...</think>` in `message["content"]`, and (for tool-response
 # messages) the tool-call linkage under `generation_metadata["toolcall_id"]`. The current format keeps reasoning
@@ -590,7 +601,7 @@ def _migrate_inline_tool_calls(message: Dict[str, Any]) -> None:
             parsed = json.loads(raw.strip())
         except (json.JSONDecodeError, ValueError):
             logger.warning("upgrade_datastore: malformed inline <tool_call> JSON; leaving this message's content unchanged.")
-            return  # §11.4: degraded but lossless — don't strip, don't extract
+            return  # degraded but lossless — don't strip, don't extract
         name = parsed.get("name", "")
         arguments = parsed.get("arguments", {})
         if not isinstance(arguments, str):  # OAI convention stores arguments as a JSON *string*
@@ -618,10 +629,11 @@ def _migrate_tool_call_id(payload: Dict[str, Any]) -> None:
     message["tool_call_id"] = generation_metadata.pop("toolcall_id")  # full move: single source of truth on the message
 
 def _migrate_content_to_parts(message: Dict[str, Any]) -> None:
-    """Wrap a legacy bare-string `message["content"]` into a single text content-part (brief 03 §3b). Mutates `message`.
+    """Wrap a legacy bare-string `message["content"]` into a single text content-part. Mutates `message`.
 
-    Runs *after* the brief-02 §11 stanzas above, which operate on the string form of `content`; this one changes
-    the shape. The persona prefix in old assistant content (`"Aria: ..."`) rides along inside the wrapped text
+    Runs *after* the reasoning / tool-call normalization stanzas above, which operate on the string form of
+    `content`; this one changes the shape. The persona prefix in old assistant content (`"Aria: ..."`) rides
+    along inside the wrapped text
     verbatim — no special handling. Idempotent: already-parts content passes through unchanged. Raises (via
     `normalize_content`) on content that is neither str nor list, surfacing datastore corruption.
     """
@@ -650,7 +662,7 @@ def upgrade_datastore(llm_settings: env,
                              each revision), and deleted from the top level of the node, so that
                              the top level contains only the system keys.
 
-    This also normalizes reasoning and tool-call storage to the current format (brief 02 §11), independently
+    This also normalizes reasoning and tool-call storage to the current format, independently
     of the v0.2.3 payload-format change above:
 
       - inline `<think>...</think>` reasoning in `message["content"]` is moved to the `reasoning_content`
@@ -733,16 +745,16 @@ def upgrade_datastore(llm_settings: env,
                                                    "datetime": f"{isodate} {isotime}",
                                                    "persona": llm_settings.personas.get(role, None)}
 
-            # brief 02 §11: normalize reasoning + tool-call storage to the current format. Move inline
-            # `<think>` reasoning into the `reasoning_content` sibling field; dedup/extract inline `<tool_call>`
-            # into structured `tool_calls`; move the tool-response linkage onto `message["tool_call_id"]`.
-            # Each step is idempotent, so this is safe to run on every load (old data and already-migrated alike).
+            # Normalize reasoning + tool-call storage to the current format. Move inline `<think>` reasoning
+            # into the `reasoning_content` sibling field; dedup/extract inline `<tool_call>` into structured
+            # `tool_calls`; move the tool-response linkage onto `message["tool_call_id"]`. Each step is
+            # idempotent, so this is safe to run on every load (old data and already-migrated alike).
             for payload in payload_revisions.values():
                 message = payload["message"]
                 _migrate_inline_reasoning(message)
                 _migrate_inline_tool_calls(message)
                 _migrate_tool_call_id(payload)
-                _migrate_content_to_parts(message)  # brief 03 §3b: wrap legacy string content as parts (runs last)
+                _migrate_content_to_parts(message)  # wrap legacy string content as parts (runs last, since it changes the shape)
 
 def factory_reset_datastore(datastore: chattree.Forest, llm_settings: env) -> str:
     """Reset `datastore` to its "factory-default" state.

@@ -636,3 +636,67 @@ class TestPersistentForestRoundtrip:
         filepath = tmp_path / "does_not_exist.json"
         pf = PersistentForest(datastore_file=pathlib.Path(filepath))
         assert len(pf.nodes) == 0
+
+
+# ---------------------------------------------------------------------------
+# PersistentForest: image sidecar storage + mark-and-sweep GC
+# ---------------------------------------------------------------------------
+
+def _refs_from_sidecars_list(payload):
+    """Trivial sidecar extractor for tests: payloads declare their refs under a "sidecars" key."""
+    return set(payload.get("sidecars", []))
+
+
+class TestSidecarStorage:
+    def test_store_read_roundtrip(self, tmp_path):
+        pf = PersistentForest(tmp_path / "chat.json", autosave=False)
+        name = pf.store_sidecar(b"hello-bytes", "png")
+        assert name.endswith(".png")
+        assert pf.read_sidecar(name) == b"hello-bytes"
+        assert pf.sidecar_dir.name == "chat.images"
+
+    def test_store_is_content_addressed_dedup(self, tmp_path):
+        pf = PersistentForest(tmp_path / "chat.json", autosave=False)
+        n1 = pf.store_sidecar(b"same", "png")
+        n2 = pf.store_sidecar(b"same", "png")
+        assert n1 == n2
+        assert pf.list_sidecar_files() == [n1]
+
+    def test_sidecar_path_rejects_traversal(self, tmp_path):
+        pf = PersistentForest(tmp_path / "chat.json", autosave=False)
+        for bad in ("../escape.png", "sub/dir.png", "/abs.png"):
+            with pytest.raises(ValueError):
+                pf.sidecar_path(bad)
+
+    def test_list_empty_when_no_dir(self, tmp_path):
+        pf = PersistentForest(tmp_path / "chat.json", autosave=False)
+        assert pf.list_sidecar_files() == []
+
+    def test_prune_sweeps_orphans_keeps_referenced(self, tmp_path):
+        pf = PersistentForest(tmp_path / "chat.json", autosave=False,
+                              sidecar_extractor=_refs_from_sidecars_list)
+        kept = pf.store_sidecar(b"kept", "png")
+        orphan = pf.store_sidecar(b"orphan", "png")
+        pf.create_node({"sidecars": [kept]}, parent_id=None)
+
+        assert pf.unreferenced_sidecars() == [orphan]          # dry-run reports, deletes nothing
+        assert set(pf.list_sidecar_files()) == {kept, orphan}
+        assert pf.prune_unreferenced_sidecars() == [orphan]    # sweep
+        assert pf.list_sidecar_files() == [kept]
+
+    def test_prune_scans_all_revisions(self, tmp_path):
+        """An old revision's sidecar stays referenced even after the node is edited to drop it."""
+        pf = PersistentForest(tmp_path / "chat.json", autosave=False,
+                              sidecar_extractor=_refs_from_sidecars_list)
+        old_img = pf.store_sidecar(b"old", "png")
+        node = pf.create_node({"sidecars": [old_img]}, parent_id=None)
+        pf.add_revision(node, {"sidecars": []})  # edit removes the image; old revision still has it
+        assert pf.prune_unreferenced_sidecars() == []          # old revision still references it -> kept
+        assert pf.list_sidecar_files() == [old_img]
+
+    def test_prune_without_extractor_is_noop(self, tmp_path):
+        pf = PersistentForest(tmp_path / "chat.json", autosave=False)  # no extractor
+        pf.store_sidecar(b"data", "png")
+        assert pf.prune_unreferenced_sidecars() == []
+        assert len(pf.list_sidecar_files()) == 1
+        assert pf.unreferenced_sidecars() == []
