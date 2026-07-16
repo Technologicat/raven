@@ -935,7 +935,7 @@ Discovered during cherrypick preload adaptive-cap work (2026-06-09).
 
 ## Remove the dead inline-`<think>` handling in the chat renderer
 
-`DPGChatMessage._render_text_paragraphs` (`chat_controller.py`) still splits inline `<think>...</think>` out of a text content-part into a collapsible thought paragraph. That path is dead: since the June `reasoning_content` migration, thinking is separated before render — at load by `chatutil.upgrade_datastore`, live by the stream parser — so a text part never contains inline `<think>`. It's leftover from last autumn's demo code, not dismantled when the June thinking-block handling landed.
+`DPGChatMessage._render_text_paragraphs` (`chat_controller.py`) still splits inline `<think>...</think>` out of a text content-part into a collapsible thought paragraph. That path is dead: since the June 2026 `reasoning_content` migration, thinking is separated before render — at load by `chatutil.upgrade_datastore`, live by the stream parser — so a text part never contains inline `<think>`. It's leftover from last autumn's demo code, not dismantled when the June 2026 thinking-block handling landed.
 
 Remove the `inside_think_block` / `<think>`-detection machinery from `_render_text_paragraphs` (and check whether the `<think>` → "**>>>Thinking>>>**" cosmetic replacement in `_render_text` and the `is_thought` plumbing it feeds become simplifiable too). Verify unreachability first (grep for any message-construction path that could inject raw `<think>` into a content text part, bypassing both migration and the parser). Small, but it's a behavior-adjacent change, so give it its own commit + a quick live check.
 

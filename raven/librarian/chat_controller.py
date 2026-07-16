@@ -1044,7 +1044,7 @@ class DPGCompleteChatMessage(DPGChatMessage):
         # Render it first, as a single collapsible thought paragraph. Migration (`upgrade_datastore`, at load)
         # and the live stream parser both move thinking into `reasoning_content` before it ever reaches here, so
         # `content` no longer carries inline `<think>`. The per-part splitter below still recognizes inline
-        # `<think>`, but that path is dead — leftover from the pre-June inline handling, not yet removed.
+        # `<think>`, but that path is dead — leftover from the pre-June-2026 inline handling, not yet removed.
         reasoning_content = message.get("reasoning_content") or ""
         if reasoning_content.strip():
             self.add_paragraph(reasoning_content, is_thought=True)
@@ -1074,9 +1074,9 @@ class DPGCompleteChatMessage(DPGChatMessage):
         """Render one text content-part: split into paragraphs and add them.
 
         Also consolidates any inline `<think>...</think>` block into a single collapsible thought paragraph, but
-        that handling is dead code: since the June `reasoning_content` migration, thinking is separated out
+        that handling is dead code: since the June 2026 `reasoning_content` migration, thinking is separated out
         before render (at load by `upgrade_datastore`, live by the stream parser), so `content` no longer
-        carries inline `<think>`. Leftover from the pre-June inline handling; slated for removal."""
+        carries inline `<think>`. Leftover from the pre-June-2026 inline handling; slated for removal."""
         paragraph_accumulator = io.StringIO()
         inside_think_block = False
         def commit_paragraph():
