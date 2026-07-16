@@ -808,3 +808,32 @@ specified.
 - A non-VLM backend with an image attachment: clear error to the user, no silent drop.
 - Image-bearing prompts are accounted for in the token budget (conservative placeholder is fine
   for v0; budget doesn't blow context).
+
+---
+
+## Implementation status
+
+**Half 1 (text-only content-parts core)** — done, merged to `main` (`b4bd79b`, 2026-06-05). Content
+became a typed-parts list everywhere; tool results as parts; per-part renderer; load-time migration.
+
+**Half 2 (multimodal / images)** — in progress, scoped into checkpoints:
+
+- **A1 — storage foundation** (`915c624`, 2026-07-16, CI green): config knobs (§5/§7 data); new
+  `raven.librarian.imagestore` (`store_image_as_sidecar`, `sidecar_url_to_data_url`,
+  `sidecar_refs_in_payload`, `downsample_dims`); `chattree.PersistentForest` sidecar file store +
+  mark-and-sweep GC with the injected-extractor design (§8 above). Original images stored byte-for-byte
+  to preserve embedded metadata. 23 tests.
+- **A2 — backend wiring** (`c4c0a2a`, 2026-07-16, CI green; live-verified against a Qwen 3.6 VLM):
+  §9 VLM-capability detection (`settings.model_is_vlm`, tri-state; LM Studio flags vision via the model
+  record's `type == "vlm"`); §8 wire substitution — `llmclient._serialize_history_for_wire` preserves
+  image parts and resolves `sidecar:`→`data:` on send; `datastore` threaded through `invoke`/`prefill`.
+  5 tests.
+- **B — minimal GUI end-to-end** (not started): §5 attach affordance + file picker; §6 fill the
+  `image_url` render stub (inline thumbnail); §9 hard-gate attach on a non-VLM model; §7 image-token
+  budgeting wired into the context-fill estimate.
+- **C — provenance & discoverability** (not started): `open_in_file_manager` utility; open-original /
+  open-dir buttons; the ride-along "open docs DB dir" / "open datastore dir" buttons — these need a
+  small Tools/Utilities GUI surface (placement TBD by CC + Juha, as noted in §6).
+- **D — GC UX & navigation** (not started): manual "Clean up & save" (dry-run preview + thumbnail grid
+  + staging recovery); bidirectional tool-call↔response nav links. Open question: `prune_unreachable_nodes`
+  currently runs only in `minichat`, not the GUI exit path — decide GUI-exit prune vs. manual-only.
