@@ -751,3 +751,54 @@ class TestInvokeTypedEvents:
         assert out.data["tool_calls"][0]["function"]["name"] == "websearch"
         assert not chatutil.content_to_text(out.data["content"])  # the tag span never leaks into content
         assert any(e["type"] == "tool_call" for e in events)
+
+
+# ---------------------------------------------------------------------------
+# _serialize_history_for_wire: text scrub + image-part preservation + sidecar resolution
+# ---------------------------------------------------------------------------
+
+class TestSerializeHistoryForWire:
+    settings = env(personas={"user": "U", "assistant": "AI", "system": None, "tool": None})
+
+    def test_text_only_message_scrubbed_to_single_text_part(self):
+        history = _history("hello there")
+        out = llmclient._serialize_history_for_wire(self.settings, history, continue_=False)
+        assert out[0]["content"] == [chatutil.text_content_part("U: hello there")]  # persona-prefixed, one text part
+
+    def test_input_history_not_mutated(self):
+        history = _history("hello")
+        llmclient._serialize_history_for_wire(self.settings, history, continue_=False)
+        assert history[0]["content"] == [chatutil.text_content_part("hello")]  # deep-copied; original untouched
+
+    def test_image_part_preserved_and_sidecar_resolved(self, tmp_path):
+        import base64
+        from raven.librarian import chattree
+        ds = chattree.PersistentForest(tmp_path / "chat.json", autosave=False)
+        raw = b"\x89PNG\r\n\x1a\n" + b"fake-png-bytes"
+        filename = ds.store_sidecar(raw, "png")
+
+        history = [{"role": "user", "content": [chatutil.text_content_part("what is this?"),
+                                                chatutil.image_content_part(f"sidecar:{filename}")]}]
+        out = llmclient._serialize_history_for_wire(self.settings, history, continue_=False, datastore=ds)
+
+        parts = out[0]["content"]
+        assert parts[0] == chatutil.text_content_part("U: what is this?")
+        assert parts[1]["type"] == "image_url"
+        url = parts[1]["image_url"]["url"]
+        assert url.startswith("data:image/png;base64,")
+        assert base64.b64decode(url.split(",", 1)[1]) == raw  # the model receives the actual bytes
+        # stored history still references the sidecar (only the wire copy was substituted)
+        assert history[0]["content"][1]["image_url"]["url"] == f"sidecar:{filename}"
+
+    def test_image_part_passes_through_without_datastore(self):
+        history = [{"role": "user", "content": [chatutil.text_content_part("x"),
+                                                {"type": "image_url", "image_url": {"url": "sidecar:abc.png"}}]}]
+        out = llmclient._serialize_history_for_wire(self.settings, history, continue_=False, datastore=None)
+        assert out[0]["content"][1]["image_url"]["url"] == "sidecar:abc.png"  # unresolved, but preserved
+
+    def test_continue_leaves_last_message_untouched(self):
+        history = [{"role": "user", "content": [chatutil.text_content_part("q")]},
+                   {"role": "assistant", "content": [chatutil.text_content_part("partial ans")]}]
+        out = llmclient._serialize_history_for_wire(self.settings, history, continue_=True)
+        assert out[0]["content"] == [chatutil.text_content_part("U: q")]  # scrubbed
+        assert out[1]["content"] == [chatutil.text_content_part("partial ans")]  # last message untouched

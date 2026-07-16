@@ -48,6 +48,7 @@ from ..common import text as common_text
 from . import chattree
 from . import chatutil
 from . import config as librarian_config
+from . import imagestore
 
 action_ack = sym("ack")  # acknowledge LLM progress, keep generating
 action_stop = sym("stop")  # interrupt the LLM, stop generating now
@@ -305,34 +306,43 @@ def _resolve_model_info(backend_url: str, flavor: str) -> env:
                rather than a guess.
       `model_id`: the model id to send in requests (relevant for LM Studio JIT), or `None`.
       `context_length`: the loaded context window in tokens, or `None` if the backend doesn't report it.
+      `is_vlm`: whether the loaded model accepts image input, as a tri-state — `True` / `False` when the backend
+                reports it (LM Studio flags this via the model record's `type == "vlm"`), or `None` when it
+                can't be determined (ooba / generic expose no capability field). Gates the image-attach UI: a
+                definite `False` hard-refuses attachment; `None` allows it and lets the backend reject.
     """
     if flavor == "oobabooga":
         # ooba reports the GGUF filename (fine — the model can interpret `name-size-quant.gguf` itself) but
-        # not the active context length here; the latter falls through to the default in `setup`.
+        # not the active context length here; the latter falls through to the default in `setup`. It exposes no
+        # VLM-capability flag either, so `is_vlm` is unknown (`None`).
         model_name = requests.get(f"{backend_url}/v1/internal/model/info", headers=headers, verify=False, timeout=librarian_config.llm_network_timeout).json().get("model_name")
         return env(label=model_name or NO_MODEL_INFO,
                    model_id=model_name,
-                   context_length=None)
+                   context_length=None,
+                   is_vlm=None)
     if flavor == "lmstudio":
         # `/api/v0/models` lists all downloaded models; exactly the `state == "loaded"` one is resident under
-        # JIT, and only that record carries `loaded_context_length`.
+        # JIT, and only that record carries `loaded_context_length`. The record's `type` field is `"vlm"` for
+        # vision models (vs `"llm"` / `"embeddings"`); vision is signaled there, not in `capabilities`.
         models = requests.get(f"{backend_url}/api/v0/models", headers=headers, verify=False, timeout=librarian_config.llm_network_timeout).json().get("data", [])
         loaded = [m for m in models if m.get("state") == "loaded"]
         if loaded:
             record = loaded[0]
             return env(label=_format_lmstudio_model_label(record),
                        model_id=record.get("id"),
-                       context_length=record.get("loaded_context_length"))
+                       context_length=record.get("loaded_context_length"),
+                       is_vlm=(record.get("type") == "vlm"))
         # JIT idle: nothing resident right now. If the user named a model, trust that; else say so honestly.
+        # Nothing loaded means no capability record to read, so `is_vlm` is unknown either way.
         if librarian_config.llm_model:
-            return env(label=librarian_config.llm_model, model_id=librarian_config.llm_model, context_length=None)
-        return env(label=NO_MODEL_INFO, model_id=None, context_length=None)
-    # generic: best-effort from the standard list; never guess identity.
+            return env(label=librarian_config.llm_model, model_id=librarian_config.llm_model, context_length=None, is_vlm=None)
+        return env(label=NO_MODEL_INFO, model_id=None, context_length=None, is_vlm=None)
+    # generic: best-effort from the standard list; never guess identity, and no capability field to read.
     ids = [m.get("id") for m in requests.get(f"{backend_url}/v1/models", headers=headers, verify=False, timeout=librarian_config.llm_network_timeout).json().get("data", [])]
     ids = [model_id for model_id in ids if model_id]
     if len(ids) == 1:
-        return env(label=ids[0], model_id=ids[0], context_length=None)
-    return env(label=NO_MODEL_INFO, model_id=librarian_config.llm_model, context_length=None)
+        return env(label=ids[0], model_id=ids[0], context_length=None, is_vlm=None)
+    return env(label=NO_MODEL_INFO, model_id=librarian_config.llm_model, context_length=None, is_vlm=None)
 
 def setup(backend_url: str,
           quiet: bool = False) -> env:
@@ -359,6 +369,12 @@ def setup(backend_url: str,
 
         `context_length: int`: The loaded context window in tokens — backend-reported where available, else a
                                conservative 64k default (a warning is logged when defaulted).
+
+        `model_is_vlm: Optional[bool]`: Whether the loaded model accepts image input, as a tri-state — `True` /
+                                        `False` when the backend reports it (LM Studio, via the model record's
+                                        `type == "vlm"`), or `None` when it can't be determined (ooba / generic).
+                                        The image-attach UI gates on this: a definite `False` refuses attachment
+                                        with a clear message; `None` allows it and lets the backend reject.
 
         `backend_supports_continue: bool`: Whether the backend supports continuing an existing assistant message
                                            (ooba does, via an explicit flag; lmstudio/generic don't).
@@ -484,6 +500,7 @@ def setup(backend_url: str,
                    model_id=request_model,  # model id sent in requests (LM Studio JIT), or None
                    backend_flavor=backend_flavor,
                    context_length=context_length,  # loaded context window in tokens (backend-reported, or the 64k default)
+                   model_is_vlm=model_info.is_vlm,  # whether the loaded model accepts image input: True/False, or None if unknown (gates image attach)
                    backend_supports_continue=(backend_flavor == "oobabooga"),  # ooba has an explicit continue flag; others don't
                    tokenizer=tokenizer,  # local HF tokenizer for exact counts, or None (see `count_tokens`)
                    char_to_token_ratio=_DEFAULT_CHAR_TO_TOKEN_RATIO,  # estimate-path calibration; refined from usage in `invoke`
@@ -857,13 +874,59 @@ class StreamParser:
 # --------------------------------------------------------------------------------
 # The most important function - call LLM, parse result
 
+def _serialize_history_for_wire(settings: env,
+                                history: List[Dict],
+                                *,
+                                continue_: bool,
+                                datastore: Optional[chattree.PersistentForest] = None) -> List[Dict]:
+    """Return a wire-ready deep copy of `history`: text scrubbed, image parts preserved and sidecar-resolved.
+
+    Per-message transform, applied to every message (or all but the last when `continue_`):
+
+      - **Text.** All text parts are joined and scrubbed (`scrub(thoughts_mode="discard")`) into a single text
+        part. Reasoning (thinking) rides out-of-band in the `reasoning_content` sibling field, untouched here —
+        the supported families' chat templates (Qwen 3, Gemma 4) read it on input and apply their own
+        strip-prior / preserve-current-turn policy via the last-user-message boundary, so Raven doesn't
+        second-guess them. The scrub is mostly a legacy safety net now: it strips any inline `<think>` blocks
+        still embedded in OLD content (pre-migration data) and normalizes the persona prefix; on new-parser
+        content it's a no-op on the text.
+
+      - **Images.** `image_url` parts are preserved (not collapsed away) and appended after the text part in
+        their original order. A `sidecar:<filename>` URL is resolved to a real `data:<mime>;base64,...` URL by
+        reading the sidecar bytes (`imagestore.sidecar_url_to_data_url`), so the model receives the image while
+        the stored message keeps its `sidecar:` reference. Resolution needs `datastore` (the chat's
+        `PersistentForest`); without it, sidecar URLs pass through unchanged — harmless for image-free callers
+        (throwaway tasks / prefill on text-only chats), which carry no sidecar parts anyway.
+
+    `continue_`: when `True`, the last message (the AI message being continued) is left exactly as-is — neither
+                 scrubbed nor image-resolved (assistant continuations carry no images).
+    """
+    history = copy.deepcopy(history)
+    end_idx = -1 if continue_ else None  # Don't touch the current AI message when continuing; else process all.
+    for message in history[:end_idx]:
+        scrubbed_text = chatutil.scrub(persona=settings.personas.get(message["role"], None),
+                                       text=chatutil.content_to_text(message["content"]),
+                                       thoughts_mode="discard",
+                                       markup=None,
+                                       add_persona=True)
+        new_content = [chatutil.text_content_part(scrubbed_text)]
+        for part in message["content"]:
+            if isinstance(part, dict) and part.get("type") == "image_url":
+                url = part.get("image_url", {}).get("url", "")
+                if datastore is not None and url.startswith(imagestore.SIDECAR_SCHEME):
+                    part = chatutil.image_content_part(imagestore.sidecar_url_to_data_url(datastore, url))
+                new_content.append(part)
+        message["content"] = new_content
+    return history
+
 def invoke(settings: env,
            history: List[Dict],
            on_progress: Optional[Callable] = None,
            on_prompt_ready: Optional[Callable] = None,
            tools_enabled: bool = True,
            continue_: bool = False,
-           max_tokens: Optional[int] = None) -> env:
+           max_tokens: Optional[int] = None,
+           datastore: Optional[chattree.PersistentForest] = None) -> env:
     """Invoke the LLM with the given chat history.
 
     This is typically done after adding the user's message to the chat history, to ask the LLM to generate a reply.
@@ -923,6 +986,12 @@ def invoke(settings: env,
                   prompt size and warm the backend KV cache without producing a real reply. `None` (default) keeps
                   the configured cap.
 
+    `datastore`: The chat's `chattree.PersistentForest`, needed only when messages carry image attachments:
+                 image parts are stored as `sidecar:<filename>` references, and the wire copy resolves them to
+                 `data:` URLs by reading the sidecar files (see `_serialize_history_for_wire`). `None` (default)
+                 is correct for text-only callers (throwaway tasks); sidecar URLs then pass through unresolved,
+                 which is harmless because such callers carry no image parts.
+
     Returns an `unpythonic.env.env` WITHOUT adding the LLM's reply to `history`.
 
     The returned `env` has the following attributes:
@@ -941,29 +1010,8 @@ def invoke(settings: env,
     """
     data = copy.deepcopy(settings.request_data)
 
-    # Normalize message content for resend.
-    #
-    # Reasoning (thinking) is carried out-of-band in each message's `reasoning_content` sibling field (brief 02
-    # §9/§10), which rides along untouched here — we only rewrite `content`. The supported families' chat
-    # templates (Qwen 3, Gemma 4) read `reasoning_content` on input and apply their own strip-prior /
-    # preserve-current-turn policy via the last-user-message boundary, so Raven doesn't second-guess them.
-    #
-    # The `scrub(thoughts_mode="discard")` below is now a legacy safety net: it strips any inline `<think>`
-    # blocks still embedded in OLD `content` (pre-§11-migration data). For messages produced by the new parser,
-    # `content` has no think tags, so this is a no-op on content; it still normalizes the persona prefix.
-    #
-    # Content-parts (brief 03): every message here carries a single text part (multi-part tool results and
-    # image parts are later work, and their resend will need to preserve non-text parts rather than collapse).
-    # So extract the text, scrub it, and re-wrap as a single text part.
-    history = copy.deepcopy(history)
-    end_idx = -1 if continue_ else None  # Don't scrub the current AI message when continuing; else scrub all messages.
-    for message in history[:end_idx]:
-        scrubbed_text = chatutil.scrub(persona=settings.personas.get(message["role"], None),
-                                       text=chatutil.content_to_text(message["content"]),
-                                       thoughts_mode="discard",
-                                       markup=None,
-                                       add_persona=True)
-        message["content"] = [chatutil.text_content_part(scrubbed_text)]
+    # Normalize message content for resend (see `_serialize_history_for_wire`).
+    history = _serialize_history_for_wire(settings, history, continue_=continue_, datastore=datastore)
 
     # Not mentioned in the oobabooga docs, but see:
     #  `text-generation-webui/extensions/openai/script.py`, function `openai_chat_completions`
@@ -1172,7 +1220,8 @@ def invoke(settings: env,
 
 def prefill(settings: env,
             history: List[Dict],
-            tools_enabled: bool = True) -> Optional[env]:
+            tools_enabled: bool = True,
+            datastore: Optional[chattree.PersistentForest] = None) -> Optional[env]:
     """Send `history` to the backend generating essentially no output. Returns the `invoke` env, or `None` on failure.
 
     Two purposes, both side effects of submitting the real prompt:
@@ -1187,6 +1236,9 @@ def prefill(settings: env,
 
     `tools_enabled` should match the next turn's setting, so the tool definitions are counted (and cached) identically.
 
+    `datastore`: passed through to `invoke` so image attachments in `history` are resolved and counted in the
+                 prompt size (see `invoke`). `None` for text-only chats.
+
     We cap generation at one token rather than zero: a single token is negligible compute, while `max_tokens == 0` is
     below the OpenAI-documented minimum and some backends reject it. The prompt-processing pass — the part that matters
     for both the count and the cache — happens regardless of the cap.
@@ -1199,7 +1251,8 @@ def prefill(settings: env,
                       history,
                       on_progress=None,
                       tools_enabled=tools_enabled,
-                      max_tokens=1)
+                      max_tokens=1,
+                      datastore=datastore)
     except Exception as exc:  # noqa: BLE001 -- best-effort; any failure just leaves the estimate in place
         logger.warning(f"prefill: backend prefill failed; keeping the token estimate. Reason {type(exc)}: {exc}")
         return None

@@ -1697,7 +1697,8 @@ class DPGChatController:
                                           node_id=task_env.head_node_id)
         out = llmclient.prefill(self.llm_settings,
                                 history,
-                                tools_enabled=self.app_state["tools_enabled"])  # match the next turn, so tool defs are counted/cached identically
+                                tools_enabled=self.app_state["tools_enabled"],  # match the next turn, so tool defs are counted/cached identically
+                                datastore=self.datastore)  # resolve any sidecar: image refs so the exact prompt size counts image tokens
 
         if task_env.cancelled or not self.gui_updates_safe:
             return

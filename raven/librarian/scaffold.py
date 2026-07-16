@@ -553,7 +553,8 @@ def ai_turn(llm_settings: env,
                                on_prompt_ready=on_prompt_ready,
                                on_progress=on_llm_progress,  # this handles `action_stop` from `on_llm_progress`
                                tools_enabled=tools_enabled,
-                               continue_=continue_this_message)
+                               continue_=continue_this_message,
+                               datastore=datastore)  # resolve any sidecar: image refs to data: URLs on the wire
         # `out.data` is now the complete message object (in the format returned by `create_chat_message`)
 
         # Clean up the LLM's reply (heuristically). This version goes into the chat history.
