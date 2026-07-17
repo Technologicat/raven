@@ -27,7 +27,7 @@ jobs:
         # `--no-deps` so pip doesn't re-resolve the full tree.
         run: |
           python -m pip install --upgrade pip
-          pip install pytest pytest-cov numpy "bibtexparser>=2.0.0b8" unpythonic Pillow tqdm requests feedparser wosfile
+          pip install pytest pytest-cov numpy "bibtexparser>=2.0.0b8" unpythonic Pillow tqdm requests feedparser wosfile pypdf
           pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
           pip install -e . --no-deps
 
