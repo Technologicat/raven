@@ -3,7 +3,7 @@
 __all__ = ["Animator", "animator",  # controller and its global instance (need only one per app)
            "Animation", "Overlay",  # base classes
            "Dimmer",  # overlays
-           "ButtonFlash", "SmoothScrolling", "PulsatingColor",  # animations
+           "ButtonFlash", "flash_button", "SmoothScrolling", "PulsatingColor",  # animations (+ ButtonFlash convenience)
            "ScrollEndFlasher",  # animated overlay
            "pulsation_envelope",  # utility: the cosine-squared curve used by pulsating animations
            "action_continue", "action_finish", "action_cancel"]  # return values for `render_frame`
@@ -458,6 +458,39 @@ class ButtonFlash(Animation):
 
             with type(self).class_lock:
                 type(self).instances.pop(self.target_button)
+
+def flash_button(*,
+                 button: Union[str, int],
+                 message: str,
+                 duration: float,
+                 tooltip: Union[str, int, None] = None,
+                 text: Union[str, int, None] = None,
+                 ok: bool = True) -> None:
+    """Flash a button as a non-intrusive acknowledgment of an action — green for success, red for failure.
+
+    Convenience wrapper over `ButtonFlash` and the shared `animator`: it picks the success/failure colors from
+    `ok` and reads the tooltip's current theme to restore afterward, so call sites don't repeat that
+    boilerplate. This is the standard way to confirm a button press whose effect isn't otherwise immediately
+    visible (a copy, a folder opened elsewhere), and to report that such an action failed without a modal
+    dialog.
+
+    `button`: the button to flash (DPG tag or ID).
+    `message`: text shown in `text` for the flash duration, then restored (`None` leaves the text unchanged).
+    `duration`: flash duration in seconds.
+    `tooltip`: the button's tooltip to flash along with it, if any (`None` to flash the button alone).
+    `text`: the text widget whose content becomes `message` during the flash — typically the text inside
+            `tooltip`, but independent of it.
+    `ok`: `True` (default) flashes green (success); `False` flashes red (failure). The green matches
+          `ButtonFlash`'s own default colors, so a plain success acknowledgment need not think about color.
+    """
+    animator.add(ButtonFlash(message=message,
+                             target_button=button,
+                             target_tooltip=tooltip,
+                             target_text=text,
+                             original_theme=(dpg.get_item_theme(tooltip) if tooltip is not None else 0),
+                             duration=duration,
+                             flash_color=((96, 128, 96) if ok else (150, 96, 96)),
+                             text_color=((180, 255, 180) if ok else (255, 180, 180))))
 
 # --------------------------------------------------------------------------------
 

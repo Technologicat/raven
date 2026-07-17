@@ -994,6 +994,81 @@ extraction path can be reused rather than adding a new dependency.
 
 Discovered during brief-03 Half-2 (2026-07-17, flagged by Juha).
 
+## Attach an image from a web URL (paste-URL path)
+
+The image-attach GUI only supports attaching *local files* (composer paperclip → FileDialog → a `file://`
+provenance). The storage and provenance layers already anticipate a web source: `imagestore.store_image_as_sidecar`
+accepts `provenance_source="paste_url"` (and `"mcp:<server>"`), records an `https://` provenance `url`, and the
+inline-image "Open source" action opens an `https://` URL in the browser — but nothing yet *produces* such an
+image, so that branch is unreachable in normal use today. Add a user path to attach an image by URL (paste a URL
+into the composer, or a dedicated "attach from URL" affordance): fetch the bytes, run them through the same
+`store_image_as_sidecar` (which downsamples + keeps the original per the existing cap policy), and record the
+web source as provenance. The image itself is stored as a sidecar exactly like a local attachment, so a saved
+chat still reloads offline — only the provenance `url` points at the web.
+
+Discovered during brief-03 Half-2 (2026-07-17, noted by Juha — the backend already accounts for it).
+
+## Datastore scaling: a single `data.json` (+ flat sidecar dir) won't hold years of chats
+
+Librarian stores *every* chat — all nodes, all payload revisions, across the whole forest — in one
+`data.json` (`chattree.PersistentForest`), and every attached image as a file in one flat `<datastore>.images/`
+sidecar directory. Both are fine now and for a long while, but neither scales to months/years of daily use:
+
+- **The JSON**: `PersistentForest.save` serializes and rewrites the *entire* file on every autosave. As the
+  forest grows to thousands of nodes with revision history, load-at-startup and each save get linearly slower,
+  and a corrupted write risks the whole history at once.
+- **The sidecar dir**: a single flat directory of content-addressed images degrades on some filesystems once it
+  holds many thousands of entries (directory-scan and lookup costs); `list_sidecar_files` (used by GC) reads the
+  whole directory each time.
+
+Directions to weigh when it matters (don't pre-build): shard the sidecar dir by hash prefix (`ab/cd/<sha>.png`);
+move the forest to an on-disk store with incremental writes (SQLite, or append-only revisions) instead of
+whole-file JSON rewrites; and/or split/rollover the datastore (per-chat files, or archive old chats out of the
+hot store). Any change needs a migration from the current single-file format (`chattree._upgrade` is the hook).
+
+Discovered during brief-03 Half-2 checkpoint C (2026-07-17, flagged by Juha — surfaced by the global "Open chat
+data folder" button making the single-store design visible).
+
+## Colorblind-safe status signaling (ok/error flashes distinguished by color alone)
+
+`animation.flash_button(ok=...)` (and, more broadly, Raven's flash/highlight vocabulary) conveys success vs.
+failure by *color alone* — green for ok, red for error. That's invisible to the ~8% of men with red–green
+colorblindness. Add a redundant, non-color channel so the distinction survives without color: an icon glyph
+(e.g. check vs. cross) folded into the flash message text, a brief symbol overlay, or a shape/position cue. The
+flash message string is already shown during the animation, so prefixing the ok/error message with a
+distinguishing glyph is the cheapest first step. Audit the other color-only signals too (the "search green"
+found-indicator, the VU meter's green/yellow/red — the latter has position redundancy already).
+
+Discovered during brief-03 Half-2 (2026-07-17, flagged by Juha).
+
+## Consolidate flash palette + internalize `ButtonFlash.original_theme`
+
+Two related cleanups in `raven.common.gui.animation`, both fleet-wide (touching multiple apps), so deferred out
+of the checkpoint that surfaced them:
+
+- **Named palette constants.** The flash colors are magic tuples repeated across the codebase: the ok-green
+  `(96, 128, 96)` / `(180, 255, 180)` is *literally* `ButtonFlash`'s own default, re-hardcoded in `flash_button`;
+  the text-green `(180, 255, 180)` ("search green") recurs in ~7 places (`vumeter`, `visualizer/app`,
+  `visualizer/annotation`, `xdot_viewer/app`, …); the error-red `(150, 96, 96)` / `(255, 180, 180)` is newer.
+  Extract a small named palette (success/failure flash background + text) and have `ButtonFlash`'s defaults,
+  `flash_button`, and the scattered literals reference it.
+- **Internalize `original_theme`.** `ButtonFlash` takes an `original_theme` argument that every caller fills with
+  `dpg.get_item_theme(<the tooltip>)` — apparently boilerplate the animation could read itself, at reification
+  time in `start()` (before it binds the flash theme), where the true pre-flash theme is still bound. Ghost-mode
+  instances (which don't reallocate) never capture, so the reified instance's snapshot is always the correct
+  one. Removing the parameter would delete the boilerplate at all 19 call sites (across `librarian/app`,
+  `librarian/chat_controller`, vendored `file_dialog/fdialog`, `visualizer/word_cloud`, `visualizer/info_panel`,
+  `cherrypick/app`) and remove the `else 0` placeholder in `flash_button`.
+  - **Verify first — the parameter may exist for a reason.** The plan assumes `dpg.get_item_theme` returns a
+    usable value for every item type ButtonFlash is applied to. Callers already call it successfully on the
+    *tooltip* items they pass, so internalizing the tooltip snapshot is behavior-preserving there — but the same
+    is unproven for `target_text` items and any other type. It's plausible the explicit parameter exists
+    precisely because `get_item_theme` misbehaves on some item (and the reason was never written down). Before
+    deleting the parameter, confirm `get_item_theme` round-trips on every item type actually flashed; if it
+    doesn't somewhere, keep the parameter (or a per-widget capture) and document *that* as the reason.
+
+Discovered during brief-03 Half-2 checkpoint C (2026-07-17, flagged by Juha while reviewing `flash_button`).
+
 ## Emoji support in the Markdown renderer (color emoji as inline images)
 
 `dpg_markdown` (vendored) can't show color emoji: DPG/ImGui rasterizes a font's glyphs into a single monochrome

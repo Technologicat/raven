@@ -862,27 +862,29 @@ became a typed-parts list everywhere; tool results as parts; per-part renderer; 
       `scaffold.user_turn` staged-images path (2). Full librarian suite 362 green, ruff clean.
     - Click-to-expand: **v0** shows the downscaled primary; **v1** a Lanczos mip-chain zoomable viewer
       (cherrypick's machinery) — still to do.
-- **C — provenance & discoverability** (not started). `raven.common.utils.open_in_file_manager` (xdg-open /
-  `open` / `explorer`) is the placement-independent first build; both surfaces below need it. **Two surfaces**
+- **C — provenance & discoverability** (DONE, committed 2026-07-17, live-test pending). New cross-platform
+  `raven.common.utils.open_file` / `open_in_file_manager` (`xdg-open` / `open` / `os.startfile`, sharing a
+  private dispatcher; unified `OSError` contract — a `CalledProcessError` from the opener is re-raised as
+  `OSError` so callers catch one type; 7 tests). New shared `animation.flash_button(*, ok=...)` — green/red
+  success/failure acknowledgment over `ButtonFlash`, used by both surfaces. **Two surfaces**, both landed
   (placement settled with Juha 2026-07-17):
-  - **Per-image provenance cluster — on the inline thumbnail.** A message can carry multiple images, so the
-    provenance actions are *per-image*, anchored to each thumbnail (a small hover/click cluster), not on the
-    message button row. The deferred inline-thumbnail **filename tooltip** rides on the same anchor. "Show
-    original" resolves to **three distinct affordances** (settled with Juha), not one, because they have
-    different reliability guarantees: (1) **"Show original"** → the stored archival copy (`original_sidecar`, or
-    the primary itself when it is the verbatim original) — the canonical one, always present offline;
-    (2) **"Open source"** → the provenance `url` (fragile — file moved / URL 404), labelled as provenance,
-    shown only when present; (3) **"Open containing folder"** → file-manager reveal of `datastore.sidecar_dir`.
-  - **Global utilities — a button group in the right column, under the avatar panel (Option D).** "Open docs DB
-    dir" / "open chat datastore dir" are app-global. They go in the right column below the mode toggles, near
-    the Documents/Speculation toggles that refer to the same docs DB (semantic adjacency + room there). Keep
-    them a **visually distinct button group**, NOT intermixed with the toggle checkboxes (persistent state vs.
-    one-shot actions). Forward caveat: when D's "Clean up & save" and any future tool config join, wrap the
-    group in a collapsing header if it gets busy. (This retires the earlier "small Tools/Utilities surface,
-    placement TBD" / gear-popup idea — Option D won on visibility + docs-adjacency.)
-  - Filename-tooltip implementation note: in `DPGCompleteChatMessage._render_image_part`, attach a
-    `dpg.tooltip` to the `add_image` widget showing the original filename — the basename of the provenance
-    `url` in `general_metadata["sidecars"][<filename>]`. Same as the staged-strip thumbnails already do.
+  - **Per-image provenance cluster — on the inline thumbnail (DONE).** `DPGCompleteChatMessage._render_image_part`
+    now takes the message's `sidecars_meta`, stacks the thumbnail over an action row, and gives each image a
+    filename tooltip (basename of the provenance `url` via `_provenance_filename`, decoding `%20` etc.). The
+    three affordances landed as small icon buttons, each flashing green/red on click via `_add_provenance_button`
+    → `flash_button`: (1) **Show original** (`ICON_IMAGE`) → `open_file(sidecar_path(original_sidecar or
+    primary))` — the archival copy, always present offline; (2) **Open source** (`ICON_LINK`) → `_open_source_url`
+    (`file://` → `open_file`, else browser), **disabled with an explanatory tooltip** when the url is absent or a
+    `data:` URL; (3) **Open folder** (`ICON_FOLDER_OPEN`) → `open_in_file_manager(datastore.sidecar_dir)`.
+    Note: only local-file attachment exists today, so (2) is a `file://` in practice; the `https://` branch is
+    forward-support (web-attach deferred — see `TODO_DEFERRED.md`).
+  - **Global utilities — a button group in the right column, under the avatar panel (Option D) (DONE).** In
+    `mode_toggle_controls`, below the toggle checkboxes and under a `dpg.add_separator()` (visually distinct from
+    the persistent-state toggles), an "Open folder:" row with two buttons: **Open documents folder**
+    (`ICON_FOLDER_TREE` → `librarian_config.llm_docs_dir`, created via `create_directory` first since it's the
+    magic drop folder) and **Open chat data folder** (`ICON_DATABASE` → `datastore.datastore_file`'s parent). A
+    shared `_make_open_folder_callback` factory reads the directory at click time and flashes green/red. Forward
+    caveat still stands: wrap in a collapsing header if D's "Clean up & save" et al. crowd it.
 - **D — GC UX & navigation** (not started): manual "Clean up & save" (dry-run preview + thumbnail grid
   + staging recovery); bidirectional tool-call↔response nav links. Open question: `prune_unreachable_nodes`
   currently runs only in `minichat`, not the GUI exit path — decide GUI-exit prune vs. manual-only.

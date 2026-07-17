@@ -708,6 +708,63 @@ with timer() as tim:
                             subtitle_explanation_str = "Closed-caption (CC) the avatar's speech."
                         dpg.add_text(f"{subtitle_explanation_str}\nUsed when TTS is ON.\nTakes effect from the AI's next chat message onward.", parent="subtitles_enabled_tooltip")  # tag
 
+                    # Utility actions — one-shot folder openers, kept a visually distinct group from the
+                    # persistent-state toggles above (their own row, under a separator). The panel below the
+                    # avatar has room to grow this into a collapsing header if more tools land here later.
+                    dpg.add_separator()
+                    with dpg.group(horizontal=True):
+                        dpg.add_text("Open folder:")
+
+                        def _make_open_folder_callback(*, get_dir, button_tag, tooltip_tag, text_tag, ok_message, ensure_exists=False):
+                            """Build a click callback that opens a directory in the file manager, flashing the button on success/failure.
+
+                            `get_dir` is called at click time (so a value like the active datastore path is read fresh, not
+                            captured at GUI-build time). `ensure_exists` creates the directory first — for the documents drop
+                            folder, which may not exist yet on a fresh install."""
+                            def callback() -> None:
+                                try:
+                                    directory = get_dir()
+                                    if ensure_exists:
+                                        common_utils.create_directory(directory)
+                                    common_utils.open_in_file_manager(directory)
+                                    gui_animation.flash_button(button=button_tag, tooltip=tooltip_tag, text=text_tag,
+                                                               ok=True, message=ok_message, duration=gui_config.acknowledgment_duration)
+                                except Exception as exc:  # noqa: BLE001 -- opening a folder must never crash the GUI
+                                    logger.error(f"open-folder utility ({button_tag}): {type(exc)}: {exc}")
+                                    gui_animation.flash_button(button=button_tag, tooltip=tooltip_tag, text=text_tag,
+                                                               ok=False, message="Couldn't open folder", duration=gui_config.acknowledgment_duration)
+                            return callback
+
+                        open_docs_dir_callback = _make_open_folder_callback(get_dir=lambda: librarian_config.llm_docs_dir,
+                                                                            button_tag="util_open_docs_dir_button",
+                                                                            tooltip_tag="util_open_docs_dir_tooltip",
+                                                                            text_tag="util_open_docs_dir_tooltip_text",
+                                                                            ok_message="Opened documents folder",
+                                                                            ensure_exists=True)
+                        open_datastore_dir_callback = _make_open_folder_callback(get_dir=lambda: pathlib.Path(chat_controller.datastore.datastore_file).expanduser().resolve().parent,
+                                                                                 button_tag="util_open_datastore_dir_button",
+                                                                                 tooltip_tag="util_open_datastore_dir_tooltip",
+                                                                                 text_tag="util_open_datastore_dir_tooltip_text",
+                                                                                 ok_message="Opened chat data folder")
+
+                        dpg.add_button(label=fa.ICON_FOLDER_TREE,
+                                       callback=open_docs_dir_callback,
+                                       width=gui_config.toolbutton_w,
+                                       tag="util_open_docs_dir_button")  # tag
+                        dpg.bind_item_font("util_open_docs_dir_button", themes_and_fonts.icon_font_solid)  # tag
+                        dpg.bind_item_theme("util_open_docs_dir_button", "disablable_widget_theme")  # tag
+                        with dpg.tooltip("util_open_docs_dir_button", tag="util_open_docs_dir_tooltip"):  # tag
+                            dpg.add_text("Open the documents folder\n(drop files in this folder for the AI to search)", tag="util_open_docs_dir_tooltip_text")  # tag
+
+                        dpg.add_button(label=fa.ICON_DATABASE,
+                                       callback=open_datastore_dir_callback,
+                                       width=gui_config.toolbutton_w,
+                                       tag="util_open_datastore_dir_button")  # tag
+                        dpg.bind_item_font("util_open_datastore_dir_button", themes_and_fonts.icon_font_solid)  # tag
+                        dpg.bind_item_theme("util_open_datastore_dir_button", "disablable_widget_theme")  # tag
+                        with dpg.tooltip("util_open_datastore_dir_button", tag="util_open_datastore_dir_tooltip"):  # tag
+                            dpg.add_text("Open the chat data folder\n(chat history + attached images)", tag="util_open_datastore_dir_tooltip_text")  # tag
+
         # NOTE: If you add or remove buttons here, update also `number_of_below_chat_buttons` and/or `number_of_separators` (search for them in this module).
         with dpg.child_window(tag="chat_global_buttons",
                               height=gui_config.ai_warning_h,

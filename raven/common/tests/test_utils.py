@@ -3,6 +3,8 @@
 import os
 import pathlib
 import re
+import subprocess
+import sys
 import time
 import types
 
@@ -98,6 +100,69 @@ class TestValidateCacheMtime:
         orig = tmp_path / "orig.txt"
         orig.write_text("original")
         assert utils.validate_cache_mtime(str(cache), str(orig)) is False
+
+
+class TestOsOpen:
+    """`open_file` / `open_in_file_manager` cross-platform dispatch and unified error contract.
+
+    `subprocess.run` is always monkeypatched so no real file manager / viewer is ever launched by the suite.
+    """
+    def _capture_run(self, monkeypatch):
+        """Patch `subprocess.run` to record the command instead of running it; return the record list."""
+        calls = []
+        def fake_run(cmd, *args, **kwargs):
+            calls.append(cmd)
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        return calls
+
+    def test_missing_path_raises_filenotfounderror(self, tmp_path):
+        # FileNotFoundError is an OSError subclass, so the unified `OSError` contract holds here too.
+        with pytest.raises(FileNotFoundError):
+            utils.open_file(tmp_path / "does_not_exist.png")
+
+    def test_linux_open_file_dispatches_xdg_open(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(sys, "platform", "linux")
+        calls = self._capture_run(monkeypatch)
+        target = tmp_path / "image.png"
+        target.write_bytes(b"x")
+        utils.open_file(target)
+        assert calls == [["xdg-open", str(target.expanduser())]]
+
+    def test_linux_open_in_file_manager_dispatches_xdg_open(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(sys, "platform", "linux")
+        calls = self._capture_run(monkeypatch)
+        utils.open_in_file_manager(tmp_path)  # a directory
+        assert calls == [["xdg-open", str(tmp_path.expanduser())]]
+
+    def test_macos_dispatches_open(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(sys, "platform", "darwin")
+        calls = self._capture_run(monkeypatch)
+        target = tmp_path / "image.png"
+        target.write_bytes(b"x")
+        utils.open_file(target)
+        assert calls == [["open", str(target.expanduser())]]
+
+    def test_windows_dispatches_startfile(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(sys, "platform", "win32")
+        started = []
+        # os.startfile exists only on Windows, so it isn't there to patch on Linux CI — inject it.
+        monkeypatch.setattr(os, "startfile", (lambda p: started.append(p)), raising=False)
+        target = tmp_path / "image.png"
+        target.write_bytes(b"x")
+        utils.open_file(target)
+        assert started == [str(target.expanduser())]
+
+    def test_called_process_error_is_reraised_as_oserror(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(sys, "platform", "linux")
+        def fake_run(cmd, *args, **kwargs):
+            raise subprocess.CalledProcessError(returncode=4, cmd=cmd)
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        target = tmp_path / "image.png"
+        target.write_bytes(b"x")
+        with pytest.raises(OSError) as excinfo:
+            utils.open_file(target)
+        assert not isinstance(excinfo.value, subprocess.CalledProcessError)  # unified to OSError, not the raw subprocess type
+        assert isinstance(excinfo.value.__cause__, subprocess.CalledProcessError)  # but the cause is preserved
 
 
 # ---------------------------------------------------------------------------

@@ -1,6 +1,7 @@
 """Miscellaneous general utilities."""
 
 __all__ = ["absolutize_filename", "strip_ext", "make_cache_filename", "validate_cache_mtime", "create_directory",
+           "open_file", "open_in_file_manager",
            "make_blank_index_array", "bail",
            "format_bibtex_author", "format_bibtex_authors",
            "normalize_whitespace", "normalize_unicode",
@@ -17,6 +18,7 @@ import io
 import os
 import pathlib
 import re
+import subprocess
 import sys
 from typing import Callable, Dict, List, NoReturn, Optional, Union
 import unicodedata
@@ -84,6 +86,51 @@ def create_directory(path: Union[str, pathlib.Path]) -> None:
 # def clear_and_create_directory(path: str) -> None:
 #     delete_directory_recursively(path)
 #     create_directory(path)
+
+def _os_open(path: str | pathlib.Path) -> None:
+    """Hand `path` to the operating system's default open mechanism.
+
+    Cross-platform dispatch: `xdg-open` (Linux/*BSD), `open` (macOS), `os.startfile` (Windows). The OS handler
+    decides what "open" means for the path — a file opens in its default application, a directory in the file
+    manager — so `open_file` and `open_in_file_manager` share this one dispatcher and differ only in the intent
+    they name at their call sites.
+
+    Raises `OSError` on any failure, so a caller has a single type to catch and turn into a non-intrusive
+    message. That covers a missing target (`FileNotFoundError`, an `OSError` subclass), a missing opener binary
+    (likewise), and the opener running but reporting failure — no handler registered for the type — which the
+    subprocess helpers surface as `CalledProcessError`; that one is not an `OSError`, so it is caught and
+    re-raised as one (`raise from`, cause preserved).
+    """
+    resolved = pathlib.Path(path).expanduser()
+    if not resolved.exists():
+        raise FileNotFoundError(f"_os_open: no such path: '{resolved}'")
+    target = str(resolved)
+    try:
+        if sys.platform == "win32":
+            os.startfile(target)  # Windows-only API; this branch never runs on other platforms
+        elif sys.platform == "darwin":
+            subprocess.run(["open", target], check=True)
+        else:
+            subprocess.run(["xdg-open", target], check=True)
+    except subprocess.CalledProcessError as exc:
+        raise OSError(f"_os_open: the platform opener failed on '{target}' (exit code {exc.returncode}).") from exc
+
+def open_file(path: str | pathlib.Path) -> None:
+    """Open a file in the operating system's default application for its type (image viewer, PDF reader, ...).
+
+    Cross-platform (see `_os_open`). Raises `OSError` if the file is gone or no application is registered for
+    the type — callers surface that as a transient message, not a modal dialog.
+    """
+    _os_open(path)
+
+def open_in_file_manager(path: str | pathlib.Path) -> None:
+    """Open a directory in the operating system's file manager.
+
+    Cross-platform (see `_os_open`). Intended for directories (the RAG document drop folder, a chat's datastore
+    directory, the image-sidecar directory); passing a file would open it in its default application instead.
+    Raises `OSError` if the directory is gone or the platform launch fails.
+    """
+    _os_open(path)
 
 # --------------------------------------------------------------------------------
 # Misc utilities

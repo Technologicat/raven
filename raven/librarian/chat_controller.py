@@ -20,7 +20,9 @@ import os
 import threading
 import time
 from typing import Any, Callable, Dict, List, Optional, Union
+import urllib.parse
 import uuid
+import webbrowser
 
 import numpy as np
 
@@ -36,6 +38,7 @@ from ..client import api  # Raven-server support
 from ..client.avatar_controller import DPGAvatarController
 
 from ..common import bgtask
+from ..common import utils as common_utils
 
 from ..common.gui import animation as gui_animation
 from ..common.gui import utils as guiutils
@@ -60,6 +63,28 @@ role_to_colors = {"assistant": {"front": gui_config.chat_color_ai_front, "back":
 
 # Built-in tools that reach out over the network -> light up the WEB (globe) indicator while they run.
 web_access_tool_names = frozenset(("websearch", "webfetch"))
+
+
+def _provenance_filename(maybe_url: Optional[str]) -> Optional[str]:
+    """Best-effort original filename from an image's provenance URL: the basename of a `file://` or `https://` URL.
+
+    Returns `None` for an inline `data:` URL (carries no filename), an empty URL, or a URL whose path has no
+    basename (e.g. a bare host). Percent-escapes are decoded, so `.../my%20photo.png` -> `my photo.png`."""
+    if not maybe_url or maybe_url.startswith("data:"):
+        return None
+    path = urllib.parse.urlparse(maybe_url).path
+    name = pathlib.Path(urllib.parse.unquote(path)).name
+    return name or None
+
+def _open_source_url(url: str) -> None:
+    """Open an image's recorded provenance source: a `file://` local original in its default application,
+    anything else (an `https://` page) in the web browser. Raises like the underlying opener when a local
+    original has moved or been deleted, so the caller can flash a non-intrusive failure acknowledgment."""
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme == "file":
+        common_utils.open_file(urllib.parse.unquote(parsed.path))
+    else:
+        webbrowser.open(url)
 
 # --------------------------------------------------------------------------------
 
@@ -1037,6 +1062,7 @@ class DPGCompleteChatMessage(DPGChatMessage):
         message = node_payload["message"]
         role = message["role"]
         persona = node_payload["general_metadata"]["persona"]  # stored persona for this chat message
+        sidecars_meta = node_payload["general_metadata"].get("sidecars", {})  # provenance per image sidecar (see imagestore)
         super().build(role=role,
                       persona=persona,
                       node_id=self.node_id)
@@ -1059,7 +1085,7 @@ class DPGCompleteChatMessage(DPGChatMessage):
             if part_type == "text":
                 self._render_text_paragraphs(chatutil.remove_persona_from_start_of_line(persona=persona, text=part["text"]))
             elif part_type == "image_url":
-                self._render_image_part(part)
+                self._render_image_part(part, sidecars_meta)
             # else: unknown part type — skip (forward-compat)
 
         # Render any tool-call invocations this assistant message made, as visible sub-elements after the text.
@@ -1113,26 +1139,99 @@ class DPGCompleteChatMessage(DPGChatMessage):
             if exiting_think_block:
                 inside_think_block = False
 
-    def _render_image_part(self, part: Dict[str, Any]) -> None:
-        """Render one `image_url` content-part as an inline thumbnail in the message body.
+    def _render_image_part(self, part: Dict[str, Any], sidecars_meta: Dict[str, Any]) -> None:
+        """Render one `image_url` content-part: an inline thumbnail plus a per-image provenance cluster.
 
         In a stored message the URL is always a Raven-internal `sidecar:<filename>` reference (see
         `chatutil.image_content_part`); the thumbnail texture is resolved and cached by the controller. A
         non-sidecar URL (shouldn't occur in stored data) is skipped for forward-compat; an unresolvable sidecar
-        renders a small placeholder rather than nothing, so the message still reads as "an image was here"."""
+        renders a small placeholder rather than nothing, so the message still reads as "an image was here".
+
+        Provenance for this image lives in `sidecars_meta[filename]` (see `imagestore.store_image_as_sidecar`).
+        The thumbnail carries the original filename as a tooltip, and a small action row below it offers, per
+        image (a message may hold several): show the stored original at full size, open the recorded source (a
+        `file://` original or an `https://` page — disabled when there is nothing openable), and reveal the
+        chat's image-sidecar directory."""
         url = (part.get("image_url") or {}).get("url", "")
         if not url.startswith(imagestore.SIDECAR_SCHEME):
             return  # only local sidecar refs are resolvable here; skip anything else (forward-compat)
         filename = url[len(imagestore.SIDECAR_SCHEME):]
+        meta = sidecars_meta.get(filename) or {}
         texture = self.parent_view.chat_controller.get_inline_image_texture(filename)
+        datastore = self.parent_view.chat_controller.datastore
         with self.paragraphs_lock:
             if texture is None:
                 dpg.add_text("[image unavailable]", color=(180, 120, 120), parent=self.gui_text_group)
                 return
-            dpg.add_image(texture.texture_tag,  # tag
-                          width=texture.w,
-                          height=texture.h,
-                          parent=self.gui_text_group)
+
+            cluster = dpg.add_group(parent=self.gui_text_group)  # thumbnail + its provenance action row, stacked
+            image_id = dpg.add_image(texture.texture_tag,  # tag
+                                     width=texture.w,
+                                     height=texture.h,
+                                     parent=cluster)
+            with dpg.tooltip(image_id):  # original filename only; the action buttons carry their own tooltips
+                dpg.add_text(_provenance_filename(meta.get("url")) or "attached image")
+
+            # Per-image provenance actions. "Show original" resolves to the archival copy — the verbatim original
+            # kept as a second sidecar (case 2 of the image store), or the primary itself when that is the
+            # verbatim original (case 1); a downsample-only image (case 3) has no archival original, so the
+            # primary is the best copy stored. "Open source" targets the recorded provenance URL, which is
+            # fragile (the file may have moved, the page may 404) and absent for some images — disabled up front
+            # when there is nothing openable. "Open folder" reveals the datastore's image-sidecar directory.
+            archival_filename = meta.get("original_sidecar") or filename
+            source_url = meta.get("url") or ""
+            source_openable = bool(source_url) and not source_url.startswith("data:")
+            actions = dpg.add_group(horizontal=True, parent=cluster)
+
+            self._add_provenance_button(parent=actions,
+                                        icon=fa.ICON_IMAGE,
+                                        tooltip_text="Show full-size image\n(the saved copy, in the chat data folder)",
+                                        ok_message="Opened image",
+                                        action=lambda: common_utils.open_file(datastore.sidecar_path(archival_filename)))
+            if source_openable:
+                source_tooltip = f"Open original source\n{source_url}"
+            elif source_url.startswith("data:"):
+                source_tooltip = "Open original source — unavailable\n(the image was embedded inline; no external source)"
+            else:
+                source_tooltip = "Open original source — unavailable\n(no source location was recorded)"
+            self._add_provenance_button(parent=actions,
+                                        icon=fa.ICON_LINK,
+                                        tooltip_text=source_tooltip,
+                                        ok_message="Opened source",
+                                        enabled=source_openable,
+                                        action=lambda: _open_source_url(source_url))
+            self._add_provenance_button(parent=actions,
+                                        icon=fa.ICON_FOLDER_OPEN,
+                                        tooltip_text="Open the image folder\n(where attached images are stored)",
+                                        ok_message="Opened folder",
+                                        action=lambda: common_utils.open_in_file_manager(datastore.sidecar_dir))
+
+    def _add_provenance_button(self, *, parent: Union[str, int], icon: str, tooltip_text: str, ok_message: str,
+                               action: Callable[[], None], enabled: bool = True) -> None:
+        """Add one small provenance-action button (icon + tooltip) under an inline image, wired to run `action`.
+
+        On click `action` runs; success flashes the button green with `ok_message`, any failure flashes it red
+        (and logs) — a non-intrusive acknowledgment in place of a modal dialog, matching the global toolbar
+        buttons. A disabled button (`enabled=False`) still shows its explanatory `tooltip_text` but does
+        nothing, so a predictably-unavailable action (no recorded source, an inline `data:` image) is
+        discoverable before the click rather than failing after it."""
+        button_id = dpg.add_button(label=icon, width=gui_config.toolbutton_w, parent=parent, enabled=enabled)
+        dpg.bind_item_font(button_id, self.parent_view.themes_and_fonts.icon_font_solid)
+        dpg.bind_item_theme(button_id, "disablable_widget_theme")  # tag
+        tooltip_id = dpg.add_tooltip(button_id)
+        text_id = dpg.add_text(tooltip_text, parent=tooltip_id)
+        if not enabled:
+            return
+        def callback() -> None:
+            try:
+                action()
+                ok, message = True, ok_message
+            except Exception as exc:  # noqa: BLE001 -- opening an external target must never crash the chat view
+                logger.error(f"DPGCompleteChatMessage._add_provenance_button: action failed: {type(exc)}: {exc}")
+                ok, message = False, "Couldn't open — it may have moved or been deleted"
+            gui_animation.flash_button(button=button_id, tooltip=tooltip_id, text=text_id,
+                                       ok=ok, message=message, duration=gui_config.acknowledgment_duration)
+        dpg.set_item_callback(button_id, callback)
 
 
 class DPGStreamingChatMessage(DPGChatMessage):
