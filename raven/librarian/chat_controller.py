@@ -1496,6 +1496,13 @@ class DPGChatController:
 
         self.gui_updates_safe = True  # At app shutdown, they aren't.
 
+        # Sync the INDEXING indicator to any commit already in progress. The startup rescan
+        # (`hybridir.setup`) can begin re-indexing before this controller exists to wire its callbacks, so
+        # the 0→1 edge that fires `on_indexing_start` passes unheard — belongs with the indicator wiring
+        # above, but must run after `gui_updates_safe`, which `_on_indexing_start` gates on.
+        if self.retriever is not None and self.retriever.is_indexing():
+            self._on_indexing_start()
+
         self.view = DPGLinearizedChatView(themes_and_fonts=themes_and_fonts,
                                           gui_parent=chat_panel_widget,
                                           chat_controller=self)
