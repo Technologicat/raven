@@ -205,7 +205,7 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 
 - **[High]** Qwen3.5 thinking toggle: urgent. Models have a thinking toggle that must be set in a specific location (check ooba's implementation; see https://unsloth.ai/docs/models/qwen3.5 for reference). More broadly: support for non-thinking models — Librarian currently assumes `<think>` tag in several places (avatar speaking animation, `llmclient.invoke`). Add a "thinking model" toggle; when enabled, inject initial `<think>` at start of message if model doesn't send it (only when not continuing a previous message). `chatutil.scrub` already handles a missing opening tag when a closing tag is present, but only for the final message.
 
-- **[High]** RAG PDF support: use `pdftotext` (from `poppler-utils`) to extract text, run through `sanitize`, add to RAG index. Store extracted text and link to original document. Handle paragraph break detection in `sanitize`. Generalize to other input formats (images via caption generation, etc.).
+- **[Med]** RAG PDF ingestion — polish. The core is done: born-digital PDF text is extracted via `raven.common.docextract` (pypdf) and indexed like any other document. Remaining: run the extracted text through `sanitize` before indexing (PDF text often has hyphenation artifacts and paragraph-break ambiguity); link a search result back to its original document (see `TODO_DEFERRED.md`, "Expose the docs-DB source files behind a reply's RAG citations"); generalize to scanned PDFs (OCR) and to images (caption generation — ties into the Nomic multimodal-search plan).
 
 - **[High]** Adjustable semantic search match strictness: configurable cosine similarity threshold in HybridIR below which results are dropped. High priority.
 

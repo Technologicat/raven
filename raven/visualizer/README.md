@@ -335,7 +335,7 @@ Abstract submissions to scientific conferences sometimes arrive as free-form, hu
 So if you are a conference organizer, and would like to semantically visualize the set of abstracts sent to you, see the `raven-pdf2bib` command-line tool provided with Raven.
 
 - The text content of the PDF is analyzed via an LLM (large language model).
-- The PDF must have its text content readable by `pdftotext` (from `poppler-utils`).
+- The PDF must have an extractable text layer (a born-digital PDF, not a scan).
 - Each PDF should contain one abstract. Multiple abstracts are fed in as separate PDF files.
 - The converter does not enforce a length limit, but its intended use case is a typical conference abstract, 1-2 pages in length.
 - The abstract should have a human-recognizable title, authors, and main text. Exact formatting does not matter.
