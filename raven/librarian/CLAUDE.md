@@ -62,7 +62,7 @@ Each layer only imports from layers below it. No circular dependencies.
                          {"type": "image_url", "image_url": {"url": "sidecar:<sha256>.png"}}],
              "reasoning_content": "...",  # optional: separated thinking trace (not in `content`)
              "tool_calls": [...]},
- "general_metadata": {"timestamp": ns, "datetime": "iso", "persona": "Aria"|None,
+ "general_metadata": {"timestamp": ns, "datetime": "iso", "persona": "<char name>"|None,  # char name from config, not literally "Aria"
                       "sidecars": {"<filename>": {"url": ..., "source": ..., "stored_dimensions": [h, w], ...}}},
  "generation_metadata": {"model": "...", "n_tokens": N, "dt": secs, "status": "success"|"error"},
  "retrieval": {"query": "...", "results": [...]}}
