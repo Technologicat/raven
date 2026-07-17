@@ -539,7 +539,10 @@ with timer() as tim:
                         # ImGui renders `hint` (placeholder text) for single-line inputs only, so a multiline
                         # field can't show one — the discoverability hint lives in this tooltip instead.
                         with dpg.tooltip("chat_field"):  # tag
-                            dpg.add_text("Ask the AI questions here.\nEnter to send. Shift+Enter for a new line. Ctrl+Space to focus.")
+                            dpg.add_text("Ask the AI questions here.\n"
+                                         "Send to the AI [Enter]\n"
+                                         "    with Shift: insert a new line\n"
+                                         "Ctrl+Space to focus this field.")
 
                         # Staged-image thumbnail strip. Hidden until the user attaches an image; populated by the
                         # attach handler. Shown by stealing height from the text field (the composer's outer
