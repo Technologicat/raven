@@ -1010,3 +1010,43 @@ technical text cleanly. (Librarian's backend-error message wanted a code box for
 back to plain text for now.)
 
 Discovered during brief-03 Half-2 error-message work (2026-07-17, flagged by Juha).
+
+## FileDialog: image thumbnail previews (Lanczos'd)
+
+The vendored `FileDialog` (`raven/vendor/file_dialog/`) lists files by name only — no image previews. For picking
+*image* files (the multimodal image-attach feature, brief 03 Half 2), a thumbnail per image would make selection
+usable — you pick by looking, not by guessing from the filename. This matters more than for most file types:
+photos and AI-generated images usually have non-descriptive filenames (hashes, timestamps, auto-names), so the
+image *data* is the only reliable way to identify the right file — and doubly so because DPG apps have no OS
+drag-and-drop (see the drag-and-drop item below), making the in-app picker the *only* way to bring an image in.
+Add Lanczos-downsampled thumbnail previews to the file listing when the filter is image-typed. Reuse
+`raven.common.image.lanczos` + the `add_dynamic_texture` path; the Nvidia/Linux texture-deletion-segfault
+workaround (`__GLVND_DISALLOW_PATCHING=1`) is already set in the apps.
+
+This is the reason the image-attach feature is deferred: a filename-only picker is a poor fit for choosing images,
+so the attach flow waits on this. When built, mind DPG texture lifecycle for the many small preview textures
+(create/destroy as the user navigates directories).
+
+Discovered during brief-03 Half-2 multimodal work (2026-07-17, flagged by Juha).
+
+## FileDialog: reduce per-use-site boilerplate
+
+Every `FileDialog` use site repeats a verbose constructor (title, tag, callback, modal, `filter_list`,
+`file_filter`, `multi_selection`/`save_mode`/`dirs_only`, `allow_drag`, `default_path`, …) plus a `.show_file_dialog()`
+call and a `selected_files` callback. Recurring across `raven-visualizer`, `raven-cherrypick`, and the avatar
+pose/settings editors — and it was about to be repeated in `raven-librarian`. Wrap the common shapes (open-file,
+open-files, save-file, pick-dir) into thin helpers so a use site is roughly one call. Long-standing "meaning to
+fix this" item (Juha).
+
+Discovered during brief-03 Half-2 multimodal work (2026-07-17, flagged by Juha).
+
+## OS drag-and-drop of files into DPG apps (cross-platform)
+
+DPG apps can't receive files dragged in from the OS file manager — you must go through the in-app `FileDialog`
+every time. A recurring pain point across the fleet (Juha), and it compounds the image-picker problem above:
+with no drag-and-drop, the picker is the sole entry path, so the picker has to be good. There's a Windows-only
+extension for this, but nothing for Linux/macOS. Investigate whether cross-platform OS→app file drop is feasible
+(SDL/GLFW-level drop events, a platform-specific shim per OS, or an out-of-process helper) and, if so, wire it as
+a general capability the apps can opt into — image attach and `FileDialog` both benefit.
+
+Discovered during brief-03 Half-2 multimodal work (2026-07-17, flagged by Juha as a constant pain point).

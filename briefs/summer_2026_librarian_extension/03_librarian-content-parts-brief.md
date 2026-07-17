@@ -828,15 +828,23 @@ became a typed-parts list everywhere; tool results as parts; per-part renderer; 
   record's `type == "vlm"`); §8 wire substitution — `llmclient._serialize_history_for_wire` preserves
   image parts and resolves `sidecar:`→`data:` on send; `datastore` threaded through `invoke`/`prefill`.
   5 tests.
-- **B — minimal GUI end-to-end** (in progress, 2026-07-17): §5 attach affordance + file picker; §6 fill the
-  `image_url` render stub (inline thumbnail); §9 hard-gate attach on a non-VLM model; §7 image-token
-  budgeting wired into the context-fill estimate. Composer redesign underway first (settled with Juha): the
-  single input row becomes a vertical stack — multiline text field (Shift+Enter = newline, Enter = send;
-  ~5 rows, resizable deferred to `TODO_DEFERRED`), an optional staged-image thumbnail strip, and a button
-  toolbar (attach / send / mic / VU). Composer outer height fixed so the chat/avatar panels don't jump when
-  the strip appears; the strip steals height from the text field instead. Staged images live in memory and
-  are written to sidecars only on send (cancel = zero orphans, no GC). Click-to-expand: **v0** shows the
-  downscaled primary; **v1** upgrades to a Lanczos mip-chain zoomable viewer (reuse cherrypick's machinery).
+- **B — minimal GUI end-to-end** (split, 2026-07-17; branch `feature/librarian-multimodal-gui`, pushed, CI green):
+  - **B.1 composer groundwork — DONE.** The single input row became a vertical stack — multiline text field
+    (Shift+Enter = newline, Enter = send; ~5 rows, resizable deferred to `TODO_DEFERRED`), a hidden staged-image
+    thumbnail strip, and a button toolbar (send / mic / VU; attach button not yet added). Composer outer height
+    fixed so the chat/avatar panels don't jump when the strip appears; the strip is to steal height from the text
+    field. Enter-send clears the field via deactivate → clear → refocus (ImGui ignores `set_value` on the active
+    input). Commits: `665ac3e` (composer), `9e06b86` (field-clear). Incidental fixes landed alongside: INDEXING
+    startup-race (`83b0ada`), silent-LLM-error → rerollable message (`b90d28b`), LM Studio default (`f05a6c0`).
+  - **B.2 attach mechanics — DEFERRED** pending FileDialog image-thumbnail previews (see `TODO_DEFERRED.md`). A
+    filename-only picker is a poor fit for choosing images, so the attach flow waits on that FileDialog work
+    (Juha's call, 2026-07-17). Remaining when resumed: §5 attach button (`fa.ICON_PAPERCLIP`) + image FileDialog;
+    §9 hard-gate attach on `model_is_vlm is False` (flag reachable at `app.py` module-level `llm_settings`); byte-
+    snapshot in-memory staging + thumbnail strip (dedicated `add_texture_registry`; `add_dynamic_texture`;
+    GLVND deletion workaround already set at `app.py:40-43`); on-send `store_image_as_sidecar` → parts → thread
+    through `chat_round`; §6 fill the render stub (`chat_controller.py:1059-1060`); §7 image-token budget. Click-
+    to-expand: **v0** shows the downscaled primary; **v1** a Lanczos mip-chain zoomable viewer (cherrypick's
+    machinery).
 - **C — provenance & discoverability** (not started): `open_in_file_manager` utility; open-original /
   open-dir buttons; the ride-along "open docs DB dir" / "open datastore dir" buttons — these need a
   small Tools/Utilities GUI surface (placement TBD by CC + Juha, as noted in §6). "Show original" resolves

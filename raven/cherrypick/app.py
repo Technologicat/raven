@@ -5,7 +5,7 @@ Main application module: startup, GUI layout, render loop, hotkey dispatch.
 
 # WORKAROUND: Deleting a texture or image widget causes DPG to segfault on Nvidia/Linux.
 # https://github.com/hoffstadt/DearPyGui/issues/554
-# See raven/librarian/app.py:27-32 for the canonical example.
+# See raven/librarian/app.py for the canonical example.
 import platform
 import os
 if platform.system().upper() == "LINUX":
