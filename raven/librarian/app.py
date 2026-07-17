@@ -292,8 +292,8 @@ with timer() as tim:
             return w, h
         def _get_subtitle_bottom_y0(avatar_panel_h: int):
             return (avatar_panel_h - 24) + gui_config.subtitle_y0
-        def _get_chat_field_base_width() -> int:  # This is accounting for other controls in the same section (mic button, VU meter, send button).
-            return gui_config.chat_panel_w - (2 * (gui_config.toolbutton_w + 8) + (gui_config.vu_meter_w + 8))
+        def _get_chat_field_base_width() -> int:  # full width; the toolbar (send/mic/VU) sits below the field now, not beside it
+            return gui_config.chat_panel_w  # `chat_controls` has `no_scrollbar=True`, so full width can't trip a horizontal scrollbar
         def _get_chat_field_width(main_window_w: int) -> int:
             extra_w = main_window_w - gui_config.main_window_w
             base_w = _get_chat_field_base_width()
@@ -326,9 +326,12 @@ with timer() as tim:
                                       height=chat_controls_h,
                                       no_scrollbar=True,
                                       no_scroll_with_mouse=True):
-                    with dpg.group(horizontal=True):
+                    with dpg.group():  # composer: vertical stack (multiline text field / staged-image strip / toolbar)
                         def send_message_to_ai_callback() -> None:
-                            user_message_text = dpg.get_value("chat_field")
+                            # Strip the trailing newline the multiline widget inserts on the Enter that sends, plus
+                            # any stray whitespace. An empty result is intentional and still sends — an empty user
+                            # message is Librarian's canonical "let the AI take another turn" gesture.
+                            user_message_text = dpg.get_value("chat_field").strip()
                             dpg.set_value("chat_field", "")
                             chat_controller.chat_round(user_message_text)
 
@@ -382,37 +385,49 @@ with timer() as tim:
                             chat_controller.chat_round(user_message_text)
 
                         dpg.add_input_text(tag="chat_field",
+                                           multiline=True,
                                            default_value="",
-                                           hint="[ask the AI questions here] [Ctrl+Space to focus]",
-                                           width=_get_chat_field_base_width())
+                                           width=_get_chat_field_base_width(),
+                                           height=gui_config.chat_field_h)
+                        # ImGui renders `hint` (placeholder text) for single-line inputs only, so a multiline
+                        # field can't show one — the discoverability hint lives in this tooltip instead.
+                        with dpg.tooltip("chat_field"):  # tag
+                            dpg.add_text("Ask the AI questions here.\nEnter to send. Shift+Enter for a new line. Ctrl+Space to focus.")
 
-                        dpg.add_button(label=fa.ICON_PAPER_PLANE,
-                                       callback=send_message_to_ai_callback,
-                                       width=gui_config.toolbutton_w,
-                                       tag="chat_send_button")  # TODO: disable this button while AI is writing
-                        dpg.bind_item_font("chat_send_button", themes_and_fonts.icon_font_solid)  # tag
-                        dpg.bind_item_theme("chat_send_button", "disablable_widget_theme")  # tag
-                        with dpg.tooltip("chat_send_button"):  # tag
-                            dpg.add_text("Send to AI [Enter]")
+                        # Staged-image thumbnail strip. Hidden until the user attaches an image; populated by the
+                        # attach handler. Shown by stealing height from the text field (the composer's outer
+                        # height is fixed, so the chat and avatar panels never jump when attachments appear).
+                        with dpg.group(tag="chat_attachments_strip", horizontal=True, show=False):  # tag
+                            pass
 
-                        record_audio_message_button = dpg.add_button(label=fa.ICON_MICROPHONE,
-                                                                     callback=record_audio_message_callback,
-                                                                     width=gui_config.toolbutton_w,
-                                                                     tag="record_audio_message_button")  # TODO: disable this button while AI is writing
-                        dpg.bind_item_font("record_audio_message_button", themes_and_fonts.icon_font_solid)  # tag
-                        dpg.bind_item_theme("record_audio_message_button", "disablable_widget_theme")  # tag
-                        with dpg.tooltip("record_audio_message_button") as record_audio_message_tooltip:  # tag
-                            record_audio_message_tooltip_text = dpg.add_text("Speak to AI [Ctrl+Shift+Enter]")  # TODO: DRY the tooltip labels
-                        mic_vu_meter = DPGVUMeter(width=gui_config.vu_meter_w,
-                                                  height=gui_config.vu_meter_h,
-                                                  border=1,
-                                                  min_value=-90.0,
-                                                  max_value=0.0,
-                                                  yellow_start=-24.0,
-                                                  red_start=-6.0,
-                                                  threshold_value=-40.0,  # TODO: configurable autostop threshold
-                                                  tooltip_text="Mic input level (dBFS)\nYellow = -24; red = -6; gray line = -40 (autostop threshold).")
-                        audio_recorder.require().connect_vu_readout(mic_vu_meter.update)
+                        with dpg.group(horizontal=True):  # composer toolbar
+                            dpg.add_button(label=fa.ICON_PAPER_PLANE,
+                                           callback=send_message_to_ai_callback,
+                                           width=gui_config.toolbutton_w,
+                                           tag="chat_send_button")  # TODO: disable this button while AI is writing
+                            dpg.bind_item_font("chat_send_button", themes_and_fonts.icon_font_solid)  # tag
+                            dpg.bind_item_theme("chat_send_button", "disablable_widget_theme")  # tag
+                            with dpg.tooltip("chat_send_button"):  # tag
+                                dpg.add_text("Send to AI [Enter]")
+
+                            record_audio_message_button = dpg.add_button(label=fa.ICON_MICROPHONE,
+                                                                         callback=record_audio_message_callback,
+                                                                         width=gui_config.toolbutton_w,
+                                                                         tag="record_audio_message_button")  # TODO: disable this button while AI is writing
+                            dpg.bind_item_font("record_audio_message_button", themes_and_fonts.icon_font_solid)  # tag
+                            dpg.bind_item_theme("record_audio_message_button", "disablable_widget_theme")  # tag
+                            with dpg.tooltip("record_audio_message_button") as record_audio_message_tooltip:  # tag
+                                record_audio_message_tooltip_text = dpg.add_text("Speak to AI [Ctrl+Shift+Enter]")  # TODO: DRY the tooltip labels
+                            mic_vu_meter = DPGVUMeter(width=gui_config.vu_meter_w,
+                                                      height=gui_config.vu_meter_h,
+                                                      border=1,
+                                                      min_value=-90.0,
+                                                      max_value=0.0,
+                                                      yellow_start=-24.0,
+                                                      red_start=-6.0,
+                                                      threshold_value=-40.0,  # TODO: configurable autostop threshold
+                                                      tooltip_text="Mic input level (dBFS)\nYellow = -24; red = -6; gray line = -40 (autostop threshold).")
+                            audio_recorder.require().connect_vu_readout(mic_vu_meter.update)
 
             with dpg.group():  # right column: AI avatar
                 avatar_panel_w, avatar_panel_h = _get_avatar_panel_base_size()
@@ -972,7 +987,9 @@ def librarian_hotkeys_callback(sender, app_data):
     # NOTE: These are global across the whole app (when no modal window is open) - be very careful here!
     else:
         if dpg.is_item_focused("chat_field"):
-            if key == dpg.mvKey_Return:  # tag  # regardless of modifier state
+            # Enter sends; Shift+Enter inserts a newline. The multiline field owns its own keyboard, so on
+            # Shift+Enter we do nothing here and let the widget insert the newline itself.
+            if key == dpg.mvKey_Return and not shift_pressed:
                 send_message_to_ai_callback()
                 dpg.focus_item("chat_field")  # tag
         # else:

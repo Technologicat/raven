@@ -301,7 +301,22 @@ gui_config = env(  # ----------------------------------------
                  main_window_w=1920, main_window_h=1040,  # The default size just fits onto a 1080p screen in Linux Mint.
                  help_window_w=1700, help_window_h=1000,  # The help content is static, these values have been chosen to fit it.
                  ai_warning_h=42,
-                 chat_controls_h=42,
+                 # Composer (chat input) geometry. The composer is a vertical stack: multiline text field,
+                 # an optional staged-image thumbnail strip, and a button toolbar. Its outer height
+                 # (`chat_controls_h`) is FIXED so that showing/hiding the strip never rescales the chat or
+                 # avatar panels (the avatar panel height tracks the chat panel height). When the strip
+                 # appears it steals height from the text field instead (field and strip heights adjust together).
+                 #
+                 # The heights below are DERIVED from the live theme metrics: font_size = 20 (the value passed to
+                 # `guiutils.bootup`), and `guiutils.setup_themes` overrides only rounding, so FramePadding /
+                 # ItemSpacing / WindowPadding keep DPG's defaults (3 / 4 / 8 px vertically). A toolbutton is thus
+                 # font(20) + 2*frame_padding_y(3) = 26 px tall (matches `vu_meter_h`, an in-repo cross-check);
+                 # child-window padding = 2*window_padding(8) = 16. So the composer child height is
+                 # chat_field_h + item_spacing_y + toolbutton_h + child_padding = 128 + 4 + 26 + 16 = 174.
+                 # TODO: confirm against a GIMP measurement of a rendered screenshot before treating as final.
+                 chat_field_h=128,  # multiline text field, ~5-6 rows at font_size 20
+                 chat_attachments_h=68,  # staged-image thumbnail strip; shown only while composing with attachments
+                 chat_controls_h=174,  # = chat_field_h(128) + item_spacing_y(4) + toolbutton_h(26) + child_padding(16)
                  chat_panel_w=(1920 // 2),  # net width 960 -> gross width with borders = this + 2 * 8 = 976
                  vu_meter_w=8,  # mic VU meter ("voltage units", audio input level)
                  vu_meter_h=26,  # same height as toolbuttons

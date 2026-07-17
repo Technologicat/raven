@@ -828,12 +828,23 @@ became a typed-parts list everywhere; tool results as parts; per-part renderer; 
   record's `type == "vlm"`); §8 wire substitution — `llmclient._serialize_history_for_wire` preserves
   image parts and resolves `sidecar:`→`data:` on send; `datastore` threaded through `invoke`/`prefill`.
   5 tests.
-- **B — minimal GUI end-to-end** (not started): §5 attach affordance + file picker; §6 fill the
+- **B — minimal GUI end-to-end** (in progress, 2026-07-17): §5 attach affordance + file picker; §6 fill the
   `image_url` render stub (inline thumbnail); §9 hard-gate attach on a non-VLM model; §7 image-token
-  budgeting wired into the context-fill estimate.
+  budgeting wired into the context-fill estimate. Composer redesign underway first (settled with Juha): the
+  single input row becomes a vertical stack — multiline text field (Shift+Enter = newline, Enter = send;
+  ~5 rows, resizable deferred to `TODO_DEFERRED`), an optional staged-image thumbnail strip, and a button
+  toolbar (attach / send / mic / VU). Composer outer height fixed so the chat/avatar panels don't jump when
+  the strip appears; the strip steals height from the text field instead. Staged images live in memory and
+  are written to sidecars only on send (cancel = zero orphans, no GC). Click-to-expand: **v0** shows the
+  downscaled primary; **v1** upgrades to a Lanczos mip-chain zoomable viewer (reuse cherrypick's machinery).
 - **C — provenance & discoverability** (not started): `open_in_file_manager` utility; open-original /
   open-dir buttons; the ride-along "open docs DB dir" / "open datastore dir" buttons — these need a
-  small Tools/Utilities GUI surface (placement TBD by CC + Juha, as noted in §6).
+  small Tools/Utilities GUI surface (placement TBD by CC + Juha, as noted in §6). "Show original" resolves
+  to **three distinct affordances** (settled with Juha), not one, because they have different reliability
+  guarantees: (1) **"Show original"** → the stored archival copy (`original_sidecar`, or the primary itself
+  when it is the verbatim original) — the canonical one, always present offline; (2) **"Open source"** →
+  the provenance `url` (fragile — file moved / URL 404), labelled as provenance, shown only when present;
+  (3) **"Open containing folder"** → file-manager reveal of `datastore.sidecar_dir`.
 - **D — GC UX & navigation** (not started): manual "Clean up & save" (dry-run preview + thumbnail grid
   + staging recovery); bidirectional tool-call↔response nav links. Open question: `prune_unreachable_nodes`
   currently runs only in `minichat`, not the GUI exit path — decide GUI-exit prune vs. manual-only.
