@@ -862,20 +862,27 @@ became a typed-parts list everywhere; tool results as parts; per-part renderer; 
       `scaffold.user_turn` staged-images path (2). Full librarian suite 362 green, ruff clean.
     - Click-to-expand: **v0** shows the downscaled primary; **v1** a Lanczos mip-chain zoomable viewer
       (cherrypick's machinery) — still to do.
-- **C — provenance & discoverability** (not started): `open_in_file_manager` utility; open-original /
-  open-dir buttons; the ride-along "open docs DB dir" / "open datastore dir" buttons — these need a
-  small Tools/Utilities GUI surface (placement TBD by CC + Juha, as noted in §6). "Show original" resolves
-  to **three distinct affordances** (settled with Juha), not one, because they have different reliability
-  guarantees: (1) **"Show original"** → the stored archival copy (`original_sidecar`, or the primary itself
-  when it is the verbatim original) — the canonical one, always present offline; (2) **"Open source"** →
-  the provenance `url` (fragile — file moved / URL 404), labelled as provenance, shown only when present;
-  (3) **"Open containing folder"** → file-manager reveal of `datastore.sidecar_dir`.
-  - **Inline-thumbnail tooltip (original filename)** — the *stored* inline images in the chat log should show
-    the original filename on hover, the same as the staged-strip thumbnails already do (from the provenance
-    `url`'s basename in `general_metadata["sidecars"]`). Pairs naturally with the "show original" affordances
-    above — same provenance metadata, same reader intent ("what is this image, where did it come from"). Add it
-    to `DPGCompleteChatMessage._render_image_part` (attach a `dpg.tooltip` to the `add_image` widget). Flagged
-    by Juha 2026-07-17.
+- **C — provenance & discoverability** (not started). `raven.common.utils.open_in_file_manager` (xdg-open /
+  `open` / `explorer`) is the placement-independent first build; both surfaces below need it. **Two surfaces**
+  (placement settled with Juha 2026-07-17):
+  - **Per-image provenance cluster — on the inline thumbnail.** A message can carry multiple images, so the
+    provenance actions are *per-image*, anchored to each thumbnail (a small hover/click cluster), not on the
+    message button row. The deferred inline-thumbnail **filename tooltip** rides on the same anchor. "Show
+    original" resolves to **three distinct affordances** (settled with Juha), not one, because they have
+    different reliability guarantees: (1) **"Show original"** → the stored archival copy (`original_sidecar`, or
+    the primary itself when it is the verbatim original) — the canonical one, always present offline;
+    (2) **"Open source"** → the provenance `url` (fragile — file moved / URL 404), labelled as provenance,
+    shown only when present; (3) **"Open containing folder"** → file-manager reveal of `datastore.sidecar_dir`.
+  - **Global utilities — a button group in the right column, under the avatar panel (Option D).** "Open docs DB
+    dir" / "open chat datastore dir" are app-global. They go in the right column below the mode toggles, near
+    the Documents/Speculation toggles that refer to the same docs DB (semantic adjacency + room there). Keep
+    them a **visually distinct button group**, NOT intermixed with the toggle checkboxes (persistent state vs.
+    one-shot actions). Forward caveat: when D's "Clean up & save" and any future tool config join, wrap the
+    group in a collapsing header if it gets busy. (This retires the earlier "small Tools/Utilities surface,
+    placement TBD" / gear-popup idea — Option D won on visibility + docs-adjacency.)
+  - Filename-tooltip implementation note: in `DPGCompleteChatMessage._render_image_part`, attach a
+    `dpg.tooltip` to the `add_image` widget showing the original filename — the basename of the provenance
+    `url` in `general_metadata["sidecars"][<filename>]`. Same as the staged-strip thumbnails already do.
 - **D — GC UX & navigation** (not started): manual "Clean up & save" (dry-run preview + thumbnail grid
   + staging recovery); bidirectional tool-call↔response nav links. Open question: `prune_unreachable_nodes`
   currently runs only in `minichat`, not the GUI exit path — decide GUI-exit prune vs. manual-only.
