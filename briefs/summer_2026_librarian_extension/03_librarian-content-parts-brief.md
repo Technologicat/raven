@@ -836,8 +836,10 @@ became a typed-parts list everywhere; tool results as parts; per-part renderer; 
     field. Enter-send clears the field via deactivate → clear → refocus (ImGui ignores `set_value` on the active
     input). Commits: `665ac3e` (composer), `9e06b86` (field-clear). Incidental fixes landed alongside: INDEXING
     startup-race (`83b0ada`), silent-LLM-error → rerollable message (`b90d28b`), LM Studio default (`f05a6c0`).
-  - **B.2 attach mechanics — CODE COMPLETE (branch `feature/librarian-image-attach`; pending live GUI sanity
-    test).** Built with the vendored FileDialog's basic (filename) listing; the Lanczos image-*preview* picker
+  - **B.2 attach mechanics — DONE (`1b8e6ec`, branch `feature/librarian-image-attach`; live-verified end-to-end
+    2026-07-17).** Attached a word-cloud PNG → 35B-A3B VLM described it → inline thumbnail + `~3%` context-fill;
+    staging strip / remove button / filename tooltips / height-steal all confirmed; message-ordering fix
+    confirmed. Built with the vendored FileDialog's basic (filename) listing; the Lanczos image-*preview* picker
     stays a deferred UX enhancement (`TODO_DEFERRED`). Landed:
     - §5 attach button (`fa.ICON_PAPERCLIP`) in the composer toolbar + an image FileDialog (`.*`-default filter;
       multi-select); staged images held as in-memory byte snapshots in a module-level `staged_images` list.
@@ -868,6 +870,12 @@ became a typed-parts list everywhere; tool results as parts; per-part renderer; 
   when it is the verbatim original) — the canonical one, always present offline; (2) **"Open source"** →
   the provenance `url` (fragile — file moved / URL 404), labelled as provenance, shown only when present;
   (3) **"Open containing folder"** → file-manager reveal of `datastore.sidecar_dir`.
+  - **Inline-thumbnail tooltip (original filename)** — the *stored* inline images in the chat log should show
+    the original filename on hover, the same as the staged-strip thumbnails already do (from the provenance
+    `url`'s basename in `general_metadata["sidecars"]`). Pairs naturally with the "show original" affordances
+    above — same provenance metadata, same reader intent ("what is this image, where did it come from"). Add it
+    to `DPGCompleteChatMessage._render_image_part` (attach a `dpg.tooltip` to the `add_image` widget). Flagged
+    by Juha 2026-07-17.
 - **D — GC UX & navigation** (not started): manual "Clean up & save" (dry-run preview + thumbnail grid
   + staging recovery); bidirectional tool-call↔response nav links. Open question: `prune_unreachable_nodes`
   currently runs only in `minichat`, not the GUI exit path — decide GUI-exit prune vs. manual-only.
