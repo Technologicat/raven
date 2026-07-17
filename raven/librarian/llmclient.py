@@ -15,6 +15,7 @@ __all__ = ["list_models",
            "detect_backend_flavor",
            "setup",
            "count_tokens",
+           "image_token_cost",
            "StreamParser",
            "invoke", "prefill", "action_ack", "action_stop",
            "perform_throwaway_task", "make_console_progress_handler",
@@ -613,6 +614,29 @@ def count_tokens(settings: env, text: str) -> Tuple[int, bool]:
     if settings.backend_flavor == "oobabooga":
         return _ooba_token_count(settings.backend_url, text), True
     return round(len(text) * settings.char_to_token_ratio), False
+
+def image_token_cost(settings: env, height: int, width: int) -> int:
+    """Estimated token cost of one attached image for the loaded model — for the context-fill budget.
+
+    A VLM image consumes a chunk of context that the text-only char->token ratio (`count_tokens` tier 3) can't
+    see, so the pre-send indicator has to add it explicitly. The per-family costs live in
+    `config.llm_image_token_cost`, keyed by a lowercase substring matched against the loaded model's id/family
+    (first match wins; the `None` key is the fallback for unknown families). Each entry is a flat token count
+    or a callable `(height, width) -> int` for models whose cost scales with resolution.
+
+    Necessarily an *estimate*: it is a conservative published-scheme figure, refined away entirely once the
+    backend reports the real `usage.prompt_tokens` for an image-bearing call (same self-correction path as the
+    char->token ratio). `height`/`width` are the stored (wire) dimensions; they only matter for the
+    resolution-scaling families.
+    """
+    table = librarian_config.llm_image_token_cost
+    haystack = " ".join(str(part) for part in (settings.model, settings.model_id) if part).lower()
+    chosen = table.get(None)  # fallback for unknown families
+    for key, value in table.items():
+        if key is not None and key in haystack:
+            chosen = value
+            break
+    return int(chosen(height, width)) if callable(chosen) else int(chosen)
 
 # --------------------------------------------------------------------------------
 # Streaming tool-call accumulation (shared by `invoke`)

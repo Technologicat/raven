@@ -68,6 +68,7 @@ def test_store_case1_under_cap_is_verbatim_primary(datastore):
     assert md["url"] == "file:///tmp/x.png"
     assert md["source"] == "user_attachment"
     assert md["content_type"] == "image/png"
+    assert md["stored_dimensions"] == [48, 64]  # [height, width] of the bytes on disk (= original here)
     assert "original_sidecar" not in md and "original_dimensions" not in md
     assert len(datastore.list_sidecar_files()) == 1
 
@@ -88,6 +89,7 @@ def test_store_case2_over_cap_downsamples_and_keeps_original(datastore):
                                                provenance_source="user_attachment")
     md = result.sidecar_metadata
     assert md["original_dimensions"] == [2000, 2000]
+    assert md["stored_dimensions"] == [1024, 1024]  # downsampled primary (2000² -> 1024² at the 1 MP cap)
     assert md["original_size_bytes"] == len(raw)
     assert "original_sidecar" in md
     # primary is downsampled to within the cap; original is byte-exact.

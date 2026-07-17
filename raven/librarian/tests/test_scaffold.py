@@ -12,7 +12,7 @@ pytest.importorskip("raven.librarian.scaffold",
 
 from unpythonic.env import env  # noqa: E402 -- after importorskip by design
 
-from raven.librarian import chattree, chatutil, scaffold  # noqa: E402 -- after importorskip by design
+from raven.librarian import chattree, chatutil, imagestore, scaffold  # noqa: E402 -- after importorskip by design
 
 
 # ---------------------------------------------------------------------------
@@ -181,6 +181,56 @@ class TestUserTurn:
                                       user_message_text="Hi there")
         content = chatutil.content_to_text(forest.get_payload(new_head)["message"]["content"])
         assert "Hi there" in content
+
+
+class TestUserTurnStagedImages:
+    """user_turn with attached images: sidecars stored, image parts appended, provenance recorded."""
+
+    @staticmethod
+    def _png_bytes(width, height, color=(30, 160, 90)):
+        import io
+        from PIL import Image  # deferred; the heavy stack is present (module-level importorskip)
+        buffer = io.BytesIO()
+        Image.new("RGB", (width, height), color).save(buffer, format="PNG")
+        return buffer.getvalue()
+
+    def _forest(self, tmp_path, llm_settings):
+        forest = chattree.PersistentForest(tmp_path / "chat.json", autosave=False,
+                                           sidecar_extractor=imagestore.sidecar_refs_in_payload)
+        greeting = chatutil.factory_reset_datastore(forest, llm_settings)
+        return forest, greeting
+
+    def test_image_part_appended_and_sidecar_recorded(self, tmp_path, llm_settings):
+        forest, head = self._forest(tmp_path, llm_settings)
+        staged = env(raw=self._png_bytes(48, 32),
+                     provenance_url="file:///tmp/pic.png",
+                     provenance_source="user_attachment")
+        new_head = scaffold.user_turn(llm_settings=llm_settings, datastore=forest,
+                                      head_node_id=head, user_message_text="look at this",
+                                      staged_images=[staged])
+        payload = forest.get_payload(new_head)
+        content = payload["message"]["content"]
+        assert "look at this" in chatutil.content_to_text(content)  # text part preserved
+
+        image_parts = [part for part in content if part.get("type") == "image_url"]
+        assert len(image_parts) == 1  # image part appended after the text part
+        url = image_parts[0]["image_url"]["url"]
+        assert url.startswith(imagestore.SIDECAR_SCHEME)
+        filename = url[len(imagestore.SIDECAR_SCHEME):]
+
+        assert len(forest.read_sidecar(filename)) > 0  # sidecar file was written
+        sidecars = payload["general_metadata"]["sidecars"]
+        assert sidecars[filename]["url"] == "file:///tmp/pic.png"  # provenance recorded
+        assert sidecars[filename]["source"] == "user_attachment"
+
+    def test_text_only_adds_no_sidecars_key(self, tmp_path, llm_settings):
+        forest, head = self._forest(tmp_path, llm_settings)
+        new_head = scaffold.user_turn(llm_settings=llm_settings, datastore=forest,
+                                      head_node_id=head, user_message_text="plain text",
+                                      staged_images=None)
+        payload = forest.get_payload(new_head)
+        assert "sidecars" not in payload["general_metadata"]
+        assert all(part.get("type") == "text" for part in payload["message"]["content"])
 
 
 # ---------------------------------------------------------------------------

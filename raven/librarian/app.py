@@ -50,7 +50,7 @@ with timer() as tim:
     # Vendored libraries
     from ..vendor.IconsFontAwesome6 import IconsFontAwesome6 as fa  # https://github.com/juliettef/IconFontCppHeaders
     from ..vendor import DearPyGui_Markdown as dpg_markdown  # https://github.com/IvanNazaruk/DearPyGui-Markdown
-    # from ..vendor.file_dialog.fdialog import FileDialog  # https://github.com/totallynotdrait/file_dialog, but with custom modifications
+    from ..vendor.file_dialog.fdialog import FileDialog  # https://github.com/totallynotdrait/file_dialog, but with custom modifications
 
     from ..client import api  # Raven-server support
     from ..client.avatar_controller import DPGAvatarController
@@ -256,6 +256,135 @@ with timer() as tim:
 logger.info(f"RAG document store loaded in {tim.dt:0.6g}s.")
 
 # --------------------------------------------------------------------------------
+# Image attachment (composer staging)
+#
+# When a vision-capable model (VLM) is loaded, the user can attach images to the message being composed. An
+# attachment is staged in memory here until send; on send, `chat_controller.chat_round` stores each as a
+# datastore sidecar and the staging is cleared. The image bytes are snapshotted at attach time, so a file
+# edited or removed on disk between attach and send still sends exactly what the user picked.
+
+# Currently staged attachments. Each entry is an `env` with `raw` (image bytes), `path`, `provenance_url`,
+# `provenance_source` (consumed by `scaffold.user_turn`), plus `strip_group_tag` / `texture_tag` for GUI teardown.
+staged_images = []
+
+# Thumbnails for the staged-image strip get their own texture registry (distinct from the chat log's inline-image
+# registry, which the controller owns). These thumbnails ARE deleted — on remove, and on send — so this relies on
+# the __GLVND_DISALLOW_PATCHING workaround (set at import time) that makes texture deletion safe on Nvidia/Linux.
+_staged_image_texture_registry = dpg.add_texture_registry(tag="librarian_staged_image_textures")  # tag
+_staged_image_counter = 0  # monotonic; keeps thumbnail widget/texture tags unique even across remove-then-re-add
+
+def _decode_staged_thumbnail(raw: bytes) -> Tuple[str, int, int]:
+    """Decode `raw` image bytes to a strip-height thumbnail texture. Return `(texture_tag, width, height)`."""
+    global _staged_image_counter
+    from ..common.image import codec, lanczos  # deferred: pulls torch / Pillow only on an actual attach
+    from ..common.image import utils as image_utils
+    arr = image_utils.ensure_rgba(codec.decode(raw))  # (H, W, 4) uint8
+    src_h, src_w = int(arr.shape[0]), int(arr.shape[1])
+    max_h = gui_config.chat_attachments_h - 12  # leave a little vertical room inside the strip
+    scale = min(max_h / src_h, 1.0)  # never upscale a small image
+    disp_h = max(1, round(src_h * scale))
+    disp_w = max(1, round(src_w * scale))
+    tensor = image_utils.np_to_tensor(arr, device="cpu")  # (1, 4, H, W) float32
+    tensor = lanczos.resize(tensor, disp_h, disp_w)
+    flat = image_utils.tensor_to_dpg_flat(tensor)  # flat float32 RGBA in [0, 1]
+    _staged_image_counter += 1
+    texture_tag = f"staged_image_texture_{_staged_image_counter}"  # tag
+    # `dynamic_texture`, not `static_texture`: these thumbnails are deleted at runtime (on remove / on send),
+    # and dpg-notes.md's rule is dynamic-for-runtime-deleted, static-for-permanent. Two `split_frame`s because
+    # DPG defers the OpenGL upload to a render frame and a single wait empirically doesn't guarantee completion
+    # before the thumbnail is first drawn (the raven-cherrypick finding; see dpg-notes.md "Texture upload ordering").
+    dpg.add_dynamic_texture(disp_w, disp_h, flat, tag=texture_tag, parent=_staged_image_texture_registry)  # tag
+    dpg.split_frame()  # trigger the deferred upload...
+    dpg.split_frame()  # ...and ensure it completed before the thumbnail draws
+    return texture_tag, disp_w, disp_h
+
+def _refresh_attachments_strip() -> None:
+    """Show the staged-image strip iff there are attachments, stealing that height from the text field.
+
+    The composer's outer height (`chat_controls_h`) is fixed, so the strip's height is taken from the text
+    field rather than added to the composer — the chat and avatar panels never jump when attachments appear.
+    """
+    if staged_images:
+        dpg.show_item("chat_attachments_strip")  # tag
+        dpg.configure_item("chat_field", height=gui_config.chat_field_h - gui_config.chat_attachments_h)  # tag
+    else:
+        dpg.hide_item("chat_attachments_strip")  # tag
+        dpg.configure_item("chat_field", height=gui_config.chat_field_h)  # tag
+
+def _remove_staged_image(staged: env) -> None:
+    """Remove one staged attachment: drop it from the list and delete its strip widgets + thumbnail texture."""
+    if staged in staged_images:
+        staged_images.remove(staged)
+    with guiutils.nonexistent_ok():
+        dpg.delete_item(staged.strip_group_tag)  # the thumbnail image + its remove button
+    with guiutils.nonexistent_ok():
+        dpg.delete_item(staged.texture_tag)  # free the thumbnail texture (safe under the GLVND workaround)
+    _refresh_attachments_strip()
+
+def _clear_staged_images() -> None:
+    """Remove all staged attachments (called after a send)."""
+    for staged in list(staged_images):
+        _remove_staged_image(staged)
+
+def _add_staged_image(path: str) -> None:
+    """Stage the image at `path`: snapshot its bytes, build a strip thumbnail, and register it for sending."""
+    try:
+        raw = pathlib.Path(path).read_bytes()
+        texture_tag, thumb_w, thumb_h = _decode_staged_thumbnail(raw)
+    except Exception as exc:  # noqa: BLE001 -- a bad file must not break the composer; just skip it with a log
+        logger.error(f"_add_staged_image: failed to stage '{path}': {type(exc)}: {exc}")
+        return
+    idx = _staged_image_counter  # bumped inside `_decode_staged_thumbnail`; unique per thumbnail
+    strip_group_tag = f"staged_image_group_{idx}"  # tag
+    remove_button_tag = f"staged_image_remove_{idx}"  # tag
+    staged = env(raw=raw,
+                 path=path,
+                 provenance_url=pathlib.Path(path).resolve().as_uri(),  # "file:///abs/path" — provenance only, never a live ref
+                 provenance_source="user_attachment",
+                 strip_group_tag=strip_group_tag,
+                 texture_tag=texture_tag)
+    image_tag = f"staged_image_thumb_{idx}"  # tag
+    with dpg.group(parent="chat_attachments_strip", horizontal=True, tag=strip_group_tag):  # tag
+        dpg.add_image(texture_tag, width=thumb_w, height=thumb_h, tag=image_tag)  # tag
+        with dpg.tooltip(image_tag):  # tag  # filename only (the remove button's tooltip adds the action)
+            dpg.add_text(pathlib.Path(path).name)
+        dpg.add_button(label=fa.ICON_XMARK,
+                       width=gui_config.toolbutton_w,
+                       callback=lambda: _remove_staged_image(staged),
+                       tag=remove_button_tag)  # tag
+        dpg.bind_item_font(remove_button_tag, themes_and_fonts.icon_font_solid)  # tag
+        dpg.bind_item_theme(remove_button_tag, "disablable_widget_theme")  # tag
+        with dpg.tooltip(remove_button_tag):  # tag
+            dpg.add_text(f"Remove attachment\n{pathlib.Path(path).name}")
+    staged_images.append(staged)
+    _refresh_attachments_strip()
+
+def _attach_image_callback(selected_files) -> None:
+    """FileDialog callback: stage each selected image."""
+    logger.debug(f"_attach_image_callback: {len(selected_files)} file(s) selected.")
+    for selected_file in selected_files:
+        _add_staged_image(selected_file)
+
+def show_attach_image_dialog() -> None:
+    """Composer button callback: open the attach-image file dialog (no-op if a text-only model is loaded)."""
+    if _filedialog_attach_image is None:
+        return
+    _filedialog_attach_image.show_file_dialog()
+
+# The attach dialog is created outside any window context (it manages its own window), so it isn't parented
+# under the main window. `.*` is the default filter so images of every listed type show at once — the widget's
+# type filter is single-extension, with no "all images" option.
+_filedialog_attach_image = FileDialog(title="Attach image(s) [Ctrl+click to multi-select]",
+                                      tag="attach_image_dialog",
+                                      callback=_attach_image_callback,
+                                      modal=True,
+                                      filter_list=[".*", ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif", ".tiff"],
+                                      file_filter=".*",
+                                      multi_selection=True,
+                                      allow_drag=False,
+                                      default_path=os.path.expanduser("~"))
+
+# --------------------------------------------------------------------------------
 # Set up the main window
 
 logger.info("Initial GUI setup...")
@@ -333,7 +462,12 @@ with timer() as tim:
                             # and still sends — an empty user message is Librarian's canonical "let the AI take
                             # another turn" gesture.
                             user_message_text = dpg.get_value("chat_field").strip()  # tag
-                            chat_controller.chat_round(user_message_text)
+                            # Snapshot the staged attachments and hand them off, then clear the staging. `chat_round`
+                            # stores each image (bytes and all) on a background thread from this snapshot, so clearing
+                            # the strip and its textures right away can't pull the rug out from under the send.
+                            outgoing_images = list(staged_images)
+                            chat_controller.chat_round(user_message_text, staged_images=(outgoing_images or None))
+                            _clear_staged_images()
                             # Clear the composer. ImGui owns the *active* (focused) multiline input's edit buffer
                             # and ignores an external `set_value` while it's focused, writing its own buffer back on
                             # deactivation — so a focused Enter-send can't be cleared by `set_value` alone. (A Send-
@@ -414,6 +548,32 @@ with timer() as tim:
                             pass
 
                         with dpg.group(horizontal=True):  # composer toolbar
+                            # Attach-image button. Gated on the loaded model's vision capability, a tri-state:
+                            # True (confirmed VLM) → enabled; None (backend exposes no capability flag, e.g.
+                            # ooba) → enabled, let the backend reject if it can't; False (confirmed text-only)
+                            # → disabled. The tooltip surfaces all three so the None case is debuggable rather
+                            # than looking identical to a confirmed VLM.
+                            model_is_vlm = llm_settings.model_is_vlm
+                            attach_enabled = (model_is_vlm is not False)
+                            dpg.add_button(label=fa.ICON_PAPERCLIP,
+                                           callback=show_attach_image_dialog,
+                                           width=gui_config.toolbutton_w,
+                                           enabled=attach_enabled,
+                                           tag="chat_attach_button")  # tag
+                            dpg.bind_item_font("chat_attach_button", themes_and_fonts.icon_font_solid)  # tag
+                            dpg.bind_item_theme("chat_attach_button", "disablable_widget_theme")  # tag
+                            with dpg.tooltip("chat_attach_button"):  # tag
+                                if model_is_vlm is True:
+                                    dpg.add_text("Attach image(s) to your message")
+                                elif model_is_vlm is None:
+                                    dpg.add_text("Attach image(s) to your message.\n\n"
+                                                 "Note: your LLM backend didn't report whether the loaded model can see images,\n"
+                                                 "so attachment is allowed on faith. If the model is actually text-only, the\n"
+                                                 "backend will error out on send. LM Studio reports the flag, so it can confirm\n"
+                                                 "capability up front.")
+                                else:  # False — confirmed text-only
+                                    dpg.add_text("The loaded model is text-only.\nLoad a vision model (VLM) at your LLM backend to attach images.")
+
                             dpg.add_button(label=fa.ICON_PAPER_PLANE,
                                            callback=send_message_to_ai_callback,
                                            width=gui_config.toolbutton_w,

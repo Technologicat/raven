@@ -836,16 +836,30 @@ became a typed-parts list everywhere; tool results as parts; per-part renderer; 
     field. Enter-send clears the field via deactivate → clear → refocus (ImGui ignores `set_value` on the active
     input). Commits: `665ac3e` (composer), `9e06b86` (field-clear). Incidental fixes landed alongside: INDEXING
     startup-race (`83b0ada`), silent-LLM-error → rerollable message (`b90d28b`), LM Studio default (`f05a6c0`).
-  - **B.2 attach mechanics — NEXT (build now with a basic picker).** Decision 2026-07-17 (Juha): build the
-    attach flow now using the vendored FileDialog's basic (filename) listing; the Lanczos image-*preview* picker
-    is a deferred UX enhancement (`TODO_DEFERRED`), not a blocker — layer it in later. Remaining: §5 attach button
-    (`fa.ICON_PAPERCLIP`) + image FileDialog;
-    §9 hard-gate attach on `model_is_vlm is False` (flag reachable at `app.py` module-level `llm_settings`); byte-
-    snapshot in-memory staging + thumbnail strip (dedicated `add_texture_registry`; `add_dynamic_texture`;
-    GLVND deletion workaround already set at `app.py:40-43`); on-send `store_image_as_sidecar` → parts → thread
-    through `chat_round`; §6 fill the render stub (`chat_controller.py:1059-1060`); §7 image-token budget. Click-
-    to-expand: **v0** shows the downscaled primary; **v1** a Lanczos mip-chain zoomable viewer (cherrypick's
-    machinery).
+  - **B.2 attach mechanics — CODE COMPLETE (branch `feature/librarian-image-attach`; pending live GUI sanity
+    test).** Built with the vendored FileDialog's basic (filename) listing; the Lanczos image-*preview* picker
+    stays a deferred UX enhancement (`TODO_DEFERRED`). Landed:
+    - §5 attach button (`fa.ICON_PAPERCLIP`) in the composer toolbar + an image FileDialog (`.*`-default filter;
+      multi-select); staged images held as in-memory byte snapshots in a module-level `staged_images` list.
+    - §9 VLM gate — the attach button is `enabled=(llm_settings.model_is_vlm is not False)` with a text-only vs.
+      allowed tooltip. Reachable at `app.py` module-level `llm_settings`.
+    - Thumbnail strip: dedicated `add_texture_registry` (`librarian_staged_image_textures`); each thumbnail is an
+      `add_dynamic_texture` (runtime-deleted → dynamic per dpg-notes) with **double** `split_frame`; strip steals
+      height from the text field (`_refresh_attachments_strip`); per-thumbnail remove button. Deletion relies on
+      the GLVND workaround (`app.py:40-43`).
+    - On send: `chat_round(text, staged_images=...)` → `user_turn` → `scaffold.user_turn` stores each via
+      `imagestore.store_image_as_sidecar` (background thread), appends `image_url` parts, records provenance under
+      `general_metadata["sidecars"]`. Image-only messages (no text) now run a round.
+    - §6 render stub filled: `DPGCompleteChatMessage._render_image_part` → inline thumbnail via a controller-level
+      texture cache (`get_inline_image_texture`, `static_texture`, cached by sidecar filename, never deleted,
+      double `split_frame`). New `gui_config.chat_inline_image_h/w`.
+    - §7 token budget: `llmclient.image_token_cost(settings, h, w)` (config `llm_image_token_cost` table, first
+      substring match wins, `None` fallback) summed into `update_context_fill_indicator`; any image forces `~X%`.
+      Dims read from new `sidecar_metadata["stored_dimensions"]`.
+    - Tests: `image_token_cost` family-matching (5), `stored_dimensions` in imagestore metadata (2 assertions),
+      `scaffold.user_turn` staged-images path (2). Full librarian suite 362 green, ruff clean.
+    - Click-to-expand: **v0** shows the downscaled primary; **v1** a Lanczos mip-chain zoomable viewer
+      (cherrypick's machinery) — still to do.
 - **C — provenance & discoverability** (not started): `open_in_file_manager` utility; open-original /
   open-dir buttons; the ride-along "open docs DB dir" / "open datastore dir" buttons — these need a
   small Tools/Utilities GUI surface (placement TBD by CC + Juha, as noted in §6). "Show original" resolves

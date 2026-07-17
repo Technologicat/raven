@@ -44,6 +44,7 @@ from . import chattree
 from . import chatutil
 from . import config as librarian_config
 from . import hybridir
+from . import imagestore
 from . import llmclient
 from . import scaffold
 
@@ -1058,7 +1059,7 @@ class DPGCompleteChatMessage(DPGChatMessage):
             if part_type == "text":
                 self._render_text_paragraphs(chatutil.remove_persona_from_start_of_line(persona=persona, text=part["text"]))
             elif part_type == "image_url":
-                pass  # TODO (brief 03 §6, Half 2): render the image as an inline thumbnail
+                self._render_image_part(part)
             # else: unknown part type — skip (forward-compat)
 
         # Render any tool-call invocations this assistant message made, as visible sub-elements after the text.
@@ -1111,6 +1112,27 @@ class DPGCompleteChatMessage(DPGChatMessage):
 
             if exiting_think_block:
                 inside_think_block = False
+
+    def _render_image_part(self, part: Dict[str, Any]) -> None:
+        """Render one `image_url` content-part as an inline thumbnail in the message body.
+
+        In a stored message the URL is always a Raven-internal `sidecar:<filename>` reference (see
+        `chatutil.image_content_part`); the thumbnail texture is resolved and cached by the controller. A
+        non-sidecar URL (shouldn't occur in stored data) is skipped for forward-compat; an unresolvable sidecar
+        renders a small placeholder rather than nothing, so the message still reads as "an image was here"."""
+        url = (part.get("image_url") or {}).get("url", "")
+        if not url.startswith(imagestore.SIDECAR_SCHEME):
+            return  # only local sidecar refs are resolvable here; skip anything else (forward-compat)
+        filename = url[len(imagestore.SIDECAR_SCHEME):]
+        texture = self.parent_view.chat_controller.get_inline_image_texture(filename)
+        with self.paragraphs_lock:
+            if texture is None:
+                dpg.add_text("[image unavailable]", color=(180, 120, 120), parent=self.gui_text_group)
+                return
+            dpg.add_image(texture.texture_tag,  # tag
+                          width=texture.w,
+                          height=texture.h,
+                          parent=self.gui_text_group)
 
 
 class DPGStreamingChatMessage(DPGChatMessage):
@@ -1465,6 +1487,16 @@ class DPGChatController:
         type(self)._load_class_textures()
         self._load_instance_textures(avatar_image_path)
 
+        # Inline chat-image thumbnails get their own texture registry, separate from the role-icon textures
+        # (`librarian_chat_controller_textures`). Cached by sidecar filename so an image referenced by several
+        # messages — or re-encountered on a view rebuild — decodes and uploads once. The textures live for the
+        # controller's lifetime and are never deleted (which also sidesteps the Nvidia/Linux texture-delete
+        # segfault). The lock serializes get-or-create so two concurrent message builds can't both try to
+        # create the same-tagged texture (a duplicate DPG tag crashes the process, not raises).
+        self._inline_image_texture_registry = dpg.add_texture_registry(tag="librarian_chat_inline_image_textures")  # tag
+        self._inline_image_textures = {}  # {sidecar_filename: env(texture_tag, w, h)}
+        self._inline_image_lock = threading.RLock()
+
         self.llm_settings = llm_settings
         self.datastore = datastore
         self.retriever = retriever
@@ -1636,6 +1668,52 @@ class DPGChatController:
         dpg_chat_message = self.current_chat_history[-1]
         return dpg_chat_message
 
+    def get_inline_image_texture(self, filename: str) -> Optional[env]:
+        """Return a cached DPG texture for the chat sidecar `filename`, creating it on first use.
+
+        Reads the sidecar bytes, downsamples to a thumbnail that fits the inline display box
+        (`gui_config.chat_inline_image_h` × `chat_inline_image_w`, aspect preserved, never upscaled), uploads a
+        static texture into the controller's inline-image registry, and caches it by filename — so the same
+        image referenced by several messages, or re-encountered on a view rebuild, decodes once. Returns an
+        `env(texture_tag, w, h)`, or `None` if the sidecar is missing or can't be decoded.
+
+        Safe to call from a message-build background thread: texture creation is serialized (a duplicate DPG tag
+        would crash the process), and two `split_frame`s after a fresh upload let DPG process the new texture
+        before it is first drawn. (DPG defers the OpenGL upload to a render frame; a single wait empirically
+        isn't enough — see dpg-notes.md "Texture upload ordering". A `static_texture` is correct here because
+        these thumbnails are permanent — cached for the controller's lifetime, never deleted.)
+        """
+        with self._inline_image_lock:
+            cached = self._inline_image_textures.get(filename)
+            if cached is not None:
+                return cached
+            try:
+                from ..common.image import codec, lanczos  # deferred: pulls torch / Pillow only when an image is shown
+                from ..common.image import utils as image_utils
+                raw = self.datastore.read_sidecar(filename)
+                arr = image_utils.ensure_rgba(codec.decode(raw))  # (H, W, 4) uint8
+                src_h, src_w = int(arr.shape[0]), int(arr.shape[1])
+                scale = min(gui_config.chat_inline_image_h / src_h,
+                            gui_config.chat_inline_image_w / src_w,
+                            1.0)  # 1.0 cap: show a small image at native size, never upscale
+                disp_h = max(1, round(src_h * scale))
+                disp_w = max(1, round(src_w * scale))
+                tensor = image_utils.np_to_tensor(arr, device="cpu")  # (1, 4, H, W) float32
+                tensor = lanczos.resize(tensor, disp_h, disp_w)
+                flat = image_utils.tensor_to_dpg_flat(tensor)  # flat float32 RGBA in [0, 1]
+                texture_tag = f"chat_inline_image_{filename}"  # tag  # filename is a content-addressed sha256.ext, so unique
+                dpg.add_static_texture(disp_w, disp_h, flat,
+                                       tag=texture_tag,  # tag
+                                       parent=self._inline_image_texture_registry)
+                dpg.split_frame()  # trigger the deferred OpenGL upload...
+                dpg.split_frame()  # ...and ensure it completed before the image widget draws it (single wait isn't enough; dpg-notes.md)
+                result = env(texture_tag=texture_tag, w=disp_w, h=disp_h)
+                self._inline_image_textures[filename] = result
+                return result
+            except Exception as exc:  # noqa: BLE001 -- a broken sidecar must not break rendering the rest of the chat
+                logger.error(f"DPGChatController.get_inline_image_texture: failed to load sidecar '{filename}': {type(exc)}: {exc}")
+                return None
+
     def _render_context_fill(self, count: int, is_exact: bool) -> None:
         """Set the bottom-toolbar context-fill readout text from a token `count`. Low-level; does no scheduling.
 
@@ -1658,13 +1736,34 @@ class DPGChatController:
         prompt, RAG injects, and tool definitions add some tokens not counted here, so it slightly under-reports —
         and then schedules a debounced background prefill (`_schedule_context_prefill`) that, once the chat settles,
         replaces the estimate with the backend's exact full-prompt `prompt_tokens` (and warms the KV cache).
+
+        Attached images each add a per-family estimate (`llmclient.image_token_cost`) — a VLM image consumes
+        context the char->token ratio can't see. Any image present forces the `~X%` (estimate) typography until
+        the background prefill lands the exact count.
         """
         if not self.gui_updates_safe:
             return
         try:
             node_ids = self.datastore.linearize_up(self.app_state["HEAD"])
-            text = "".join(chatutil.content_to_text(self.datastore.get_payload(node_id)["message"].get("content")) for node_id in node_ids)
-            count, is_exact = llmclient.count_tokens(self.llm_settings, text)
+            text_segments = []
+            image_tokens = 0
+            for node_id in node_ids:
+                payload = self.datastore.get_payload(node_id)
+                message = payload["message"]
+                text_segments.append(chatutil.content_to_text(message.get("content")))
+                sidecars_meta = payload.get("general_metadata", {}).get("sidecars", {})
+                for part in message.get("content") or []:
+                    if part.get("type") != "image_url":
+                        continue
+                    url = (part.get("image_url") or {}).get("url", "")
+                    filename = url[len(imagestore.SIDECAR_SCHEME):] if url.startswith(imagestore.SIDECAR_SCHEME) else None
+                    dims = (sidecars_meta.get(filename) or {}).get("stored_dimensions") if filename else None
+                    image_h, image_w = dims if dims else (1024, 1024)  # fallback for pre-stored-dims data; only matters for resolution-scaling families
+                    image_tokens += llmclient.image_token_cost(self.llm_settings, image_h, image_w)
+            count, is_exact = llmclient.count_tokens(self.llm_settings, "".join(text_segments))
+            if image_tokens:
+                count += image_tokens
+                is_exact = False  # per-image token cost is an estimate, so the whole readout is now approximate
             self._render_context_fill(count, is_exact)
         except Exception:  # noqa: BLE001 -- a status readout must never break the GUI or a chat turn
             logger.exception("DPGChatController.update_context_fill_indicator: failed to update the context-fill readout")
@@ -1720,13 +1819,18 @@ class DPGChatController:
         logger.info(f"DPGChatController._context_prefill_entrypoint: exact prompt size for HEAD '{task_env.head_node_id}': {out.usage['prompt_tokens']} tokens")
         self._render_context_fill(out.usage["prompt_tokens"], is_exact=True)
 
-    def chat_round(self, user_message_text: str) -> None:
+    def chat_round(self, user_message_text: str, staged_images: Optional[List[env]] = None) -> None:
         """Run a chat round (user and AI).
 
         `user_message_text`: What the user wrote.
 
-                             If `user_message_text` is the empty string, the AI will generate another message
-                             without the user writing in between.
+                             If `user_message_text` is the empty string *and* no images are attached, the AI
+                             will generate another message without the user writing in between.
+
+        `staged_images`: Images the user attached to this message, or `None`. Each entry is an `env` with `raw`
+                         (image bytes), `provenance_url`, and `provenance_source` (see `scaffold.user_turn`).
+                         An attachment counts as user content: with images present, a round runs even when the
+                         text is empty (rather than being treated as "let the AI take another turn").
 
         The RAG query (for document database search) is taken from the latest available user message:
 
@@ -1740,11 +1844,11 @@ class DPGChatController:
             if task_env.cancelled:  # while the task was in the queue
                 return
 
-            # Only add the user's message to the chat if the user entered any text.
-            if user_message_text:
-                self.user_turn(text=user_message_text)
+            # Add the user's message to the chat if the user entered any text or attached any image.
+            if user_message_text or staged_images:
+                self.user_turn(text=user_message_text, staged_images=staged_images)
                 # NOTE: Rudimentary approach to RAG search, using the user's message text as the query. (Good enough to demonstrate the functionality. Improve later.)
-                docs_query = user_message_text
+                docs_query = user_message_text or None  # image-only message: no text to search docs with
             else:
                 # Handle the RAG query: find the latest existing user message
                 docs_query = None  # if no user message, send `None` as query to AI -> no docs search
@@ -1758,23 +1862,36 @@ class DPGChatController:
                          continue_=False)
         self.task_manager.submit(chat_round_task, env())
 
-    def user_turn(self, text: str) -> None:
-        """Run the user's part of a chat round.
+    def user_turn(self, text: str, staged_images: Optional[List[env]] = None) -> str:
+        """Run the user's part of a chat round: create the user message node, update HEAD, append it to the view.
 
-        This appends the user's message to the current chat, and append it to the linearized chat view in the GUI.
+        Returns the new HEAD node id.
+
+        Runs **synchronously on the caller's thread** — deliberately not as a task of its own, and deliberately
+        asymmetric with `ai_turn`, which *is* task-based (see its docstring for why that one must be). The AI
+        turn that follows in the same round must observe the completed user turn (its message node as the new
+        HEAD, its sidecar images already written, and the message already in the view); if the two ran as
+        separate concurrent tasks, that ordering would be a race — invisible while the AI turn takes seconds to
+        reach its first output, but wrong the instant the backend errors immediately (the AI's error message
+        would append before the user's message, and could even be parented to the pre-user HEAD). So
+        `chat_round` calls this inline, then submits the AI turn.
+
+        Call from a background thread (as `chat_round` does), never directly from a GUI event handler — it does
+        datastore and (with attachments) image work. That constraint is exactly why this needs no task of its
+        own: unlike `ai_turn`, it is never invoked straight from the GUI, so there is no GUI thread to keep free.
+
+        `staged_images`: Images the user attached, or `None`. Passed through to `scaffold.user_turn`, which
+                         stores each as a datastore sidecar (decode/downsample happens here, off the GUI thread).
         """
-        def user_turn_task(task_env: env) -> None:
-            if task_env.cancelled:  # while the task was in the queue
-                return
-
-            new_head_node_id = scaffold.user_turn(llm_settings=self.llm_settings,
-                                                  datastore=self.datastore,
-                                                  head_node_id=self.app_state["HEAD"],
-                                                  user_message_text=text)
-            self.app_state["HEAD"] = new_head_node_id  # as soon as possible, so that not affected by any errors during GUI building
-            self.view.add_complete_message(new_head_node_id)
-            self.update_context_fill_indicator()  # user message added -> context grew
-        self.task_manager.submit(user_turn_task, env())
+        new_head_node_id = scaffold.user_turn(llm_settings=self.llm_settings,
+                                              datastore=self.datastore,
+                                              head_node_id=self.app_state["HEAD"],
+                                              user_message_text=text,
+                                              staged_images=staged_images)
+        self.app_state["HEAD"] = new_head_node_id  # update HEAD before the AI turn reads it as the parent
+        self.view.add_complete_message(new_head_node_id)
+        self.update_context_fill_indicator()  # user message added -> context grew
+        return new_head_node_id
 
     def ai_turn(self,
                 docs_query: Optional[str],
@@ -1782,8 +1899,18 @@ class DPGChatController:
                 _retry_tool_node_id: Optional[str] = None) -> None:
         """Run the AI's response part of a chat round.
 
-        This spawns a background task to avoid hanging GUI event handlers,
-        to allow GUI event handlers (e.g. AI reroll) to call `ai_turn` directly.
+        Spawns a background task (on its own `ai_turn_task_manager`) — deliberately, and deliberately asymmetric
+        with `user_turn`, which runs synchronously. Three reasons this one must be tasked, none of which apply to
+        `user_turn`:
+          1. It is invoked *directly from GUI event handlers* — reroll, continue, and "approve denied host &
+             retry" all call `ai_turn` from the DPG callback thread, which must return at once. (`user_turn` is
+             only ever called from inside `chat_round`'s task, already off the GUI thread.)
+          2. It needs *independent cancellation* — the Stop button clears just `ai_turn_task_manager`
+             (`stop_ai_turn`), interrupting the AI turn without disturbing any other task.
+          3. It is *long-running* — LLM streaming, tool calls, web fetches — the actual reason GUI responsiveness
+             is at stake here.
+        The underlying `scaffold.ai_turn` is itself synchronous; the tasking is the controller's concern (the CLI
+        client `minichat` calls `scaffold.ai_turn` straight, and blocks, which is right for a REPL).
 
         `docs_query`: Query for RAG document database, or `None` for no search. Search results are auto-injected before the LLM replies.
 

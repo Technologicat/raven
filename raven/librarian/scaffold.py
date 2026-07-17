@@ -36,7 +36,8 @@ action_stop = llmclient.action_stop
 def user_turn(llm_settings: env,
               datastore: chattree.Forest,
               head_node_id: str,
-              user_message_text: str) -> str:
+              user_message_text: str,
+              staged_images: Optional[List[env]] = None) -> str:
     """Add the user's message with content `user_message_text` to `datastore`.
 
     `llm_settings`: Obtain this by calling `raven.librarian.llmclient.setup` at app start time.
@@ -47,13 +48,37 @@ def user_turn(llm_settings: env,
 
     `user_message_text`: The message text to add.
 
+    `staged_images`: Images the user attached to this message, or `None` for a text-only message. Each entry is
+                     an `env` with `raw` (the image bytes), `provenance_url` (recorded provenance — where the
+                     image came from), and `provenance_source` (the categorical pathway, e.g.
+                     `"user_attachment"`). Each is stored as a datastore sidecar via
+                     `imagestore.store_image_as_sidecar`; the resulting `image_url` parts are appended to the
+                     message content (after the text part), and the per-image provenance metadata is recorded
+                     under the node's `general_metadata["sidecars"]`. The heavy work (decode + downsample) runs
+                     here, so call this off the GUI thread.
+
     Returns the new HEAD node ID (i.e. the chat node that was just added).
     """
-    # Add the user's message to the chat.
-    user_message_node_id = datastore.create_node(payload=chatutil.create_payload(llm_settings=llm_settings,
-                                                                                 message=chatutil.create_chat_message(llm_settings=llm_settings,
-                                                                                                                      role="user",
-                                                                                                                      text=user_message_text)),
+    message = chatutil.create_chat_message(llm_settings=llm_settings,
+                                           role="user",
+                                           text=user_message_text)
+    sidecar_metadata_by_filename = {}
+    if staged_images:
+        from . import imagestore  # deferred: only pulls Pillow/torch when an image is actually attached
+        for staged in staged_images:
+            result = imagestore.store_image_as_sidecar(datastore=datastore,
+                                                       image_source=staged.raw,
+                                                       provenance_url=staged.provenance_url,
+                                                       provenance_source=staged.provenance_source)
+            message["content"].append(result.part)  # a fresh list from create_chat_message; safe to extend
+            sidecar_metadata_by_filename[result.filename] = result.sidecar_metadata
+
+    payload = chatutil.create_payload(llm_settings=llm_settings,
+                                      message=message)
+    if sidecar_metadata_by_filename:
+        payload["general_metadata"]["sidecars"] = sidecar_metadata_by_filename
+
+    user_message_node_id = datastore.create_node(payload=payload,
                                                  parent_id=head_node_id)
     return user_message_node_id
 

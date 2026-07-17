@@ -141,7 +141,8 @@ def store_image_as_sidecar(datastore: chattree.PersistentForest,
         metadata = {"url": provenance_url,
                     "fetched_at": fetched_at,
                     "content_type": content_type,
-                    "source": provenance_source}
+                    "source": provenance_source,
+                    "stored_dimensions": [height, width]}  # dims of the bytes actually on disk (= original here)
         return env(part=chatutil.image_content_part(f"{SIDECAR_SCHEME}{filename}"),
                    filename=filename,
                    sidecar_metadata=metadata)
@@ -174,6 +175,7 @@ def store_image_as_sidecar(datastore: chattree.PersistentForest,
                 "fetched_at": fetched_at,
                 "content_type": content_type,
                 "source": provenance_source,
+                "stored_dimensions": [new_height, new_width],  # dims of the downsampled bytes actually on disk (= what goes on the wire)
                 "original_dimensions": [height, width],
                 "original_size_bytes": original_size_bytes}
     if librarian_config.store_original_image:

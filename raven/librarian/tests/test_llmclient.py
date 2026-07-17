@@ -488,6 +488,35 @@ class TestCountTokens:
         assert (count, is_exact) == (10, False)  # round(40 * 0.25) = 10, estimate
 
 
+class TestImageTokenCost:
+    """Per-image context-fill estimate: family match against the config table (first match wins, None fallback)."""
+
+    @staticmethod
+    def _settings(model=None, model_id=None):
+        return env(model=model, model_id=model_id)
+
+    def test_flat_family_ignores_dimensions(self):
+        assert llmclient.image_token_cost(self._settings(model_id="gemma4"), 512, 512) == 1120
+        assert llmclient.image_token_cost(self._settings(model_id="gemma4"), 64, 64) == 1120  # flat: dims don't matter
+
+    def test_callable_family_scales_with_resolution(self):
+        # Qwen-VL: ceil(h/28) * ceil(w/28), capped at 16384. 1024x1024 -> 37*37 = 1369.
+        assert llmclient.image_token_cost(self._settings(model="Qwen3-VL-4B"), 1024, 1024) == 1369
+
+    def test_more_specific_key_wins_over_prefix(self):
+        # "llava-1.5" must match before the plainer "llava" (table order is specific-first).
+        assert llmclient.image_token_cost(self._settings(model_id="llava-1.5-7b"), 100, 100) == 576
+        assert llmclient.image_token_cost(self._settings(model_id="llava-v1.6-mistral"), 100, 100) == 2880
+
+    def test_unknown_family_uses_none_fallback(self):
+        assert llmclient.image_token_cost(self._settings(model="some-mystery-model"), 100, 100) == 1000
+
+    def test_matches_across_model_and_model_id(self):
+        # The haystack is model + model_id, so a family named in either field is found.
+        assert llmclient.image_token_cost(self._settings(model="gemma4-27b", model_id=None), 1, 1) == 1120
+        assert llmclient.image_token_cost(self._settings(model=None, model_id="google/gemma4"), 1, 1) == 1120
+
+
 class TestUsageCalibration:
     def test_ratio_refined_from_prompt_usage(self, monkeypatch, invoke_settings):
         # Calibration divides prompt_tokens by the chars actually sent. invoke scrubs the history (which adds

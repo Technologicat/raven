@@ -335,6 +335,10 @@ gui_config = env(  # ----------------------------------------
                  # ----------------------------------------
                  # Chat
                  chat_icon_size=32,  # pixels
+                 # Inline image thumbnails (attached images shown in the chat log). Each image is downsampled to
+                 # fit within this box, aspect ratio preserved, and never upscaled past its native size.
+                 chat_inline_image_h=220,  # max height of an inline image thumbnail in the chat log
+                 chat_inline_image_w=480,  # max width of an inline image thumbnail in the chat log
                  margin=8,  # around chat GUI elements (such as icon); the DPG default theme uses 8 elsewhere
                  chat_color_think_front=colorspace.hex_to_rgb("#9ea2eeff"),
                  chat_color_ai_front=colorspace.hex_to_rgb("#c6c6c6ff"),

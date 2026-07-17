@@ -1,5 +1,16 @@
 # Deferred TODOs
 
+## Modernize the Librarian system prompt / character card
+
+The default system prompt (`raven.librarian.config`) reads as dated for current instruction-tuned models —
+"take a deep breath and think step by step", "believe in your abilities and strive for excellence", "you are
+NOT automatically updated with new data", an explicit context-window-size line, etc. Much of this is Bronze-Age
+prompt-craft: modern models don't need the pep-talk hand-holding, and some of it is mildly counterproductive
+(asserting the model's identity/limitations *to* the model). Revisit the whole prompt + character-card default:
+keep the genuinely load-bearing behavioral constraints (cite only provided sources, metric units, admit
+uncertainty), drop the motivational filler, and reconsider how much identity the frontend should assert at a
+modern model at all. Noticed during brief-03 Half-2 image-attach testing (2026-07-17, Juha).
+
 ## Decide the public name: "Raven" is taken, and the project has outgrown "raven-visualizer"
 
 Raven has no PyPI package, and can't easily get one under either candidate name.
@@ -1027,6 +1038,18 @@ This is a UX enhancement for the image-attach picker, not a blocker: the attach 
 basic (filename) FileDialog listing; this improves it (a filename-only picker is a poor fit for choosing images).
 When built, mind DPG texture lifecycle for the many small preview textures (create/destroy as the user navigates
 directories).
+
+Discovered during brief-03 Half-2 multimodal work (2026-07-17, flagged by Juha).
+
+## FileDialog: multi-extension filter as one labelled item
+
+The vendored `FileDialog`'s type filter is single-extension: each `filter_list` entry matches exactly one
+extension (`.png`), and the "show everything" option is the bare `.*`. There is no way to offer a single filter
+item that matches a *set* of extensions under a descriptive label — e.g. "All images (`.png .jpg .jpeg .webp
+.bmp .gif .tiff`)". Librarian's image-attach dialog works around this by defaulting to `.*` (so images of every
+type show at once, at the cost of also listing non-images). Add multi-extension filter items with custom labels:
+a `filter_list` entry should be able to carry a label plus a set of extensions, and the listing filter should
+match any extension in the set. Then image pickers can offer one "All images" item instead of `.*`.
 
 Discovered during brief-03 Half-2 multimodal work (2026-07-17, flagged by Juha).
 
