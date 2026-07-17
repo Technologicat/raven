@@ -328,12 +328,25 @@ with timer() as tim:
                                       no_scroll_with_mouse=True):
                     with dpg.group():  # composer: vertical stack (multiline text field / staged-image strip / toolbar)
                         def send_message_to_ai_callback() -> None:
-                            # Strip the trailing newline the multiline widget inserts on the Enter that sends, plus
-                            # any stray whitespace. An empty result is intentional and still sends — an empty user
-                            # message is Librarian's canonical "let the AI take another turn" gesture.
-                            user_message_text = dpg.get_value("chat_field").strip()
-                            dpg.set_value("chat_field", "")
+                            # Grab and strip the message. The trailing newline the multiline widget inserts on the
+                            # sending Enter, plus any stray whitespace, come off here. An empty result is intentional
+                            # and still sends — an empty user message is Librarian's canonical "let the AI take
+                            # another turn" gesture.
+                            user_message_text = dpg.get_value("chat_field").strip()  # tag
                             chat_controller.chat_round(user_message_text)
+                            # Clear the composer. ImGui owns the *active* (focused) multiline input's edit buffer
+                            # and ignores an external `set_value` while it's focused, writing its own buffer back on
+                            # deactivation — so a focused Enter-send can't be cleared by `set_value` alone. (A Send-
+                            # button click clears trivially, but only because the click already moved focus off the
+                            # field; cf. the Visualizer search field, which likewise never clears while focused.)
+                            # So move focus off the field to deactivate it, let that frame apply the deactivation,
+                            # then clear the now-inactive field and refocus for the next message. Safe: this runs on
+                            # a DPG event-callback thread (Send button / key handler), never the render loop (where
+                            # `split_frame` would deadlock).
+                            dpg.focus_item("chat_send_button")  # tag  # deactivate the input's ImGui edit buffer
+                            dpg.split_frame()
+                            dpg.set_value("chat_field", "")  # tag  # field inactive now, so the clear sticks
+                            dpg.focus_item("chat_field")  # tag  # refocus; reactivation reloads the empty buffer
 
                         def record_audio_message_callback() -> None:
                             if not audio_recorder.require().is_recording():
