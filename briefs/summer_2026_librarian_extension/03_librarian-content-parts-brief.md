@@ -836,9 +836,10 @@ became a typed-parts list everywhere; tool results as parts; per-part renderer; 
     field. Enter-send clears the field via deactivate → clear → refocus (ImGui ignores `set_value` on the active
     input). Commits: `665ac3e` (composer), `9e06b86` (field-clear). Incidental fixes landed alongside: INDEXING
     startup-race (`83b0ada`), silent-LLM-error → rerollable message (`b90d28b`), LM Studio default (`f05a6c0`).
-  - **B.2 attach mechanics — DEFERRED** pending FileDialog image-thumbnail previews (see `TODO_DEFERRED.md`). A
-    filename-only picker is a poor fit for choosing images, so the attach flow waits on that FileDialog work
-    (Juha's call, 2026-07-17). Remaining when resumed: §5 attach button (`fa.ICON_PAPERCLIP`) + image FileDialog;
+  - **B.2 attach mechanics — NEXT (build now with a basic picker).** Decision 2026-07-17 (Juha): build the
+    attach flow now using the vendored FileDialog's basic (filename) listing; the Lanczos image-*preview* picker
+    is a deferred UX enhancement (`TODO_DEFERRED`), not a blocker — layer it in later. Remaining: §5 attach button
+    (`fa.ICON_PAPERCLIP`) + image FileDialog;
     §9 hard-gate attach on `model_is_vlm is False` (flag reachable at `app.py` module-level `llm_settings`); byte-
     snapshot in-memory staging + thumbnail strip (dedicated `add_texture_registry`; `add_dynamic_texture`;
     GLVND deletion workaround already set at `app.py:40-43`); on-send `store_image_as_sidecar` → parts → thread

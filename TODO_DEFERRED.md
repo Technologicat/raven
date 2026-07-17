@@ -1023,9 +1023,10 @@ Add Lanczos-downsampled thumbnail previews to the file listing when the filter i
 `raven.common.image.lanczos` + the `add_dynamic_texture` path; the Nvidia/Linux texture-deletion-segfault
 workaround (`__GLVND_DISALLOW_PATCHING=1`) is already set in the apps.
 
-This is the reason the image-attach feature is deferred: a filename-only picker is a poor fit for choosing images,
-so the attach flow waits on this. When built, mind DPG texture lifecycle for the many small preview textures
-(create/destroy as the user navigates directories).
+This is a UX enhancement for the image-attach picker, not a blocker: the attach feature ships first with the
+basic (filename) FileDialog listing; this improves it (a filename-only picker is a poor fit for choosing images).
+When built, mind DPG texture lifecycle for the many small preview textures (create/destroy as the user navigates
+directories).
 
 Discovered during brief-03 Half-2 multimodal work (2026-07-17, flagged by Juha).
 
