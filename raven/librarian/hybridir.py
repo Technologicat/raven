@@ -1161,11 +1161,20 @@ class HybridIRFileSystemEventHandler(watchdog.events.FileSystemEventHandler):
             return False
         return True
 
-    def _read(self, path: Union[pathlib.Path, str]) -> str:
+    def _read(self, path: Union[pathlib.Path, str]) -> Optional[str]:
         p = pathlib.Path(path) if not isinstance(path, pathlib.Path) else path
         abspath = p.expanduser().resolve()
         if self.callback:
-            content = self.callback(abspath)
+            # The callback (e.g. `raven.common.docextract.extract_text`) raises on an unreadable document — a
+            # corrupt/encrypted PDF, a non-UTF-8 text file, or a file that vanished between the event and this
+            # read. In a background batch ingest the right policy is to skip that one file and keep going, not to
+            # let the exception abort the ingest task, so we catch here and treat it as "no content" downstream.
+            try:
+                content = self.callback(abspath)
+            except Exception as exc:  # noqa: BLE001 -- one unreadable document must not abort the whole batch ingest
+                logger.warning(f"HybridIRFileSystemEventHandler._read: file '{abspath}': extraction failed, "
+                               f"skipping: {type(exc)}: {exc}")
+                return None
         else:
             with open(path, "r", encoding="utf-8") as document_file:
                 content = document_file.read()

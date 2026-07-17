@@ -50,6 +50,8 @@ with timer() as tim:
 
     from .. import __version__
 
+    from ..common import docextract
+
     from ..client import api
 
     from . import appstate
@@ -110,13 +112,15 @@ def minimal_chat_client(backend_url) -> None:
         retriever, _unused_scanner = hybridir.setup(docs_dir=docs_dir,
                                                     recursive=librarian_config.llm_docs_dir_recursive,
                                                     db_dir=db_dir,
+                                                    exts=librarian_config.llm_docs_exts,
+                                                    callback=docextract.extract_text,  # extract plaintext from PDFs (and read text files)
                                                     embedding_model_name=librarian_config.qa_embedding_model,
                                                     local_model_loader_fallback=False)  # Minichat requires Raven-server for other reasons, too
         docs_enabled_str = "ON" if app_state["docs_enabled"] else "OFF"
         colorful_rag_status = colorizer.colorize(f"Document database (retrieval-augmented generation, RAG) is currently {docs_enabled_str}.",
                                                  colorizer.Style.BRIGHT)
         print(f"{colorful_rag_status} Toggle with the `!docs` command.")
-        print(f"    Its document store is at '{str(librarian_config.llm_docs_dir)}' (put your plain-text documents here).")
+        print(f"    Its document store is at '{str(librarian_config.llm_docs_dir)}' (put your text or PDF documents here).")
         # The retriever's `documents` attribute must be locked before accessing.
         with retriever.datastore_lock:
             plural_s = "s" if len(retriever.documents) != 1 else ""

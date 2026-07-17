@@ -31,7 +31,12 @@ dependencies = [
     "spacy>=3.7.5",  # BibTeX importer: NLP analysis
     "en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl",  # spaCy
     "sseclient-py>=1.8.0",  # librarian: streaming transport for receiving data from LLM
-    "torch>=2.4.0",
+    # The torch trio is version-pinned (not floored) and sourced from the `pytorch-cu128` index declared under
+    # `[[tool.pdm.source]]` below — so a re-lock keeps the validated `+cu128` build set instead of drifting the
+    # versions (and, worse, the audio wheel's CUDA runtime) on its own. Bump these three together, deliberately.
+    "torch==2.10.0",
+    "torchvision==0.25.0",  # raven.common.video
+    "torchaudio==2.10.0",  # raven.common.audio.resample (device-agnostic resampler)
     "unpythonic>=2.2.0",
     "wordcloud>=1.9.3",  # visualizer
     "wosfile>=0.6",  # wos2bib
@@ -44,8 +49,6 @@ dependencies = [
     "flask>=3.1.1",  # server
     "flask-cors>=6.0.0",  # server
     "flask-compress>=1.17",  # server
-    "torchvision>=0.22.0",  # raven.common.video
-    "torchaudio>=2.4.0",  # raven.common.audio.resample (device-agnostic resampler)
     "huggingface-hub>=0.31.4",  # server (AI models autodownloader)
     "waitress>=3.0.2",  # server
     "kokoro>=0.9.4",  # server.tts; you may also need the `espeak-ng` software; on Linux, `sudo apt install espeak-ng`. For Windows, see instructions at https://github.com/hexgrad/kokoro
@@ -65,6 +68,7 @@ dependencies = [
     "tqdm>=4.0",  # server.stt, papers (arXiv download)
     "trafilatura>=2.0.0",  # server.webfetch; readability extraction (HTML -> clean text/markdown)
     "youtube-transcript-api>=1.0.0",  # server.webfetch; transcript extraction for YouTube URLs
+    "pypdf>=6.14.2",
 ]
 
 keywords=["visualization", "semantic-analysis", "application", "AI", "NLP", "GUI"]
@@ -172,6 +176,18 @@ excludes = ["**/tests", "**/__pycache__"]
 name = "nvidia"
 url = "https://pypi.org/simple"
 verify_ssl = true
+
+# PyTorch CUDA 12.8 wheels. `include_packages` makes this source *exclusive* for the torch trio, so a re-lock
+# resolves the `+cu128` builds from here instead of PyPI's default wheels — which now bundle CUDA 13 and fail to
+# load against a CUDA 12.x runtime (`libcudart.so.13: cannot open shared object file`). Without this, a bare
+# `torchaudio>=2.4.0` floor lets `pdm lock` silently drift the audio wheel onto the CUDA-13 PyPI build while
+# torch/torchvision stay `+cu128`, and the mismatched runtime breaks at import. Bump the `cuXYZ` in the URL to
+# move the whole stack to a different CUDA version.
+[[tool.pdm.source]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+verify_ssl = true
+include_packages = ["torch", "torchvision", "torchaudio"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

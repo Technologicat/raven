@@ -973,26 +973,26 @@ Concrete science/tech example: "here's our spec for what we want to do (attached
 your docs DB would you suggest for implementing it?" — the spec is attached (in full, in context), the methods
 come from RAG. The two compose.
 
-Design questions when we get to it: how an attached text doc enters the message (a content-part? inlined into
-the text with a delimiter? a token-budget cap like images have?), how it renders in the chat log, and how it
-interacts with the context-fill estimate. Shares the attach/stage/thumbnail plumbing being built for images.
-Needs PDF text extraction (see next item).
+Text and PDF extraction is already available: `raven.common.docextract.extract_text` (built for the docs-DB PDF
+support, 2026-07-18) is the shared backend, so an attachment just needs to route a picked file through it. PDF
+works for the attachment path exactly as it does for the docs DB.
 
-Discovered during brief-03 Half-2 (2026-07-17, suggested by Juha).
+Design settled during the 2026-07-18 discussion (recorded before it evaporates):
 
-## PDF text extraction wherever we ingest text
+- *Representation*: store the picked file as a content-addressed **sidecar** (reuse the image sidecar machinery
+  from checkpoint C), reference it from the message with a new text-file content-part, and expand it to a real
+  text part at wire-build time — mirroring the `sidecar:`→`data:` substitution images already do. This keeps the
+  document bytes out of `data.json` (important given the single-file datastore's scaling ceiling) and reuses the
+  GC and the provenance buttons for free. *Not* inlining the whole document into the persisted text part.
+- *No VLM gating*: injected text works with any model, unlike images — so the text/PDF attach affordance is
+  available regardless of the loaded model's vision capability.
+- *Staging*: a separate `staged_files` list beside `staged_images` — different wire target (a text part for
+  everyone, vs an `image_url` part for VLMs only), so keeping the two lists separate is clearer than unifying.
+- *Render*: a file chip in the chat log reusing checkpoint C's provenance-button infrastructure.
+- *Token budget*: account for the injected text in the context-fill estimate (as attached images already do).
 
-Text ingestion currently assumes plain-text formats (`.txt`, `.md`, `.rst`, `.org`, `.bib`, `.tex` — see
-`hybridir.setup`'s `exts`). Add PDF support at *every* text-ingestion site, since PDFs are the common real-world
-document format:
-
-- the RAG document database (`hybridir` / the docs-dir scanner + `callback` that reads file plaintext), and
-- the text-file attachment feature (see previous item).
-
-Raven already has PDF-to-text machinery in `raven/papers/` (the bibliography/PDF converters) — check whether that
-extraction path can be reused rather than adding a new dependency.
-
-Discovered during brief-03 Half-2 (2026-07-17, flagged by Juha).
+Discovered during brief-03 Half-2 (2026-07-17, suggested by Juha). Design settled 2026-07-18. The docs-DB half
+of PDF ingestion (the sibling concern) is done as of 2026-07-18.
 
 ## Attach an image from a web URL (paste-URL path)
 
@@ -1149,3 +1149,43 @@ extension for this, but nothing for Linux/macOS. Investigate whether cross-platf
 a general capability the apps can opt into — image attach and `FileDialog` both benefit.
 
 Discovered during brief-03 Half-2 multimodal work (2026-07-17, flagged by Juha as a constant pain point).
+
+## Expose the docs-DB source files behind a reply's RAG citations
+
+When the AI composes a reply using the document database, it sees a set of retrieved snippets, and that
+provenance is already tracked per turn (the payload's `retrieval` field records the query and the snippets the
+AI saw). But none of it is surfaced in the GUI — the user can't see *which* documents fed a given answer, nor
+open the originals. Expose it: for each stored reply that used RAG, offer a way to view the source snippets and
+open the original files they came from (each indexed doc carries its `path`, so "open file" / "open folder"
+reuses the `common_utils.open_file` / `open_in_file_manager` provenance-button machinery already built for image
+attachments). Design questions when we get to it: where the affordance lives (per-message expander? a side
+panel?), and how much of the snippet vs. the whole document to show.
+
+Discovered during the plain-text/PDF interlude (2026-07-18, requested by Juha).
+
+## VLM reranking of mixed-modality search results (post-Nomic)
+
+Once the search feature encodes both text and images (the Nomic plan, autumn 2026 — this supersedes the
+CLIP/`clip-ViT-L-14` note still sitting in `hybridir.py`'s image-support TODO comment), a single result set can
+mix text snippets and images. Idea: feed the candidate result set to the VLM and ask it to re-prioritize —
+neural reranking that can actually *look at* the image hits, not just their embeddings. Composes naturally with
+the "hand PDF pages to the VLM as ~1MP images" v2 idea from the attachment work: once images are first-class
+search hits, VLM reranking over them is a small step.
+
+Orthogonal sub-question that also needs answering at that time: what should *keyword* (BM25) search do for
+images, which have no text? One option: ask the VLM to describe each image and store the description as a
+BM25-able text representation. This is the same "the ingestor needs an embeddable/searchable representation of
+each file" generalization that the PDF-extraction callback foreshadows — for text it's the extracted plaintext,
+for an image it's a caption plus the image embedding.
+
+Discovered during the plain-text/PDF interlude (2026-07-18, raised by Juha).
+
+## Drop the Intel Mac / macOS 10.x install workaround
+
+The README has an "Install on an Intel Mac with MacOSX 10.x" section (torch 2.2.x pin + removing ChromaDB) for
+an Intel x86_64 Mac too old for modern PyTorch. That platform is now effectively dead — new Macs are Apple
+Silicon (M-series) on recent macOS. Remove the section (and stop maintaining the torch-version snippet inside it,
+which has to be kept in sync with the pinned trio in `pyproject.toml`). The general macOS caveat — remove the
+`pytorch-cu128` source so torch resolves from PyPI — stays, since that applies to *all* Macs.
+
+Discovered during the plain-text/PDF interlude (2026-07-18, Juha: a coworker's new M-series Mac on current macOS).

@@ -311,8 +311,6 @@ Now the installation should be complete.
 
 :exclamation: *Using CUDA requires the proprietary NVIDIA drivers, also on Linux.* :exclamation:
 
-:exclamation: *Currently Raven uses CUDA 12.x. Make sure your NVIDIA drivers support this version.* :exclamation:
-
 ```bash
 pdm install --prod -G cuda
 ```
@@ -322,6 +320,17 @@ If you want to add GPU compute support later, you can run this install command o
 Installing dependencies may take a long time (up to 15-30 minutes, depending on your internet connection), because `torch` and the NVIDIA packages are rather large (my `.venv` shows 11.1 GB in total).
 
 Now the installation should be complete.
+
+##### CUDA version and the `torch` wheels
+
+The `torch`, `torchvision` and `torchaudio` versions are pinned as a matched set, and installed as **CUDA 12.8** (`+cu128`) wheels from a dedicated PyTorch package index declared in [`pyproject.toml`](pyproject.toml) (the `pytorch-cu128` entry under `[[tool.pdm.source]]`). This is deliberate:
+
+- CUDA 12.8 wheels run on **both** CUDA 12 and CUDA 13 driver stacks — an NVIDIA driver is backward-compatible, and the wheels bundle their own CUDA 12.8 runtime, so they work on any reasonably recent driver (Linux ~R570+). What `nvidia-smi` reports as *"CUDA Version"* is the maximum your **driver** supports, not an installed runtime; you don't need a matching system CUDA toolkit.
+- Pinning to the index keeps the CUDA build stable across dependency re-locks. (Without it, a re-lock could silently pull a CUDA-13 `torchaudio` wheel from PyPI while `torch` stays on 12.8, and the mismatched runtime fails to load at import.)
+
+To target a **different CUDA version**, change the `cuXYZ` in that source's URL (e.g. `cu126`, `cu129`) and re-run `pdm lock && pdm install`. Bump the three `torch*` versions in `[project] dependencies` together, deliberately, if you also want a newer PyTorch.
+
+:exclamation: *The `pytorch-cu128` index has Linux and Windows wheels only — no macOS wheels.* On **macOS** (or any platform that index doesn't cover), remove that `[[tool.pdm.source]]` block from [`pyproject.toml`](pyproject.toml) before installing, so `torch` resolves from PyPI instead. :exclamation:
 
 #### Install on an Intel Mac with MacOSX 10.x
 
@@ -334,8 +343,9 @@ If you have an Intel Mac (x86_64) with MacOSX 10.x, to work around this, you can
 To do this, modify Raven's [`pyproject.toml`](pyproject.toml) in a text editor, so that the lines
 
 ```
-    "torch>=2.4.0",
-    "torchvision>=0.22.0",
+    "torch==2.10.0",
+    "torchvision==0.25.0",
+    "torchaudio==2.10.0",
 ```
 
 become
@@ -343,7 +353,10 @@ become
 ```
     "torch>=2.2.0,<2.3.0",
     "torchvision>=0.17.2",
+    "torchaudio>=2.2.0,<2.3.0",
 ```
+
+Also remove the `pytorch-cu128` `[[tool.pdm.source]]` block from [`pyproject.toml`](pyproject.toml) (as noted in the CUDA section above) — that index has Linux/Windows wheels only, so on macOS `torch` must resolve from PyPI instead.
 
 Also, ChromaDB requires `onnxruntime`, which doesn't seem to be installable on this version of OS X. This means *Raven-librarian* and *Raven-server* won't work (as the RAG backend and the server's `embeddings` module require ChromaDB), but you can still get *Raven-visualizer* to work, by removing ChromaDB. Run this command in the terminal:
 

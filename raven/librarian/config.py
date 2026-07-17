@@ -235,9 +235,15 @@ llm_image_token_cost = {
 # especially if there are few documents in the database, or if the database does not talk about the queried topic.
 docs_num_results = 20
 
-# Magic directory: put your RAG documents here (plain text for now).
+# Magic directory: put your RAG documents here.
 # Add/modify/delete a file in this directory to trigger a document database index auto-update in Librarian and Minichat.
 llm_docs_dir = llmclient_userdata_dir / "documents"
+
+# File types ingested into the document database. Plain-text formats are read verbatim; PDFs have their text
+# layer extracted (born-digital PDFs; a scanned/image-only PDF has no text to extract and is skipped). Handled
+# by `raven.common.docextract`, which is the single text-extraction backend — keep this list within the set it
+# supports (`docextract.supported_extensions()`).
+llm_docs_exts = [".txt", ".md", ".rst", ".org", ".bib", ".tex", ".pdf"]
 
 # Whether to scan also subdirectories of `llm_docs_dir`.
 llm_docs_dir_recursive = False

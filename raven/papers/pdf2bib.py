@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """Convert PDF conference abstracts into a BibTeX database.
 
-The heavy lifting is done by `pdftotext` (from poppler-utils) and an OpenAI compatible LLM.
+The heavy lifting is done by `raven.common.docextract` (PDF text extraction) and an OpenAI compatible LLM.
 
 USAGE:
 
@@ -26,7 +26,6 @@ import os
 import pathlib
 import re
 import shutil
-import subprocess
 import sys
 from textwrap import dedent
 from typing import Dict, List
@@ -36,6 +35,7 @@ from unpythonic.env import env
 
 from ..client import mayberemote
 
+from ..common import docextract
 from ..common import utils as common_utils
 
 from ..librarian import config as librarian_config
@@ -809,7 +809,12 @@ def setup_prompts(llm_settings: env,
 # Processing logic
 
 def listpdf(path: str) -> List[str]:
-    """Return a list of all PDF files under `path`, recursively."""
+    """Return a sorted list of the PDF filenames directly in `path` (this one directory, non-recursive).
+
+    Recursion across a directory tree is the caller's job: `main` walks the input directory with `os.walk`
+    (dropping the output / failed-output directories so processed files are not re-scanned) and hands
+    `process_abstracts` the full list of directories, each of which is listed here.
+    """
     return list(sorted(filename for filename in os.listdir(path) if filename.endswith(".pdf")))
 
 def process_one(llm_settings: env,
@@ -909,23 +914,20 @@ def process_abstracts(paths: List[str], opts: argparse.Namespace) -> None:
                         unique_id = os.path.splitext(os.path.basename(fullpath))[0]  # "/foo/blah.pdf" -> "blah"
                         logger.info(f"{fullpath} [{idx + 1} out of {len(filenames)}, {est.formatted_eta}]")
 
-                        # Extract the text content from the PDF.
+                        # Extract the text content from the PDF via the shared extractor (`raven.common.docextract`),
+                        # the single PDF-text backend across Raven.
                         #
                         # Since we'll be using an LLM for the processing step, it doesn't matter if the extraction isn't perfect
                         # (e.g. the LLM will clean the author names if they have affiliation symbols or such).
                         #
-                        cmd = ['pdftotext',
-                               fullpath,
-                               '-']  # output to stdout
+                        # `extract_text` returns `None` for a PDF with no text layer (a scanned/image-only paper); pass the
+                        # empty string on to the LLM step in that case, matching the previous behavior where such a PDF
+                        # simply yielded no text.
                         try:
-                            completed = subprocess.run(cmd, check=True,
-                                                       stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                        except subprocess.CalledProcessError as err:
-                            logger.exception("When processing {fullpath}: subprocess returned non-zero exit status. Stderr dump below, after the exception trace.")
-                            logger.error(err.stderr.decode("utf-8"))
+                            text_from_pdf = docextract.extract_text(fullpath) or ""
+                        except (docextract.DocumentExtractionError, FileNotFoundError) as err:
+                            logger.error(f"When processing {fullpath}: text extraction failed: {type(err)}: {err}")
                             raise
-
-                        text_from_pdf = completed.stdout.decode("utf-8")
 
                         status, error_info, bibtex_entry = process_one(llm_settings,
                                                                        prompts,

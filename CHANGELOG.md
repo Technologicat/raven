@@ -23,6 +23,8 @@
 
 - *Raven-librarian*: two folder-opening buttons under the avatar panel — **Open documents folder** (the RAG drop folder where you put files for the AI to search; created if it doesn't exist yet) and **Open chat data folder** (the chat history and attached images) — for quick access to both without digging through the config for their paths.
 
+- *Raven-librarian*: the RAG **document database now ingests PDFs** (born-digital) alongside the plain-text formats — drop a `.pdf` into the documents folder and its text layer is extracted and indexed like any other document. Scanned/image-only PDFs, which have no text layer, are skipped. The ingested file types are configurable via the new `config.llm_docs_exts`.
+
 - *Raven-librarian*: new `webfetch` tool — the AI can retrieve a web page's main content as clean text/markdown, the natural companion to `websearch` (search → pick a link → fetch it). Static extraction with a headless-browser fallback for JS-rendered pages, and cleaner-source routing for arXiv, Reddit, and YouTube (transcript). An optional domain allowlist (off by default) constrains which sites the AI may visit on its own initiative, while URLs the user types into the chat are always honored for that turn; requests to private-network addresses and non-HTTP(S) schemes are refused server-side, and fetched text is stripped of invisible prompt-injection characters before the model sees it.
   - Every URL in the chat history now has a small inline "send to chat input" icon; clicking it drops the URL into your message draft (so you can add context and send) — the one-click way to hand a search result back to the AI as a user-typed, auto-allowed URL.
   - When the allowlist refuses a fetch, the denied result carries an "approve this host & retry" button: it allows the host for the rest of the session and re-runs that one fetch on a new conversation branch, so you don't have to edit the config and restart. Only the denied fetch re-runs — any companion `websearch` from the same step is preserved exactly, not re-queried.
@@ -52,6 +54,11 @@
 - *Raven-arxiv-download*: prints the paper's citation (`Authors (Year) - Title`) just before downloading its PDF, so it stays on screen during the rate-limit wait — a mistyped ID that resolved to the wrong paper is caught before the download completes. Only shown when a paper is actually being fetched; already-present papers are reported by their existing one-line status.
 
 - *Raven-visualizer*: logs whether *Raven-server* is reachable once at startup, so its presence or absence is explicit from the first line of output rather than only surfacing when the importer first reaches for it. The server is optional for the Visualizer, so both outcomes log at info level.
+
+**Changed**:
+
+- Install (GPU): `torch` / `torchvision` / `torchaudio` are pinned as a matched set and installed as CUDA 12.8 (`+cu128`) wheels from a dedicated PyTorch index (`pytorch-cu128` in `pyproject.toml`), so a dependency re-lock can't silently swap in a mismatched-CUDA wheel that fails to load at import. These wheels run on both CUDA 12 and CUDA 13 driver stacks; macOS installs must remove that source first (see the README's CUDA section).
+- *Raven-pdf2bib*: extracts PDF text with the bundled `pypdf` instead of the external `pdftotext` (poppler-utils) binary — one fewer system dependency to install.
 
 **Fixed**:
 
