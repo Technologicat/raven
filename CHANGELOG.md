@@ -14,6 +14,8 @@
 - *Raven-librarian* RAG: closing the app while indexing is in progress no longer blocks until the full backlog is processed. The commit loop exits cleanly after the current document on cancellation, persists whatever was applied, and requeues the unprocessed remainder; on the next app start, `bootup`'s rescan re-detects the corresponding file changes via mtime.
 - *Raven-librarian*: the indicators are now stacked vertically — INDEXING (red, RAG database update), DOCS (white, RAG search), SYSTEM (LLM prompt processing), WEB (websearch tool) — instead of overlapping at the same screen position. INDEXING and DOCS are independent and show simultaneously when an LLM query lands during a background reindex, each with its own progress label.
 
+- *Raven-librarian*: the chat input is now **multiline** — Enter sends, Shift+Enter inserts a newline — for composing multi-paragraph messages. The send / microphone controls move below the text field.
+
 - *Raven-librarian*: new `webfetch` tool — the AI can retrieve a web page's main content as clean text/markdown, the natural companion to `websearch` (search → pick a link → fetch it). Static extraction with a headless-browser fallback for JS-rendered pages, and cleaner-source routing for arXiv, Reddit, and YouTube (transcript). An optional domain allowlist (off by default) constrains which sites the AI may visit on its own initiative, while URLs the user types into the chat are always honored for that turn; requests to private-network addresses and non-HTTP(S) schemes are refused server-side, and fetched text is stripped of invisible prompt-injection characters before the model sees it.
   - Every URL in the chat history now has a small inline "send to chat input" icon; clicking it drops the URL into your message draft (so you can add context and send) — the one-click way to hand a search result back to the AI as a user-typed, auto-allowed URL.
   - When the allowlist refuses a fetch, the denied result carries an "approve this host & retry" button: it allows the host for the rest of the session and re-runs that one fetch on a new conversation branch, so you don't have to edit the config and restart. Only the denied fetch re-runs — any companion `websearch` from the same step is preserved exactly, not re-queried.
@@ -45,6 +47,8 @@
 - *Raven-visualizer*: logs whether *Raven-server* is reachable once at startup, so its presence or absence is explicit from the first line of output rather than only surfacing when the importer first reaches for it. The server is optional for the Visualizer, so both outcomes log at info level.
 
 **Fixed**:
+
+- *Raven-librarian*: a language-model backend error mid-reply (e.g. a broken model prompt template) no longer fails silently — the AI turn used to vanish with no reply and no on-screen indication. The failure now appears as an assistant message naming the backend error and its reason; reroll it to retry.
 
 - *Raven-cherrypick*: triaging an image (cherry / lemon / winner) while its mips were still loading no longer leaves it stuck at a reduced resolution or failing to appear. The triage move relocates the file out from under the in-flight background decode, which then failed with `FileNotFoundError`; the load now restarts from the file's new location, whether it was filling in the full-res level of a preloaded image or doing the initial decode of a cache-miss one.
 

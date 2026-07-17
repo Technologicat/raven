@@ -23,3 +23,6 @@ raven/vendor/tha3/models/
 # Parody character assets. Deliberately unpublished.
 raven/avatar/assets/characters/parody/
 raven/avatar/assets/characters/00_workfiles/parody/
+
+# Session logs written by the apps' --log CLI option.
+*.log

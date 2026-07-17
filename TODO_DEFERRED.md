@@ -952,3 +952,61 @@ Discovered 2026-07-16 (noted by Juha during brief-03 Half-2 pause).
 The composer's multiline text field (`chat_field`, `app.py`) is a fixed height (`gui_config.chat_field_h`, ~5 rows). For essay-length prompts — common in scientific use — a fixed box is a toilet-paper-roll view of the input. Add a drag-to-resize affordance (or a fixed/expand toggle) so the user can grow the field when composing long messages. The composer's outer height is currently fixed on purpose (so the chat/avatar panels don't jump when the staged-image strip appears), so a resize handle would need to grow the whole composer and re-run the panel layout — reuse `_resize_panels`.
 
 Discovered during brief-03 Half-2 composer rework (2026-07-17, flagged by Juha).
+
+## Support text-file attachments to chat messages (not just images)
+
+The multimodal work (brief 03 Half 2) adds an attach affordance to the composer for images. Extend it to
+plain-text documents too. This is a *distinct use case* from the RAG document database: RAG searches the whole
+corpus for relevant snippets, whereas an attached document is the specific thing the user wants to discuss *now*.
+Concrete science/tech example: "here's our spec for what we want to do (attached); what methods/approaches from
+your docs DB would you suggest for implementing it?" — the spec is attached (in full, in context), the methods
+come from RAG. The two compose.
+
+Design questions when we get to it: how an attached text doc enters the message (a content-part? inlined into
+the text with a delimiter? a token-budget cap like images have?), how it renders in the chat log, and how it
+interacts with the context-fill estimate. Shares the attach/stage/thumbnail plumbing being built for images.
+Needs PDF text extraction (see next item).
+
+Discovered during brief-03 Half-2 (2026-07-17, suggested by Juha).
+
+## PDF text extraction wherever we ingest text
+
+Text ingestion currently assumes plain-text formats (`.txt`, `.md`, `.rst`, `.org`, `.bib`, `.tex` — see
+`hybridir.setup`'s `exts`). Add PDF support at *every* text-ingestion site, since PDFs are the common real-world
+document format:
+
+- the RAG document database (`hybridir` / the docs-dir scanner + `callback` that reads file plaintext), and
+- the text-file attachment feature (see previous item).
+
+Raven already has PDF-to-text machinery in `raven/papers/` (the bibliography/PDF converters) — check whether that
+extraction path can be reused rather than adding a new dependency.
+
+Discovered during brief-03 Half-2 (2026-07-17, flagged by Juha).
+
+## Emoji support in the Markdown renderer (color emoji as inline images)
+
+`dpg_markdown` (vendored) can't show color emoji: DPG/ImGui rasterizes a font's glyphs into a single monochrome
+atlas, so emoji code points render as blank boxes. This is why Librarian's system/error chat messages avoid
+symbols like `⚠`/`✓` (see the error-message construction in `scaffold.py`'s `ai_turn`).
+
+The renderer is the natural home for a fix: it already splits a text run into extents to apply styling, so it
+could detect emoji code points and substitute an inline image per emoji instead of a text glyph, sized to the
+surrounding text. Implementation sketch: bundle a permissively-licensed emoji set — candidates: Twemoji, Noto
+Emoji, OpenMoji (confirm the exact license when picking) — and rasterize **lazily**: a cache (defaultdict-style)
+keyed by emoji code point, populated on first encounter, so only emoji that actually appear get turned into
+textures. This sidesteps rasterizing the whole set up front (cf. the font-atlas size limits in `dpg-notes.md`).
+Emit the cached texture inline where the emoji appears. Enables emoji in chat messages, tooltips, and anywhere
+`dpg_markdown` renders.
+
+Discovered during brief-03 Half-2 error-message work (2026-07-17, flagged by Juha).
+
+## Fenced code block (```` ``` ````) support in the Markdown renderer
+
+`dpg_markdown` (vendored) doesn't render triple-backtick fenced code blocks: the fences show up literally and
+the content between them renders as ordinary prose (no monospace, no background box). Add fenced-code-block
+parsing plus a styled render — monospace font, background fill, and horizontal scroll (or wrap) for long lines.
+Would let LLM replies containing code display properly, and let Raven's own system/error messages show verbatim
+technical text cleanly. (Librarian's backend-error message wanted a code box for the raw error string; it falls
+back to plain text for now.)
+
+Discovered during brief-03 Half-2 error-message work (2026-07-17, flagged by Juha).
