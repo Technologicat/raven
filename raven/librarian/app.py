@@ -476,9 +476,17 @@ def _attach_callback(selected_files) -> None:
                                 centering_reference_window="librarian_main_window")
 
 def show_attach_dialog() -> None:
-    """Composer button callback: open the attach dialog (images and documents)."""
+    """Composer button callback: open the attach dialog (images and documents).
+
+    Flash the button on click as an acknowledgment. Building the file listing can take a moment on a large
+    directory, and the dialog only appears afterward — without this the click looks like it did nothing. The
+    flash animates on the render loop, independent of this callback thread doing the (possibly slow) dialog build,
+    so the pulse shows immediately even while the listing is still being assembled."""
     if _filedialog_attach is None:
         return
+    gui_animation.flash_button(button="chat_attach_button",  # tag
+                               message="",  # button-only flash (no tooltip/text target), so nothing is displayed
+                               duration=gui_config.acknowledgment_duration)
     _filedialog_attach.show_file_dialog()
 
 # The attach dialog manages its own window (created outside any window context). `.*` is the default filter so
