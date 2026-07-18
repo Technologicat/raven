@@ -46,6 +46,7 @@ from ..common.gui import utils as guiutils
 from . import chattree
 from . import chatutil
 from . import config as librarian_config
+from . import filestore
 from . import hybridir
 from . import imagestore
 from . import llmclient
@@ -1062,7 +1063,7 @@ class DPGCompleteChatMessage(DPGChatMessage):
         message = node_payload["message"]
         role = message["role"]
         persona = node_payload["general_metadata"]["persona"]  # stored persona for this chat message
-        sidecars_meta = node_payload["general_metadata"].get("sidecars", {})  # provenance per image sidecar (see imagestore)
+        sidecars_meta = node_payload["general_metadata"].get("sidecars", {})  # provenance per attached-file sidecar (see imagestore / filestore)
         super().build(role=role,
                       persona=persona,
                       node_id=self.node_id)
@@ -1086,6 +1087,8 @@ class DPGCompleteChatMessage(DPGChatMessage):
                 self._render_text_paragraphs(chatutil.remove_persona_from_start_of_line(persona=persona, text=part["text"]))
             elif part_type == "image_url":
                 self._render_image_part(part, sidecars_meta)
+            elif part_type == "text_file":
+                self._render_text_file_part(part, sidecars_meta)
             # else: unknown part type — skip (forward-compat)
 
         # Render any tool-call invocations this assistant message made, as visible sub-elements after the text.
@@ -1203,6 +1206,59 @@ class DPGCompleteChatMessage(DPGChatMessage):
             self._add_provenance_button(parent=actions,
                                         icon=fa.ICON_FOLDER_OPEN,
                                         tooltip_text="Open the image folder\n(where attached images are stored)",
+                                        ok_message="Opened folder",
+                                        action=lambda: common_utils.open_in_file_manager(datastore.sidecar_dir))
+
+    def _render_text_file_part(self, part: Dict[str, Any], sidecars_meta: Dict[str, Any]) -> None:
+        """Render one `text_file` content-part: an inline file chip plus a per-document provenance cluster.
+
+        The file counterpart of `_render_image_part`. A document has no thumbnail, so it renders as a chip — a
+        document glyph and the original filename — followed by the same action row images get: show the stored
+        copy (opens it in the OS default app for its type), open the recorded source (a `file://` original or an
+        `https://` page — disabled when nothing openable), and reveal the datastore's sidecar directory. The
+        document's text is *not* shown inline (it went to the model at wire-build, folded into the message text);
+        this is the visible handle for it. Provenance lives in `sidecars_meta[filename]` (see
+        `filestore.store_file_as_sidecar`). A non-sidecar URL (shouldn't occur in stored data) is skipped."""
+        url = (part.get("text_file") or {}).get("url", "")
+        if not url.startswith(imagestore.SIDECAR_SCHEME):
+            return  # only local sidecar refs are resolvable here; skip anything else (forward-compat)
+        filename = url[len(imagestore.SIDECAR_SCHEME):]
+        meta = sidecars_meta.get(filename) or {}
+        name = (part.get("text_file") or {}).get("name") or meta.get("name") or "attached file"
+        datastore = self.parent_view.chat_controller.datastore
+        with self.paragraphs_lock:
+            cluster = dpg.add_group(parent=self.gui_text_group)  # chip + its provenance action row, stacked
+
+            chip = dpg.add_group(horizontal=True, parent=cluster)  # a document glyph + the filename, on one line
+            icon_id = dpg.add_text(fa.ICON_FILE_LINES, parent=chip)
+            dpg.bind_item_font(icon_id, self.parent_view.themes_and_fonts.icon_font_solid)
+            dpg.add_text(name, parent=chip)
+
+            # Per-document provenance actions. "Show document" opens the stored sidecar (verbatim — documents are
+            # never transformed, so the sidecar IS the original) in the OS default app. "Open source" targets the
+            # recorded provenance URL, disabled when nothing is openable. "Open folder" reveals the sidecar dir.
+            source_url = meta.get("url") or ""
+            source_openable = bool(source_url) and not source_url.startswith("data:")
+            actions = dpg.add_group(horizontal=True, parent=cluster)
+
+            self._add_provenance_button(parent=actions,
+                                        icon=fa.ICON_FILE_LINES,
+                                        tooltip_text="Show the attached document\n(the saved copy, in the chat data folder)",
+                                        ok_message="Opened document",
+                                        action=lambda: common_utils.open_file(datastore.sidecar_path(filename)))
+            if source_openable:
+                source_tooltip = f"Open original source\n{source_url}"
+            else:
+                source_tooltip = "Open original source — unavailable\n(no source location was recorded)"
+            self._add_provenance_button(parent=actions,
+                                        icon=fa.ICON_LINK,
+                                        tooltip_text=source_tooltip,
+                                        ok_message="Opened source",
+                                        enabled=source_openable,
+                                        action=lambda: _open_source_url(source_url))
+            self._add_provenance_button(parent=actions,
+                                        icon=fa.ICON_FOLDER_OPEN,
+                                        tooltip_text="Open the attachments folder\n(where attached files are stored)",
                                         ok_message="Opened folder",
                                         action=lambda: common_utils.open_in_file_manager(datastore.sidecar_dir))
 
@@ -1838,7 +1894,9 @@ class DPGChatController:
 
         Attached images each add a per-family estimate (`llmclient.image_token_cost`) — a VLM image consumes
         context the char->token ratio can't see. Any image present forces the `~X%` (estimate) typography until
-        the background prefill lands the exact count.
+        the background prefill lands the exact count. Attached documents add the token count of their extracted
+        text (they ride the wire as text, folded into the message at send), counted alongside the rest via
+        `count_tokens` — so unlike images they do not by themselves force the estimate typography.
         """
         if not self.gui_updates_safe:
             return
@@ -1852,13 +1910,20 @@ class DPGChatController:
                 text_segments.append(chatutil.content_to_text(message.get("content")))
                 sidecars_meta = payload.get("general_metadata", {}).get("sidecars", {})
                 for part in message.get("content") or []:
-                    if part.get("type") != "image_url":
-                        continue
-                    url = (part.get("image_url") or {}).get("url", "")
-                    filename = url[len(imagestore.SIDECAR_SCHEME):] if url.startswith(imagestore.SIDECAR_SCHEME) else None
-                    dims = (sidecars_meta.get(filename) or {}).get("stored_dimensions") if filename else None
-                    image_h, image_w = dims if dims else (1024, 1024)  # fallback for pre-stored-dims data; only matters for resolution-scaling families
-                    image_tokens += llmclient.image_token_cost(self.llm_settings, image_h, image_w)
+                    part_type = part.get("type")
+                    if part_type == "image_url":
+                        url = (part.get("image_url") or {}).get("url", "")
+                        filename = url[len(imagestore.SIDECAR_SCHEME):] if url.startswith(imagestore.SIDECAR_SCHEME) else None
+                        dims = (sidecars_meta.get(filename) or {}).get("stored_dimensions") if filename else None
+                        image_h, image_w = dims if dims else (1024, 1024)  # fallback for pre-stored-dims data; only matters for resolution-scaling families
+                        image_tokens += llmclient.image_token_cost(self.llm_settings, image_h, image_w)
+                    elif part_type == "text_file":
+                        # An attached document rides on the wire as text (folded in at wire-build), so its token
+                        # cost is exactly that text's — count it alongside the rest via `count_tokens`, not as a
+                        # separate estimate. Extraction is memoized on the content-addressed sidecar filename.
+                        file_url = (part.get("text_file") or {}).get("url", "")
+                        if file_url.startswith(imagestore.SIDECAR_SCHEME):
+                            text_segments.append(filestore.sidecar_to_text(self.datastore, file_url))
             count, is_exact = llmclient.count_tokens(self.llm_settings, "".join(text_segments))
             if image_tokens:
                 count += image_tokens

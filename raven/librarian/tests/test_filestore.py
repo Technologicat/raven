@@ -67,47 +67,47 @@ def test_store_from_path(datastore, tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# sidecar_url_to_text
+# sidecar_to_text
 # ---------------------------------------------------------------------------
 
-def test_sidecar_url_to_text_plaintext(datastore):
+def test_sidecar_to_text_plaintext(datastore):
     result = filestore.store_file_as_sidecar(datastore, b"plain content here",
                                              name="a.txt", provenance_url="file:///a.txt",
                                              provenance_source="user_attachment")
-    assert filestore.sidecar_url_to_text(datastore, result.part["text_file"]["url"]) == "plain content here"
+    assert filestore.sidecar_to_text(datastore, result.part["text_file"]["url"]) == "plain content here"
 
 
-def test_sidecar_url_to_text_pdf(datastore):
+def test_sidecar_to_text_pdf(datastore):
     pdf = make_minimal_pdf("Extracted from a PDF attachment")
     result = filestore.store_file_as_sidecar(datastore, pdf,
                                              name="paper.pdf", provenance_url="file:///paper.pdf",
                                              provenance_source="user_attachment")
-    assert filestore.sidecar_url_to_text(datastore, result.part["text_file"]["url"]) == "Extracted from a PDF attachment"
+    assert filestore.sidecar_to_text(datastore, result.part["text_file"]["url"]) == "Extracted from a PDF attachment"
 
 
-def test_sidecar_url_to_text_is_memoized_on_immutable_filename(datastore):
+def test_sidecar_to_text_is_memoized_on_immutable_filename(datastore):
     result = filestore.store_file_as_sidecar(datastore, b"cache me",
                                              name="c.txt", provenance_url="file:///c.txt",
                                              provenance_source="user_attachment")
     url = result.part["text_file"]["url"]
-    first = filestore.sidecar_url_to_text(datastore, url)
+    first = filestore.sidecar_to_text(datastore, url)
     # Corrupt the on-disk sidecar; because the memo keys on the (content-addressed) filename, a second read must
     # still return the original text without touching disk.
     datastore.sidecar_path(result.filename).write_bytes(b"different now")
-    assert filestore.sidecar_url_to_text(datastore, url) == first == "cache me"
+    assert filestore.sidecar_to_text(datastore, url) == first == "cache me"
 
 
-def test_sidecar_url_to_text_empty_document_placeholder(datastore):
+def test_sidecar_to_text_empty_document_placeholder(datastore):
     result = filestore.store_file_as_sidecar(datastore, b"   \n\t ",
                                              name="blank.txt", provenance_url="file:///blank.txt",
                                              provenance_source="user_attachment")
     # Whitespace-only extracts to None; the wire path must get a placeholder rather than an exception.
-    assert filestore.sidecar_url_to_text(datastore, result.part["text_file"]["url"]) == "[no extractable text]"
+    assert filestore.sidecar_to_text(datastore, result.part["text_file"]["url"]) == "[no extractable text]"
 
 
-def test_sidecar_url_to_text_bad_scheme_raises(datastore):
+def test_sidecar_to_text_bad_scheme_raises(datastore):
     with pytest.raises(ValueError):
-        filestore.sidecar_url_to_text(datastore, "https://example.com/x.txt")
+        filestore.sidecar_to_text(datastore, "https://example.com/x.txt")
 
 
 # ---------------------------------------------------------------------------

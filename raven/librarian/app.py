@@ -66,6 +66,7 @@ with timer() as tim:
 
     from ..common.gui import animation as gui_animation
     from ..common.gui import helpcard
+    from ..common.gui import messagebox
     from ..common.gui import utils as guiutils
     from ..common.gui.vumeter import DPGVUMeter
 
@@ -266,9 +267,16 @@ logger.info(f"RAG document store loaded in {tim.dt:0.6g}s.")
 # datastore sidecar and the staging is cleared. The image bytes are snapshotted at attach time, so a file
 # edited or removed on disk between attach and send still sends exactly what the user picked.
 
-# Currently staged attachments. Each entry is an `env` with `raw` (image bytes), `path`, `provenance_url`,
+# Currently staged image attachments. Each entry is an `env` with `raw` (image bytes), `path`, `provenance_url`,
 # `provenance_source` (consumed by `scaffold.user_turn`), plus `strip_group_tag` / `texture_tag` for GUI teardown.
 staged_images = []
+
+# Currently staged document attachments (plain text / PDF). Each entry is an `env` with `raw` (file bytes),
+# `path`, `name`, `provenance_url`, `provenance_source` (consumed by `scaffold.user_turn`), plus `strip_group_tag`
+# for GUI teardown. Documents need no vision model (their text is folded into the prompt at wire-build) and no
+# thumbnail texture (they render as a chip), so this staging is simpler than the image staging above.
+staged_files = []
+_staged_file_counter = 0  # monotonic; keeps chip widget tags unique even across remove-then-re-add
 
 # Thumbnails for the staged-image strip get their own texture registry (distinct from the chat log's inline-image
 # registry, which the controller owns). These thumbnails ARE deleted — on remove, and on send — so this relies on
@@ -302,12 +310,13 @@ def _decode_staged_thumbnail(raw: bytes) -> Tuple[str, int, int]:
     return texture_tag, disp_w, disp_h
 
 def _refresh_attachments_strip() -> None:
-    """Show the staged-image strip iff there are attachments, stealing that height from the text field.
+    """Show the staged-attachments strip iff anything is staged, stealing that height from the text field.
 
     The composer's outer height (`chat_controls_h`) is fixed, so the strip's height is taken from the text
     field rather than added to the composer — the chat and avatar panels never jump when attachments appear.
+    Shared by both staged images (thumbnails) and staged documents (chips).
     """
-    if staged_images:
+    if staged_images or staged_files:
         dpg.show_item("chat_attachments_strip")  # tag
         dpg.configure_item("chat_field", height=gui_config.chat_field_h - gui_config.chat_attachments_h)  # tag
     else:
@@ -362,30 +371,128 @@ def _add_staged_image(path: str) -> None:
     staged_images.append(staged)
     _refresh_attachments_strip()
 
-def _attach_image_callback(selected_files) -> None:
-    """FileDialog callback: stage each selected image."""
-    logger.debug(f"_attach_image_callback: {len(selected_files)} file(s) selected.")
-    for selected_file in selected_files:
-        _add_staged_image(selected_file)
+# Image extensions the composer's attach dialog offers, distinct from the document types
+# (`docextract.supported_extensions()`). Used both to build the picker's filter list and to route a picked file
+# to image vs. document staging.
+_ATTACH_IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif", ".tiff")
 
-def show_attach_image_dialog() -> None:
-    """Composer button callback: open the attach-image file dialog (no-op if a text-only model is loaded)."""
-    if _filedialog_attach_image is None:
+
+def _remove_staged_file(staged: env) -> None:
+    """Remove one staged document: drop it from the list and delete its strip chip widgets."""
+    if staged in staged_files:
+        staged_files.remove(staged)
+    with guiutils.nonexistent_ok():
+        dpg.delete_item(staged.strip_group_tag)  # the chip group (icon + filename + remove button)
+    _refresh_attachments_strip()
+
+def _clear_staged_files() -> None:
+    """Remove all staged documents (called after a send)."""
+    for staged in list(staged_files):
+        _remove_staged_file(staged)
+
+def _add_staged_file(path: str) -> None:
+    """Stage the document at `path`: snapshot its bytes, verify text can be extracted, add a strip chip.
+
+    Extraction is validated *here*, at attach time, so a scanned/empty PDF or an unreadable file is caught with a
+    dialog now rather than silently contributing nothing at send. The bytes stored are this snapshot, so a file
+    edited on disk between attach and send still sends exactly what the user picked.
+    """
+    global _staged_file_counter
+    name = pathlib.Path(path).name
+    try:
+        raw = pathlib.Path(path).read_bytes()
+        text = docextract.extract_text(path)  # validate up front (any model can use the text; no VLM needed)
+    except Exception as exc:  # noqa: BLE001 -- a bad file must not break the composer; report and skip it
+        logger.error(f"_add_staged_file: failed to read '{path}': {type(exc)}: {exc}")
+        messagebox.modal_dialog(window_title="Could not attach file",
+                                message=f"'{name}' could not be read as text.",
+                                buttons=["OK"], ok_button="OK", cancel_button="OK",
+                                centering_reference_window="librarian_main_window")
         return
-    _filedialog_attach_image.show_file_dialog()
+    if not text:
+        logger.info(f"_add_staged_file: '{path}' yielded no extractable text; not attaching.")
+        messagebox.modal_dialog(window_title="Could not attach file",
+                                message=f"'{name}' has no extractable text.\n\n"
+                                        "If it is a scanned or image-only PDF, run it through OCR first.",
+                                buttons=["OK"], ok_button="OK", cancel_button="OK",
+                                centering_reference_window="librarian_main_window")
+        return
+    _staged_file_counter += 1
+    idx = _staged_file_counter
+    strip_group_tag = f"staged_file_group_{idx}"  # tag
+    icon_tag = f"staged_file_icon_{idx}"  # tag
+    remove_button_tag = f"staged_file_remove_{idx}"  # tag
+    staged = env(raw=raw,
+                 path=path,
+                 name=name,
+                 provenance_url=pathlib.Path(path).resolve().as_uri(),  # "file:///abs/path" — provenance only, never a live ref
+                 provenance_source="user_attachment",
+                 strip_group_tag=strip_group_tag)
+    with dpg.group(parent="chat_attachments_strip", horizontal=True, tag=strip_group_tag):  # tag
+        dpg.add_text(fa.ICON_FILE_LINES, tag=icon_tag)  # tag  # a document glyph stands in for the image thumbnail
+        dpg.bind_item_font(icon_tag, themes_and_fonts.icon_font_solid)  # tag
+        dpg.add_text(name)
+        with dpg.tooltip(icon_tag):  # tag
+            dpg.add_text(name)
+        dpg.add_button(label=fa.ICON_XMARK,
+                       width=gui_config.toolbutton_w,
+                       callback=lambda: _remove_staged_file(staged),
+                       tag=remove_button_tag)  # tag
+        dpg.bind_item_font(remove_button_tag, themes_and_fonts.icon_font_solid)  # tag
+        dpg.bind_item_theme(remove_button_tag, "disablable_widget_theme")  # tag
+        with dpg.tooltip(remove_button_tag):  # tag
+            dpg.add_text(f"Remove attachment\n{name}")
+    staged_files.append(staged)
+    _refresh_attachments_strip()
 
-# The attach dialog is created outside any window context (it manages its own window), so it isn't parented
-# under the main window. `.*` is the default filter so images of every listed type show at once — the widget's
-# type filter is single-extension, with no "all images" option.
-_filedialog_attach_image = FileDialog(title="Attach image(s) [Ctrl+click to multi-select]",
-                                      tag="attach_image_dialog",
-                                      callback=_attach_image_callback,
-                                      modal=True,
-                                      filter_list=[".*", ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif", ".tiff"],
-                                      file_filter=".*",
-                                      multi_selection=True,
-                                      allow_drag=False,
-                                      default_path=os.path.expanduser("~"))
+def _attach_callback(selected_files) -> None:
+    """FileDialog callback: route each selected file to image or document staging by its extension.
+
+    Documents (plain text / PDF) attach on any model. Images need a vision model; on a *confirmed* text-only
+    model (`model_is_vlm is False`) a picked image is rejected with a dialog, since the model could not use it.
+    This routing-time image gate is interim: once FileDialog can offer multiple extension groups as one labelled
+    filter, the picker can simply not offer image types on a text-only model (see TODO_DEFERRED), so wrong types
+    can't be picked in the first place.
+    """
+    logger.debug(f"_attach_callback: {len(selected_files)} file(s) selected.")
+    rejected_images = []
+    for selected_file in selected_files:
+        ext = pathlib.Path(selected_file).suffix.lower()
+        if ext in _ATTACH_IMAGE_EXTS:
+            if llm_settings.model_is_vlm is False:  # confirmed text-only: the model can't see an image
+                rejected_images.append(pathlib.Path(selected_file).name)
+            else:
+                _add_staged_image(selected_file)
+        elif docextract.is_supported(selected_file):
+            _add_staged_file(selected_file)
+        else:
+            logger.info(f"_attach_callback: '{selected_file}': unsupported file type, skipping.")
+    if rejected_images:
+        names = "\n".join(f"  - {n}" for n in rejected_images)
+        messagebox.modal_dialog(window_title="Images need a vision model",
+                                message=f"The loaded model is text-only, so these images were not attached:\n\n{names}\n\n"
+                                        "Load a vision model (VLM) to attach images. Documents attach on any model.",
+                                buttons=["OK"], ok_button="OK", cancel_button="OK",
+                                centering_reference_window="librarian_main_window")
+
+def show_attach_dialog() -> None:
+    """Composer button callback: open the attach dialog (images and documents)."""
+    if _filedialog_attach is None:
+        return
+    _filedialog_attach.show_file_dialog()
+
+# The attach dialog manages its own window (created outside any window context). `.*` is the default filter so
+# every supported type shows at once — the widget's type filter is single-extension, with no grouped "all images"
+# / "all documents" option yet (see TODO_DEFERRED).
+_filedialog_attach = FileDialog(title="Attach file(s) [Ctrl+click to multi-select]",
+                                tag="attach_file_dialog",
+                                callback=_attach_callback,
+                                modal=True,
+                                filter_list=[".*", *_ATTACH_IMAGE_EXTS, *docextract.supported_extensions()],
+                                file_filter=".*",
+                                multi_selection=True,
+                                allow_drag=False,
+                                default_path=os.path.expanduser("~"))
 
 # --------------------------------------------------------------------------------
 # Set up the main window
@@ -469,8 +576,12 @@ with timer() as tim:
                             # stores each image (bytes and all) on a background thread from this snapshot, so clearing
                             # the strip and its textures right away can't pull the rug out from under the send.
                             outgoing_images = list(staged_images)
-                            chat_controller.chat_round(user_message_text, staged_images=(outgoing_images or None))
+                            outgoing_files = list(staged_files)
+                            chat_controller.chat_round(user_message_text,
+                                                       staged_images=(outgoing_images or None),
+                                                       staged_files=(outgoing_files or None))
                             _clear_staged_images()
+                            _clear_staged_files()
                             # Clear the composer. ImGui owns the *active* (focused) multiline input's edit buffer
                             # and ignores an external `set_value` while it's focused, writing its own buffer back on
                             # deactivation — so a focused Enter-send can't be cleared by `set_value` alone. (A Send-
@@ -554,31 +665,32 @@ with timer() as tim:
                             pass
 
                         with dpg.group(horizontal=True):  # composer toolbar
-                            # Attach-image button. Gated on the loaded model's vision capability, a tri-state:
-                            # True (confirmed VLM) → enabled; None (backend exposes no capability flag, e.g.
-                            # ooba) → enabled, let the backend reject if it can't; False (confirmed text-only)
-                            # → disabled. The tooltip surfaces all three so the None case is debuggable rather
-                            # than looking identical to a confirmed VLM.
+                            # Attach button — documents (text / PDF) and images. Always enabled: a document works
+                            # on any model (its text is folded into the prompt), so only images depend on vision
+                            # capability, and that is enforced at routing time (`_attach_callback`) rather than by
+                            # disabling the button. The tooltip's image note tracks the model_is_vlm tri-state:
+                            # True (confirmed VLM), None (backend didn't report — e.g. ooba, allowed on faith),
+                            # False (confirmed text-only — images rejected on pick, documents still fine).
                             model_is_vlm = llm_settings.model_is_vlm
-                            attach_enabled = (model_is_vlm is not False)
                             dpg.add_button(label=fa.ICON_PAPERCLIP,
-                                           callback=show_attach_image_dialog,
+                                           callback=show_attach_dialog,
                                            width=gui_config.toolbutton_w,
-                                           enabled=attach_enabled,
                                            tag="chat_attach_button")  # tag
                             dpg.bind_item_font("chat_attach_button", themes_and_fonts.icon_font_solid)  # tag
                             dpg.bind_item_theme("chat_attach_button", "disablable_widget_theme")  # tag
                             with dpg.tooltip("chat_attach_button"):  # tag
                                 if model_is_vlm is True:
-                                    dpg.add_text("Attach image(s) to your message")
+                                    dpg.add_text("Attach file(s) to your message.\n\nDocuments (text, PDF) and images are both accepted.")
                                 elif model_is_vlm is None:
-                                    dpg.add_text("Attach image(s) to your message.\n\n"
-                                                 "Note: your LLM backend didn't report whether the loaded model can see images,\n"
-                                                 "so attachment is allowed on faith. If the model is actually text-only, the\n"
-                                                 "backend will error out on send. LM Studio reports the flag, so it can confirm\n"
-                                                 "capability up front.")
+                                    dpg.add_text("Attach file(s) to your message.\n\n"
+                                                 "Documents (text, PDF) work with any model. Images require a vision model —\n"
+                                                 "your LLM backend didn't report whether the loaded model can see images, so an\n"
+                                                 "image is allowed on faith and the backend will error on send if it can't. LM\n"
+                                                 "Studio reports the flag, so it can confirm capability up front.")
                                 else:  # False — confirmed text-only
-                                    dpg.add_text("The loaded model is text-only.\nLoad a vision model (VLM) at your LLM backend to attach images.")
+                                    dpg.add_text("Attach file(s) to your message.\n\n"
+                                                 "Documents (text, PDF) work with any model. The loaded model is text-only, so\n"
+                                                 "images can't be attached — load a vision model (VLM) at your LLM backend for those.")
 
                             dpg.add_button(label=fa.ICON_PAPER_PLANE,
                                            callback=send_message_to_ai_callback,

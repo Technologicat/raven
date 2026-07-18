@@ -977,36 +977,6 @@ The composer's multiline text field (`chat_field`, `app.py`) is a fixed height (
 
 Discovered during brief-03 Half-2 composer rework (2026-07-17, flagged by Juha).
 
-## Support text-file attachments to chat messages (not just images)
-
-The multimodal work (brief 03 Half 2) adds an attach affordance to the composer for images. Extend it to
-plain-text documents too. This is a *distinct use case* from the RAG document database: RAG searches the whole
-corpus for relevant snippets, whereas an attached document is the specific thing the user wants to discuss *now*.
-Concrete science/tech example: "here's our spec for what we want to do (attached); what methods/approaches from
-your docs DB would you suggest for implementing it?" — the spec is attached (in full, in context), the methods
-come from RAG. The two compose.
-
-Text and PDF extraction is already available: `raven.common.docextract.extract_text` (built for the docs-DB PDF
-support, 2026-07-18) is the shared backend, so an attachment just needs to route a picked file through it. PDF
-works for the attachment path exactly as it does for the docs DB.
-
-Design settled during the 2026-07-18 discussion (recorded before it evaporates):
-
-- *Representation*: store the picked file as a content-addressed **sidecar** (reuse the image sidecar machinery
-  from checkpoint C), reference it from the message with a new text-file content-part, and expand it to a real
-  text part at wire-build time — mirroring the `sidecar:`→`data:` substitution images already do. This keeps the
-  document bytes out of `data.json` (important given the single-file datastore's scaling ceiling) and reuses the
-  GC and the provenance buttons for free. *Not* inlining the whole document into the persisted text part.
-- *No VLM gating*: injected text works with any model, unlike images — so the text/PDF attach affordance is
-  available regardless of the loaded model's vision capability.
-- *Staging*: a separate `staged_files` list beside `staged_images` — different wire target (a text part for
-  everyone, vs an `image_url` part for VLMs only), so keeping the two lists separate is clearer than unifying.
-- *Render*: a file chip in the chat log reusing checkpoint C's provenance-button infrastructure.
-- *Token budget*: account for the injected text in the context-fill estimate (as attached images already do).
-
-Discovered during brief-03 Half-2 (2026-07-17, suggested by Juha). Design settled 2026-07-18. The docs-DB half
-of PDF ingestion (the sibling concern) is done as of 2026-07-18.
-
 ## Attach an image from a web URL (paste-URL path)
 
 The image-attach GUI only supports attaching *local files* (composer paperclip → FileDialog → a `file://`
@@ -1138,6 +1108,12 @@ item that matches a *set* of extensions under a descriptive label — e.g. "All 
 type show at once, at the cost of also listing non-images). Add multi-extension filter items with custom labels:
 a `filter_list` entry should be able to carry a label plus a set of extensions, and the listing filter should
 match any extension in the set. Then image pickers can offer one "All images" item instead of `.*`.
+
+Once this exists, it also lets the Librarian **attach** dialog gate the *offered* types by model capability
+(Juha, 2026-07-18): show "All files (images + documents)" with a vision model, "Documents only" with a text-only
+model — so wrong types can't be picked at all. Today the attach dialog offers everything and does the image
+gating at *routing* time (`app._attach_callback` rejects an image on a confirmed text-only model with a dialog);
+picker-level filtering would replace that after-the-fact rejection with up-front unavailability.
 
 Discovered during brief-03 Half-2 multimodal work (2026-07-17, flagged by Juha).
 

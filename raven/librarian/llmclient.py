@@ -925,7 +925,7 @@ def _serialize_history_for_wire(settings: env,
 
       - **Documents.** `text_file` parts (attached plain-text / PDF documents) have no native wire form, so each
         is *folded into the message text*: its plaintext is extracted on demand from the sidecar
-        (`filestore.sidecar_url_to_text`) and appended after the user's text under an `[Attached file: ...]`
+        (`filestore.sidecar_to_text`) and appended after the user's text under an `[Attached file: ...]`
         header. Any model can therefore use an attached document — no vision capability required. Like image
         resolution this needs `datastore`; without it there are no `text_file` parts to fold.
 
@@ -952,7 +952,7 @@ def _serialize_history_for_wire(settings: env,
                     url = part.get("text_file", {}).get("url", "")
                     name = part.get("text_file", {}).get("name") or "attached file"
                     if url.startswith(imagestore.SIDECAR_SCHEME):
-                        doc_text = filestore.sidecar_url_to_text(datastore, url)
+                        doc_text = filestore.sidecar_to_text(datastore, url)
                         file_blocks.append(f"[Attached file: {name}]\n{doc_text}\n[End of attached file: {name}]")
             if file_blocks:
                 scrubbed_text = "\n\n".join([scrubbed_text, *file_blocks]) if scrubbed_text else "\n\n".join(file_blocks)

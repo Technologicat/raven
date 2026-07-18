@@ -14,7 +14,7 @@ Three public operations, mirroring `imagestore`:
 
   - `store_file_as_sidecar`: store the document bytes verbatim, return the `text_file` content-part plus the
     provenance metadata entry.
-  - `sidecar_url_to_text`: resolve a stored `sidecar:` URL to the document's extracted plaintext, memoized on
+  - `sidecar_to_text`: resolve a stored `sidecar:` URL to the document's extracted plaintext, memoized on
     the content-addressed filename (so a chat with an attached PDF re-extracts it at most once per process).
   - `sidecar_refs_in_payload`: the GC mark-phase interpreter for `text_file` parts. Compose it (set union) with
     `imagestore.sidecar_refs_in_payload` when configuring a datastore's `sidecar_extractor`, so both attached
@@ -22,7 +22,7 @@ Three public operations, mirroring `imagestore`:
 """
 
 __all__ = ["store_file_as_sidecar",
-           "sidecar_url_to_text",
+           "sidecar_to_text",
            "sidecar_refs_in_payload"]
 
 import logging
@@ -104,7 +104,7 @@ def store_file_as_sidecar(datastore: chattree.PersistentForest,
                sidecar_metadata=metadata)
 
 
-def sidecar_url_to_text(datastore: chattree.PersistentForest, url: str) -> str:
+def sidecar_to_text(datastore: chattree.PersistentForest, url: str) -> str:
     """Resolve a stored `sidecar:<filename>` document URL to its extracted plaintext, memoized by filename.
 
     Reads the sidecar file and extracts its text via `raven.common.docextract` (plain text verbatim; PDF text
@@ -113,7 +113,7 @@ def sidecar_url_to_text(datastore: chattree.PersistentForest, url: str) -> str:
     a single unreadable attachment can never break the LLM call.
     """
     if not url.startswith(SIDECAR_SCHEME):
-        raise ValueError(f"sidecar_url_to_text: expected a '{SIDECAR_SCHEME}' URL, got '{url[:32]}'.")
+        raise ValueError(f"sidecar_to_text: expected a '{SIDECAR_SCHEME}' URL, got '{url[:32]}'.")
     filename = url[len(SIDECAR_SCHEME):]
     if filename in _extracted_text_cache:
         return _extracted_text_cache[filename]
@@ -121,7 +121,7 @@ def sidecar_url_to_text(datastore: chattree.PersistentForest, url: str) -> str:
     try:
         text = docextract.extract_text(path)
     except Exception as exc:  # noqa: BLE001 -- wire-build must never crash on one unreadable attachment
-        logger.warning(f"sidecar_url_to_text: could not extract text from sidecar '{filename}': {type(exc)}: {exc}")
+        logger.warning(f"sidecar_to_text: could not extract text from sidecar '{filename}': {type(exc)}: {exc}")
         text = None
     if not text:
         text = "[no extractable text]"
