@@ -1918,18 +1918,24 @@ class DPGChatController:
         logger.info(f"DPGChatController._context_prefill_entrypoint: exact prompt size for HEAD '{task_env.head_node_id}': {out.usage['prompt_tokens']} tokens")
         self._render_context_fill(out.usage["prompt_tokens"], is_exact=True)
 
-    def chat_round(self, user_message_text: str, staged_images: Optional[List[env]] = None) -> None:
+    def chat_round(self, user_message_text: str, staged_images: Optional[List[env]] = None,
+                   staged_files: Optional[List[env]] = None) -> None:
         """Run a chat round (user and AI).
 
         `user_message_text`: What the user wrote.
 
-                             If `user_message_text` is the empty string *and* no images are attached, the AI
-                             will generate another message without the user writing in between.
+                             If `user_message_text` is the empty string *and* nothing is attached (no images and
+                             no documents), the AI will generate another message without the user writing in
+                             between.
 
         `staged_images`: Images the user attached to this message, or `None`. Each entry is an `env` with `raw`
                          (image bytes), `provenance_url`, and `provenance_source` (see `scaffold.user_turn`).
                          An attachment counts as user content: with images present, a round runs even when the
                          text is empty (rather than being treated as "let the AI take another turn").
+
+        `staged_files`: Documents (plain text / PDF) the user attached, or `None` — the file counterpart of
+                        `staged_images` (see `scaffold.user_turn`). Also counts as user content: a round runs with
+                        attachments present even when the text is empty.
 
         The RAG query (for document database search) is taken from the latest available user message:
 
@@ -1943,9 +1949,9 @@ class DPGChatController:
             if task_env.cancelled:  # while the task was in the queue
                 return
 
-            # Add the user's message to the chat if the user entered any text or attached any image.
-            if user_message_text or staged_images:
-                self.user_turn(text=user_message_text, staged_images=staged_images)
+            # Add the user's message to the chat if the user entered any text or attached anything.
+            if user_message_text or staged_images or staged_files:
+                self.user_turn(text=user_message_text, staged_images=staged_images, staged_files=staged_files)
                 # NOTE: Rudimentary approach to RAG search, using the user's message text as the query. (Good enough to demonstrate the functionality. Improve later.)
                 docs_query = user_message_text or None  # image-only message: no text to search docs with
             else:
@@ -1961,7 +1967,8 @@ class DPGChatController:
                          continue_=False)
         self.task_manager.submit(chat_round_task, env())
 
-    def user_turn(self, text: str, staged_images: Optional[List[env]] = None) -> str:
+    def user_turn(self, text: str, staged_images: Optional[List[env]] = None,
+                  staged_files: Optional[List[env]] = None) -> str:
         """Run the user's part of a chat round: create the user message node, update HEAD, append it to the view.
 
         Returns the new HEAD node id.
@@ -1981,12 +1988,15 @@ class DPGChatController:
 
         `staged_images`: Images the user attached, or `None`. Passed through to `scaffold.user_turn`, which
                          stores each as a datastore sidecar (decode/downsample happens here, off the GUI thread).
+        `staged_files`: Documents (plain text / PDF) the user attached, or `None`. Passed through to
+                        `scaffold.user_turn`, which stores each verbatim as a datastore sidecar.
         """
         new_head_node_id = scaffold.user_turn(llm_settings=self.llm_settings,
                                               datastore=self.datastore,
                                               head_node_id=self.app_state["HEAD"],
                                               user_message_text=text,
-                                              staged_images=staged_images)
+                                              staged_images=staged_images,
+                                              staged_files=staged_files)
         self.app_state["HEAD"] = new_head_node_id  # update HEAD before the AI turn reads it as the parent
         self.view.add_complete_message(new_head_node_id)
         self.update_context_fill_indicator()  # user message added -> context grew

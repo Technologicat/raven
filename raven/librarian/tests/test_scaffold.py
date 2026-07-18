@@ -12,7 +12,7 @@ pytest.importorskip("raven.librarian.scaffold",
 
 from unpythonic.env import env  # noqa: E402 -- after importorskip by design
 
-from raven.librarian import chattree, chatutil, imagestore, scaffold  # noqa: E402 -- after importorskip by design
+from raven.librarian import chattree, chatutil, filestore, imagestore, scaffold  # noqa: E402 -- after importorskip by design
 
 
 # ---------------------------------------------------------------------------
@@ -231,6 +231,62 @@ class TestUserTurnStagedImages:
         payload = forest.get_payload(new_head)
         assert "sidecars" not in payload["general_metadata"]
         assert all(part.get("type") == "text" for part in payload["message"]["content"])
+
+
+class TestUserTurnStagedFiles:
+    """user_turn with attached documents: sidecars stored, text_file parts appended, provenance recorded."""
+
+    def _forest(self, tmp_path, llm_settings):
+        forest = chattree.PersistentForest(tmp_path / "chat.json", autosave=False,
+                                           sidecar_extractor=filestore.sidecar_refs_in_payload)
+        greeting = chatutil.factory_reset_datastore(forest, llm_settings)
+        return forest, greeting
+
+    def test_file_part_appended_and_sidecar_recorded(self, tmp_path, llm_settings):
+        forest, head = self._forest(tmp_path, llm_settings)
+        staged = env(raw=b"the spec body text",
+                     name="spec.txt",
+                     provenance_url="file:///tmp/spec.txt",
+                     provenance_source="user_attachment")
+        new_head = scaffold.user_turn(llm_settings=llm_settings, datastore=forest,
+                                      head_node_id=head, user_message_text="review the spec",
+                                      staged_files=[staged])
+        payload = forest.get_payload(new_head)
+        content = payload["message"]["content"]
+        assert "review the spec" in chatutil.content_to_text(content)  # text part preserved
+        assert "the spec body text" not in chatutil.content_to_text(content)  # document not in the message's own text
+
+        file_parts = [part for part in content if part.get("type") == "text_file"]
+        assert len(file_parts) == 1  # text_file part appended after the text part
+        assert file_parts[0]["text_file"]["name"] == "spec.txt"
+        url = file_parts[0]["text_file"]["url"]
+        assert url.startswith(imagestore.SIDECAR_SCHEME)
+        filename = url[len(imagestore.SIDECAR_SCHEME):]
+
+        assert forest.read_sidecar(filename) == b"the spec body text"  # sidecar stored verbatim
+        sidecars = payload["general_metadata"]["sidecars"]
+        assert sidecars[filename]["url"] == "file:///tmp/spec.txt"  # provenance recorded
+        assert sidecars[filename]["source"] == "user_attachment"
+        assert sidecars[filename]["name"] == "spec.txt"
+
+    def test_images_and_files_share_the_sidecars_metadata(self, tmp_path, llm_settings):
+        # A message carrying both an image and a document records both under general_metadata["sidecars"].
+        forest = chattree.PersistentForest(
+            tmp_path / "chat.json", autosave=False,
+            sidecar_extractor=lambda p: imagestore.sidecar_refs_in_payload(p) | filestore.sidecar_refs_in_payload(p))
+        head = chatutil.factory_reset_datastore(forest, llm_settings)
+        img = env(raw=TestUserTurnStagedImages._png_bytes(16, 16),
+                  provenance_url="file:///tmp/pic.png", provenance_source="user_attachment")
+        doc = env(raw=b"doc body", name="d.txt",
+                  provenance_url="file:///tmp/d.txt", provenance_source="user_attachment")
+        new_head = scaffold.user_turn(llm_settings=llm_settings, datastore=forest,
+                                      head_node_id=head, user_message_text="both",
+                                      staged_images=[img], staged_files=[doc])
+        payload = forest.get_payload(new_head)
+        content = payload["message"]["content"]
+        assert sum(1 for p in content if p.get("type") == "image_url") == 1
+        assert sum(1 for p in content if p.get("type") == "text_file") == 1
+        assert len(payload["general_metadata"]["sidecars"]) == 2  # both recorded
 
 
 # ---------------------------------------------------------------------------

@@ -37,7 +37,8 @@ def user_turn(llm_settings: env,
               datastore: chattree.Forest,
               head_node_id: str,
               user_message_text: str,
-              staged_images: Optional[List[env]] = None) -> str:
+              staged_images: Optional[List[env]] = None,
+              staged_files: Optional[List[env]] = None) -> str:
     """Add the user's message with content `user_message_text` to `datastore`.
 
     `llm_settings`: Obtain this by calling `raven.librarian.llmclient.setup` at app start time.
@@ -57,6 +58,15 @@ def user_turn(llm_settings: env,
                      under the node's `general_metadata["sidecars"]`. The heavy work (decode + downsample) runs
                      here, so call this off the GUI thread.
 
+    `staged_files`: Documents (plain text / PDF) the user attached, or `None`. Each entry is an `env` with `raw`
+                    (the file bytes), `name` (the original filename — for display and to derive the sidecar
+                    extension), `provenance_url`, and `provenance_source` (as for `staged_images`). Each is stored
+                    verbatim as a datastore sidecar via `filestore.store_file_as_sidecar`; the resulting
+                    `text_file` parts are appended to the message content and their provenance is recorded
+                    alongside the images' under `general_metadata["sidecars"]`. Unlike an image, a document works
+                    with any model (its text is folded into the prompt at wire-build), so this is not gated on
+                    vision capability.
+
     Returns the new HEAD node ID (i.e. the chat node that was just added).
     """
     message = chatutil.create_chat_message(llm_settings=llm_settings,
@@ -71,6 +81,16 @@ def user_turn(llm_settings: env,
                                                        provenance_url=staged.provenance_url,
                                                        provenance_source=staged.provenance_source)
             message["content"].append(result.part)  # a fresh list from create_chat_message; safe to extend
+            sidecar_metadata_by_filename[result.filename] = result.sidecar_metadata
+    if staged_files:
+        from . import filestore  # deferred: only pulls docextract/pypdf when a document is actually attached
+        for staged in staged_files:
+            result = filestore.store_file_as_sidecar(datastore=datastore,
+                                                     file_source=staged.raw,
+                                                     name=staged.name,
+                                                     provenance_url=staged.provenance_url,
+                                                     provenance_source=staged.provenance_source)
+            message["content"].append(result.part)
             sidecar_metadata_by_filename[result.filename] = result.sidecar_metadata
 
     payload = chatutil.create_payload(llm_settings=llm_settings,
