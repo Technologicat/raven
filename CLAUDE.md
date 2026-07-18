@@ -5,11 +5,11 @@ Local research assistant constellation. Privacy-first, 100% local.
 
 **Components:**
 - **Visualizer** (`raven/visualizer/`): BibTeX topic analysis, semantic clustering, keyword extraction. The original app. See `raven/visualizer/CLAUDE.md` for architecture.
-- **Librarian** (`raven/librarian/`): LLM chat frontend with tree-structured branching history, hybrid RAG, tool-calling, avatar integration. See `raven/librarian/CLAUDE.md` for architecture.
+- **Librarian** (`raven/librarian/`): LLM chat frontend with tree-structured branching history, hybrid RAG, tool-calling, message attachments (images on a VLM + text/PDF documents on any model, stored as content-addressed sidecars), avatar integration. See `raven/librarian/CLAUDE.md` for architecture.
 - **Server** (`raven/server/`): Web API for GPU-bound ML models. Primary inference endpoint.
 - **Client** (`raven/client/`): Python bindings for Server API.
 - **Avatar** (`raven/avatar/`): AI-animated anime character (THA3 engine, lipsync, cel animations). Some avatar-related code (video postprocessor, colorspace) lives in Common for licensing reasons.
-- **Common** (`raven/common/`): Shared utilities (video processing, audio, GUI widgets, networking). BSD-licensed; Server and Avatar pose editor are AGPL.
+- **Common** (`raven/common/`): Shared utilities (video processing, audio, GUI widgets, networking, document text extraction — `docextract`: plain text + PDF via pypdf, the single extraction backend for both RAG ingestion and chat attachments). BSD-licensed; Server and Avatar pose editor are AGPL.
 - **Papers** (`raven/papers/`): Academic paper tools — arXiv search/download, bibliography converters (WoS, CSV, PDF, BibTeX burst).
 - **Tools** (`raven/tools/`): Miscellaneous CLI utilities (CUDA check, audio device listing, image format conversion, dehyphenation).
 

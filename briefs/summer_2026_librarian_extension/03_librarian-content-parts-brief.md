@@ -102,6 +102,12 @@ persistence level. Paragraph splitting is a render concern.)
 {"type": "image_url",
  "image_url": {"url": "data:image/png;base64,iVBORw0KG..."}}
 # (or a fetchable HTTP URL in place of the data URL)
+
+# Text-document part (added after v0 — plain text / PDF attachment; see the "Text/PDF documents"
+# checkpoint under Implementation status). Stored verbatim as a sidecar; has no native wire form —
+# its extracted text is folded into the message's text part at wire-build. Usable on any model.
+{"type": "text_file",
+ "text_file": {"url": "sidecar:<sha256>.pdf", "name": "paper.pdf"}}
 ```
 
 Out of scope for v0: audio parts (model support is uneven across open-weight models), MCP
@@ -885,6 +891,54 @@ became a typed-parts list everywhere; tool results as parts; per-part renderer; 
     magic drop folder) and **Open chat data folder** (`ICON_DATABASE` → `datastore.datastore_file`'s parent). A
     shared `_make_open_folder_callback` factory reads the directory at click time and flashes green/red. Forward
     caveat still stands: wrap in a collapsing header if D's "Clean up & save" et al. crowd it.
-- **D — GC UX & navigation** (not started): manual "Clean up & save" (dry-run preview + thumbnail grid
-  + staging recovery); bidirectional tool-call↔response nav links. Open question: `prune_unreachable_nodes`
-  currently runs only in `minichat`, not the GUI exit path — decide GUI-exit prune vs. manual-only.
+- **Text/PDF documents — attachments + docs-DB** (DONE, 2026-07-18; committed to `main`, CI green; live-verified
+  — a comparative-study PDF folded into the prompt, model answered, ~24% context-fill, Documents-RAG toggle off
+  so it was the pure attachment path). Documents reuse the whole content-parts + sidecar machinery images
+  established, on a new `text_file` part type. Any model can use a document — it is fed as text, so no VLM is
+  required (the one big difference from an attached image). Two fronts:
+  - **Docs-DB (RAG) PDF ingestion** (was "Phase 1"). `raven.common.docextract` is the single text-extraction
+    backend: `extract_text(path) -> str | None` — raises `FileNotFoundError` (missing) or
+    `DocumentExtractionError` (corrupt / encrypted / non-UTF-8 parse failure), returns `None` for a
+    parsed-but-empty document (e.g. a scanned/image-only PDF with no text layer). Rule: parse failure → raise;
+    parsed-but-empty → `None`; callers pick policy (batch ingest catches + skips, interactive surfaces the
+    reason). Plain-text exts (`.txt/.md/.rst/.org/.bib/.tex`) + `.pdf` via **pypdf** (BSD-3-Clause; replaced the
+    poppler `pdftotext` subprocess fleet-wide — `raven.papers.pdf2bib` was ported onto `docextract` too). Wired
+    into `hybridir.setup(callback=docextract.extract_text, exts=…)` from `app`/`minichat`; the ingested types are
+    configurable via `config.llm_docs_exts`. Fixed a pre-existing spurious double-change on brand-new files:
+    `hybridir._pend_edit`'s update branch now emits a delete only if `document_id in self.documents`.
+  - **Document attachments** (was "Phase 2"). A `text_file` content part
+    `{"type": "text_file", "text_file": {"url": "sidecar:<file>", "name": "<orig>"}}` (`chatutil.text_file_content_part`).
+    Stored *verbatim* as a sidecar (no transform, unlike an image) by
+    `raven.librarian.textfilestore.store_file_as_sidecar`; resolved on demand to plaintext by
+    `textfilestore.sidecar_to_text` (memoized on the content-addressed filename). A document has **no native wire
+    form** — `llmclient._serialize_history_for_wire` extracts the text and folds it into the message's own text
+    part under an `[Attached file: <name>]` header (so the model sees the document; the stored payload keeps only
+    the `sidecar:` ref, and the chat JSON stays small for a big PDF). GUI: **one unified attach button** routes by
+    extension (images gated on `model_is_vlm`, documents always allowed — a future FileDialog multi-extension
+    entry will let us gate by ext at pick time); file chip in the composer strip + inline chip in the chat log
+    with the same three provenance buttons as images; `update_context_fill_indicator` counts document tokens by
+    appending `sidecar_to_text` output to the text segments.
+- **Store unification** (DONE, 2026-07-18, `d39389c`, CI green). The shared image/document sidecar mechanics are
+  factored into `raven.librarian.sidecarstore` (Layer 0, stdlib-only — no chatutil/chattree/config):
+  `SIDECAR_SCHEME`, `format_now`, `read_source_bytes`, `base_provenance`, `sidecar_filename_from_url`,
+  `content_part_sidecar_refs(payload, part_type)`. `imagestore` and `textfilestore` are now thin kind-specific
+  layers on top. `filestore` was renamed to `textfilestore` — it only holds the text-bearing documents
+  `docextract` can expand (plain text + PDF), and it mirrors its data-model name (the `text_file` part); "doc"
+  and "document" were avoided as they collide with the RAG docs-DB vocabulary (`docs_enabled`, `llm_docs_exts`).
+  No behavior change; `sidecarstore` has its own tests.
+- *(Env interlude, not brief-03 scope: the torch trio is pinned at `2.11.0` / `0.26.0` / `2.11.0` `+cu128` as of
+  `af3a19b`, validated on the live server — NVRTC OK. See `pyproject.toml` / README for the pinning scheme.)*
+- **D — GC UX & navigation** (not started — this is the remaining brief-03 work): manual "Clean up & save"
+  (dry-run preview + thumbnail grid + staging recovery); bidirectional tool-call↔response nav links. Open
+  question: `prune_unreachable_nodes` currently runs only in `minichat`, not the GUI exit path — decide GUI-exit
+  prune vs. manual-only.
+  - **Verified 2026-07-18 (sidecar GC is likewise unwired):** the GUI delete-branch path
+    (`chat_controller.delete_subtree_callback` → `datastore.delete_subtree`) frees the tree nodes but never
+    sweeps sidecar files, and `prune_unreferenced_sidecars` (mark-and-sweep, needs the datastore configured with
+    `sidecar_extractor` = the set-union of `imagestore.sidecar_refs_in_payload` and
+    `textfilestore.sidecar_refs_in_payload`) has **no non-test caller anywhere**. So attached images/documents
+    accumulate on disk (`<datastore>.images/`) until D wires a sweep — a slow disk leak, not a correctness bug.
+    Correctly deferred, not eager-per-delete: sidecars are content-addressed and shared across branches /
+    revisions, so deleting on node-delete could drop a file another branch still references. The safe shape is
+    mark-and-sweep over all reachable payloads — `prune_unreachable_nodes` first, then
+    `prune_unreferenced_sidecars` — which is exactly what D should trigger (on GUI exit and/or a manual button).
