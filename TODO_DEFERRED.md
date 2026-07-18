@@ -393,13 +393,11 @@ Some instructions don't yet exist, and need to be written.
 
 ## Hybridir: cover the edit-queueing layer with tests
 
-`raven/librarian/tests/test_hybridir.py` has 18 tests but they all target the post-commit query side — corpus is added once, committed, queried. The edit-queueing layer (`_pend_edit` dedup, update/delete paths, the add-then-update-same-doc race) is untested. A latent shape-mismatch bug in `_pend_edit` survived this gap until it was triggered by dropping ~200 .bib files into the docs dir at once (watchdog burst → multiple concurrent `scheduled_add` / `scheduled_update` tasks).
+`raven/librarian/tests/test_hybridir.py`'s original 18 tests all target the post-commit query side — corpus is added once, committed, queried. The edit-queueing layer (`_pend_edit` dedup, update/delete paths, the add-then-update-same-doc race) was untested. Two latent bugs survived this gap: a `_pend_edit` shape-mismatch (triggered by dropping ~200 .bib files into the docs dir at once), and a spurious delete queued for a brand-new file whose watchdog create+modify events both landed before the first commit (triggered by ingesting a PDF — the first large files the docs DB handled).
 
-Concrete coverage to add:
+A first batch of `_pend_edit` collapse tests landed 2026-07-18 (covering: update of an existing document → delete+add; delete of an existing document; add-then-update dedup for a new file → single add; the observed create/modify event-flurry ordering → single add). Remaining coverage to add:
 
-- `update()` on an existing document (internally delete + add).
-- `delete()` on an existing document.
-- Dedup behavior: queue add then update same `document_id` before commit; queue delete then add same id; queue add for two docs and update one; etc.
+- More dedup shapes: queue delete then add same id; queue add for two docs and update one; etc.
 - Idempotency of `commit()` on empty queue.
 - `is_indexing()` reference-counting under threaded concurrent `commit()` calls — mock the slow inner work, have two threads enter, verify `is_indexing` stays True throughout and goes False only when both have exited (also covers same-thread re-entry under the existing `datastore_lock` RLock).
 - BM25 + semantic search is becoming the de-facto standard hybrid retrieval shape, so the layer is worth investing in regardless.
