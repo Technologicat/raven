@@ -767,6 +767,12 @@ specified.
 - Custom card-style GUI rendering for tool results (markdown-rendered text parts is enough;
   if a future need arises, options include re-parsing markdown at render time or extending the
   vendored markdown renderer — both real but neither needed yet).
+- Length-based document routing (inject-whole vs. per-chat auto-RAG, the way LM Studio switches
+  on document size) — v0 always injects the whole attached document; a length threshold plus a
+  separate per-chat datastore is a v2 refinement. *(The document-attachment track itself was
+  not in v0 scope either — it was improvised mid-sprint as the content-parts + sidecar machinery
+  generalized from images to any attachment; see the Implementation status "Text/PDF documents"
+  checkpoint and the doc-tagged criteria below.)*
 
 ---
 
@@ -814,6 +820,35 @@ specified.
 - A non-VLM backend with an image attachment: clear error to the user, no silent drop.
 - Image-bearing prompts are accounted for in the token budget (conservative placeholder is fine
   for v0; budget doesn't blow context).
+
+The following criteria cover the **text/PDF document track**, added mid-sprint as the
+content-parts + sidecar machinery generalized from images to any attachment. Documents parallel
+the image criteria above, sharing the sidecar store, provenance metadata, and GUI provenance
+buttons — the differences are called out inline:
+
+- **Document attachment (text/PDF)** [doc]: attaching a plain-text (`.txt/.md/.rst/.org/.bib/.tex`)
+  or `.pdf` file folds its extracted text into the outgoing prompt under an `[Attached file: <name>]`
+  header, and **any model can use it — no VLM required** (the one structural difference from an
+  image, which needs a data URL and a vision-capable backend). Extraction runs through the single
+  `raven.common.docextract` backend (**pypdf** for PDF, replacing the poppler `pdftotext` subprocess
+  fleet-wide); parse failure raises `DocumentExtractionError`, a parsed-but-empty document (e.g. a
+  scanned PDF with no text layer) returns `None`.
+- **Document storage** [doc]: the file is stored *verbatim* as a sidecar (no transform, unlike the
+  downsampled image), resolved to plaintext on demand via `textfilestore.sidecar_to_text`
+  (memoized on the content-addressed filename). Provenance is recorded in
+  `general_metadata["sidecars"]` alongside images; the stored payload keeps only the
+  `sidecar:<filename>` ref, so the datastore JSON stays small even for a large PDF, and the
+  sidecar directory plus JSON remains portable as a unit. No native wire form — a `text_file`
+  part never appears on the wire; only its folded text does.
+- **Docs-DB (RAG) ingestion accepts the same document types** [doc]: the docs-DB uses the same
+  `docextract` backend for the configured `config.llm_docs_exts`, so a `.pdf` dropped into the
+  ingestion directory is indexed rather than skipped. (Fixed alongside: a pre-existing spurious
+  double-change event on brand-new files during ingestion.)
+- **Unified attach affordance** [doc]: one attach button routes by extension — images gated on
+  `model_is_vlm`, documents always allowed — with a composer-strip chip and an inline chat-log
+  chip carrying the same three provenance buttons (show original / open source / open folder) as
+  images. Document tokens count toward the context-fill indicator (the folded text is included in
+  the estimate).
 
 ---
 
