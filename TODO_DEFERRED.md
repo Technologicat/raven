@@ -15,6 +15,40 @@ union), so a unified base is the natural home for that composition.
 
 Discovered during brief-03 Half-2 Phase 2 (text/PDF attachments), 2026-07-18 (Juha).
 
+## Attachment + docs-DB: support office document formats (MS Office / LibreOffice)
+
+`raven.common.docextract` handles plain text and PDF. For real-world use, people attach (and drop into the docs
+DB) office files too: word-processor documents (`.docx`, `.odt`), presentations (`.pptx`, `.odp`), and
+spreadsheets (`.xlsx`, `.ods`) — MS Office and LibreOffice both. Add extraction for these to `docextract` (one
+backend, so both the attach path and the docs-DB ingester get them at once) — a per-format library like
+`python-docx` / `python-pptx` / `openpyxl`, or a general converter. Then add the new extensions to the attach
+picker (`app._ATTACH_IMAGE_EXTS`'s document sibling) and to `librarian_config.llm_docs_exts`.
+
+Discovered during the document-attach test-drive (2026-07-18, Juha — "the software category that spends its time
+disproving the claim on the tin").
+
+## FileDialog: slow open and a teardown input-dead-window on huge directories
+
+`FileDialog.show_file_dialog` → `chdir` → `reset_dir` rebuilds the *entire* file listing — one widget row per
+entry — every time the dialog opens. On a directory with thousands of files (Juha's papers dir) this takes a
+couple of seconds to show, and there is a second symptom: right after *closing* the dialog, clicking the opener
+again does nothing (not even the opener button's own flash fires) for a similar couple of seconds, then works.
+The modal window is still tearing down its thousands of child widgets, and while it does, input to the button
+behind it is swallowed — the click never reaches the callback. Both symptoms share one root cause: the listing is
+fully materialized as DPG widgets. Fixes to weigh: virtualize the listing (render only the visible rows), or
+cache/reuse the built listing when the directory is unchanged across opens (the common reopen-same-dir case), so
+a reopen is instant and there is no thousands-of-widgets teardown to block on.
+
+Discovered during the document-attach test-drive (2026-07-18, Juha).
+
+## FileDialog: smart-case the Find (search) field
+
+The `FileDialog` search/filter field matches case-sensitively, which is the wrong default for a file finder. Make
+it smart-case: case-insensitive when the query is all-lowercase, case-sensitive when it contains an uppercase
+letter (the Emacs / ripgrep convention).
+
+Discovered during the document-attach test-drive (2026-07-18, Juha).
+
 ## Modernize the Librarian system prompt / character card
 
 The default system prompt (`raven.librarian.config`) reads as dated for current instruction-tuned models —

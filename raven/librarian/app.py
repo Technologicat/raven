@@ -431,7 +431,10 @@ def _add_staged_file(path: str) -> None:
     with dpg.group(parent="chat_attachments_strip", horizontal=True, tag=strip_group_tag):  # tag
         dpg.add_text(fa.ICON_FILE_LINES, tag=icon_tag)  # tag  # a document glyph stands in for the image thumbnail
         dpg.bind_item_font(icon_tag, themes_and_fonts.icon_font_solid)  # tag
-        dpg.add_text(name)
+        # Wrap the filename so a very long name can't push the remove button off the (fixed-width) composer panel
+        # — bounded conservatively so the button stays reachable even on a narrow (~1080p-split) window. The full
+        # name is always available via the icon's tooltip.
+        dpg.add_text(name, wrap=420)
         with dpg.tooltip(icon_tag):  # tag
             dpg.add_text(name)
         dpg.add_button(label=fa.ICON_XMARK,
@@ -485,7 +488,9 @@ def show_attach_dialog() -> None:
     if _filedialog_attach is None:
         return
     gui_animation.flash_button(button="chat_attach_button",  # tag
-                               message="",  # button-only flash (no tooltip/text target), so nothing is displayed
+                               tooltip="chat_attach_tooltip",  # tag
+                               text="chat_attach_tooltip_text",  # tag
+                               message="Opening the file browser…",  # shown in the tooltip while it's hovered during the flash
                                duration=gui_config.acknowledgment_duration)
     _filedialog_attach.show_file_dialog()
 
@@ -686,19 +691,24 @@ with timer() as tim:
                                            tag="chat_attach_button")  # tag
                             dpg.bind_item_font("chat_attach_button", themes_and_fonts.icon_font_solid)  # tag
                             dpg.bind_item_theme("chat_attach_button", "disablable_widget_theme")  # tag
-                            with dpg.tooltip("chat_attach_button"):  # tag
+                            with dpg.tooltip("chat_attach_button", tag="chat_attach_tooltip"):  # tag
+                                # One text widget under one tag (only one branch runs), so the click-flash can
+                                # briefly swap in an "opening…" acknowledgment and restore the help text after.
                                 if model_is_vlm is True:
-                                    dpg.add_text("Attach file(s) to your message.\n\nDocuments (text, PDF) and images are both accepted.")
+                                    dpg.add_text("Attach file(s) to your message.\n\nDocuments (text, PDF) and images are both accepted.",
+                                                 tag="chat_attach_tooltip_text")
                                 elif model_is_vlm is None:
                                     dpg.add_text("Attach file(s) to your message.\n\n"
                                                  "Documents (text, PDF) work with any model. Images require a vision model —\n"
                                                  "your LLM backend didn't report whether the loaded model can see images, so an\n"
                                                  "image is allowed on faith and the backend will error on send if it can't. LM\n"
-                                                 "Studio reports the flag, so it can confirm capability up front.")
+                                                 "Studio reports the flag, so it can confirm capability up front.",
+                                                 tag="chat_attach_tooltip_text")
                                 else:  # False — confirmed text-only
                                     dpg.add_text("Attach file(s) to your message.\n\n"
                                                  "Documents (text, PDF) work with any model. The loaded model is text-only, so\n"
-                                                 "images can't be attached — load a vision model (VLM) at your LLM backend for those.")
+                                                 "images can't be attached — load a vision model (VLM) at your LLM backend for those.",
+                                                 tag="chat_attach_tooltip_text")
 
                             dpg.add_button(label=fa.ICON_PAPER_PLANE,
                                            callback=send_message_to_ai_callback,
