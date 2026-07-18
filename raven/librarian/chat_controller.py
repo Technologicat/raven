@@ -1192,7 +1192,7 @@ class DPGCompleteChatMessage(DPGChatMessage):
                                         ok_message="Opened image",
                                         action=lambda: common_utils.open_file(datastore.sidecar_path(archival_filename)))
             if source_openable:
-                source_tooltip = f"Open original source\n{source_url}"
+                source_tooltip = f"Open original source\n{urllib.parse.unquote(source_url)}"
             elif source_url.startswith("data:"):
                 source_tooltip = "Open original source — unavailable\n(the image was embedded inline; no external source)"
             else:
@@ -1247,7 +1247,7 @@ class DPGCompleteChatMessage(DPGChatMessage):
                                         ok_message="Opened document",
                                         action=lambda: common_utils.open_file(datastore.sidecar_path(filename)))
             if source_openable:
-                source_tooltip = f"Open original source\n{source_url}"
+                source_tooltip = f"Open original source\n{urllib.parse.unquote(source_url)}"
             else:
                 source_tooltip = "Open original source — unavailable\n(no source location was recorded)"
             self._add_provenance_button(parent=actions,
