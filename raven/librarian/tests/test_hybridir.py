@@ -7,6 +7,8 @@ yet cached.
 """
 
 import textwrap
+import threading
+import types
 
 import pytest
 
@@ -300,3 +302,58 @@ class TestHybridSearch:
             doc = retriever.documents[r["document_id"]]
             offset = r["offset"]
             assert doc["text"][offset:offset + len(r["text"])] == r["text"]
+
+
+# ---------------------------------------------------------------------------
+# Pending-edit collapse (`_pend_edit`) — unit-level, no real index needed
+# ---------------------------------------------------------------------------
+
+def _fake_ir_for_pend_edit(indexed_document_ids=()):
+    """A minimal stand-in exposing just what `_pend_edit` touches, to unit-test its collapse logic.
+
+    Avoids constructing a real `HybridIR` (which would load an embedding model and open the vector store).
+    `indexed_document_ids` seeds the *committed* index membership that `_pend_edit` consults to decide whether
+    an update needs a preceding delete.
+    """
+    fake = types.SimpleNamespace()
+    fake._pending_edits = []
+    fake._pending_edits_lock = threading.RLock()
+    fake.documents = {doc_id: {"document_id": doc_id} for doc_id in indexed_document_ids}
+    fake._stat = lambda path: {"size": 0, "mtime": 0.0}
+    return fake
+
+
+def _pending_kinds(fake):
+    return [kind for (kind, _data) in fake._pending_edits]
+
+
+def test_pend_edit_new_file_add_then_modify_stays_single_add():
+    # A brand-new file: watchdog fires create (-> add) then modify (-> update). The update must not queue a
+    # delete for a document that was never indexed, or the commit no-ops it with a KeyError and the change count
+    # reads 2 instead of 1.
+    fake = _fake_ir_for_pend_edit(indexed_document_ids=())
+    hybridir.HybridIR._pend_edit(fake, action="add", document_id="doc1", path="/docs/doc1.pdf", text="hello")
+    hybridir.HybridIR._pend_edit(fake, action="update", document_id="doc1", path="/docs/doc1.pdf", text="hello")
+    assert _pending_kinds(fake) == ["add"]
+
+
+def test_pend_edit_new_file_event_flurry_collapses_to_single_add():
+    # The exact ordering observed for a large new file (several modify events interleaved with the create):
+    # update, update, add, update. It must still collapse to one clean add.
+    fake = _fake_ir_for_pend_edit(indexed_document_ids=())
+    for action in ("update", "update", "add", "update"):
+        hybridir.HybridIR._pend_edit(fake, action=action, document_id="doc1", path="/docs/doc1.pdf", text="t")
+    assert _pending_kinds(fake) == ["add"]
+
+
+def test_pend_edit_update_of_indexed_document_is_delete_then_add():
+    # A genuine update of an already-committed document still replaces it: delete, then add.
+    fake = _fake_ir_for_pend_edit(indexed_document_ids=("doc1",))
+    hybridir.HybridIR._pend_edit(fake, action="update", document_id="doc1", path="/docs/doc1.pdf", text="new")
+    assert _pending_kinds(fake) == ["delete", "add"]
+
+
+def test_pend_edit_delete_of_indexed_document():
+    fake = _fake_ir_for_pend_edit(indexed_document_ids=("doc1",))
+    hybridir.HybridIR._pend_edit(fake, action="delete", document_id="doc1")
+    assert _pending_kinds(fake) == ["delete"]

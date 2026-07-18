@@ -500,8 +500,16 @@ class HybridIR:
             elif action == "delete":
                 self._pending_edits.append((action, {"document_id": document_id}))
             else:  # action == "update":
-                # Update = delete, then add.
-                self._pending_edits.append(("delete", {"document_id": document_id}))
+                # Update is delete-then-add for an already-indexed document. But if the document isn't in the
+                # committed index yet — a brand-new file whose watchdog `create` and `modify` events both landed
+                # before the first commit (common for larger files, which emit several `modify` events while
+                # being written) — there is nothing to delete. Queueing a delete then would only no-op with a
+                # KeyError at commit time and inflate the change count, so emit it only when the document exists.
+                # The membership read is a GIL-atomic dict lookup and takes no new lock; the two possible
+                # stale-read races are already absorbed commit-side (the add path skips an already-present doc,
+                # the delete path catches KeyError).
+                if document_id in self.documents:
+                    self._pending_edits.append(("delete", {"document_id": document_id}))
                 self._pending_edits.append(("add", document))
 
     # TODO: Index rebuilding is slow. Maybe `commit` should run as a bgtask, like the BibTeX importer.

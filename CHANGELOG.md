@@ -62,6 +62,7 @@
 
 **Fixed**:
 
+- *Raven-librarian* RAG: adding a new document to the database no longer logs a spurious `KeyError` traceback, and the indexing progress no longer counts a single new file as two changes. A new file's filesystem create+modify events could queue a *delete* for a document that was never indexed (more likely with larger files such as PDFs, which emit several write events while being copied in); the delete half of an update is now emitted only when the document actually exists.
 - *Raven-librarian*: a language-model backend error mid-reply (e.g. a broken model prompt template) no longer fails silently — the AI turn used to vanish with no reply and no on-screen indication. The failure now appears as an assistant message naming the backend error and its reason; reroll it to retry.
 - *Raven-librarian*: a chat round whose AI turn finishes *instantly* — a backend error, or the "no relevant documents" RAG bypass — no longer renders the AI's message above your own message. The user turn and the AI turn ran as separate concurrent background tasks with no ordering guarantee between them; harmless while the AI took a second or more to produce its first output, but visibly out of order when it returned at once. The user turn now completes before the AI turn starts.
 
