@@ -343,9 +343,9 @@ If you have an Intel Mac (x86_64) with MacOSX 10.x, to work around this, you can
 To do this, modify Raven's [`pyproject.toml`](pyproject.toml) in a text editor, so that the lines
 
 ```
-    "torch==2.10.0",
-    "torchvision==0.25.0",
-    "torchaudio==2.10.0",
+    "torch==2.11.0",
+    "torchvision==0.26.0",
+    "torchaudio==2.11.0",
 ```
 
 become

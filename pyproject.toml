@@ -34,9 +34,9 @@ dependencies = [
     # The torch trio is version-pinned (not floored) and sourced from the `pytorch-cu128` index declared under
     # `[[tool.pdm.source]]` below — so a re-lock keeps the validated `+cu128` build set instead of drifting the
     # versions (and, worse, the audio wheel's CUDA runtime) on its own. Bump these three together, deliberately.
-    "torch==2.10.0",
-    "torchvision==0.25.0",  # raven.common.video
-    "torchaudio==2.10.0",  # raven.common.audio.resample (device-agnostic resampler)
+    "torch==2.11.0",
+    "torchvision==0.26.0",  # raven.common.video
+    "torchaudio==2.11.0",  # raven.common.audio.resample (device-agnostic resampler)
     "unpythonic>=2.2.0",
     "wordcloud>=1.9.3",  # visualizer
     "wosfile>=0.6",  # wos2bib
