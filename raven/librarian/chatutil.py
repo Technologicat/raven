@@ -10,6 +10,7 @@ __all__ = ["format_message_number",
            "make_timestamp",
            "text_content_part",
            "image_content_part",
+           "text_file_content_part",
            "normalize_content",
            "content_to_text",
            "create_message_from_parts",
@@ -47,8 +48,10 @@ from . import chattree
 # A chat message's `content` is a list of typed parts. Even a text-only message is
 # `[{"type": "text", "text": "..."}]`. This is OpenAI's multimodal `content` shape used directly as Raven's
 # internal representation, so the wire format needs no translation. v0 part types: "text" and "image_url".
-# Reading code must never treat `content` as a string — funnel through `content_to_text` for the text, or
-# dispatch on each part's "type".
+# A later addition, "text_file", references an attached document (plain text or PDF) by its sidecar; it has no
+# native wire form and is expanded into the message's text part at wire-build (`llmclient.invoke`), so it never
+# leaves as-is. Reading code must never treat `content` as a string — funnel through `content_to_text` for the
+# text, or dispatch on each part's "type".
 
 def text_content_part(text: str) -> Dict[str, str]:
     """Wrap a plain string as a single text content-part: `{"type": "text", "text": text}`."""
@@ -63,6 +66,19 @@ def image_content_part(url: str) -> Dict[str, Any]:
     on the wire.
     """
     return {"type": "image_url", "image_url": {"url": url}}
+
+def text_file_content_part(url: str, name: str) -> Dict[str, Any]:
+    """Wrap an attached document as a text-file content-part: `{"type": "text_file", "text_file": {"url", "name"}}`.
+
+    A Raven-internal part type for a document (plain text or PDF) the user attached to a message. As with
+    `image_content_part`, in a *stored* message `url` is a `sidecar:<filename>` reference — the document bytes
+    live in the datastore's sidecar directory, never inline in the chat JSON — and `name` is the original
+    filename, kept for display and for the wire header. Unlike an image, this part has no native wire form:
+    `llmclient.invoke` reads the sidecar, extracts its plaintext (`raven.common.docextract`), and folds it into
+    the message's text part just before sending, so any model can use it (no vision capability required).
+    `content_to_text` skips this part, so an attached document never leaks into the message's own displayed text.
+    """
+    return {"type": "text_file", "text_file": {"url": url, "name": name}}
 
 def normalize_content(content: Any) -> List[Dict[str, Any]]:
     """Return `content` as a content-parts list: a bare string becomes a single text part; a list passes through.

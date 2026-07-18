@@ -1,5 +1,20 @@
 # Deferred TODOs
 
+## Unify a shared sidecar-attachment base for `imagestore` and `filestore`
+
+`raven.librarian.imagestore` (attached images) and `raven.librarian.filestore` (attached text/PDF documents)
+were built as parallel modules — deliberately, so their common shape is visible. They share: storing bytes into
+`chattree`'s content-addressed sidecar store, building a provenance-metadata dict (`url`, `fetched_at`,
+`content_type`, `source`, ...), producing a content part that references the sidecar by `sidecar:` URL, and a
+`sidecar_refs_in_payload` GC mark-phase interpreter. They differ in the payload-specific bits: an image is
+downsampled and resolved to a `data:` URL for the wire; a document is stored verbatim and expanded to text at
+wire-build. Factor the common parts into a small shared base (e.g. `raven.librarian.sidecarstore`) once both
+have settled, keeping the type-specific transform pluggable. Related: whoever wires the datastore's
+`sidecar_extractor` (the deferred GC-UX checkpoint) must compose *both* modules' `sidecar_refs_in_payload` (set
+union), so a unified base is the natural home for that composition.
+
+Discovered during brief-03 Half-2 Phase 2 (text/PDF attachments), 2026-07-18 (Juha).
+
 ## Modernize the Librarian system prompt / character card
 
 The default system prompt (`raven.librarian.config`) reads as dated for current instruction-tuned models —

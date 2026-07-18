@@ -49,6 +49,7 @@ from ..common import text as common_text
 from . import chattree
 from . import chatutil
 from . import config as librarian_config
+from . import filestore
 from . import imagestore
 
 action_ack = sym("ack")  # acknowledge LLM progress, keep generating
@@ -922,8 +923,14 @@ def _serialize_history_for_wire(settings: env,
         `PersistentForest`); without it, sidecar URLs pass through unchanged — harmless for image-free callers
         (throwaway tasks / prefill on text-only chats), which carry no sidecar parts anyway.
 
+      - **Documents.** `text_file` parts (attached plain-text / PDF documents) have no native wire form, so each
+        is *folded into the message text*: its plaintext is extracted on demand from the sidecar
+        (`filestore.sidecar_url_to_text`) and appended after the user's text under an `[Attached file: ...]`
+        header. Any model can therefore use an attached document — no vision capability required. Like image
+        resolution this needs `datastore`; without it there are no `text_file` parts to fold.
+
     `continue_`: when `True`, the last message (the AI message being continued) is left exactly as-is — neither
-                 scrubbed nor image-resolved (assistant continuations carry no images).
+                 scrubbed nor image/document-resolved (assistant continuations carry no attachments).
     """
     history = copy.deepcopy(history)
     end_idx = -1 if continue_ else None  # Don't touch the current AI message when continuing; else process all.
@@ -933,6 +940,23 @@ def _serialize_history_for_wire(settings: env,
                                        thoughts_mode="discard",
                                        markup=None,
                                        add_persona=True)
+
+        # Fold any attached documents into the message text. A `text_file` part has no native wire form, so its
+        # plaintext (extracted on demand from the sidecar) rides as text under a clear header — which is why any
+        # model can use an attached document, no vision capability required. Resolution needs `datastore`;
+        # without it (throwaway tasks / prefill on attachment-free chats) there are no `text_file` parts anyway.
+        if datastore is not None:
+            file_blocks = []
+            for part in message["content"]:
+                if isinstance(part, dict) and part.get("type") == "text_file":
+                    url = part.get("text_file", {}).get("url", "")
+                    name = part.get("text_file", {}).get("name") or "attached file"
+                    if url.startswith(imagestore.SIDECAR_SCHEME):
+                        doc_text = filestore.sidecar_url_to_text(datastore, url)
+                        file_blocks.append(f"[Attached file: {name}]\n{doc_text}\n[End of attached file: {name}]")
+            if file_blocks:
+                scrubbed_text = "\n\n".join([scrubbed_text, *file_blocks]) if scrubbed_text else "\n\n".join(file_blocks)
+
         new_content = [chatutil.text_content_part(scrubbed_text)]
         for part in message["content"]:
             if isinstance(part, dict) and part.get("type") == "image_url":

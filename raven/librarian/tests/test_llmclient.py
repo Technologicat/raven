@@ -831,3 +831,40 @@ class TestSerializeHistoryForWire:
         out = llmclient._serialize_history_for_wire(self.settings, history, continue_=True)
         assert out[0]["content"] == [chatutil.text_content_part("U: q")]  # scrubbed
         assert out[1]["content"] == [chatutil.text_content_part("partial ans")]  # last message untouched
+
+    # --- attached documents (text_file parts) fold into the message text (P2-A) ---
+
+    def _datastore_with_file(self, tmp_path, body, name="spec.txt"):
+        from raven.librarian import chattree, filestore
+        datastore = chattree.PersistentForest(tmp_path / "chat.json", autosave=False,
+                                              sidecar_extractor=filestore.sidecar_refs_in_payload)
+        stored = filestore.store_file_as_sidecar(datastore, body, name=name,
+                                                 provenance_url=f"file:///{name}",
+                                                 provenance_source="user_attachment")
+        return datastore, stored.part
+
+    def test_text_file_folded_into_message_text(self, tmp_path):
+        datastore, file_part = self._datastore_with_file(tmp_path, b"the attached document body")
+        history = [{"role": "user",
+                    "content": [chatutil.text_content_part("What does the spec say?"), file_part]}]
+        wire = llmclient._serialize_history_for_wire(self.settings, history,
+                                                     continue_=False, datastore=datastore)
+        assert len(wire) == 1
+        parts = wire[0]["content"]
+        assert all(p["type"] == "text" for p in parts)  # no text_file part survives onto the wire
+        text = "".join(p["text"] for p in parts)
+        assert "What does the spec say?" in text
+        assert "[Attached file: spec.txt]" in text
+        assert "the attached document body" in text
+
+    def test_text_file_not_folded_without_datastore(self, tmp_path):
+        datastore, file_part = self._datastore_with_file(tmp_path, b"secret body")
+        history = [{"role": "user",
+                    "content": [chatutil.text_content_part("hello"), file_part]}]
+        # No datastore -> the sidecar can't be resolved, so the document is not folded (the throwaway/prefill
+        # callers that pass no datastore carry no attachments in practice).
+        wire = llmclient._serialize_history_for_wire(self.settings, history,
+                                                     continue_=False, datastore=None)
+        text = "".join(p["text"] for p in wire[0]["content"])
+        assert "hello" in text
+        assert "secret body" not in text

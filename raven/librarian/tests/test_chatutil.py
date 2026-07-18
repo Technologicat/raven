@@ -927,3 +927,17 @@ class TestUpgradeDatastoreReasoningAndToolCallId:
         # Messages with nothing to extract are wrapped verbatim (single text part holding the original string).
         assert f.get_payload(system_id)["message"]["content"] == [{"type": "text", "text": "sys"}]
         assert f.get_payload(tool_id)["message"]["content"] == [{"type": "text", "text": "search result"}]
+
+
+class TestTextFileContentPart:
+    """The `text_file` content part for attached documents, and its interaction with `content_to_text`."""
+
+    def test_shape(self):
+        part = chatutil.text_file_content_part("sidecar:abc.txt", "notes.txt")
+        assert part == {"type": "text_file", "text_file": {"url": "sidecar:abc.txt", "name": "notes.txt"}}
+
+    def test_content_to_text_skips_text_file_parts(self):
+        # An attached document must not leak into the message's own displayed/counted text.
+        content = [chatutil.text_content_part("my question"),
+                   chatutil.text_file_content_part("sidecar:abc.txt", "notes.txt")]
+        assert chatutil.content_to_text(content) == "my question"
