@@ -46,11 +46,11 @@ from ..common.gui import utils as guiutils
 from . import chattree
 from . import chatutil
 from . import config as librarian_config
-from . import filestore
+from . import textfilestore
 from . import hybridir
-from . import imagestore
 from . import llmclient
 from . import scaffold
+from . import sidecarstore
 
 gui_config = librarian_config.gui_config  # shorthand, this is used a lot
 
@@ -1063,7 +1063,7 @@ class DPGCompleteChatMessage(DPGChatMessage):
         message = node_payload["message"]
         role = message["role"]
         persona = node_payload["general_metadata"]["persona"]  # stored persona for this chat message
-        sidecars_meta = node_payload["general_metadata"].get("sidecars", {})  # provenance per attached-file sidecar (see imagestore / filestore)
+        sidecars_meta = node_payload["general_metadata"].get("sidecars", {})  # provenance per attached-file sidecar (see imagestore / textfilestore)
         super().build(role=role,
                       persona=persona,
                       node_id=self.node_id)
@@ -1156,9 +1156,9 @@ class DPGCompleteChatMessage(DPGChatMessage):
         `file://` original or an `https://` page — disabled when there is nothing openable), and reveal the
         chat's image-sidecar directory."""
         url = (part.get("image_url") or {}).get("url", "")
-        if not url.startswith(imagestore.SIDECAR_SCHEME):
+        if not url.startswith(sidecarstore.SIDECAR_SCHEME):
             return  # only local sidecar refs are resolvable here; skip anything else (forward-compat)
-        filename = url[len(imagestore.SIDECAR_SCHEME):]
+        filename = url[len(sidecarstore.SIDECAR_SCHEME):]
         meta = sidecars_meta.get(filename) or {}
         texture = self.parent_view.chat_controller.get_inline_image_texture(filename)
         datastore = self.parent_view.chat_controller.datastore
@@ -1218,11 +1218,11 @@ class DPGCompleteChatMessage(DPGChatMessage):
         `https://` page — disabled when nothing openable), and reveal the datastore's sidecar directory. The
         document's text is *not* shown inline (it went to the model at wire-build, folded into the message text);
         this is the visible handle for it. Provenance lives in `sidecars_meta[filename]` (see
-        `filestore.store_file_as_sidecar`). A non-sidecar URL (shouldn't occur in stored data) is skipped."""
+        `textfilestore.store_file_as_sidecar`). A non-sidecar URL (shouldn't occur in stored data) is skipped."""
         url = (part.get("text_file") or {}).get("url", "")
-        if not url.startswith(imagestore.SIDECAR_SCHEME):
+        if not url.startswith(sidecarstore.SIDECAR_SCHEME):
             return  # only local sidecar refs are resolvable here; skip anything else (forward-compat)
-        filename = url[len(imagestore.SIDECAR_SCHEME):]
+        filename = url[len(sidecarstore.SIDECAR_SCHEME):]
         meta = sidecars_meta.get(filename) or {}
         name = (part.get("text_file") or {}).get("name") or meta.get("name") or "attached file"
         datastore = self.parent_view.chat_controller.datastore
@@ -1913,7 +1913,7 @@ class DPGChatController:
                     part_type = part.get("type")
                     if part_type == "image_url":
                         url = (part.get("image_url") or {}).get("url", "")
-                        filename = url[len(imagestore.SIDECAR_SCHEME):] if url.startswith(imagestore.SIDECAR_SCHEME) else None
+                        filename = url[len(sidecarstore.SIDECAR_SCHEME):] if url.startswith(sidecarstore.SIDECAR_SCHEME) else None
                         dims = (sidecars_meta.get(filename) or {}).get("stored_dimensions") if filename else None
                         image_h, image_w = dims if dims else (1024, 1024)  # fallback for pre-stored-dims data; only matters for resolution-scaling families
                         image_tokens += llmclient.image_token_cost(self.llm_settings, image_h, image_w)
@@ -1922,8 +1922,8 @@ class DPGChatController:
                         # cost is exactly that text's — count it alongside the rest via `count_tokens`, not as a
                         # separate estimate. Extraction is memoized on the content-addressed sidecar filename.
                         file_url = (part.get("text_file") or {}).get("url", "")
-                        if file_url.startswith(imagestore.SIDECAR_SCHEME):
-                            text_segments.append(filestore.sidecar_to_text(self.datastore, file_url))
+                        if file_url.startswith(sidecarstore.SIDECAR_SCHEME):
+                            text_segments.append(textfilestore.sidecar_to_text(self.datastore, file_url))
             count, is_exact = llmclient.count_tokens(self.llm_settings, "".join(text_segments))
             if image_tokens:
                 count += image_tokens

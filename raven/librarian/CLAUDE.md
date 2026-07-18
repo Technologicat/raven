@@ -1,16 +1,16 @@
 # Librarian — CLAUDE.md
 
-~11,100 lines total across 11 modules. Clean layered design, target style for the project.
+~11,800 lines total across 13 modules. Clean layered design, target style for the project.
 
 ## Dependency Layers (bottom → top)
 
 ```
-Layer 5 - Applications:     app.py (1427 lines), minichat.py (668 lines, minimal reference client)
-Layer 4 - Controller:       chat_controller.py (2232 lines)
-Layer 3 - Orchestration:    scaffold.py (825 lines)
-Layer 2 - Backends:         llmclient.py (1575 lines), hybridir.py (1380 lines)
-Layer 1 - Utilities:        chatutil.py (974 lines), appstate.py (301 lines), imagestore.py (236 lines)
-Layer 0 - Foundation:       config.py (555 lines), chattree.py (931 lines)
+Layer 5 - Applications:     app.py (1620 lines), minichat.py (672 lines, minimal reference client)
+Layer 4 - Controller:       chat_controller.py (2406 lines)
+Layer 3 - Orchestration:    scaffold.py (845 lines)
+Layer 2 - Backends:         llmclient.py (1600 lines), hybridir.py (1397 lines)
+Layer 1 - Utilities:        chatutil.py (990 lines), appstate.py (301 lines), imagestore.py (214 lines), textfilestore.py (129 lines)
+Layer 0 - Foundation:       config.py (561 lines), chattree.py (931 lines), sidecarstore.py (105 lines)
 ```
 
 Each layer only imports from layers below it. No circular dependencies.
@@ -23,7 +23,11 @@ Each layer only imports from layers below it. No circular dependencies.
 
 - **`chatutil.py`** — Pure functions for message formatting, creation, and cleanup. **Content is a list of typed parts** (OpenAI multimodal schema: `{"type": "text"|"image_url", ...}`), not a bare string. Constructors: `create_chat_message()` (string → single text part, with persona), `create_message_from_parts()` (multi-part). Accessors: `content_to_text()` (universal "give me the text" reader — assumes a parts list, raises on a stray string), `text_content_part`/`image_content_part`, `normalize_content()` (the one str→parts migration converter). Handles thought blocks (`<think>...</think>`) via regex — modes: `"discard"`, `"markup"`, `"keep"`. `scrub()` cleans LLM output (thought blocks, persona prefix, formatting quirks). `linearize_chat()` reconstructs linear history from tree. Multiple markup targets (ANSI, Markdown, None).
 
-- **`imagestore.py`** — Image sidecar lifecycle for multimodal messages, bridging the image codec/Lanczos resampler (`raven.common.image`), the sidecar file store (`chattree`), and the image-storage config. `store_image_as_sidecar()` (decode → downsample-to-cap → re-encode; original kept byte-for-byte to preserve EXIF/ICC when over cap) returns the `image_url` content-part + provenance metadata. `sidecar_url_to_data_url()` resolves a stored `sidecar:<filename>` URL to a `data:` URL for wire-send (a `sidecar:` URL never leaves the datastore). `sidecar_refs_in_payload()` is the GC mark-phase interpreter injected into `chattree`.
+- **`sidecarstore.py`** — Shared foundation for the two per-kind attachment stores (`imagestore`, `textfilestore`). Owns the `SIDECAR_SCHEME` (`"sidecar:"`) constant and the mechanics both kinds duplicate otherwise: `read_source_bytes()` (bytes-or-path ingestion), `base_provenance()` (the four common provenance keys — url/fetched_at/content_type/source — as a fresh dict the caller extends), `sidecar_filename_from_url()` (the scheme-strip both resolvers need, raising on a non-`sidecar:` URL), `content_part_sidecar_refs(payload, part_type)` (the GC mark-phase content-list walk, parameterized by part type). Stdlib-only, no `chatutil`/`chattree`/`config` deps — so it sits beneath every store. Exists so the two kind modules can't drift on the shared bits.
+
+- **`imagestore.py`** — Image-specific sidecar store, on top of `sidecarstore`. Bridges the image codec/Lanczos resampler (`raven.common.image`), the sidecar file store (`chattree`), and the image-storage config. `store_image_as_sidecar()` (decode → downsample-to-cap → re-encode; original kept byte-for-byte to preserve EXIF/ICC when over cap) returns the `image_url` content-part + provenance metadata. `sidecar_url_to_data_url()` resolves a stored `sidecar:<filename>` URL to a `data:` URL for wire-send (a `sidecar:` URL never leaves the datastore). `sidecar_refs_in_payload()` is the GC mark-phase interpreter injected into `chattree` (image parts + the preserved-original `original_sidecar` refs).
+
+- **`textfilestore.py`** — Document-specific sidecar store (plain text / PDF attachments), the file sibling of `imagestore` on the same `sidecarstore` base. `store_file_as_sidecar()` stores the document bytes *verbatim* (no transform, unlike an image) and returns a `text_file` content-part + provenance. A document has no native wire form: `sidecar_to_text()` extracts its plaintext on demand via `raven.common.docextract` (memoized on the content-addressed filename), and `llmclient` folds that into the message text at wire-build time — so any model can use an attached document, no vision capability required. `sidecar_refs_in_payload()` is the `text_file` GC mark interpreter; union it with `imagestore`'s when configuring a datastore's `sidecar_extractor`.
 
 - **`appstate.py`** — Loads/saves app state (JSON dict) + datastore (`PersistentForest`). On load: refreshes system prompt (overwrites stored version), refreshes greeting node, validates HEAD pointers, fills missing settings with defaults, migrates old formats. Recovers gracefully from partial corruption (dangling HEAD, missing keys); factory reset only if datastore is genuinely empty. State dict tracks: HEAD, toggle states (tools/docs/speculate/speech/subtitles), node IDs for system prompt and greeting.
 

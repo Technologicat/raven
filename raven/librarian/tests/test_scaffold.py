@@ -12,7 +12,7 @@ pytest.importorskip("raven.librarian.scaffold",
 
 from unpythonic.env import env  # noqa: E402 -- after importorskip by design
 
-from raven.librarian import chattree, chatutil, filestore, imagestore, scaffold  # noqa: E402 -- after importorskip by design
+from raven.librarian import chattree, chatutil, textfilestore, imagestore, scaffold, sidecarstore  # noqa: E402 -- after importorskip by design
 
 
 # ---------------------------------------------------------------------------
@@ -215,8 +215,8 @@ class TestUserTurnStagedImages:
         image_parts = [part for part in content if part.get("type") == "image_url"]
         assert len(image_parts) == 1  # image part appended after the text part
         url = image_parts[0]["image_url"]["url"]
-        assert url.startswith(imagestore.SIDECAR_SCHEME)
-        filename = url[len(imagestore.SIDECAR_SCHEME):]
+        assert url.startswith(sidecarstore.SIDECAR_SCHEME)
+        filename = url[len(sidecarstore.SIDECAR_SCHEME):]
 
         assert len(forest.read_sidecar(filename)) > 0  # sidecar file was written
         sidecars = payload["general_metadata"]["sidecars"]
@@ -238,7 +238,7 @@ class TestUserTurnStagedFiles:
 
     def _forest(self, tmp_path, llm_settings):
         forest = chattree.PersistentForest(tmp_path / "chat.json", autosave=False,
-                                           sidecar_extractor=filestore.sidecar_refs_in_payload)
+                                           sidecar_extractor=textfilestore.sidecar_refs_in_payload)
         greeting = chatutil.factory_reset_datastore(forest, llm_settings)
         return forest, greeting
 
@@ -260,8 +260,8 @@ class TestUserTurnStagedFiles:
         assert len(file_parts) == 1  # text_file part appended after the text part
         assert file_parts[0]["text_file"]["name"] == "spec.txt"
         url = file_parts[0]["text_file"]["url"]
-        assert url.startswith(imagestore.SIDECAR_SCHEME)
-        filename = url[len(imagestore.SIDECAR_SCHEME):]
+        assert url.startswith(sidecarstore.SIDECAR_SCHEME)
+        filename = url[len(sidecarstore.SIDECAR_SCHEME):]
 
         assert forest.read_sidecar(filename) == b"the spec body text"  # sidecar stored verbatim
         sidecars = payload["general_metadata"]["sidecars"]
@@ -273,7 +273,7 @@ class TestUserTurnStagedFiles:
         # A message carrying both an image and a document records both under general_metadata["sidecars"].
         forest = chattree.PersistentForest(
             tmp_path / "chat.json", autosave=False,
-            sidecar_extractor=lambda p: imagestore.sidecar_refs_in_payload(p) | filestore.sidecar_refs_in_payload(p))
+            sidecar_extractor=lambda p: imagestore.sidecar_refs_in_payload(p) | textfilestore.sidecar_refs_in_payload(p))
         head = chatutil.factory_reset_datastore(forest, llm_settings)
         img = env(raw=TestUserTurnStagedImages._png_bytes(16, 16),
                   provenance_url="file:///tmp/pic.png", provenance_source="user_attachment")

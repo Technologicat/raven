@@ -6,10 +6,12 @@ as a *sidecar file* next to the chat datastore JSON (in `<datastore>.images/`, m
 `https://` URL ever lands in a stored datastore, so a saved chat reloads without network access, survives the
 source going away (link rot), and never phones home when reopened.
 
-This module is the bridge between three lower layers — the image codec / Lanczos resampler
+This is the image-specific store; the shared sidecar mechanics (URL scheme, provenance skeleton, byte
+ingestion, GC content-walk) live in `sidecarstore`, the common foundation with `textfilestore`. On top of those,
+this module is the bridge between three lower layers — the image codec / Lanczos resampler
 (`raven.common.image`), the sidecar file store (`chattree`), and the image-storage config knobs
-(`raven.librarian.config`). It knows the chat-message content-part and provenance-metadata shapes, so the
-storage layer beneath it doesn't have to.
+(`raven.librarian.config`). It knows the image content-part and provenance-metadata shapes, so the storage
+layer beneath it doesn't have to.
 
 Three public operations:
 
@@ -24,8 +26,7 @@ Three public operations:
     `sidecars`-metadata schema knowledge, which chattree deliberately doesn't have.
 """
 
-__all__ = ["SIDECAR_SCHEME",
-           "downsample_dims",
+__all__ = ["downsample_dims",
            "store_image_as_sidecar",
            "sidecar_url_to_data_url",
            "sidecar_refs_in_payload"]
@@ -34,7 +35,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 import base64
-import datetime
 import io
 import math
 import pathlib
@@ -44,17 +44,11 @@ from unpythonic.env import env
 from . import chatutil
 from . import chattree
 from . import config as librarian_config
-
-# The Raven-internal URL scheme marking an image part as "resolve against the datastore's sidecar directory".
-SIDECAR_SCHEME = "sidecar:"
+from . import sidecarstore
 
 # One megapixel, in pixels. The downsample target is expressed in megapixels (config `image_store_max_megapixels`).
 _ONE_MEGAPIXEL = 2 ** 20
 
-
-def _format_now() -> str:
-    """Current local time as `"YYYY-MM-DD HH:MM:SS"` — the format used for `general_metadata["datetime"]`."""
-    return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 def _mime_for_ext(ext: str) -> str:
     """MIME type for a sidecar filename extension (no leading dot), e.g. "png" -> "image/png"."""
@@ -118,8 +112,7 @@ def store_image_as_sidecar(datastore: chattree.PersistentForest,
     """
     from PIL import Image  # deferred: Pillow is heavy and only needed on an actual attach
 
-    raw = image_source if isinstance(image_source, (bytes, bytearray)) else pathlib.Path(image_source).read_bytes()
-    raw = bytes(raw)
+    raw = sidecarstore.read_source_bytes(image_source)
     original_size_bytes = len(raw)
 
     # Probe format + dimensions without decoding pixels (PIL is lazy; `.format` / `.size` need no full load).
@@ -129,7 +122,6 @@ def store_image_as_sidecar(datastore: chattree.PersistentForest,
         has_alpha = probe.mode in ("RGBA", "LA", "PA") or ("transparency" in probe.info)
 
     content_type = content_type or _mime_for_pil_format(pil_format)
-    fetched_at = fetched_at or _format_now()
 
     max_megapixels = librarian_config.image_store_max_megapixels
     megapixels = (height * width) / _ONE_MEGAPIXEL
@@ -138,12 +130,10 @@ def store_image_as_sidecar(datastore: chattree.PersistentForest,
     if not needs_downsample:
         # Case 1: store the verbatim original as the primary — preserves embedded metadata, no re-encode.
         filename = datastore.store_sidecar(raw, pil_format.lower())
-        metadata = {"url": provenance_url,
-                    "fetched_at": fetched_at,
-                    "content_type": content_type,
-                    "source": provenance_source,
-                    "stored_dimensions": [height, width]}  # dims of the bytes actually on disk (= original here)
-        return env(part=chatutil.image_content_part(f"{SIDECAR_SCHEME}{filename}"),
+        metadata = sidecarstore.base_provenance(url=provenance_url, source=provenance_source,
+                                                content_type=content_type, fetched_at=fetched_at)
+        metadata["stored_dimensions"] = [height, width]  # dims of the bytes actually on disk (= original here)
+        return env(part=chatutil.image_content_part(f"{sidecarstore.SIDECAR_SCHEME}{filename}"),
                    filename=filename,
                    sidecar_metadata=metadata)
 
@@ -171,19 +161,17 @@ def store_image_as_sidecar(datastore: chattree.PersistentForest,
         out_format = pil_format if pil_format in ("JPEG", "PNG", "WEBP", "BMP", "TIFF") else "PNG"
 
     primary_filename = datastore.store_sidecar(codec.encode(downsampled, out_format), out_format.lower())
-    metadata = {"url": provenance_url,
-                "fetched_at": fetched_at,
-                "content_type": content_type,
-                "source": provenance_source,
-                "stored_dimensions": [new_height, new_width],  # dims of the downsampled bytes actually on disk (= what goes on the wire)
-                "original_dimensions": [height, width],
-                "original_size_bytes": original_size_bytes}
+    metadata = sidecarstore.base_provenance(url=provenance_url, source=provenance_source,
+                                            content_type=content_type, fetched_at=fetched_at)
+    metadata["stored_dimensions"] = [new_height, new_width]  # dims of the downsampled bytes actually on disk (= what goes on the wire)
+    metadata["original_dimensions"] = [height, width]
+    metadata["original_size_bytes"] = original_size_bytes
     if librarian_config.store_original_image:
         # Keep the full-resolution original verbatim (metadata intact) as a second sidecar.
         original_filename = datastore.store_sidecar(raw, pil_format.lower())
         metadata["original_sidecar"] = original_filename
 
-    return env(part=chatutil.image_content_part(f"{SIDECAR_SCHEME}{primary_filename}"),
+    return env(part=chatutil.image_content_part(f"{sidecarstore.SIDECAR_SCHEME}{primary_filename}"),
                filename=primary_filename,
                sidecar_metadata=metadata)
 
@@ -197,9 +185,7 @@ def sidecar_url_to_data_url(datastore: chattree.PersistentForest, url: str) -> s
     `llmclient.invoke` to substitute a real image reference into the outgoing message; the persisted message
     keeps its `sidecar:` URL.
     """
-    if not url.startswith(SIDECAR_SCHEME):
-        raise ValueError(f"sidecar_url_to_data_url: expected a '{SIDECAR_SCHEME}' URL, got '{url[:32]}'.")
-    filename = url[len(SIDECAR_SCHEME):]
+    filename = sidecarstore.sidecar_filename_from_url(url, caller="sidecar_url_to_data_url")
     data = datastore.read_sidecar(filename)
     ext = filename.rsplit(".", 1)[-1] if "." in filename else "png"
     encoded = base64.b64encode(data).decode("ascii")
@@ -220,15 +206,7 @@ def sidecar_refs_in_payload(payload: dict) -> set[str]:
     Robust to a pre-migration payload whose `content` is still a bare string (returns no refs rather than
     iterating the string), though in practice GC only ever runs on post-migration data.
     """
-    referenced = set()
-    message = payload.get("message", {})
-    content = message.get("content")
-    if isinstance(content, list):  # post-migration content is always a parts list; guard legacy strings
-        for part in content:
-            if isinstance(part, dict) and part.get("type") == "image_url":
-                part_url = part.get("image_url", {}).get("url", "")
-                if part_url.startswith(SIDECAR_SCHEME):
-                    referenced.add(part_url[len(SIDECAR_SCHEME):])
+    referenced = sidecarstore.content_part_sidecar_refs(payload, "image_url")
     sidecars = payload.get("general_metadata", {}).get("sidecars", {})
     for entry in sidecars.values():
         if isinstance(entry, dict) and "original_sidecar" in entry:

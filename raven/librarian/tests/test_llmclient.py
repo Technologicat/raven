@@ -835,10 +835,10 @@ class TestSerializeHistoryForWire:
     # --- attached documents (text_file parts) fold into the message text (P2-A) ---
 
     def _datastore_with_file(self, tmp_path, body, name="spec.txt"):
-        from raven.librarian import chattree, filestore
+        from raven.librarian import chattree, textfilestore
         datastore = chattree.PersistentForest(tmp_path / "chat.json", autosave=False,
-                                              sidecar_extractor=filestore.sidecar_refs_in_payload)
-        stored = filestore.store_file_as_sidecar(datastore, body, name=name,
+                                              sidecar_extractor=textfilestore.sidecar_refs_in_payload)
+        stored = textfilestore.store_file_as_sidecar(datastore, body, name=name,
                                                  provenance_url=f"file:///{name}",
                                                  provenance_source="user_attachment")
         return datastore, stored.part

@@ -10,7 +10,8 @@ Unlike an image (which the model consumes natively as a `data:` URL), a document
 plaintext is extracted on demand (`raven.common.docextract`) and folded into the message's text at wire-build
 time by `llmclient.invoke`. So any model can use an attached document — no vision capability required.
 
-Three public operations, mirroring `imagestore`:
+The shared sidecar mechanics (URL scheme, provenance skeleton, byte ingestion, GC content-walk) live in
+`sidecarstore`, the common foundation with `imagestore`. Three public operations, mirroring `imagestore`:
 
   - `store_file_as_sidecar`: store the document bytes verbatim, return the `text_file` content-part plus the
     provenance metadata entry.
@@ -28,7 +29,6 @@ __all__ = ["store_file_as_sidecar",
 import logging
 logger = logging.getLogger(__name__)
 
-import datetime
 import pathlib
 
 from unpythonic.env import env
@@ -37,7 +37,7 @@ from ..common import docextract
 
 from . import chatutil
 from . import chattree
-from .imagestore import SIDECAR_SCHEME  # the sidecar URL scheme is shared with images; imagestore owns it
+from . import sidecarstore
 
 
 # Extracted-text cache, keyed by the content-addressed sidecar filename (`<sha256>.<ext>`). A sidecar is
@@ -46,10 +46,6 @@ from .imagestore import SIDECAR_SCHEME  # the sidecar URL scheme is shared with 
 # that carries an attached document.
 _extracted_text_cache: dict[str, str] = {}
 
-
-def _format_now() -> str:
-    """Current local time as `"YYYY-MM-DD HH:MM:SS"` — the format used for `general_metadata["datetime"]`."""
-    return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 def _mime_for_ext(ext: str) -> str:
     """A reasonable MIME type for a document extension (no leading dot). Informational provenance only."""
@@ -85,21 +81,17 @@ def store_file_as_sidecar(datastore: chattree.PersistentForest,
       `filename`: the sidecar's filename (the key under which `sidecar_metadata` should be recorded).
       `sidecar_metadata`: the provenance dict to store at `general_metadata["sidecars"][filename]`.
     """
-    raw = file_source if isinstance(file_source, (bytes, bytearray)) else pathlib.Path(file_source).read_bytes()
-    raw = bytes(raw)
+    raw = sidecarstore.read_source_bytes(file_source)
 
     ext = pathlib.Path(name).suffix.lstrip(".").lower() or "txt"
     content_type = content_type or _mime_for_ext(ext)
-    fetched_at = fetched_at or _format_now()
 
     filename = datastore.store_sidecar(raw, ext)
-    metadata = {"url": provenance_url,
-                "fetched_at": fetched_at,
-                "content_type": content_type,
-                "source": provenance_source,
-                "name": name,
-                "size_bytes": len(raw)}
-    return env(part=chatutil.text_file_content_part(f"{SIDECAR_SCHEME}{filename}", name),
+    metadata = sidecarstore.base_provenance(url=provenance_url, source=provenance_source,
+                                            content_type=content_type, fetched_at=fetched_at)
+    metadata["name"] = name
+    metadata["size_bytes"] = len(raw)
+    return env(part=chatutil.text_file_content_part(f"{sidecarstore.SIDECAR_SCHEME}{filename}", name),
                filename=filename,
                sidecar_metadata=metadata)
 
@@ -112,9 +104,7 @@ def sidecar_to_text(datastore: chattree.PersistentForest, url: str) -> str:
     An extraction failure or an empty document degrades to a short bracketed placeholder rather than raising, so
     a single unreadable attachment can never break the LLM call.
     """
-    if not url.startswith(SIDECAR_SCHEME):
-        raise ValueError(f"sidecar_to_text: expected a '{SIDECAR_SCHEME}' URL, got '{url[:32]}'.")
-    filename = url[len(SIDECAR_SCHEME):]
+    filename = sidecarstore.sidecar_filename_from_url(url, caller="sidecar_to_text")
     if filename in _extracted_text_cache:
         return _extracted_text_cache[filename]
     path = datastore.sidecar_path(filename)
@@ -136,13 +126,4 @@ def sidecar_refs_in_payload(payload: dict) -> set[str]:
     datastore's `sidecar_extractor`, so both attached images and attached documents are seen by the mark phase.
     Robust to a pre-migration bare-string `content` (returns no refs rather than iterating the string).
     """
-    referenced = set()
-    message = payload.get("message", {})
-    content = message.get("content")
-    if isinstance(content, list):  # post-migration content is always a parts list; guard legacy strings
-        for part in content:
-            if isinstance(part, dict) and part.get("type") == "text_file":
-                part_url = part.get("text_file", {}).get("url", "")
-                if part_url.startswith(SIDECAR_SCHEME):
-                    referenced.add(part_url[len(SIDECAR_SCHEME):])
-    return referenced
+    return sidecarstore.content_part_sidecar_refs(payload, "text_file")

@@ -49,8 +49,9 @@ from ..common import text as common_text
 from . import chattree
 from . import chatutil
 from . import config as librarian_config
-from . import filestore
+from . import textfilestore
 from . import imagestore
+from . import sidecarstore
 
 action_ack = sym("ack")  # acknowledge LLM progress, keep generating
 action_stop = sym("stop")  # interrupt the LLM, stop generating now
@@ -925,7 +926,7 @@ def _serialize_history_for_wire(settings: env,
 
       - **Documents.** `text_file` parts (attached plain-text / PDF documents) have no native wire form, so each
         is *folded into the message text*: its plaintext is extracted on demand from the sidecar
-        (`filestore.sidecar_to_text`) and appended after the user's text under an `[Attached file: ...]`
+        (`textfilestore.sidecar_to_text`) and appended after the user's text under an `[Attached file: ...]`
         header. Any model can therefore use an attached document — no vision capability required. Like image
         resolution this needs `datastore`; without it there are no `text_file` parts to fold.
 
@@ -951,8 +952,8 @@ def _serialize_history_for_wire(settings: env,
                 if isinstance(part, dict) and part.get("type") == "text_file":
                     url = part.get("text_file", {}).get("url", "")
                     name = part.get("text_file", {}).get("name") or "attached file"
-                    if url.startswith(imagestore.SIDECAR_SCHEME):
-                        doc_text = filestore.sidecar_to_text(datastore, url)
+                    if url.startswith(sidecarstore.SIDECAR_SCHEME):
+                        doc_text = textfilestore.sidecar_to_text(datastore, url)
                         file_blocks.append(f"[Attached file: {name}]\n{doc_text}\n[End of attached file: {name}]")
             if file_blocks:
                 scrubbed_text = "\n\n".join([scrubbed_text, *file_blocks]) if scrubbed_text else "\n\n".join(file_blocks)
@@ -961,7 +962,7 @@ def _serialize_history_for_wire(settings: env,
         for part in message["content"]:
             if isinstance(part, dict) and part.get("type") == "image_url":
                 url = part.get("image_url", {}).get("url", "")
-                if datastore is not None and url.startswith(imagestore.SIDECAR_SCHEME):
+                if datastore is not None and url.startswith(sidecarstore.SIDECAR_SCHEME):
                     part = chatutil.image_content_part(imagestore.sidecar_url_to_data_url(datastore, url))
                 new_content.append(part)
         message["content"] = new_content

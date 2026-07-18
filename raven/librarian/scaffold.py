@@ -61,7 +61,7 @@ def user_turn(llm_settings: env,
     `staged_files`: Documents (plain text / PDF) the user attached, or `None`. Each entry is an `env` with `raw`
                     (the file bytes), `name` (the original filename — for display and to derive the sidecar
                     extension), `provenance_url`, and `provenance_source` (as for `staged_images`). Each is stored
-                    verbatim as a datastore sidecar via `filestore.store_file_as_sidecar`; the resulting
+                    verbatim as a datastore sidecar via `textfilestore.store_file_as_sidecar`; the resulting
                     `text_file` parts are appended to the message content and their provenance is recorded
                     alongside the images' under `general_metadata["sidecars"]`. Unlike an image, a document works
                     with any model (its text is folded into the prompt at wire-build), so this is not gated on
@@ -83,9 +83,9 @@ def user_turn(llm_settings: env,
             message["content"].append(result.part)  # a fresh list from create_chat_message; safe to extend
             sidecar_metadata_by_filename[result.filename] = result.sidecar_metadata
     if staged_files:
-        from . import filestore  # deferred: only pulls docextract/pypdf when a document is actually attached
+        from . import textfilestore  # deferred: only pulls docextract/pypdf when a document is actually attached
         for staged in staged_files:
-            result = filestore.store_file_as_sidecar(datastore=datastore,
+            result = textfilestore.store_file_as_sidecar(datastore=datastore,
                                                      file_source=staged.raw,
                                                      name=staged.name,
                                                      provenance_url=staged.provenance_url,
