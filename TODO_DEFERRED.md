@@ -123,8 +123,13 @@ cost only their own tail. (The RAG results already pay this price — they are i
 `_perform_injects` carries a standing TODO about the full cache rebuild it causes. That placement is
 deliberate, not an oversight: it dates from Qwen 3.0, which would refuse to engage with material
 injected at the end of the prompt at all. The cache rebuild was the price of the model actually
-reading the retrieved documents. Whether current models still need it is worth re-testing before
-anyone "optimizes" that insert position.)
+reading the retrieved documents.
+
+That constraint is from autumn 2025 and should be treated as **probably stale**: long-context
+attention has moved a great deal since, Qwen specifically, and the architecture has changed
+underneath (Qwen3.5/3.6 are gated-deltanet). Re-test before assuming the front placement is still
+required — but equally, re-test before removing it, because the failure it prevents is the model
+silently ignoring retrieved documents, which looks like bad retrieval rather than bad placement.)
 
 So hoisting is only sane for something that is *both* worth system-level weight and stable across the
 conversation — which none of the current always-on injects are.
