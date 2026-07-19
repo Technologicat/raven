@@ -968,6 +968,35 @@ def _serialize_history_for_wire(settings: env,
         message["content"] = new_content
     return history
 
+def _warn_about_strict_template_violations(history: List[Dict]) -> None:
+    """Log a warning if `history` has a message shape that strict chat templates reject.
+
+    Some chat templates enforce their message-ordering contract with a hard `raise_exception` rather
+    than by ignoring the offending message, so a violation fails the *whole* request. The backend
+    reports that as a template-parser failure ("Unable to generate parser for this template.
+    Automatic parser generation failed"), which reads as a backend bug — the conversation we sent is
+    nowhere in the message. Naming the offending shape here, at the point of send while we still know
+    what we built, is what turns that into a quick diagnosis instead of a hunt through the backend.
+
+    Qwen3.5's template is the strict reference: it requires at least one user message, and requires
+    every system message to precede the first user/assistant turn. Qwen3.6's dropped both guards, so
+    a history that works fine on one model of a family can hard-fail on another.
+
+    Warn, don't raise: which shapes a template accepts is the template's business, and most backends
+    are permissive. A refused request surfaces on its own; this only makes the reason legible.
+    """
+    roles = [message["role"] for message in history]
+    if not roles:
+        return
+    role_sequence = ", ".join(roles)
+
+    if "user" not in roles:
+        logger.warning(f"_warn_about_strict_template_violations: history has no user message; roles are [{role_sequence}]. Strict chat templates reject this.")
+
+    end_of_leading_system_block = next((index for index, role in enumerate(roles) if role != "system"), len(roles))
+    if "system" in roles[end_of_leading_system_block:]:
+        logger.warning(f"_warn_about_strict_template_violations: history has a system message after the conversation starts; roles are [{role_sequence}]. Strict chat templates reject this.")
+
 def invoke(settings: env,
            history: List[Dict],
            on_progress: Optional[Callable] = None,
@@ -1062,13 +1091,7 @@ def invoke(settings: env,
     # Normalize message content for resend (see `_serialize_history_for_wire`).
     history = _serialize_history_for_wire(settings, history, continue_=continue_, datastore=datastore)
 
-    # Some chat templates refuse a history with no user turn, with a hard `raise_exception` — Qwen3.5's
-    # bails out with "No user query found in messages." The backend reports this as a template-parser
-    # failure, which reads as a backend bug rather than as "we sent a conversation the model won't accept",
-    # so log the role sequence here: at the point of send, where we still know what we built.
-    if not any(message["role"] == "user" for message in history):
-        roles = ", ".join(message["role"] for message in history)
-        logger.warning(f"invoke: history has no user message; roles are [{roles}]. Strict chat templates reject this.")
+    _warn_about_strict_template_violations(history)
 
     # Not mentioned in the oobabooga docs, but see:
     #  `text-generation-webui/extensions/openai/script.py`, function `openai_chat_completions`

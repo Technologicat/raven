@@ -6,6 +6,7 @@ The actual fetch (`api.webfetch_fetch`, HTTP to the server) is monkeypatched.
 """
 
 import json
+import logging
 
 import pytest
 
@@ -868,3 +869,58 @@ class TestSerializeHistoryForWire:
         text = "".join(p["text"] for p in wire[0]["content"])
         assert "hello" in text
         assert "secret body" not in text
+
+
+# ---------------------------------------------------------------------------
+# Strict-chat-template shape warnings
+# ---------------------------------------------------------------------------
+
+def _roles(*roles):
+    """A history carrying only the roles — all these checks look at is the role sequence."""
+    return [{"role": role, "content": [chatutil.text_content_part(f"({role})")]} for role in roles]
+
+
+class TestStrictTemplateWarnings:
+    """`_warn_about_strict_template_violations` makes a backend template rejection legible.
+
+    A strict template (Qwen3.5's) answers a bad message shape with a 400 that names its own parser,
+    not the conversation — so the log line here is what points at the real cause. These tests pin
+    that the warning fires for the two rejected shapes and stays quiet for good ones; a warning that
+    cried wolf would be worse than none, since it would train the reader to skip it.
+    """
+
+    def test_missing_user_message_warns(self, caplog):
+        with caplog.at_level(logging.WARNING):
+            llmclient._warn_about_strict_template_violations(_roles("system", "assistant"))
+        assert "no user message" in caplog.text
+        assert "system, assistant" in caplog.text  # the actual sequence, for diagnosis
+
+    def test_late_system_message_warns(self, caplog):
+        # The shape Raven itself sent before the injects moved to the user role.
+        with caplog.at_level(logging.WARNING):
+            llmclient._warn_about_strict_template_violations(_roles("system", "assistant", "user", "system", "system"))
+        assert "system message after the conversation starts" in caplog.text
+        assert "system, assistant, user, system, system" in caplog.text
+
+    def test_both_violations_warn_separately(self, caplog):
+        with caplog.at_level(logging.WARNING):
+            llmclient._warn_about_strict_template_violations(_roles("system", "assistant", "system"))
+        assert "no user message" in caplog.text
+        assert "system message after the conversation starts" in caplog.text
+
+    @pytest.mark.parametrize("roles", [("system", "user"),
+                                       ("system", "system", "user"),  # several leading system messages are fine
+                                       ("system", "assistant", "user"),
+                                       ("system", "user", "assistant", "user"),
+                                       ("system", "user", "assistant", "tool", "assistant", "user"),  # tool results mid-conversation
+                                       ("user",)])  # no system prompt at all
+    def test_accepted_shapes_stay_quiet(self, caplog, roles):
+        with caplog.at_level(logging.WARNING):
+            llmclient._warn_about_strict_template_violations(_roles(*roles))
+        assert caplog.text == ""
+
+    def test_empty_history_stays_quiet(self, caplog):
+        # A degenerate history is someone else's error to report; don't add noise to it.
+        with caplog.at_level(logging.WARNING):
+            llmclient._warn_about_strict_template_violations([])
+        assert caplog.text == ""
