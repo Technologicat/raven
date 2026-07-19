@@ -763,3 +763,79 @@ class TestRetryToolCalls:
                                        head_node_id=head, user_message_text="Hello")
         with pytest.raises(ValueError):
             run_retry(forest, llm_settings, user_head)  # a user node, not a tool node
+
+
+# ---------------------------------------------------------------------------
+# Temporary context injects
+# ---------------------------------------------------------------------------
+
+def leading_system_block_length(history):
+    """Return the number of messages in the leading run of "system" messages."""
+    for index, message in enumerate(history):
+        if message["role"] != "system":
+            return index
+    return len(history)
+
+
+def make_conversation(llm_settings):
+    """A minimal system -> assistant -> user history, the shape a chat has when the AI's turn starts."""
+    return [chatutil.create_chat_message(llm_settings=llm_settings, role="system", text="You are a helpful assistant."),
+            chatutil.create_chat_message(llm_settings=llm_settings, role="assistant", text="How can I help you today?"),
+            chatutil.create_chat_message(llm_settings=llm_settings, role="user", text="What is X?")]
+
+
+class TestPerformInjects:
+    """`_perform_injects` builds the temporary history handed to the LLM.
+
+    The invariant these pin down is a chat-template contract, not a Raven preference: several
+    templates require every "system" message to precede the first user/assistant turn, and enforce
+    it with a hard `raise_exception` rather than by ignoring the stray message. Qwen3.5's template
+    does; Qwen3.6's dropped the guard. A violation therefore fails the whole request, and does so
+    only on the strict models — invisible while developing against a permissive one.
+    """
+
+    def test_system_messages_stay_ahead_of_the_conversation(self, llm_settings):
+        history = make_conversation(llm_settings)
+        scaffold._perform_injects(llm_settings=llm_settings, history=history,
+                                  continue_=False, speculate=False, docs_matches=[])
+
+        # Every "system" message must sit in the leading block; none may follow a user/assistant turn.
+        roles = [message["role"] for message in history]
+        assert "system" not in roles[leading_system_block_length(history):], roles
+
+    def test_system_messages_stay_ahead_of_the_conversation_with_rag_matches(self, llm_settings):
+        history = make_conversation(llm_settings)
+        scaffold._perform_injects(llm_settings=llm_settings, history=history,
+                                  continue_=False, speculate=False,
+                                  docs_matches=[sample_rag_match(document_id="a.txt"),
+                                                sample_rag_match(document_id="b.txt")])
+
+        roles = [message["role"] for message in history]
+        assert "system" not in roles[leading_system_block_length(history):], roles
+
+        # The RAG matches are what grew the leading block: system prompt + match count + one per match.
+        assert leading_system_block_length(history) == 4
+
+    def test_system_messages_stay_ahead_of_the_conversation_when_continuing(self, llm_settings):
+        # When continuing, the AI's incomplete message is last and the injects go just before it.
+        history = make_conversation(llm_settings)
+        history.append(chatutil.create_chat_message(llm_settings=llm_settings, role="assistant", text="X is"))
+        scaffold._perform_injects(llm_settings=llm_settings, history=history,
+                                  continue_=True, speculate=False, docs_matches=[])
+
+        roles = [message["role"] for message in history]
+        assert "system" not in roles[leading_system_block_length(history):], roles
+        assert roles[-1] == "assistant"  # the message being continued stays last
+
+    def test_injects_carry_no_persona_prefix(self, llm_settings):
+        # The inject text is bracketed and self-labelling; prefixing the speaker's persona to it
+        # ("User: [System information: ...]") would read as the user narrating a system notice.
+        history = make_conversation(llm_settings)
+        before = len(history)
+        scaffold._perform_injects(llm_settings=llm_settings, history=history,
+                                  continue_=False, speculate=False, docs_matches=[])
+
+        injected = history[before:]
+        assert injected  # guard: the rest of this test is vacuous if nothing was injected
+        for message in injected:
+            assert chatutil.content_to_text(message["content"]).startswith("[System information:")

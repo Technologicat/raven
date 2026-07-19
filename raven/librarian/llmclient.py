@@ -1062,6 +1062,14 @@ def invoke(settings: env,
     # Normalize message content for resend (see `_serialize_history_for_wire`).
     history = _serialize_history_for_wire(settings, history, continue_=continue_, datastore=datastore)
 
+    # Some chat templates refuse a history with no user turn, with a hard `raise_exception` — Qwen3.5's
+    # bails out with "No user query found in messages." The backend reports this as a template-parser
+    # failure, which reads as a backend bug rather than as "we sent a conversation the model won't accept",
+    # so log the role sequence here: at the point of send, where we still know what we built.
+    if not any(message["role"] == "user" for message in history):
+        roles = ", ".join(message["role"] for message in history)
+        logger.warning(f"invoke: history has no user message; roles are [{roles}]. Strict chat templates reject this.")
+
     # Not mentioned in the oobabooga docs, but see:
     #  `text-generation-webui/extensions/openai/script.py`, function `openai_chat_completions`
     #  `text-generation-webui/extensions/openai/typing.py`, classes `ChatCompletionRequest` and `ChatCompletionRequestParams`

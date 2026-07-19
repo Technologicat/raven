@@ -45,6 +45,88 @@ keep the genuinely load-bearing behavioral constraints (cite only provided sourc
 uncertainty), drop the motivational filler, and reconsider how much identity the frontend should assert at a
 modern model at all. Noticed during brief-03 Half-2 image-attach testing (2026-07-17, Juha).
 
+## Revisit the "answer from context only" reminder: wording and firing condition
+
+`chatutil.format_reminder_to_use_information_from_context_only` is a 2024-era anti-confabulation
+measure, and both halves of it need a look — they're separable, and fixing only the wording would
+leave the second problem in place.
+
+**Wording.** "Please answer based on the information provided in the context only." Modern
+instruction-tuned models take this literally enough to argue themselves out of answering. Observed
+with Qwen3.5-9B: asked "What is 2+2?" with the reminder active and no context supplied, the model
+spent its reasoning budget deliberating whether general mathematical knowledge was permissible,
+since "the system information doesn't contain the answer to 2+2". (Seen in a synthetic probe
+constructed while debugging the chat-template issue, not in live Librarian traffic — but the code
+path that produced it is real, see below.)
+
+**Firing condition.** In `scaffold._perform_injects` the reminder is gated on `if not speculate:`
+alone — nothing ties it to whether any context actually exists. With docs disabled and speculation
+off, Raven instructs the model to answer from the provided context while providing none. The
+existing anti-hallucination bypass covers "RAG searched and found nothing"; it does not cover "RAG
+never ran". Gating on the presence of context rather than on `speculate` alone is the obvious
+direction.
+
+Note that "context" is broader than docs-DB matches: explicit attachments (images, documents) and
+information the user supplied earlier in the chat history are context too, and any condition should
+count them.
+
+The requirement this has to satisfy: **general-knowledge questions with no documents must work.**
+That's a valid Librarian use case on its own ("Which components are commonly considered part of a
+hydrogen production value chain?" with an empty or unrelated docs DB — the user may ask first and
+populate the DB afterwards, or the DB may hold AI papers while the question is about hydrogen), and
+it's what a live audience will do at the Researchers' Night demo (September 2026). The model should
+answer from its general knowledge in that case.
+
+Related: [Modernize the Librarian system prompt / character card] above — same Bronze-Age
+prompt-craft vintage, same "revisit what modern models actually need" question.
+
+Discovered while debugging Librarian↔LM Studio connectivity on the work machine (2026-07-18).
+
+## Fold the temporary context injects into the user's message instead of sending them as separate turns
+
+`scaffold._perform_injects` appends the always-on injects (current date and time, focus-on-latest-input
+reminder, answer-from-context-only reminder) as separate messages at the end of the temporary history.
+They were `role="system"` until 2026-07-18, which strict chat templates reject outright — Qwen3.5's
+raises "System message must be at the beginning." They now go out as `role="user"`, which every
+template accepts, but that has its own wart: the focus reminder ("Reply to the user's most recent
+message") *becomes* the most recent user message, so the instruction refers to itself.
+
+Better shape: fold the inject text into the user's latest message rather than adding turns at all. No
+role fiction, no extra messages, nothing for a template guard to object to, and the reminder ends up
+inside the message it's talking about.
+
+Chat templates split into two families: some (Qwen3.6) accept system messages at arbitrary positions,
+others (Qwen3.5) require them all up front. But the choice is not purely about compatibility — the
+system role was the *original* deliberate choice because models generally weight system instructions
+more heavily than user text, which is exactly what a steering reminder wants. (That's a design prior
+rather than something measured for these models; worth measuring before building on it.)
+
+So the trade-off is three-way, and no single shape wins all of it:
+
+| Shape | System-level weight | Sits after the user turn | Works on strict templates |
+|---|---|---|---|
+| System message at end (original) | yes | yes | **no** |
+| User-role message at end (current) | no | yes | yes |
+| Folded into the user's message | no | yes | yes |
+| Hoisted into the leading system block | yes | **no** | yes |
+
+Note in particular that **the fold does not recover the system-level weight** — folded text is still
+user-role text. The fold fixes the self-reference wart and the template incompatibility; it does not
+restore the steering strength the original design was reaching for.
+
+If the steering difference proves real and material, the mechanism to recover it is
+template-strictness detection in `llmclient.setup` (alongside the existing `model_is_vlm` tri-state),
+so a permissive backend keeps the system-role form and a strict one falls back — rather than a config
+knob. A misconfigured knob fails as a 400 reading `Unable to generate parser for this template`, which
+points at the backend rather than at the setting that caused it.
+
+Constraint: this must happen **on the wire only** — the folded form must never reach the chatlog. The
+natural home is `llmclient._serialize_history_for_wire`, which already works on a deep copy, rather
+than `_perform_injects`. The `continue_=True` path needs care: it folds into the last *user* message,
+not the end of the list (the last message there is the assistant message being continued).
+
+Discovered while debugging Librarian↔LM Studio connectivity on the work machine (2026-07-18).
+
 ## Decide the public name: "Raven" is taken, and the project has outgrown "raven-visualizer"
 
 Raven has no PyPI package, and can't easily get one under either candidate name.
@@ -579,6 +661,32 @@ just not be connecting them). Separately, emoji in replies render as tofu/`?` be
 has no emoji glyphs — cosmetic, lower priority (would need an emoji fallback font).
 
 Discovered while smoke-testing the webfetch send-to-AI affordance (2026-06-03).
+
+## Chat view drops a character mid-message ("What" renders as " hat")
+
+Observed 2026-07-18 in Librarian's chat view: an assistant greeting displayed as
+"Hello! I'm here and ready to help.    hat can I do for you?" — the `W` missing, with a visible
+run of extra whitespace where it should be.
+
+The data is fine and the markdown stage is fine; both were checked:
+
+- Stored verbatim in the datastore: `"Aria: Hello! I'm here and ready to help. What can I do for you?"`.
+- `mistletoe.markdown()` on the scrubbed text returns `<p>...What can I do for you?</p>` intact.
+- `chatutil.scrub` only does thought-block surgery plus a final `strip()` — nothing that removes a
+  mid-string character.
+
+So the loss happens after markdown, in the rendering stage. The streaming path is ruled out: the
+observation was of a *stored* message re-rendered on load, in a later session than the one that
+generated it. That leaves the vendored `DearPyGui_Markdown` HTML→widget stage (`_HTMLToParser` in
+`parser.py`) — the same stage that swallows `<h1>`–`<h6>` (see the ATX-headings item above), so it
+already has form for dropping content between HTML and widgets.
+
+Note the shape of the loss: a capital letter at the start of a word following a sentence-ending
+period, replaced by whitespace rather than simply deleted. Worth checking whether the parser's
+entity/whitespace handling treats a run like `. W` specially, and whether the same input reproduces
+it deterministically (feed the exact stored string to the renderer in isolation).
+
+Discovered while committing the chat-template fix (2026-07-19).
 
 ## Colored-glyph / emoji and super/subscript font coverage in the GUI
 

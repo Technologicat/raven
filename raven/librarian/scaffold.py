@@ -259,22 +259,33 @@ def _perform_injects(llm_settings: env,
     # Otherwise, those injects should be placed at the end, since the AI will add a new message to the end.
     def inject(message):
         if continue_:
-            history.insert(-1, message_to_inject)
+            history.insert(-1, message)
         else:
-            history.append(message_to_inject)
+            history.append(message)
+
+    # These injects go near the end of the history, *after* the user's latest message, so they can't use
+    # the "system" role: some chat templates require every system message to precede the first user turn,
+    # and enforce it with a hard `raise_exception` (Qwen3.5's does; Qwen3.6's dropped the guard). Sending
+    # them as "user" keeps the position — which is the point of a "focus on the latest input" reminder —
+    # at the cost of the model seeing them as the user's words. The text is bracketed and self-labelling
+    # ("[System information: ...]"), so `add_persona=False`: prefixing the user persona to it would read
+    # as the user narrating a system notice.
+    inject_role = "user"
 
     # Always-on injects, e.g. current local datetime
     for thunk in injectors:
         message_to_inject = chatutil.create_chat_message(llm_settings=llm_settings,
-                                                          role="system",
-                                                          text=thunk())
+                                                         role=inject_role,
+                                                         add_persona=False,
+                                                         text=thunk())
         inject(message_to_inject)
 
     # If speculation is off, remind the LLM to use information from the context only.
     if not speculate:
         message_to_inject = chatutil.create_chat_message(llm_settings=llm_settings,
-                                                          role="system",
-                                                          text=chatutil.format_reminder_to_use_information_from_context_only())
+                                                         role=inject_role,
+                                                         add_persona=False,
+                                                         text=chatutil.format_reminder_to_use_information_from_context_only())
         inject(message_to_inject)
 
 
