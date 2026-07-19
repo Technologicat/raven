@@ -98,8 +98,13 @@ dicts in it may be shared with the datastore, so the merge must copy the first m
 mutate it in place, or it will corrupt the stored system prompt. The folding work has to solve that
 same problem for the user message, which is why the two belong together.
 
-Rejected alternative: the tool role, as the commented-out block in `_perform_injects` once tried. It
-was abandoned because Qwen3 then missed the user's last message.
+Untried-in-isolation alternative: the tool role. The commented-out block in `_perform_injects` did
+try it, but changed two things at once — it also moved the matches from the front of the history to
+just after the user's latest message — and the note left behind ("This causes Qwen3 to miss the
+user's last message. Maybe better to put the RAG results at another position.") attributes the
+failure to the *position*, not the role. So tool-role-at-the-front has not actually been tested, and
+is worth a look: it carries no system-message count problem, and unlike the user role it does not
+present the retrieved text as something the user said.
 
 Note that reranking (see below) does **not** fix this on its own — two system messages break the rule
 as surely as nine — but it does shrink whatever merged block the proper fix produces.
