@@ -262,12 +262,14 @@ rather than something measured for these models; worth measuring before building
   present absurdity: the datetime note is currently the most recent *user* message as far as a
   template is concerned.
 
-  For the datetime this is not cosmetic. Qwen models — 3.6 included — carry a strong prior that it is
-  still spring 2024, and will argue with a date that contradicts it. Presented as a *user* message,
-  the current date is a claim from a fallible human, and disputing it is defensible behaviour. As
-  tool output it is an environment reading from the system the model is running inside, which is a
-  different epistemic status entirely. Expect the argumentativeness to drop accordingly — and note
-  this is the failure the change is *for*, not merely a tidier message shape.
+  For the datetime there is a related behavioural problem, but **the role change does not fix it.**
+  Qwen models — 3.6 included — carry a strong prior that it is still spring 2024 and argue with any
+  date that contradicts it. Observed in LM Studio (2026-07-19): the model doubts the date even when
+  it arrives as a tool message, and sometimes rationalizes the conflict by concluding it must be
+  running in a test-environment simulation, since "2026 hasn't happened yet". So the prior survives
+  the change in epistemic framing, and tool role should be adopted for the reasons above — count
+  limit, not attributed to the user, excluded from the last-user-query scan — not on a promise of
+  fixing the date-doubting. That needs separate work.
 - **Instruction-like** — the focus-on-latest-input and answer-from-context-only reminders. These are
   directives to the model, not data it asked for, so wrapping them in `<tool_response>` is a category
   error, and a model may weigh them as material to consider rather than rules to follow. Against
