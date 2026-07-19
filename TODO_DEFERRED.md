@@ -677,14 +677,23 @@ The data is fine and the markdown stage is fine; both were checked:
 
 So the loss happens after markdown, in the rendering stage. The streaming path is ruled out: the
 observation was of a *stored* message re-rendered on load, in a later session than the one that
-generated it. That leaves the vendored `DearPyGui_Markdown` HTML→widget stage (`_HTMLToParser` in
-`parser.py`) — the same stage that swallows `<h1>`–`<h6>` (see the ATX-headings item above), so it
-already has form for dropping content between HTML and widgets.
+generated it.
 
-Note the shape of the loss: a capital letter at the start of a word following a sentence-ending
-period, replaced by whitespace rather than simply deleted. Worth checking whether the parser's
-entity/whitespace handling treats a run like `. W` specially, and whether the same input reproduces
-it deterministically (feed the exact stored string to the renderer in isolation).
+**It is intermittent.** Restarting Librarian re-rendered the same stored node correctly, and it had
+never been seen before that one occurrence. So this is not a deterministic function of the input —
+feeding the stored string to the renderer in isolation may well render it correctly and prove
+nothing. Budget for a race, not for a parsing bug: the vendored `DearPyGui_Markdown` renders from a
+persistent worker thread (`CallInNextFrame._worker`), which is already known to be the shaky part of
+that module (see the shutdown-segfault note in the vendored-dependencies section of `CLAUDE.md`, and
+the untracked URL-highlight bug). A dropped character is consistent with a widget being built from
+partially-updated state.
+
+The shape of the loss is still worth recording, since it may fingerprint the race: a capital letter
+starting a word after a sentence-ending period, replaced by whitespace rather than deleted outright.
+
+Reproduction is the hard part and the first task — without it, any fix is unfalsifiable. Rendering
+the same long-ish message repeatedly (reload the chat in a loop, or rebuild the view many times) and
+diffing rendered text against stored text would be the way in.
 
 Discovered while committing the chat-template fix (2026-07-19).
 
