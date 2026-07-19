@@ -45,6 +45,27 @@ keep the genuinely load-bearing behavioral constraints (cite only provided sourc
 uncertainty), drop the motivational filler, and reconsider how much identity the frontend should assert at a
 modern model at all. Noticed during brief-03 Half-2 image-attach testing (2026-07-17, Juha).
 
+## Sending an empty message starts an AI turn that answers Raven's own injects
+
+Observed 2026-07-19 (new chat, empty input, send): the AI turn runs, and the model responds to the
+temporary context injects — the datetime note and the behavioural reminders — because with an empty
+user message those are the only user-role content in the turn. The reply is Aria discussing her own
+instructions ("Got it — sounds like I should stick to the context provided when answering"), which is
+internal machinery leaking into the conversation.
+
+Before the injects moved to the user role this shape hard-failed on strict chat templates instead
+(no user message → template `raise_exception`), so it was never a *good* path; it has changed from a
+visible error into a plausible-looking but nonsense exchange, which is arguably worse. A stray Enter
+in the input box is enough to trigger it, so this is demo-relevant (Researchers' Night, September
+2026).
+
+Simplest fix is to refuse to start a turn on empty input — no user message, no AI turn — in both
+`app.py`'s send path and `minichat`. Consider whether "empty input" should mean "no text at all" or
+"no text *and* no attachments", since an image or document with no accompanying text is a legitimate
+message.
+
+Discovered while live-testing the chat-template fix (2026-07-19).
+
 ## RAG: rerank retrieved chunks and inject only the best few
 
 `docs_num_results = 20` (`raven.librarian.config`), and `scaffold._perform_injects` injects *all* of
@@ -131,6 +152,17 @@ They were `role="system"` until 2026-07-18, which strict chat templates reject o
 raises "System message must be at the beginning." They now go out as `role="user"`, which every
 template accepts, but that has its own wart: the focus reminder ("Reply to the user's most recent
 message") *becomes* the most recent user message, so the instruction refers to itself.
+
+That is confirmed behaviour, not a theoretical concern. Qwen3.5-9B, 2026-07-19, reasoning verbatim:
+"The user is providing me with system information notes. They want me to reply to their most recent
+message, *which is the system information note itself*." The model then reasoned about whether the
+instructions were themselves the request, and answered them rather than the user.
+
+Side effect worth knowing when reading `llmclient._warn_about_strict_template_violations`: because
+the injects are user-role, `_perform_injects` now guarantees at least one user message in any AI
+turn, so the no-user-message branch of that warning cannot fire from the Librarian path at all. It
+still covers `perform_throwaway_task` and future callers, but it is not a live safety net here. If
+the fold lands, the injects stop being separate messages and that branch becomes reachable again.
 
 Better shape: fold the inject text into the user's latest message rather than adding turns at all. No
 role fiction, no extra messages, nothing for a template guard to object to, and the reminder ends up
