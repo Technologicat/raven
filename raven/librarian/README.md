@@ -34,6 +34,8 @@
     - [System prompt, AI character personality, communication style](#system-prompt-ai-character-personality-communication-style)
     - [AI avatar](#ai-avatar)
 - [Future vision](#future-vision)
+- [Troubleshooting](#troubleshooting)
+    - [The LLM backend fails to load a model that used to fit](#the-llm-backend-fails-to-load-a-model-that-used-to-fit)
 - [Appendix: Getting started in setting up a local LLM](#appendix-getting-started-in-setting-up-a-local-llm)
 
 <!-- markdown-toc end -->
@@ -572,6 +574,23 @@ Areas to improve:
   - Integrate the document database with the semantic map visualization
   - Select data points in *Visualizer*, talk about those studies in *Librarian*
   - Ask *Librarian* a free-form question, let it highlight useful studies in *Visualizer* (based on document database search results)
+
+# Troubleshooting
+
+## The LLM backend fails to load a model that used to fit
+
+Typical symptom: a model you loaded successfully earlier now fails, and the backend's log shows a CUDA out-of-memory error on a **small** allocation — a few hundred megabytes, after the multi-gigabyte weights have already loaded. Sometimes retrying succeeds, which is the giveaway that you are only just over the limit.
+
+The weights are not the problem; the *compute buffer* is. Two things commonly eat the margin:
+
+- **Raven-server is holding VRAM.** It loads its AI models at startup and keeps them resident, so on a single-GPU machine that VRAM is simply not available to the LLM backend. A model that fit when you tested it with nothing else running will not necessarily fit once *Raven-server* is up. Check who actually holds the memory with `nvidia-smi` — it lists per-process usage.
+- **The backend is reserving space for concurrent requests.** Many backends size their compute buffer for several simultaneous generations. *LM Studio* calls this setting **max concurrency** (`--parallel` on its CLI); *llama.cpp*'s server calls the same thing parallel slots. The cost scales with the context length, so at 128k context the difference between 4 slots and 1 is substantial.
+
+  **If you are a single user talking to the model through *Librarian*, set it to 1.** In one measured case this was the whole difference between a 30B-class model failing to load and loading on the first try, with the layer offload left exactly as it was.
+
+If it still does not fit after that, try reducing the context length before you start reducing GPU layer offload. A shorter context shrinks both the KV cache and the compute buffer, whereas moving layers off the GPU costs generation speed directly, for every token, for the rest of the session.
+
+Note that the backend's automatic GPU-offload sizing does not necessarily save you here: it estimates against free VRAM at load time, and an estimate that leaves only a couple of hundred megabytes of headroom will load successfully and then fail *during* a conversation, once the KV cache grows. If a model loads but dies mid-reply, suspect this rather than a bug in the backend.
 
 # Appendix: Getting started in setting up a local LLM
 
