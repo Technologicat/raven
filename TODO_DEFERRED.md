@@ -66,6 +66,11 @@ existing anti-hallucination bypass covers "RAG searched and found nothing"; it d
 never ran". Gating on the presence of context rather than on `speculate` alone is the obvious
 direction.
 
+Confirmed in live use (Qwen3.5-9B, 2026-07-19, Documents off + Speculation off): the model's
+reasoning noted "the instructions say to answer based on information in context only, and there's no
+actual information needed to answer" before deciding how to proceed. Reasoning budget spent
+negotiating a constraint that should not have been sent.
+
 Note that "context" is broader than docs-DB matches: explicit attachments (images, documents) and
 information the user supplied earlier in the chat history are context too, and any condition should
 count them.
@@ -113,6 +118,18 @@ So the trade-off is three-way, and no single shape wins all of it:
 Note in particular that **the fold does not recover the system-level weight** — folded text is still
 user-role text. The fold fixes the self-reference wart and the template incompatibility; it does not
 restore the steering strength the original design was reaching for.
+
+**The user-role form has an observed behavioural cost, not just a theoretical one.** Qwen3.5-9B,
+2026-07-19: the model's reasoning enumerated the injects as things the *user* had sent ("They've
+sent: 1. 'Testing 1 2 3' — a test message; 2. System information about today's date and time;
+3. Instructions about which message to reply to; 4. Instructions about answering based on context
+only"), concluded the exchange was a system test, and replied *about* the injects — "Got it, this
+seems to be a system test. I've received your messages and the system information provided" — instead
+of just answering. Conspicuous machine-looking text in the user turn invites the model to narrate it.
+Whether the fold fixes this is untested: folded text is still in the user turn, so the model may
+still comment on it, though it would at least no longer read as several separate sends. Hoisting to
+the leading system block is the option that avoids the narration entirely, at the cost of recency —
+which is the trade-off the table above lays out.
 
 If the steering difference proves real and material, the mechanism to recover it is
 template-strictness detection in `llmclient.setup` (alongside the existing `model_is_vlm` tri-state),
