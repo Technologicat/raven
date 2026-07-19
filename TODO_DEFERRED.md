@@ -120,7 +120,11 @@ leading system block sits at the *front* of the prompt, so rewriting it invalida
 everything after it — i.e. the whole prompt, on every turn. The current date and time changes by
 construction every turn, so hoisting it means never reusing the cache at all. Injects at the end
 cost only their own tail. (The RAG results already pay this price — they are inserted at index 1, and
-`_perform_injects` carries a standing TODO about the full cache rebuild it causes.)
+`_perform_injects` carries a standing TODO about the full cache rebuild it causes. That placement is
+deliberate, not an oversight: it dates from Qwen 3.0, which would refuse to engage with material
+injected at the end of the prompt at all. The cache rebuild was the price of the model actually
+reading the retrieved documents. Whether current models still need it is worth re-testing before
+anyone "optimizes" that insert position.)
 
 So hoisting is only sane for something that is *both* worth system-level weight and stable across the
 conversation — which none of the current always-on injects are.
