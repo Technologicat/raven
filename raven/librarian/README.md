@@ -35,6 +35,7 @@
     - [AI avatar](#ai-avatar)
 - [Future vision](#future-vision)
 - [Troubleshooting](#troubleshooting)
+    - [Start Raven-server *before* the LLM backend](#start-raven-server-before-the-llm-backend)
     - [The LLM backend fails to load a model that used to fit](#the-llm-backend-fails-to-load-a-model-that-used-to-fit)
 - [Appendix: Getting started in setting up a local LLM](#appendix-getting-started-in-setting-up-a-local-llm)
 
@@ -576,6 +577,14 @@ Areas to improve:
   - Ask *Librarian* a free-form question, let it highlight useful studies in *Visualizer* (based on document database search results)
 
 # Troubleshooting
+
+## Start Raven-server *before* the LLM backend
+
+When the LLM backend and *Raven-server* share a GPU, **start *Raven-server* first, and load the model in the LLM backend only once *Raven-server* is up.**
+
+*Raven-server* loads its AI models at startup and keeps them resident, so its VRAM usage is stable once running. LLM backends, on the other hand, commonly size their GPU offload automatically against however much VRAM is *free at the moment the model loads*. Load the model first and that measurement is taken against an empty GPU — it will happily claim memory that *Raven-server* is about to need, and you get an out-of-memory failure in whichever program asks second.
+
+In the other order, the backend measures what is actually left over, and its autodetect does the right thing on its own.
 
 ## The LLM backend fails to load a model that used to fit
 

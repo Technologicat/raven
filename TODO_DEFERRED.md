@@ -108,12 +108,22 @@ rather than something measured for these models; worth measuring before building
 
 So the trade-off is three-way, and no single shape wins all of it:
 
-| Shape | System-level weight | Sits after the user turn | Works on strict templates |
-|---|---|---|---|
-| System message at end (original) | yes | yes | **no** |
-| User-role message at end (current) | no | yes | yes |
-| Folded into the user's message | no | yes | yes |
-| Hoisted into the leading system block | yes | **no** | yes |
+| Shape | System-level weight | Sits after the user turn | Works on strict templates | Keeps the KV cache prefix |
+|---|---|---|---|---|
+| System message at end (original) | yes | yes | **no** | yes |
+| User-role message at end (current) | no | yes | yes | yes |
+| Folded into the user's message | no | yes | yes | yes |
+| Hoisted into the leading system block | yes | **no** | yes | **no** |
+
+That last column rules hoisting out for most of these injects, independently of everything else: the
+leading system block sits at the *front* of the prompt, so rewriting it invalidates the KV cache for
+everything after it — i.e. the whole prompt, on every turn. The current date and time changes by
+construction every turn, so hoisting it means never reusing the cache at all. Injects at the end
+cost only their own tail. (The RAG results already pay this price — they are inserted at index 1, and
+`_perform_injects` carries a standing TODO about the full cache rebuild it causes.)
+
+So hoisting is only sane for something that is *both* worth system-level weight and stable across the
+conversation — which none of the current always-on injects are.
 
 Note in particular that **the fold does not recover the system-level weight** — folded text is still
 user-role text. The fold fixes the self-reference wart and the template incompatibility; it does not
