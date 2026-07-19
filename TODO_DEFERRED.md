@@ -45,6 +45,42 @@ keep the genuinely load-bearing behavioral constraints (cite only provided sourc
 uncertainty), drop the motivational filler, and reconsider how much identity the frontend should assert at a
 modern model at all. Noticed during brief-03 Half-2 image-attach testing (2026-07-17, Juha).
 
+## RAG: rerank retrieved chunks and inject only the best few
+
+`docs_num_results = 20` (`raven.librarian.config`), and `scaffold._perform_injects` injects *all* of
+them into the prompt, each as its own system message at index 1. That is a lot of material to hand a
+model for one question, and it costs three ways at once:
+
+- **Context.** Twenty chunks of scientific fulltext is a large fraction of the window before the
+  conversation has even started, and the "Context-window budgeting and conversation compaction" item
+  below has no enforcement yet.
+- **KV cache.** They go in at the front, so every one of them is part of the prefix that gets rebuilt
+  each turn (see the fold item's discussion of insert position).
+- **Attention.** A model given twenty candidate passages, most of them irrelevant, has to do the
+  relevance filtering itself — and long-context attentiveness is exactly what degrades as the prompt
+  fills. Handing it three good passages is a different task from handing it twenty mediocre ones.
+
+The standard shape for this is a **reranking stage**: retrieve broadly (the current hybrid BM25 +
+vector + reciprocal-rank-fusion pass is a good recall stage), then score each candidate against the
+query with a cross-encoder — which reads query and passage *together*, rather than comparing
+independently-computed embeddings — and keep only the top few. Retrieval stays wide; what reaches the
+prompt is narrow. See sentence-transformers' cross-encoder documentation
+(https://www.sbert.net/examples/applications/cross-encoder/README.html) for the usual implementation,
+and note the recall/precision division of labour is the whole point: the fusion pass is cheap and
+approximate, the reranker is expensive per candidate but only runs on a shortlist.
+
+Fits the three-layer pattern the other ML subsystems use: a `raven.common.rerank` implementation, a
+`raven.server.modules.rerank` shim with its route, and a `raven.client.mayberemote.Reranker`. It is a
+separate model from the embedder (cross-encoder, not bi-encoder), so it is a new load on whichever
+device serves it — worth weighing against the VRAM budget on single-GPU setups, and a good candidate
+for the CPU in `config_lowvram` since it runs on a shortlist rather than the whole corpus.
+
+Open question worth settling with the same experiment: how many chunks should actually reach the
+prompt. The answer interacts with the "answer from context only" reminder below — fewer, better
+passages may make that reminder unnecessary rather than merely better-worded.
+
+Discovered during Librarian↔LM Studio connectivity work (2026-07-19, Juha).
+
 ## Revisit the "answer from context only" reminder: wording and firing condition
 
 `chatutil.format_reminder_to_use_information_from_context_only` is a 2024-era anti-confabulation
