@@ -98,13 +98,45 @@ dicts in it may be shared with the datastore, so the merge must copy the first m
 mutate it in place, or it will corrupt the stored system prompt. The folding work has to solve that
 same problem for the user message, which is why the two belong together.
 
-Untried-in-isolation alternative: the tool role. The commented-out block in `_perform_injects` did
-try it, but changed two things at once — it also moved the matches from the front of the history to
-just after the user's latest message — and the note left behind ("This causes Qwen3 to miss the
-user's last message. Maybe better to put the RAG results at another position.") attributes the
-failure to the *position*, not the role. So tool-role-at-the-front has not actually been tested, and
-is worth a look: it carries no system-message count problem, and unlike the user role it does not
-present the retrieved text as something the user said.
+**Strong candidate: the tool role.** The commented-out block in `_perform_injects` did try it, but
+changed two things at once — it also moved the matches from the front of the history to just after
+the user's latest message — and the note left behind ("This causes Qwen3 to miss the user's last
+message. Maybe better to put the RAG results at another position.") attributes the failure to the
+*position*, not the role. So the role itself has not actually been tested.
+
+Reading Qwen3.5's template (`gguf-dump --no-tensors <model>.gguf`) makes it look like the right
+answer. A `tool` message renders as a user turn wrapped in `<tool_response>` tags:
+
+```jinja
+{%- elif message.role == "tool" %}
+    {%- if loop.previtem and loop.previtem.role != "tool" %}
+        {{- '<|im_start|>user' }}
+    {%- endif %}
+    {{- '\n<tool_response>\n' }}{{- content }}{{- '\n</tool_response>' }}
+```
+
+Three properties fall out, and together they cover every problem the other options trade against:
+
+- **No system-message count problem** — it is not a system message, so the `loop.first` guard is
+  irrelevant no matter how many matches there are.
+- **Not attributed to the user.** The model sees tool output, which is what a RAG match actually is —
+  avoiding the narration wart the user role produces (the model remarking on the injected text).
+- **Excluded from "the last user query."** The template's earlier scan sets `ns.last_query_index`
+  only for user messages whose content is *not* wrapped in `<tool_response>`, so tool messages do not
+  displace the user's real question. That is precisely the self-reference bug the current user-role
+  workaround has.
+
+Bonus: consecutive tool messages merge into one user turn (the `previtem`/`nextitem` logic), so N
+matches become a single `<|im_start|>user` block with N `<tool_response>` sections, rather than N
+separate turns.
+
+Open question (Juha, 2026-07-19): whether to also synthesize the *tool call* — an assistant message
+with a `tool_calls` entry for the RAG autosearch — so the model understands why the material is
+there and what query produced it. Arguments for: it matches how models are trained to see tool
+results, it makes the autosearch legible rather than mysterious, and the OpenAI schema normally pairs
+a `tool` message with a `tool_call_id` from a preceding call (some backends validate this, even where
+the template does not). Argument against: it puts a call in the assistant's mouth that it never made.
+Worth testing both, since the template itself appears to render a standalone tool message fine.
 
 Note that reranking (see below) does **not** fix this on its own — two system messages break the rule
 as surely as nine — but it does shrink whatever merged block the proper fix produces.
