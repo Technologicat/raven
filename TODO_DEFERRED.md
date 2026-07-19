@@ -254,7 +254,31 @@ system role was the *original* deliberate choice because models generally weight
 more heavily than user text, which is exactly what a steering reminder wants. (That's a design prior
 rather than something measured for these models; worth measuring before building on it.)
 
-So the trade-off is three-way, and no single shape wins all of it:
+**The injects are not all the same kind of thing, and probably should not all get the same shape**
+(Juha's question, 2026-07-19). Two categories:
+
+- **Data-like** — the current datetime, and the RAG matches. These are information about the world.
+  The tool role fits honestly (see the RAG item above for why it wins mechanically), and it fixes a
+  present absurdity: the datetime note is currently the most recent *user* message as far as a
+  template is concerned.
+- **Instruction-like** — the focus-on-latest-input and answer-from-context-only reminders. These are
+  directives to the model, not data it asked for, so wrapping them in `<tool_response>` is a category
+  error, and a model may weigh them as material to consider rather than rules to follow. Against
+  that: as tool messages they stop displacing the user's real question, which is what makes "reply to
+  the user's most recent message" self-referential today.
+
+  A third option exists for these two specifically, and only for them: **their text is constant**
+  (unlike the datetime, it does not vary per turn), so merging them into the leading system message
+  costs nothing in KV-cache terms while restoring system-level authority. The cost is recency, which
+  is the original reason they were placed late — the code comment cites DeepSeek-R1 distills needing
+  it for multi-turn to work. Whether that constraint survives on current models is itself worth
+  re-testing rather than assuming.
+
+  So: test tool-role-late against system-merged-at-front for the two reminders. The arguments point
+  in different directions and neither has been measured.
+
+The full trade-off for a *single* shape applied to everything, which is what the table below assumed,
+is three-way, and no single shape wins all of it:
 
 | Shape | System-level weight | Sits after the user turn | Works on strict templates | Keeps the KV cache prefix |
 |---|---|---|---|---|
