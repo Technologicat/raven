@@ -978,9 +978,15 @@ def _warn_about_strict_template_violations(history: List[Dict]) -> None:
     nowhere in the message. Naming the offending shape here, at the point of send while we still know
     what we built, is what turns that into a quick diagnosis instead of a hunt through the backend.
 
-    Qwen3.5's template is the strict reference: it requires at least one user message, and requires
-    every system message to precede the first user/assistant turn. Qwen3.6's dropped both guards, so
-    a history that works fine on one model of a family can hard-fail on another.
+    Qwen3.5's template is the strict reference. It requires at least one user message, and permits
+    exactly **one** system message, which must be the very first message — the guard is
+    `{%- if message.role == "system" %}{%- if not loop.first %}`, so the second system message trips
+    it no matter how early it appears. Read its error text with care: "System message must be at the
+    beginning" means *be* the beginning, not merely *precede the conversation*. Several system
+    messages in a row at the front are rejected just as firmly as one placed after a user turn.
+
+    Qwen3.6's template dropped both guards, so a history that works on one model of a family can
+    hard-fail on another.
 
     Warn, don't raise: which shapes a template accepts is the template's business, and most backends
     are permissive. A refused request surfaces on its own; this only makes the reason legible.
@@ -993,9 +999,8 @@ def _warn_about_strict_template_violations(history: List[Dict]) -> None:
     if "user" not in roles:
         logger.warning(f"_warn_about_strict_template_violations: history has no user message; roles are [{role_sequence}]. Strict chat templates reject this.")
 
-    end_of_leading_system_block = next((index for index, role in enumerate(roles) if role != "system"), len(roles))
-    if "system" in roles[end_of_leading_system_block:]:
-        logger.warning(f"_warn_about_strict_template_violations: history has a system message after the conversation starts; roles are [{role_sequence}]. Strict chat templates reject this.")
+    if "system" in roles[1:]:
+        logger.warning(f"_warn_about_strict_template_violations: history has a system message that is not the first message; roles are [{role_sequence}]. Strict chat templates allow only one system message, as the very first one.")
 
 def invoke(settings: env,
            history: List[Dict],

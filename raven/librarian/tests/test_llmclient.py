@@ -899,17 +899,24 @@ class TestStrictTemplateWarnings:
         # The shape Raven itself sent before the injects moved to the user role.
         with caplog.at_level(logging.WARNING):
             llmclient._warn_about_strict_template_violations(_roles("system", "assistant", "user", "system", "system"))
-        assert "system message after the conversation starts" in caplog.text
+        assert "system message that is not the first message" in caplog.text
         assert "system, assistant, user, system, system" in caplog.text
+
+    def test_consecutive_leading_system_messages_warn(self, caplog):
+        # The RAG-inject shape: matches inserted at index 1, each as its own system message. Every
+        # system message is ahead of the conversation, and Qwen3.5's template rejects it anyway —
+        # its guard is `not loop.first`, so only the message at index 0 may carry the system role.
+        with caplog.at_level(logging.WARNING):
+            llmclient._warn_about_strict_template_violations(_roles("system", "system", "system", "assistant", "user"))
+        assert "system message that is not the first message" in caplog.text
 
     def test_both_violations_warn_separately(self, caplog):
         with caplog.at_level(logging.WARNING):
             llmclient._warn_about_strict_template_violations(_roles("system", "assistant", "system"))
         assert "no user message" in caplog.text
-        assert "system message after the conversation starts" in caplog.text
+        assert "system message that is not the first message" in caplog.text
 
     @pytest.mark.parametrize("roles", [("system", "user"),
-                                       ("system", "system", "user"),  # several leading system messages are fine
                                        ("system", "assistant", "user"),
                                        ("system", "user", "assistant", "user"),
                                        ("system", "user", "assistant", "tool", "assistant", "user"),  # tool results mid-conversation
