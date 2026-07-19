@@ -769,12 +769,16 @@ class TestRetryToolCalls:
 # Temporary context injects
 # ---------------------------------------------------------------------------
 
-def leading_system_block_length(history):
-    """Return the number of messages in the leading run of "system" messages."""
-    for index, message in enumerate(history):
-        if message["role"] != "system":
-            return index
-    return len(history)
+def assert_at_most_one_leading_system_message(history):
+    """Assert the strictest chat templates would accept `history`'s role sequence.
+
+    Qwen3.5's guard is `{%- if message.role == "system" %}{%- if not loop.first %}` -> `raise_exception`,
+    i.e. exactly one system message, at index 0. Note this is a *count* rule wearing the clothes of a
+    position rule: its error text says "System message must be at the beginning", but a second system
+    message fails even when it sits ahead of the conversation.
+    """
+    roles = [message["role"] for message in history]
+    assert "system" not in roles[1:], roles
 
 
 def make_conversation(llm_settings):
@@ -794,38 +798,36 @@ class TestPerformInjects:
     only on the strict models — invisible while developing against a permissive one.
     """
 
-    def test_system_messages_stay_ahead_of_the_conversation(self, llm_settings):
+    def test_injects_add_no_system_message(self, llm_settings):
         history = make_conversation(llm_settings)
         scaffold._perform_injects(llm_settings=llm_settings, history=history,
                                   continue_=False, speculate=False, docs_matches=[])
+        assert_at_most_one_leading_system_message(history)
 
-        # Every "system" message must sit in the leading block; none may follow a user/assistant turn.
-        roles = [message["role"] for message in history]
-        assert "system" not in roles[leading_system_block_length(history):], roles
-
-    def test_system_messages_stay_ahead_of_the_conversation_with_rag_matches(self, llm_settings):
+    def test_rag_matches_add_no_system_message(self, llm_settings):
+        # Each match used to go in as its own system message at index 1, which failed every AI turn on
+        # Qwen3.5 — several system messages are rejected even though all of them precede the conversation.
         history = make_conversation(llm_settings)
         scaffold._perform_injects(llm_settings=llm_settings, history=history,
                                   continue_=False, speculate=False,
                                   docs_matches=[sample_rag_match(document_id="a.txt"),
                                                 sample_rag_match(document_id="b.txt")])
+        assert_at_most_one_leading_system_message(history)
 
-        roles = [message["role"] for message in history]
-        assert "system" not in roles[leading_system_block_length(history):], roles
+        # The matches are still injected, still ahead of the conversation, and still in corpus order.
+        texts = [chatutil.content_to_text(message["content"]) for message in history[1:4]]
+        assert "matched 2 items" in texts[0]
+        assert "a.txt" in texts[1]
+        assert "b.txt" in texts[2]
 
-        # The RAG matches are what grew the leading block: system prompt + match count + one per match.
-        assert leading_system_block_length(history) == 4
-
-    def test_system_messages_stay_ahead_of_the_conversation_when_continuing(self, llm_settings):
+    def test_injects_add_no_system_message_when_continuing(self, llm_settings):
         # When continuing, the AI's incomplete message is last and the injects go just before it.
         history = make_conversation(llm_settings)
         history.append(chatutil.create_chat_message(llm_settings=llm_settings, role="assistant", text="X is"))
         scaffold._perform_injects(llm_settings=llm_settings, history=history,
                                   continue_=True, speculate=False, docs_matches=[])
-
-        roles = [message["role"] for message in history]
-        assert "system" not in roles[leading_system_block_length(history):], roles
-        assert roles[-1] == "assistant"  # the message being continued stays last
+        assert_at_most_one_leading_system_message(history)
+        assert history[-1]["role"] == "assistant"  # the message being continued stays last
 
     def test_injects_carry_no_persona_prefix(self, llm_settings):
         # The inject text is bracketed and self-labelling; prefixing the speaker's persona to it

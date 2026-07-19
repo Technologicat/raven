@@ -237,19 +237,29 @@ def _perform_injects(llm_settings: env,
     #                                                           text=search_result_text)
     #         history.insert(position, message_to_inject)
 
-    # Insert RAG results at the start of the history, as system messages.
+    # All temporary injects go in as "user", never "system" — see the note at `inject_role` below for why.
+    # For the RAG results this is a workaround, not a design: they are system information, and the system
+    # role is what they want. But the strictest templates allow only a single system message, so several
+    # match notifications cannot be system messages no matter where they sit. Injecting the matches into
+    # the *content* of the one leading system message is the proper fix; it lands with the folding work
+    # (see TODO_DEFERRED.md), which has to solve the same shared-dict-mutation problem anyway.
+    inject_role = "user"
+
+    # Insert RAG results at the start of the history.
     # TODO: This causes a full KV cache rebuild. Could we place them later in the chat history?
     for docs_result in reversed(docs_matches):  # reverse to keep original order, because we insert each item at the same position.
         # TODO: Should the RAG match notification show the query string, too?
         search_result_text = f"[System information: Knowledge-base match from '{docs_result['document_id']}'.]\n\n{docs_result['text'].strip()}\n-----"
         message_to_inject = chatutil.create_chat_message(llm_settings=llm_settings,
-                                                         role="system",
+                                                         role=inject_role,
+                                                         add_persona=False,
                                                          text=search_result_text)
         history.insert(1, message_to_inject)  # after system prompt / character card combo
     if docs_matches:
         n_matches_text = f"[System information: Knowledge base matched {len(docs_matches)} items.]"
         message_to_inject = chatutil.create_chat_message(llm_settings=llm_settings,
-                                                         role="system",
+                                                         role=inject_role,
+                                                         add_persona=False,
                                                          text=n_matches_text)
         history.insert(1, message_to_inject)
 
@@ -263,14 +273,18 @@ def _perform_injects(llm_settings: env,
         else:
             history.append(message)
 
-    # These injects go near the end of the history, *after* the user's latest message, so they can't use
-    # the "system" role: some chat templates require every system message to precede the first user turn,
-    # and enforce it with a hard `raise_exception` (Qwen3.5's does; Qwen3.6's dropped the guard). Sending
-    # them as "user" keeps the position — which is the point of a "focus on the latest input" reminder —
-    # at the cost of the model seeing them as the user's words. The text is bracketed and self-labelling
-    # ("[System information: ...]"), so `add_persona=False`: prefixing the user persona to it would read
-    # as the user narrating a system notice.
-    inject_role = "user"
+    # Why every inject above and below uses the "user" role rather than "system": the strictest chat
+    # templates permit exactly ONE system message, and only as the very first message. Qwen3.5's guard is
+    # `{%- if message.role == "system" %}{%- if not loop.first %}` -> `raise_exception`, so the second
+    # system message fails the whole request even when it sits ahead of the conversation. (Its error text,
+    # "System message must be at the beginning", reads as a position rule but is really a count rule.)
+    # Qwen3.6's template dropped the guard entirely.
+    #
+    # The always-on injects below have a second reason: they belong *after* the user's latest message —
+    # that is the point of a "focus on the latest input" reminder — where no template would accept a system
+    # message anyway. The cost is that the model sees them as the user's words, and will sometimes remark
+    # on them. Their text is bracketed and self-labelling ("[System information: ...]"), so
+    # `add_persona=False`: prefixing the user persona would read as the user narrating a system notice.
 
     # Always-on injects, e.g. current local datetime
     for thunk in injectors:

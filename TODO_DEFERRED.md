@@ -66,16 +66,19 @@ message.
 
 Discovered while live-testing the chat-template fix (2026-07-19).
 
-## RAG injects break every AI turn on strict chat templates (Qwen3.5)
+## RAG injects: sent in the user role as a workaround, want the system role back
 
-**This is a live failure, not a latent one: with Documents enabled, every AI turn fails on
-Qwen3.5-9B.** Reproduced 2026-07-19 with one PDF in the database; the turn returns "The language
-model backend returned an error" and the backend reports
-`Jinja Exception: System message must be at the beginning.`
+**Worked around 2026-07-19, not properly fixed.** The RAG match notifications now go in as `user`
+messages like the other temporary injects, which unblocks Qwen3.5. They are system information and
+the system role is what they want; getting it back needs the folding work below.
 
-`scaffold._perform_injects` inserts each RAG match at `history.insert(1, ...)` as its own system
-message, plus one more for the match count. Qwen3.5's template permits exactly **one** system
-message, and only as the very first one:
+The failure being worked around: with Documents enabled, every AI turn failed on Qwen3.5-9B —
+reproduced with one PDF in the database, the turn returning "The language model backend returned an
+error" with `Jinja Exception: System message must be at the beginning.`
+
+`scaffold._perform_injects` inserts each RAG match at `history.insert(1, ...)`, plus one more message
+for the match count. As system messages that broke the template, because Qwen3.5 permits exactly
+**one** system message, and only as the very first one:
 
 ```jinja
 {%- if message.role == "system" %}
@@ -88,19 +91,18 @@ fix was written against: it is `not loop.first`, so the *second* system message 
 every system message sits ahead of the conversation. Observed failing sequence: nine system messages,
 then assistant, then the user turns.
 
-Candidate fixes, none of them free:
+The proper fix, to land with the folding work: **merge the matches into the content of the one
+leading system message.** That keeps the system role and the front position and costs nothing at the
+template level. Careful — `_perform_injects` mutates the temporary history list, but the message
+dicts in it may be shared with the datastore, so the merge must copy the first message rather than
+mutate it in place, or it will corrupt the stored system prompt. The folding work has to solve that
+same problem for the user message, which is why the two belong together.
 
-- **Merge the matches into the leading system message.** Keeps the system role and the front
-  position, costs nothing at the template level. Careful: `_perform_injects` mutates the temporary
-  history list, but the message dicts in it may be shared with the datastore — the merge must copy
-  the first message rather than mutate it in place, or it will corrupt the stored system prompt.
-- **Send them in a different role** (user, or tool as the commented-out block in `_perform_injects`
-  once tried). Sidesteps the guard entirely, but the tool-role version was abandoned because Qwen3
-  then missed the user's last message, and the user role reintroduces the narration problem
-  documented in the fold item above.
-- **Rerank first** (see the item below): fewer matches does not fix the rule violation — two system
-  messages break it as surely as nine — but it shrinks whatever merged block the first option
-  produces.
+Rejected alternative: the tool role, as the commented-out block in `_perform_injects` once tried. It
+was abandoned because Qwen3 then missed the user's last message.
+
+Note that reranking (see below) does **not** fix this on its own — two system messages break the rule
+as surely as nine — but it does shrink whatever merged block the proper fix produces.
 
 Whatever the fix, `llmclient._warn_about_strict_template_violations` now warns on this shape, so a
 regression announces itself in Raven's own log.
