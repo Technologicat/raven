@@ -695,6 +695,16 @@ Reproduction is the hard part and the first task — without it, any fix is unfa
 the same long-ish message repeatedly (reload the chat in a loop, or rebuild the view many times) and
 diffing rendered text against stored text would be the way in.
 
+One lead worth checking first, on the grounds that it is new in this same release cycle: the
+Librarian **idle throttle** drops the render loop to ~12 fps when nothing needs updating, and the
+vendored renderer hands work back to the main thread via `CallInNextFrame` — so frame cadence is part
+of that handoff's timing, and throttling changes the width of any race window in it. A message
+rendered on chat load, with the app otherwise idle, is precisely the case the throttle governs. This
+is a hypothesis from timing coincidence, not from reading the interaction; if it doesn't pan out
+quickly, drop it rather than building on it. (It is also why the observation is treated as a genuine
+first occurrence rather than a long-standing bug finally noticed: a dropped letter is the kind of
+thing this project's author does reliably catch.)
+
 Discovered while committing the chat-template fix (2026-07-19).
 
 ## Colored-glyph / emoji and super/subscript font coverage in the GUI
