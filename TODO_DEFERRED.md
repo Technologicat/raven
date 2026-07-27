@@ -71,6 +71,65 @@ letter (the Emacs / ripgrep convention).
 
 Discovered during the document-attach test-drive (2026-07-18, Juha).
 
+## FileDialog: image thumbnail previews (Lanczos'd)
+
+The vendored `FileDialog` (`raven/vendor/file_dialog/`) lists files by name only — no image previews. For picking
+*image* files (the multimodal image-attach feature, brief 03 Half 2), a thumbnail per image would make selection
+usable — you pick by looking, not by guessing from the filename. This matters more than for most file types:
+photos and AI-generated images usually have non-descriptive filenames (hashes, timestamps, auto-names), so the
+image *data* is the only reliable way to identify the right file — and doubly so because DPG apps have no OS
+drag-and-drop (see the drag-and-drop item below), making the in-app picker the *only* way to bring an image in.
+Add Lanczos-downsampled thumbnail previews to the file listing when the filter is image-typed. Reuse
+`raven.common.image.lanczos` + the `add_dynamic_texture` path; the Nvidia/Linux texture-deletion-segfault
+workaround (`__GLVND_DISALLOW_PATCHING=1`) is already set in the apps.
+
+This is a UX enhancement for the image-attach picker, not a blocker: the attach feature ships first with the
+basic (filename) FileDialog listing; this improves it (a filename-only picker is a poor fit for choosing images).
+When built, mind DPG texture lifecycle for the many small preview textures (create/destroy as the user navigates
+directories).
+
+Discovered during brief-03 Half-2 multimodal work (2026-07-17, flagged by Juha).
+
+## FileDialog: multi-extension filter as one labelled item
+
+The vendored `FileDialog`'s type filter is single-extension: each `filter_list` entry matches exactly one
+extension (`.png`), and the "show everything" option is the bare `.*`. There is no way to offer a single filter
+item that matches a *set* of extensions under a descriptive label — e.g. "All images (`.png .jpg .jpeg .webp
+.bmp .gif .tiff`)". Librarian's image-attach dialog works around this by defaulting to `.*` (so images of every
+type show at once, at the cost of also listing non-images). Add multi-extension filter items with custom labels:
+a `filter_list` entry should be able to carry a label plus a set of extensions, and the listing filter should
+match any extension in the set. Then image pickers can offer one "All images" item instead of `.*`.
+
+Once this exists, it also lets the Librarian **attach** dialog gate the *offered* types by model capability
+(Juha, 2026-07-18): show "All files (images + documents)" with a vision model, "Documents only" with a text-only
+model — so wrong types can't be picked at all. Today the attach dialog offers everything and does the image
+gating at *routing* time (`app._attach_callback` rejects an image on a confirmed text-only model with a dialog);
+picker-level filtering would replace that after-the-fact rejection with up-front unavailability.
+
+Discovered during brief-03 Half-2 multimodal work (2026-07-17, flagged by Juha).
+
+## FileDialog: reduce per-use-site boilerplate
+
+Every `FileDialog` use site repeats a verbose constructor (title, tag, callback, modal, `filter_list`,
+`file_filter`, `multi_selection`/`save_mode`/`dirs_only`, `allow_drag`, `default_path`, …) plus a `.show_file_dialog()`
+call and a `selected_files` callback. Recurring across `raven-visualizer`, `raven-cherrypick`, and the avatar
+pose/settings editors — and it was about to be repeated in `raven-librarian`. Wrap the common shapes (open-file,
+open-files, save-file, pick-dir) into thin helpers so a use site is roughly one call. Long-standing "meaning to
+fix this" item (Juha).
+
+Discovered during brief-03 Half-2 multimodal work (2026-07-17, flagged by Juha).
+
+## OS drag-and-drop of files into DPG apps (cross-platform)
+
+DPG apps can't receive files dragged in from the OS file manager — you must go through the in-app `FileDialog`
+every time. A recurring pain point across the fleet (Juha), and it compounds the image-picker problem above:
+with no drag-and-drop, the picker is the sole entry path, so the picker has to be good. There's a Windows-only
+extension for this, but nothing for Linux/macOS. Investigate whether cross-platform OS→app file drop is feasible
+(SDL/GLFW-level drop events, a platform-specific shim per OS, or an out-of-process helper) and, if so, wire it as
+a general capability the apps can opt into — image attach and `FileDialog` both benefit.
+
+Discovered during brief-03 Half-2 multimodal work (2026-07-17, flagged by Juha as a constant pain point).
+
 ## Modernize the Librarian system prompt / character card
 
 The default system prompt (`raven.librarian.config`) reads as dated for current instruction-tuned models —
@@ -918,6 +977,115 @@ has no emoji glyphs — cosmetic, lower priority (would need an emoji fallback f
 
 Discovered while smoke-testing the webfetch send-to-AI affordance (2026-06-03).
 
+## Fenced code block (```` ``` ````) support in the Markdown renderer
+
+`dpg_markdown` (vendored) doesn't render triple-backtick fenced code blocks: the fences show up literally and
+the content between them renders as ordinary prose (no monospace, no background box). Add fenced-code-block
+parsing plus a styled render — monospace font, background fill, and horizontal scroll (or wrap) for long lines.
+Would let LLM replies containing code display properly, and let Raven's own system/error messages show verbatim
+technical text cleanly. (Librarian's backend-error message wanted a code box for the raw error string; it falls
+back to plain text for now.)
+
+Discovered during brief-03 Half-2 error-message work (2026-07-17, flagged by Juha).
+
+## Reasoning traces with indented bullets mis-render (Markdown indented-code-block collision)
+
+A model's reasoning trace that indents its bullets — Gemma 4 emits `    *   Role: ...` with **four leading
+spaces** — collides with standard Markdown semantics: 4+ leading spaces is an **indented code block**, so the
+whole bullet list renders as verbatim/`Pre`, drawing a grey background box around it. Confirmed it is the
+indentation, not stray markup: the stored `reasoning_content` has **zero backticks and zero font tags**
+(grepped `data.json`); the offending lines are literally `'\n    *   Role: Aria...'`.
+
+Two visual manifestations of the same input:
+- **On reload / completed message** (whole reasoning rendered as one Markdown block): the 4-space indent fires
+  the code-block rule → a grey `Pre` box over the bullets, whose border doesn't match its fill — that mismatch
+  is the *existing* stranded-`Pre`-box reflow bug (see the inline-code-box item below), here triggered by the
+  indented-code block instead of an inline-code span.
+- **While streaming** (reasoning built incrementally): the code-block rule doesn't fire consistently, so the
+  `*` markers get mis-parsed as emphasis delimiters across lines — random words tinted pink/teal — and a raw
+  `</font>` leaks at the end (the thought-blue color wrapping broken by the list parse).
+
+Not a content-parts (brief 03) regression: the reasoning-bubble rendering is unchanged
+(`add_paragraph(reasoning_content, is_thought=True)`); the model's indented output simply meets standard
+Markdown. A reroll whose reasoning used `1.`/`2.` numbers at column 0 rendered cleanly. Likely fix: **dedent /
+normalize the reasoning trace's leading indentation before Markdown rendering** (strip the common/per-line
+leading whitespace so indented bullets become real bullets, not code), and/or fix the vendored renderer's
+color-on-list and `Pre`-box-position handling. Separately note: paragraph font color is also not applied to
+list-item *markers* (bullets/numbers keep the default color) even when the list renders correctly.
+
+Discovered during brief 03 §4 live validation, reported by Juha (2026-06-05).
+
+## DearPyGui_Markdown inline-code background boxes are stranded on dynamic reflow
+
+Inline-code spans (`` `like this` ``) render a grey rounded background box behind the text. The box position is
+correct on first render, but when the layout above the span *reflows* — e.g. expanding/collapsing a message's
+thinking trace, which pushes the whole answer down — the text moves but the background box stays put, leaving
+empty grey rectangles stranded mid-paragraph (observed live: three stranded boxes after expanding a thought
+bubble whose answer contained `` `code` `` spans).
+
+Root cause in the vendored renderer: `DearPyGui_Markdown/text_attributes.py` `Code.render` captures the text
+group's **absolute** screen position once via `dpg.get_item_pos(dpg_text_group)` and creates the background as
+an absolutely-positioned `dpg.add_group(pos=pos)` + drawlist quad. Absolute position doesn't track normal-flow
+reflow, so any layout change above the span leaves the box behind. (The thought-bubble show/hide toggle is the
+easy repro now that §9/§10 made thinking traces prominent, but window-resize reflow and message edits would
+trigger it too.)
+
+Same class as the list-item bullet-point position bug fixed earlier — a decoration positioned from a captured
+absolute pos rather than following the live layout. Fix directions: draw the background relative to the text in
+normal flow instead of an absolute-pos group, or recompute/redraw the Code (and Pre) backgrounds when the
+containing layout changes (the renderer's `post_render` / `CallInNextFrame` machinery already exists for `Pre`).
+
+Discovered during brief 02 §9/§10 live validation (2026-06-04).
+
+## Emoji support in the Markdown renderer (color emoji as inline images)
+
+`dpg_markdown` (vendored) can't show color emoji: DPG/ImGui rasterizes a font's glyphs into a single monochrome
+atlas, so emoji code points render as blank boxes (and emoji in LLM replies come out as tofu/`?`, since the body
+font has no emoji glyphs at all). This is why Librarian's system/error chat messages avoid symbols like `⚠`/`✓`
+(see the error-message construction in `scaffold.py`'s `ai_turn`).
+
+Precisely: full-color emoji would need Dear ImGui's FreeType backend with `LoadColor` (COLR/CPAL or CBDT/CBLC),
+which DPG does not expose. That leaves two realistic routes, and they sit at different layers:
+
+- **(a) A monochrome outline emoji font** with a permissive license (e.g. an OpenMoji-Black or Twemoji-mono
+  build), added to the atlas. Cheap, but flat glyphs — decide whether that's acceptable before building it.
+  This is an atlas-level fix, so it shares machinery with "Super/subscript font coverage in the GUI" above.
+- **(b) Inline images**, i.e. the sketch below — richer, renderer-level, and the only route that gets actual
+  color.
+
+The renderer is the natural home for a fix: it already splits a text run into extents to apply styling, so it
+could detect emoji code points and substitute an inline image per emoji instead of a text glyph, sized to the
+surrounding text. Implementation sketch: bundle a permissively-licensed emoji set — candidates: Twemoji, Noto
+Emoji, OpenMoji (confirm the exact license when picking) — and rasterize **lazily**: a cache (defaultdict-style)
+keyed by emoji code point, populated on first encounter, so only emoji that actually appear get turned into
+textures. This sidesteps rasterizing the whole set up front (cf. the font-atlas size limits in `dpg-notes.md`).
+Emit the cached texture inline where the emoji appears. Enables emoji in chat messages, tooltips, and anywhere
+`dpg_markdown` renders.
+
+Discovered during brief-03 Half-2 error-message work (2026-07-17, flagged by Juha).
+
+## Super/subscript font coverage in the GUI
+
+Math superscripts and chemistry subscripts, for the letters and numbers Unicode provides
+(U+2070–U+209F etc.), need a font that actually carries those glyphs. Raven currently has no single
+font covering both well; the gap shows up first in Visualizer.
+
+This is a **font-coverage** problem, not a renderer one: `raven.common.gui.fontsetup` serves both
+plain DPG text and the vendored markdown renderer (`markdown_add_font_callback` supplies
+`dpg_markdown`'s fonts), so the glyphs either exist in the atlas for everything or for nothing.
+Visualizer wants them in labels and tooltips, which never go through `dpg_markdown`.
+
+**The Unicode range is not the gap.** `setup_font_ranges` already requests `0x100`–`0x2fff`, which
+covers the subscript/superscript blocks outright — and on recent DPG the ranges are set up
+automatically, so that call is a no-op anyway (see the separate item on it). What's missing is a font
+that actually *carries* the glyphs. So the work is a survey of permissively-licensed fonts for
+coverage of U+2070–U+209F and friends, and picking one — not range configuration, and not the
+renderer.
+
+Raised during webfetch GUI smoke-testing (2026-06-03); flagged for a dedicated discussion. Split out
+from a combined emoji + super/subscript item on 2026-07-27 — the emoji half is a separate problem with
+its own fix, and lives in "Emoji support in the Markdown renderer" below.
+
 ## Chat view drops a character mid-message ("What" renders as " hat")
 
 Observed 2026-07-18 in Librarian's chat view: an assistant greeting displayed as
@@ -962,28 +1130,6 @@ first occurrence rather than a long-standing bug finally noticed: a dropped lett
 thing this project's author does reliably catch.)
 
 Discovered while committing the chat-template fix (2026-07-19).
-
-## Super/subscript font coverage in the GUI
-
-Math superscripts and chemistry subscripts, for the letters and numbers Unicode provides
-(U+2070–U+209F etc.), need a font that actually carries those glyphs. Raven currently has no single
-font covering both well; the gap shows up first in Visualizer.
-
-This is a **font-coverage** problem, not a renderer one: `raven.common.gui.fontsetup` serves both
-plain DPG text and the vendored markdown renderer (`markdown_add_font_callback` supplies
-`dpg_markdown`'s fonts), so the glyphs either exist in the atlas for everything or for nothing.
-Visualizer wants them in labels and tooltips, which never go through `dpg_markdown`.
-
-**The Unicode range is not the gap.** `setup_font_ranges` already requests `0x100`–`0x2fff`, which
-covers the subscript/superscript blocks outright — and on recent DPG the ranges are set up
-automatically, so that call is a no-op anyway (see the separate item on it). What's missing is a font
-that actually *carries* the glyphs. So the work is a survey of permissively-licensed fonts for
-coverage of U+2070–U+209F and friends, and picking one — not range configuration, and not the
-renderer.
-
-Raised during webfetch GUI smoke-testing (2026-06-03); flagged for a dedicated discussion. Split out
-from a combined emoji + super/subscript item on 2026-07-27 — the emoji half is a separate problem with
-its own fix, and lives in "Emoji support in the Markdown renderer" below.
 
 ## webfetch local (client-side) mode
 
@@ -1248,55 +1394,6 @@ Posture decision for Juha (security vs. convenience for the median scientific us
 review (2026-06-05); pre-existing since the webfetch brief (brief 01) shipped, not introduced by the
 content-parts refactor.
 
-## Reasoning traces with indented bullets mis-render (Markdown indented-code-block collision)
-
-A model's reasoning trace that indents its bullets — Gemma 4 emits `    *   Role: ...` with **four leading
-spaces** — collides with standard Markdown semantics: 4+ leading spaces is an **indented code block**, so the
-whole bullet list renders as verbatim/`Pre`, drawing a grey background box around it. Confirmed it is the
-indentation, not stray markup: the stored `reasoning_content` has **zero backticks and zero font tags**
-(grepped `data.json`); the offending lines are literally `'\n    *   Role: Aria...'`.
-
-Two visual manifestations of the same input:
-- **On reload / completed message** (whole reasoning rendered as one Markdown block): the 4-space indent fires
-  the code-block rule → a grey `Pre` box over the bullets, whose border doesn't match its fill — that mismatch
-  is the *existing* stranded-`Pre`-box reflow bug (see the inline-code-box item below), here triggered by the
-  indented-code block instead of an inline-code span.
-- **While streaming** (reasoning built incrementally): the code-block rule doesn't fire consistently, so the
-  `*` markers get mis-parsed as emphasis delimiters across lines — random words tinted pink/teal — and a raw
-  `</font>` leaks at the end (the thought-blue color wrapping broken by the list parse).
-
-Not a content-parts (brief 03) regression: the reasoning-bubble rendering is unchanged
-(`add_paragraph(reasoning_content, is_thought=True)`); the model's indented output simply meets standard
-Markdown. A reroll whose reasoning used `1.`/`2.` numbers at column 0 rendered cleanly. Likely fix: **dedent /
-normalize the reasoning trace's leading indentation before Markdown rendering** (strip the common/per-line
-leading whitespace so indented bullets become real bullets, not code), and/or fix the vendored renderer's
-color-on-list and `Pre`-box-position handling. Separately note: paragraph font color is also not applied to
-list-item *markers* (bullets/numbers keep the default color) even when the list renders correctly.
-
-Discovered during brief 03 §4 live validation, reported by Juha (2026-06-05).
-
-## DearPyGui_Markdown inline-code background boxes are stranded on dynamic reflow
-
-Inline-code spans (`` `like this` ``) render a grey rounded background box behind the text. The box position is
-correct on first render, but when the layout above the span *reflows* — e.g. expanding/collapsing a message's
-thinking trace, which pushes the whole answer down — the text moves but the background box stays put, leaving
-empty grey rectangles stranded mid-paragraph (observed live: three stranded boxes after expanding a thought
-bubble whose answer contained `` `code` `` spans).
-
-Root cause in the vendored renderer: `DearPyGui_Markdown/text_attributes.py` `Code.render` captures the text
-group's **absolute** screen position once via `dpg.get_item_pos(dpg_text_group)` and creates the background as
-an absolutely-positioned `dpg.add_group(pos=pos)` + drawlist quad. Absolute position doesn't track normal-flow
-reflow, so any layout change above the span leaves the box behind. (The thought-bubble show/hide toggle is the
-easy repro now that §9/§10 made thinking traces prominent, but window-resize reflow and message edits would
-trigger it too.)
-
-Same class as the list-item bullet-point position bug fixed earlier — a decoration positioned from a captured
-absolute pos rather than following the live layout. Fix directions: draw the background relative to the text in
-normal flow instead of an absolute-pos group, or recompute/redraw the Code (and Pre) backgrounds when the
-containing layout changes (the renderer's `post_render` / `CallInNextFrame` machinery already exists for `Pre`).
-
-Discovered during brief 02 §9/§10 live validation (2026-06-04).
-
 ## TTS crashes (server 400, IndexError) on a degenerate sentence like a lone `*`
 
 When the avatar speaks an AI response, `avatar_controller.preprocess_task` splits it into lines/sentences and
@@ -1454,103 +1551,6 @@ of the checkpoint that surfaced them:
     doesn't somewhere, keep the parameter (or a per-widget capture) and document *that* as the reason.
 
 Discovered during brief-03 Half-2 checkpoint C (2026-07-17, flagged by Juha while reviewing `flash_button`).
-
-## Emoji support in the Markdown renderer (color emoji as inline images)
-
-`dpg_markdown` (vendored) can't show color emoji: DPG/ImGui rasterizes a font's glyphs into a single monochrome
-atlas, so emoji code points render as blank boxes (and emoji in LLM replies come out as tofu/`?`, since the body
-font has no emoji glyphs at all). This is why Librarian's system/error chat messages avoid symbols like `⚠`/`✓`
-(see the error-message construction in `scaffold.py`'s `ai_turn`).
-
-Precisely: full-color emoji would need Dear ImGui's FreeType backend with `LoadColor` (COLR/CPAL or CBDT/CBLC),
-which DPG does not expose. That leaves two realistic routes, and they sit at different layers:
-
-- **(a) A monochrome outline emoji font** with a permissive license (e.g. an OpenMoji-Black or Twemoji-mono
-  build), added to the atlas. Cheap, but flat glyphs — decide whether that's acceptable before building it.
-  This is an atlas-level fix, so it shares machinery with "Super/subscript font coverage in the GUI" above.
-- **(b) Inline images**, i.e. the sketch below — richer, renderer-level, and the only route that gets actual
-  color.
-
-The renderer is the natural home for a fix: it already splits a text run into extents to apply styling, so it
-could detect emoji code points and substitute an inline image per emoji instead of a text glyph, sized to the
-surrounding text. Implementation sketch: bundle a permissively-licensed emoji set — candidates: Twemoji, Noto
-Emoji, OpenMoji (confirm the exact license when picking) — and rasterize **lazily**: a cache (defaultdict-style)
-keyed by emoji code point, populated on first encounter, so only emoji that actually appear get turned into
-textures. This sidesteps rasterizing the whole set up front (cf. the font-atlas size limits in `dpg-notes.md`).
-Emit the cached texture inline where the emoji appears. Enables emoji in chat messages, tooltips, and anywhere
-`dpg_markdown` renders.
-
-Discovered during brief-03 Half-2 error-message work (2026-07-17, flagged by Juha).
-
-## Fenced code block (```` ``` ````) support in the Markdown renderer
-
-`dpg_markdown` (vendored) doesn't render triple-backtick fenced code blocks: the fences show up literally and
-the content between them renders as ordinary prose (no monospace, no background box). Add fenced-code-block
-parsing plus a styled render — monospace font, background fill, and horizontal scroll (or wrap) for long lines.
-Would let LLM replies containing code display properly, and let Raven's own system/error messages show verbatim
-technical text cleanly. (Librarian's backend-error message wanted a code box for the raw error string; it falls
-back to plain text for now.)
-
-Discovered during brief-03 Half-2 error-message work (2026-07-17, flagged by Juha).
-
-## FileDialog: image thumbnail previews (Lanczos'd)
-
-The vendored `FileDialog` (`raven/vendor/file_dialog/`) lists files by name only — no image previews. For picking
-*image* files (the multimodal image-attach feature, brief 03 Half 2), a thumbnail per image would make selection
-usable — you pick by looking, not by guessing from the filename. This matters more than for most file types:
-photos and AI-generated images usually have non-descriptive filenames (hashes, timestamps, auto-names), so the
-image *data* is the only reliable way to identify the right file — and doubly so because DPG apps have no OS
-drag-and-drop (see the drag-and-drop item below), making the in-app picker the *only* way to bring an image in.
-Add Lanczos-downsampled thumbnail previews to the file listing when the filter is image-typed. Reuse
-`raven.common.image.lanczos` + the `add_dynamic_texture` path; the Nvidia/Linux texture-deletion-segfault
-workaround (`__GLVND_DISALLOW_PATCHING=1`) is already set in the apps.
-
-This is a UX enhancement for the image-attach picker, not a blocker: the attach feature ships first with the
-basic (filename) FileDialog listing; this improves it (a filename-only picker is a poor fit for choosing images).
-When built, mind DPG texture lifecycle for the many small preview textures (create/destroy as the user navigates
-directories).
-
-Discovered during brief-03 Half-2 multimodal work (2026-07-17, flagged by Juha).
-
-## FileDialog: multi-extension filter as one labelled item
-
-The vendored `FileDialog`'s type filter is single-extension: each `filter_list` entry matches exactly one
-extension (`.png`), and the "show everything" option is the bare `.*`. There is no way to offer a single filter
-item that matches a *set* of extensions under a descriptive label — e.g. "All images (`.png .jpg .jpeg .webp
-.bmp .gif .tiff`)". Librarian's image-attach dialog works around this by defaulting to `.*` (so images of every
-type show at once, at the cost of also listing non-images). Add multi-extension filter items with custom labels:
-a `filter_list` entry should be able to carry a label plus a set of extensions, and the listing filter should
-match any extension in the set. Then image pickers can offer one "All images" item instead of `.*`.
-
-Once this exists, it also lets the Librarian **attach** dialog gate the *offered* types by model capability
-(Juha, 2026-07-18): show "All files (images + documents)" with a vision model, "Documents only" with a text-only
-model — so wrong types can't be picked at all. Today the attach dialog offers everything and does the image
-gating at *routing* time (`app._attach_callback` rejects an image on a confirmed text-only model with a dialog);
-picker-level filtering would replace that after-the-fact rejection with up-front unavailability.
-
-Discovered during brief-03 Half-2 multimodal work (2026-07-17, flagged by Juha).
-
-## FileDialog: reduce per-use-site boilerplate
-
-Every `FileDialog` use site repeats a verbose constructor (title, tag, callback, modal, `filter_list`,
-`file_filter`, `multi_selection`/`save_mode`/`dirs_only`, `allow_drag`, `default_path`, …) plus a `.show_file_dialog()`
-call and a `selected_files` callback. Recurring across `raven-visualizer`, `raven-cherrypick`, and the avatar
-pose/settings editors — and it was about to be repeated in `raven-librarian`. Wrap the common shapes (open-file,
-open-files, save-file, pick-dir) into thin helpers so a use site is roughly one call. Long-standing "meaning to
-fix this" item (Juha).
-
-Discovered during brief-03 Half-2 multimodal work (2026-07-17, flagged by Juha).
-
-## OS drag-and-drop of files into DPG apps (cross-platform)
-
-DPG apps can't receive files dragged in from the OS file manager — you must go through the in-app `FileDialog`
-every time. A recurring pain point across the fleet (Juha), and it compounds the image-picker problem above:
-with no drag-and-drop, the picker is the sole entry path, so the picker has to be good. There's a Windows-only
-extension for this, but nothing for Linux/macOS. Investigate whether cross-platform OS→app file drop is feasible
-(SDL/GLFW-level drop events, a platform-specific shim per OS, or an out-of-process helper) and, if so, wire it as
-a general capability the apps can opt into — image attach and `FileDialog` both benefit.
-
-Discovered during brief-03 Half-2 multimodal work (2026-07-17, flagged by Juha as a constant pain point).
 
 ## Expose the docs-DB source files behind a reply's RAG citations
 
