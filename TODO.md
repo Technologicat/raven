@@ -9,6 +9,41 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 
 ---
 
+## Autumn 2026: Researchers' Night (2026-09-26)
+
+Librarian has to be demo-ready and impressive by then. The date is the only hard constraint in this file, so
+individual items carry a "Researchers' Night" note where they feed it. Working backwards from 26 September:
+
+1. **Demo correctness** — the defects a live audience would *see*. The temporary-context-inject package (six
+   linked items in `TODO_DEFERRED.md`, listed under its cluster index), the TTS zero-segment crash, the Markdown
+   renderer defects, the remaining crash/race items. Not polish: this is whether the demo works.
+2. **Demo impressiveness** — `crt` and `atmospheric_dust` (both briefed), the avatar branch-switch glitch, RAG
+   reranking for better answers on stage, citation surfacing, colorblind-safe signalling, lorebook if it fits.
+3. **Freeze and rehearse** — no new features; run the demo repeatedly on the actual hardware and fix what that
+   surfaces. This window is the one that gets eaten, and it is where the real surprises live. It is also when the
+   Librarian marathon restarts, since briefs 04 (MCP) and 06 (Hindsight) are off the deadline path by their own
+   framing — deferred by date, not by worth. They remain the main line for the "digital colleague" track.
+
+**Measurements to take early**, because several decisions are blocked on numbers rather than on opinions:
+
+- **Avatar stutter** — is it warmup, GPU contention, or genuinely the GIL? The voice is already warmed at
+  startup, so "first speech" warmup is a weaker hypothesis than it sounds; what is still cold at that moment is
+  THA3's first inference at the talking-morph shape, the audio device open, and the postprocessor's first pass.
+  Test whether it survives TTS-on-CPU, which would rule contention out.
+- **Per-module VRAM budget** — so the config variants are derived rather than guessed on the day.
+- **MoE vs dense decode speed** — 35B-A3B (current) against 27B dense, which is smarter but slower. Batch-1
+  decode is weight-bandwidth-bound, so the active-parameter ratio (3B vs 27B) is a *decent* first approximation
+  rather than a bad one; what compresses it is the fixed per-token overhead that doesn't scale with weights.
+  Expect somewhere in 3–9×, and measure rather than reason. Note eGPU measurements have to run on whichever
+  machine the eGPU is physically attached to.
+
+**Demo hardware shape**: LLM alone on the larger card, all nine raven-server modules on the internal one — the
+`config_dual_midvram` variant. Reducing context to buy headroom is a weak lever and not worth the cheat: Qwen 3.6
+is gated-deltanet at 3:1, so only about a quarter of the layers carry a KV cache that grows with context.
+
+
+---
+
 ## Cross-cutting
 
 - **[High]** HF hub: document the env vars that prevent hub checks on Raven startup (for privacy and faster startup). Add recommendation to server docs. Currently not written down anywhere in the project.
