@@ -321,6 +321,9 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 - **[Medium]** Robustness: temporarily disable relevant buttons while AI is writing; re-enable correctly by checking whether the relevant action has a stashed callback for that specific displayed chat message.
 
 - **[Medium]** Fix bug: incomplete thought block (in first response) after Continue. Continuing should resume the incomplete thought block. May have a reproducible case still in the persistent chat tree — investigate.
+  - **Probable mechanism, found 2026-07-27 while probing backends.** Continue works by prefilling the partial reply as a trailing assistant message — and a trailing assistant message means the template emits no generation prompt, which is exactly where the thinking prefix comes from. So the continued turn **cannot re-enter the thought channel**: if generation was interrupted mid-thinking, the block has no way to be closed, which is the reported symptom. Corroborated by Juha's recollection of the manual testing that produced it — the interruptions were sometimes during output and sometimes during thinking, and it is the latter that this predicts will break.
+  - Still a hypothesis rather than a proven cause; the confirming test is to interrupt deliberately during thinking, then Continue, and check whether the reasoning channel reopens. Worth doing *before* designing a fix, because the fix differs: if this is the cause, resuming mid-thought needs the continuation to re-open the block explicitly (prefill the partial reasoning *inside* an open `<think>`), rather than anything in the renderer.
+  - Land it with the thinking-toggle work above — same mechanism, same per-family marker table, and the same "wrong marker breaks generation" constraint applies.
 
 - **[Low]** Add lockfile so `raven-minichat` and `raven-librarian` can't run simultaneously (prevents losing changes made in one app). Quick CC session.
 
