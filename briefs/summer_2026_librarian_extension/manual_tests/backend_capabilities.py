@@ -14,8 +14,8 @@ reasoning lengths, or whether output varies with the seed.
 Run it after upgrading a backend, or when pointing Raven at a new one, to see which
 mechanisms are available before writing code against them.
 
-Findings on LM Studio 0.3.x with Qwen3.5-9B / Qwen3.6-35B-A3B (2026-07-27), for
-comparison against whatever you get:
+Findings on LM Studio 0.4.19 (Build 2), 2026-07-27, for comparison against whatever
+you get. Models: unsloth Qwen3.5-9B / Qwen3.6-35B-A3B, lmstudio-community Gemma4-26B-A4B.
 
   - unknown parameters              : silently ignored (so acceptance means nothing)
   - min_p                           : honoured, despite being undocumented
@@ -23,7 +23,18 @@ comparison against whatever you get:
   - chat_template_kwargs            : ignored on both endpoints
   - thinking toggle, OpenAI-compat  : unavailable (prefill is the workaround)
   - thinking toggle, Anthropic-compat: works, via Anthropic's native `thinking` field
-  - thinking history fed back       : dropped on every route tried
+  - thinking history fed back       : Qwen drops it; Gemma 4 keeps it
+
+Prefill suppresses thinking because a trailing assistant message leaves no generation
+prompt, and the generation prompt is where the template emits its thinking prefix --
+the prefill's *content* is incidental, as a bare "The" suppresses it just as well.
+`CLOSED_THINK` below is nonetheless the Qwen-correct string, so the model sees
+well-formed markup rather than a foreign tag. Gemma's equivalent is
+`<|channel>thought\n<channel|>`.
+
+Note the Gemma quant is not interchangeable: the unsloth build fails to load, because
+LM Studio's workaround for Gemma's template fires only for the lmstudio-community
+build with its bundled template unoverridden.
 
 Usage:
     python backend_capabilities.py                       # localhost:1234, first model
