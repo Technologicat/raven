@@ -27,10 +27,14 @@ you get. Models: unsloth Qwen3.5-9B / Qwen3.6-35B-A3B, lmstudio-community Gemma4
 
 Prefill suppresses thinking because a trailing assistant message leaves no generation
 prompt, and the generation prompt is where the template emits its thinking prefix --
-the prefill's *content* is incidental, as a bare "The" suppresses it just as well.
-`CLOSED_THINK` below is nonetheless the Qwen-correct string, so the model sees
-well-formed markup rather than a foreign tag. Gemma's equivalent is
-`<|channel>thought\n<channel|>`.
+the prefill's *content* is incidental to the suppression, as a bare "The" suppresses
+it just as well.
+
+The content is NOT incidental to output quality, though: prefilling Gemma's
+`<|channel>thought\n<channel|>` into Qwen3.5-9B suppresses the reasoning and then makes
+the model echo the question back instead of answering it. `CLOSED_THINK` below is the
+Qwen-correct string; Gemma's is `<|channel>thought\n<channel|>`. Get the per-family
+string right, or don't prefill at all.
 
 Note the Gemma quant is not interchangeable: the unsloth build fails to load, because
 LM Studio's workaround for Gemma's template fires only for the lmstudio-community
