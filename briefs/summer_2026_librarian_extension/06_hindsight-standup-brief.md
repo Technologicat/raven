@@ -171,9 +171,8 @@ Net VRAM impact on the 3070 Ti (where Raven's non-LLM ML runs — see hardware n
 
 ### Hardware note — VRAM budget actually matters here
 
-The reasoning above hinges on real VRAM constraints on the primary dev machine (`maia`),
-which the brief should record so model-choice decisions aren't made against the wrong mental
-model:
+The reasoning above hinges on real VRAM constraints on the primary dev machine, which the
+brief should record so model-choice decisions aren't made against the wrong mental model:
 
 - **4090 (24 GB)** — *dedicated to the LLM*. Filled completely by a 30B-class model at INT4.
   No headroom for anything else.
@@ -218,14 +217,15 @@ budget — non-trivial against the other ML competing for it.
     - Tool-call JSON malformation is harder to defend against in the parser; surfaces as
       visible tool-call failures. Recoverable by rerolling.
 
-- **`electra` (the other dev machine)** has a 16 GB internal GPU, looser budget. No
-  specialized config yet; likely just runs a slightly larger LLM with the same Raven-server
-  config as `maia`'s primary setup.
+- **The other dev machine** has a 16 GB internal GPU, looser budget. No specialized config
+  yet; likely just runs a slightly larger LLM with the same Raven-server config as the
+  primary machine's setup.
 
 **Implication for the multilingual upgrade path**: adding v2-moe as a "multilingual" role
-isn't a free extension on `maia` — it'd consume a meaningful slice of the 3070 Ti budget,
-potentially squeezing other ML. Worth a deliberate evaluation against what else is loaded,
-not an assumed "we'll just add it later." On `electra` the extra ~950 MB is easier to absorb.
+isn't a free extension on the primary machine — it'd consume a meaningful slice of the 3070 Ti
+budget, potentially squeezing other ML. Worth a deliberate evaluation against what else is
+loaded, not an assumed "we'll just add it later." On the 16 GB machine the extra ~950 MB is
+easier to absorb.
 
 ### Public API: two entry points, role-orthogonal modality
 
@@ -323,17 +323,17 @@ recall-quality issue:
 
 (A third option — having Hindsight load its own embedder alongside Raven's — was considered
 and dropped, since it conflicts with Raven's central design principle of loading each ML
-model only once; the VRAM cost on `maia`'s shared 3070 Ti is genuinely incompatible with
-duplicating embedders.)
+model only once; the VRAM cost on the primary machine's shared 3070 Ti is genuinely
+incompatible with duplicating embedders.)
 
 v0 acceptance is the right call until empirical evidence shows recall quality is unsatisfying.
 
 **Multilinguality parked for now**: Librarian is currently English-only, so v1.5's
 English-focus is fine. If Finnish (or other non-English) memory recall becomes a real need
 later, the cleanest addition is a separate "multilingual" role serving
-`nomic-ai/nomic-embed-text-v2-moe`. The ~950 MB cost would consume ~14% of `maia`'s 3070 Ti
-budget — tight but evaluatable against what else is loaded; easier to absorb on `electra`'s
-16 GB GPU. Hindsight reconfigures by changing one env var; no other code changes. **Watch
+`nomic-ai/nomic-embed-text-v2-moe`. The ~950 MB cost would consume ~14% of the primary
+machine's 3070 Ti budget — tight but evaluatable against what else is loaded; easier to
+absorb on the 16 GB machine. Hindsight reconfigures by changing one env var; no other code changes. **Watch
 for a v2 vision model**: when one ships paired to text-v2, the multilingual path becomes the
 clean upgrade across the board, and could justify revisiting the budget allocation.
 

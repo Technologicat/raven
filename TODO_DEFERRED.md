@@ -1,5 +1,42 @@
 # Deferred TODOs
 
+New items go at the **top**. (Both ends were in use up to 2026-07-27, which is how the two halves of the same
+Librarian session ended up ~1000 lines apart.)
+
+## DPG now sets up font ranges itself; `setup_font_ranges` is a no-op that logs loudly
+
+Recent DearPyGui configures font ranges automatically, which makes `dpg.add_font_range` redundant — so
+`raven.common.gui.fontsetup.setup_font_ranges` (which requests `0x100`–`0x2fff`) no longer does anything, and DPG
+logs about it on every Raven GUI app start. Cosmetically noisy now; misleading later, since the function reads as
+load-bearing and isn't.
+
+Called from four places: `raven/avatar/pose_editor/app.py`, `raven/common/gui/utils.py` (twice), and
+`fontsetup.markdown_add_font_callback`. Decide between version-gating the call (if we still support DPG versions
+that need it) and removing it outright, then update `dpg-notes.md`, whose "`setup_font_ranges` and extended
+Unicode" section documents the old behaviour as current.
+
+Note the two dev machines are on different DPG versions as of 2026-07-27, so this reproduces on one and not the
+other — check the installed version before concluding anything about it.
+
+Discovered while reconciling the TODO lists (2026-07-27, reported by Juha).
+
+Several items are siblings under one root cause and are cheaper to fix as a package than one at a time. The
+clusters, as of 2026-07-27:
+
+- **Temporary context injects** — how much goes on the wire each turn, in which role, at which position. "RAG
+  injects: sent in the user role as a workaround", "Fold the temporary context injects…", "RAG: rerank retrieved
+  chunks…", "Revisit the 'answer from context only' reminder", "Sending an empty message starts an AI turn…",
+  "Modernize the Librarian system prompt / character card". These decide the same question and mostly have
+  "neither option has been measured" as their state.
+- **FileDialog** — "slow open and a teardown input-dead-window", "smart-case the Find field", "image thumbnail
+  previews", "multi-extension filter as one labelled item", "reduce per-use-site boilerplate", plus "OS
+  drag-and-drop of files into DPG apps" (which is why the picker has to be good — it's the only entry path).
+- **Markdown renderer** (the vendored `DearPyGui_Markdown`) — "Markdown ATX headings don't render", "Fenced
+  code block support", "Reasoning traces with indented bullets mis-render", "inline-code background boxes are
+  stranded on dynamic reflow", "Emoji support in the Markdown renderer". Adjacent: "Super/subscript font
+  coverage in the GUI" is an *atlas* problem rather than a renderer one (`fontsetup` serves both plain DPG
+  text and `dpg_markdown`), but it shares the font-survey work with the emoji item's monochrome-font route.
+
 ## Attachment + docs-DB: support office document formats (MS Office / LibreOffice)
 
 `raven.common.docextract` handles plain text and PDF. For real-world use, people attach (and drop into the docs
@@ -457,7 +494,9 @@ So the AGPL tax on the server side is concentrated in three places: the Flask ap
 
 The server animator is not going away — it remains indefinitely useful, especially once a JavaScript avatar client exists. A BSD client-local animator is purely additive.
 
-When a client-local animator lands, `raven-avatar-pose-editor` should gain a mayberemote mode as well: it currently loads THA3 in-process, which collides with other local GPU consumers (observed 2026-04-24 — CUDA OOM on a 3070 Ti with Qwen + one THA3 instance already resident). Remote mode would let the pose editor run against a separate server process, or share a single THA3 instance with the live animator on the same box.
+`raven-avatar-pose-editor` should gain a mayberemote mode as well: it currently loads THA3 in-process, which collides with other local GPU consumers (observed 2026-04-24 — CUDA OOM on a 3070 Ti with Qwen + one THA3 instance already resident). Remote mode would let the pose editor run against a separate server process, or share a single THA3 instance with the live animator on the same box.
+
+**This does *not* depend on the client-local animator, and is not licensing-gated** (corrected 2026-07-27 — the earlier wording sequenced it after the clean-room work, which was wrong). Both the server and the pose editor are already AGPL, so a remote mode is just an AGPL client calling an AGPL server over HTTP; no clean-room question arises. The actual blocker is technical: the avatar web API was designed for live animation and does not expose the primitives the pose editor needs. Scoping that gap is the first step.
 
 No action until the user decides whether to pursue the clean-room path. Discovered during speech-extract-to-common discussion (2026-04-17).
 
@@ -744,13 +783,13 @@ Discovered during DOCS-indexing-indicator smoke test (2026-04-27).
 
 Raven's `[cuda]` extra currently pulls a torch / torchaudio / torchvision combo pinned to one CUDA toolchain (currently `+cu128`). The PyTorch project ships these via `--index-url https://download.pytorch.org/whl/cuXXX`, and the matching `nvidia-cuda-runtime-cuYY` runtime is also installable as a Python package — so a Raven install could in principle bundle a complete CUDA stack from PyPI without touching the host's toolchain.
 
-Today, switching machines (e.g. between maia at CUDA 12.8 and electra at CUDA 13) requires hand-editing `pyproject.toml` and re-running `pdm install`. Worse, a plain `pdm install` quietly upgraded `torchaudio` from `2.10.0+cu128` to `2.11.0` (the latter wants CUDA 13 and silently broke imports on the CUDA-12.8 machine). The fix: pin torch + torchaudio + torchvision together as a CUDA-version-matched group, expose `pdm install -G cuda12` / `-G cuda13` extras, and document the per-machine choice.
+Today, switching between machines on different CUDA versions (e.g. one at CUDA 12.8, another at CUDA 13) requires hand-editing `pyproject.toml` and re-running `pdm install`. Worse, a plain `pdm install` quietly upgraded `torchaudio` from `2.10.0+cu128` to `2.11.0` (the latter wants CUDA 13 and silently broke imports on the CUDA-12.8 machine). The fix: pin torch + torchaudio + torchvision together as a CUDA-version-matched group, expose `pdm install -G cuda12` / `-G cuda13` extras, and document the per-machine choice.
 
 In particular, `torchaudio` should be part of the CUDA dep set, pinned to the matching CUDA version — not a free-floating dep that PDM resolves to whatever's latest.
 
 CPU-only path: someone who just wants Raven-visualizer on a laptop without a GPU shouldn't have to learn about extra-dep groups. The default install (`pdm install` with no extras) should pull the CPU build of torch/torchaudio/torchvision; the `-G cudaXX` extras only add CUDA-build alternates. Today GPU support being opt-in is fine (it's the heavy/optional capability), but the CPU torch build still has to *appear*, otherwise `import torch` fails outright. Probably means listing the CPU-build versions in the base `[project] dependencies` (with PyTorch's CPU index URL) and having the `-G cudaXX` extras override the base pins via a higher-priority constraint.
 
-Discovered during the logsetup smoke test (2026-04-29) when a routine `pdm install` (run to refresh a console-script entry point) bumped torchaudio and broke the visualizer's import path. Recurred 2026-06-03 on maia (CUDA 12.8): adding `trafilatura` triggered a re-resolve that again bumped `torchaudio 2.10.0+cu128 → 2.11.0` (CUDA-13 build, `OSError: libcudart.so.13`); restored with `python -m pip install "torchaudio==2.10.0" --index-url https://download.pytorch.org/whl/cu128`. Second occurrence — this is a recurring tax on every dependency change, not a one-off.
+Discovered during the logsetup smoke test (2026-04-29) when a routine `pdm install` (run to refresh a console-script entry point) bumped torchaudio and broke the visualizer's import path. Recurred 2026-06-03 on the CUDA 12.8 machine: adding `trafilatura` triggered a re-resolve that again bumped `torchaudio 2.10.0+cu128 → 2.11.0` (CUDA-13 build, `OSError: libcudart.so.13`); restored with `python -m pip install "torchaudio==2.10.0" --index-url https://download.pytorch.org/whl/cu128`. Second occurrence — this is a recurring tax on every dependency change, not a one-off.
 
 ## Convert startup `print()`s to `logger.info()` where appropriate
 
@@ -924,26 +963,27 @@ thing this project's author does reliably catch.)
 
 Discovered while committing the chat-template fix (2026-07-19).
 
-## Colored-glyph / emoji and super/subscript font coverage in the GUI
+## Super/subscript font coverage in the GUI
 
-Two related font-rendering gaps across the constellation:
+Math superscripts and chemistry subscripts, for the letters and numbers Unicode provides
+(U+2070–U+209F etc.), need a font that actually carries those glyphs. Raven currently has no single
+font covering both well; the gap shows up first in Visualizer.
 
-- **Emoji** in LLM replies render as tofu/`?` — the body font has no emoji glyphs. Note DPG's font
-  atlas (Dear ImGui) is **monochrome by default**; full-color emoji need the FreeType backend with
-  `LoadColor` (COLR/CPAL or CBDT/CBLC), which DPG does not expose. Realistic options: (a) ship a
-  *monochrome outline* emoji font with a permissive license (e.g. an OpenMoji-Black or Twemoji-mono
-  build) and accept flat glyphs; or (b) detect emoji codepoints and splice **image widgets** into the
-  markdown renderer (same per-run hook used for the webfetch URL icon) from a pre-rasterized,
-  permissively-licensed emoji set (made offline, since the image-gen models don't co-reside in VRAM).
-- **Super/subscripts** (Visualizer): math superscripts and chemistry subscripts for the
-  letters/numbers Unicode provides (U+2070–U+209F etc.) need a font that actually carries those
-  glyphs. Raven currently has no single font covering both well.
+This is a **font-coverage** problem, not a renderer one: `raven.common.gui.fontsetup` serves both
+plain DPG text and the vendored markdown renderer (`markdown_add_font_callback` supplies
+`dpg_markdown`'s fonts), so the glyphs either exist in the atlas for everything or for nothing.
+Visualizer wants them in labels and tooltips, which never go through `dpg_markdown`.
 
-Both reduce to "font with the right Unicode coverage (and possibly color)" plus, for color emoji, the
-DPG/ImGui monochrome-atlas limitation. Worth a dedicated session: survey permissive fonts, decide
-font-vs-image-injection, and (for emoji) whether a flat monochrome glyph is acceptable.
+**The Unicode range is not the gap.** `setup_font_ranges` already requests `0x100`–`0x2fff`, which
+covers the subscript/superscript blocks outright — and on recent DPG the ranges are set up
+automatically, so that call is a no-op anyway (see the separate item on it). What's missing is a font
+that actually *carries* the glyphs. So the work is a survey of permissively-licensed fonts for
+coverage of U+2070–U+209F and friends, and picking one — not range configuration, and not the
+renderer.
 
-Raised during webfetch GUI smoke-testing (2026-06-03); flagged for a dedicated discussion.
+Raised during webfetch GUI smoke-testing (2026-06-03); flagged for a dedicated discussion. Split out
+from a combined emoji + super/subscript item on 2026-07-27 — the emoji half is a separate problem with
+its own fix, and lives in "Emoji support in the Markdown renderer" below.
 
 ## webfetch local (client-side) mode
 
@@ -1418,8 +1458,18 @@ Discovered during brief-03 Half-2 checkpoint C (2026-07-17, flagged by Juha whil
 ## Emoji support in the Markdown renderer (color emoji as inline images)
 
 `dpg_markdown` (vendored) can't show color emoji: DPG/ImGui rasterizes a font's glyphs into a single monochrome
-atlas, so emoji code points render as blank boxes. This is why Librarian's system/error chat messages avoid
-symbols like `⚠`/`✓` (see the error-message construction in `scaffold.py`'s `ai_turn`).
+atlas, so emoji code points render as blank boxes (and emoji in LLM replies come out as tofu/`?`, since the body
+font has no emoji glyphs at all). This is why Librarian's system/error chat messages avoid symbols like `⚠`/`✓`
+(see the error-message construction in `scaffold.py`'s `ai_turn`).
+
+Precisely: full-color emoji would need Dear ImGui's FreeType backend with `LoadColor` (COLR/CPAL or CBDT/CBLC),
+which DPG does not expose. That leaves two realistic routes, and they sit at different layers:
+
+- **(a) A monochrome outline emoji font** with a permissive license (e.g. an OpenMoji-Black or Twemoji-mono
+  build), added to the atlas. Cheap, but flat glyphs — decide whether that's acceptable before building it.
+  This is an atlas-level fix, so it shares machinery with "Super/subscript font coverage in the GUI" above.
+- **(b) Inline images**, i.e. the sketch below — richer, renderer-level, and the only route that gets actual
+  color.
 
 The renderer is the natural home for a fix: it already splits a text run into extents to apply styling, so it
 could detect emoji code points and substitute an inline image per emoji instead of a text glyph, sized to the

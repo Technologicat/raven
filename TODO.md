@@ -15,7 +15,7 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
   - `HF_HUB_OFFLINE=1` — forces huggingface_hub to use only locally cached models, no network requests at all.
   - `HF_HUB_DISABLE_TELEMETRY=1` — stops telemetry pings only.
 
-- **[High]** Neural reranker for HybridIR: add a reranker stage to avoid needing large k values (k=100 style workarounds). Since we maintain our own HybridIR backend, we can power it up properly.
+- **[High]** Neural reranker for HybridIR: add a reranker stage to avoid needing large k values (k=100 style workarounds). Since we maintain our own HybridIR backend, we can power it up properly. Design worked out in `TODO_DEFERRED.md`, "RAG: rerank retrieved chunks and inject only the best few" (cross-encoder stage, three-layer `common`/`server`/`mayberemote` shape, VRAM tradeoff).
 
 - **[High]** Revisit logging system: library modules should not reconfigure the logger (verify exact behavior against Python `logging` stdlib docs, but currently each module sets the log level, which is the entrypoint's responsibility). Move logging configuration to entrypoints only. Add a "detailed debug" level at that time for particularly spammy-but-useful log lines (e.g. `SmoothScrolling.render_frame`, `_managed_task`, `binary_search_item`).
 
@@ -139,13 +139,13 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 
 - **[Low]** Make clustering hyperparameters configurable, preferably in the GUI. Put defaults into `raven.visualizer.config`.
 
-- **[Low]** fdialog improvements:
+- **[Low]** fdialog improvements. Five further FileDialog items live in `TODO_DEFERRED.md` (slow open + teardown input-dead-window on huge directories, smart-case Find, image thumbnail previews, multi-extension filter as one labelled item, reduce per-use-site boilerplate); treat the whole set as one work package rather than picking at it from two lists.
   - Add "go up to parent directory" button
   - Change the "go to default directory" icon to something less confusing
   - In save mode: if the user has picked a unique file extension in the filter combo, use that as the default extension. If multiple extensions or wildcards, use the API-provided default.
   - Ctrl+F hotkey to focus the file name field is not always working. **[Verify]** exact conditions before fixing.
 
-- **[Low]** Drag'n'drop from OS file manager into the Raven window to open a dataset. DPG 2.0.0: not implemented for Linux; Windows add-on exists. Need a cross-platform solution — keep an eye on DPG upstream.
+- **[Low]** Drag'n'drop from OS file manager into the Raven window to open a dataset. DPG 2.0.0: not implemented for Linux; Windows add-on exists. Need a cross-platform solution — keep an eye on DPG upstream. Fleet-wide framing (it blocks the Librarian attach path too, making the in-app picker the sole entry route) in `TODO_DEFERRED.md`, "OS drag-and-drop of files into DPG apps (cross-platform)".
 
 - **[Low]** Live filtering by year (or other fields) in the visualization view, complementing import-time pre-filtering.
 
@@ -177,7 +177,7 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 - **[Medium]** Resolve remaining hotkey conflicts with macOS builtins. Gather empirical data via live video session with pilot user. (Cmd+Shift+M for debug window is working; check others.)
 - **[Medium]** Right-click and right-drag features on one-button mouse/trackpad.
 - **[Medium]** F-key support on macOS.
-- **[Medium]** OS X 10.x: ChromaDB/onnxruntime won't install; `av`/TTS won't install (add `try`/`except`, disable `tts` module gracefully). TTS is irrelevant for Visualizer-only use. Drop 10.x support as soon as pilot user upgrades to a recent macOS.
+- **[Low]** OS X 10.x: ChromaDB/onnxruntime won't install; `av`/TTS won't install (add `try`/`except`, disable `tts` module gracefully). TTS is irrelevant for Visualizer-only use. Superseded in practice — `TODO_DEFERRED.md`, "Drop the Intel Mac / macOS 10.x install workaround", records the platform as effectively dead (new Macs are Apple Silicon) and proposes removing the README section rather than supporting it. Resolve the two together.
 
 
 ### Robustness and bug fixing
@@ -203,17 +203,22 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 
 ### Urgent / in-flight
 
-- **[High]** Qwen3.5 thinking toggle: urgent. Models have a thinking toggle that must be set in a specific location (check ooba's implementation; see https://unsloth.ai/docs/models/qwen3.5 for reference). More broadly: support for non-thinking models — Librarian currently assumes `<think>` tag in several places (avatar speaking animation, `llmclient.invoke`). Add a "thinking model" toggle; when enabled, inject initial `<think>` at start of message if model doesn't send it (only when not continuing a previous message). `chatutil.scrub` already handles a missing opening tag when a closing tag is present, but only for the final message.
+- **[High]** Thinking toggle: let the user turn a thinking model's reasoning on and off. Researched 2026-07-27 — brief 02 closed the *transport* half of this item but none of the request-side half, so the remaining work is narrower and differently shaped than originally written:
+  - **Done (brief 02).** Reasoning rides out-of-band: `llmclient.invoke` emits a typed `{"type": "reasoning", ...}` event, storage uses the `reasoning_content` sibling field, `chatutil.upgrade_datastore` migrates old inline `<think>` at load, and minichat / `chat_controller` consume the typed channel instead of sniffing tags. Live traffic no longer depends on parsing `<think>`.
+  - **Open, and the actual work.** Nothing anywhere sends `enable_thinking` / `chat_template_kwargs` / `reasoning_effort` — grep across `librarian/` and `client/` returns zero hits. So a model that *supports* toggling can't be told to stop thinking. Add the request field plus a GUI toggle and an app-state key (current keys: tools / docs / speculate / speech / subtitles — no thinking entry). Check ooba's implementation and https://unsloth.ai/docs/models/qwen3.5 for where each backend expects the flag; it is not uniform across backends.
+  - **Where it goes: a parameter on `invoke`, not a mutation of `settings.request_data`.** `llmclient.setup` assembles `request_data` (~line 465) from `librarian_config.llm_sampler_config`, and `invoke` deep-copies it per call (~line 1094), so the per-call copy already exists and is the natural place to apply the flag. It must *not* be done by mutating the shared settings dict, because `perform_throwaway_task` takes the same `llm_settings` and routes through the same `invoke` — a keyword-extraction call shouldn't spend reasoning tokens just because the user enabled thinking in chat. Settings holds the default; the parameter overrides per call; the user's toggle lives in app state and threads down through scaffold, the same shape tools / docs / speculate already use.
+  - **One flavor-aware mapping.** The wire field differs per backend, and `llmclient` already has `detect_backend_flavor` — so translate "thinking on/off" into the right field once, where the payload is finalized, rather than at each call site.
+  - **Still open, separately:** `chatutil.scrub` retains the `<think>`-repair machinery for models that emit malformed or missing tags — QwQ-32B is the documented case, but recent Qwens reportedly do it too, so this isn't a single-model quirk. The standing question at `chatutil.py:937` asks whether to inject the opening `<think>` into the prompt and how to do that through the API. That framing may be obsolete: on current models the tag is believed to come from the chat template automatically once the right API options are set, making it the *same* knob as the toggle above rather than a separate injection problem. **Research before implementing either** — check Qwen 3.5, Qwen 3.6 and Gemma 4 specifically, since those are what Raven currently supports, and the answer decides whether this is one feature or two.
+    - **Don't delete the autofixer yet.** It's moot on LM Studio, which delivers reasoning on its own channel, so the repair path never fires there. Ooba is the backend that would exercise it, and the local install is far behind — upgrade it and re-test (see "Upgrade oobabooga and re-check Raven's ooba support" in `TODO_DEFERRED.md`) before concluding the machinery is dead code.
 
 - **[Med]** RAG PDF ingestion — polish. The core is done: born-digital PDF text is extracted via `raven.common.docextract` (pypdf) and indexed like any other document. Remaining: run the extracted text through `sanitize` before indexing (PDF text often has hyphenation artifacts and paragraph-break ambiguity); link a search result back to its original document (see `TODO_DEFERRED.md`, "Expose the docs-DB source files behind a reply's RAG citations"); generalize to scanned PDFs (OCR) and to images (caption generation — ties into the Nomic multimodal-search plan).
 
 - **[High]** Adjustable semantic search match strictness: configurable cosine similarity threshold in HybridIR below which results are dropped. High priority.
 
-- **[High]** File attachments (images): inject full image into LLM context (not RAG). Needed for reading graphs, tables, and equations in papers. Qwen3.5 and similar now support vision input natively.
+- **[Medium]** Attach a document that is *already in the docs DB*. Full-document attach itself works (images and text/PDF, brief 03 Half 2) — but only from the filesystem. There is no way to reach into the RAG store and attach one of its documents whole, which is what you want when retrieved chunks aren't enough and the file is already ingested.
+  - **Open question: whose affordance is this — the user's, the AI's, or both?** The AI side already has an entry under Tools ("RAG access via tool-call: … fetch a full document by ID"), so if that lands, the model can pull a whole document itself. The user side (pick from the DB in the attach dialog) is the genuinely missing half. Deciding this shapes both: a shared "resolve doc ID → `text_file` content part" path serves both callers, and the GUI picker needs the docs DB to be browsable, which the tool version doesn't.
 
-- **[High]** File attachments (text/PDF): full-document context injection for deep analysis of a single item; complement to RAG, not a replacement. Also add feature to pull an already-ingested item from DB. Orthogonal to RAG — useful when you need to ensure the LLM sees the full document.
-
-- **[High]** Citation tracker GUI: show which documents matched the RAG query; clickable to open each one. Also: validate that LLM-inlined citations (in whatever format we specify) actually point to documents in the RAG result set; flag any that don't.
+- **[High]** Citation tracker GUI: validate that LLM-inlined citations (in whatever format we specify) actually point to documents in the RAG result set; flag any that don't. The other half — surfacing *which* documents fed a reply, and opening the originals — is specced in `TODO_DEFERRED.md`, "Expose the docs-DB source files behind a reply's RAG citations"; the provenance data is already tracked per turn (the payload's `retrieval` field), just not shown.
 
 - **[Low]** `minichat`: remove deprecation note (it will be maintained with Claude Code). Minimal example client, usable over a bare SSH terminal.
 
@@ -228,7 +233,7 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 
 - **[Medium]** BM25 migration from `bm25s` to ChromaDB FTS5: gains incremental updates and metadata filtering (needed for scopes); removes full index rebuild at each commit; simplifies `hybridir.py` and removes a dependency. Mitigate tokenization quality loss by storing spaCy-lemmatized text in a dedicated ChromaDB field for FTS5 search. **Low priority** — `bm25s` works, and Raven's dependency policy is already generous.
 
-- **[Medium]** Context compaction: drop and/or summarize old messages when context window fills. Use `raven.llmclient.token_count` to bisect linearized history to find the cut point (accounting for max response length from `settings.request_data["max_tokens"]`). Medium priority — in practice, usually start a new chat before running out, but any serious LLM frontend needs this.
+- **[Medium]** Context compaction: drop and/or summarize old messages when context window fills. Use `raven.llmclient.token_count` to bisect linearized history to find the cut point (accounting for max response length from `settings.request_data["max_tokens"]`). Medium priority — in practice, usually start a new chat before running out, but any serious LLM frontend needs this. Budgeting details in `TODO_DEFERRED.md`, "Context-window budgeting and conversation compaction (Librarian)".
 
 - **[Medium]** Long-term memory: second RAG store indexing chat messages. Tool-call access (search with query, retrieve local neighborhood of a node). Automatic associative memory via autosearch on user's most recent message(s). Return user messages only (not AI replies) to keep the model grounded. **Design TBD — flag for second review round.** Hindsight may be a better backend here.
 
@@ -262,9 +267,12 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 
 - **[Medium]** Ctrl+F find in current chat: incremental fragment search; reuse existing generic infrastructure from Visualizer/XDot viewer.
 
-- **[Medium]** Multiline input.
-
 - **[Medium]** Message editing: use chattree's revision system.
+
+- **[Medium]** Bilingual chat display / on-demand translation of user input. Raven is English-only because Qwen (and Gemma, and Gemini) understand Finnish but can't *produce* acceptable Finnish. Translating Finnish *input* into English is feasible — `opus-mt-tc-big-fi-en` is already in `server/config.py`'s `translation_models`, commented out to save VRAM on smaller setups — but it needs UX work, not just the model:
+  - A silently-applied wrong translation is worse than no translation, so auto-translated text must be prominently marked as such.
+  - The original wording must be preserved in the datastore, never replaced by its translation.
+  - Likely shape: "translate this message" / "translate conversation" actions, or a dual-language overlay showing both. Expect a couple of prototypes before settling — this is a UX design problem more than a plumbing one.
 
 - **[Medium]** Robustness: temporarily disable relevant buttons while AI is writing; re-enable correctly by checking whether the relevant action has a stashed callback for that specific displayed chat message.
 
@@ -277,7 +285,18 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 
 ### STT / voice
 
-- **[Medium]** STT: configurable silence level, autostop timeout, VU peak hold time.
+- **[High]** STT: configurable silence level, autostop timeout, VU peak hold time. Needs a GUI, not just config knobs — the noise threshold for auto-stop has to be tunable in the room, on the day. Demo-facing (Researchers' Night, 2026-09-26).
+
+- **[High]** STT: input-language selector in the GUI. `api.stt_transcribe` / `stt_transcribe_array` already take `language: Optional[str]` (`None` = autodetect) and the server honours it; Librarian's only call site (`app.py`, `stop_recording_audio_message`) just never passes it. So the plumbing exists — what's missing is the control.
+  - A **combobox**, not a config knob: "Automatic" plus each configured input language. The language has to change *between questioners*, not at startup — a Researchers' Night audience will mix Finnish and English speakers, and switching on the fly is the difference between the mic working for everyone and working for half the room.
+  - Read the selection at transcription time (the pattern `_make_open_folder_callback` already uses for directories), so a mid-session change takes effect on the next recording with no restart.
+  - The offered list comes from config — Whisper handles ~99 languages, but the demo wants two. Distinct from the *subtitler's* output language (`gui_config.translator_target_lang`); don't conflate them.
+  - Edge case: an English-only Whisper build (`whisper-base.en`) makes the selector meaningless. Hide or disable it when the configured `speech_recognition_model` ends in `.en`.
+  - Autodetect stays worth offering but shouldn't be the only option: Whisper's language detection is least reliable on short utterances in a noisy room, which is exactly a live Q&A.
+  - **Show what was detected.** When the selector is on "Automatic", briefly flash the detected language code somewhere unobtrusive — a corner of the avatar panel is the natural spot. Not cosmetic: a misdetect currently fails *silently*, producing a plausible-looking transcription in the wrong language, and this converts it into something the operator can see and correct. Only worth showing in Automatic mode; when the language is pinned, it's noise. Reuse the existing `animation` flash machinery, and note it stays legible under the colorblind-signaling item since a language code is text rather than a color.
+    - **Prerequisite: nothing returns the detected language today.** `server.modules.stt.speech_to_text` returns a bare `str` and `api.stt_transcribe` returns `List[str]`, so the detection is discarded at the engine boundary. Surfacing it means changing the response shape through all three layers (`common.audio.speech.stt` → server module → client API) to carry text *plus* language. First check whether the engine wrapper can expose it at all — Whisper detects the language internally, but whether `common/audio/speech/stt.py`'s `transcribe` can hand it back needs reading. Worth doing now rather than later: the response-shape break is free while Librarian has no outside users, and gets expensive once it does.
+
+- **[High]** Finnish demo path — end-to-end test. The chain that lets a Finnish-speaking audience interact without the LLM ever producing Finnish: Finnish speech → Whisper (multilingual, language selected in the GUI per the item above) → Finnish text → the LLM *understands* it → answers in English → TTS speaks English → the subtitler translates to Finnish. Every hop is believed to work; the whole has never been run. Test the English-input path through the same chain too — a mixed audience is the expected case, not the exception. Two known gaps: `speech_recognition_model` is `openai/whisper-base` (74M, chosen for CPU) which will be rough on Finnish — `whisper-large-v3-turbo` (~1.6 GB) is commented out two lines above in `server/config.py` and is affordable on a mid-VRAM setup — and nobody has tested the chain with a real Finnish question.
 
 - **[Medium]** `raven-transcribe`: command-line tool for transcribing audio files or mic input. (`-p` for prompt, `-o` for output file, stdout by default.) Potential for podcast analysis.
 
@@ -298,30 +317,33 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 
 ### Tools
 
-- **[Medium]** Weather tool via open-meteo (https://open-meteo.com/en/docs). Makes Librarian more humanlike as a "voice with internet access" (HCI is a major Raven goal). Medium priority.
+- **[Medium]** Weather and calculator tools: both parked in brief 01 §6 and specced in `TODO_DEFERRED.md`, "Add built-in calculator and weather LLM tools". Weather via open-meteo (https://open-meteo.com/en/docs) — makes Librarian more humanlike as a "voice with internet access" (HCI is a major Raven goal). Calculator via secure eval limited to math expressions; `eval` itself is unsafe (see notes in the archived section), candidate https://github.com/danthedeckie/simpleeval.
 
 - **[Medium]** Calendar tool: get one- or three-month calendar, like the `cal` command-line utility. See Python's `calendar` module.
 
-- **[Medium]** Calculator tool: secure eval limited to math expressions. `eval` itself is unsafe (see notes in archived section). Candidate: https://github.com/danthedeckie/simpleeval.
-
 - **[Medium]** RAG access via tool-call: search the document DB with a given query (optionally scoped), fetch a full document by ID, get available topics/scopes. Keep auto-inject (current scaffold behaviour) alongside tool access — don't replace it.
   - **Investigate:** Qwen currently requires RAG results near the start of the context or comprehension degrades — this kills KV cache hit rate (near-full preprocess each turn since the RAG result set changes). Check whether injecting near the end of the chat still works; newer model versions may have fixed this. No official Qwen documentation for RAG-with-tool-use found yet.
-
-- **[Medium]** Webfetch tool: allow fetching user-provided URLs (conservative security policy — user-provided links considered safe; no autonomous crawling). Useful for throwing AI research blogposts at the model and seeing how they connect to the local paper pile.
 
 - **[Medium]** Websearch: **[Verify]** whether raw URLs are currently saved in tool results. Remaining work: final formatting of results, link crawling to retrieve full result documents (persist to RAG with expiry timeout), figure out in which contexts search result pages should be enabled as RAG data sources.
 
 - **[Medium]** HybridIR pedigree field: auto-remove only documents added by a named scanner instance. Needed for programmatic RAG ingestion (e.g. web pages from websearch).
 
-- **[Medium]** Source attribution for RAG: clickable snippets in GUI based on `document_id`, `offset`, length; clickable link to open full document (spawn external viewer based on file type). See also citation tracker GUI item above.
+- **[Medium]** Source attribution for RAG: clickable snippets in GUI based on `document_id`, `offset`, length; clickable link to open full document (spawn external viewer based on file type). Same feature as `TODO_DEFERRED.md`, "Expose the docs-DB source files behind a reply's RAG citations" — that entry carries the current design questions (where the affordance lives, snippet vs. whole document) and notes the `open_file` / `open_in_file_manager` machinery it can reuse.
 
 - **[Medium]** Inline citations: encourage LLM to inline citations in a specified format; validate programmatically that cited IDs exist in the RAG result set; flag invalid citations. Design goal: preserve synthesis (don't force one-paragraph-per-source).
 
-- **[Medium]** MCP support: under consideration; security implications unresolved. Agent skills (CLI-based, "anime maid form factor" — plugging into interfaces designed for human use) are a superior alternative capability-wise, but also more dangerous for the user's computing environment. Keep both options under consideration.
+- **[High]** MCP support: specced in `briefs/summer_2026_librarian_extension/04_librarian-mcp-client-brief.md` — client-side MCP tools registered *alongside* the built-ins, all feeding the existing `perform_tool_calls` loop. Gated on the Hindsight playground (brief 06). Main line for the "digital colleague" track: this is how Librarian reaches the lab's systems. Agent skills (CLI-based, "anime maid form factor" — plugging into interfaces designed for human use) remain a superior alternative capability-wise but more dangerous for the user's computing environment; still under consideration as a separate path.
 
 - **[Low]** IBM Granite OCR / vision OCR: low priority. Since writing this item, DeepSeek-OCR and Qwen3.5 native vision have appeared. Evaluate accuracy/speed/model size tradeoff when relevant.
 
-- **[Parked]** Translator upgrade: HPLT v2 (Helsinki-NLP), needs Marian format backend (https://huggingface.co/HPLT/translate-en-fi-v2.0-hplt_opus). Divided on adding a second backend just for this.
+- **[Parked]** Translator upgrade. Current: `Helsinki-NLP/opus-mt-tc-big-en-fi`, sentence-level only, so it misses whatever needs broader context to disambiguate. Surveyed 2026-07-27; nothing clean is available, so this stays parked until HPLT v2 ships HF weights:
+  - **HPLT v2 en-fi** (https://huggingface.co/HPLT/translate-en-fi-v2.0-hplt_opus) — still Marian-format only. The card says "we are working on converting it to the Hugging Face format", with no timeline. Would need a second backend, which is why it was parked in the first place.
+  - **HPLT v1.0 en-fi** does ship HF-format weights, but the card documents a conversion defect: the checkpoint "cannot work with transformer versions <4.26 or >4.30" (recommends `transformers==4.28`). Raven-server shares one `transformers` across classify / embeddings / Whisper / translate, so that pin is unaffordable. Dead end — recorded so it isn't re-investigated.
+  - **NLLB-200** — CC-BY-NC. Blocked by the commercial partners who want to use Raven, independently of quality.
+  - **MADLAD-400** (CC BY 4.0, T5-based, 3B/7B/10B) — the only license-clean transformers-native candidate, but far heavier than a ~200 MB opus-mt for a subtitler, and multilingual rather than (en, fi)-specialized. Worth a spot check, not a plan.
+  - **EuroLLM 9B** — tested 2025, output unusable. 28 EU languages in 9B, with Finnish and Estonian the only Fenno-Ugric ones. Don't re-test.
+  - **Aya** — 20–30B class. No VRAM headroom: that budget is spent on the LLM itself.
+  - If the LLM route is taken at all, the translator has to *be* the main LLM (Gemma 4 handles Finnish better than Qwen 3.6 but is less capable overall). For production the tradeoff favours intelligence — English is fine. Demo requirements differ; see the Finnish demo path under Chat UI.
 
 - **[Parked]** User persona sampling / prefill: functional utility for local model testing, but deferred for now.
 
@@ -354,6 +376,27 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 
 ## Server
 
+- **[High]** Per-module VRAM budget: measure it once, so the config variants below are derived from numbers instead of trial and error on demo day. All unique models load at server startup (`server/config.py`), so the budget is the resident sum across the nine placeable modules — `avatar`, `classify`, `embeddings`, `imagefx`, `natlang`, `sanitize`, `stt`, `translate`, `tts` — plus whatever the LLM backend takes in its own process.
+
+- **[High]** Expand the server config-variant set. `device_string` is already per *module*, not just per config, so any split across two GPUs is a config edit rather than a code change. Existing: default `config.py`, `config_lowvram.py`, `config_avatar_only.py` (avatar testing / settings editor). Wanted, so the right one can be selected on the CLI at server start.
+
+  Two axes: how much VRAM the GPU serving raven-server's modules has, and whether there is a *second* GPU the LLM gets to itself. Name by capability tier, not by hardware — an installing user knows their card's VRAM, not our machines. Proposed (naming still open):
+
+  | Config | Server-module GPU | LLM |
+  |---|---|---|
+  | `config_lowvram.py` (exists) | ~8 GB | shares the same GPU |
+  | `config_midvram.py` | ~16 GB | shares the same GPU |
+  | `config_dual_lowvram.py` | ~8 GB | dedicated second GPU |
+  | `config_dual_midvram.py` | ~16 GB | dedicated second GPU |
+
+  `config_dual_midvram` is the demo configuration: LLM alone on the larger card, all nine server modules on the internal one. Tiers extend upward (`high` ≈ 24 GB, `extreme` ≈ 32 GB+) as hardware warrants; don't create empty cells in advance.
+
+  **`config.py` stays the default** — a server that won't start without a CLI flag fails the "installable by any half-tech-savvy person" bar. Two ways to fill that role, and they're worth deciding between explicitly:
+  - **Auto-tiering default.** `config.py` reads available VRAM at import (`raven.common.deviceinfo` already does the detection) and selects a tier, logging loudly which one it picked and what flag overrides it. Works out of the box, and the log line is where the user learns the explicit configs exist. Cost: more magic to reason about when it guesses wrong.
+  - **Fixed conservative default.** `config.py` is simply the lowest tier that's still useful. Predictable and trivially debuggable, at the price of under-using good hardware until the user discovers the flag.
+
+  Either way, document the tier → approximate-GB mapping in a header comment and as a "your hardware → this config" table in the README — picking the right one is the user's first decision after install, and the default only has to be *good enough to start*, not optimal.
+
 - **[Medium]** Server: check for local model before checking HuggingFace Hub.
   - Currently some modules do this, others don't.
   - Important if a model is removed from HF (as happened with the old summarizer).
@@ -374,6 +417,10 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 ---
 
 ## Avatar
+
+- **[High]** CRT filter improvements. Wanted for the Researchers' Night demo (2026-09-26). The retro-display look is currently *assembled* from separate `Postprocessor` filters — `scanlines`, `banding`, `chromatic_aberration`, `vignetting`, `bloom`, `translucent_display` / `monochrome_display` — with no dedicated CRT filter. What "improvements" covers is to be settled in a brief (discussed separately with claude.ai; not yet written up).
+
+- **[High]** Floating glittering dust: ambient particle effect around the avatar. Wanted for the Researchers' Night demo (2026-09-26). No existing filter covers it; the candidate homes are the addon-cel / animefx layer and the `Postprocessor` chain, and which one it belongs in is a design question for the brief (also discussed separately with claude.ai; not yet written up).
 
 - **[High]** Add help cards for: Avatar settings editor, Avatar pose editor.
 
