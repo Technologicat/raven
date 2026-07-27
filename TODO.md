@@ -465,9 +465,11 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 
 ## Avatar
 
-- **[High]** CRT filter improvements. Wanted for the Researchers' Night demo (2026-09-26). The retro-display look is currently *assembled* from separate `Postprocessor` filters — `scanlines`, `banding`, `chromatic_aberration`, `vignetting`, `bloom`, `translucent_display` / `monochrome_display` — with no dedicated CRT filter. What "improvements" covers is to be settled in a brief (discussed separately with claude.ai; not yet written up).
+- **[High]** Prerequisite for both avatar-effect briefs below: **give `_priority` a stated meaning** (`briefs/crt-display.md` §0). The existing numbers already almost form a scheme — Scene (< 0), Capture (0–5), Signal (5–10), Display (≥ 10), with `0.0` as the moment of capture — so codifying it renumbers nothing. Documentation plus a convention, no code motion; the brief asks for it as its own commit, and both new filters need the Scene band to place themselves in.
 
-- **[High]** Floating glittering dust: ambient particle effect around the avatar. Wanted for the Researchers' Night demo (2026-09-26). No existing filter covers it; the candidate homes are the addon-cel / animefx layer and the `Postprocessor` chain, and which one it belongs in is a design question for the brief (also discussed separately with claude.ai; not yet written up).
+- **[High]** `crt` — raster projection simulation (`briefs/crt-display.md`). Wanted for the Researchers' Night demo (2026-09-26). Replaces the current *assembly* of `scanlines` / `banding` / `chromatic_aberration` / `vignetting` / `bloom` / `translucent_display` with a dedicated filter at priority −3.0, in the Scene band — the display is diegetically *in the world*, so it composites early and rides through the capture-stage optics like the character does.
+
+- **[High]** `atmospheric_dust` — drifting in-air particles (`briefs/atmospheric-dust.md`). Wanted for the Researchers' Night demo (2026-09-26). Light-catching motes in the avatar's air, priority −2.0, Scene band, for the same diegetic reason. Register is anime-atmospheric (dust in a sunbeam), not game-HUD sparkle. Budget: ≤ 1.5 ms at 1024² against the postprocessor's current ~11 ms stage.
 
 - **[High]** Add help cards for: Avatar settings editor, Avatar pose editor.
 

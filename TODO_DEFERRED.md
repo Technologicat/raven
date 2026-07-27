@@ -808,6 +808,12 @@ Discovered during tooltip feature session (2026-04-03).
 
 ## Avatar settings editor: custom postprocessor chain ordering
 
+**This is a GUI limitation only** — `briefs/crt-display.md` §0 establishes that the backend has always
+supported multiple instances at arbitrary positions: `render_into` applies the chain *positionally*, and
+`_priority` is consumed only by `get_filters` to sort the settings-editor panels. The `name` parameter on every
+caching filter exists precisely so multiple instances key their caches apart. So this item is "build the
+add/remove/reorder GUI", not "make the engine support it".
+
 The settings editor currently presents filters in a fixed priority order, with at most one copy of each filter. With the desaturate/monochrome_display and noise/analog_vhs_noise splits, the signal pipeline model is becoming richer — users may want to reorder filters or have multiple instances. The GUI needs drag-and-drop chain building: add/remove filters, reorder freely, support multiple instances of the same filter (with independent `name` keys). Currently, `strip_postprocessor_chain_for_gui` enforces fixed ordering and single instances.
 
 Discovered during postprocessor chain ordering redesign (2026-04-09).
