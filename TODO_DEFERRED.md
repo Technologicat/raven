@@ -814,6 +814,16 @@ supported multiple instances at arbitrary positions: `render_into` applies the c
 caching filter exists precisely so multiple instances key their caches apart. So this item is "build the
 add/remove/reorder GUI", not "make the engine support it".
 
+**What the GUI unlocks, which is more than convenience.** The eventual intent is two raster filters coexisting —
+the old, simple `scanlines` and the new `crt` — each usable at *either* diegetic layer: Scene band for a sci-fi
+hologram projected into the character's world, Display band for the viewer's own CRT monitor. The filters stop
+being "the hologram one" and "the monitor one" and become two looks placeable at either position, or both at
+once. That is exactly the freedom the fixed-order, one-instance-per-filter GUI currently withholds, which makes
+this item the prerequisite for the whole idea rather than a nicety alongside it.
+
+Note it is **not** a Researchers' Night blocker: the demo needs `crt` working at its default Scene-band
+position, which the existing autodiscovery gives it. The placement freedom is the follow-up.
+
 The settings editor currently presents filters in a fixed priority order, with at most one copy of each filter. With the desaturate/monochrome_display and noise/analog_vhs_noise splits, the signal pipeline model is becoming richer — users may want to reorder filters or have multiple instances. The GUI needs drag-and-drop chain building: add/remove filters, reorder freely, support multiple instances of the same filter (with independent `name` keys). Currently, `strip_postprocessor_chain_for_gui` enforces fixed ordering and single instances.
 
 Discovered during postprocessor chain ordering redesign (2026-04-09).
