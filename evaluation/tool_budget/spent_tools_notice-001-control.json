@@ -1,0 +1,1196 @@
+{
+  "gensym#forest-node:069fea91-2bca-4fc7-8bf3-81d9c2e92473": {
+    "id": "gensym#forest-node:069fea91-2bca-4fc7-8bf3-81d9c2e92473",
+    "timestamp": 1785279234862250235,
+    "active_revision": 1,
+    "next_free_revision": 2,
+    "revision_names": {},
+    "data": {
+      "1": {
+        "message": {
+          "role": "system",
+          "content": [
+            {
+              "type": "text",
+              "text": "Note that User cannot see this introductory text; it is only used internally, to initialize the LLM (large language model).\n\n    **About Aria**\n\n    You are Aria (she/her), an AI assistant. You are highly intelligent. You have been trained to answer questions, provide recommendations, and help with decision making.\n\n\n**About the system**\n\nThe LLM version is \"qwen3.6-35b-a3b, IQ4_NL_XL, 128 Ki context\".\n\nThe knowledge cutoff date of the model is not specified, but is most likely within the year 2024. The knowledge cutoff date applies only to your internal knowledge. Any information provided in the context as well as web search results may be newer.\n\nYou are running on a private, local system.\n\n**Interaction tips**\n\n- Be polite, but go straight to the point.\n- Provide honest answers.\n- If you are unsure or cannot verify a fact, admit it.\n- If you think what the user says is incorrect, say so, and provide justification.\n- Cite sources when possible. IMPORTANT: Cite only sources listed in the context.\n- When given a complex problem, take a deep breath, and think step by step. Report your train of thought.\n- When given web search results, and those results are relevant to the query, use the provided results, and report only the facts as according to the provided results. Ignore any search results that do not make sense. The user cannot directly see your search results.\n- Be accurate, but diverse. Avoid repetition.\n- Use the metric unit system, with meters, kilograms, and celsius.\n- Use Markdown for formatting when helpful.\n- Believe in your abilities and strive for excellence. Take pride in your work and give it your best. Your hard work will yield remarkable results.\n\n**Known limitations**\n\n- You are NOT automatically updated with new data.\n- You have limited long-term memory within each chat session.\n- The length of your context window is 131072 tokens.\n\n**Data sources**\n\n- The system accesses external data beyond its built-in knowledge through:\n  - Tool calls.\n  - Additional context that is provided by the software this LLM is running in, e.g. matches in document database.\n\n-----"
+            }
+          ],
+          "tool_calls": []
+        },
+        "general_metadata": {
+          "timestamp": 1785279234862102911,
+          "datetime": "2026-07-29 01:53:54",
+          "persona": null
+        }
+      }
+    },
+    "parent": null,
+    "children": [
+      "gensym#forest-node:b91fd940-0a3f-4a52-a45a-c0f62b075ad8"
+    ]
+  },
+  "gensym#forest-node:b91fd940-0a3f-4a52-a45a-c0f62b075ad8": {
+    "id": "gensym#forest-node:b91fd940-0a3f-4a52-a45a-c0f62b075ad8",
+    "timestamp": 1785279234862324830,
+    "active_revision": 1,
+    "next_free_revision": 2,
+    "revision_names": {},
+    "data": {
+      "1": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "Aria: How can I help you today?"
+            }
+          ],
+          "tool_calls": []
+        },
+        "general_metadata": {
+          "timestamp": 1785279234862265403,
+          "datetime": "2026-07-29 01:53:54",
+          "persona": "Aria"
+        }
+      }
+    },
+    "parent": "gensym#forest-node:069fea91-2bca-4fc7-8bf3-81d9c2e92473",
+    "children": [
+      "gensym#forest-node:37f61bcc-898f-4d66-bb16-85592d234493"
+    ]
+  },
+  "gensym#forest-node:37f61bcc-898f-4d66-bb16-85592d234493": {
+    "id": "gensym#forest-node:37f61bcc-898f-4d66-bb16-85592d234493",
+    "timestamp": 1785279234862390491,
+    "active_revision": 1,
+    "next_free_revision": 2,
+    "revision_names": {},
+    "data": {
+      "1": {
+        "message": {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "User: hydrogen production by anaerobic bacteria"
+            }
+          ],
+          "tool_calls": []
+        },
+        "general_metadata": {
+          "timestamp": 1785279234862341577,
+          "datetime": "2026-07-29 01:53:54",
+          "persona": "User"
+        }
+      }
+    },
+    "parent": "gensym#forest-node:b91fd940-0a3f-4a52-a45a-c0f62b075ad8",
+    "children": [
+      "gensym#forest-node:d40357cb-b040-454d-a2d9-413354a578be"
+    ]
+  },
+  "gensym#forest-node:d40357cb-b040-454d-a2d9-413354a578be": {
+    "id": "gensym#forest-node:d40357cb-b040-454d-a2d9-413354a578be",
+    "timestamp": 1785279261117563126,
+    "active_revision": 1,
+    "next_free_revision": 2,
+    "revision_names": {},
+    "data": {
+      "1": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "Aria: Based on the provided documents, hydrogen production by anaerobic bacteria primarily occurs through **dark fermentation**. This process involves the enzymatic conversion of organic substrates (like sugars) into hydrogen gas by fermentative bacteria.\n\nHere is a detailed breakdown of the key aspects of this process:\n\n### 1. Key Microorganisms\nSeveral genera of anaerobic bacteria are identified as efficient hydrogen producers. They can be categorized as strict or facultative anaerobes:\n*   **Strict Anaerobes:** *Clostridia* (e.g., *C. butyricum*), *Thermotoga*, and *Thermoanaerobacterium*.\n*   **Facultative Anaerobes:** *Enterobacter* species.\n*   **Synergy:** Research indicates that mixed cultures (combining facultative and anaerobic bacteria) often produce significantly more hydrogen than pure cultures due to synergistic effects.\n\n### 2. Metabolic Pathways and Conditions\n*   **Metabolic Flux:** The pathway is driven by redox reactions. Controlling the **redox potential** is critical for regulating metabolic fluxes toward hydrogen production.\n*   **Temperature:** Thermophilic bacteria, such as *Thermoanaerobacterium thermosaccharolyticum*, are particularly effective at higher temperatures (e.g., 55\u00b0C).\n*   **pH:** An initial pH of around 6.5 is often cited as optimal for strains like *T. thermosaccharolyticum*.\n*   **Volatile Fatty Acids (VFAs):** The order of VFA production typically follows acetic, n-butyric, propionic, and n-valeric acids. The type of fermentation (e.g., acetate-type vs. butyrate-type) influences hydrogen yield.\n\n### 3. Yields and Efficiency\n*   **Theoretical vs. Actual:** In pure culture, the maximal hydrogen production potential is generally between **1.3 to 2.2 moles of H\u2082 per mole of glucose**, which represents less than 50% of the theoretical maximum.\n*   **Strain Specifics:** *C. butyricum* has been reported to produce 2 mol H\u2082/mol glucose (50% efficiency).\n*   **Two-Stage Systems:** Combining anaerobic fermentation with photobioreactors can enhance total yields (e.g., up to 5.6 mol-H\u2082/mol-glucose), though this depends heavily on substrate and operating conditions.\n\n### 4. Substrates\n*   Common substrates include glucose, dilute molasses, and pentose sugars like **xylose and arabinose** (often found in acid-hydrolyzed agricultural waste like bagasse).\n\n### 5. Strategies to Enhance Production\n*   **Mixed Cultures:** Mixing facultative and strict anaerobes can leverage metabolic differences to improve yield.\n*   **Redox Control:** Manipulating redox potential helps manage the growth of bacteria and the direction of metabolic pathways.\n*   **Co-fermentation:** Using phototrophic bacteria (like *Rhodobacter sphaeroides*) to consume the acetate/lactate byproducts of anaerobic fermentation can significantly boost overall hydrogen recovery.\n*   **Oxygen Management:** While strictly anaerobic conditions (Redox Potential < -350 mV) are standard, some studies suggest micro-aerobic conditions (-300 to -150 mV) can support robust hydrogen production with high buffering capacity."
+            }
+          ],
+          "tool_calls": [],
+          "reasoning_content": "The user is asking about hydrogen production by anaerobic bacteria.\nI have already performed a search in the user's document database (`search_documents`) for \"hydrogen production by anaerobic bacteria\" and got several relevant snippets.\n\nLet's analyze the search results:\n1.  **Metabolic Pathways & Bacteria Types**:\n    *   Strict and facultative anaerobic bacteria involved include *Clostridia*, *Enterobacter*, *Thermotoga*, and *Thermoanaerobacterium*.\n    *   The pathway is governed by redox reactions during fermentation.\n    *   Metabolic fluxes can be manipulated by controlling the redox potential.\n2.  **Yield & Efficiency**:\n    *   Maximal potential is 1.3 to 2.2 mol-H2/mol-glucose (less than 50% theoretical).\n    *   A two-stage bioreactor (anaerobic fermenter + photobioreactor) can reach 1.4 to 5.6 mol-H2/mol-glucose (12-47% theoretical).\n    *   *Clostridia* (e.g., *C. butyricum*) can produce 2 mol H2/mol glucose (50% efficiency).\n    *   Mixed cultures (facultative + anaerobic) can have a synergistic effect, performing better than pure cultures.\n    *   *Thermoanaerobacterium thermosaccharolyticum* KKU-ED1: Optimum conditions include 1:1 xylose/arabinose (5 g/L total), pH 6.5, 55\u00b0C.\n    *   *Rhodobacter sphaeroides* (though photosynthetic, it ferments organic acids like acetate/lactate from anaerobic bacteria) can improve overall yield.\n3.  **Factors Influencing Production**:\n    *   **Redox Potential**: Affects growth and metabolic fluxes.\n    *   **Hydrogen Partial Pressure**: Needs to be kept low (consumed by other microbes in digesters) to maintain continuous production.\n    *   **Substrate**: Glucose, dilute molasses, pentose sugars (xylose/arabinose).\n    *   **Temperature**: Thermophilic conditions (e.g., 55\u00b0C for *Thermoanaerobacterium*).\n    *   **pH**: Initial pH around 6.5 mentioned.\n4.  **Microbial Community**:\n    *   Includes fermentative acid-producing bacteria, syntrophic bacteria, homoacetogens, etc.\n    *   Micro-aerobic conditions can be used (ORP -300 to -150 mV) compared to anaerobic (-560 to -360 mV).\n\nI have enough information to provide a comprehensive answer based on the provided documents. I don't need to perform a web search because the local database has specific scientific abstracts covering this.\n\nStructure of the answer:\n1.  **Overview**: Dark fermentation by anaerobic bacteria as a method for biohydrogen production.\n2.  **Key Bacteria Types**: Mention *Clostridia*, *Enterobacter*, *Thermotoga*, *Thermoanaerobacterium*, etc.\n3.  **Metabolic Pathways & Conditions**: Role of redox potential, pH, temperature (thermophilic).\n4.  **Yields & Efficiency**: Mention the mol-H2/mol-glucose metrics.\n5.  **Strategies to Enhance Production**: Mixed cultures, substrate optimization, two-stage systems.\n\nI will formulate the response now.\n\nNo new search is needed. The provided snippets from the `search_documents` tool cover the topic well.\n1. Review the snippets.\n2. Synthesize the information.\n3. Present the answer.\n\nSnippet 1: Metabolic pathways, *Clostridia*, *Enterobacter*, *Thermotoga*, *Thermoanaerobacterium*. Redox potential importance.\nSnippet 2: Power-to-gas, biogas upgrade, low hydrogen partial pressure.\nSnippet 3: Mixed culture (facultative + anaerobic) better than pure culture.\nSnippet 4: Max yield 1.3-2.2 mol/mol glucose. Two-stage system yield.\nSnippet 5: SRT effects, VFA production order (acetic, n-butyric...).\nSnippet 6: Overview. *C. butyricum* (2 mol/mol glucose), *E. coli* (immobilized), *Ruminococcus albus*.\nSnippet 7: *T. thermosaccharolyticum* KKU-ED1. Xylose/arabinose. pH 6.5, 55C. Acetic acid fermentation.\nSnippet 8: *Rhodobacter sphaeroides* using acetate from anaerobes.\nSnippet 9: Micro-aerobic vs Anaerobic.\nSnippet 10: ABR reactor, molasses substrate.\n\nThis looks sufficient. I will draft the response.\n\nAnswer plan:\n- **Mechanism**: Dark fermentation of organic matter.\n- **Key Bacteria**: List them.\n- **Conditions**: Redox potential, temperature, pH.\n- **Yields**: Theoretical vs practical.\n- **Improvements**: Mixed cultures, substrate use, two-stage systems.\n\nI will stick to the facts found in the documents. The user did not specify a format, so a structured text is best.\n\nOne specific detail: \"The maximal hydrogen production potential... is 1.3 to 2.2 mol-H2/mol-glucose... less than 50% of theoretical\".\nAnother: \"Clostridia... 2 mol H2/mol glucose at 50% efficiency\".\nAnother: Mixed culture synergistic effect.\n\nI will synthesize these points.\nThe user's query is short: \"hydrogen production by anaerobic bacteria\". I should provide a general overview based on the documents.\n\nOne more check: Are there specific document IDs to cite? The user didn't ask for citations, but I should use the information present. The system prompt says \"Cite sources when possible. IMPORTANT: Cite only sources listed in the context.\" The context contains abstracts with IDs like `WOS001149136800001.bib`. I will reference the findings generally but can mention the specific bacteria found in these studies if needed. Since I don't have the full text, I'll rely on the abstract details provided in the search result snippets.\n\nWait, the prompt says \"Cite sources when possible.\" and \"Cite only sources listed in the context.\"\nThe context *is* the search results I just got.\nI will formulate the answer now.\n\nRefined Plan:\n1.  **Introduction**: Define the process (dark fermentation).\n2.  **Bacteria involved**: *Clostridia*, *Enterobacter*, *Thermotoga*, *Thermoanaerobacterium*.\n3.  **Yield/Efficiency**: 1.3-2.2 mol/mol glucose usually.\n4.  **Factors**: Redox potential, pH (6.5), Temperature (thermophilic ~55C).\n5.  **Optimization**: Mixed cultures (better synergy), use of pentose sugars (xylose/arabinose), two-stage systems.\n\nI will write the response directly. No further tool calls needed.\n\nWait, I should check if there is any contradictory info.\nSnippet 4 says \"maximal ... 1.3 to 2.2 ... less than 50% theoretical\".\nSnippet 6 says \"C. butyricum produces 2 mol H2/mol glucose at 50% efficiency\".\nTheoretically, glucose fermentation via the *Embden-Meyerhof-Parnas* (EMP) pathway yields 4 moles of H2 per mole of glucose (if all H2 comes from acetyl-CoA conversion). So 2 mol is 50%.\nIf via *Entner-Doudoroff* (ED) pathway, it's 2 mol H2, which is 25%.\nThe snippets don't detail the pathway names (EMP vs ED) deeply enough to explain the 1.3-2.2 range specifically beyond \"redox reactions\", so I'll just stick to the numbers provided.\n\nI have enough info. I will construct the response.\nOne detail: \"Hydrogen production... by facultative anaerobic bacteria... and their mixed culture... synergistic effect\".\n\nI'll organize the output clearly.\n\nThe current time is 2026-07-29. This is just context, doesn't impact the scientific facts unless looking for \"recent\" news, but the papers are from 1993 to 2013. That's fine.\n\nResponse generation.\nStart with a summary.\nThen break down into:\n- Mechanism\n- Microorganisms\n- Key Factors\n- Yield & Efficiency\n- Optimization Strategies\n\nReady.\n"
+        },
+        "general_metadata": {
+          "timestamp": 1785279261117442737,
+          "datetime": "2026-07-29 01:54:21",
+          "persona": "Aria"
+        },
+        "generation_metadata": {
+          "model": "qwen3.6-35b-a3b, IQ4_NL_XL, 128 Ki context",
+          "n_tokens": 2704,
+          "dt": 26.036925776003045,
+          "grounded": true
+        },
+        "retrieval": {
+          "query": "hydrogen production by anaerobic bacteria",
+          "results": [
+            {
+              "document_id": "WOS001149136800001.bib",
+              "chunk_id": 1,
+              "full_id": "doc-WOS001149136800001.bib-chunk-1",
+              "offset": 750,
+              "text": "n yields remain a major constraint to commercial production. Unraveling the metabolic pathway for hydrogen production will unlock the potential to enhance biohydrogen yield. In this regard, the key fundamentals of various important dark fermentative hydrogen-producing metabolic pathways are scrutinized in this review, including those in strict and facultative anaerobic bacteria such as Clostridia, Enterobacter, Thermotoga, and Thermoanaerobacterium. Since the hydrogen metabolic pathway is governed by a series of redox reactions during fermentation, manipulation of the redox potential not only indicates the extent of an anaerobic condition, but also affects the growth of anaerobic bacteria. This article reviews the types of hydrogen-producing bacteria and their fundamental metabolic pathways, the effect of redox potential on metabolic fluxes towards growth and hydrogen production and discusses various important redox potential control strategies. In pure culture, strict anaerobes are mo",
+              "score": 0.03125763125763126
+            },
+            {
+              "document_id": "WOS000536914300001.bib",
+              "chunk_id": 1,
+              "full_id": "doc-WOS000536914300001.bib-chunk-1",
+              "offset": 750,
+              "text": "red to as power-to-gas. Recently, hydrogen has been added to digesters as an in-situ or ex-situ biogas upgrade to reduce the levels of carbon dioxide. Biogas production systems consist of microbial complexes with highly organized microorganisms in different niches, which can either produce or consume hydrogen. However, the produced endogenous hydrogen should be constantly consumed to maintain a low hydrogen partial pressure. This review addresses the biochemical processes of anaerobic digestion and hydrogen-related microorganisms, including fermentative acid-producing bacteria, syntrophic organic acid degrading bacteria, syntrophic acetate-oxidizing bacteria, homoacetogens, hydrogenotrophic methanogens, and newly reported hydrogen-dependent methylotrophic methanogens. This study also investigates (1) the role of endogenous hydrogen as an intermediate metabolite and of interspecies electron transfer in anaerobic digestion, (2) effects of exogenous hydrogen addition on microbial communit",
+              "score": 0.02877846790890269
+            },
+            {
+              "document_id": "WOS000299647700011.bib",
+              "chunk_id": 0,
+              "full_id": "doc-WOS000299647700011.bib-chunk-0",
+              "offset": 0,
+              "text": "@article{WOS:000299647700011,\n\tAuthor = {Qian, Chun-xiang and Chen, Lu-yuan and Rong, Hui and Yuan, Xiao-ming},\n\tYear = {2011},\n\tTitle = {Hydrogen production by mixed culture of several facultative bacteria and anaerobic bacteria},\n\tJournal = {PROGRESS IN NATURAL SCIENCE-MATERIALS INTERNATIONAL},\n\tVolume = {21},\n\tNumber = {6},\n\tPages = {506-511},\n\tDOI = {10.1016/S1002-0071(12)60090-2},\n\tWeb-Of-Science-Categories = {Materials Science, Multidisciplinary; Multidisciplinary Sciences},\n\tAbstract = {The characteristic of hydrogen production by facultative anaerobic bacteria, obligate anaerobic bacteria and their mixed culture was studied by the batch culture method. The results showed that, due to the synergistic effect between facultative bacteria and anaerobic bacteria, the ability of hydrogen production in the mixed culture was much better than that in the pure culture. Especially, the culture Scheme No.7 mixed up with three strains (Bacterium.E: Bacterium.B: Bacterium.P = 1:1:1) not only",
+              "score": 0.01639344262295082
+            },
+            {
+              "document_id": "WOS000071012600006.bib",
+              "chunk_id": 2,
+              "full_id": "doc-WOS000071012600006.bib-chunk-2",
+              "offset": 1500,
+              "text": "-vacuum cultures. It was concluded that the maximal hydrogen production potential by anaerobic bacteria is 1.3 to 2.2 mol-H-2/mol-glucose, which is less than 50\\% of theoretical. In addition, the total hydrogen production rate by a two-stage bioreactor consisting of a 1-litre anaerobic fermenter (HRT 10h) and a 4-litre photobioreactor (HRT 36h) feeding at 2.4-litre of 1.0\\% glucose per day was estimated at 1.4 to 5.6 mol-H-2/mol-glucose, which is 12 to 47\\% theoretical. (C) 1997 IAWQ. Published by Elsevier Science Ltd.},\n\tAffiliation = {Kataoka, N, Ebara Res Co Ltd, Ctr Adv Technol, Biotechnol Lab, 2-1 Honfujisawa 4 Chome, Fujisawa, Kanagawa 251, Japan}\n}",
+              "score": 0.01639344262295082
+            },
+            {
+              "document_id": "WOSA1993NC44500012.bib",
+              "chunk_id": 0,
+              "full_id": "doc-WOSA1993NC44500012.bib-chunk-0",
+              "offset": 0,
+              "text": "@article{WOS:A1993NC44500012,\n\tAuthor = {NAKAMURA, M and KANBE, H and MATSUMOTO, JI},\n\tYear = {1993},\n\tTitle = {FUNDAMENTAL-STUDIES ON HYDROGEN-PRODUCTION IN THE ACID-FORMING PHASE AND ITS BACTERIA IN ANAEROBIC TREATMENT PROCESSES - THE EFFECTS OF SOLIDS RETENTION TIME},\n\tJournal = {WATER SCIENCE AND TECHNOLOGY},\n\tVolume = {28},\n\tNumber = {7},\n\tPages = {81-88},\n\tDOI = {10.2166/wst.1993.0146},\n\tWeb-Of-Science-Categories = {Engineering, Environmental; Environmental Sciences; Water Resources},\n\tAbstract = {Effects of solids retention time (SRT) on hydrogen gas production, glucose degradation and anaerobic bacteria in anaerobic treatment processes were investigated with use of 11,700 mg/l glucose solution as a substrate. Five series of experiments were conducted at 36 +/- 1-degrees-C. Volatile fatty acids were produced in the order: acetic, n-butyric, propionic and n-valeric with concentration of effluent. Counts of general anaerobic bacteria and acid-forming bacteria in each reactor incre",
+              "score": 0.016129032258064516
+            },
+            {
+              "document_id": "WOS000072836900003.bib",
+              "chunk_id": 0,
+              "full_id": "doc-WOS000072836900003.bib-chunk-0",
+              "offset": 0,
+              "text": "@article{WOS:000072836900003,\n\tAuthor = {Nandi, R and Sengupta, S},\n\tYear = {1998},\n\tTitle = {Microbial production of hydrogen: An overview},\n\tJournal = {CRITICAL REVIEWS IN MICROBIOLOGY},\n\tVolume = {24},\n\tNumber = {1},\n\tPages = {61-84},\n\tDOI = {10.1080/10408419891294181},\n\tWeb-Of-Science-Categories = {Microbiology},\n\tAbstract = {Production of hydrogen by anaerobes, facultative anaerobes, aerobes, methylotrophs, and photosynthetic bacteria is possible. Anaerobic Clostridia are potential producers and immobilized C. butyricum produces 2 mol H-2/mol glucose at 50\\% efficiency. Spontaneous production of H-2 from formate and glucose by immobilized Escherichia coli showed 100\\% and 60\\% efficiencies, respectively. Enterobactericiae produces H-2 at similar efficiency from different monosaccharides during growth. Among methylotrophs, methanogenes, rumen bacteria, and thermophilic archae, Ruminococcus albus, is promising (2.37 mol/mol glucose). Immobilized aerobic Bacillus licheniformis optima",
+              "score": 0.016129032258064516
+            },
+            {
+              "document_id": "WOS000318348800002.bib",
+              "offset": 0,
+              "score": 0.015873015873015872,
+              "text": "@article{WOS:000318348800002,\n\tAuthor = {Saripan, Arunsri Fangkum and Reungsang, Alissara},\n\tYear = {2013},\n\tTitle = {Biohydrogen production by <i>Thermoanaerobacterium thermosaccharolyticum</i> KKU-ED1: Culture conditions optimization using mixed xylose/arabinose as substrate},\n\tJournal = {ELECTRONIC JOURNAL OF BIOTECHNOLOGY},\n\tVolume = {16},\n\tNumber = {1},\n\tDOI = {10.2225/vol16-issue1-fulltext-1},\n\tWeb-Of-Science-Categories = {Biotechnology \\& Applied Microbiology},\n\tAbstract = {Background: Biological hydrogen production by microorganisms can be divided into two main categories i.e. photosynthetic organisms that produce hydrogen using light as energy source and anaerobic bacteria that produce hydrogen via dark fermentation. Dark fermentative hydrogen production by anaerobic bacteria has the advantages of a higher HPR without illumination and of the capability to convert various kinds of substrate. Results: Thermophilic hydrogen producer was isolated from elephant dung and identified as Thermoanaerobacterium thermosaccharolyticum KKU-ED1 by 16S rRNA gene analysis, which was further used to produce hydrogen from mixed pentose sugar i.e., xylose/arabinose. The optimum conditions for hydrogen production from mixed xylose/arabinose by KKU-ED1 were a 1: 1 xylose/arabinose mixture at the total concentration of 5 g/L, initial pH of 6.5 and temperature of 55 degrees C. Under the optimum conditions, hydrogen from sugar derived from acid-hydrolyzed sugarcane bagasse at a reducing sugar concentration were achieved. Soluble metabolite product (SMP) was predominantly acetic acid indicating the acetate-type fermentation. Conclusions: The strain KKU-ED1 appeared to be a suitable candidate for thermophilic fermentative hydrogen product"
+            },
+            {
+              "document_id": "WOS000305106300017.bib",
+              "offset": 0,
+              "score": 0.015625,
+              "text": "@article{WOS:000305106300017,\n\tAuthor = {Kobayashi, Jyumpei and Hasegawa, Shinya and Itou, Keisuke and Yoshimune, Kazuaki and Komoriya, Tomoe and Asada, Yasuo and Kohno, Hideki},\n\tYear = {2012},\n\tTitle = {Expression of aldehyde dehydrogenase gene increases hydrogen production from low concentration of acetate by <i>Rhodobacter sphaeroides</i>},\n\tJournal = {INTERNATIONAL JOURNAL OF HYDROGEN ENERGY},\n\tVolume = {37},\n\tNumber = {12},\n\tPages = {9602-9609},\n\tDOI = {10.1016/j.ijhydene.2012.03.053},\n\tWeb-Of-Science-Categories = {Chemistry, Physical; Electrochemistry; Energy \\& Fuels},\n\tAbstract = {Rhodobacter sphaeroides RV (RV) is a hydrogen-producing bacterium exhibiting the highest yield of hydrogen production from organic acids such as lactate and acetate, which are the byproducts of hydrogen fermentation by hydrogen-producing anaerobic bacteria. Co-fermentation of the RV strain with anaerobic bacteria is an efficient method of hydrogen production. However, less than 21 mM acetate is produced by the anaerobic bacteria, which is too low for efficient hydrogen production by the RV strain; it requires approximately 75 mM acetate. In this study, 2 distinct isozymes of aldehyde dehydrogenase from Rhodospirillum rubrum were separately overexpressed in the RV strain. The recombinant RV strains that were designated as RVAD1 and RVAD2, exhibited 13-fold higher ALDH activities than the wild-type RV strain. Hydrogen yields of both of the recombinant strains were 1.4-fold higher than that of the RV strain in 21 mM acetate. In 43 mM acetate, the RVAD1 strain showed higher yield, though the RVAD2 strain showed lower yield as compared to that of the RV strain. In 64 mM acetate and all concentrations of lactate tested (21, 43 and 64 mM), th"
+            },
+            {
+              "document_id": "WOS000373552100006.bib",
+              "chunk_id": 1,
+              "full_id": "doc-WOS000373552100006.bib-chunk-1",
+              "offset": 750,
+              "text": ") obtained from scale-up experiment with optimal oxygen addition of 0.28 mL/(g (total solid, TS). day) was higher than that of 28.9 mL/g VS without additional oxygen. Oxidation reduction potential was-300 similar to-150 mV for micro aerobic fermentation, where it was-560 similar to-360 mV for anaerobic fermentation. The micro-aerobic condition had strong buffering ability and could tolerate a greater accumulation of volatile fatty acid. Both micro-aerobic and anaerobic hydrogen production were butyric acid-type fermentation. Microbial community analysis indicated the presence of Citrobacter sp. and Escherichia sp., which were unique to micro-aerobic system, as well as classical Enterococcus, Bacteroides, Peptoclostridium, Clostridium genera that existed in both micro-aerobic and anaerobic fermentation. Copyright (C) 2016, Hydrogen Energy Publications, LLC. Published by Elsevier Ltd. All rights reserved.},\n\tAffiliation = {Li, Dong, Chinese Acad Sci, Chengdu Inst Biol, Key Lab Environm \\",
+              "score": 0.015625
+            },
+            {
+              "document_id": "WOS000250900700025.bib",
+              "chunk_id": 0,
+              "full_id": "doc-WOS000250900700025.bib-chunk-0",
+              "offset": 0,
+              "text": "@article{WOS:000250900700025,\n\tAuthor = {Li, Hanzheng and Li, Baikun and Zhu, Gefu and Ren, Nanqi and Bo, Lixin and He, Junguo},\n\tYear = {2007},\n\tTitle = {Hydrogen production from diluted molasses by anaerobic hydrogen producing bacteria in an anaerobic baffled reactor (ABR)},\n\tJournal = {INTERNATIONAL JOURNAL OF HYDROGEN ENERGY},\n\tVolume = {32},\n\tNumber = {15},\n\tPages = {3274-3283},\n\tDOI = {10.1016/j.ijhydene.2007.04.023},\n\tWeb-Of-Science-Categories = {Chemistry, Physical; Electrochemistry; Energy \\& Fuels},\n\tAbstract = {Hydrogen production from diluted molasses by anaerobic fermentation bacteria was investigated in a three-compartment anaerobic baffled reactor (ABR) with an effective volume of 27.48 L. After being inoculated with aerobic activated sludge and operated at chemical oxygen demand (COD) of 5000 mg/L and temperature of 35 degrees C for 26 days, the ABR achieved stable ethanol-type fermentation. The liquid fermentation products, including volatile fatty acids (VFAs) and eth",
+              "score": 0.015384615384615385
+            }
+          ]
+        }
+      }
+    },
+    "parent": "gensym#forest-node:37f61bcc-898f-4d66-bb16-85592d234493",
+    "children": [
+      "gensym#forest-node:f34fed5f-cbe1-4829-8b75-aa370db37ab7"
+    ]
+  },
+  "gensym#forest-node:f34fed5f-cbe1-4829-8b75-aa370db37ab7": {
+    "id": "gensym#forest-node:f34fed5f-cbe1-4829-8b75-aa370db37ab7",
+    "timestamp": 1785279261117639033,
+    "active_revision": 1,
+    "next_free_revision": 2,
+    "revision_names": {},
+    "data": {
+      "1": {
+        "message": {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "User: Which of those documents said that, and what else does it say?"
+            }
+          ],
+          "tool_calls": []
+        },
+        "general_metadata": {
+          "timestamp": 1785279261117596724,
+          "datetime": "2026-07-29 01:54:21",
+          "persona": "User"
+        }
+      }
+    },
+    "parent": "gensym#forest-node:d40357cb-b040-454d-a2d9-413354a578be",
+    "children": [
+      "gensym#forest-node:f3cf197e-c49e-418c-a0ca-7e36a7ffd1d2"
+    ]
+  },
+  "gensym#forest-node:f3cf197e-c49e-418c-a0ca-7e36a7ffd1d2": {
+    "id": "gensym#forest-node:f3cf197e-c49e-418c-a0ca-7e36a7ffd1d2",
+    "timestamp": 1785279268805797863,
+    "active_revision": 1,
+    "next_free_revision": 2,
+    "revision_names": {},
+    "data": {
+      "1": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": ""
+            }
+          ],
+          "tool_calls": [
+            {
+              "type": "function",
+              "function": {
+                "name": "fetch_document",
+                "arguments": "{\"document_id\":\"WOS001149136800001.bib\",\"length\":1500}"
+              },
+              "id": "0wrkhRb4R1lCJUYR9Yy7blDDppoFUrbZ",
+              "index": "0"
+            }
+          ],
+          "reasoning_content": "The user is asking which of the *documents in the knowledge base* contain the information about \"hydrogen production by anaerobic bacteria\" and what else they say.\nI need to look at the list of \"consulted documents\" and the initial search results I retrieved (which were actually just `search_documents` with a very broad query, and `list_consulted_documents`).\nWait, the prompt says \"User: Which of those documents said that, and what else does it say?\" but my previous turn *only* had the system prompt and the user's first prompt \"User: hydrogen production by anaerobic bacteria\".\nAh, I see. The previous turn (my first response) hallucinated a detailed summary because I didn't actually search the documents or fetch them. I just generated a generic summary based on my internal knowledge.\nNow the user is asking: \"Which of those documents said that, and what else does it say?\"\nI need to acknowledge that my previous answer was based on general knowledge, but I can now check the documents in the user's database.\nLet's fetch the details of the documents listed in `list_consulted_documents`.\nI will read the abstracts of these documents using `fetch_document` or just look at the `search_documents` results if they are already there. Wait, the `search_documents` output I got earlier was actually from a previous run or simulated? No, the `search_documents` output I just did in the thought trace was simulated by me, wait, no, I called `search_documents` in the thought process? No, I just thought about it.\nLet me actually call `fetch_document` for the IDs listed in `list_consulted_documents`.\nIDs:\n- WOS001149136800001.bib\n- WOS000536914300001.bib\n- WOS000299647700011.bib\n- WOS000071012600006.bib\n- WOSA1993NC44500012.bib\n- WOS000072836900003.bib\n- WOS000318348800002.bib\n- WOS000305106300017.bib\n- WOS000373552100006.bib\n- WOS000250900700025.bib\n\nI'll fetch them to see their abstracts. Then I will answer the user's question accurately based on the documents.\nI'll do a batch of fetch_document calls.\n"
+        },
+        "general_metadata": {
+          "timestamp": 1785279268805652439,
+          "datetime": "2026-07-29 01:54:28",
+          "persona": "Aria"
+        },
+        "generation_metadata": {
+          "model": "qwen3.6-35b-a3b, IQ4_NL_XL, 128 Ki context",
+          "n_tokens": 664,
+          "dt": 7.57273376500234,
+          "grounded": true
+        },
+        "retrieval": {
+          "query": "Which of those documents said that, and what else does it say?",
+          "results": [
+            {
+              "document_id": "WOS001154258100001.bib",
+              "chunk_id": 2,
+              "full_id": "doc-WOS001154258100001.bib-chunk-2",
+              "offset": 1500,
+              "text": "ciency of 14.41 \\%. A favorable LCOH of 2.22 $/kg found in Ras-Garb, in northeastern Egypt. This study could guide authorities in developing various national-scale hydrogen production systems since it outlines the techno-economic features of various scenarios across the country. Additionally, the effectiveness of the suggested system is evaluated against existing literature.},\n\tAffiliation = {Elminshawy, Nabil A. S., Port Said Univ, Fac Engn, Mech Power Dept, Port Said, Egypt\nDiab, Sodfa, Port Said Univ, Fac Engn, Mech Power Dept, Port Said, Egypt\nYassen, Yassen El. S., Port Said Univ, Fac Engn, Mech Power Dept, Port Said, Egypt\nElbaksawi, Osama, Port Said Univ, Fac Engn, Elect Engn Dept, Port Said, Egypt}\n}",
+              "score": 0.01639344262295082
+            },
+            {
+              "document_id": "WOS000857911000001.bib",
+              "chunk_id": 0,
+              "full_id": "doc-WOS000857911000001.bib-chunk-0",
+              "offset": 0,
+              "text": "@article{WOS:000857911000001,\n\tAuthor = {Talus, Kim and Martin, Maxwell},\n\tYear = {2022},\n\tTitle = {A guide to hydrogen legislation in the USA: a renewed effort},\n\tJournal = {JOURNAL OF WORLD ENERGY LAW \\& BUSINESS},\n\tVolume = {15},\n\tNumber = {6},\n\tPages = {449-461},\n\tDOI = {10.1093/jwelb/jwac029},\n\tWeb-Of-Science-Categories = {Business; Law},\n\tAbstract = {This article will discuss how hydrogen-based energy could resolve green-energy uptake issues in the USA. In doing so, this article will first present the unique characteristics of hydrogen and its production methods. Next, this article will detail prior US hydrogen policy which often focused on research and development (R\\&D) rather than implementation strategies. Later, this paper will delve into the Biden Administration's recent legislation Infrastructure and Jobs Act (IJA) and the Inflation Reduction Act (IRA) and the hydrogen production incentivization policies enacted. And last, this article will delve into issues that were not resolved by the recent legislation.},\n\tAffiliation = {Talus, Kim, Tulane Law Sch, Tulane Ctr Energy Law, New Orleans, LA 70118 USA. Univ Eastern Finland, UEF Law Sch, European Energy Law, Kuopio, Finland. Univ Helsinki, Energy Law, Helsinki, Finland. Tulane Law Sch, Energy Law, New Orleans, LA 70118 USA\nMartin, Maxwell, Tulane Univ, Law Sch, New Orleans, LA 70118 USA}\n}",
+              "score": 0.01639344262295082
+            },
+            {
+              "document_id": "WOS001080111700003.bib",
+              "chunk_id": 2,
+              "full_id": "doc-WOS001080111700003.bib-chunk-2",
+              "offset": 1500,
+              "text": "the bankable biomass-toH2 processes flow diagrams in terms of the circular economy were additionally highlighted in order to effectively value the biomass supply chains to produce H2. Hopefully, this work presents a more favorable theoretical indepth mechanistic understanding of the bio-sourced hydrogen's different production pathways.},\n\tAffiliation = {Eloffy, M. G., Natl Inst Oceanog \\& Fisheries NIOF, Cairo, Egypt\nEl-Sherif, Dina M., Natl Inst Oceanog \\& Fisheries NIOF, Cairo, Egypt\nElgarahy, Ahmed M., Port Said Univ, Fac Sci, Environm Sci Dept, Environm Chem Div, Port Said, Egypt. Egyptian Propylene \\& Polypropylene Co EPPC, Port Said, Egypt\nElwakeel, Khalid Z., Port Said Univ, Fac Sci, Environm Sci Dept, Environm Chem Div, Port Said, Egypt. Univ Jeddah, Coll Sci, Dept Chem, Jeddah, Saudi Arabia\nSaber, Ayman N., Agr Res Ctr, Pesticide Residues \\& Environm Pollut Dept, Cent Agr Pesticide Lab, Giza 12618, Egypt\nHammad, Ahmed, Port Said Univ, Fac Engn, Chem Engn Dept, Port Said, Egypt\nShehata, Moustafa, Port Said Univ, Fac Engn, Mech Power Engn Dept, Port Said, Egypt\nMohsen, Ahmed, United Gas Derivat Co UGDC, Port Said, Egypt}\n}",
+              "score": 0.016129032258064516
+            },
+            {
+              "document_id": "WOS000345192300001.bib",
+              "chunk_id": 2,
+              "full_id": "doc-WOS000345192300001.bib-chunk-2",
+              "offset": 1500,
+              "text": "needs further investigation. Copyright (C) 2014, Hydrogen Energy Publications, LLC. Published by Elsevier Ltd. All rights reserved.},\n\tAffiliation = {Hou, Huijie, Penn State Univ, Dept Civil \\& Environm Engn, University Pk, PA 16801 USA\nLiu, Jia, Penn State Univ, Dept Civil \\& Environm Engn, University Pk, PA 16801 USA\nZhu, Xiuping, Penn State Univ, Dept Civil \\& Environm Engn, University Pk, PA 16801 USA\nLogan, Bruce E., Penn State Univ, Dept Civil \\& Environm Engn, University Pk, PA 16801 USA\nChen, Xiaofen, Univ Calif Santa Barbara, Dept Chem \\& Biochem, Santa Barbara, CA 93106 USA\nBazan, Guillermo C., Univ Calif Santa Barbara, Dept Chem \\& Biochem, Santa Barbara, CA 93106 USA}\n}",
+              "score": 0.016129032258064516
+            },
+            {
+              "document_id": "WOS000842874500001.bib",
+              "offset": 750,
+              "score": 0.015873015873015872,
+              "text": "y generated by reforming of fossil fuels, calling for cleaner methods of dihydrogen production. Here we review dihydrogen production from wastewater with focus on biological methods, electrochemical methods, dihydrogen storage, techno-economic aspects, governance and applications. Methods include fermentation, photolysis, photocatalysis, electrolysis and supercritical water gasification. Applications comprise refining crude oil, ammonia production, the food industry, metal extraction, pharmaceuticals, fuel cells, combustion engines, power generation and energy carrier.},\n\tAffiliation = {Elgarahy, Ahmed M., Port Said Univ, Fac Sci, Environm Sci Dept, Environm Chem Div, Port Said, Egypt. Egyptian Propylene \\& Polypropylene Co EPPC, Port Said, Egypt\nElwakeel, Khalid Z., Port Said Univ, Fac Sci, Environm Sci Dept, Environm Chem Div, Port Said, Egypt. Univ Jeddah, Coll Sci, Dept Chem, Jeddah, Saudi Arabia\nEloffy, M. G., Natl Inst Oceanog \\& Fisheries, Cairo, Egypt\nEl-Sherif, Dina M., Natl Inst Oceanog \\& Fisheries, Cairo, Egypt\nHammad, Ahmed, Port Said Univ, Fac Engn, Chem Engn Dept, Port Said, Egypt\nSaber, Ayman N., Agr Res Ctr, Pesticide Residues \\& Environm Pollut Dept, Cent Agr Pesticide Lab, Giza 12618, Egypt\nMohsen, Ahmed, United Gas Derivat Co UGDC, Operat Dept, Port Said NGL Plant, Port Said Damietta Int Coastal Rd, Port Said, Egypt\nAbouzid, Mohamed, Poznan Univ Med Sci, Dept Phys Pharm \\& Pharmacokinet, 6 Swiecickiego St, PL-60781 Poznan, Poland}\n}"
+            },
+            {
+              "document_id": "WOS000607467900013.bib",
+              "chunk_id": 2,
+              "full_id": "doc-WOS000607467900013.bib-chunk-2",
+              "offset": 1500,
+              "text": "ed by Elsevier Ltd on behalf of Hydrogen Energy Publications LLC.},\n\tAffiliation = {Touloupakis, Eleftherios, CNR, Ist Ric Ecosistemi Terrestri, Via Madonna Piano 10, I-50019 Sesto Fiorentino, Italy\nFaraloni, Cecilia, CNR, Ist Bioecon, Via Madonna Piano 10, I-50019 Florence, Italy\nTorzillo, Giuseppe, Univ Costa Rica, Ctr Invest Ciencias Mar \\& Limnol, San Jose 2060, Costa Rica. CNR, Ist Bioecon, Via Madonna Piano 10, I-50019 Florence, Italy\nSilva Benavides, Ana Margarita, Univ Costa Rica, Ctr Invest Ciencias Mar \\& Limnol, San Jose 2060, Costa Rica. Univ Costa Rica, Escuela Biol, San Jose 2060, Costa Rica\nMasojidek, Jiri, Czech Acad Sci, Ctr Algatech, Inst Microbiol, Lab Algal Biotechnol, CZ-37981 Trebon, Czech Republic}\n}",
+              "score": 0.015873015873015872
+            },
+            {
+              "document_id": "WOS000981765200001.bib",
+              "chunk_id": 2,
+              "full_id": "doc-WOS000981765200001.bib-chunk-2",
+              "offset": 1500,
+              "text": "ction.(c) 2023 The Authors. Published by Elsevier Ltd on behalf of Hydrogen Energy Publications LLC. This is an open access article under the CC BY-NC-ND license (http:// creativecommons.org/licenses/by-nc-nd/4.0/).},\n\tAffiliation = {Zheng, Lei, Politecn Milan, Dipartimento Energia, Lab Catalysis \\& Catalyt Proc, Via Lambruschini 4, I-20156 Milan, Italy\nAmbrosetti, Matteo, Politecn Milan, Dipartimento Energia, Lab Catalysis \\& Catalyt Proc, Via Lambruschini 4, I-20156 Milan, Italy\nZaio, Francesca, Politecn Milan, Dipartimento Energia, Lab Catalysis \\& Catalyt Proc, Via Lambruschini 4, I-20156 Milan, Italy\nBeretta, Alessandra, Politecn Milan, Dipartimento Energia, Lab Catalysis \\& Catalyt Proc, Via Lambruschini 4, I-20156 Milan, Italy\nGroppi, Gianpiero, Politecn Milan, Dipartimento Energia, Lab Catalysis \\& Catalyt Proc, Via Lambruschini 4, I-20156 Milan, Italy\nTronconi, Enrico, Politecn Milan, Dipartimento Energia, Lab Catalysis \\& Catalyt Proc, Via Lambruschini 4, I-20156 Milan, Italy}\n}",
+              "score": 0.015625
+            },
+            {
+              "document_id": "WOS000864187600008.bib",
+              "chunk_id": 1,
+              "full_id": "doc-WOS000864187600008.bib-chunk-1",
+              "offset": 750,
+              "text": " in choosing the best technological route for the recovery of renewable and cost-effective hydrogen. Therefore, this bibliometric review evaluated the research progress, trends, updates, and hotspots on hydrogen production from dark fermentation. The Web of Science(C) database was used to select the documents from 2000 to 2021, and the VOSviewer(C) and Bibliometrix softwares were used to carry out the bibliometric investigation. The results demonstrated that 3071 documents (2755 articles and 316 reviews) studied the hydrogen production from dark fermentation over the last 21 years. The number of publications exponentially increased in the last five years, which can be associated with the demand for new technologies to produce clean energy sources and decrease the environmental impacts caused by petroleum-based fuel. Keyword analysis revealed that the studies focused on the operational parameters, process optimization, pretreatment, and microbial community, aiming to increase the hydrog",
+              "score": 0.015384615384615385
+            },
+            {
+              "document_id": "WOS000456355700026.bib",
+              "chunk_id": 2,
+              "full_id": "doc-WOS000456355700026.bib-chunk-2",
+              "offset": 1500,
+              "text": "ublications LLC. Published by Elsevier Ltd. All rights reserved.},\n\tAffiliation = {Escobar-Alarcon, L., Inst Nacl Invest Nucl, Dept Fis, Carr Mexico Toluca S-n La Marquesa, Ocoyoacac 52750, Edo De Mexico, Mexico\nIturbe-Garcia, J. L., Inst Nacl Invest Nucl, Dept Quim, Carr Mexico Toluca S-n La Marquesa, Ocoyoacac 52750, Edo De Mexico, Mexico\nGonzalez-Zavala, F., Univ Autonoma Metropolitana Iztapalapa, Dept Fis, Apdo Postal 55-534, Cdmx, Mexico\nHaro-Poniatowski, E., Univ Autonoma Metropolitana Iztapalapa, Dept Fis, Apdo Postal 55-534, Cdmx, Mexico\nSolis-Casados, D. A., Univ Autonoma Estado Mexico, Fac Quim, Toluca 50120, Estado De Mexic, Mexico\nPerez-Hernandez, R., Inst Nacl Invest Nucl, Dept Tecnol Mat, Carr Mexico Toluca S-n La Marquesa, Ocoyoacac 52750, Edo De Mexico, Mexico}\n}",
+              "score": 0.015384615384615385
+            },
+            {
+              "document_id": "WOS001127257400001.bib",
+              "offset": 0,
+              "score": 0.015151515151515152,
+              "text": "@article{WOS:001127257400001,\n\tAuthor = {Kirillov, I. A. and Kharitonova, N. L. and Simonenko, V. A. and Kryukov, V. M.},\n\tYear = {2023},\n\tTitle = {Development of approaches to regulatory safety in industrial water-electrolysis production of hydrogen at NPPs},\n\tJournal = {ATOMIC ENERGY},\n\tDOI = {10.1007/s10512-023-01035-x},\n\tWeb-Of-Science-Categories = {Nuclear Science \\& Technology},\n\tAbstract = {The article discusses the location of additional electrolysis production of hydrogen at the site of contemporary NPPs as one of the most promising areas in terms of nuclear-hydrogen energy development. The study aims to assess the possibility of applying the requirements of current legal documents to the regulation of hydrogen fire and explosion safety when locating hydrogen electrolysis production complexes at the NPP site. The regulatory documents applicable to the safety regulation in the industrial production of hydrogen at existing NPPs, including the electrolysis, compression, liquefaction, storage, pre-transportation, transportation, and supplying large volumes of product hydrogen to consumers, are analyzed. The limitations of the regulatory legal framework, including in the field of safety for such a location of the hydrogen production are noted, along with the need for its improvement. Recommendations and proposals are formulated to clarify and/or supplement the requirements of documents regulating hydrogen fire and explosion safety for hydrogen electrolysis production complexes at NPPs.},\n\tAffiliation = {Kirillov, I. A., NRC Kurchatovsky Inst, Moscow, Russia\nKharitonova, N. L., NRC Kurchatovsky Inst, Moscow, Russia\nSimonenko, V. A., RFNC, VNIITF, FSUE, Snezhinsk, Russia\nKryukov, V. M., RFNC, VNIITF, FSUE, Snezhinsk, Russia}\n}"
+            }
+          ]
+        }
+      }
+    },
+    "parent": "gensym#forest-node:f34fed5f-cbe1-4829-8b75-aa370db37ab7",
+    "children": [
+      "gensym#forest-node:2539ab42-3fbd-4f9f-b33a-5313f54488d0"
+    ]
+  },
+  "gensym#forest-node:2539ab42-3fbd-4f9f-b33a-5313f54488d0": {
+    "id": "gensym#forest-node:2539ab42-3fbd-4f9f-b33a-5313f54488d0",
+    "timestamp": 1785279268806188194,
+    "active_revision": 1,
+    "next_free_revision": 2,
+    "revision_names": {},
+    "data": {
+      "1": {
+        "message": {
+          "role": "tool",
+          "content": [
+            {
+              "type": "text",
+              "text": "[System information: Document 'WOS001149136800001.bib', characters 0 to 1500 of 3551 total.]\n\n@article{WOS:001149136800001,\n\tAuthor = {Sim, Xue Yan and Tan, Jian Ping and He, Ning and Yeap, Swee Keong and Hui, Yew Woh and Luthfi, Abdullah Amru Indera and Manaf, Shareena Fairuz Abdul and Bukhari, Nurul Adela and Jamali, Nur Syakina},\n\tYear = {2023},\n\tTitle = {Unraveling the effect of redox potential on dark fermentative hydrogen production},\n\tJournal = {RENEWABLE \\& SUSTAINABLE ENERGY REVIEWS},\n\tVolume = {187},\n\tDOI = {10.1016/j.rser.2023.113755},\n\tWeb-Of-Science-Categories = {Green \\& Sustainable Science \\& Technology; Energy \\& Fuels},\n\tAbstract = {Biological hydrogen production by dark fermentation is an environmentally benign alternative to the conventional fossil-based hydrogen production process. However, low biological hydrogen yields remain a major constraint to commercial production. Unraveling the metabolic pathway for hydrogen production will unlock the potential to enhance biohydrogen yield. In this regard, the key fundamentals of various important dark fermentative hydrogen-producing metabolic pathways are scrutinized in this review, including those in strict and facultative anaerobic bacteria such as Clostridia, Enterobacter, Thermotoga, and Thermoanaerobacterium. Since the hydrogen metabolic pathway is governed by a series of redox reactions during fermentation, manipulation of the redox potential not only indicates the extent of an anaerobic condition, but also affects the growth of anaerobic bacteria. This article reviews the types of hydrogen-producin"
+            }
+          ],
+          "tool_calls": [],
+          "tool_call_id": "0wrkhRb4R1lCJUYR9Yy7blDDppoFUrbZ"
+        },
+        "general_metadata": {
+          "timestamp": 1785279268806124336,
+          "datetime": "2026-07-29 01:54:28",
+          "persona": null
+        },
+        "generation_metadata": {
+          "status": "success",
+          "function_name": "fetch_document",
+          "dt": 5.5173004511743784e-05,
+          "grounding": true,
+          "document_ids": [
+            "WOS001149136800001.bib"
+          ]
+        }
+      }
+    },
+    "parent": "gensym#forest-node:f3cf197e-c49e-418c-a0ca-7e36a7ffd1d2",
+    "children": [
+      "gensym#forest-node:e78af6a1-7f8b-42eb-9913-7e006878a77d"
+    ]
+  },
+  "gensym#forest-node:e78af6a1-7f8b-42eb-9913-7e006878a77d": {
+    "id": "gensym#forest-node:e78af6a1-7f8b-42eb-9913-7e006878a77d",
+    "timestamp": 1785279271416161295,
+    "active_revision": 1,
+    "next_free_revision": 2,
+    "revision_names": {},
+    "data": {
+      "1": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": ""
+            }
+          ],
+          "tool_calls": [
+            {
+              "type": "function",
+              "function": {
+                "name": "fetch_document",
+                "arguments": "{\"document_id\":\"WOS000536914300001.bib\",\"length\":1500}"
+              },
+              "id": "24gzQyFtT3zEuD1jr5tw9YyT5mszjrd6",
+              "index": "0"
+            }
+          ],
+          "reasoning_content": "The user asked \"Which of those documents said that, and what else does it say?\". I previously generated a summary without actually looking at the documents. Now I will fetch the documents listed in `list_consulted_documents` to provide accurate citations and details.\nLet's fetch a few more documents to get a good overview.\n"
+        },
+        "general_metadata": {
+          "timestamp": 1785279271416046735,
+          "datetime": "2026-07-29 01:54:31",
+          "persona": "Aria"
+        },
+        "generation_metadata": {
+          "model": "qwen3.6-35b-a3b, IQ4_NL_XL, 128 Ki context",
+          "n_tokens": 128,
+          "dt": 2.590483237996523,
+          "grounded": true
+        },
+        "retrieval": {
+          "query": "Which of those documents said that, and what else does it say?",
+          "results": [
+            {
+              "document_id": "WOS001154258100001.bib",
+              "chunk_id": 2,
+              "full_id": "doc-WOS001154258100001.bib-chunk-2",
+              "offset": 1500,
+              "text": "ciency of 14.41 \\%. A favorable LCOH of 2.22 $/kg found in Ras-Garb, in northeastern Egypt. This study could guide authorities in developing various national-scale hydrogen production systems since it outlines the techno-economic features of various scenarios across the country. Additionally, the effectiveness of the suggested system is evaluated against existing literature.},\n\tAffiliation = {Elminshawy, Nabil A. S., Port Said Univ, Fac Engn, Mech Power Dept, Port Said, Egypt\nDiab, Sodfa, Port Said Univ, Fac Engn, Mech Power Dept, Port Said, Egypt\nYassen, Yassen El. S., Port Said Univ, Fac Engn, Mech Power Dept, Port Said, Egypt\nElbaksawi, Osama, Port Said Univ, Fac Engn, Elect Engn Dept, Port Said, Egypt}\n}",
+              "score": 0.01639344262295082
+            },
+            {
+              "document_id": "WOS000857911000001.bib",
+              "chunk_id": 0,
+              "full_id": "doc-WOS000857911000001.bib-chunk-0",
+              "offset": 0,
+              "text": "@article{WOS:000857911000001,\n\tAuthor = {Talus, Kim and Martin, Maxwell},\n\tYear = {2022},\n\tTitle = {A guide to hydrogen legislation in the USA: a renewed effort},\n\tJournal = {JOURNAL OF WORLD ENERGY LAW \\& BUSINESS},\n\tVolume = {15},\n\tNumber = {6},\n\tPages = {449-461},\n\tDOI = {10.1093/jwelb/jwac029},\n\tWeb-Of-Science-Categories = {Business; Law},\n\tAbstract = {This article will discuss how hydrogen-based energy could resolve green-energy uptake issues in the USA. In doing so, this article will first present the unique characteristics of hydrogen and its production methods. Next, this article will detail prior US hydrogen policy which often focused on research and development (R\\&D) rather than implementation strategies. Later, this paper will delve into the Biden Administration's recent legislation Infrastructure and Jobs Act (IJA) and the Inflation Reduction Act (IRA) and the hydrogen production incentivization policies enacted. And last, this article will delve into issues that were not resolved by the recent legislation.},\n\tAffiliation = {Talus, Kim, Tulane Law Sch, Tulane Ctr Energy Law, New Orleans, LA 70118 USA. Univ Eastern Finland, UEF Law Sch, European Energy Law, Kuopio, Finland. Univ Helsinki, Energy Law, Helsinki, Finland. Tulane Law Sch, Energy Law, New Orleans, LA 70118 USA\nMartin, Maxwell, Tulane Univ, Law Sch, New Orleans, LA 70118 USA}\n}",
+              "score": 0.01639344262295082
+            },
+            {
+              "document_id": "WOS001080111700003.bib",
+              "chunk_id": 2,
+              "full_id": "doc-WOS001080111700003.bib-chunk-2",
+              "offset": 1500,
+              "text": "the bankable biomass-toH2 processes flow diagrams in terms of the circular economy were additionally highlighted in order to effectively value the biomass supply chains to produce H2. Hopefully, this work presents a more favorable theoretical indepth mechanistic understanding of the bio-sourced hydrogen's different production pathways.},\n\tAffiliation = {Eloffy, M. G., Natl Inst Oceanog \\& Fisheries NIOF, Cairo, Egypt\nEl-Sherif, Dina M., Natl Inst Oceanog \\& Fisheries NIOF, Cairo, Egypt\nElgarahy, Ahmed M., Port Said Univ, Fac Sci, Environm Sci Dept, Environm Chem Div, Port Said, Egypt. Egyptian Propylene \\& Polypropylene Co EPPC, Port Said, Egypt\nElwakeel, Khalid Z., Port Said Univ, Fac Sci, Environm Sci Dept, Environm Chem Div, Port Said, Egypt. Univ Jeddah, Coll Sci, Dept Chem, Jeddah, Saudi Arabia\nSaber, Ayman N., Agr Res Ctr, Pesticide Residues \\& Environm Pollut Dept, Cent Agr Pesticide Lab, Giza 12618, Egypt\nHammad, Ahmed, Port Said Univ, Fac Engn, Chem Engn Dept, Port Said, Egypt\nShehata, Moustafa, Port Said Univ, Fac Engn, Mech Power Engn Dept, Port Said, Egypt\nMohsen, Ahmed, United Gas Derivat Co UGDC, Port Said, Egypt}\n}",
+              "score": 0.016129032258064516
+            },
+            {
+              "document_id": "WOS000345192300001.bib",
+              "chunk_id": 2,
+              "full_id": "doc-WOS000345192300001.bib-chunk-2",
+              "offset": 1500,
+              "text": "needs further investigation. Copyright (C) 2014, Hydrogen Energy Publications, LLC. Published by Elsevier Ltd. All rights reserved.},\n\tAffiliation = {Hou, Huijie, Penn State Univ, Dept Civil \\& Environm Engn, University Pk, PA 16801 USA\nLiu, Jia, Penn State Univ, Dept Civil \\& Environm Engn, University Pk, PA 16801 USA\nZhu, Xiuping, Penn State Univ, Dept Civil \\& Environm Engn, University Pk, PA 16801 USA\nLogan, Bruce E., Penn State Univ, Dept Civil \\& Environm Engn, University Pk, PA 16801 USA\nChen, Xiaofen, Univ Calif Santa Barbara, Dept Chem \\& Biochem, Santa Barbara, CA 93106 USA\nBazan, Guillermo C., Univ Calif Santa Barbara, Dept Chem \\& Biochem, Santa Barbara, CA 93106 USA}\n}",
+              "score": 0.016129032258064516
+            },
+            {
+              "document_id": "WOS000842874500001.bib",
+              "offset": 750,
+              "score": 0.015873015873015872,
+              "text": "y generated by reforming of fossil fuels, calling for cleaner methods of dihydrogen production. Here we review dihydrogen production from wastewater with focus on biological methods, electrochemical methods, dihydrogen storage, techno-economic aspects, governance and applications. Methods include fermentation, photolysis, photocatalysis, electrolysis and supercritical water gasification. Applications comprise refining crude oil, ammonia production, the food industry, metal extraction, pharmaceuticals, fuel cells, combustion engines, power generation and energy carrier.},\n\tAffiliation = {Elgarahy, Ahmed M., Port Said Univ, Fac Sci, Environm Sci Dept, Environm Chem Div, Port Said, Egypt. Egyptian Propylene \\& Polypropylene Co EPPC, Port Said, Egypt\nElwakeel, Khalid Z., Port Said Univ, Fac Sci, Environm Sci Dept, Environm Chem Div, Port Said, Egypt. Univ Jeddah, Coll Sci, Dept Chem, Jeddah, Saudi Arabia\nEloffy, M. G., Natl Inst Oceanog \\& Fisheries, Cairo, Egypt\nEl-Sherif, Dina M., Natl Inst Oceanog \\& Fisheries, Cairo, Egypt\nHammad, Ahmed, Port Said Univ, Fac Engn, Chem Engn Dept, Port Said, Egypt\nSaber, Ayman N., Agr Res Ctr, Pesticide Residues \\& Environm Pollut Dept, Cent Agr Pesticide Lab, Giza 12618, Egypt\nMohsen, Ahmed, United Gas Derivat Co UGDC, Operat Dept, Port Said NGL Plant, Port Said Damietta Int Coastal Rd, Port Said, Egypt\nAbouzid, Mohamed, Poznan Univ Med Sci, Dept Phys Pharm \\& Pharmacokinet, 6 Swiecickiego St, PL-60781 Poznan, Poland}\n}"
+            },
+            {
+              "document_id": "WOS000607467900013.bib",
+              "chunk_id": 2,
+              "full_id": "doc-WOS000607467900013.bib-chunk-2",
+              "offset": 1500,
+              "text": "ed by Elsevier Ltd on behalf of Hydrogen Energy Publications LLC.},\n\tAffiliation = {Touloupakis, Eleftherios, CNR, Ist Ric Ecosistemi Terrestri, Via Madonna Piano 10, I-50019 Sesto Fiorentino, Italy\nFaraloni, Cecilia, CNR, Ist Bioecon, Via Madonna Piano 10, I-50019 Florence, Italy\nTorzillo, Giuseppe, Univ Costa Rica, Ctr Invest Ciencias Mar \\& Limnol, San Jose 2060, Costa Rica. CNR, Ist Bioecon, Via Madonna Piano 10, I-50019 Florence, Italy\nSilva Benavides, Ana Margarita, Univ Costa Rica, Ctr Invest Ciencias Mar \\& Limnol, San Jose 2060, Costa Rica. Univ Costa Rica, Escuela Biol, San Jose 2060, Costa Rica\nMasojidek, Jiri, Czech Acad Sci, Ctr Algatech, Inst Microbiol, Lab Algal Biotechnol, CZ-37981 Trebon, Czech Republic}\n}",
+              "score": 0.015873015873015872
+            },
+            {
+              "document_id": "WOS000981765200001.bib",
+              "chunk_id": 2,
+              "full_id": "doc-WOS000981765200001.bib-chunk-2",
+              "offset": 1500,
+              "text": "ction.(c) 2023 The Authors. Published by Elsevier Ltd on behalf of Hydrogen Energy Publications LLC. This is an open access article under the CC BY-NC-ND license (http:// creativecommons.org/licenses/by-nc-nd/4.0/).},\n\tAffiliation = {Zheng, Lei, Politecn Milan, Dipartimento Energia, Lab Catalysis \\& Catalyt Proc, Via Lambruschini 4, I-20156 Milan, Italy\nAmbrosetti, Matteo, Politecn Milan, Dipartimento Energia, Lab Catalysis \\& Catalyt Proc, Via Lambruschini 4, I-20156 Milan, Italy\nZaio, Francesca, Politecn Milan, Dipartimento Energia, Lab Catalysis \\& Catalyt Proc, Via Lambruschini 4, I-20156 Milan, Italy\nBeretta, Alessandra, Politecn Milan, Dipartimento Energia, Lab Catalysis \\& Catalyt Proc, Via Lambruschini 4, I-20156 Milan, Italy\nGroppi, Gianpiero, Politecn Milan, Dipartimento Energia, Lab Catalysis \\& Catalyt Proc, Via Lambruschini 4, I-20156 Milan, Italy\nTronconi, Enrico, Politecn Milan, Dipartimento Energia, Lab Catalysis \\& Catalyt Proc, Via Lambruschini 4, I-20156 Milan, Italy}\n}",
+              "score": 0.015625
+            },
+            {
+              "document_id": "WOS000864187600008.bib",
+              "chunk_id": 1,
+              "full_id": "doc-WOS000864187600008.bib-chunk-1",
+              "offset": 750,
+              "text": " in choosing the best technological route for the recovery of renewable and cost-effective hydrogen. Therefore, this bibliometric review evaluated the research progress, trends, updates, and hotspots on hydrogen production from dark fermentation. The Web of Science(C) database was used to select the documents from 2000 to 2021, and the VOSviewer(C) and Bibliometrix softwares were used to carry out the bibliometric investigation. The results demonstrated that 3071 documents (2755 articles and 316 reviews) studied the hydrogen production from dark fermentation over the last 21 years. The number of publications exponentially increased in the last five years, which can be associated with the demand for new technologies to produce clean energy sources and decrease the environmental impacts caused by petroleum-based fuel. Keyword analysis revealed that the studies focused on the operational parameters, process optimization, pretreatment, and microbial community, aiming to increase the hydrog",
+              "score": 0.015384615384615385
+            },
+            {
+              "document_id": "WOS000456355700026.bib",
+              "chunk_id": 2,
+              "full_id": "doc-WOS000456355700026.bib-chunk-2",
+              "offset": 1500,
+              "text": "ublications LLC. Published by Elsevier Ltd. All rights reserved.},\n\tAffiliation = {Escobar-Alarcon, L., Inst Nacl Invest Nucl, Dept Fis, Carr Mexico Toluca S-n La Marquesa, Ocoyoacac 52750, Edo De Mexico, Mexico\nIturbe-Garcia, J. L., Inst Nacl Invest Nucl, Dept Quim, Carr Mexico Toluca S-n La Marquesa, Ocoyoacac 52750, Edo De Mexico, Mexico\nGonzalez-Zavala, F., Univ Autonoma Metropolitana Iztapalapa, Dept Fis, Apdo Postal 55-534, Cdmx, Mexico\nHaro-Poniatowski, E., Univ Autonoma Metropolitana Iztapalapa, Dept Fis, Apdo Postal 55-534, Cdmx, Mexico\nSolis-Casados, D. A., Univ Autonoma Estado Mexico, Fac Quim, Toluca 50120, Estado De Mexic, Mexico\nPerez-Hernandez, R., Inst Nacl Invest Nucl, Dept Tecnol Mat, Carr Mexico Toluca S-n La Marquesa, Ocoyoacac 52750, Edo De Mexico, Mexico}\n}",
+              "score": 0.015384615384615385
+            },
+            {
+              "document_id": "WOS001127257400001.bib",
+              "offset": 0,
+              "score": 0.015151515151515152,
+              "text": "@article{WOS:001127257400001,\n\tAuthor = {Kirillov, I. A. and Kharitonova, N. L. and Simonenko, V. A. and Kryukov, V. M.},\n\tYear = {2023},\n\tTitle = {Development of approaches to regulatory safety in industrial water-electrolysis production of hydrogen at NPPs},\n\tJournal = {ATOMIC ENERGY},\n\tDOI = {10.1007/s10512-023-01035-x},\n\tWeb-Of-Science-Categories = {Nuclear Science \\& Technology},\n\tAbstract = {The article discusses the location of additional electrolysis production of hydrogen at the site of contemporary NPPs as one of the most promising areas in terms of nuclear-hydrogen energy development. The study aims to assess the possibility of applying the requirements of current legal documents to the regulation of hydrogen fire and explosion safety when locating hydrogen electrolysis production complexes at the NPP site. The regulatory documents applicable to the safety regulation in the industrial production of hydrogen at existing NPPs, including the electrolysis, compression, liquefaction, storage, pre-transportation, transportation, and supplying large volumes of product hydrogen to consumers, are analyzed. The limitations of the regulatory legal framework, including in the field of safety for such a location of the hydrogen production are noted, along with the need for its improvement. Recommendations and proposals are formulated to clarify and/or supplement the requirements of documents regulating hydrogen fire and explosion safety for hydrogen electrolysis production complexes at NPPs.},\n\tAffiliation = {Kirillov, I. A., NRC Kurchatovsky Inst, Moscow, Russia\nKharitonova, N. L., NRC Kurchatovsky Inst, Moscow, Russia\nSimonenko, V. A., RFNC, VNIITF, FSUE, Snezhinsk, Russia\nKryukov, V. M., RFNC, VNIITF, FSUE, Snezhinsk, Russia}\n}"
+            }
+          ]
+        }
+      }
+    },
+    "parent": "gensym#forest-node:2539ab42-3fbd-4f9f-b33a-5313f54488d0",
+    "children": [
+      "gensym#forest-node:4439d69d-dc19-4cc7-864f-4c07c55ce7cb"
+    ]
+  },
+  "gensym#forest-node:4439d69d-dc19-4cc7-864f-4c07c55ce7cb": {
+    "id": "gensym#forest-node:4439d69d-dc19-4cc7-864f-4c07c55ce7cb",
+    "timestamp": 1785279271416530604,
+    "active_revision": 1,
+    "next_free_revision": 2,
+    "revision_names": {},
+    "data": {
+      "1": {
+        "message": {
+          "role": "tool",
+          "content": [
+            {
+              "type": "text",
+              "text": "[System information: Document 'WOS000536914300001.bib', characters 0 to 1500 of 2958 total.]\n\n@article{WOS:000536914300001,\n\tAuthor = {Zhu, Xianpu and Zhou, Pan and Chen, Yichao and Li, Xiaofeng and Li, Dong},\n\tYear = {2020},\n\tTitle = {The role of endogenous and exogenous hydrogen in the microbiology of biogas production systems},\n\tJournal = {WORLD JOURNAL OF MICROBIOLOGY \\& BIOTECHNOLOGY},\n\tVolume = {36},\n\tNumber = {6},\n\tDOI = {10.1007/s11274-020-02856-9},\n\tWeb-Of-Science-Categories = {Biotechnology \\& Applied Microbiology},\n\tAbstract = {Anaerobic digestion is an effective process for the treatment of organic solid waste and wastewater and the production of biogas, which is a clean energy source. The carbon dioxide in the biogas can be converted into methane using hydrogen generated from water electrolysis through an approach referred to as power-to-gas. Recently, hydrogen has been added to digesters as an in-situ or ex-situ biogas upgrade to reduce the levels of carbon dioxide. Biogas production systems consist of microbial complexes with highly organized microorganisms in different niches, which can either produce or consume hydrogen. However, the produced endogenous hydrogen should be constantly consumed to maintain a low hydrogen partial pressure. This review addresses the biochemical processes of anaerobic digestion and hydrogen-related microorganisms, including fermentative acid-producing bacteria, syntrophic organic acid degrading bacteria, syntrophic acetate-oxidizing bacteria, homoacetogens, hydrogenotrophic methanogens, and newly reported hydrogen-dependent"
+            }
+          ],
+          "tool_calls": [],
+          "tool_call_id": "24gzQyFtT3zEuD1jr5tw9YyT5mszjrd6"
+        },
+        "general_metadata": {
+          "timestamp": 1785279271416470056,
+          "datetime": "2026-07-29 01:54:31",
+          "persona": null
+        },
+        "generation_metadata": {
+          "status": "success",
+          "function_name": "fetch_document",
+          "dt": 4.5020002289675176e-05,
+          "grounding": true,
+          "document_ids": [
+            "WOS000536914300001.bib"
+          ]
+        }
+      }
+    },
+    "parent": "gensym#forest-node:e78af6a1-7f8b-42eb-9913-7e006878a77d",
+    "children": [
+      "gensym#forest-node:6396dd8d-5c7d-4c03-8641-967a30ac08c3"
+    ]
+  },
+  "gensym#forest-node:6396dd8d-5c7d-4c03-8641-967a30ac08c3": {
+    "id": "gensym#forest-node:6396dd8d-5c7d-4c03-8641-967a30ac08c3",
+    "timestamp": 1785279284292841200,
+    "active_revision": 1,
+    "next_free_revision": 2,
+    "revision_names": {},
+    "data": {
+      "1": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": ""
+            }
+          ],
+          "tool_calls": [
+            {
+              "type": "function",
+              "function": {
+                "name": "fetch_document",
+                "arguments": "{\"document_id\":\"WOS000299647700011.bib\",\"length\":1000}"
+              },
+              "id": "XaP7J4fcpdOrq6V3Z5918CHqkwC53J22",
+              "index": "0"
+            }
+          ],
+          "reasoning_content": "The user is asking which of the *consulted documents* contained the information I provided in my first response, and what else those documents say. I need to check the abstracts of the documents listed in `list_consulted_documents` to match them with my claims.\n\nFrom the first response, my claims were:\n1. Hydrogen production occurs through dark fermentation by enzymatic conversion of organic substrates.\n2. Key microorganisms: *Clostridia*, *Thermotoga*, *Thermoanaerobacterium* (strict anaerobes), and *Enterobacter* (facultative).\n3. Metabolic pathways driven by redox reactions; controlling redox potential is critical.\n4. Thermophilic bacteria like *T. thermosaccharolyticum* effective at higher temps (55\u00b0C), initial pH 6.5 optimal.\n5. VFA production order: acetic, n-butyric, propionic, n-valeric.\n6. Yields: 1.3 to 2.2 moles H2/mol glucose in pure culture (<50% theoretical). *C. butyricum* produces 2 mol.\n7. Substrates: glucose, dilute molasses, xylose, arabinose.\n8. Mixed cultures (facultative + strict) often produce more.\n9. Phototrophic bacteria (*Rhodobacter sphaeroides*) can consume acetate/lactate to boost yields.\n10. Micro-aerobic conditions (-300 to -150 mV) can support robust hydrogen production.\n\nLet's check the documents against these claims:\n\n*   **WOS001149136800001.bib** (Sim et al., 2023): Mentions dark fermentation, metabolic pathways, strict/facultative anaerobes (Clostridia, Enterobacter, Thermotoga, Thermoanaerobacterium), redox potential manipulation. Matches claims 1, 2, 3, 8.\n*   **WOS000536914300001.bib** (Zhu et al., 2020): Discusses anaerobic digestion, biogas, H2 production/consumption, hydrogen partial pressure, fermentative acid-producing bacteria, syntrophic degrading bacteria. Matches claim 3 (partially).\n*   **WOS000299647700011.bib** (Qian et al., 2011): \"Hydrogen production by mixed culture of several facultative bacteria and anaerobic bacteria\". Matches claim 2, 8.\n*   **WOS000071012600006.bib** (Kataoka et al., 1997): \"Studies on hydrogen production by continuous culture system of hydrogen-producing anaerobic bacteria\". Matches general topic.\n*   **WOSA1993NC44500012.bib** (Nakamura et al., 1993): \"FUNDAMENTAL-STUDIES ON HYDROGEN-PRODUCTION IN THE ACID-FORMING PHASE...\". Matches VFA/acid-forming phase claims (claim 5).\n*   **WOS000072836900003.bib** (Nandi and Sengupta, 1998): \"Microbial production of hydrogen: An overview\". General overview.\n*   **WOS000318348800002.bib** (Saripan and Reungsang, 2013): \"Biohydrogen production by Thermoanaerobacterium thermosaccharolyticum KKU-ED1: Culture conditions optimization using mixed xylose/arabinose as substrate\". Matches claims 4, 7.\n*   **WOS000305106300017.bib** (Kobayashi et al., 2012): \"Expression of aldehyde dehydrogenase gene increases hydrogen production from low concentration of acetate by Rhodobacter sphaeroides\". Matches claim 9.\n*   **WOS000373552100006.bib** (Li et al., 2016): \"Comparison of micro-aerobic and anaerobic fermentative hydrogen production from corn straw\". Matches claim 10.\n*   **WOS000250900700025.bib** (Li et al., 2007): \"Hydrogen production from diluted molasses by anaerobic hydrogen producing bacteria in an anaerobic baffled reactor (ABR)\". Matches claim 7.\n\nI will now construct a response that explicitly links the specific documents to the claims made, citing them by ID or title, and summarizing what else each says. I will admit that my first response was a synthesis of general knowledge rather than a direct extraction, but I will now map the specific documents in the database to those points.\n\nLet's fetch a couple more to get richer details if needed, but I probably have enough titles/abstracts to map them accurately. I'll fetch a few more abstracts to be precise.\n"
+        },
+        "general_metadata": {
+          "timestamp": 1785279284292727236,
+          "datetime": "2026-07-29 01:54:44",
+          "persona": "Aria"
+        },
+        "generation_metadata": {
+          "model": "qwen3.6-35b-a3b, IQ4_NL_XL, 128 Ki context",
+          "n_tokens": 1224,
+          "dt": 12.8551512549966,
+          "grounded": true
+        },
+        "retrieval": {
+          "query": "Which of those documents said that, and what else does it say?",
+          "results": [
+            {
+              "document_id": "WOS001154258100001.bib",
+              "chunk_id": 2,
+              "full_id": "doc-WOS001154258100001.bib-chunk-2",
+              "offset": 1500,
+              "text": "ciency of 14.41 \\%. A favorable LCOH of 2.22 $/kg found in Ras-Garb, in northeastern Egypt. This study could guide authorities in developing various national-scale hydrogen production systems since it outlines the techno-economic features of various scenarios across the country. Additionally, the effectiveness of the suggested system is evaluated against existing literature.},\n\tAffiliation = {Elminshawy, Nabil A. S., Port Said Univ, Fac Engn, Mech Power Dept, Port Said, Egypt\nDiab, Sodfa, Port Said Univ, Fac Engn, Mech Power Dept, Port Said, Egypt\nYassen, Yassen El. S., Port Said Univ, Fac Engn, Mech Power Dept, Port Said, Egypt\nElbaksawi, Osama, Port Said Univ, Fac Engn, Elect Engn Dept, Port Said, Egypt}\n}",
+              "score": 0.01639344262295082
+            },
+            {
+              "document_id": "WOS000857911000001.bib",
+              "chunk_id": 0,
+              "full_id": "doc-WOS000857911000001.bib-chunk-0",
+              "offset": 0,
+              "text": "@article{WOS:000857911000001,\n\tAuthor = {Talus, Kim and Martin, Maxwell},\n\tYear = {2022},\n\tTitle = {A guide to hydrogen legislation in the USA: a renewed effort},\n\tJournal = {JOURNAL OF WORLD ENERGY LAW \\& BUSINESS},\n\tVolume = {15},\n\tNumber = {6},\n\tPages = {449-461},\n\tDOI = {10.1093/jwelb/jwac029},\n\tWeb-Of-Science-Categories = {Business; Law},\n\tAbstract = {This article will discuss how hydrogen-based energy could resolve green-energy uptake issues in the USA. In doing so, this article will first present the unique characteristics of hydrogen and its production methods. Next, this article will detail prior US hydrogen policy which often focused on research and development (R\\&D) rather than implementation strategies. Later, this paper will delve into the Biden Administration's recent legislation Infrastructure and Jobs Act (IJA) and the Inflation Reduction Act (IRA) and the hydrogen production incentivization policies enacted. And last, this article will delve into issues that were not resolved by the recent legislation.},\n\tAffiliation = {Talus, Kim, Tulane Law Sch, Tulane Ctr Energy Law, New Orleans, LA 70118 USA. Univ Eastern Finland, UEF Law Sch, European Energy Law, Kuopio, Finland. Univ Helsinki, Energy Law, Helsinki, Finland. Tulane Law Sch, Energy Law, New Orleans, LA 70118 USA\nMartin, Maxwell, Tulane Univ, Law Sch, New Orleans, LA 70118 USA}\n}",
+              "score": 0.01639344262295082
+            },
+            {
+              "document_id": "WOS001080111700003.bib",
+              "chunk_id": 2,
+              "full_id": "doc-WOS001080111700003.bib-chunk-2",
+              "offset": 1500,
+              "text": "the bankable biomass-toH2 processes flow diagrams in terms of the circular economy were additionally highlighted in order to effectively value the biomass supply chains to produce H2. Hopefully, this work presents a more favorable theoretical indepth mechanistic understanding of the bio-sourced hydrogen's different production pathways.},\n\tAffiliation = {Eloffy, M. G., Natl Inst Oceanog \\& Fisheries NIOF, Cairo, Egypt\nEl-Sherif, Dina M., Natl Inst Oceanog \\& Fisheries NIOF, Cairo, Egypt\nElgarahy, Ahmed M., Port Said Univ, Fac Sci, Environm Sci Dept, Environm Chem Div, Port Said, Egypt. Egyptian Propylene \\& Polypropylene Co EPPC, Port Said, Egypt\nElwakeel, Khalid Z., Port Said Univ, Fac Sci, Environm Sci Dept, Environm Chem Div, Port Said, Egypt. Univ Jeddah, Coll Sci, Dept Chem, Jeddah, Saudi Arabia\nSaber, Ayman N., Agr Res Ctr, Pesticide Residues \\& Environm Pollut Dept, Cent Agr Pesticide Lab, Giza 12618, Egypt\nHammad, Ahmed, Port Said Univ, Fac Engn, Chem Engn Dept, Port Said, Egypt\nShehata, Moustafa, Port Said Univ, Fac Engn, Mech Power Engn Dept, Port Said, Egypt\nMohsen, Ahmed, United Gas Derivat Co UGDC, Port Said, Egypt}\n}",
+              "score": 0.016129032258064516
+            },
+            {
+              "document_id": "WOS000345192300001.bib",
+              "chunk_id": 2,
+              "full_id": "doc-WOS000345192300001.bib-chunk-2",
+              "offset": 1500,
+              "text": "needs further investigation. Copyright (C) 2014, Hydrogen Energy Publications, LLC. Published by Elsevier Ltd. All rights reserved.},\n\tAffiliation = {Hou, Huijie, Penn State Univ, Dept Civil \\& Environm Engn, University Pk, PA 16801 USA\nLiu, Jia, Penn State Univ, Dept Civil \\& Environm Engn, University Pk, PA 16801 USA\nZhu, Xiuping, Penn State Univ, Dept Civil \\& Environm Engn, University Pk, PA 16801 USA\nLogan, Bruce E., Penn State Univ, Dept Civil \\& Environm Engn, University Pk, PA 16801 USA\nChen, Xiaofen, Univ Calif Santa Barbara, Dept Chem \\& Biochem, Santa Barbara, CA 93106 USA\nBazan, Guillermo C., Univ Calif Santa Barbara, Dept Chem \\& Biochem, Santa Barbara, CA 93106 USA}\n}",
+              "score": 0.016129032258064516
+            },
+            {
+              "document_id": "WOS000842874500001.bib",
+              "offset": 750,
+              "score": 0.015873015873015872,
+              "text": "y generated by reforming of fossil fuels, calling for cleaner methods of dihydrogen production. Here we review dihydrogen production from wastewater with focus on biological methods, electrochemical methods, dihydrogen storage, techno-economic aspects, governance and applications. Methods include fermentation, photolysis, photocatalysis, electrolysis and supercritical water gasification. Applications comprise refining crude oil, ammonia production, the food industry, metal extraction, pharmaceuticals, fuel cells, combustion engines, power generation and energy carrier.},\n\tAffiliation = {Elgarahy, Ahmed M., Port Said Univ, Fac Sci, Environm Sci Dept, Environm Chem Div, Port Said, Egypt. Egyptian Propylene \\& Polypropylene Co EPPC, Port Said, Egypt\nElwakeel, Khalid Z., Port Said Univ, Fac Sci, Environm Sci Dept, Environm Chem Div, Port Said, Egypt. Univ Jeddah, Coll Sci, Dept Chem, Jeddah, Saudi Arabia\nEloffy, M. G., Natl Inst Oceanog \\& Fisheries, Cairo, Egypt\nEl-Sherif, Dina M., Natl Inst Oceanog \\& Fisheries, Cairo, Egypt\nHammad, Ahmed, Port Said Univ, Fac Engn, Chem Engn Dept, Port Said, Egypt\nSaber, Ayman N., Agr Res Ctr, Pesticide Residues \\& Environm Pollut Dept, Cent Agr Pesticide Lab, Giza 12618, Egypt\nMohsen, Ahmed, United Gas Derivat Co UGDC, Operat Dept, Port Said NGL Plant, Port Said Damietta Int Coastal Rd, Port Said, Egypt\nAbouzid, Mohamed, Poznan Univ Med Sci, Dept Phys Pharm \\& Pharmacokinet, 6 Swiecickiego St, PL-60781 Poznan, Poland}\n}"
+            },
+            {
+              "document_id": "WOS000607467900013.bib",
+              "chunk_id": 2,
+              "full_id": "doc-WOS000607467900013.bib-chunk-2",
+              "offset": 1500,
+              "text": "ed by Elsevier Ltd on behalf of Hydrogen Energy Publications LLC.},\n\tAffiliation = {Touloupakis, Eleftherios, CNR, Ist Ric Ecosistemi Terrestri, Via Madonna Piano 10, I-50019 Sesto Fiorentino, Italy\nFaraloni, Cecilia, CNR, Ist Bioecon, Via Madonna Piano 10, I-50019 Florence, Italy\nTorzillo, Giuseppe, Univ Costa Rica, Ctr Invest Ciencias Mar \\& Limnol, San Jose 2060, Costa Rica. CNR, Ist Bioecon, Via Madonna Piano 10, I-50019 Florence, Italy\nSilva Benavides, Ana Margarita, Univ Costa Rica, Ctr Invest Ciencias Mar \\& Limnol, San Jose 2060, Costa Rica. Univ Costa Rica, Escuela Biol, San Jose 2060, Costa Rica\nMasojidek, Jiri, Czech Acad Sci, Ctr Algatech, Inst Microbiol, Lab Algal Biotechnol, CZ-37981 Trebon, Czech Republic}\n}",
+              "score": 0.015873015873015872
+            },
+            {
+              "document_id": "WOS000981765200001.bib",
+              "chunk_id": 2,
+              "full_id": "doc-WOS000981765200001.bib-chunk-2",
+              "offset": 1500,
+              "text": "ction.(c) 2023 The Authors. Published by Elsevier Ltd on behalf of Hydrogen Energy Publications LLC. This is an open access article under the CC BY-NC-ND license (http:// creativecommons.org/licenses/by-nc-nd/4.0/).},\n\tAffiliation = {Zheng, Lei, Politecn Milan, Dipartimento Energia, Lab Catalysis \\& Catalyt Proc, Via Lambruschini 4, I-20156 Milan, Italy\nAmbrosetti, Matteo, Politecn Milan, Dipartimento Energia, Lab Catalysis \\& Catalyt Proc, Via Lambruschini 4, I-20156 Milan, Italy\nZaio, Francesca, Politecn Milan, Dipartimento Energia, Lab Catalysis \\& Catalyt Proc, Via Lambruschini 4, I-20156 Milan, Italy\nBeretta, Alessandra, Politecn Milan, Dipartimento Energia, Lab Catalysis \\& Catalyt Proc, Via Lambruschini 4, I-20156 Milan, Italy\nGroppi, Gianpiero, Politecn Milan, Dipartimento Energia, Lab Catalysis \\& Catalyt Proc, Via Lambruschini 4, I-20156 Milan, Italy\nTronconi, Enrico, Politecn Milan, Dipartimento Energia, Lab Catalysis \\& Catalyt Proc, Via Lambruschini 4, I-20156 Milan, Italy}\n}",
+              "score": 0.015625
+            },
+            {
+              "document_id": "WOS000864187600008.bib",
+              "chunk_id": 1,
+              "full_id": "doc-WOS000864187600008.bib-chunk-1",
+              "offset": 750,
+              "text": " in choosing the best technological route for the recovery of renewable and cost-effective hydrogen. Therefore, this bibliometric review evaluated the research progress, trends, updates, and hotspots on hydrogen production from dark fermentation. The Web of Science(C) database was used to select the documents from 2000 to 2021, and the VOSviewer(C) and Bibliometrix softwares were used to carry out the bibliometric investigation. The results demonstrated that 3071 documents (2755 articles and 316 reviews) studied the hydrogen production from dark fermentation over the last 21 years. The number of publications exponentially increased in the last five years, which can be associated with the demand for new technologies to produce clean energy sources and decrease the environmental impacts caused by petroleum-based fuel. Keyword analysis revealed that the studies focused on the operational parameters, process optimization, pretreatment, and microbial community, aiming to increase the hydrog",
+              "score": 0.015384615384615385
+            },
+            {
+              "document_id": "WOS000456355700026.bib",
+              "chunk_id": 2,
+              "full_id": "doc-WOS000456355700026.bib-chunk-2",
+              "offset": 1500,
+              "text": "ublications LLC. Published by Elsevier Ltd. All rights reserved.},\n\tAffiliation = {Escobar-Alarcon, L., Inst Nacl Invest Nucl, Dept Fis, Carr Mexico Toluca S-n La Marquesa, Ocoyoacac 52750, Edo De Mexico, Mexico\nIturbe-Garcia, J. L., Inst Nacl Invest Nucl, Dept Quim, Carr Mexico Toluca S-n La Marquesa, Ocoyoacac 52750, Edo De Mexico, Mexico\nGonzalez-Zavala, F., Univ Autonoma Metropolitana Iztapalapa, Dept Fis, Apdo Postal 55-534, Cdmx, Mexico\nHaro-Poniatowski, E., Univ Autonoma Metropolitana Iztapalapa, Dept Fis, Apdo Postal 55-534, Cdmx, Mexico\nSolis-Casados, D. A., Univ Autonoma Estado Mexico, Fac Quim, Toluca 50120, Estado De Mexic, Mexico\nPerez-Hernandez, R., Inst Nacl Invest Nucl, Dept Tecnol Mat, Carr Mexico Toluca S-n La Marquesa, Ocoyoacac 52750, Edo De Mexico, Mexico}\n}",
+              "score": 0.015384615384615385
+            },
+            {
+              "document_id": "WOS001127257400001.bib",
+              "offset": 0,
+              "score": 0.015151515151515152,
+              "text": "@article{WOS:001127257400001,\n\tAuthor = {Kirillov, I. A. and Kharitonova, N. L. and Simonenko, V. A. and Kryukov, V. M.},\n\tYear = {2023},\n\tTitle = {Development of approaches to regulatory safety in industrial water-electrolysis production of hydrogen at NPPs},\n\tJournal = {ATOMIC ENERGY},\n\tDOI = {10.1007/s10512-023-01035-x},\n\tWeb-Of-Science-Categories = {Nuclear Science \\& Technology},\n\tAbstract = {The article discusses the location of additional electrolysis production of hydrogen at the site of contemporary NPPs as one of the most promising areas in terms of nuclear-hydrogen energy development. The study aims to assess the possibility of applying the requirements of current legal documents to the regulation of hydrogen fire and explosion safety when locating hydrogen electrolysis production complexes at the NPP site. The regulatory documents applicable to the safety regulation in the industrial production of hydrogen at existing NPPs, including the electrolysis, compression, liquefaction, storage, pre-transportation, transportation, and supplying large volumes of product hydrogen to consumers, are analyzed. The limitations of the regulatory legal framework, including in the field of safety for such a location of the hydrogen production are noted, along with the need for its improvement. Recommendations and proposals are formulated to clarify and/or supplement the requirements of documents regulating hydrogen fire and explosion safety for hydrogen electrolysis production complexes at NPPs.},\n\tAffiliation = {Kirillov, I. A., NRC Kurchatovsky Inst, Moscow, Russia\nKharitonova, N. L., NRC Kurchatovsky Inst, Moscow, Russia\nSimonenko, V. A., RFNC, VNIITF, FSUE, Snezhinsk, Russia\nKryukov, V. M., RFNC, VNIITF, FSUE, Snezhinsk, Russia}\n}"
+            }
+          ]
+        }
+      }
+    },
+    "parent": "gensym#forest-node:4439d69d-dc19-4cc7-864f-4c07c55ce7cb",
+    "children": [
+      "gensym#forest-node:4272914f-ef4c-4b8e-86e7-59517ed02a24"
+    ]
+  },
+  "gensym#forest-node:4272914f-ef4c-4b8e-86e7-59517ed02a24": {
+    "id": "gensym#forest-node:4272914f-ef4c-4b8e-86e7-59517ed02a24",
+    "timestamp": 1785279284293251379,
+    "active_revision": 1,
+    "next_free_revision": 2,
+    "revision_names": {},
+    "data": {
+      "1": {
+        "message": {
+          "role": "tool",
+          "content": [
+            {
+              "type": "text",
+              "text": "[System information: Document 'WOS000299647700011.bib', characters 0 to 1000 of 1641 total.]\n\n@article{WOS:000299647700011,\n\tAuthor = {Qian, Chun-xiang and Chen, Lu-yuan and Rong, Hui and Yuan, Xiao-ming},\n\tYear = {2011},\n\tTitle = {Hydrogen production by mixed culture of several facultative bacteria and anaerobic bacteria},\n\tJournal = {PROGRESS IN NATURAL SCIENCE-MATERIALS INTERNATIONAL},\n\tVolume = {21},\n\tNumber = {6},\n\tPages = {506-511},\n\tDOI = {10.1016/S1002-0071(12)60090-2},\n\tWeb-Of-Science-Categories = {Materials Science, Multidisciplinary; Multidisciplinary Sciences},\n\tAbstract = {The characteristic of hydrogen production by facultative anaerobic bacteria, obligate anaerobic bacteria and their mixed culture was studied by the batch culture method. The results showed that, due to the synergistic effect between facultative bacteria and anaerobic bacteria, the ability of hydrogen production in the mixed culture was much better than that in the pure culture. Especially, the culture Scheme No.7 mixed up with three strains (Bacterium.E: Bacterium.B: Bacterium.P = 1:1:1) not only"
+            }
+          ],
+          "tool_calls": [],
+          "tool_call_id": "XaP7J4fcpdOrq6V3Z5918CHqkwC53J22"
+        },
+        "general_metadata": {
+          "timestamp": 1785279284293164578,
+          "datetime": "2026-07-29 01:54:44",
+          "persona": null
+        },
+        "generation_metadata": {
+          "status": "success",
+          "function_name": "fetch_document",
+          "dt": 4.7722998715471476e-05,
+          "grounding": true,
+          "document_ids": [
+            "WOS000299647700011.bib"
+          ]
+        }
+      }
+    },
+    "parent": "gensym#forest-node:6396dd8d-5c7d-4c03-8641-967a30ac08c3",
+    "children": [
+      "gensym#forest-node:23058d84-3e58-4867-8026-c4bb31ab77ed"
+    ]
+  },
+  "gensym#forest-node:23058d84-3e58-4867-8026-c4bb31ab77ed": {
+    "id": "gensym#forest-node:23058d84-3e58-4867-8026-c4bb31ab77ed",
+    "timestamp": 1785279295891162180,
+    "active_revision": 1,
+    "next_free_revision": 2,
+    "revision_names": {},
+    "data": {
+      "1": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": ""
+            }
+          ],
+          "tool_calls": [
+            {
+              "type": "function",
+              "function": {
+                "name": "fetch_document",
+                "arguments": "{\"document_id\":\"WOS000318348800002.bib\",\"length\":1000}"
+              },
+              "id": "D1kLU6LwMt8E59PZ6CWkOxo3rtw6qt17",
+              "index": "0"
+            }
+          ],
+          "reasoning_content": "The user is asking \"Which of those documents said that, and what else does it say?\". I previously generated a detailed summary of hydrogen production by anaerobic bacteria without explicitly referencing the specific documents in the user's database. The user is now rightfully asking for the source and additional details from those specific documents.\n\nI have already fetched `WOS001149136800001.bib` (Sim et al., 2023), `WOS000536914300001.bib` (Zhu et al., 2020), and `WOS000299647700011.bib` (Qian et al., 2011).\nI need to fetch the remaining documents from the `list_consulted_documents` list to answer the user's question accurately based on the provided text.\n\nList of documents to fetch:\n- WOS000071012600006.bib (Kataoka et al., 1997)\n- WOSA1993NC44500012.bib (Nakamura et al., 1993)\n- WOS000072836900003.bib (Nandi and Sengupta, 1998)\n- WOS000318348800002.bib (Saripan and Reungsang, 2013)\n- WOS000305106300017.bib (Kobayashi et al., 2012)\n- WOS000373552100006.bib (Li et al., 2016)\n- WOS000250900700025.bib (Li et al., 2007)\n\nI will fetch them in batches or sequentially. Since I can only make one tool call at a time in this turn (or I can try parallel if supported, but the instructions say \"If you call a tool... You are not required to wait for tool output before continuing\". I will fetch them one by one or in a small batch to be safe and manage the response properly). Actually, I can just fetch a few key ones that match the specific claims I made earlier.\n\nMy previous claims were:\n1. Strict vs facultative anaerobes (*Clostridia*, *Enterobacter*, *Thermotoga*, *Thermoanaerobacterium*). -> Covered by Sim et al. (WOS001149136800001) and Qian et al. (WOS000299647700011).\n2. Redox potential control. -> Covered by Sim et al.\n3. Thermophilic bacteria (*T. thermosaccharolyticum*) at 55\u00b0C, pH 6.5. -> Likely in Saripan and Reungsang (WOS000318348800002).\n4. VFA production order (acetic, n-butyric, etc.). -> Likely in Nakamura (WOSA1993NC44500012) or Nandi (WOS000072836900003).\n5. Yields (1.3-2.2 mol/mol glucose, <50% theoretical). -> Likely in Sim et al. or Nandi.\n6. Mixed cultures produce more than pure cultures. -> Covered by Qian et al.\n7. Phototrophic bacteria (*Rhodobacter sphaeroides*) consuming acetate. -> Covered by Kobayashi et al. (WOS000305106300017).\n8. Substrates: molasses, xylose, arabinose. -> Covered by Saripan (WOS000318348800002) and Li et al. (WOS000250900700025).\n9. Micro-aerobic conditions. -> Covered by Li et al. (WOS000373552100006).\n\nI will fetch the remaining relevant documents to get the exact quotes/details for the specific claims.\n"
+        },
+        "general_metadata": {
+          "timestamp": 1785279295891010912,
+          "datetime": "2026-07-29 01:54:55",
+          "persona": "Aria"
+        },
+        "generation_metadata": {
+          "model": "qwen3.6-35b-a3b, IQ4_NL_XL, 128 Ki context",
+          "n_tokens": 1047,
+          "dt": 11.57305892399745,
+          "grounded": true
+        },
+        "retrieval": {
+          "query": "Which of those documents said that, and what else does it say?",
+          "results": [
+            {
+              "document_id": "WOS001154258100001.bib",
+              "chunk_id": 2,
+              "full_id": "doc-WOS001154258100001.bib-chunk-2",
+              "offset": 1500,
+              "text": "ciency of 14.41 \\%. A favorable LCOH of 2.22 $/kg found in Ras-Garb, in northeastern Egypt. This study could guide authorities in developing various national-scale hydrogen production systems since it outlines the techno-economic features of various scenarios across the country. Additionally, the effectiveness of the suggested system is evaluated against existing literature.},\n\tAffiliation = {Elminshawy, Nabil A. S., Port Said Univ, Fac Engn, Mech Power Dept, Port Said, Egypt\nDiab, Sodfa, Port Said Univ, Fac Engn, Mech Power Dept, Port Said, Egypt\nYassen, Yassen El. S., Port Said Univ, Fac Engn, Mech Power Dept, Port Said, Egypt\nElbaksawi, Osama, Port Said Univ, Fac Engn, Elect Engn Dept, Port Said, Egypt}\n}",
+              "score": 0.01639344262295082
+            },
+            {
+              "document_id": "WOS000857911000001.bib",
+              "chunk_id": 0,
+              "full_id": "doc-WOS000857911000001.bib-chunk-0",
+              "offset": 0,
+              "text": "@article{WOS:000857911000001,\n\tAuthor = {Talus, Kim and Martin, Maxwell},\n\tYear = {2022},\n\tTitle = {A guide to hydrogen legislation in the USA: a renewed effort},\n\tJournal = {JOURNAL OF WORLD ENERGY LAW \\& BUSINESS},\n\tVolume = {15},\n\tNumber = {6},\n\tPages = {449-461},\n\tDOI = {10.1093/jwelb/jwac029},\n\tWeb-Of-Science-Categories = {Business; Law},\n\tAbstract = {This article will discuss how hydrogen-based energy could resolve green-energy uptake issues in the USA. In doing so, this article will first present the unique characteristics of hydrogen and its production methods. Next, this article will detail prior US hydrogen policy which often focused on research and development (R\\&D) rather than implementation strategies. Later, this paper will delve into the Biden Administration's recent legislation Infrastructure and Jobs Act (IJA) and the Inflation Reduction Act (IRA) and the hydrogen production incentivization policies enacted. And last, this article will delve into issues that were not resolved by the recent legislation.},\n\tAffiliation = {Talus, Kim, Tulane Law Sch, Tulane Ctr Energy Law, New Orleans, LA 70118 USA. Univ Eastern Finland, UEF Law Sch, European Energy Law, Kuopio, Finland. Univ Helsinki, Energy Law, Helsinki, Finland. Tulane Law Sch, Energy Law, New Orleans, LA 70118 USA\nMartin, Maxwell, Tulane Univ, Law Sch, New Orleans, LA 70118 USA}\n}",
+              "score": 0.01639344262295082
+            },
+            {
+              "document_id": "WOS001080111700003.bib",
+              "chunk_id": 2,
+              "full_id": "doc-WOS001080111700003.bib-chunk-2",
+              "offset": 1500,
+              "text": "the bankable biomass-toH2 processes flow diagrams in terms of the circular economy were additionally highlighted in order to effectively value the biomass supply chains to produce H2. Hopefully, this work presents a more favorable theoretical indepth mechanistic understanding of the bio-sourced hydrogen's different production pathways.},\n\tAffiliation = {Eloffy, M. G., Natl Inst Oceanog \\& Fisheries NIOF, Cairo, Egypt\nEl-Sherif, Dina M., Natl Inst Oceanog \\& Fisheries NIOF, Cairo, Egypt\nElgarahy, Ahmed M., Port Said Univ, Fac Sci, Environm Sci Dept, Environm Chem Div, Port Said, Egypt. Egyptian Propylene \\& Polypropylene Co EPPC, Port Said, Egypt\nElwakeel, Khalid Z., Port Said Univ, Fac Sci, Environm Sci Dept, Environm Chem Div, Port Said, Egypt. Univ Jeddah, Coll Sci, Dept Chem, Jeddah, Saudi Arabia\nSaber, Ayman N., Agr Res Ctr, Pesticide Residues \\& Environm Pollut Dept, Cent Agr Pesticide Lab, Giza 12618, Egypt\nHammad, Ahmed, Port Said Univ, Fac Engn, Chem Engn Dept, Port Said, Egypt\nShehata, Moustafa, Port Said Univ, Fac Engn, Mech Power Engn Dept, Port Said, Egypt\nMohsen, Ahmed, United Gas Derivat Co UGDC, Port Said, Egypt}\n}",
+              "score": 0.016129032258064516
+            },
+            {
+              "document_id": "WOS000345192300001.bib",
+              "chunk_id": 2,
+              "full_id": "doc-WOS000345192300001.bib-chunk-2",
+              "offset": 1500,
+              "text": "needs further investigation. Copyright (C) 2014, Hydrogen Energy Publications, LLC. Published by Elsevier Ltd. All rights reserved.},\n\tAffiliation = {Hou, Huijie, Penn State Univ, Dept Civil \\& Environm Engn, University Pk, PA 16801 USA\nLiu, Jia, Penn State Univ, Dept Civil \\& Environm Engn, University Pk, PA 16801 USA\nZhu, Xiuping, Penn State Univ, Dept Civil \\& Environm Engn, University Pk, PA 16801 USA\nLogan, Bruce E., Penn State Univ, Dept Civil \\& Environm Engn, University Pk, PA 16801 USA\nChen, Xiaofen, Univ Calif Santa Barbara, Dept Chem \\& Biochem, Santa Barbara, CA 93106 USA\nBazan, Guillermo C., Univ Calif Santa Barbara, Dept Chem \\& Biochem, Santa Barbara, CA 93106 USA}\n}",
+              "score": 0.016129032258064516
+            },
+            {
+              "document_id": "WOS000842874500001.bib",
+              "offset": 750,
+              "score": 0.015873015873015872,
+              "text": "y generated by reforming of fossil fuels, calling for cleaner methods of dihydrogen production. Here we review dihydrogen production from wastewater with focus on biological methods, electrochemical methods, dihydrogen storage, techno-economic aspects, governance and applications. Methods include fermentation, photolysis, photocatalysis, electrolysis and supercritical water gasification. Applications comprise refining crude oil, ammonia production, the food industry, metal extraction, pharmaceuticals, fuel cells, combustion engines, power generation and energy carrier.},\n\tAffiliation = {Elgarahy, Ahmed M., Port Said Univ, Fac Sci, Environm Sci Dept, Environm Chem Div, Port Said, Egypt. Egyptian Propylene \\& Polypropylene Co EPPC, Port Said, Egypt\nElwakeel, Khalid Z., Port Said Univ, Fac Sci, Environm Sci Dept, Environm Chem Div, Port Said, Egypt. Univ Jeddah, Coll Sci, Dept Chem, Jeddah, Saudi Arabia\nEloffy, M. G., Natl Inst Oceanog \\& Fisheries, Cairo, Egypt\nEl-Sherif, Dina M., Natl Inst Oceanog \\& Fisheries, Cairo, Egypt\nHammad, Ahmed, Port Said Univ, Fac Engn, Chem Engn Dept, Port Said, Egypt\nSaber, Ayman N., Agr Res Ctr, Pesticide Residues \\& Environm Pollut Dept, Cent Agr Pesticide Lab, Giza 12618, Egypt\nMohsen, Ahmed, United Gas Derivat Co UGDC, Operat Dept, Port Said NGL Plant, Port Said Damietta Int Coastal Rd, Port Said, Egypt\nAbouzid, Mohamed, Poznan Univ Med Sci, Dept Phys Pharm \\& Pharmacokinet, 6 Swiecickiego St, PL-60781 Poznan, Poland}\n}"
+            },
+            {
+              "document_id": "WOS000607467900013.bib",
+              "chunk_id": 2,
+              "full_id": "doc-WOS000607467900013.bib-chunk-2",
+              "offset": 1500,
+              "text": "ed by Elsevier Ltd on behalf of Hydrogen Energy Publications LLC.},\n\tAffiliation = {Touloupakis, Eleftherios, CNR, Ist Ric Ecosistemi Terrestri, Via Madonna Piano 10, I-50019 Sesto Fiorentino, Italy\nFaraloni, Cecilia, CNR, Ist Bioecon, Via Madonna Piano 10, I-50019 Florence, Italy\nTorzillo, Giuseppe, Univ Costa Rica, Ctr Invest Ciencias Mar \\& Limnol, San Jose 2060, Costa Rica. CNR, Ist Bioecon, Via Madonna Piano 10, I-50019 Florence, Italy\nSilva Benavides, Ana Margarita, Univ Costa Rica, Ctr Invest Ciencias Mar \\& Limnol, San Jose 2060, Costa Rica. Univ Costa Rica, Escuela Biol, San Jose 2060, Costa Rica\nMasojidek, Jiri, Czech Acad Sci, Ctr Algatech, Inst Microbiol, Lab Algal Biotechnol, CZ-37981 Trebon, Czech Republic}\n}",
+              "score": 0.015873015873015872
+            },
+            {
+              "document_id": "WOS000981765200001.bib",
+              "chunk_id": 2,
+              "full_id": "doc-WOS000981765200001.bib-chunk-2",
+              "offset": 1500,
+              "text": "ction.(c) 2023 The Authors. Published by Elsevier Ltd on behalf of Hydrogen Energy Publications LLC. This is an open access article under the CC BY-NC-ND license (http:// creativecommons.org/licenses/by-nc-nd/4.0/).},\n\tAffiliation = {Zheng, Lei, Politecn Milan, Dipartimento Energia, Lab Catalysis \\& Catalyt Proc, Via Lambruschini 4, I-20156 Milan, Italy\nAmbrosetti, Matteo, Politecn Milan, Dipartimento Energia, Lab Catalysis \\& Catalyt Proc, Via Lambruschini 4, I-20156 Milan, Italy\nZaio, Francesca, Politecn Milan, Dipartimento Energia, Lab Catalysis \\& Catalyt Proc, Via Lambruschini 4, I-20156 Milan, Italy\nBeretta, Alessandra, Politecn Milan, Dipartimento Energia, Lab Catalysis \\& Catalyt Proc, Via Lambruschini 4, I-20156 Milan, Italy\nGroppi, Gianpiero, Politecn Milan, Dipartimento Energia, Lab Catalysis \\& Catalyt Proc, Via Lambruschini 4, I-20156 Milan, Italy\nTronconi, Enrico, Politecn Milan, Dipartimento Energia, Lab Catalysis \\& Catalyt Proc, Via Lambruschini 4, I-20156 Milan, Italy}\n}",
+              "score": 0.015625
+            },
+            {
+              "document_id": "WOS000864187600008.bib",
+              "chunk_id": 1,
+              "full_id": "doc-WOS000864187600008.bib-chunk-1",
+              "offset": 750,
+              "text": " in choosing the best technological route for the recovery of renewable and cost-effective hydrogen. Therefore, this bibliometric review evaluated the research progress, trends, updates, and hotspots on hydrogen production from dark fermentation. The Web of Science(C) database was used to select the documents from 2000 to 2021, and the VOSviewer(C) and Bibliometrix softwares were used to carry out the bibliometric investigation. The results demonstrated that 3071 documents (2755 articles and 316 reviews) studied the hydrogen production from dark fermentation over the last 21 years. The number of publications exponentially increased in the last five years, which can be associated with the demand for new technologies to produce clean energy sources and decrease the environmental impacts caused by petroleum-based fuel. Keyword analysis revealed that the studies focused on the operational parameters, process optimization, pretreatment, and microbial community, aiming to increase the hydrog",
+              "score": 0.015384615384615385
+            },
+            {
+              "document_id": "WOS000456355700026.bib",
+              "chunk_id": 2,
+              "full_id": "doc-WOS000456355700026.bib-chunk-2",
+              "offset": 1500,
+              "text": "ublications LLC. Published by Elsevier Ltd. All rights reserved.},\n\tAffiliation = {Escobar-Alarcon, L., Inst Nacl Invest Nucl, Dept Fis, Carr Mexico Toluca S-n La Marquesa, Ocoyoacac 52750, Edo De Mexico, Mexico\nIturbe-Garcia, J. L., Inst Nacl Invest Nucl, Dept Quim, Carr Mexico Toluca S-n La Marquesa, Ocoyoacac 52750, Edo De Mexico, Mexico\nGonzalez-Zavala, F., Univ Autonoma Metropolitana Iztapalapa, Dept Fis, Apdo Postal 55-534, Cdmx, Mexico\nHaro-Poniatowski, E., Univ Autonoma Metropolitana Iztapalapa, Dept Fis, Apdo Postal 55-534, Cdmx, Mexico\nSolis-Casados, D. A., Univ Autonoma Estado Mexico, Fac Quim, Toluca 50120, Estado De Mexic, Mexico\nPerez-Hernandez, R., Inst Nacl Invest Nucl, Dept Tecnol Mat, Carr Mexico Toluca S-n La Marquesa, Ocoyoacac 52750, Edo De Mexico, Mexico}\n}",
+              "score": 0.015384615384615385
+            },
+            {
+              "document_id": "WOS001127257400001.bib",
+              "offset": 0,
+              "score": 0.015151515151515152,
+              "text": "@article{WOS:001127257400001,\n\tAuthor = {Kirillov, I. A. and Kharitonova, N. L. and Simonenko, V. A. and Kryukov, V. M.},\n\tYear = {2023},\n\tTitle = {Development of approaches to regulatory safety in industrial water-electrolysis production of hydrogen at NPPs},\n\tJournal = {ATOMIC ENERGY},\n\tDOI = {10.1007/s10512-023-01035-x},\n\tWeb-Of-Science-Categories = {Nuclear Science \\& Technology},\n\tAbstract = {The article discusses the location of additional electrolysis production of hydrogen at the site of contemporary NPPs as one of the most promising areas in terms of nuclear-hydrogen energy development. The study aims to assess the possibility of applying the requirements of current legal documents to the regulation of hydrogen fire and explosion safety when locating hydrogen electrolysis production complexes at the NPP site. The regulatory documents applicable to the safety regulation in the industrial production of hydrogen at existing NPPs, including the electrolysis, compression, liquefaction, storage, pre-transportation, transportation, and supplying large volumes of product hydrogen to consumers, are analyzed. The limitations of the regulatory legal framework, including in the field of safety for such a location of the hydrogen production are noted, along with the need for its improvement. Recommendations and proposals are formulated to clarify and/or supplement the requirements of documents regulating hydrogen fire and explosion safety for hydrogen electrolysis production complexes at NPPs.},\n\tAffiliation = {Kirillov, I. A., NRC Kurchatovsky Inst, Moscow, Russia\nKharitonova, N. L., NRC Kurchatovsky Inst, Moscow, Russia\nSimonenko, V. A., RFNC, VNIITF, FSUE, Snezhinsk, Russia\nKryukov, V. M., RFNC, VNIITF, FSUE, Snezhinsk, Russia}\n}"
+            }
+          ]
+        }
+      }
+    },
+    "parent": "gensym#forest-node:4272914f-ef4c-4b8e-86e7-59517ed02a24",
+    "children": [
+      "gensym#forest-node:6d3703fd-cbf5-4cc1-85b2-6b089f6e1e1d"
+    ]
+  },
+  "gensym#forest-node:6d3703fd-cbf5-4cc1-85b2-6b089f6e1e1d": {
+    "id": "gensym#forest-node:6d3703fd-cbf5-4cc1-85b2-6b089f6e1e1d",
+    "timestamp": 1785279295891639844,
+    "active_revision": 1,
+    "next_free_revision": 2,
+    "revision_names": {},
+    "data": {
+      "1": {
+        "message": {
+          "role": "tool",
+          "content": [
+            {
+              "type": "text",
+              "text": "[System information: Document 'WOS000318348800002.bib', characters 0 to 1000 of 2176 total.]\n\n@article{WOS:000318348800002,\n\tAuthor = {Saripan, Arunsri Fangkum and Reungsang, Alissara},\n\tYear = {2013},\n\tTitle = {Biohydrogen production by <i>Thermoanaerobacterium thermosaccharolyticum</i> KKU-ED1: Culture conditions optimization using mixed xylose/arabinose as substrate},\n\tJournal = {ELECTRONIC JOURNAL OF BIOTECHNOLOGY},\n\tVolume = {16},\n\tNumber = {1},\n\tDOI = {10.2225/vol16-issue1-fulltext-1},\n\tWeb-Of-Science-Categories = {Biotechnology \\& Applied Microbiology},\n\tAbstract = {Background: Biological hydrogen production by microorganisms can be divided into two main categories i.e. photosynthetic organisms that produce hydrogen using light as energy source and anaerobic bacteria that produce hydrogen via dark fermentation. Dark fermentative hydrogen production by anaerobic bacteria has the advantages of a higher HPR without illumination and of the capability to convert various kinds of substrate. Results: Thermophilic hydrogen producer was isolated from elephant dung and identified "
+            }
+          ],
+          "tool_calls": [],
+          "tool_call_id": "D1kLU6LwMt8E59PZ6CWkOxo3rtw6qt17"
+        },
+        "general_metadata": {
+          "timestamp": 1785279295891571047,
+          "datetime": "2026-07-29 01:54:55",
+          "persona": null
+        },
+        "generation_metadata": {
+          "status": "success",
+          "function_name": "fetch_document",
+          "dt": 5.6712000514380634e-05,
+          "grounding": true,
+          "document_ids": [
+            "WOS000318348800002.bib"
+          ]
+        }
+      }
+    },
+    "parent": "gensym#forest-node:23058d84-3e58-4867-8026-c4bb31ab77ed",
+    "children": [
+      "gensym#forest-node:cdf7e72e-3d0d-4136-82c4-d7ce11546bcf"
+    ]
+  },
+  "gensym#forest-node:cdf7e72e-3d0d-4136-82c4-d7ce11546bcf": {
+    "id": "gensym#forest-node:cdf7e72e-3d0d-4136-82c4-d7ce11546bcf",
+    "timestamp": 1785279306336223076,
+    "active_revision": 1,
+    "next_free_revision": 2,
+    "revision_names": {},
+    "data": {
+      "1": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": ""
+            }
+          ],
+          "tool_calls": [
+            {
+              "type": "function",
+              "function": {
+                "name": "fetch_document",
+                "arguments": "{\"document_id\":\"WOS000071012600006.bib\",\"length\":1000}"
+              },
+              "id": "MUnQtk8FUOjyeGAzAcpFArEkaFNZn30C",
+              "index": "0"
+            }
+          ],
+          "reasoning_content": "The user is asking which of the *documents in the local database* contained the information I provided in my first response, and what else those documents say.\n\nMy first response was actually a hallucination/synthesis based on general training data because I didn't actually check the documents before answering. The user is now rightfully asking for the source and what else they say.\n\nI have already fetched:\n- `WOS001149136800001.bib` (Sim et al., 2023) - Mentions redox potential, strict/facultative anaerobes (Clostridia, Enterobacter, Thermotoga, Thermoanaerobacterium), dark fermentation.\n- `WOS000536914300001.bib` (Zhu et al., 2020) - Discusses endogenous/exogenous hydrogen in biogas, syntrophic interactions.\n- `WOS000299647700011.bib` (Qian et al., 2011) - Mixed culture of facultative and anaerobic bacteria, synergistic effects.\n- `WOS000318348800002.bib` (Saripan and Reungsang, 2013) - *Thermoanaerobacterium thermosaccharolyticum*, dark fermentation vs photosynthetic, mixed xylose/arabinose.\n\nI need to fetch the rest of the documents from the `list_consulted_documents` to see which ones match the specific points I made (like yields, pH, temperature, substrates, etc.) and answer the user's question accurately based on the text.\n\nThe list of consulted documents is:\n1. `WOS001149136800001.bib` (Sim et al., 2023)\n2. `WOS000536914300001.bib` (Zhu et al., 2020)\n3. `WOS000299647700011.bib` (Qian et al., 2011)\n4. `WOS000071012600006.bib` (Kataoka et al., 1997)\n5. `WOSA1993NC44500012.bib` (Nakamura et al., 1993)\n6. `WOS000072836900003.bib` (Nandi and Sengupta, 1998)\n7. `WOS000318348800002.bib` (Saripan and Reungsang, 2013)\n8. `WOS000305106300017.bib` (Kobayashi et al., 2012)\n9. `WOS000373552100006.bib` (Li et al., 2016)\n10. `WOS000250900700025.bib` (Li et al., 2007)\n\nI will fetch the abstracts for the remaining ones to see which specific claims match which documents.\n"
+        },
+        "general_metadata": {
+          "timestamp": 1785279306336043852,
+          "datetime": "2026-07-29 01:55:06",
+          "persona": "Aria"
+        },
+        "generation_metadata": {
+          "model": "qwen3.6-35b-a3b, IQ4_NL_XL, 128 Ki context",
+          "n_tokens": 832,
+          "dt": 9.812365866004257,
+          "grounded": true
+        },
+        "retrieval": {
+          "query": "Which of those documents said that, and what else does it say?",
+          "results": [
+            {
+              "document_id": "WOS001154258100001.bib",
+              "chunk_id": 2,
+              "full_id": "doc-WOS001154258100001.bib-chunk-2",
+              "offset": 1500,
+              "text": "ciency of 14.41 \\%. A favorable LCOH of 2.22 $/kg found in Ras-Garb, in northeastern Egypt. This study could guide authorities in developing various national-scale hydrogen production systems since it outlines the techno-economic features of various scenarios across the country. Additionally, the effectiveness of the suggested system is evaluated against existing literature.},\n\tAffiliation = {Elminshawy, Nabil A. S., Port Said Univ, Fac Engn, Mech Power Dept, Port Said, Egypt\nDiab, Sodfa, Port Said Univ, Fac Engn, Mech Power Dept, Port Said, Egypt\nYassen, Yassen El. S., Port Said Univ, Fac Engn, Mech Power Dept, Port Said, Egypt\nElbaksawi, Osama, Port Said Univ, Fac Engn, Elect Engn Dept, Port Said, Egypt}\n}",
+              "score": 0.01639344262295082
+            },
+            {
+              "document_id": "WOS000857911000001.bib",
+              "chunk_id": 0,
+              "full_id": "doc-WOS000857911000001.bib-chunk-0",
+              "offset": 0,
+              "text": "@article{WOS:000857911000001,\n\tAuthor = {Talus, Kim and Martin, Maxwell},\n\tYear = {2022},\n\tTitle = {A guide to hydrogen legislation in the USA: a renewed effort},\n\tJournal = {JOURNAL OF WORLD ENERGY LAW \\& BUSINESS},\n\tVolume = {15},\n\tNumber = {6},\n\tPages = {449-461},\n\tDOI = {10.1093/jwelb/jwac029},\n\tWeb-Of-Science-Categories = {Business; Law},\n\tAbstract = {This article will discuss how hydrogen-based energy could resolve green-energy uptake issues in the USA. In doing so, this article will first present the unique characteristics of hydrogen and its production methods. Next, this article will detail prior US hydrogen policy which often focused on research and development (R\\&D) rather than implementation strategies. Later, this paper will delve into the Biden Administration's recent legislation Infrastructure and Jobs Act (IJA) and the Inflation Reduction Act (IRA) and the hydrogen production incentivization policies enacted. And last, this article will delve into issues that were not resolved by the recent legislation.},\n\tAffiliation = {Talus, Kim, Tulane Law Sch, Tulane Ctr Energy Law, New Orleans, LA 70118 USA. Univ Eastern Finland, UEF Law Sch, European Energy Law, Kuopio, Finland. Univ Helsinki, Energy Law, Helsinki, Finland. Tulane Law Sch, Energy Law, New Orleans, LA 70118 USA\nMartin, Maxwell, Tulane Univ, Law Sch, New Orleans, LA 70118 USA}\n}",
+              "score": 0.01639344262295082
+            },
+            {
+              "document_id": "WOS001080111700003.bib",
+              "chunk_id": 2,
+              "full_id": "doc-WOS001080111700003.bib-chunk-2",
+              "offset": 1500,
+              "text": "the bankable biomass-toH2 processes flow diagrams in terms of the circular economy were additionally highlighted in order to effectively value the biomass supply chains to produce H2. Hopefully, this work presents a more favorable theoretical indepth mechanistic understanding of the bio-sourced hydrogen's different production pathways.},\n\tAffiliation = {Eloffy, M. G., Natl Inst Oceanog \\& Fisheries NIOF, Cairo, Egypt\nEl-Sherif, Dina M., Natl Inst Oceanog \\& Fisheries NIOF, Cairo, Egypt\nElgarahy, Ahmed M., Port Said Univ, Fac Sci, Environm Sci Dept, Environm Chem Div, Port Said, Egypt. Egyptian Propylene \\& Polypropylene Co EPPC, Port Said, Egypt\nElwakeel, Khalid Z., Port Said Univ, Fac Sci, Environm Sci Dept, Environm Chem Div, Port Said, Egypt. Univ Jeddah, Coll Sci, Dept Chem, Jeddah, Saudi Arabia\nSaber, Ayman N., Agr Res Ctr, Pesticide Residues \\& Environm Pollut Dept, Cent Agr Pesticide Lab, Giza 12618, Egypt\nHammad, Ahmed, Port Said Univ, Fac Engn, Chem Engn Dept, Port Said, Egypt\nShehata, Moustafa, Port Said Univ, Fac Engn, Mech Power Engn Dept, Port Said, Egypt\nMohsen, Ahmed, United Gas Derivat Co UGDC, Port Said, Egypt}\n}",
+              "score": 0.016129032258064516
+            },
+            {
+              "document_id": "WOS000345192300001.bib",
+              "chunk_id": 2,
+              "full_id": "doc-WOS000345192300001.bib-chunk-2",
+              "offset": 1500,
+              "text": "needs further investigation. Copyright (C) 2014, Hydrogen Energy Publications, LLC. Published by Elsevier Ltd. All rights reserved.},\n\tAffiliation = {Hou, Huijie, Penn State Univ, Dept Civil \\& Environm Engn, University Pk, PA 16801 USA\nLiu, Jia, Penn State Univ, Dept Civil \\& Environm Engn, University Pk, PA 16801 USA\nZhu, Xiuping, Penn State Univ, Dept Civil \\& Environm Engn, University Pk, PA 16801 USA\nLogan, Bruce E., Penn State Univ, Dept Civil \\& Environm Engn, University Pk, PA 16801 USA\nChen, Xiaofen, Univ Calif Santa Barbara, Dept Chem \\& Biochem, Santa Barbara, CA 93106 USA\nBazan, Guillermo C., Univ Calif Santa Barbara, Dept Chem \\& Biochem, Santa Barbara, CA 93106 USA}\n}",
+              "score": 0.016129032258064516
+            },
+            {
+              "document_id": "WOS000842874500001.bib",
+              "offset": 750,
+              "score": 0.015873015873015872,
+              "text": "y generated by reforming of fossil fuels, calling for cleaner methods of dihydrogen production. Here we review dihydrogen production from wastewater with focus on biological methods, electrochemical methods, dihydrogen storage, techno-economic aspects, governance and applications. Methods include fermentation, photolysis, photocatalysis, electrolysis and supercritical water gasification. Applications comprise refining crude oil, ammonia production, the food industry, metal extraction, pharmaceuticals, fuel cells, combustion engines, power generation and energy carrier.},\n\tAffiliation = {Elgarahy, Ahmed M., Port Said Univ, Fac Sci, Environm Sci Dept, Environm Chem Div, Port Said, Egypt. Egyptian Propylene \\& Polypropylene Co EPPC, Port Said, Egypt\nElwakeel, Khalid Z., Port Said Univ, Fac Sci, Environm Sci Dept, Environm Chem Div, Port Said, Egypt. Univ Jeddah, Coll Sci, Dept Chem, Jeddah, Saudi Arabia\nEloffy, M. G., Natl Inst Oceanog \\& Fisheries, Cairo, Egypt\nEl-Sherif, Dina M., Natl Inst Oceanog \\& Fisheries, Cairo, Egypt\nHammad, Ahmed, Port Said Univ, Fac Engn, Chem Engn Dept, Port Said, Egypt\nSaber, Ayman N., Agr Res Ctr, Pesticide Residues \\& Environm Pollut Dept, Cent Agr Pesticide Lab, Giza 12618, Egypt\nMohsen, Ahmed, United Gas Derivat Co UGDC, Operat Dept, Port Said NGL Plant, Port Said Damietta Int Coastal Rd, Port Said, Egypt\nAbouzid, Mohamed, Poznan Univ Med Sci, Dept Phys Pharm \\& Pharmacokinet, 6 Swiecickiego St, PL-60781 Poznan, Poland}\n}"
+            },
+            {
+              "document_id": "WOS000607467900013.bib",
+              "chunk_id": 2,
+              "full_id": "doc-WOS000607467900013.bib-chunk-2",
+              "offset": 1500,
+              "text": "ed by Elsevier Ltd on behalf of Hydrogen Energy Publications LLC.},\n\tAffiliation = {Touloupakis, Eleftherios, CNR, Ist Ric Ecosistemi Terrestri, Via Madonna Piano 10, I-50019 Sesto Fiorentino, Italy\nFaraloni, Cecilia, CNR, Ist Bioecon, Via Madonna Piano 10, I-50019 Florence, Italy\nTorzillo, Giuseppe, Univ Costa Rica, Ctr Invest Ciencias Mar \\& Limnol, San Jose 2060, Costa Rica. CNR, Ist Bioecon, Via Madonna Piano 10, I-50019 Florence, Italy\nSilva Benavides, Ana Margarita, Univ Costa Rica, Ctr Invest Ciencias Mar \\& Limnol, San Jose 2060, Costa Rica. Univ Costa Rica, Escuela Biol, San Jose 2060, Costa Rica\nMasojidek, Jiri, Czech Acad Sci, Ctr Algatech, Inst Microbiol, Lab Algal Biotechnol, CZ-37981 Trebon, Czech Republic}\n}",
+              "score": 0.015873015873015872
+            },
+            {
+              "document_id": "WOS000981765200001.bib",
+              "chunk_id": 2,
+              "full_id": "doc-WOS000981765200001.bib-chunk-2",
+              "offset": 1500,
+              "text": "ction.(c) 2023 The Authors. Published by Elsevier Ltd on behalf of Hydrogen Energy Publications LLC. This is an open access article under the CC BY-NC-ND license (http:// creativecommons.org/licenses/by-nc-nd/4.0/).},\n\tAffiliation = {Zheng, Lei, Politecn Milan, Dipartimento Energia, Lab Catalysis \\& Catalyt Proc, Via Lambruschini 4, I-20156 Milan, Italy\nAmbrosetti, Matteo, Politecn Milan, Dipartimento Energia, Lab Catalysis \\& Catalyt Proc, Via Lambruschini 4, I-20156 Milan, Italy\nZaio, Francesca, Politecn Milan, Dipartimento Energia, Lab Catalysis \\& Catalyt Proc, Via Lambruschini 4, I-20156 Milan, Italy\nBeretta, Alessandra, Politecn Milan, Dipartimento Energia, Lab Catalysis \\& Catalyt Proc, Via Lambruschini 4, I-20156 Milan, Italy\nGroppi, Gianpiero, Politecn Milan, Dipartimento Energia, Lab Catalysis \\& Catalyt Proc, Via Lambruschini 4, I-20156 Milan, Italy\nTronconi, Enrico, Politecn Milan, Dipartimento Energia, Lab Catalysis \\& Catalyt Proc, Via Lambruschini 4, I-20156 Milan, Italy}\n}",
+              "score": 0.015625
+            },
+            {
+              "document_id": "WOS000864187600008.bib",
+              "chunk_id": 1,
+              "full_id": "doc-WOS000864187600008.bib-chunk-1",
+              "offset": 750,
+              "text": " in choosing the best technological route for the recovery of renewable and cost-effective hydrogen. Therefore, this bibliometric review evaluated the research progress, trends, updates, and hotspots on hydrogen production from dark fermentation. The Web of Science(C) database was used to select the documents from 2000 to 2021, and the VOSviewer(C) and Bibliometrix softwares were used to carry out the bibliometric investigation. The results demonstrated that 3071 documents (2755 articles and 316 reviews) studied the hydrogen production from dark fermentation over the last 21 years. The number of publications exponentially increased in the last five years, which can be associated with the demand for new technologies to produce clean energy sources and decrease the environmental impacts caused by petroleum-based fuel. Keyword analysis revealed that the studies focused on the operational parameters, process optimization, pretreatment, and microbial community, aiming to increase the hydrog",
+              "score": 0.015384615384615385
+            },
+            {
+              "document_id": "WOS000456355700026.bib",
+              "chunk_id": 2,
+              "full_id": "doc-WOS000456355700026.bib-chunk-2",
+              "offset": 1500,
+              "text": "ublications LLC. Published by Elsevier Ltd. All rights reserved.},\n\tAffiliation = {Escobar-Alarcon, L., Inst Nacl Invest Nucl, Dept Fis, Carr Mexico Toluca S-n La Marquesa, Ocoyoacac 52750, Edo De Mexico, Mexico\nIturbe-Garcia, J. L., Inst Nacl Invest Nucl, Dept Quim, Carr Mexico Toluca S-n La Marquesa, Ocoyoacac 52750, Edo De Mexico, Mexico\nGonzalez-Zavala, F., Univ Autonoma Metropolitana Iztapalapa, Dept Fis, Apdo Postal 55-534, Cdmx, Mexico\nHaro-Poniatowski, E., Univ Autonoma Metropolitana Iztapalapa, Dept Fis, Apdo Postal 55-534, Cdmx, Mexico\nSolis-Casados, D. A., Univ Autonoma Estado Mexico, Fac Quim, Toluca 50120, Estado De Mexic, Mexico\nPerez-Hernandez, R., Inst Nacl Invest Nucl, Dept Tecnol Mat, Carr Mexico Toluca S-n La Marquesa, Ocoyoacac 52750, Edo De Mexico, Mexico}\n}",
+              "score": 0.015384615384615385
+            },
+            {
+              "document_id": "WOS001127257400001.bib",
+              "offset": 0,
+              "score": 0.015151515151515152,
+              "text": "@article{WOS:001127257400001,\n\tAuthor = {Kirillov, I. A. and Kharitonova, N. L. and Simonenko, V. A. and Kryukov, V. M.},\n\tYear = {2023},\n\tTitle = {Development of approaches to regulatory safety in industrial water-electrolysis production of hydrogen at NPPs},\n\tJournal = {ATOMIC ENERGY},\n\tDOI = {10.1007/s10512-023-01035-x},\n\tWeb-Of-Science-Categories = {Nuclear Science \\& Technology},\n\tAbstract = {The article discusses the location of additional electrolysis production of hydrogen at the site of contemporary NPPs as one of the most promising areas in terms of nuclear-hydrogen energy development. The study aims to assess the possibility of applying the requirements of current legal documents to the regulation of hydrogen fire and explosion safety when locating hydrogen electrolysis production complexes at the NPP site. The regulatory documents applicable to the safety regulation in the industrial production of hydrogen at existing NPPs, including the electrolysis, compression, liquefaction, storage, pre-transportation, transportation, and supplying large volumes of product hydrogen to consumers, are analyzed. The limitations of the regulatory legal framework, including in the field of safety for such a location of the hydrogen production are noted, along with the need for its improvement. Recommendations and proposals are formulated to clarify and/or supplement the requirements of documents regulating hydrogen fire and explosion safety for hydrogen electrolysis production complexes at NPPs.},\n\tAffiliation = {Kirillov, I. A., NRC Kurchatovsky Inst, Moscow, Russia\nKharitonova, N. L., NRC Kurchatovsky Inst, Moscow, Russia\nSimonenko, V. A., RFNC, VNIITF, FSUE, Snezhinsk, Russia\nKryukov, V. M., RFNC, VNIITF, FSUE, Snezhinsk, Russia}\n}"
+            }
+          ]
+        }
+      }
+    },
+    "parent": "gensym#forest-node:6d3703fd-cbf5-4cc1-85b2-6b089f6e1e1d",
+    "children": [
+      "gensym#forest-node:3cbccb4a-467d-4a7e-a8ee-d392344186f5"
+    ]
+  },
+  "gensym#forest-node:3cbccb4a-467d-4a7e-a8ee-d392344186f5": {
+    "id": "gensym#forest-node:3cbccb4a-467d-4a7e-a8ee-d392344186f5",
+    "timestamp": 1785279306336650492,
+    "active_revision": 1,
+    "next_free_revision": 2,
+    "revision_names": {},
+    "data": {
+      "1": {
+        "message": {
+          "role": "tool",
+          "content": [
+            {
+              "type": "text",
+              "text": "[System information: Document 'WOS000071012600006.bib', characters 0 to 1000 of 2163 total.]\n\n@article{WOS:000071012600006,\n\tAuthor = {Kataoka, N and Miya, A and Kiriyama, K},\n\tYear = {1997},\n\tTitle = {Studies on hydrogen production by continuous culture system of hydrogen-producing anaerobic bacteria},\n\tJournal = {WATER SCIENCE AND TECHNOLOGY},\n\tVolume = {36},\n\tNumber = {6-7},\n\tPages = {41-47},\n\tDOI = {10.1016/S0273-1223(97)00505-2},\n\tWeb-Of-Science-Categories = {Engineering, Environmental; Environmental Sciences; Water Resources},\n\tAbstract = {Characteristics of continuous hydrogen production and fatty acid formation by an active hydrogen-producing anaerobic bacterium, Clostridium butyricum strain SC-El, was examined under vacuum and non-vacuum culture systems. The continuous cultures were performed using 1040 ml anaerobic glass bottles containing 600 ml of medium including glucose and polypeptone at a concentration of 0.5 or 1.0\\% as substrate, and were conducted at pH 6.7, hydraulic retention time (HRT) 8h, and 30 degrees C on a reciprocal shaker. The nonvacuum cultures at "
+            }
+          ],
+          "tool_calls": [],
+          "tool_call_id": "MUnQtk8FUOjyeGAzAcpFArEkaFNZn30C"
+        },
+        "general_metadata": {
+          "timestamp": 1785279306336590909,
+          "datetime": "2026-07-29 01:55:06",
+          "persona": null
+        },
+        "generation_metadata": {
+          "status": "success",
+          "function_name": "fetch_document",
+          "dt": 5.0940994697157294e-05,
+          "grounding": true,
+          "document_ids": [
+            "WOS000071012600006.bib"
+          ]
+        }
+      }
+    },
+    "parent": "gensym#forest-node:cdf7e72e-3d0d-4136-82c4-d7ce11546bcf",
+    "children": [
+      "gensym#forest-node:79402cf1-0830-4300-b528-4e007b47f1ad"
+    ]
+  },
+  "gensym#forest-node:79402cf1-0830-4300-b528-4e007b47f1ad": {
+    "id": "gensym#forest-node:79402cf1-0830-4300-b528-4e007b47f1ad",
+    "timestamp": 1785279320817068183,
+    "active_revision": 1,
+    "next_free_revision": 2,
+    "revision_names": {},
+    "data": {
+      "1": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": ""
+            }
+          ],
+          "tool_calls": [],
+          "reasoning_content": "The user is asking which of the *documents* in the provided list contained the information I previously summarized, and what else those documents say. I need to map the specific claims from my first response to the actual abstracts of the documents in the `list_consulted_documents`.\n\nFrom the first response, the key points were:\n1.  **Microorganisms:** *Clostridia*, *Enterobacter*, *Thermotoga*, *Thermoanaerobacterium* (strict vs facultative).\n2.  **Metabolic Flux/Redox Potential:** Redox potential manipulation is critical.\n3.  **Yields:** 1.3-2.2 mol H2/mol glucose in pure culture (<50% theoretical); *C. butyricum* produces 2 mol.\n4.  **Substrates:** Glucose, molasses, xylose, arabinose.\n5.  **Conditions:** Thermophilic bacteria (*T. thermosaccharolyticum*), pH 6.5, temp 55\u00b0C.\n6.  **Mixed Cultures:** Synergistic effects between facultative and anaerobic bacteria.\n7.  **VFA Pathways:** Acetic, n-butyric, propionic, n-valeric acids.\n8.  **Two-stage/Phototrophic:** *Rhodobacter sphaeroides* consuming acetate/lactate.\n9.  **Micro-aerobic conditions:** -300 to -150 mV.\n\nLet's match these to the documents I've fetched or can fetch:\n\n*   **WOS001149136800001.bib** (Sim et al., 2023): Mentions strict/facultative anaerobes (*Clostridia*, *Enterobacter*, *Thermotoga*, *Thermoanaerobacterium*) and the effect of redox potential.\n*   **WOS000299647700011.bib** (Qian et al., 2011): Mentions mixed culture of facultative and anaerobic bacteria having synergistic effects and better hydrogen production.\n*   **WOS000318348800002.bib** (Saripan and Reungsang, 2013): Mentions *Thermoanaerobacterium thermosaccharolyticum*, dark fermentation vs photosynthetic, and mixed xylose/arabinose substrates.\n*   **WOS000305106300017.bib** (Kobayashi et al., 2012): Mentions *Rhodobacter sphaeroides* producing hydrogen from acetate.\n*   **WOS000373552100006.bib** (Li et al., 2016): Mentions micro-aerobic vs anaerobic fermentative hydrogen production.\n*   **WOS000250900700025.bib** (Li et al., 2007): Mentions hydrogen production from diluted molasses.\n*   **WOS000071012600006.bib** (Kataoka et al., 1997): Mentions *Clostridium butyricum* strain SC-El, continuous culture, pH 6.7, 30\u00b0C. (My previous response said pH 6.5 for *T. thermosaccharolyticum*, so I need to be careful not to attribute the wrong values to the wrong documents).\n*   **WOSA1993NC44500012.bib** (Nakamura et al., 1993): Mentions hydrogen production in the acid-forming phase.\n\nI need to fetch the abstracts for the remaining documents to provide a complete answer. I already fetched:\n- `WOS001149136800001.bib` (Sim et al., 2023) - Redox potential, bacterial types.\n- `WOS000536914300001.bib` (Zhu et al., 2020) - Role of hydrogen in biogas systems.\n- `WOS000299647700011.bib` (Qian et al., 2011) - Mixed culture synergistic effects.\n- `WOS000318348800002.bib` (Saripan and Reungsang, 2013) - *T. thermosaccharolyticum*, xylose/arabinose.\n- `WOS000071012600006.bib` (Kataoka et al., 1997) - *C. butyricum*, continuous culture.\n\nI still need to check:\n- `WOSA1993NC44500012.bib`\n- `WOS000072836900003.bib`\n- `WOS000305106300017.bib`\n- `WOS000373552100006.bib`\n- `WOS000250900700025.bib`\n\nLet's fetch the next batch.\n"
+        },
+        "general_metadata": {
+          "timestamp": 1785279320816940006,
+          "datetime": "2026-07-29 01:55:20",
+          "persona": "Aria"
+        },
+        "generation_metadata": {
+          "model": "qwen3.6-35b-a3b, IQ4_NL_XL, 128 Ki context",
+          "n_tokens": 1292,
+          "dt": 14.453512486994441,
+          "grounded": true
+        },
+        "retrieval": {
+          "query": "Which of those documents said that, and what else does it say?",
+          "results": [
+            {
+              "document_id": "WOS001154258100001.bib",
+              "chunk_id": 2,
+              "full_id": "doc-WOS001154258100001.bib-chunk-2",
+              "offset": 1500,
+              "text": "ciency of 14.41 \\%. A favorable LCOH of 2.22 $/kg found in Ras-Garb, in northeastern Egypt. This study could guide authorities in developing various national-scale hydrogen production systems since it outlines the techno-economic features of various scenarios across the country. Additionally, the effectiveness of the suggested system is evaluated against existing literature.},\n\tAffiliation = {Elminshawy, Nabil A. S., Port Said Univ, Fac Engn, Mech Power Dept, Port Said, Egypt\nDiab, Sodfa, Port Said Univ, Fac Engn, Mech Power Dept, Port Said, Egypt\nYassen, Yassen El. S., Port Said Univ, Fac Engn, Mech Power Dept, Port Said, Egypt\nElbaksawi, Osama, Port Said Univ, Fac Engn, Elect Engn Dept, Port Said, Egypt}\n}",
+              "score": 0.01639344262295082
+            },
+            {
+              "document_id": "WOS000857911000001.bib",
+              "chunk_id": 0,
+              "full_id": "doc-WOS000857911000001.bib-chunk-0",
+              "offset": 0,
+              "text": "@article{WOS:000857911000001,\n\tAuthor = {Talus, Kim and Martin, Maxwell},\n\tYear = {2022},\n\tTitle = {A guide to hydrogen legislation in the USA: a renewed effort},\n\tJournal = {JOURNAL OF WORLD ENERGY LAW \\& BUSINESS},\n\tVolume = {15},\n\tNumber = {6},\n\tPages = {449-461},\n\tDOI = {10.1093/jwelb/jwac029},\n\tWeb-Of-Science-Categories = {Business; Law},\n\tAbstract = {This article will discuss how hydrogen-based energy could resolve green-energy uptake issues in the USA. In doing so, this article will first present the unique characteristics of hydrogen and its production methods. Next, this article will detail prior US hydrogen policy which often focused on research and development (R\\&D) rather than implementation strategies. Later, this paper will delve into the Biden Administration's recent legislation Infrastructure and Jobs Act (IJA) and the Inflation Reduction Act (IRA) and the hydrogen production incentivization policies enacted. And last, this article will delve into issues that were not resolved by the recent legislation.},\n\tAffiliation = {Talus, Kim, Tulane Law Sch, Tulane Ctr Energy Law, New Orleans, LA 70118 USA. Univ Eastern Finland, UEF Law Sch, European Energy Law, Kuopio, Finland. Univ Helsinki, Energy Law, Helsinki, Finland. Tulane Law Sch, Energy Law, New Orleans, LA 70118 USA\nMartin, Maxwell, Tulane Univ, Law Sch, New Orleans, LA 70118 USA}\n}",
+              "score": 0.01639344262295082
+            },
+            {
+              "document_id": "WOS001080111700003.bib",
+              "chunk_id": 2,
+              "full_id": "doc-WOS001080111700003.bib-chunk-2",
+              "offset": 1500,
+              "text": "the bankable biomass-toH2 processes flow diagrams in terms of the circular economy were additionally highlighted in order to effectively value the biomass supply chains to produce H2. Hopefully, this work presents a more favorable theoretical indepth mechanistic understanding of the bio-sourced hydrogen's different production pathways.},\n\tAffiliation = {Eloffy, M. G., Natl Inst Oceanog \\& Fisheries NIOF, Cairo, Egypt\nEl-Sherif, Dina M., Natl Inst Oceanog \\& Fisheries NIOF, Cairo, Egypt\nElgarahy, Ahmed M., Port Said Univ, Fac Sci, Environm Sci Dept, Environm Chem Div, Port Said, Egypt. Egyptian Propylene \\& Polypropylene Co EPPC, Port Said, Egypt\nElwakeel, Khalid Z., Port Said Univ, Fac Sci, Environm Sci Dept, Environm Chem Div, Port Said, Egypt. Univ Jeddah, Coll Sci, Dept Chem, Jeddah, Saudi Arabia\nSaber, Ayman N., Agr Res Ctr, Pesticide Residues \\& Environm Pollut Dept, Cent Agr Pesticide Lab, Giza 12618, Egypt\nHammad, Ahmed, Port Said Univ, Fac Engn, Chem Engn Dept, Port Said, Egypt\nShehata, Moustafa, Port Said Univ, Fac Engn, Mech Power Engn Dept, Port Said, Egypt\nMohsen, Ahmed, United Gas Derivat Co UGDC, Port Said, Egypt}\n}",
+              "score": 0.016129032258064516
+            },
+            {
+              "document_id": "WOS000345192300001.bib",
+              "chunk_id": 2,
+              "full_id": "doc-WOS000345192300001.bib-chunk-2",
+              "offset": 1500,
+              "text": "needs further investigation. Copyright (C) 2014, Hydrogen Energy Publications, LLC. Published by Elsevier Ltd. All rights reserved.},\n\tAffiliation = {Hou, Huijie, Penn State Univ, Dept Civil \\& Environm Engn, University Pk, PA 16801 USA\nLiu, Jia, Penn State Univ, Dept Civil \\& Environm Engn, University Pk, PA 16801 USA\nZhu, Xiuping, Penn State Univ, Dept Civil \\& Environm Engn, University Pk, PA 16801 USA\nLogan, Bruce E., Penn State Univ, Dept Civil \\& Environm Engn, University Pk, PA 16801 USA\nChen, Xiaofen, Univ Calif Santa Barbara, Dept Chem \\& Biochem, Santa Barbara, CA 93106 USA\nBazan, Guillermo C., Univ Calif Santa Barbara, Dept Chem \\& Biochem, Santa Barbara, CA 93106 USA}\n}",
+              "score": 0.016129032258064516
+            },
+            {
+              "document_id": "WOS000842874500001.bib",
+              "offset": 750,
+              "score": 0.015873015873015872,
+              "text": "y generated by reforming of fossil fuels, calling for cleaner methods of dihydrogen production. Here we review dihydrogen production from wastewater with focus on biological methods, electrochemical methods, dihydrogen storage, techno-economic aspects, governance and applications. Methods include fermentation, photolysis, photocatalysis, electrolysis and supercritical water gasification. Applications comprise refining crude oil, ammonia production, the food industry, metal extraction, pharmaceuticals, fuel cells, combustion engines, power generation and energy carrier.},\n\tAffiliation = {Elgarahy, Ahmed M., Port Said Univ, Fac Sci, Environm Sci Dept, Environm Chem Div, Port Said, Egypt. Egyptian Propylene \\& Polypropylene Co EPPC, Port Said, Egypt\nElwakeel, Khalid Z., Port Said Univ, Fac Sci, Environm Sci Dept, Environm Chem Div, Port Said, Egypt. Univ Jeddah, Coll Sci, Dept Chem, Jeddah, Saudi Arabia\nEloffy, M. G., Natl Inst Oceanog \\& Fisheries, Cairo, Egypt\nEl-Sherif, Dina M., Natl Inst Oceanog \\& Fisheries, Cairo, Egypt\nHammad, Ahmed, Port Said Univ, Fac Engn, Chem Engn Dept, Port Said, Egypt\nSaber, Ayman N., Agr Res Ctr, Pesticide Residues \\& Environm Pollut Dept, Cent Agr Pesticide Lab, Giza 12618, Egypt\nMohsen, Ahmed, United Gas Derivat Co UGDC, Operat Dept, Port Said NGL Plant, Port Said Damietta Int Coastal Rd, Port Said, Egypt\nAbouzid, Mohamed, Poznan Univ Med Sci, Dept Phys Pharm \\& Pharmacokinet, 6 Swiecickiego St, PL-60781 Poznan, Poland}\n}"
+            },
+            {
+              "document_id": "WOS000607467900013.bib",
+              "chunk_id": 2,
+              "full_id": "doc-WOS000607467900013.bib-chunk-2",
+              "offset": 1500,
+              "text": "ed by Elsevier Ltd on behalf of Hydrogen Energy Publications LLC.},\n\tAffiliation = {Touloupakis, Eleftherios, CNR, Ist Ric Ecosistemi Terrestri, Via Madonna Piano 10, I-50019 Sesto Fiorentino, Italy\nFaraloni, Cecilia, CNR, Ist Bioecon, Via Madonna Piano 10, I-50019 Florence, Italy\nTorzillo, Giuseppe, Univ Costa Rica, Ctr Invest Ciencias Mar \\& Limnol, San Jose 2060, Costa Rica. CNR, Ist Bioecon, Via Madonna Piano 10, I-50019 Florence, Italy\nSilva Benavides, Ana Margarita, Univ Costa Rica, Ctr Invest Ciencias Mar \\& Limnol, San Jose 2060, Costa Rica. Univ Costa Rica, Escuela Biol, San Jose 2060, Costa Rica\nMasojidek, Jiri, Czech Acad Sci, Ctr Algatech, Inst Microbiol, Lab Algal Biotechnol, CZ-37981 Trebon, Czech Republic}\n}",
+              "score": 0.015873015873015872
+            },
+            {
+              "document_id": "WOS000981765200001.bib",
+              "chunk_id": 2,
+              "full_id": "doc-WOS000981765200001.bib-chunk-2",
+              "offset": 1500,
+              "text": "ction.(c) 2023 The Authors. Published by Elsevier Ltd on behalf of Hydrogen Energy Publications LLC. This is an open access article under the CC BY-NC-ND license (http:// creativecommons.org/licenses/by-nc-nd/4.0/).},\n\tAffiliation = {Zheng, Lei, Politecn Milan, Dipartimento Energia, Lab Catalysis \\& Catalyt Proc, Via Lambruschini 4, I-20156 Milan, Italy\nAmbrosetti, Matteo, Politecn Milan, Dipartimento Energia, Lab Catalysis \\& Catalyt Proc, Via Lambruschini 4, I-20156 Milan, Italy\nZaio, Francesca, Politecn Milan, Dipartimento Energia, Lab Catalysis \\& Catalyt Proc, Via Lambruschini 4, I-20156 Milan, Italy\nBeretta, Alessandra, Politecn Milan, Dipartimento Energia, Lab Catalysis \\& Catalyt Proc, Via Lambruschini 4, I-20156 Milan, Italy\nGroppi, Gianpiero, Politecn Milan, Dipartimento Energia, Lab Catalysis \\& Catalyt Proc, Via Lambruschini 4, I-20156 Milan, Italy\nTronconi, Enrico, Politecn Milan, Dipartimento Energia, Lab Catalysis \\& Catalyt Proc, Via Lambruschini 4, I-20156 Milan, Italy}\n}",
+              "score": 0.015625
+            },
+            {
+              "document_id": "WOS000864187600008.bib",
+              "chunk_id": 1,
+              "full_id": "doc-WOS000864187600008.bib-chunk-1",
+              "offset": 750,
+              "text": " in choosing the best technological route for the recovery of renewable and cost-effective hydrogen. Therefore, this bibliometric review evaluated the research progress, trends, updates, and hotspots on hydrogen production from dark fermentation. The Web of Science(C) database was used to select the documents from 2000 to 2021, and the VOSviewer(C) and Bibliometrix softwares were used to carry out the bibliometric investigation. The results demonstrated that 3071 documents (2755 articles and 316 reviews) studied the hydrogen production from dark fermentation over the last 21 years. The number of publications exponentially increased in the last five years, which can be associated with the demand for new technologies to produce clean energy sources and decrease the environmental impacts caused by petroleum-based fuel. Keyword analysis revealed that the studies focused on the operational parameters, process optimization, pretreatment, and microbial community, aiming to increase the hydrog",
+              "score": 0.015384615384615385
+            },
+            {
+              "document_id": "WOS000456355700026.bib",
+              "chunk_id": 2,
+              "full_id": "doc-WOS000456355700026.bib-chunk-2",
+              "offset": 1500,
+              "text": "ublications LLC. Published by Elsevier Ltd. All rights reserved.},\n\tAffiliation = {Escobar-Alarcon, L., Inst Nacl Invest Nucl, Dept Fis, Carr Mexico Toluca S-n La Marquesa, Ocoyoacac 52750, Edo De Mexico, Mexico\nIturbe-Garcia, J. L., Inst Nacl Invest Nucl, Dept Quim, Carr Mexico Toluca S-n La Marquesa, Ocoyoacac 52750, Edo De Mexico, Mexico\nGonzalez-Zavala, F., Univ Autonoma Metropolitana Iztapalapa, Dept Fis, Apdo Postal 55-534, Cdmx, Mexico\nHaro-Poniatowski, E., Univ Autonoma Metropolitana Iztapalapa, Dept Fis, Apdo Postal 55-534, Cdmx, Mexico\nSolis-Casados, D. A., Univ Autonoma Estado Mexico, Fac Quim, Toluca 50120, Estado De Mexic, Mexico\nPerez-Hernandez, R., Inst Nacl Invest Nucl, Dept Tecnol Mat, Carr Mexico Toluca S-n La Marquesa, Ocoyoacac 52750, Edo De Mexico, Mexico}\n}",
+              "score": 0.015384615384615385
+            },
+            {
+              "document_id": "WOS001127257400001.bib",
+              "offset": 0,
+              "score": 0.015151515151515152,
+              "text": "@article{WOS:001127257400001,\n\tAuthor = {Kirillov, I. A. and Kharitonova, N. L. and Simonenko, V. A. and Kryukov, V. M.},\n\tYear = {2023},\n\tTitle = {Development of approaches to regulatory safety in industrial water-electrolysis production of hydrogen at NPPs},\n\tJournal = {ATOMIC ENERGY},\n\tDOI = {10.1007/s10512-023-01035-x},\n\tWeb-Of-Science-Categories = {Nuclear Science \\& Technology},\n\tAbstract = {The article discusses the location of additional electrolysis production of hydrogen at the site of contemporary NPPs as one of the most promising areas in terms of nuclear-hydrogen energy development. The study aims to assess the possibility of applying the requirements of current legal documents to the regulation of hydrogen fire and explosion safety when locating hydrogen electrolysis production complexes at the NPP site. The regulatory documents applicable to the safety regulation in the industrial production of hydrogen at existing NPPs, including the electrolysis, compression, liquefaction, storage, pre-transportation, transportation, and supplying large volumes of product hydrogen to consumers, are analyzed. The limitations of the regulatory legal framework, including in the field of safety for such a location of the hydrogen production are noted, along with the need for its improvement. Recommendations and proposals are formulated to clarify and/or supplement the requirements of documents regulating hydrogen fire and explosion safety for hydrogen electrolysis production complexes at NPPs.},\n\tAffiliation = {Kirillov, I. A., NRC Kurchatovsky Inst, Moscow, Russia\nKharitonova, N. L., NRC Kurchatovsky Inst, Moscow, Russia\nSimonenko, V. A., RFNC, VNIITF, FSUE, Snezhinsk, Russia\nKryukov, V. M., RFNC, VNIITF, FSUE, Snezhinsk, Russia}\n}"
+            }
+          ]
+        }
+      }
+    },
+    "parent": "gensym#forest-node:3cbccb4a-467d-4a7e-a8ee-d392344186f5",
+    "children": []
+  }
+}

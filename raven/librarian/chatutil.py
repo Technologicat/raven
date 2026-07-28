@@ -306,9 +306,15 @@ def format_notice_that_tools_are_spent() -> str:
     assumption - offer no tools, and the model has no move except to answer - and measurement says
     otherwise. Given a list of documents to work through, the model spends its rounds fetching them one at
     a time, and on the invocation where the tools are gone it announces the *next* fetch ("Now let's get the
-    ABR reactor document") and then stops, having written no reply at all. Five of six sampled turns that
-    reached the cap ended with an empty assistant message. A model that believes it is still gathering does
-    not notice that gathering has become impossible; it has to be told.
+    ABR reactor document") and then stops, having written no reply at all.
+
+    **Reaching the cap is what produces the empty reply, and this notice does not measurably prevent it.**
+    Measured over 24 paired samples (`evaluation/tool_budget/`, qwen3.6-35b-a3b): turns that reached the cap
+    answered 5 of 14, turns that did not answered 9 of 10 (Fisher exact p = 0.013). The notice itself moved
+    nothing - 8 of 12 answered with it against 6 of 12 without, p = 0.68, and the two arms disagree about
+    the sign once restricted to cap-reaching turns. So this is kept on the strength of the mechanism it
+    addresses, which was directly observed, and not on evidence that it works. The fix with the evidence
+    behind it is a larger budget for fetch-shaped calls; see the tool-budget item in `TODO.md`.
 
     Worded as a statement of the situation with the required action attached, never as a prohibition. "You
     may not call any more tools" is the shape that measured 5-37x the deliberation elsewhere in this file,

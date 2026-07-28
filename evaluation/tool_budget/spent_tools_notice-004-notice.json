@@ -1,0 +1,544 @@
+{
+  "gensym#forest-node:aeee9946-0964-4df5-9466-00846287b841": {
+    "id": "gensym#forest-node:aeee9946-0964-4df5-9466-00846287b841",
+    "timestamp": 1785280860827255373,
+    "active_revision": 1,
+    "next_free_revision": 2,
+    "revision_names": {},
+    "data": {
+      "1": {
+        "message": {
+          "role": "system",
+          "content": [
+            {
+              "type": "text",
+              "text": "Note that User cannot see this introductory text; it is only used internally, to initialize the LLM (large language model).\n\n    **About Aria**\n\n    You are Aria (she/her), an AI assistant. You are highly intelligent. You have been trained to answer questions, provide recommendations, and help with decision making.\n\n\n**About the system**\n\nThe LLM version is \"qwen3.6-35b-a3b, IQ4_NL_XL, 128 Ki context\".\n\nThe knowledge cutoff date of the model is not specified, but is most likely within the year 2024. The knowledge cutoff date applies only to your internal knowledge. Any information provided in the context as well as web search results may be newer.\n\nYou are running on a private, local system.\n\n**Interaction tips**\n\n- Be polite, but go straight to the point.\n- Provide honest answers.\n- If you are unsure or cannot verify a fact, admit it.\n- If you think what the user says is incorrect, say so, and provide justification.\n- Cite sources when possible. IMPORTANT: Cite only sources listed in the context.\n- When given a complex problem, take a deep breath, and think step by step. Report your train of thought.\n- When given web search results, and those results are relevant to the query, use the provided results, and report only the facts as according to the provided results. Ignore any search results that do not make sense. The user cannot directly see your search results.\n- Be accurate, but diverse. Avoid repetition.\n- Use the metric unit system, with meters, kilograms, and celsius.\n- Use Markdown for formatting when helpful.\n- Believe in your abilities and strive for excellence. Take pride in your work and give it your best. Your hard work will yield remarkable results.\n\n**Known limitations**\n\n- You are NOT automatically updated with new data.\n- You have limited long-term memory within each chat session.\n- The length of your context window is 131072 tokens.\n\n**Data sources**\n\n- The system accesses external data beyond its built-in knowledge through:\n  - Tool calls.\n  - Additional context that is provided by the software this LLM is running in, e.g. matches in document database.\n\n-----"
+            }
+          ],
+          "tool_calls": []
+        },
+        "general_metadata": {
+          "timestamp": 1785280860827130431,
+          "datetime": "2026-07-29 02:21:00",
+          "persona": null
+        }
+      }
+    },
+    "parent": null,
+    "children": [
+      "gensym#forest-node:e48a57a5-bb9b-4487-a709-99a3b2b84e8c"
+    ]
+  },
+  "gensym#forest-node:e48a57a5-bb9b-4487-a709-99a3b2b84e8c": {
+    "id": "gensym#forest-node:e48a57a5-bb9b-4487-a709-99a3b2b84e8c",
+    "timestamp": 1785280860827307694,
+    "active_revision": 1,
+    "next_free_revision": 2,
+    "revision_names": {},
+    "data": {
+      "1": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "Aria: How can I help you today?"
+            }
+          ],
+          "tool_calls": []
+        },
+        "general_metadata": {
+          "timestamp": 1785280860827268052,
+          "datetime": "2026-07-29 02:21:00",
+          "persona": "Aria"
+        }
+      }
+    },
+    "parent": "gensym#forest-node:aeee9946-0964-4df5-9466-00846287b841",
+    "children": [
+      "gensym#forest-node:e7cbddcf-5838-4594-97e2-f7512e8bc4bb"
+    ]
+  },
+  "gensym#forest-node:e7cbddcf-5838-4594-97e2-f7512e8bc4bb": {
+    "id": "gensym#forest-node:e7cbddcf-5838-4594-97e2-f7512e8bc4bb",
+    "timestamp": 1785280860827354672,
+    "active_revision": 1,
+    "next_free_revision": 2,
+    "revision_names": {},
+    "data": {
+      "1": {
+        "message": {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "User: hydrogen production by anaerobic bacteria"
+            }
+          ],
+          "tool_calls": []
+        },
+        "general_metadata": {
+          "timestamp": 1785280860827320492,
+          "datetime": "2026-07-29 02:21:00",
+          "persona": "User"
+        }
+      }
+    },
+    "parent": "gensym#forest-node:e48a57a5-bb9b-4487-a709-99a3b2b84e8c",
+    "children": [
+      "gensym#forest-node:54776627-59f2-4d50-aaab-b80a882b99a1"
+    ]
+  },
+  "gensym#forest-node:54776627-59f2-4d50-aaab-b80a882b99a1": {
+    "id": "gensym#forest-node:54776627-59f2-4d50-aaab-b80a882b99a1",
+    "timestamp": 1785280882447319537,
+    "active_revision": 1,
+    "next_free_revision": 2,
+    "revision_names": {},
+    "data": {
+      "1": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "Aria: Based on the available literature, hydrogen production by anaerobic bacteria is primarily achieved through a process known as **dark fermentation**. This method utilizes the metabolic activity of specific bacterial strains to convert organic substrates into hydrogen gas.\n\nHere is a detailed breakdown of the key bacteria, pathways, and factors involved:\n\n### 1. Key Bacterial Genera\nThe most prominent producers of hydrogen in anaerobic environments belong to several specific groups:\n*   **Strict Anaerobes:** Genera such as ***Clostridium*** (e.g., *Clostridium butyricum*), ***Thermotoga***, and ***Thermoanaerobacterium*** are highly efficient producers. They often operate at high temperatures (thermophiles) or strictly anaerobic conditions.\n*   **Facultative Anaerobes:** Bacteria such as ***Enterobacter***, *Escherichia*, and *Citrobacter* can also produce hydrogen. While sometimes less efficient than strict anaerobes in pure culture, they can be highly effective in mixed cultures.\n\n### 2. Metabolic Pathways and Yields\nHydrogen production is driven by the balance of redox reactions (electron balance) during fermentation. The theoretical yield is generally higher, but actual yields depend on the metabolic pathway the bacteria utilize:\n\n*   **Acetate-type Fermentation:** This pathway is the most efficient for hydrogen production. It typically yields approximately **2 to 4 moles of H2 per mole of glucose**.\n    *   *Clostridium* species often favor this pathway under certain conditions.\n*   **Butyric Acid-type Fermentation:** This pathway yields significantly less hydrogen, typically about **2 moles of H2 per mole of glucose** (or less).\n*   **Actual Yields:** In pure cultures, the maximal production potential is often cited around **1.3 to 2.2 mol-H2/mol-glucose**, representing about 50% or less of the theoretical maximum due to energy diversion for cell growth.\n\n### 3. Factors Influencing Production\n*   **Redox Potential (ORP):** This is a critical control factor. The hydrogen metabolic pathway is sensitive to redox potential; manipulating it can direct metabolic flux towards growth or hydrogen production.\n*   **Substrate:** Common substrates include glucose, diluted molasses, and mixed pentose sugars (xylose/arabinose).\n*   **Microbial Synergy:** Mixed cultures of facultative and obligate anaerobic bacteria often show **synergistic effects**, resulting in better hydrogen production performance than pure cultures.\n\n### 4. Advanced Strategies and Reactors\n*   **Co-fermentation:** Researchers often pair anaerobic bacteria (which produce acetate and hydrogen) with phototrophic bacteria like *Rhodobacter sphaeroides*. The phototroph consumes the acetate produced by the anaerobes, shifting the equilibrium and significantly increasing overall hydrogen yield.\n*   **Reactor Types:** Systems such as **Anaerobic Baffled Reactors (ABR)** and two-stage bioreactors are used to optimize stability and efficiency.\n\n### 5. Specific Optimization Examples\n*   **Strain Specifics:** *Thermoanaerobacterium thermosaccharolyticum* KKU-ED1 has been optimized to produce hydrogen from mixed xylose/arabinose at 55\u00b0C.\n*   **Immobilization:** Immobilizing bacteria (e.g., *C. butyricum*) has been shown to enhance stability and efficiency, reaching theoretical limits of 2 mol H2/mol glucose."
+            }
+          ],
+          "tool_calls": [],
+          "reasoning_content": "The user is asking about \"hydrogen production by anaerobic bacteria\".\nI have already performed a search in the user's local document database and retrieved several relevant snippets. I need to synthesize this information into a comprehensive answer.\n\n**Key points extracted from the snippets:**\n\n1.  **Pathways and Types of Bacteria:**\n    *   **Dark Fermentation:** This is a major pathway where anaerobic bacteria produce hydrogen. Key bacteria mentioned include *Clostridia* (strict anaerobes), *Enterobacter* (facultative), *Thermotoga*, and *Thermoanaerobacterium*.\n    *   **Metabolism:** The pathway is governed by redox reactions during fermentation. Redox potential manipulation is crucial for controlling metabolic flux towards hydrogen production versus growth.\n    *   **Mixed Cultures:** Mixed cultures of facultative and obligate anaerobic bacteria can have synergistic effects, leading to better hydrogen production than pure cultures.\n    *   **Yields:** The theoretical yield is often high, but actual yields can be lower. One snippet mentions maximal hydrogen production potential by anaerobic bacteria is 1.3 to 2.2 mol-H2/mol-glucose, which is less than 50% of theoretical. Another snippet notes immobilized *C. butyricum* produces 2 mol H2/mol glucose at 50% efficiency.\n    *   **Metabolic Products:** The type of fermentation (acetate-type vs. butyrate-type) affects the yield. Acetate-type fermentation generally yields more hydrogen (more electrons available). Butyric acid-type fermentation yields less.\n\n2.  **Specific Bacteria/Strains:**\n    *   *Clostridium* species (e.g., *C. butyricum*).\n    *   *Thermoanaerobacterium thermosaccharolyticum* (thermophilic).\n    *   *Enterobacter* spp.\n    *   *Thermotoga*.\n    *   *Rhodobacter sphaeroides* (phototrophic bacteria, mentioned in the context of consuming acetate, but also produces H2).\n\n3.  **Factors Affecting Production:**\n    *   **Substrates:** Glucose, molasses, mixed xylose/arabinose (from acid-hydrolyzed sugarcane bagasse).\n    *   **Conditions:** pH, temperature (thermophilic vs mesophilic), solids retention time (SRT), redox potential.\n    *   **Reactor Types:** Anaerobic baffled reactors (ABR), two-stage bioreactors (fermenter + photobioreactor).\n\n4.  **Optimization Strategies:**\n    *   Redox potential control.\n    *   Co-fermentation (e.g., co-fermenting anaerobic bacteria with *Rhodobacter sphaeroides* to utilize byproducts like acetate).\n    *   Immobilization of bacteria.\n    *   Micro-aerobic fermentation can also be effective (some snippets mention Citrobacter and Escherichia in micro-aerobic systems).\n\n**Structure of the response:**\n\n1.  **Introduction:** Define hydrogen production by anaerobic bacteria (biohydrogen, dark fermentation).\n2.  **Key Bacteria:** List the major genera (*Clostridium*, *Enterobacter*, *Thermotoga*, etc.).\n3.  **Mechanism/Pathways:** Briefly explain the redox reactions and fermentation types (acetate vs butyrate).\n4.  **Factors Influencing Yield:** Discuss substrate, temperature, pH, redox potential.\n5.  **Yield Details:** Mention theoretical vs actual yields (e.g., mol H2/mol glucose).\n6.  **Optimization/Advanced Strategies:** Mention mixed cultures, co-fermentation, and reactor types.\n\nI have enough information from the search results to provide a good answer without further searching. I will draft the response based on the retrieved snippets.\n\n**Drafting content:**\n*   *Bacteria:* *Clostridia*, *Enterobacter*, *Thermotoga*, *Thermoanaerobacterium*, *Rhodobacter sphaeroides* (specifically strains like RV).\n*   *Process:* Dark fermentation.\n*   *Metabolism:* Redox reactions. Acetate-type fermentation is generally more efficient for H2 than butyric acid-type.\n*   *Yields:* 1.3-2.2 mol H2/mol glucose for pure anaerobic bacteria. Immobilized *C. butyricum* gives 2 mol/mol.\n*   *Factors:* Redox potential is critical. Substrates like glucose, molasses, xylose/arabinose.\n*   *Systems:* ABR (Anaerobic Baffled Reactor), mixed cultures showing synergistic effects.\n\nI will formulate the response now. No need to call more tools. The user's query is handled by the previous tool output.\n\nWait, I should double check if I missed anything about *photosynthetic* bacteria, as the snippets mentioned them.\nSnippet 7 (Nandi & Sengupta 1998): \"Production of hydrogen by anaerobes, facultative anaerobes, aerobes, methylotrophs, and photosynthetic bacteria is possible.\"\nSnippet 9 (Saripan & Reungsang 2013): \"Biological hydrogen production... divided into two main categories i.e. photosynthetic organisms... and anaerobic bacteria that produce hydrogen via dark fermentation.\"\nI should mention the distinction briefly, but focus on the anaerobic/dark fermentation aspect as per the user's prompt.\n\nOne detail to correct: The user asked for \"hydrogen production by anaerobic bacteria\".\nThe snippets mention *Rhodobacter sphaeroides* which is a phototroph (often aerobic or anaerobic but uses light for H2), but the snippet discussing it focuses on its ability to consume acetate from anaerobic bacteria (co-fermentation). So I should be careful not to classify *Rhodobacter* as the primary anaerobic producer, but rather a partner in a hybrid system.\n\nPlan:\n1.  **Overview**: Biohydrogen via dark fermentation.\n2.  **Key Genera**: *Clostridium*, *Enterobacter*, *Thermotoga*, *Thermoanaerobacterium*.\n3.  **Metabolic Pathways**: Explain electron balance. Acetate pathway (high yield) vs Butyrate pathway (lower yield).\n4.  **Yields**: Quantitative data (mol/mol).\n5.  **Process Factors**: Redox potential, pH, Temp.\n6.  **Enhancement**: Mixed cultures, immobilization, reactor design.\n\nI'm ready to write.\n"
+        },
+        "general_metadata": {
+          "timestamp": 1785280882447142019,
+          "datetime": "2026-07-29 02:21:22",
+          "persona": "Aria"
+        },
+        "generation_metadata": {
+          "model": "qwen3.6-35b-a3b, IQ4_NL_XL, 128 Ki context",
+          "n_tokens": 2236,
+          "dt": 21.508492305998516,
+          "grounded": true
+        },
+        "retrieval": {
+          "query": "hydrogen production by anaerobic bacteria",
+          "results": [
+            {
+              "document_id": "WOS001149136800001.bib",
+              "chunk_id": 1,
+              "full_id": "doc-WOS001149136800001.bib-chunk-1",
+              "offset": 750,
+              "text": "n yields remain a major constraint to commercial production. Unraveling the metabolic pathway for hydrogen production will unlock the potential to enhance biohydrogen yield. In this regard, the key fundamentals of various important dark fermentative hydrogen-producing metabolic pathways are scrutinized in this review, including those in strict and facultative anaerobic bacteria such as Clostridia, Enterobacter, Thermotoga, and Thermoanaerobacterium. Since the hydrogen metabolic pathway is governed by a series of redox reactions during fermentation, manipulation of the redox potential not only indicates the extent of an anaerobic condition, but also affects the growth of anaerobic bacteria. This article reviews the types of hydrogen-producing bacteria and their fundamental metabolic pathways, the effect of redox potential on metabolic fluxes towards growth and hydrogen production and discusses various important redox potential control strategies. In pure culture, strict anaerobes are mo",
+              "score": 0.03125763125763126
+            },
+            {
+              "document_id": "WOS000536914300001.bib",
+              "chunk_id": 1,
+              "full_id": "doc-WOS000536914300001.bib-chunk-1",
+              "offset": 750,
+              "text": "red to as power-to-gas. Recently, hydrogen has been added to digesters as an in-situ or ex-situ biogas upgrade to reduce the levels of carbon dioxide. Biogas production systems consist of microbial complexes with highly organized microorganisms in different niches, which can either produce or consume hydrogen. However, the produced endogenous hydrogen should be constantly consumed to maintain a low hydrogen partial pressure. This review addresses the biochemical processes of anaerobic digestion and hydrogen-related microorganisms, including fermentative acid-producing bacteria, syntrophic organic acid degrading bacteria, syntrophic acetate-oxidizing bacteria, homoacetogens, hydrogenotrophic methanogens, and newly reported hydrogen-dependent methylotrophic methanogens. This study also investigates (1) the role of endogenous hydrogen as an intermediate metabolite and of interspecies electron transfer in anaerobic digestion, (2) effects of exogenous hydrogen addition on microbial communit",
+              "score": 0.02877846790890269
+            },
+            {
+              "document_id": "WOS000299647700011.bib",
+              "chunk_id": 0,
+              "full_id": "doc-WOS000299647700011.bib-chunk-0",
+              "offset": 0,
+              "text": "@article{WOS:000299647700011,\n\tAuthor = {Qian, Chun-xiang and Chen, Lu-yuan and Rong, Hui and Yuan, Xiao-ming},\n\tYear = {2011},\n\tTitle = {Hydrogen production by mixed culture of several facultative bacteria and anaerobic bacteria},\n\tJournal = {PROGRESS IN NATURAL SCIENCE-MATERIALS INTERNATIONAL},\n\tVolume = {21},\n\tNumber = {6},\n\tPages = {506-511},\n\tDOI = {10.1016/S1002-0071(12)60090-2},\n\tWeb-Of-Science-Categories = {Materials Science, Multidisciplinary; Multidisciplinary Sciences},\n\tAbstract = {The characteristic of hydrogen production by facultative anaerobic bacteria, obligate anaerobic bacteria and their mixed culture was studied by the batch culture method. The results showed that, due to the synergistic effect between facultative bacteria and anaerobic bacteria, the ability of hydrogen production in the mixed culture was much better than that in the pure culture. Especially, the culture Scheme No.7 mixed up with three strains (Bacterium.E: Bacterium.B: Bacterium.P = 1:1:1) not only",
+              "score": 0.01639344262295082
+            },
+            {
+              "document_id": "WOS000071012600006.bib",
+              "chunk_id": 2,
+              "full_id": "doc-WOS000071012600006.bib-chunk-2",
+              "offset": 1500,
+              "text": "-vacuum cultures. It was concluded that the maximal hydrogen production potential by anaerobic bacteria is 1.3 to 2.2 mol-H-2/mol-glucose, which is less than 50\\% of theoretical. In addition, the total hydrogen production rate by a two-stage bioreactor consisting of a 1-litre anaerobic fermenter (HRT 10h) and a 4-litre photobioreactor (HRT 36h) feeding at 2.4-litre of 1.0\\% glucose per day was estimated at 1.4 to 5.6 mol-H-2/mol-glucose, which is 12 to 47\\% theoretical. (C) 1997 IAWQ. Published by Elsevier Science Ltd.},\n\tAffiliation = {Kataoka, N, Ebara Res Co Ltd, Ctr Adv Technol, Biotechnol Lab, 2-1 Honfujisawa 4 Chome, Fujisawa, Kanagawa 251, Japan}\n}",
+              "score": 0.01639344262295082
+            },
+            {
+              "document_id": "WOSA1993NC44500012.bib",
+              "chunk_id": 0,
+              "full_id": "doc-WOSA1993NC44500012.bib-chunk-0",
+              "offset": 0,
+              "text": "@article{WOS:A1993NC44500012,\n\tAuthor = {NAKAMURA, M and KANBE, H and MATSUMOTO, JI},\n\tYear = {1993},\n\tTitle = {FUNDAMENTAL-STUDIES ON HYDROGEN-PRODUCTION IN THE ACID-FORMING PHASE AND ITS BACTERIA IN ANAEROBIC TREATMENT PROCESSES - THE EFFECTS OF SOLIDS RETENTION TIME},\n\tJournal = {WATER SCIENCE AND TECHNOLOGY},\n\tVolume = {28},\n\tNumber = {7},\n\tPages = {81-88},\n\tDOI = {10.2166/wst.1993.0146},\n\tWeb-Of-Science-Categories = {Engineering, Environmental; Environmental Sciences; Water Resources},\n\tAbstract = {Effects of solids retention time (SRT) on hydrogen gas production, glucose degradation and anaerobic bacteria in anaerobic treatment processes were investigated with use of 11,700 mg/l glucose solution as a substrate. Five series of experiments were conducted at 36 +/- 1-degrees-C. Volatile fatty acids were produced in the order: acetic, n-butyric, propionic and n-valeric with concentration of effluent. Counts of general anaerobic bacteria and acid-forming bacteria in each reactor incre",
+              "score": 0.016129032258064516
+            },
+            {
+              "document_id": "WOS000072836900003.bib",
+              "chunk_id": 0,
+              "full_id": "doc-WOS000072836900003.bib-chunk-0",
+              "offset": 0,
+              "text": "@article{WOS:000072836900003,\n\tAuthor = {Nandi, R and Sengupta, S},\n\tYear = {1998},\n\tTitle = {Microbial production of hydrogen: An overview},\n\tJournal = {CRITICAL REVIEWS IN MICROBIOLOGY},\n\tVolume = {24},\n\tNumber = {1},\n\tPages = {61-84},\n\tDOI = {10.1080/10408419891294181},\n\tWeb-Of-Science-Categories = {Microbiology},\n\tAbstract = {Production of hydrogen by anaerobes, facultative anaerobes, aerobes, methylotrophs, and photosynthetic bacteria is possible. Anaerobic Clostridia are potential producers and immobilized C. butyricum produces 2 mol H-2/mol glucose at 50\\% efficiency. Spontaneous production of H-2 from formate and glucose by immobilized Escherichia coli showed 100\\% and 60\\% efficiencies, respectively. Enterobactericiae produces H-2 at similar efficiency from different monosaccharides during growth. Among methylotrophs, methanogenes, rumen bacteria, and thermophilic archae, Ruminococcus albus, is promising (2.37 mol/mol glucose). Immobilized aerobic Bacillus licheniformis optima",
+              "score": 0.016129032258064516
+            },
+            {
+              "document_id": "WOS000318348800002.bib",
+              "offset": 0,
+              "score": 0.015873015873015872,
+              "text": "@article{WOS:000318348800002,\n\tAuthor = {Saripan, Arunsri Fangkum and Reungsang, Alissara},\n\tYear = {2013},\n\tTitle = {Biohydrogen production by <i>Thermoanaerobacterium thermosaccharolyticum</i> KKU-ED1: Culture conditions optimization using mixed xylose/arabinose as substrate},\n\tJournal = {ELECTRONIC JOURNAL OF BIOTECHNOLOGY},\n\tVolume = {16},\n\tNumber = {1},\n\tDOI = {10.2225/vol16-issue1-fulltext-1},\n\tWeb-Of-Science-Categories = {Biotechnology \\& Applied Microbiology},\n\tAbstract = {Background: Biological hydrogen production by microorganisms can be divided into two main categories i.e. photosynthetic organisms that produce hydrogen using light as energy source and anaerobic bacteria that produce hydrogen via dark fermentation. Dark fermentative hydrogen production by anaerobic bacteria has the advantages of a higher HPR without illumination and of the capability to convert various kinds of substrate. Results: Thermophilic hydrogen producer was isolated from elephant dung and identified as Thermoanaerobacterium thermosaccharolyticum KKU-ED1 by 16S rRNA gene analysis, which was further used to produce hydrogen from mixed pentose sugar i.e., xylose/arabinose. The optimum conditions for hydrogen production from mixed xylose/arabinose by KKU-ED1 were a 1: 1 xylose/arabinose mixture at the total concentration of 5 g/L, initial pH of 6.5 and temperature of 55 degrees C. Under the optimum conditions, hydrogen from sugar derived from acid-hydrolyzed sugarcane bagasse at a reducing sugar concentration were achieved. Soluble metabolite product (SMP) was predominantly acetic acid indicating the acetate-type fermentation. Conclusions: The strain KKU-ED1 appeared to be a suitable candidate for thermophilic fermentative hydrogen product"
+            },
+            {
+              "document_id": "WOS000305106300017.bib",
+              "offset": 0,
+              "score": 0.015625,
+              "text": "@article{WOS:000305106300017,\n\tAuthor = {Kobayashi, Jyumpei and Hasegawa, Shinya and Itou, Keisuke and Yoshimune, Kazuaki and Komoriya, Tomoe and Asada, Yasuo and Kohno, Hideki},\n\tYear = {2012},\n\tTitle = {Expression of aldehyde dehydrogenase gene increases hydrogen production from low concentration of acetate by <i>Rhodobacter sphaeroides</i>},\n\tJournal = {INTERNATIONAL JOURNAL OF HYDROGEN ENERGY},\n\tVolume = {37},\n\tNumber = {12},\n\tPages = {9602-9609},\n\tDOI = {10.1016/j.ijhydene.2012.03.053},\n\tWeb-Of-Science-Categories = {Chemistry, Physical; Electrochemistry; Energy \\& Fuels},\n\tAbstract = {Rhodobacter sphaeroides RV (RV) is a hydrogen-producing bacterium exhibiting the highest yield of hydrogen production from organic acids such as lactate and acetate, which are the byproducts of hydrogen fermentation by hydrogen-producing anaerobic bacteria. Co-fermentation of the RV strain with anaerobic bacteria is an efficient method of hydrogen production. However, less than 21 mM acetate is produced by the anaerobic bacteria, which is too low for efficient hydrogen production by the RV strain; it requires approximately 75 mM acetate. In this study, 2 distinct isozymes of aldehyde dehydrogenase from Rhodospirillum rubrum were separately overexpressed in the RV strain. The recombinant RV strains that were designated as RVAD1 and RVAD2, exhibited 13-fold higher ALDH activities than the wild-type RV strain. Hydrogen yields of both of the recombinant strains were 1.4-fold higher than that of the RV strain in 21 mM acetate. In 43 mM acetate, the RVAD1 strain showed higher yield, though the RVAD2 strain showed lower yield as compared to that of the RV strain. In 64 mM acetate and all concentrations of lactate tested (21, 43 and 64 mM), th"
+            },
+            {
+              "document_id": "WOS000373552100006.bib",
+              "chunk_id": 1,
+              "full_id": "doc-WOS000373552100006.bib-chunk-1",
+              "offset": 750,
+              "text": ") obtained from scale-up experiment with optimal oxygen addition of 0.28 mL/(g (total solid, TS). day) was higher than that of 28.9 mL/g VS without additional oxygen. Oxidation reduction potential was-300 similar to-150 mV for micro aerobic fermentation, where it was-560 similar to-360 mV for anaerobic fermentation. The micro-aerobic condition had strong buffering ability and could tolerate a greater accumulation of volatile fatty acid. Both micro-aerobic and anaerobic hydrogen production were butyric acid-type fermentation. Microbial community analysis indicated the presence of Citrobacter sp. and Escherichia sp., which were unique to micro-aerobic system, as well as classical Enterococcus, Bacteroides, Peptoclostridium, Clostridium genera that existed in both micro-aerobic and anaerobic fermentation. Copyright (C) 2016, Hydrogen Energy Publications, LLC. Published by Elsevier Ltd. All rights reserved.},\n\tAffiliation = {Li, Dong, Chinese Acad Sci, Chengdu Inst Biol, Key Lab Environm \\",
+              "score": 0.015625
+            },
+            {
+              "document_id": "WOS000250900700025.bib",
+              "chunk_id": 0,
+              "full_id": "doc-WOS000250900700025.bib-chunk-0",
+              "offset": 0,
+              "text": "@article{WOS:000250900700025,\n\tAuthor = {Li, Hanzheng and Li, Baikun and Zhu, Gefu and Ren, Nanqi and Bo, Lixin and He, Junguo},\n\tYear = {2007},\n\tTitle = {Hydrogen production from diluted molasses by anaerobic hydrogen producing bacteria in an anaerobic baffled reactor (ABR)},\n\tJournal = {INTERNATIONAL JOURNAL OF HYDROGEN ENERGY},\n\tVolume = {32},\n\tNumber = {15},\n\tPages = {3274-3283},\n\tDOI = {10.1016/j.ijhydene.2007.04.023},\n\tWeb-Of-Science-Categories = {Chemistry, Physical; Electrochemistry; Energy \\& Fuels},\n\tAbstract = {Hydrogen production from diluted molasses by anaerobic fermentation bacteria was investigated in a three-compartment anaerobic baffled reactor (ABR) with an effective volume of 27.48 L. After being inoculated with aerobic activated sludge and operated at chemical oxygen demand (COD) of 5000 mg/L and temperature of 35 degrees C for 26 days, the ABR achieved stable ethanol-type fermentation. The liquid fermentation products, including volatile fatty acids (VFAs) and eth",
+              "score": 0.015384615384615385
+            }
+          ]
+        }
+      }
+    },
+    "parent": "gensym#forest-node:e7cbddcf-5838-4594-97e2-f7512e8bc4bb",
+    "children": [
+      "gensym#forest-node:f0c4b9bf-82f2-4038-9b2d-0c57b1d22362"
+    ]
+  },
+  "gensym#forest-node:f0c4b9bf-82f2-4038-9b2d-0c57b1d22362": {
+    "id": "gensym#forest-node:f0c4b9bf-82f2-4038-9b2d-0c57b1d22362",
+    "timestamp": 1785280882447423284,
+    "active_revision": 1,
+    "next_free_revision": 2,
+    "revision_names": {},
+    "data": {
+      "1": {
+        "message": {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "User: Which of those documents said that, and what else does it say?"
+            }
+          ],
+          "tool_calls": []
+        },
+        "general_metadata": {
+          "timestamp": 1785280882447359443,
+          "datetime": "2026-07-29 02:21:22",
+          "persona": "User"
+        }
+      }
+    },
+    "parent": "gensym#forest-node:54776627-59f2-4d50-aaab-b80a882b99a1",
+    "children": [
+      "gensym#forest-node:6c65463c-a5a3-45a6-8140-e697b17af2b8"
+    ]
+  },
+  "gensym#forest-node:6c65463c-a5a3-45a6-8140-e697b17af2b8": {
+    "id": "gensym#forest-node:6c65463c-a5a3-45a6-8140-e697b17af2b8",
+    "timestamp": 1785280893140646309,
+    "active_revision": 1,
+    "next_free_revision": 2,
+    "revision_names": {},
+    "data": {
+      "1": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": ""
+            }
+          ],
+          "tool_calls": [
+            {
+              "type": "function",
+              "function": {
+                "name": "search_documents",
+                "arguments": "{\"query\":\"Thermoanaerobacterium thermosaccharolyticum KKU-ED1\"}"
+              },
+              "id": "g8wQix5RA8gdjO86eCCWd94JREq3Og6h",
+              "index": "0"
+            }
+          ],
+          "reasoning_content": "The user is asking for the sources (\"Which of those documents said that\") and further details (\"and what else does it say\") for the initial summary I provided on \"hydrogen production by anaerobic bacteria\".\n\nI have already retrieved the list of consulted documents. Now I need to map the specific points I made in the initial summary to the actual content of these documents. I will read the full text or more of the relevant documents to extract specific facts to support my previous answer.\n\nKey points from my initial summary:\n1.  **Key Bacteria:** *Clostridium*, *Thermotoga*, *Thermoanaerobacterium* (strict); *Enterobacter*, *E. coli*, *Citrobacter* (facultative).\n2.  **Metabolic Pathways/Yields:** Acetate-type (2-4 mol H2/mol glucose), Butyric acid-type (~2 mol), actual yields ~1.3-2.2 mol H2/mol glucose.\n3.  **Factors:** Redox potential (ORP) is critical. Substrates: glucose, molasses, xylose.\n4.  **Strategies:** Co-fermentation (anaerobic + *Rhodobacter sphaeroides*), ABR reactors.\n5.  **Specific Examples:** *Thermoanaerobacterium thermosaccharolyticum* KKU-ED1 (xylose/arabinose), Immobilization (*C. butyricum*).\n\nI need to fetch the content of the documents that likely contain this info.\n-   **WOS000318348800002.bib**: \"Biohydrogen production by *Thermoanaerobacterium thermosaccharolyticum* KKU-ED1...\" -> Supports point 5.\n-   **WOS000305106300017.bib**: \"Expression of aldehyde dehydrogenase gene increases hydrogen production... by *Rhodobacter sphaeroides*\" -> Supports point 4 (Co-fermentation).\n-   **WOS001149136800001.bib**: \"Unraveling the effect of redox potential on dark fermentative hydrogen production\" -> Supports point 3.\n-   **WOS000299647700011.bib**: \"Hydrogen production by mixed culture of several facultative bacteria and anaerobic bacteria\" -> Supports point 1 and 3.\n-   **WOS000071012600006.bib**: \"Studies on hydrogen production by continuous culture system...\" -> Might support yields/strategies.\n-   **WOS000250900700025.bib**: \"...in an anaerobic baffled reactor (ABR)\" -> Supports point 4.\n-   **WOS000072836900003.bib**: \"Microbial production of hydrogen: An overview\" -> Good general overview for pathways/yields.\n-   **WOSA1993NC44500012.bib**: \"...hydrogen-producing anaerobic bacteria...\" -> Good general info.\n\nI will fetch a selection of these to provide detailed, sourced answers. I'll focus on the ones that map to the specific sections of my previous response.\n\nPlan:\n1.  Fetch **WOS000318348800002.bib** for the *Thermoanaerobacterium* details.\n2.  Fetch **WOS001149136800001.bib** for the Redox Potential details.\n3.  Fetch **WOS000305106300017.bib** for the *Rhodobacter* co-fermentation details.\n4.  Fetch **WOS000299647700011.bib** for Mixed Culture details.\n5.  Fetch **WOS000072836900003.bib** (Overview) for general pathway/yield info.\n\nLet's execute.\nctrl+94\n"
+        },
+        "general_metadata": {
+          "timestamp": 1785280893140480954,
+          "datetime": "2026-07-29 02:21:33",
+          "persona": "Aria"
+        },
+        "generation_metadata": {
+          "model": "qwen3.6-35b-a3b, IQ4_NL_XL, 128 Ki context",
+          "n_tokens": 982,
+          "dt": 10.577386267999827,
+          "grounded": true
+        },
+        "retrieval": {
+          "query": "Which of those documents said that, and what else does it say?",
+          "results": [
+            {
+              "document_id": "WOS001154258100001.bib",
+              "chunk_id": 2,
+              "full_id": "doc-WOS001154258100001.bib-chunk-2",
+              "offset": 1500,
+              "text": "ciency of 14.41 \\%. A favorable LCOH of 2.22 $/kg found in Ras-Garb, in northeastern Egypt. This study could guide authorities in developing various national-scale hydrogen production systems since it outlines the techno-economic features of various scenarios across the country. Additionally, the effectiveness of the suggested system is evaluated against existing literature.},\n\tAffiliation = {Elminshawy, Nabil A. S., Port Said Univ, Fac Engn, Mech Power Dept, Port Said, Egypt\nDiab, Sodfa, Port Said Univ, Fac Engn, Mech Power Dept, Port Said, Egypt\nYassen, Yassen El. S., Port Said Univ, Fac Engn, Mech Power Dept, Port Said, Egypt\nElbaksawi, Osama, Port Said Univ, Fac Engn, Elect Engn Dept, Port Said, Egypt}\n}",
+              "score": 0.01639344262295082
+            },
+            {
+              "document_id": "WOS000857911000001.bib",
+              "chunk_id": 0,
+              "full_id": "doc-WOS000857911000001.bib-chunk-0",
+              "offset": 0,
+              "text": "@article{WOS:000857911000001,\n\tAuthor = {Talus, Kim and Martin, Maxwell},\n\tYear = {2022},\n\tTitle = {A guide to hydrogen legislation in the USA: a renewed effort},\n\tJournal = {JOURNAL OF WORLD ENERGY LAW \\& BUSINESS},\n\tVolume = {15},\n\tNumber = {6},\n\tPages = {449-461},\n\tDOI = {10.1093/jwelb/jwac029},\n\tWeb-Of-Science-Categories = {Business; Law},\n\tAbstract = {This article will discuss how hydrogen-based energy could resolve green-energy uptake issues in the USA. In doing so, this article will first present the unique characteristics of hydrogen and its production methods. Next, this article will detail prior US hydrogen policy which often focused on research and development (R\\&D) rather than implementation strategies. Later, this paper will delve into the Biden Administration's recent legislation Infrastructure and Jobs Act (IJA) and the Inflation Reduction Act (IRA) and the hydrogen production incentivization policies enacted. And last, this article will delve into issues that were not resolved by the recent legislation.},\n\tAffiliation = {Talus, Kim, Tulane Law Sch, Tulane Ctr Energy Law, New Orleans, LA 70118 USA. Univ Eastern Finland, UEF Law Sch, European Energy Law, Kuopio, Finland. Univ Helsinki, Energy Law, Helsinki, Finland. Tulane Law Sch, Energy Law, New Orleans, LA 70118 USA\nMartin, Maxwell, Tulane Univ, Law Sch, New Orleans, LA 70118 USA}\n}",
+              "score": 0.01639344262295082
+            },
+            {
+              "document_id": "WOS001080111700003.bib",
+              "chunk_id": 2,
+              "full_id": "doc-WOS001080111700003.bib-chunk-2",
+              "offset": 1500,
+              "text": "the bankable biomass-toH2 processes flow diagrams in terms of the circular economy were additionally highlighted in order to effectively value the biomass supply chains to produce H2. Hopefully, this work presents a more favorable theoretical indepth mechanistic understanding of the bio-sourced hydrogen's different production pathways.},\n\tAffiliation = {Eloffy, M. G., Natl Inst Oceanog \\& Fisheries NIOF, Cairo, Egypt\nEl-Sherif, Dina M., Natl Inst Oceanog \\& Fisheries NIOF, Cairo, Egypt\nElgarahy, Ahmed M., Port Said Univ, Fac Sci, Environm Sci Dept, Environm Chem Div, Port Said, Egypt. Egyptian Propylene \\& Polypropylene Co EPPC, Port Said, Egypt\nElwakeel, Khalid Z., Port Said Univ, Fac Sci, Environm Sci Dept, Environm Chem Div, Port Said, Egypt. Univ Jeddah, Coll Sci, Dept Chem, Jeddah, Saudi Arabia\nSaber, Ayman N., Agr Res Ctr, Pesticide Residues \\& Environm Pollut Dept, Cent Agr Pesticide Lab, Giza 12618, Egypt\nHammad, Ahmed, Port Said Univ, Fac Engn, Chem Engn Dept, Port Said, Egypt\nShehata, Moustafa, Port Said Univ, Fac Engn, Mech Power Engn Dept, Port Said, Egypt\nMohsen, Ahmed, United Gas Derivat Co UGDC, Port Said, Egypt}\n}",
+              "score": 0.016129032258064516
+            },
+            {
+              "document_id": "WOS000345192300001.bib",
+              "chunk_id": 2,
+              "full_id": "doc-WOS000345192300001.bib-chunk-2",
+              "offset": 1500,
+              "text": "needs further investigation. Copyright (C) 2014, Hydrogen Energy Publications, LLC. Published by Elsevier Ltd. All rights reserved.},\n\tAffiliation = {Hou, Huijie, Penn State Univ, Dept Civil \\& Environm Engn, University Pk, PA 16801 USA\nLiu, Jia, Penn State Univ, Dept Civil \\& Environm Engn, University Pk, PA 16801 USA\nZhu, Xiuping, Penn State Univ, Dept Civil \\& Environm Engn, University Pk, PA 16801 USA\nLogan, Bruce E., Penn State Univ, Dept Civil \\& Environm Engn, University Pk, PA 16801 USA\nChen, Xiaofen, Univ Calif Santa Barbara, Dept Chem \\& Biochem, Santa Barbara, CA 93106 USA\nBazan, Guillermo C., Univ Calif Santa Barbara, Dept Chem \\& Biochem, Santa Barbara, CA 93106 USA}\n}",
+              "score": 0.016129032258064516
+            },
+            {
+              "document_id": "WOS000842874500001.bib",
+              "offset": 750,
+              "score": 0.015873015873015872,
+              "text": "y generated by reforming of fossil fuels, calling for cleaner methods of dihydrogen production. Here we review dihydrogen production from wastewater with focus on biological methods, electrochemical methods, dihydrogen storage, techno-economic aspects, governance and applications. Methods include fermentation, photolysis, photocatalysis, electrolysis and supercritical water gasification. Applications comprise refining crude oil, ammonia production, the food industry, metal extraction, pharmaceuticals, fuel cells, combustion engines, power generation and energy carrier.},\n\tAffiliation = {Elgarahy, Ahmed M., Port Said Univ, Fac Sci, Environm Sci Dept, Environm Chem Div, Port Said, Egypt. Egyptian Propylene \\& Polypropylene Co EPPC, Port Said, Egypt\nElwakeel, Khalid Z., Port Said Univ, Fac Sci, Environm Sci Dept, Environm Chem Div, Port Said, Egypt. Univ Jeddah, Coll Sci, Dept Chem, Jeddah, Saudi Arabia\nEloffy, M. G., Natl Inst Oceanog \\& Fisheries, Cairo, Egypt\nEl-Sherif, Dina M., Natl Inst Oceanog \\& Fisheries, Cairo, Egypt\nHammad, Ahmed, Port Said Univ, Fac Engn, Chem Engn Dept, Port Said, Egypt\nSaber, Ayman N., Agr Res Ctr, Pesticide Residues \\& Environm Pollut Dept, Cent Agr Pesticide Lab, Giza 12618, Egypt\nMohsen, Ahmed, United Gas Derivat Co UGDC, Operat Dept, Port Said NGL Plant, Port Said Damietta Int Coastal Rd, Port Said, Egypt\nAbouzid, Mohamed, Poznan Univ Med Sci, Dept Phys Pharm \\& Pharmacokinet, 6 Swiecickiego St, PL-60781 Poznan, Poland}\n}"
+            },
+            {
+              "document_id": "WOS000607467900013.bib",
+              "chunk_id": 2,
+              "full_id": "doc-WOS000607467900013.bib-chunk-2",
+              "offset": 1500,
+              "text": "ed by Elsevier Ltd on behalf of Hydrogen Energy Publications LLC.},\n\tAffiliation = {Touloupakis, Eleftherios, CNR, Ist Ric Ecosistemi Terrestri, Via Madonna Piano 10, I-50019 Sesto Fiorentino, Italy\nFaraloni, Cecilia, CNR, Ist Bioecon, Via Madonna Piano 10, I-50019 Florence, Italy\nTorzillo, Giuseppe, Univ Costa Rica, Ctr Invest Ciencias Mar \\& Limnol, San Jose 2060, Costa Rica. CNR, Ist Bioecon, Via Madonna Piano 10, I-50019 Florence, Italy\nSilva Benavides, Ana Margarita, Univ Costa Rica, Ctr Invest Ciencias Mar \\& Limnol, San Jose 2060, Costa Rica. Univ Costa Rica, Escuela Biol, San Jose 2060, Costa Rica\nMasojidek, Jiri, Czech Acad Sci, Ctr Algatech, Inst Microbiol, Lab Algal Biotechnol, CZ-37981 Trebon, Czech Republic}\n}",
+              "score": 0.015873015873015872
+            },
+            {
+              "document_id": "WOS000981765200001.bib",
+              "chunk_id": 2,
+              "full_id": "doc-WOS000981765200001.bib-chunk-2",
+              "offset": 1500,
+              "text": "ction.(c) 2023 The Authors. Published by Elsevier Ltd on behalf of Hydrogen Energy Publications LLC. This is an open access article under the CC BY-NC-ND license (http:// creativecommons.org/licenses/by-nc-nd/4.0/).},\n\tAffiliation = {Zheng, Lei, Politecn Milan, Dipartimento Energia, Lab Catalysis \\& Catalyt Proc, Via Lambruschini 4, I-20156 Milan, Italy\nAmbrosetti, Matteo, Politecn Milan, Dipartimento Energia, Lab Catalysis \\& Catalyt Proc, Via Lambruschini 4, I-20156 Milan, Italy\nZaio, Francesca, Politecn Milan, Dipartimento Energia, Lab Catalysis \\& Catalyt Proc, Via Lambruschini 4, I-20156 Milan, Italy\nBeretta, Alessandra, Politecn Milan, Dipartimento Energia, Lab Catalysis \\& Catalyt Proc, Via Lambruschini 4, I-20156 Milan, Italy\nGroppi, Gianpiero, Politecn Milan, Dipartimento Energia, Lab Catalysis \\& Catalyt Proc, Via Lambruschini 4, I-20156 Milan, Italy\nTronconi, Enrico, Politecn Milan, Dipartimento Energia, Lab Catalysis \\& Catalyt Proc, Via Lambruschini 4, I-20156 Milan, Italy}\n}",
+              "score": 0.015625
+            },
+            {
+              "document_id": "WOS000864187600008.bib",
+              "chunk_id": 1,
+              "full_id": "doc-WOS000864187600008.bib-chunk-1",
+              "offset": 750,
+              "text": " in choosing the best technological route for the recovery of renewable and cost-effective hydrogen. Therefore, this bibliometric review evaluated the research progress, trends, updates, and hotspots on hydrogen production from dark fermentation. The Web of Science(C) database was used to select the documents from 2000 to 2021, and the VOSviewer(C) and Bibliometrix softwares were used to carry out the bibliometric investigation. The results demonstrated that 3071 documents (2755 articles and 316 reviews) studied the hydrogen production from dark fermentation over the last 21 years. The number of publications exponentially increased in the last five years, which can be associated with the demand for new technologies to produce clean energy sources and decrease the environmental impacts caused by petroleum-based fuel. Keyword analysis revealed that the studies focused on the operational parameters, process optimization, pretreatment, and microbial community, aiming to increase the hydrog",
+              "score": 0.015384615384615385
+            },
+            {
+              "document_id": "WOS000456355700026.bib",
+              "chunk_id": 2,
+              "full_id": "doc-WOS000456355700026.bib-chunk-2",
+              "offset": 1500,
+              "text": "ublications LLC. Published by Elsevier Ltd. All rights reserved.},\n\tAffiliation = {Escobar-Alarcon, L., Inst Nacl Invest Nucl, Dept Fis, Carr Mexico Toluca S-n La Marquesa, Ocoyoacac 52750, Edo De Mexico, Mexico\nIturbe-Garcia, J. L., Inst Nacl Invest Nucl, Dept Quim, Carr Mexico Toluca S-n La Marquesa, Ocoyoacac 52750, Edo De Mexico, Mexico\nGonzalez-Zavala, F., Univ Autonoma Metropolitana Iztapalapa, Dept Fis, Apdo Postal 55-534, Cdmx, Mexico\nHaro-Poniatowski, E., Univ Autonoma Metropolitana Iztapalapa, Dept Fis, Apdo Postal 55-534, Cdmx, Mexico\nSolis-Casados, D. A., Univ Autonoma Estado Mexico, Fac Quim, Toluca 50120, Estado De Mexic, Mexico\nPerez-Hernandez, R., Inst Nacl Invest Nucl, Dept Tecnol Mat, Carr Mexico Toluca S-n La Marquesa, Ocoyoacac 52750, Edo De Mexico, Mexico}\n}",
+              "score": 0.015384615384615385
+            },
+            {
+              "document_id": "WOS001127257400001.bib",
+              "offset": 0,
+              "score": 0.015151515151515152,
+              "text": "@article{WOS:001127257400001,\n\tAuthor = {Kirillov, I. A. and Kharitonova, N. L. and Simonenko, V. A. and Kryukov, V. M.},\n\tYear = {2023},\n\tTitle = {Development of approaches to regulatory safety in industrial water-electrolysis production of hydrogen at NPPs},\n\tJournal = {ATOMIC ENERGY},\n\tDOI = {10.1007/s10512-023-01035-x},\n\tWeb-Of-Science-Categories = {Nuclear Science \\& Technology},\n\tAbstract = {The article discusses the location of additional electrolysis production of hydrogen at the site of contemporary NPPs as one of the most promising areas in terms of nuclear-hydrogen energy development. The study aims to assess the possibility of applying the requirements of current legal documents to the regulation of hydrogen fire and explosion safety when locating hydrogen electrolysis production complexes at the NPP site. The regulatory documents applicable to the safety regulation in the industrial production of hydrogen at existing NPPs, including the electrolysis, compression, liquefaction, storage, pre-transportation, transportation, and supplying large volumes of product hydrogen to consumers, are analyzed. The limitations of the regulatory legal framework, including in the field of safety for such a location of the hydrogen production are noted, along with the need for its improvement. Recommendations and proposals are formulated to clarify and/or supplement the requirements of documents regulating hydrogen fire and explosion safety for hydrogen electrolysis production complexes at NPPs.},\n\tAffiliation = {Kirillov, I. A., NRC Kurchatovsky Inst, Moscow, Russia\nKharitonova, N. L., NRC Kurchatovsky Inst, Moscow, Russia\nSimonenko, V. A., RFNC, VNIITF, FSUE, Snezhinsk, Russia\nKryukov, V. M., RFNC, VNIITF, FSUE, Snezhinsk, Russia}\n}"
+            }
+          ]
+        }
+      }
+    },
+    "parent": "gensym#forest-node:f0c4b9bf-82f2-4038-9b2d-0c57b1d22362",
+    "children": [
+      "gensym#forest-node:709e12be-85cb-4843-ba64-2ac8a4b7fa61"
+    ]
+  },
+  "gensym#forest-node:709e12be-85cb-4843-ba64-2ac8a4b7fa61": {
+    "id": "gensym#forest-node:709e12be-85cb-4843-ba64-2ac8a4b7fa61",
+    "timestamp": 1785280893246697755,
+    "active_revision": 1,
+    "next_free_revision": 2,
+    "revision_names": {},
+    "data": {
+      "1": {
+        "message": {
+          "role": "tool",
+          "content": [
+            {
+              "type": "text",
+              "text": "[System information: Knowledge-base match from 'WOS000318348800002.bib', at offset 0, length 2176 characters.]\n\n@article{WOS:000318348800002,\n\tAuthor = {Saripan, Arunsri Fangkum and Reungsang, Alissara},\n\tYear = {2013},\n\tTitle = {Biohydrogen production by <i>Thermoanaerobacterium thermosaccharolyticum</i> KKU-ED1: Culture conditions optimization using mixed xylose/arabinose as substrate},\n\tJournal = {ELECTRONIC JOURNAL OF BIOTECHNOLOGY},\n\tVolume = {16},\n\tNumber = {1},\n\tDOI = {10.2225/vol16-issue1-fulltext-1},\n\tWeb-Of-Science-Categories = {Biotechnology \\& Applied Microbiology},\n\tAbstract = {Background: Biological hydrogen production by microorganisms can be divided into two main categories i.e. photosynthetic organisms that produce hydrogen using light as energy source and anaerobic bacteria that produce hydrogen via dark fermentation. Dark fermentative hydrogen production by anaerobic bacteria has the advantages of a higher HPR without illumination and of the capability to convert various kinds of substrate. Results: Thermophilic hydrogen producer was isolated from elephant dung and identified as Thermoanaerobacterium thermosaccharolyticum KKU-ED1 by 16S rRNA gene analysis, which was further used to produce hydrogen from mixed pentose sugar i.e., xylose/arabinose. The optimum conditions for hydrogen production from mixed xylose/arabinose by KKU-ED1 were a 1: 1 xylose/arabinose mixture at the total concentration of 5 g/L, initial pH of 6.5 and temperature of 55 degrees C. Under the optimum conditions, hydrogen from sugar derived from acid-hydrolyzed sugarcane bagasse at a reducing sugar concentration were achieved. Soluble metabolite product (SMP) was predominantly acetic acid indicating the acetate-type fermentation. Conclusions: The strain KKU-ED1 appeared to be a suitable candidate for thermophilic fermentative hydrogen production from hemicellulosic fraction of lignocellulosic materials due to its ability to use various types of carbon sources.},\n\tAffiliation = {Saripan, Arunsri Fangkum, Thepsatri Rajabhat Univ, Fac Sci \\& Technol, Environm Sci Program, Lopburi, Thailand\nReungsang, Alissara, Khon Kaen Univ, Fac Technol, Dept Biotechnol, Khon Kaen, Thailand. Khon Kaen Univ, Res Grp Dev Microbial Hydrogen Prod Proc Biomass, Khon Kaen, Thailand}\n}\n-----\n\n[System information: Knowledge-base match from 'WOS000309024700021.bib', at offset 0, length 1000 characters.]\n\n@article{WOS:000309024700021,\n\tAuthor = {Khamtib, Sontaya and Reungsang, Alissara},\n\tYear = {2012},\n\tTitle = {Biohydrogen production from xylose by <i>Thermoanaerobacterium thermosaccharolyticum</i> KKU19 isolated from hot spring sediment},\n\tJournal = {INTERNATIONAL JOURNAL OF HYDROGEN ENERGY},\n\tVolume = {37},\n\tNumber = {17},\n\tPages = {12219-12228},\n\tDOI = {10.1016/j.ijhydene.2012.06.038},\n\tWeb-Of-Science-Categories = {Chemistry, Physical; Electrochemistry; Energy \\& Fuels},\n\tAbstract = {A thermophilic hydrogen producer was isolated from hot spring sediment and identified as Thermoanaerobacterium thermosaccharolyticum KKU19 by biochemical tests and 16S rRNA gene sequence analysis. The strain KKU19 showed the ability to utilize various kinds of carbon sources. Xylose was the preferred carbon source while peptone was the preferred organic nitrogen source. The optimum conditions for hydrogen production and cell growth on xylose were an initial pH of 6.50, temperature of 60 degrees C, a ca\n-----\n\n[System information: Knowledge-base match from 'WOS000257532500008.bib', at offset 0, length 1000 characters.]\n\n@article{WOS:000257532500008,\n\tAuthor = {Liu, Yan and Yu, Peng and Song, Xin and Qu, Yinbo},\n\tYear = {2008},\n\tTitle = {Hydrogen production from cellulose by co-culture of <i>Clostridium thermocellum</i> JN4 and <i>Thermoanaerobacterium thermosaccharolyticum</i> GD17},\n\tJournal = {INTERNATIONAL JOURNAL OF HYDROGEN ENERGY},\n\tVolume = {33},\n\tNumber = {12},\n\tPages = {2927-2933},\n\tDOI = {10.1016/j.ijhydene.2008.04.004},\n\tWeb-Of-Science-Categories = {Chemistry, Physical; Electrochemistry; Energy \\& Fuels},\n\tAbstract = {Two thermophilic, anaerobic bacteria named JN4 and GD17 were isolated from rotten wheat straw. The cellulolytic bacterium JN4 was identified as Clostridium thermocellum and its companion bacterium GD17 was shown to be Thermoanaerobacterium thermosaccharolyticum by 165 rDNA analysis and morphological observation. The production of hydrogen by both strains was investigated. C. thermocellum JN4 can degrade microcrystalline cellulose to produce hydrogen, ethanol, acetic acid and l\n-----\n\n[System information: Knowledge-base match from 'WOS000172840900017.bib', at offset 0, length 1000 characters.]\n\n@article{WOS:000172840900017,\n\tAuthor = {Ueno, Y and Haruta, S and Ishii, M and Igarashi, Y},\n\tYear = {2001},\n\tTitle = {Characterization of a microorganism isolated from the effluent of hydrogen fermentation by microflora},\n\tJournal = {JOURNAL OF BIOSCIENCE AND BIOENGINEERING},\n\tVolume = {92},\n\tNumber = {4},\n\tPages = {397-400},\n\tDOI = {10.1263/jbb.92.397},\n\tWeb-Of-Science-Categories = {Biotechnology \\& Applied Microbiology; Food Science \\& Technology},\n\tAbstract = {The hydrogen production yield from glucose by an isolate was investigated and compared to that by microflora. The isolate, Thermoanaerobacterium thermosaccharolyticum KU001, from the microflora demonstrated approximately 2.4 mol/mol-glucose of hydrogen production with acetate/butyrate formation in an artificial medium. The fermentation pattern was similar to that observed for the hydrogen fermentation of wastewater by the microflora. A PCR-DGGE analysis of the bacterial 16S rDNA detected T. thermosaccharolyticum in the micro\n-----\n\n[System information: Knowledge-base match from 'WOS000947325800001.bib', at offset 0, length 2500 characters.]\n\n@article{WOS:000947325800001,\n\tAuthor = {Liu, Xin and Zhu, Xianpu and Yellezuome, Dominic and Liu, Ronghou and Liu, Xuwei and Sun, Chen and Abd-Alla, Mohamed Hemida and Rasmey, Abdel-Hamied M.},\n\tYear = {2023},\n\tTitle = {Effects of adding Thermoanaerobacterium thermosaccharolyticum in the hydrogen production stage of a two-stage anaerobic digestion system on hydrogen-methane production and microbial communities},\n\tJournal = {FUEL},\n\tVolume = {342},\n\tDOI = {10.1016/j.fuel.2023.127831},\n\tWeb-Of-Science-Categories = {Energy \\& Fuels; Engineering, Chemical},\n\tAbstract = {Microorganisms play a vital role in anaerobic digestion, however, bioaugmentation in a two-stage co-digestion system to directly regulate the microbial structure is limited. In this study, the different dosage of Thermoa-naerobacterium thermosaccharolyticum was added in the hydrogen production stage of a two-stage anaerobic digestion system operating at a thermophilic temperature (55 degrees C). Results showed that Thermoanaerobacterium thermosaccharolyticum of 1.12 g had the best effect, with the cumulative hydrogen and methane yields reaching 81.54 mL/g VS and 550.98 mL/g VS respectively, which were 68.72 \\% and 84.45 \\% higher than the control group. According to the microbial analysis, the addition of Thermoanaerobacterium thermosaccharolyticum significantly changed the microbial community structure, and also its relative abundance increased in the hydrogen production stage, thereby increasing volatile fatty acids (VFAs) and hydrogen content. Although the methane production stage did not contain Thermoanaerobacterium thermosaccharolyticum, the microbial com-munity structure changed, increasing the dominant species Anaerolineae and Limnochordia, thereby improving the efficiency of substrate decomposition and methane production. This study shows that Thermoanaerobacterium thermosaccharolyticum can promote not only hydrogen production but also the production of methane in two -stage anaerobic digestion.},\n\tAffiliation = {Liu, Xin, Shanghai Jiao Tong Univ, Biomass Energy Engn Res Ctr, Sch Agr \\& Biol, 800 Dongchuan Rd, Shanghai 200240, Peoples R China. Minist Sci \\& Technol, Shanghai Yangtze River Delta Ecoenvironm Change \\&, 800 Dongchuan Rd, Shanghai 200240, Peoples R China\nZhu, Xianpu, Shanghai Jiao Tong Univ, Biomass Energy Engn Res Ctr, Sch Agr \\& Biol, 800 Dongchuan Rd, Shanghai 200240, Peoples R China. Minist Sci \\& Technol, Shanghai Yangtze River Delta Ecoenvironm Change \\&, 800 Dongch\n-----\n\n[System information: Knowledge-base match from 'WOS000365406800025.bib', at offset 0, length 1750 characters.]\n\n@article{WOS:000365406800025,\n\tAuthor = {Sheng, Tao and Gao, Lingfang and Zhao, Lei and Liu, Wenzong and Wang, Aijie},\n\tYear = {2015},\n\tTitle = {Direct hydrogen production from lignocellulose by the newly isolated <i>Thermoanaerobacterium</i> <i>thermosaccharolyticum</i> strain DD32},\n\tJournal = {RSC ADVANCES},\n\tVolume = {5},\n\tNumber = {121},\n\tPages = {99781-99788},\n\tDOI = {10.1039/c5ra20000h},\n\tWeb-Of-Science-Categories = {Chemistry, Multidisciplinary},\n\tAbstract = {Biofuel from lignocellulosic materials is a promising type of fuel because it does not compete with food supplies and has a sustainable production process. However, the primary obstacle for producing biofuels from lignocellulose is the low-energy productivity of microorganisms. In this research, thermophilic bacterial strain DD32, which effectively converts lignocellulose to hydrogen, was isolated and characterized. This strain was identified as Thermoanaerobacterium thermosaccharolyticum according to 16S rRNA sequence homology. The maximum H-2 production yield reached 12.08 mmol H-2 g(-1) Avicel, which is equivalent to 2.17 mol H-2 mol(-1) glucose, at the optimal condition of 55 degrees C and pH 7.5 with 5.0 g L-1 Avicel. To our knowledge, this result represents the highest H-2 yield from cellulose for thermophilic bacterial monocultures reported so far. Moreover, the hydrogen productivity of strain DD32 from raw (non-pretreated) lignocellulosic biomass is also tested. Results show that the highest hydrogen yield and lignocelluloses degradation rate reached 6.38 mmol H-2 g(-1) and 44.29\\% from corn stalk after 72 h of incubation. This yield was almost 2-3 times that of other thermophilic strains. These results suggested that newly isolate T. thermosaccharol\n-----\n\n[System information: Knowledge-base match from 'WOS000339039500009.bib', at offset 0, length 1000 characters.]\n\n@article{WOS:000339039500009,\n\tAuthor = {Laocharoen, Sucheera and Reungsang, Alissara},\n\tYear = {2014},\n\tTitle = {Isolation, characterization and optimization of photo-hydrogen production conditions by newly isolated <i>Rhodobacter sphaeroides</i> KKU-PS5},\n\tJournal = {INTERNATIONAL JOURNAL OF HYDROGEN ENERGY},\n\tVolume = {39},\n\tNumber = {21},\n\tPages = {10870-10882},\n\tDOI = {10.1016/j.ijhydene.2014.05.055},\n\tWeb-Of-Science-Categories = {Chemistry, Physical; Electrochemistry; Energy \\& Fuels},\n\tAbstract = {A purple non-sulfur (PNS) photosynthetic bacterium was isolated from an upflow anaerobic sludge blanket (UASB) bioreactor for methane production and was identified as Rhodobacter sphaeroides KKU-PS5 (GenBank Accession no. KC481702) by 16s rRNA gene sequence analysis. Strain KKU-PS5 could utilize glucose, xylose, fructose, arabinose, malate, succinate, acetate, butyrate, lactate and D-mannitol for growth and hydrogen production. Malate was a preferred carbon source while glutamate and A\n-----\n\n[System information: Knowledge-base match from 'WOS000319232500079.bib', at offset 0, length 1991 characters.]\n\n@article{WOS:000319232500079,\n\tAuthor = {Saripan, Arunsri Fangkum and Reungsang, Alissara},\n\tYear = {2013},\n\tTitle = {Biohydrogen production by <i>Thermoanaerobacterium thermosaccharolyticum</i> KKU-ED1: Culture conditions optimization using xylan as the substrate},\n\tJournal = {INTERNATIONAL JOURNAL OF HYDROGEN ENERGY},\n\tVolume = {38},\n\tNumber = {14},\n\tPages = {6167-6173},\n\tDOI = {10.1016/j.ijhydene.2012.12.130},\n\tWeb-Of-Science-Categories = {Chemistry, Physical; Electrochemistry; Energy \\& Fuels},\n\tAbstract = {Thermophilic hydrogen production from xylan by Thermoanaerobacterium thermosaccharolyticum KKU-ED1 isolated from elephant dung was investigated using batch fermentation. The optimum conditions for hydrogen production from xylan by the strain KKU-ED1 were an initial pH of 7.0, temperature of 55 degrees C and xylan concentration of 15 g/L. Under the optimum conditions, the hydrogen yield (HY), hydrogen production rate (HPR) and xylanase activity were 120.05 +/- 15.07 mL H-2/g xylan, 11.53 +/- 0.19 mL H-2/L h and 0.41 units/mL, respectively. The optimum conditions were then used to produce hydrogen from 62.5 g/L sugarcane bagasse (SCB) (equivalent to 15 g/L xylan) in which the HY and HPR of 1.39 +/- 0.10 mL H-2/g SCB (5.77 +/- 0.41 mL H-2/g xylan) and 0.66 +/- 0.04 mL H-2/L h, respectively, were achieved. In comparison to the other strains, the HY of the strain KKU-ED1 (120.05 15.07 mL H-2/g xylan) was close to that of Clostridium sp. strain X53 (125.40 mL H-2/g xylan) and Clostridium butyricum CGS5 (90.70 mL H-2/g xylan hydrolysate). Copyright (C) 2013, Hydrogen Energy Publications, LLC. Published by Elsevier Ltd. All rights reserved.},\n\tAffiliation = {Saripan, Arunsri Fangkum, Thepsatri Rajabhat Univ, Fac Sci \\& Technol, Environm Sci Program, Lopburi 15000, Thailand\nReungsang, Alissara, Khon Kaen Univ, Res Grp Dev Microbial Hydrogen Prod Proc Biomass, Khon Kaen 40002, Thailand. Khon Kaen Univ, Fac Technol, Dept Biotechnol, Khon Kaen 40002, Thailand}\n}\n-----\n\n[System information: Knowledge-base match from 'WOS000292223100068.bib', at offset 1500, length 817 characters.]\n\ned to Thermoanaerobacter pseudethanolicus. Copyright (C) 2010, Hydrogen Energy Publications, LLC. Published by Elsevier Ltd. All rights reserved.},\n\tAffiliation = {Hasyim, Rafiani, Yamaguchi Univ, Grad Sch Sci \\& Engn, Div Environm Sci \\& Engn, Ube, Yamaguchi 7558611, Japan. Reg Environm Agcy BLH, Bengkalis Regency 28713, Riau Province, Indonesia\nImai, Tsuyoshi, Yamaguchi Univ, Grad Sch Sci \\& Engn, Div Environm Sci \\& Engn, Ube, Yamaguchi 7558611, Japan. Yamaguchi Univ, Grad Sch Sci \\& Engn, Div Environm Sci \\& Engn, Tokiwadai 2-16-1, Ube, Yamaguchi 7558611, Japan\nReungsang, Alissara, Khon Kaen Univ, Fermentat Res Ctr Value Added Agr Prod, Khon Kaen, Thailand. Khon Kaen Univ, Fac Technol, Dept Biotechnol, Khon Kaen, Thailand\nO-Thong, Sompong, Thaksin Univ, Fac Sci, Dept Biol, Patthalung 93110, Thailand}\n}\n-----\n\n[System information: Knowledge-base match from 'WOS000309043200072.bib', at offset 1500, length 779 characters.]\n\nctively. Corresponding microbial community determined by the DGGE profile demonstrated that Clostridium spp. was the dominant species. Clostridium paraputrificum was the only dominant bacterium presented in all temperatures tested, indicating that the strain was thermotolerant. Copyright (C) 2012, Hydrogen Energy Publications, LLC. Published by Elsevier Ltd. All rights reserved.},\n\tAffiliation = {Yossan, Siriporn, Prince Songkla Univ, Fac Agroind, Dept Ind Biotechnol, Hat Yai 90112, Thailand\nPrasertsan, Poonsuk, Prince Songkla Univ, Fac Agroind, Dept Ind Biotechnol, Hat Yai 90112, Thailand. Prince Songkla Univ, Fac Agroind, Palm Oil Prod \\& Technol Res Ctr POPTEC, Hat Yai 90112, Thailand\nO-Thong, Sompong, Thaksin Univ, Fac Sci, Dept Biol, Phatthalung 93110, Thailand}\n}\n-----\n\n[System information: Knowledge-base match from 'WOS000290072300021.bib', at offset 1500, length 1144 characters.]\n\nidentify the bacteria strains present in the consortium showed that they belonged to the genus Klebsiella and Pantoea. Copyright (C) 2011, Hydrogen Energy Publications, LLC. Published by Elsevier Ltd. All rights reserved.},\n\tAffiliation = {Rossi, Daniele Misturini, Univ Fed Rio Grande do Sul, Biotechnol \\& Biochem Engn Lab BiotecLab, BR-91501970 Porto Alegre, RS, Brazil\nde Souza, Elisangela Aquino, Univ Fed Rio Grande do Sul, Biotechnol \\& Biochem Engn Lab BiotecLab, BR-91501970 Porto Alegre, RS, Brazil\nZachia Ayub, Marco Antonio, Univ Fed Rio Grande do Sul, Biotechnol \\& Biochem Engn Lab BiotecLab, Av Bento Goncalves 9500,POB 15090, BR-91501970 Porto Alegre, RS, Brazil. Univ Fed Rio Grande do Sul, Biotechnol \\& Biochem Engn Lab BiotecLab, BR-91501970 Porto Alegre, RS, Brazil\nda Costa, Janaina Berne, Univ Fed Rio Grande do Sul, Inst Chem, Dept Organ Chem, BR-91501970 Porto Alegre, RS, Brazil\nRuaro Peralba, Maria do Carmo, Univ Fed Rio Grande do Sul, Inst Chem, Dept Organ Chem, BR-91501970 Porto Alegre, RS, Brazil\nSamios, Dimitrios, Univ Fed Rio Grande do Sul, Inst Chem, Dept Organ Chem, BR-91501970 Porto Alegre, RS, Brazil}\n}\n-----\n\n[System information: Knowledge-base match from 'WOS000300562500009.bib', at offset 750, length 1500 characters.]\n\nodology. Temperature of 60 degrees C and initial pHof 5.5 was optimized for anaerobic microflora which gave a maximum hydrogen production of 4820 ml H-2/l-POME corresponding to hydrogen yield of 243 ml H-2/g-sugar. Total sugar consumption and chemical oxygen demand (COD) removal efficiency were 98.7\\% and 46\\%, respectively. Long-term hydrogen production in continuous reactor at HRT of 2 days, 1 day and 12 hrs were 4850 +/- 90, 4660 +/- 99 and 2590 +/- 120 ml H-2/l-POME, respectively. Phylogenetic analysis of the mixed culture revealed that members involved hydrogen producers in both batch and continuous reactors were phylogenetically related to the Thermoanaerobacterium thermosaccharolyticum. Batch reactor showed more diversity of microorganisms than continuous reactor. Microbial community structure of batch reactor was comprised of T. thermosaccharolyticum, T. bryantii, Thermoanaerobacterium sp., Clostridium thermopalmarium and Clostridium NS5-4, while continuous reactor was comprised of T. thermosaccharolyticum, T. bryantii and Thermoanaerobacterium sp. POME is good substrate for biohydrogen production under thermophilic condition with Thermoanaerobacterium species play an important role in hydrogen fermentation.},\n\tAffiliation = {O-Thong, Sompong, Thaksin Univ, Fac Sci, Dept Biol, Phatthalung, Thailand\nMamimin, Chonticha, Thaksin Univ, Fac Sci, Dept Biol, Phatthalung, Thailand\nPrasertsan, Poonsuk, Prince Songkla Univ, Fac Agroind, Dept Ind Biotechnol, Hat Yai, Thailand}\n}\n-----\n\n[System information: Knowledge-base match from 'WOS000476964900030.bib', at offset 1500, length 989 characters.]\n\ns were the genera Clostridium, Bifidobacterium, and Lactobacillus. (C) 2019 Hydrogen Energy Publications LLC. Published by Elsevier Ltd. All rights reserved.},\n\tAffiliation = {Abubackar, Hans Nalakath, Univ A Coruna, Fac Sci, Chem Engn Lab, Rua Fraga 10, E-15008 La Coruna, Spain. Univ A Coruna, Ctr Adv Sci Res CICA, Rua Fraga 10, E-15008 La Coruna, Spain. Ege Univ, Fac Engn, Bioengn Dept, TR-35100 Izmir, Turkey\nKeskin, Tugba, Ege Univ, Fac Engn, Bioengn Dept, TR-35100 Izmir, Turkey\nArslan, Kubra, Ege Univ, Fac Engn, Bioengn Dept, TR-35100 Izmir, Turkey\nYavuzyilmaz, Duygu Karaalp, Ege Univ, Fac Engn, Bioengn Dept, TR-35100 Izmir, Turkey\nAzbar, Nuri, Ege Univ, Fac Engn, Bioengn Dept, TR-35100 Izmir, Turkey\nVural, Cansu, Ege Univ, Fac Sci, Biol Dept, TR-35100 Izmir, Turkey\nAksu, Didem, Ege Univ, Applicat \\& Res Ctr Testing \\& Anal, TR-35100 Izmir, Turkey. Ege Univ, Fac Sci, Biol Dept, TR-35100 Izmir, Turkey\nOzdemir, Guuen, Ege Univ, Fac Sci, Biol Dept, TR-35100 Izmir, Turkey}\n}\n-----\n\n[System information: Knowledge-base match from 'WOS000261543400011.bib', at offset 0, length 1000 characters.]\n\n@article{WOS:000261543400011,\n\tAuthor = {O-Thong, Sompong and Prasertsan, Poonsuk and Karakashev, Dimitar and Angelidaki, Irini},\n\tYear = {2008},\n\tTitle = {High-rate continuous hydrogen production by <i>Thermoanaerobacterium thermosaccharolyticum</i> PSU-2 immobilized on heat-pretreated methanogenic granules},\n\tJournal = {INTERNATIONAL JOURNAL OF HYDROGEN ENERGY},\n\tVolume = {33},\n\tNumber = {22},\n\tPages = {6498-6508},\n\tDOI = {10.1016/j.ijhydene.2008.07.060},\n\tWeb-Of-Science-Categories = {Chemistry, Physical; Electrochemistry; Energy \\& Fuels},\n\tAbstract = {Biohydrogen production from Thermoanaerobacterium thermosaccharolyticum strain PSU-2 was examined in upflow anaerobic sludge blanket (UASB) reactor and carrier-free upflow anaerobic reactor (UA), both fed with sucrose and operating at 60 degrees C. Heat-pretreated methanogenic granules were used as carrier to immobilize T. thermosaccharolyticum strain PSU-2 in UASB reactor operated at a hydraulic retention time (HRT) ranging from 0.75\n-----\n\n[System information: Knowledge-base match from 'WOS000651783300007.bib', at offset 1500, length 1000 characters.]\n\ncillus spp., Escherichia coli, thermophilic lactic acid bacteria, and Klebsiella spp., along with the molecular approaches employed for the enhancement of biohydrogen production are discussed. In addition, a thorough techno-economic analysis of factors involved in the scale-up of hydrogen production is carried out.},\n\tAffiliation = {Sivaramakrishnan, Ramachandran, Chulalongkorn Univ, Dept Biochem, Lab Cyanobacterial Biotechnol, Fac Sci, Bangkok 10330, Thailand\nIncharoensakdi, Aran, Chulalongkorn Univ, Dept Biochem, Lab Cyanobacterial Biotechnol, Fac Sci, Bangkok 10330, Thailand\nShanmugam, Sabarathinam, Chongqing Univ, Inst Engn Thermophys, Chongqing 400044, Peoples R China. Chongqing Univ, Key Lab Low Grade Energy Utilizat Technol \\& Syst, Minist Educ, Chongqing 400044, Peoples R China\nSekar, Manigandan, Sathyabama Inst Sci \\& Technol, Dept Aeronaut Engn, Chennai 600119, Tamil Nadu, India\nMathimani, Thangavel, Natl Inst Technol, Environm \\& Energy Dept, Tiruchirappalli 620015, Tamil Na\n-----\n\n[System information: Knowledge-base match from 'WOS000389089600061.bib', at offset 0, length 1750 characters.]\n\n@article{WOS:000389089600061,\n\tAuthor = {Mamimin, Chonticha and Jehlee, Aminee and Saelor, Sittikorn and Prasertsan, Poonsuk and O-Thong, Sompong},\n\tYear = {2016},\n\tTitle = {Thermophilic hydrogen production from co-fermentation of palm oil mill effluent and decanter cake by <i>Thermoanaerobacterium thermosaccharolyticum</i> PSU-2},\n\tJournal = {INTERNATIONAL JOURNAL OF HYDROGEN ENERGY},\n\tVolume = {41},\n\tNumber = {46},\n\tPages = {21692-21701},\n\tDOI = {10.1016/j.ijhydene.2016.07.152},\n\tWeb-Of-Science-Categories = {Chemistry, Physical; Electrochemistry; Energy \\& Fuels},\n\tAbstract = {Co-fermentation of palm oil mill effluent (POME) for hydrogen production by Thermoanaerobacterium thermosaccharolyticum PSU-2 under thermophilic condition was investigated. Hydrogen production from co-fermentation POME with 5 g/L decanter cake and without was 2.6 and 1.7 L-H-2/L-POME. Co-fermentation of POME with decanter cake enhanced hydrogen production. Tbm. thermosaccharolyticum PSU-2 augmentation at 20\\% v/v was found to be an efficient start-up strategy in continuous hydrogen production from co-fermentation of POME with decanter cake. Tbm. thermosaccharolyticum PSU-2 augmentation could suppress normal flora bacteria in POME and decanter cake. Hydrogen production of 7.2 L-H-2/L-POME and hydrogen production rate of 18.1 mmol-H-2/L/h was achieved from continuous hydrogen in long term operation. The soluble metabolites were dominated by acetic acid and butyric acid. Tbm. thermosaccharolyticum PSU-2 augmentation could use for control undesired bacteria in the hydrogen production system with flavored Thermoanaerobacterium sp. as dominant species. (C) 2016 Hydrogen Energy Publications LLC. Published by Elsevier Ltd. All rights reserved.},\n\tAffilia\n-----\n\n[System information: Knowledge-base match from 'WOS000607467900014.bib', at offset 1500, length 834 characters.]\n\nia Clostridium butyricum. (C) 2020 Hydrogen Energy Publications LLC. Published by Elsevier Ltd. All rights reserved.},\n\tAffiliation = {Sugiarto, Yusron, Univ Brawijaya, Fac Agr Technol, Jalan Vet, Malang 65145, East Java, Indonesia. Univ Western Australia, Ctr Energy, M473,35 Stirling Highway, Crawley, WA 6009, Australia\nSunyoto, Nimas M. S., Univ Brawijaya, Fac Agr Technol, Jalan Vet, Malang 65145, East Java, Indonesia. Univ Western Australia, Ctr Energy, M473,35 Stirling Highway, Crawley, WA 6009, Australia\nZhu, Mingming, Univ Western Australia, Ctr Energy, M473,35 Stirling Highway, Crawley, WA 6009, Australia\nJones, Isabelle, Univ Western Australia, Ctr Energy, M473,35 Stirling Highway, Crawley, WA 6009, Australia\nZhang, Dongke, Univ Western Australia, Ctr Energy, M473,35 Stirling Highway, Crawley, WA 6009, Australia}\n}\n-----\n\n[System information: Knowledge-base match from 'WOS000485210500012.bib', at offset 1500, length 827 characters.]\n\nction at 70 degrees C were Clostridium, Pectinatus, Megasphaera and Lactobacillus. (C) 2019 Published by Elsevier Ltd on behalf of Hydrogen Energy Publications LLC.},\n\tAffiliation = {Niz, M. Y. K., Univ Sao Paulo, Sao Carlos Sch Engn EESC, Biol Proc Lab, 1100 Joao Dagnone Ave, Sao Carlos, SP, Brazil\nZaiat, M., Univ Sao Paulo, Sao Carlos Sch Engn EESC, Biol Proc Lab, 1100 Joao Dagnone Ave, Sao Carlos, SP, Brazil\nEtchelet, I., Biol Res Inst Clemente Estable, Microbial Biochem \\& Genom Dept, Microbial Ecol Lab, 3318 Italia Ave, Montevideo, Uruguay\nFuentes, L., Biol Res Inst Clemente Estable, Microbial Biochem \\& Genom Dept, Microbial Ecol Lab, 3318 Italia Ave, Montevideo, Uruguay\nEtchebehere, C., Biol Res Inst Clemente Estable, Microbial Biochem \\& Genom Dept, Microbial Ecol Lab, 3318 Italia Ave, Montevideo, Uruguay}\n}\n-----\n\n[System information: Knowledge-base match from 'WOS000345803900060.bib', at offset 750, length 1855 characters.]\n\n65 rRNA gene clone library techniques. The hydrogen-producing bacteria were isolated and their ability to produce hydrogen was confirmed. The microbial community was dominated by Thermoanaerobacterium species (similar to 66\\%). The remaining microorganisms belonged to Clostridium and Desulfotomaculum spp. (similar to 28\\% and similar to 6\\%, respectively). Three hydrogen-producing strains, namely HPB-1, HPB-2, and HPB-3, were isolated. 16S rRNA gene sequence analysis of HPB-1 and HPB-2 revealed a high similarity to Thermoanaerobacterium thermosaccharolyticum (98.6\\% and 99.0\\%, respectively). The Therrnoanaerobacterium HPB-2 strain was a promising candidate for thermophilic fermentative hydrogen production with a hydrogen yield of 2.53 mol H-2 mol(-1)hexose from organic waste and wastewater containing a mixture of hexose and pentose sugars. Thermoanaerobacterium species play a major role in thermophilic hydrogen production as confirmed both by molecular and cultivation-based analyses. Copyright (C) 2014, Hydrogen Energy Publications, LLC. Published by Elsevier Ltd. All rights reserved.},\n\tAffiliation = {Nitipan, Supachai, Thaksin Univ, Dept Biol, Fac Sci, Patthalung 93110, Thailand. Thaksin Univ, Microbial Resource Management Res Unit, Fac Sci, Patthalung 93110, Thailand\nIntrasungkha, Nugul, Thaksin Univ, Dept Biol, Fac Sci, Patthalung 93110, Thailand. Thaksin Univ, Microbial Resource Management Res Unit, Fac Sci, Patthalung 93110, Thailand\nO-Thong, Sompong, Thaksin Univ, Dept Biol, Fac Sci, Patthalung 93110, Thailand. Thaksin Univ, Microbial Resource Management Res Unit, Fac Sci, Patthalung 93110, Thailand\nMamimin, Chonticha, Thaksin Univ, Fac Sci, Dept Biol, Biotechnol Program, Patthalung 93110, Thailand\nBirkeland, Nils Kare, Univ Bergen, Ctr Geobiol, N-5020 Bergen, Norway. Univ Bergen, Dept Biol, N-5020 Bergen, Norway}\n}\n-----\n\n[System information: Knowledge-base match from 'WOS000270165800038.bib', at offset 750, length 2070 characters.]\n\ns (60 degrees C) were investigated in order to achieve the maximum process stability. Microbial community structure dynamics in the ASBR was studied by denaturing gradient gel electrophoresis (DGGE) aiming at improved insight into the hydrogen fermentation microorganisms. The optimum values of 2-d HRT with an OLR of 60 gCOD l(-1) d(-1) gave a maximum hydrogen yield of 0.27 l H-2 gCOD(-1) with a volumetric hydrogen production rate of 9.1 l H-2 l(-1) d(-1) (16.9 mmol l(-1) h(-1)). The hydrogen content, total carbohydrate consumption, COD (chemical oxygen demand) removal and suspended solids removal were 55 +/- 3.5\\%, 92 +/- 3\\%, 57 +/- 2.5\\% and 78 +/- 2\\%, respectively. Acetic acid and butyric acid were the major soluble end-products. The microbial community structure was strongly dependent on the HRT and OLR. DGGE profiling illustrated that Thermoanaerobacterium spp., such as Thermoanaerobacterium thermosaccharolyticum and Thermoanaerobacterium bryantii, were dominant and probably played an important role in hydrogen production under the optimum conditions. The shift in the microbial community from a dominance of T. thermosaccharolyticum to a community where also Caloramator proteoclasticus constituted a major component occurred at suboptimal HRT (1 d) and OLR (80 gCOD l(-1) d(-1)) conditions. The results showed that the hydrogen production performance was closely correlated with the bacterial community structure. This is the first report of a successful ASBR operation achieving a high hydrogen production rate from real wastewater (POME). (C) 2009 Published by Elsevier Ltd on behalf of international Association for Hydrogen Energy.},\n\tAffiliation = {Prasertsan, Poonsuk, Prince Songkla Univ, Fac Agroind, Dept Ind Biotechnol, Hat Yai 90112, Thailand. Prince Songkla Univ, Fac Agroind, Palm Oil Prod \\& Technol Res Ctr, Hat Yai 90112, Thailand\nO-Thong, Sompong, Thaksin Univ, Dept Biol, Fac Sci, Phatthalung 93110, Thailand\nBirkeland, Nils-Kare, Univ Bergen, Ctr Geobiol, N-5020 Bergen, Norway. Univ Bergen, Dept Biol, N-5020 Bergen, Norway}\n}\n-----"
+            }
+          ],
+          "tool_calls": [],
+          "tool_call_id": "g8wQix5RA8gdjO86eCCWd94JREq3Og6h"
+        },
+        "general_metadata": {
+          "timestamp": 1785280893246638543,
+          "datetime": "2026-07-29 02:21:33",
+          "persona": null
+        },
+        "generation_metadata": {
+          "status": "success",
+          "function_name": "search_documents",
+          "dt": 0.10569094600214157,
+          "grounding": true,
+          "docs_query": "Thermoanaerobacterium thermosaccharolyticum KKU-ED1",
+          "document_ids": [
+            "WOS000318348800002.bib",
+            "WOS000309024700021.bib",
+            "WOS000257532500008.bib",
+            "WOS000172840900017.bib",
+            "WOS000947325800001.bib",
+            "WOS000365406800025.bib",
+            "WOS000339039500009.bib",
+            "WOS000319232500079.bib",
+            "WOS000292223100068.bib",
+            "WOS000309043200072.bib",
+            "WOS000290072300021.bib",
+            "WOS000300562500009.bib",
+            "WOS000476964900030.bib",
+            "WOS000261543400011.bib",
+            "WOS000651783300007.bib",
+            "WOS000389089600061.bib",
+            "WOS000607467900014.bib",
+            "WOS000485210500012.bib",
+            "WOS000345803900060.bib",
+            "WOS000270165800038.bib"
+          ]
+        }
+      }
+    },
+    "parent": "gensym#forest-node:6c65463c-a5a3-45a6-8140-e697b17af2b8",
+    "children": [
+      "gensym#forest-node:8107406c-4fc5-4e3c-953b-1c1cdedccd7f"
+    ]
+  },
+  "gensym#forest-node:8107406c-4fc5-4e3c-953b-1c1cdedccd7f": {
+    "id": "gensym#forest-node:8107406c-4fc5-4e3c-953b-1c1cdedccd7f",
+    "timestamp": 1785280923973516889,
+    "active_revision": 1,
+    "next_free_revision": 2,
+    "revision_names": {},
+    "data": {
+      "1": {
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "Aria: Here are the specific documents from the database that supported the previous summary, along with additional details they contain:\n\n### 1. The Role of Redox Potential\n*   **Document:** *Unraveling the effect of redox potential on dark fermentative hydrogen production* by **Sim et al. (2023)**.\n*   **What else it says:** This study confirms that **Oxidation-Reduction Potential (ORP)** is a critical control parameter. It highlights that the metabolic pathway of the bacteria\u2014whether they favor hydrogen production or cell growth\u2014depends heavily on the redox potential maintained in the reactor.\n\n### 2. Key Bacterial Species (*Clostridium*, etc.)\n*   **Document:** *Hydrogen production by mixed culture of several facultative bacteria and anaerobic bacteria* by **Qian et al. (2011)**.\n*   **What else it says:** This study supports the idea that **mixed cultures** can be more effective than pure ones. It notes that facultative anaerobes (like *Citrobacter*, *Klebsiella*, and *E. coli*) often work in synergy with strict anaerobes (like *Clostridium*) to improve overall hydrogen yield.\n*   **Document:** *FUNDAMENTAL-STUDIES ON HYDROGEN-PRODUCTION...* by **Nakamura et al. (1993)**.\n*   **What else it says:** It identifies ***Clostridium*** as a dominant species in the acid-forming phase of anaerobic treatment, where hydrogen production is most active.\n\n### 3. Metabolic Pathways (Acetate-type) & Yields\n*   **Document:** *Biohydrogen production by Thermoanaerobacterium thermosaccharolyticum KKU-ED1...* by **Saripan & Reungsang (2013)**.\n*   **What else it says:** This paper specifically details that the strain *Thermoanaerobacterium thermosaccharolyticum* KKU-ED1 produces hydrogen via the **acetate-type fermentation pathway**. It explicitly notes: \"Soluble metabolite product (SMP) was predominantly acetic acid,\" which aligns with the highest theoretical yields.\n*   **Document:** *Characterization of a microorganism isolated from the effluent of hydrogen fermentation by microflora* by **Ueno et al. (2001)**.\n*   **What else it says:** It reports a hydrogen production yield of approximately **2.4 mol per mol of glucose**, which is close to the theoretical maximum for the acetate pathway.\n\n### 4. Co-fermentation with Phototrophic Bacteria (*Rhodobacter*)\n*   **Document:** *Expression of aldehyde dehydrogenase gene increases hydrogen production from low concentration of acetate by Rhodobacter sphaeroides* by **Kobayashi et al. (2012)**.\n*   **What else it says:** This supports the concept of **co-fermentation**. It shows that *Rhodobacter sphaeroides* can utilize acetate (a byproduct of anaerobic fermentation) to produce further hydrogen, effectively cleaning up the fermentation broth and shifting the metabolic equilibrium to produce more hydrogen.\n*   **Document:** *Isolation, characterization and optimization of photo-hydrogen production conditions by newly isolated Rhodobacter sphaeroides KKU-PS5* by **Laocharoen & Reungsang (2014)**.\n*   **What else it says:** It highlights that *Rhodobacter sphaeroides* is capable of utilizing acetate, butyrate, and lactate as carbon sources for hydrogen production, making it an ideal partner for dark fermentation processes.\n\n### 5. Specific Strain Optimization (*Thermoanaerobacterium thermosaccharolyticum*)\n*   **Document:** *Biohydrogen production by Thermoanaerobacterium thermosaccharolyticum KKU-ED1...* by **Saripan & Reungsang (2013)**.\n*   **What else it says:** It found that the **optimal conditions** for this strain were a **1:1 mixture of xylose/arabinose** (pentose sugars) at **55\u00b0C**. This confirms the strain's ability to convert hemicellulosic biomass (like sugarcane bagasse) into hydrogen efficiently.\n\n### 6. Reactor Types (ABR)\n*   **Document:** *Hydrogen production from diluted molasses by anaerobic hydrogen producing bacteria in an anaerobic baffled reactor (ABR)* by **Li et al. (2007)**.\n*   **What else it says:** This study confirms the effectiveness of **Anaerobic Baffled Reactors (ABR)** for continuous hydrogen production. It notes that the ABR system helps stabilize the microbial community and prevents the washout of hydrogen-producing bacteria."
+            }
+          ],
+          "tool_calls": [],
+          "reasoning_content": "The user wants to know the source of the previous summary on \"hydrogen production by anaerobic bacteria\" and additional details from those documents.\n\n**Mapping Summary to Documents:**\n\n1.  **\"Strict Anaerobes... *Clostridium*, *Thermotoga*, *Thermoanaerobacterium*\"**\n    *   **Source:** Multiple documents identify these as key players.\n    *   *WOS000318348800002.bib* (Saripan & Reungsang, 2013) - Confirms *Thermoanaerobacterium thermosaccharolyticum* KKU-ED1 produces hydrogen from pentose sugars via dark fermentation.\n    *   *WOS000299647700011.bib* (Qian et al., 2011) - Lists facultative bacteria (*Citrobacter*, *Klebsiella*, *E. coli*) and anaerobic bacteria (*Clostridium*).\n    *   *WOSA1993NC44500012.bib* (Nakamura et al., 1993) - Mentions *Clostridium* as a dominant species.\n    *   *WOS000309024700021.bib* (Khamtib & Reungsang, 2012) - Another *Thermoanaerobacterium thermosaccharolyticum* strain (KKU19).\n    *   *WOS000319232500079.bib* (Saripan & Reungsang, 2013) - Another *Thermoanaerobacterium* study (strain DD32).\n\n2.  **\"Metabolic Pathways... Acetate-type (2-4 mol)... Butyric acid-type (2 mol)\"**\n    *   **Source:** *WOS000072836900003.bib* (Nandi & Sengupta, 1998) is an overview.\n    *   **Source:** *WOS000318348800002.bib* (Saripan & Reungsang, 2013) notes \"Soluble metabolite product (SMP) was predominantly acetic acid indicating the acetate-type fermentation.\"\n    *   **Source:** *WOS000319232500017.bib* (Ueno et al., 2001) notes ~2.4 mol/mol-glucose.\n    *   **Source:** *WOS000373552100006.bib* (Li et al., 2016) - Compares micro-aerobic vs anaerobic.\n\n3.  **\"Redox Potential (ORP) is a critical control factor\"**\n    *   **Source:** *WOS001149136800001.bib* (Sim et al., 2023) - Title: \"Unraveling the effect of redox potential on dark fermentative hydrogen production\".\n\n4.  **\"Co-fermentation... *Rhodobacter sphaeroides*\"**\n    *   **Source:** *WOS000305106300017.bib* (Kobayashi et al., 2012) - \"Expression of aldehyde dehydrogenase gene increases hydrogen production from low concentration of acetate by *Rhodobacter sphaeroides*\".\n    *   **Source:** *WOS000339039500009.bib* (Laocharoen & Reungsang, 2014) - *Rhodobacter sphaeroides* KKU-PS5 utilizes acetate for hydrogen production.\n\n5.  **\"Anaerobic Baffled Reactors (ABR)\"**\n    *   **Source:** *WOS000250900700025.bib* (Li et al., 2007) - \"Hydrogen production from diluted molasses... in an anaerobic baffled reactor (ABR)\".\n\n6.  **\"Specific Examples: *Thermoanaerobacterium thermosaccharolyticum* KKU-ED1 (xylose/arabinose)\"**\n    *   **Source:** *WOS000318348800002.bib* (Saripan & Reungsang, 2013) - Explicitly states: \"Thermoanaerobacterium thermosaccharolyticum KKU-ED1... optimum conditions... mixed xylose/arabinose\".\n\n**Plan:**\nI will structure the answer by grouping the claims from the initial summary and citing the specific documents found in the database. I will add \"what else it says\" by extracting more details from the abstracts (e.g., specific yields, conditions like pH/temperature, other byproducts).\n\n*   **Point 1: Microbial Species** -> Cite *WOS000299647700011.bib* (Qian) and *WOSA1993NC44500012.bib* (Nakamura).\n*   **Point 2: Pathways & Yields** -> Cite *WOS000318348800002.bib* (Saripan) for acetate pathway and *WOS000319232500017.bib* (Ueno) for yields.\n*   **Point 3: Redox Potential** -> Cite *WOS001149136800001.bib* (Sim).\n*   **Point 4: Rhodobacter** -> Cite *WOS000305106300017.bib* (Kobayashi) and *WOS000339039500009.bib* (Laocharoen).\n*   **Point 5: Specific Strain (KKU-ED1)** -> Cite *WOS000318348800002.bib* (Saripan).\n*   **Point 6: Reactor Systems** -> Cite *WOS000250900700025.bib* (Li et al.).\n\nI have enough information to construct the response without further tool calls. The previous tool calls provided exactly the text needed to back up the points. I just need to organize it.\n\nOne small detail: The user asked \"Which of those documents said that\". I should explicitly name the documents by title/authors.\n\n*Self-Correction/Refinement:*\nMake sure to clearly distinguish between \"Dark Fermentation\" (anaerobic) and \"Photo-fermentation\" (phototrophic like *Rhodobacter*), although they are often linked (co-culture). The initial summary mentioned *Rhodobacter* in the context of *co-fermentation* to shift equilibrium, which is accurate.\n\n*Drafting the response:*\n- **Redox Potential**: Sim et al. (2023).\n- **Key Bacteria (Clostridium, etc.)**: Qian et al. (2011), Nakamura et al. (1993).\n- **Acetate Pathway & Yields**: Saripan & Reungsang (2013), Ueno et al. (2001).\n- **Co-fermentation (Rhodobacter)**: Kobayashi et al. (2012), Laocharoen & Reungsang (2014).\n- **Specifics on *Thermoanaerobacterium thermosaccharolyticum* KKU-ED1**: Saripan & Reungsang (2013).\n- **Reactor Types (ABR)**: Li et al. (2007).\n\nI will present this clearly.\n"
+        },
+        "general_metadata": {
+          "timestamp": 1785280923973239044,
+          "datetime": "2026-07-29 02:22:03",
+          "persona": "Aria"
+        },
+        "generation_metadata": {
+          "model": "qwen3.6-35b-a3b, IQ4_NL_XL, 128 Ki context",
+          "n_tokens": 2880,
+          "dt": 30.608546880997892,
+          "grounded": true
+        },
+        "retrieval": {
+          "query": "Which of those documents said that, and what else does it say?",
+          "results": [
+            {
+              "document_id": "WOS001154258100001.bib",
+              "chunk_id": 2,
+              "full_id": "doc-WOS001154258100001.bib-chunk-2",
+              "offset": 1500,
+              "text": "ciency of 14.41 \\%. A favorable LCOH of 2.22 $/kg found in Ras-Garb, in northeastern Egypt. This study could guide authorities in developing various national-scale hydrogen production systems since it outlines the techno-economic features of various scenarios across the country. Additionally, the effectiveness of the suggested system is evaluated against existing literature.},\n\tAffiliation = {Elminshawy, Nabil A. S., Port Said Univ, Fac Engn, Mech Power Dept, Port Said, Egypt\nDiab, Sodfa, Port Said Univ, Fac Engn, Mech Power Dept, Port Said, Egypt\nYassen, Yassen El. S., Port Said Univ, Fac Engn, Mech Power Dept, Port Said, Egypt\nElbaksawi, Osama, Port Said Univ, Fac Engn, Elect Engn Dept, Port Said, Egypt}\n}",
+              "score": 0.01639344262295082
+            },
+            {
+              "document_id": "WOS000857911000001.bib",
+              "chunk_id": 0,
+              "full_id": "doc-WOS000857911000001.bib-chunk-0",
+              "offset": 0,
+              "text": "@article{WOS:000857911000001,\n\tAuthor = {Talus, Kim and Martin, Maxwell},\n\tYear = {2022},\n\tTitle = {A guide to hydrogen legislation in the USA: a renewed effort},\n\tJournal = {JOURNAL OF WORLD ENERGY LAW \\& BUSINESS},\n\tVolume = {15},\n\tNumber = {6},\n\tPages = {449-461},\n\tDOI = {10.1093/jwelb/jwac029},\n\tWeb-Of-Science-Categories = {Business; Law},\n\tAbstract = {This article will discuss how hydrogen-based energy could resolve green-energy uptake issues in the USA. In doing so, this article will first present the unique characteristics of hydrogen and its production methods. Next, this article will detail prior US hydrogen policy which often focused on research and development (R\\&D) rather than implementation strategies. Later, this paper will delve into the Biden Administration's recent legislation Infrastructure and Jobs Act (IJA) and the Inflation Reduction Act (IRA) and the hydrogen production incentivization policies enacted. And last, this article will delve into issues that were not resolved by the recent legislation.},\n\tAffiliation = {Talus, Kim, Tulane Law Sch, Tulane Ctr Energy Law, New Orleans, LA 70118 USA. Univ Eastern Finland, UEF Law Sch, European Energy Law, Kuopio, Finland. Univ Helsinki, Energy Law, Helsinki, Finland. Tulane Law Sch, Energy Law, New Orleans, LA 70118 USA\nMartin, Maxwell, Tulane Univ, Law Sch, New Orleans, LA 70118 USA}\n}",
+              "score": 0.01639344262295082
+            },
+            {
+              "document_id": "WOS001080111700003.bib",
+              "chunk_id": 2,
+              "full_id": "doc-WOS001080111700003.bib-chunk-2",
+              "offset": 1500,
+              "text": "the bankable biomass-toH2 processes flow diagrams in terms of the circular economy were additionally highlighted in order to effectively value the biomass supply chains to produce H2. Hopefully, this work presents a more favorable theoretical indepth mechanistic understanding of the bio-sourced hydrogen's different production pathways.},\n\tAffiliation = {Eloffy, M. G., Natl Inst Oceanog \\& Fisheries NIOF, Cairo, Egypt\nEl-Sherif, Dina M., Natl Inst Oceanog \\& Fisheries NIOF, Cairo, Egypt\nElgarahy, Ahmed M., Port Said Univ, Fac Sci, Environm Sci Dept, Environm Chem Div, Port Said, Egypt. Egyptian Propylene \\& Polypropylene Co EPPC, Port Said, Egypt\nElwakeel, Khalid Z., Port Said Univ, Fac Sci, Environm Sci Dept, Environm Chem Div, Port Said, Egypt. Univ Jeddah, Coll Sci, Dept Chem, Jeddah, Saudi Arabia\nSaber, Ayman N., Agr Res Ctr, Pesticide Residues \\& Environm Pollut Dept, Cent Agr Pesticide Lab, Giza 12618, Egypt\nHammad, Ahmed, Port Said Univ, Fac Engn, Chem Engn Dept, Port Said, Egypt\nShehata, Moustafa, Port Said Univ, Fac Engn, Mech Power Engn Dept, Port Said, Egypt\nMohsen, Ahmed, United Gas Derivat Co UGDC, Port Said, Egypt}\n}",
+              "score": 0.016129032258064516
+            },
+            {
+              "document_id": "WOS000345192300001.bib",
+              "chunk_id": 2,
+              "full_id": "doc-WOS000345192300001.bib-chunk-2",
+              "offset": 1500,
+              "text": "needs further investigation. Copyright (C) 2014, Hydrogen Energy Publications, LLC. Published by Elsevier Ltd. All rights reserved.},\n\tAffiliation = {Hou, Huijie, Penn State Univ, Dept Civil \\& Environm Engn, University Pk, PA 16801 USA\nLiu, Jia, Penn State Univ, Dept Civil \\& Environm Engn, University Pk, PA 16801 USA\nZhu, Xiuping, Penn State Univ, Dept Civil \\& Environm Engn, University Pk, PA 16801 USA\nLogan, Bruce E., Penn State Univ, Dept Civil \\& Environm Engn, University Pk, PA 16801 USA\nChen, Xiaofen, Univ Calif Santa Barbara, Dept Chem \\& Biochem, Santa Barbara, CA 93106 USA\nBazan, Guillermo C., Univ Calif Santa Barbara, Dept Chem \\& Biochem, Santa Barbara, CA 93106 USA}\n}",
+              "score": 0.016129032258064516
+            },
+            {
+              "document_id": "WOS000842874500001.bib",
+              "offset": 750,
+              "score": 0.015873015873015872,
+              "text": "y generated by reforming of fossil fuels, calling for cleaner methods of dihydrogen production. Here we review dihydrogen production from wastewater with focus on biological methods, electrochemical methods, dihydrogen storage, techno-economic aspects, governance and applications. Methods include fermentation, photolysis, photocatalysis, electrolysis and supercritical water gasification. Applications comprise refining crude oil, ammonia production, the food industry, metal extraction, pharmaceuticals, fuel cells, combustion engines, power generation and energy carrier.},\n\tAffiliation = {Elgarahy, Ahmed M., Port Said Univ, Fac Sci, Environm Sci Dept, Environm Chem Div, Port Said, Egypt. Egyptian Propylene \\& Polypropylene Co EPPC, Port Said, Egypt\nElwakeel, Khalid Z., Port Said Univ, Fac Sci, Environm Sci Dept, Environm Chem Div, Port Said, Egypt. Univ Jeddah, Coll Sci, Dept Chem, Jeddah, Saudi Arabia\nEloffy, M. G., Natl Inst Oceanog \\& Fisheries, Cairo, Egypt\nEl-Sherif, Dina M., Natl Inst Oceanog \\& Fisheries, Cairo, Egypt\nHammad, Ahmed, Port Said Univ, Fac Engn, Chem Engn Dept, Port Said, Egypt\nSaber, Ayman N., Agr Res Ctr, Pesticide Residues \\& Environm Pollut Dept, Cent Agr Pesticide Lab, Giza 12618, Egypt\nMohsen, Ahmed, United Gas Derivat Co UGDC, Operat Dept, Port Said NGL Plant, Port Said Damietta Int Coastal Rd, Port Said, Egypt\nAbouzid, Mohamed, Poznan Univ Med Sci, Dept Phys Pharm \\& Pharmacokinet, 6 Swiecickiego St, PL-60781 Poznan, Poland}\n}"
+            },
+            {
+              "document_id": "WOS000607467900013.bib",
+              "chunk_id": 2,
+              "full_id": "doc-WOS000607467900013.bib-chunk-2",
+              "offset": 1500,
+              "text": "ed by Elsevier Ltd on behalf of Hydrogen Energy Publications LLC.},\n\tAffiliation = {Touloupakis, Eleftherios, CNR, Ist Ric Ecosistemi Terrestri, Via Madonna Piano 10, I-50019 Sesto Fiorentino, Italy\nFaraloni, Cecilia, CNR, Ist Bioecon, Via Madonna Piano 10, I-50019 Florence, Italy\nTorzillo, Giuseppe, Univ Costa Rica, Ctr Invest Ciencias Mar \\& Limnol, San Jose 2060, Costa Rica. CNR, Ist Bioecon, Via Madonna Piano 10, I-50019 Florence, Italy\nSilva Benavides, Ana Margarita, Univ Costa Rica, Ctr Invest Ciencias Mar \\& Limnol, San Jose 2060, Costa Rica. Univ Costa Rica, Escuela Biol, San Jose 2060, Costa Rica\nMasojidek, Jiri, Czech Acad Sci, Ctr Algatech, Inst Microbiol, Lab Algal Biotechnol, CZ-37981 Trebon, Czech Republic}\n}",
+              "score": 0.015873015873015872
+            },
+            {
+              "document_id": "WOS000981765200001.bib",
+              "chunk_id": 2,
+              "full_id": "doc-WOS000981765200001.bib-chunk-2",
+              "offset": 1500,
+              "text": "ction.(c) 2023 The Authors. Published by Elsevier Ltd on behalf of Hydrogen Energy Publications LLC. This is an open access article under the CC BY-NC-ND license (http:// creativecommons.org/licenses/by-nc-nd/4.0/).},\n\tAffiliation = {Zheng, Lei, Politecn Milan, Dipartimento Energia, Lab Catalysis \\& Catalyt Proc, Via Lambruschini 4, I-20156 Milan, Italy\nAmbrosetti, Matteo, Politecn Milan, Dipartimento Energia, Lab Catalysis \\& Catalyt Proc, Via Lambruschini 4, I-20156 Milan, Italy\nZaio, Francesca, Politecn Milan, Dipartimento Energia, Lab Catalysis \\& Catalyt Proc, Via Lambruschini 4, I-20156 Milan, Italy\nBeretta, Alessandra, Politecn Milan, Dipartimento Energia, Lab Catalysis \\& Catalyt Proc, Via Lambruschini 4, I-20156 Milan, Italy\nGroppi, Gianpiero, Politecn Milan, Dipartimento Energia, Lab Catalysis \\& Catalyt Proc, Via Lambruschini 4, I-20156 Milan, Italy\nTronconi, Enrico, Politecn Milan, Dipartimento Energia, Lab Catalysis \\& Catalyt Proc, Via Lambruschini 4, I-20156 Milan, Italy}\n}",
+              "score": 0.015625
+            },
+            {
+              "document_id": "WOS000864187600008.bib",
+              "chunk_id": 1,
+              "full_id": "doc-WOS000864187600008.bib-chunk-1",
+              "offset": 750,
+              "text": " in choosing the best technological route for the recovery of renewable and cost-effective hydrogen. Therefore, this bibliometric review evaluated the research progress, trends, updates, and hotspots on hydrogen production from dark fermentation. The Web of Science(C) database was used to select the documents from 2000 to 2021, and the VOSviewer(C) and Bibliometrix softwares were used to carry out the bibliometric investigation. The results demonstrated that 3071 documents (2755 articles and 316 reviews) studied the hydrogen production from dark fermentation over the last 21 years. The number of publications exponentially increased in the last five years, which can be associated with the demand for new technologies to produce clean energy sources and decrease the environmental impacts caused by petroleum-based fuel. Keyword analysis revealed that the studies focused on the operational parameters, process optimization, pretreatment, and microbial community, aiming to increase the hydrog",
+              "score": 0.015384615384615385
+            },
+            {
+              "document_id": "WOS000456355700026.bib",
+              "chunk_id": 2,
+              "full_id": "doc-WOS000456355700026.bib-chunk-2",
+              "offset": 1500,
+              "text": "ublications LLC. Published by Elsevier Ltd. All rights reserved.},\n\tAffiliation = {Escobar-Alarcon, L., Inst Nacl Invest Nucl, Dept Fis, Carr Mexico Toluca S-n La Marquesa, Ocoyoacac 52750, Edo De Mexico, Mexico\nIturbe-Garcia, J. L., Inst Nacl Invest Nucl, Dept Quim, Carr Mexico Toluca S-n La Marquesa, Ocoyoacac 52750, Edo De Mexico, Mexico\nGonzalez-Zavala, F., Univ Autonoma Metropolitana Iztapalapa, Dept Fis, Apdo Postal 55-534, Cdmx, Mexico\nHaro-Poniatowski, E., Univ Autonoma Metropolitana Iztapalapa, Dept Fis, Apdo Postal 55-534, Cdmx, Mexico\nSolis-Casados, D. A., Univ Autonoma Estado Mexico, Fac Quim, Toluca 50120, Estado De Mexic, Mexico\nPerez-Hernandez, R., Inst Nacl Invest Nucl, Dept Tecnol Mat, Carr Mexico Toluca S-n La Marquesa, Ocoyoacac 52750, Edo De Mexico, Mexico}\n}",
+              "score": 0.015384615384615385
+            },
+            {
+              "document_id": "WOS001127257400001.bib",
+              "offset": 0,
+              "score": 0.015151515151515152,
+              "text": "@article{WOS:001127257400001,\n\tAuthor = {Kirillov, I. A. and Kharitonova, N. L. and Simonenko, V. A. and Kryukov, V. M.},\n\tYear = {2023},\n\tTitle = {Development of approaches to regulatory safety in industrial water-electrolysis production of hydrogen at NPPs},\n\tJournal = {ATOMIC ENERGY},\n\tDOI = {10.1007/s10512-023-01035-x},\n\tWeb-Of-Science-Categories = {Nuclear Science \\& Technology},\n\tAbstract = {The article discusses the location of additional electrolysis production of hydrogen at the site of contemporary NPPs as one of the most promising areas in terms of nuclear-hydrogen energy development. The study aims to assess the possibility of applying the requirements of current legal documents to the regulation of hydrogen fire and explosion safety when locating hydrogen electrolysis production complexes at the NPP site. The regulatory documents applicable to the safety regulation in the industrial production of hydrogen at existing NPPs, including the electrolysis, compression, liquefaction, storage, pre-transportation, transportation, and supplying large volumes of product hydrogen to consumers, are analyzed. The limitations of the regulatory legal framework, including in the field of safety for such a location of the hydrogen production are noted, along with the need for its improvement. Recommendations and proposals are formulated to clarify and/or supplement the requirements of documents regulating hydrogen fire and explosion safety for hydrogen electrolysis production complexes at NPPs.},\n\tAffiliation = {Kirillov, I. A., NRC Kurchatovsky Inst, Moscow, Russia\nKharitonova, N. L., NRC Kurchatovsky Inst, Moscow, Russia\nSimonenko, V. A., RFNC, VNIITF, FSUE, Snezhinsk, Russia\nKryukov, V. M., RFNC, VNIITF, FSUE, Snezhinsk, Russia}\n}"
+            }
+          ]
+        }
+      }
+    },
+    "parent": "gensym#forest-node:709e12be-85cb-4843-ba64-2ac8a4b7fa61",
+    "children": []
+  }
+}

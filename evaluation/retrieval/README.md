@@ -29,6 +29,15 @@ Two honest limitations, because they are structural rather than fixable:
 Full judgments can be layered on later by pooling the top-N of each configuration and judging the union.
 This set is the seed for that, not a competitor to it.
 
+**And the judging needs a corpus in a native area.** Both limitations above trace to the same thing:
+hydrogen production is an application domain for this team rather than its home field, so "did it find the
+paper the question came from" is the only question answerable without a subject-matter judge. The fix is
+not a better metric — it is a corpus in a literature the evaluator knows from the inside. The hand-curated BibTeX database of axially moving materials (assembled by hand, ~2007-2016) is
+the candidate: small, curated rather than exported, and in a literature the maintainer knows well enough to
+say whether the right papers came back. Known-item retrieval measures whether the retriever can find a
+planted document; only a reader who knows the field can measure whether it found the *useful* ones, which
+is the thing the tool claims to do.
+
 ## The hazard to watch
 
 The questions are LLM-written, and a question that reuses its abstract's distinctive phrasing turns the

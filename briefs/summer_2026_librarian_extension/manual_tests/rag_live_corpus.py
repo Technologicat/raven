@@ -29,12 +29,19 @@ kilobytes each. Nothing in it is long enough to be truncated, so E can show that
 of full papers (an arXiv download stash) to be indexed first.
 
 Usage:
-    python rag_live_corpus.py [base_url] [model] [phase F samples]
+    python rag_live_corpus.py [base_url] [model] [phase F samples] [results file] [on|off|ab]
+
+A *results file* is appended to, one JSON object per phase F sample, as each sample finishes. Give one for
+any run worth keeping: samples pool across sessions and machines, and this is the only thing that survives
+a reboot (`/tmp` is a ramdisk here). The last argument switches the spent-tools notice on or off, or `ab`
+to alternate it between samples — which is the honest way to compare, since it pairs the two arms inside
+one run rather than across runs that may differ in ways nobody wrote down.
 
 Naming a model matters on a backend that loads them on demand: an idle LM Studio answers `/v1/models` and
 then refuses to generate, so "the backend is up" is not the same question as "the backend can answer".
 """
 
+import json
 import pathlib
 import re
 import sys
@@ -49,6 +56,8 @@ from raven.librarian import chattree, chatutil, config as librarian_config, hybr
 BASE = sys.argv[1] if len(sys.argv) > 1 else librarian_config.llm_backend_url
 MODEL = sys.argv[2] if len(sys.argv) > 2 else None
 N_LIVE = int(sys.argv[3]) if len(sys.argv) > 3 else 1  # phase F samples; the failure it hunts is intermittent
+RESULTS_PATH = sys.argv[4] if len(sys.argv) > 4 else None  # append one JSON object per sample, for pooling later
+NOTICE_MODE = sys.argv[5] if len(sys.argv) > 5 else "on"  # "on", "off", or "ab" to alternate between samples
 
 if MODEL is not None:
     librarian_config.llm_model = MODEL  # `setup` reads it from here; naming it lets the backend load on demand
@@ -263,7 +272,30 @@ def _ai_turn(llm_settings, datastore, retriever, head, question):
     return final, seen.get("history", [])
 
 
-def check_live_turn(retriever, hits):
+def _append_result(record):
+    """Append one sample to the results file, flushed immediately.
+
+    Written per sample rather than per run because these runs are long, get interrupted, and are worth
+    pooling afterwards. A batch that dies at sample 9 of 12 should still contribute its first 8.
+    """
+    if RESULTS_PATH is None:
+        return
+    with open(RESULTS_PATH, "a", encoding="utf-8") as results_file:
+        results_file.write(json.dumps(record, sort_keys=True) + "\n")
+        results_file.flush()
+
+
+def _make_datastore(sample_index, notice_enabled):
+    """A datastore for one sample: persistent beside the results file when there is one, else in memory."""
+    if RESULTS_PATH is None:
+        return chattree.Forest()
+    results_path = pathlib.Path(RESULTS_PATH)
+    arm = "notice" if notice_enabled else "control"
+    chat_path = results_path.with_name(f"{results_path.stem}-{sample_index:03d}-{arm}.json")
+    return chattree.PersistentForest(chat_path, autosave=False)
+
+
+def check_live_turn(retriever, hits, notice_enabled=True, sample_index=0):
     """Two turns against the live model: does it use the tools, and does the provenance list come back?
 
     Two, because the second is where the interesting thing happens. The automatic search's matches are
@@ -278,16 +310,31 @@ def check_live_turn(retriever, hits):
         report("F live turn", None, "no usable LLM backend")
         return
 
-    datastore = chattree.Forest()
-    head = chatutil.factory_reset_datastore(datastore, llm_settings)
-    head = scaffold.user_turn(llm_settings=llm_settings, datastore=datastore,
-                              head_node_id=head, user_message_text=QUERIES[0])
-    head, _ = _ai_turn(llm_settings, datastore, retriever, head, QUERIES[0])
+    # The A/B switch. Silencing the formatter is enough: `_perform_injects` appends whatever it returns,
+    # and an empty string adds no system line at all.
+    original_notice = chatutil.format_notice_that_tools_are_spent
+    if not notice_enabled:
+        chatutil.format_notice_that_tools_are_spent = lambda: ""
+    try:
+        # A `PersistentForest` rather than an in-memory `Forest`, when there is somewhere to put it. The
+        # whole conversation is then on disk in Raven's own format - every message, the reasoning that
+        # never reaches `content`, the tool nodes and their metadata - so a later analysis is not limited
+        # to whatever this probe thought to summarize tonight. These runs are slow enough that throwing the
+        # evidence away and re-running would be the expensive mistake.
+        datastore = _make_datastore(sample_index, notice_enabled)
+        head = chatutil.factory_reset_datastore(datastore, llm_settings)
+        head = scaffold.user_turn(llm_settings=llm_settings, datastore=datastore,
+                                  head_node_id=head, user_message_text=QUERIES[0])
+        head, _ = _ai_turn(llm_settings, datastore, retriever, head, QUERIES[0])
 
-    follow_up = "Which of those documents said that, and what else does it say?"
-    head = scaffold.user_turn(llm_settings=llm_settings, datastore=datastore,
-                              head_node_id=head, user_message_text=follow_up)
-    final, history = _ai_turn(llm_settings, datastore, retriever, head, follow_up)
+        follow_up = "Which of those documents said that, and what else does it say?"
+        head = scaffold.user_turn(llm_settings=llm_settings, datastore=datastore,
+                                  head_node_id=head, user_message_text=follow_up)
+        final, history = _ai_turn(llm_settings, datastore, retriever, head, follow_up)
+    finally:
+        chatutil.format_notice_that_tools_are_spent = original_notice
+        if isinstance(datastore, chattree.PersistentForest):
+            datastore.save()
 
     wire = "\n".join(chatutil.content_to_text(message.get("content")) for message in history)
     listed = "consulted" in wire
@@ -344,6 +391,19 @@ def check_live_turn(retriever, hits):
         print(f"    {len(reasonings)} assistant turns emitted reasoning, {distinct} distinct")
         print(f"    last reasoning: {' '.join(reasonings[-1].split())[:400]!r}")
 
+    _append_result({"sample": sample_index,
+                    "notice": notice_enabled,
+                    "model": llm_settings.model,
+                    "answered": bool(reply.strip()),
+                    "leaked": leaked,
+                    "rounds": rounds["n"],
+                    "cap": librarian_config.max_tool_call_rounds,
+                    "calls": tool_calls,
+                    "provenance_list_injected": listed,
+                    "reasoning_turns": len(reasonings),
+                    "reasoning_distinct": len(set(reasonings)),
+                    "reply_characters": len(reply)})
+
 
 # --------------------------------------------------------------------------------
 
@@ -356,10 +416,23 @@ def main():
     check_tools(retriever, hits)
     check_labels(retriever, hits)
     check_budget(retriever, hits)
-    for sample in range(N_LIVE):
+    # Resume where a previous run stopped. The results file is the ledger: one line per finished sample,
+    # so its length *is* the count of work already done, and re-running the same command continues instead
+    # of starting over. These runs take an hour and the machines reboot; a batch that has to restart from
+    # zero is a batch that never finishes.
+    done = 0
+    if RESULTS_PATH is not None and pathlib.Path(RESULTS_PATH).exists():
+        done = sum(1 for line in pathlib.Path(RESULTS_PATH).read_text(encoding="utf-8").splitlines() if line.strip())
+        if done:
+            print(f"\nresuming: {done} sample(s) already in {RESULTS_PATH}")
+    for sample in range(done, N_LIVE):
+        # The arm follows from the sample index, so resuming keeps the two arms balanced rather than
+        # restarting the alternation and over-sampling whichever one comes first.
+        notice_enabled = {"on": True, "off": False}.get(NOTICE_MODE, sample % 2 == 0)
         if N_LIVE > 1:
-            print(f"\n--- live turn, sample {sample + 1} of {N_LIVE} ---")
-        check_live_turn(retriever, hits)
+            print(f"\n--- live turn, sample {sample + 1} of {N_LIVE}"
+                  f" ({'notice' if notice_enabled else 'control'}) ---")
+        check_live_turn(retriever, hits, notice_enabled=notice_enabled, sample_index=sample)
 
     print("\n" + "=" * 78 + "\nrecap\n" + "=" * 78)
     for phase, ok, message in results:

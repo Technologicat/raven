@@ -276,6 +276,12 @@ PyPI, and whatever branding constraints the in-house discussion surfaces. Note t
 "Raven" as the *project* name while publishing under a distinct PyPI name is also on the
 table — the two don't have to match.
 
+**Before closing this item, move the three-part etymology above somewhere permanent.** It is
+filed here because it constrains the naming decision, but it long outlives it — and this file's
+convention is that resolved items are *deleted*, git being the history. Whatever is decided, the
+reason the thing was ever called Raven should not be deleted along with the question of what to
+call it next.
+
 ## Audit fleet for dict constants that should be `frozendict`
 
 Several modules across Raven hold module-level dict constants that are used as immutable defaults or lookup tables, relying on "don't mutate this" by convention. `unpythonic.frozendict` (already a Raven dep) enforces it with teeth and costs nothing extra; Python 3.15 will also ship a stdlib `frozendict`.
