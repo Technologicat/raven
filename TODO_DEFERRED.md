@@ -85,9 +85,10 @@ clusters, as of 2026-07-27:
 
 - **Temporary context injects** — how much goes on the wire each turn, in which role, at which position. "RAG
   injects: sent in the user role as a workaround", "Fold the temporary context injects…", "RAG: rerank retrieved
-  chunks…", "Revisit the 'answer from context only' reminder", "Sending an empty message starts an AI turn…",
-  "Modernize the Librarian system prompt / character card". These decide the same question and mostly have
-  "neither option has been measured" as their state.
+  chunks…", "Revisit the 'answer from context only' reminder", "Modernize the Librarian system prompt /
+  character card". **Measured 2026-07-28** — the results are in `briefs/context-inject-shape-measurements.md`
+  and the implementation they argue for is `briefs/summer_2026_librarian_extension/08_context-injects-brief.md`.
+  Everything in this cluster except reranking and the system-prompt rewrite is settled and ready to build.
 - **FileDialog** — "slow open and a teardown input-dead-window", "smart-case the Find field", "image thumbnail
   previews", "multi-extension filter as one labelled item", "reduce per-use-site boilerplate", plus "OS
   drag-and-drop of files into DPG apps" (which is why the picker has to be good — it's the only entry path).

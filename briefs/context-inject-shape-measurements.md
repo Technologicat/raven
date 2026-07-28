@@ -10,6 +10,10 @@ resulting implementation will be archived once that work lands, whereas these nu
 afterwards — they are the baseline any future change to the inject machinery gets compared against,
 and re-running the sweep costs about an hour of GPU time.
 
+The implementation these numbers argue for is written up separately, as
+`summer_2026_librarian_extension/08_context-injects-brief.md`. That brief gets archived when the work
+lands; this document does not.
+
 Harness: `briefs/summer_2026_librarian_extension/manual_tests/inject_shapes.py`. It imports the inject
 strings from `raven.librarian.chatutil` rather than copying them, so it always measures what Raven
 actually sends.
