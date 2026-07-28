@@ -229,6 +229,37 @@ So the trade-off disappears. `before` keeps the honest tool role (and with it Ge
 synthetic call), keeps the KV-cache prefix stable, and avoids the agent-loop misfire. **This is the
 recommended placement**, replacing both the current front insert and the end placement considered above.
 
+### How the results are packaged: one tool message, not one per result
+
+The OpenAI schema pairs a `tool` message with a single `tool_call_id`, so N results should arrive as one
+message, not as N messages sharing an id. Measured at `before`, k=20:
+
+| model | one message per result | **one merged message** |
+|---|---|---|
+| Qwen3.6-27B | 3/3 | 3/3 |
+| Gemma4-26B-A4B | 3/3 | 3/3 |
+| Gemma4-E4B | 1/3 | 2/3 |
+
+Merged is never worse and is better on the weakest model, so **emit one tool message carrying all
+matches**. (Gemma4-E4B is the only model where the tool role costs accuracy at all — `user` role gets
+3/3 there. It is a 4B-effective model; every larger one is fine either way.)
+
+### The end-placement failure, re-verified
+
+The misses that ruled out the end placement were first measured with a 400-token cap and no
+`finish_reason`, which is exactly the setup that has produced three false readings elsewhere in this
+document. Re-run with a 1500-token budget and the finish reason surfaced, on Qwen3.6-27B:
+
+| @ end | k=20 | k=100 |
+|---|---|---|
+| `tool+call` | 2/3 | 2/3 |
+| `tool+call-merged` | **0/3** | **1/3** |
+
+Every failure completed normally (`finish_reason=stop`) with a `<tool_call>` block as its answer, so
+these are genuine, not truncations. And merging — which *helps* at `before` — makes matters worse here,
+which fits the diagnosis: a single clean tool result immediately before the generation point is an even
+stronger "your tool output has arrived, now what?" cue than a ragged pile of them.
+
 ## Q8. Does a backend upgrade change any of this? (LM Studio 0.4.20 Build 1)
 
 `backend_capabilities.py` re-run on the newer build, against Qwen3.6-27B. Everything reproduced:
