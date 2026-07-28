@@ -379,20 +379,28 @@ class DPGChatMessage:
                              color=(120, 120, 120),
                              parent=text_vertical_layout_group)
 
-                # Say when the reply had nothing but the model's own knowledge to stand on. Present only
-                # when the user asked to be told (speculation off); absent means there is nothing to say,
-                # which is why this tests `is False` rather than falsiness.
+                # Say when nothing was retrieved for this reply. Present only when the user asked to be told
+                # (speculation off); absent means there is nothing to say, which is why this tests `is False`
+                # rather than falsiness.
                 #
-                # A marker, not a warning: on a general-knowledge question this is the correct and expected
-                # state, and most such questions land here — the answer to "what is 2+2?" is not in anyone's
-                # document database. Hence the muted colour rather than a red one.
+                # The wording states what was *retrieved*, not what the model did with it, because that is
+                # all we can observe: retrieval reporting matches does not mean the reply used them, and
+                # against a real corpus a search nearly always returns something. Claiming "answered from
+                # general knowledge" would assert the unobservable half. (What would make the stronger claim
+                # sayable: relevance-aware retrieval scores, or the model citing its own sources. See
+                # `briefs/summer_2026_librarian_extension/09_retrieval-query-side-brief.md`.)
+                #
+                # A marker, not a warning: on a general question this state is correct and expected, since
+                # no document database answers "what is 2+2?". Hence the muted colour rather than a red one.
                 if generation_metadata.get("grounded") is False:
-                    grounding_marker = dpg.add_text("[general knowledge]",
+                    grounding_marker = dpg.add_text("[no sources retrieved]",
                                                     color=(170, 145, 90),
                                                     parent=text_vertical_layout_group)
                     with dpg.tooltip(grounding_marker):
-                        dpg.add_text("Not based on your document database.\n"
-                                     "The model answered from what it already knew.")
+                        dpg.add_text("Nothing was retrieved for this reply: no document matches,\n"
+                                     "no attachments, no tool results.\n\n"
+                                     "The absence of this marker means something *was* retrieved -\n"
+                                     "not that the reply relied on it.")
 
         # If there is no linked chat node, this is a live streaming chat message, so the GUI widget should end here - it doesn't need the datastore control buttons or end spacers.
         # This makes the GUI look calmer while rendering a streaming message.

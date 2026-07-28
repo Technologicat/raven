@@ -600,10 +600,12 @@ def minimal_chat_client(backend_url) -> None:
                 dt = generation_metadata["dt"]
                 speed = n_tokens / dt
                 print(colorizer.colorize(f"[{n_tokens}t, {dt:0.2f}s, {speed:0.2f}t/s]", colorizer.Style.DIM))
-                # Say when the reply had nothing but the model's own knowledge to stand on. The field is
-                # present only when the user asked to be told (speculation off); absent means nothing to say.
+                # Say when nothing was retrieved for this reply. The field is present only when the user
+                # asked to be told (speculation off); absent means there is nothing to say. The wording
+                # states what was retrieved, not what the model did with it - see the GUI's counterpart in
+                # `chat_controller` for why the stronger claim is not ours to make yet.
                 if generation_metadata.get("grounded") is False:
-                    print(colorizer.colorize("[answered from general knowledge, not from the document database]",
+                    print(colorizer.colorize("[no sources retrieved for this reply]",
                                              colorizer.Style.DIM, colorizer.Fore.YELLOW))
                 print()
 

@@ -830,7 +830,7 @@ with timer() as tim:
 
                         dpg.add_checkbox(label="Speculation", default_value=app_state["speculate_enabled"], callback=toggle_speculate_enabled, tag="speculate_enabled_checkbox")
                         dpg.add_tooltip("speculate_enabled_checkbox", tag="speculate_enabled_tooltip")  # tag
-                        dpg.add_text("ON: Let AI freely use its internal knowledge.\nOFF: Ask the AI to ground claims in the context, and mark any reply\nthat had nothing to ground in with [general knowledge].\n\nEither way the AI answers; OFF only adds the marker.", parent="speculate_enabled_tooltip")  # tag
+                        dpg.add_text("ON: Let AI freely use its internal knowledge.\nOFF: Ask the AI to ground claims in the context, and mark any reply\nfor which nothing was retrieved with [no sources retrieved].\n\nEither way the AI answers; OFF only adds the marker.", parent="speculate_enabled_tooltip")  # tag
 
                         dpg.add_checkbox(label="Speech", default_value=app_state["avatar_speech_enabled"], callback=toggle_speech_enabled, tag="speech_enabled_checkbox")
                         dpg.add_tooltip("speech_enabled_checkbox", tag="speech_enabled_tooltip")  # tag
@@ -1151,7 +1151,7 @@ def render_help_extras(self: helpcard.HelpWindow,
                           parent=g1)
     dpg_markdown.add_text(f'{self.c_txt}When the {self.c_end}{self.c_hig}**Documents**{self.c_end}{self.c_txt} checkbox in the app is **ON**, the document database is automatically searched, using your latest message to the AI as the search query. The AI can also search it again itself, with a better query, once it has read those results.{self.c_end}',
                           parent=g1)
-    dpg_markdown.add_text(f'{self.c_txt}If {self.c_end}{self.c_hig}**Speculation**{self.c_end}{self.c_txt} is **OFF**, any reply that had nothing to ground itself in is marked {self.c_end}{self.c_hig}**[general knowledge]**{self.c_end}{self.c_txt}. The AI still answers - the marker tells you which replies came from your documents and which came from the model itself.{self.c_end}',
+    dpg_markdown.add_text(f'{self.c_txt}If {self.c_end}{self.c_hig}**Speculation**{self.c_end}{self.c_txt} is **OFF**, any reply for which nothing was retrieved - no document matches, no attachments, no tool results - is marked {self.c_end}{self.c_hig}**[no sources retrieved]**{self.c_end}{self.c_txt}. The AI still answers. Note the marker reports what was *retrieved*, not whether the reply used it: a search that returns irrelevant matches still counts as retrieval.{self.c_end}',
                           parent=g1)
     dpg_markdown.add_text(f'{self.c_txt}To improve search result quality, Raven-librarian uses a hybrid method: Okapi BM25 for keywords, and vector embeddings for semantic search. Results are combined with RRF (reciprocal rank fusion).{self.c_end}',
                           parent=g1)

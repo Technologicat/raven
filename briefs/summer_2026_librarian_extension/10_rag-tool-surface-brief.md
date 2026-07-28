@@ -249,7 +249,7 @@ provided documents on those documents. Answer general questions normally"*, whil
 exactly those general questions. Whatever is done, they have to agree.
 
 **Resolution: delete the bypass; mark the answer instead.** HEAD stays on the model's reply, which carries
-an unintrusive `[general knowledge]` marker. No branch, no HEAD switch, no re-render.
+an unintrusive `[no sources retrieved]` marker. No branch, no HEAD switch, no re-render.
 
 Deliberately styled as a *marker*, not a warning. On a general-knowledge question the ungrounded state is
 correct and expected, and most such questions land there — no document database answers "what is 2+2?" —
@@ -265,8 +265,10 @@ this answer."*
 So `grounded` answers **was there material**, while the marker's text claims **did the answer come from the
 corpus**. Those two questions come apart exactly here, and two things follow:
 
-- **The label overclaims.** What is measured is closer to "no documents matched" than to "answered from
-  general knowledge".
+- **The label overclaimed, and has been corrected.** It read `[general knowledge]`, asserting something
+  about what the model did; it now reads `[no sources retrieved]`, which is what is actually observed. The
+  tooltip and both frontends say the rest out loud: the absence of the marker means something *was*
+  retrieved, not that the reply relied on it.
 - **Worse: against a real corpus the marker will almost never fire.** Retrieval nearly always returns
   *something* — `semantic_distance_threshold` defaults to 0.8 cosine, which is permissive, and BM25 matches
   on common words. The failure is therefore silent and in the dangerous direction: a feature that looks
