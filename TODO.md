@@ -41,6 +41,10 @@ individual items carry a "Researchers' Night" note where they feed it. Working b
 `config_dual_midvram` variant. Reducing context to buy headroom is a weak lever and not worth the cheat: Qwen 3.6
 is gated-deltanet at 3:1, so only about a quarter of the layers carry a KV cache that grows with context.
 
+The **eGPU travels to the demo**, so it runs on the top tier rather than on a laptop-class model. Which model
+that is, and which one each other machine gets, is settled in `briefs/model-lineup-autumn-2026.md` — Qwen at
+every tier, chosen on measurements rather than reputation.
+
 
 ---
 
