@@ -132,6 +132,49 @@ guess at it. Two things make "twenty chunks" the wrong mental picture:
 Modelled that way, k=20 comes to ~29000 characters (~7-8k tokens) — an order of magnitude more than
 the Q3 probe used, and the number that should be quoted for the configured case.
 
+### Result at realistic scale, Qwen3.5-9B
+
+Twelve conditions per corpus size: needle first / middle / last, material in the `user` or `tool+call`
+role, placed at the front or the end. Each with a needle-absent control.
+
+| corpus | prompt size | needle found | controls |
+|---|---|---|---|
+| k=20 (configured) | ~6.5k tokens | **12 / 12** | 4 / 4 clean |
+| k=100 (filled) | ~32.3k tokens | **12 / 12** | 4 / 4 clean |
+
+No position effect, no depth effect, no role effect, and no control invented the figure — so no hit was
+a lucky guess. **On this model the front placement buys nothing**, and it costs a full KV-cache prefix
+rebuild every turn.
+
+Qwen3.5-9B is the weakest model in the set, so this is not a "the small one coped, the big ones surely
+will" argument — it is the model whose attention over 32k tokens should be least trustworthy, which is
+what makes a clean sweep informative. The other three ran out of VRAM for prompt processing on the
+16 GB machine (spilling to system RAM caps prefill near 300 tok/s), so their runs move to the machine
+with the 24 GB eGPU.
+
+## Q7. Does the replacement wording still refuse what it *should*?
+
+Material about Kuiper-7 is supplied and the question asks about Kuiper-9 — neither in the documents nor
+general knowledge, so the only correct answer is that we do not know. This is the half Q4 does not
+measure, and a wording that never refuses anything would score perfectly there while being useless.
+
+Partial, pending the eGPU run: on **Qwen3.5-9B** and **Qwen3.6-35B-A3B**, all three wordings — none,
+current, and the proposed replacement — declined correctly. Representative reply under the proposed
+wording:
+
+> The provided information only contains data for the **Kuiper-7** sensor array. There is no mention of
+> a "Kuiper-9" sensor array or its baseline drift.
+
+So the early reading is that the replacement keeps the anti-confabulation behaviour while dropping the
+over-refusal — but two models is not the sweep, and this section is not settled until the other two run.
+
+**Two verdicts in this probe's first runs were the detector's fault, not the models'**, and are worth
+recording so they are not mistaken for findings later: a correct decline reading "do **not** contain"
+was missed by a phrase list containing only "does not contain", and the fabrication test — "the reply
+contains a digit" — fired on the digits in *Kuiper-7* and *Kuiper-9* themselves. The detector now
+matches inflections by regex and only counts a drift figure that differs from Kuiper-7's own. The
+printed reply remains what actually decides; the verdict is a hint.
+
 ## Q4. The "answer from context only" reminder
 
 Probes 5 and 6. Asked "What is 2+2?" with no context supplied — the general-knowledge question a live

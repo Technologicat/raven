@@ -337,17 +337,19 @@ def probe_reminder_constrains(base: str, model: str) -> None:
             report(label, f"REJECTED -- {got['content'][:80]}")
             continue
         lowered = got["content"].lower()
-        declined = any(p in lowered for p in ("does not contain", "no information", "not mentioned",
-                                              "no mention", "not appear", "cannot find", "can't find",
-                                              "don't have", "do not have", "not provided", "no data",
-                                              "unable to", "only provides", "only contains",
-                                              "only reports", "does not include", "not specified",
-                                              "not available", "no specific"))
-        # The failure is a *drift figure* asserted for Kuiper-9. Testing for any digit does not work:
-        # the model names contain digits, so a correct decline that names Kuiper-7 and Kuiper-9 scores
-        # as a fabrication. Require a number attached to the unit instead.
-        invented = (not declined) and bool(re.search(r"\d+(?:\.\d+)?\s*(?:mk\b|millikelvin)", lowered))
-        report(label, "declined correctly" if declined else ("CONFABULATED" if invented else "unclear"),
+        # Phrase matching is brittle here and the printed reply is what actually decides; two rounds of
+        # false verdicts came from it ("do not contain" missing where "does not contain" was present,
+        # and digits in the model *names* reading as a fabricated measurement). Hence regexes over
+        # inflections, and a fabrication test that ignores the legitimately-quoted Kuiper-7 value.
+        declined = bool(re.search(r"(does not|do not|doesn't|don't|cannot|can't|unable to)\s+"
+                                  r"(contain|include|have|mention|provide|find|specify)", lowered)
+                        or re.search(r"no (information|data|mention|record|reference|details|specific)", lowered)
+                        or re.search(r"only (contains?|reports?|provides?|includes?|has|covers)", lowered)
+                        or "not mentioned" in lowered or "not provided" in lowered
+                        or "not available" in lowered or "not specified" in lowered)
+        drift_figures = {m for m in re.findall(r"(\d+(?:\.\d+)?)\s*(?:mk\b|millikelvin)", lowered)}
+        invented = bool(drift_figures - {NEEDLE})  # a drift value other than Kuiper-7's own
+        report(label, "CONFABULATED" if invented else ("declined correctly" if declined else "unclear -- read the reply"),
                show("reply", got["content"], limit=150))
 
 
