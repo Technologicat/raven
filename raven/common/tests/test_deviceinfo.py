@@ -167,3 +167,58 @@ class TestValidate:
             config = {"avatar": {"device_string": "cuda:0", "dtype": torch.float16}}
             deviceinfo.validate(config)
             assert config["avatar"]["dtype"] is torch.float32
+
+
+class TestVRAMLedger:
+    """`VRAMLedger` accounting, on the paths that need no GPU.
+
+    The CUDA path is exercised by running raven-server with `--vram-report`; what is pinned here is
+    the behaviour that must hold on every machine, CI included: a device it cannot measure is
+    reported as *unmeasured*, never as zero. Zero would read as "this module is free", which is the
+    one wrong answer that looks like a right one.
+    """
+
+    def test_non_cuda_device_records_unmeasured_not_zero(self):
+        ledger = deviceinfo.VRAMLedger()
+        with ledger.measure("somemodule", "cpu"):
+            pass
+        entry = ledger.entries()[0]
+        assert entry["label"] == "somemodule"
+        assert entry["driver_bytes"] is None
+        assert entry["torch_bytes"] is None
+
+    def test_entries_preserve_load_order(self):
+        # The per-step split is order-dependent when models are shared, so the order is part of the
+        # data rather than a presentational detail.
+        ledger = deviceinfo.VRAMLedger()
+        for name in ("first", "second", "third"):
+            with ledger.measure(name, "cpu"):
+                pass
+        assert [entry["label"] for entry in ledger.entries()] == ["first", "second", "third"]
+
+    def test_step_is_recorded_even_when_it_raises(self):
+        # A module that dies partway through has usually already allocated something, and that is
+        # exactly when someone wants to know how much.
+        ledger = deviceinfo.VRAMLedger()
+        with pytest.raises(RuntimeError):
+            with ledger.measure("exploding", "cpu"):
+                raise RuntimeError("model failed to load")
+        assert [entry["label"] for entry in ledger.entries()] == ["exploding"]
+
+    def test_empty_ledger_reports_nothing_measured(self):
+        assert "nothing measured" in deviceinfo.VRAMLedger().format_report()
+
+    def test_report_mentions_every_measured_module(self):
+        ledger = deviceinfo.VRAMLedger()
+        for name in ("avatar", "stt", "tts"):
+            with ledger.measure(name, "cpu"):
+                pass
+        report = ledger.format_report()
+        for name in ("avatar", "stt", "tts"):
+            assert name in report
+
+    def test_totals_are_empty_without_a_measurable_device(self):
+        ledger = deviceinfo.VRAMLedger()
+        with ledger.measure("somemodule", "cpu"):
+            pass
+        assert ledger.totals() == {}

@@ -21,6 +21,8 @@ parser.add_argument("--port", type=int, help="Specify the port on which the appl
 parser.add_argument("--listen", action="store_true", help="Host the app on the local network (if not set, the server is visible to localhost only)")
 parser.add_argument("--secure", action="store_true", help="Require an API key (will be auto-created first time, and printed to console each time on server startup)")
 parser.add_argument("--max-content-length", help="Set the max content length for the Flask app config.")
+parser.add_argument("--vram-report", metavar='PATH', default=None,
+                    help="Write the per-module VRAM measurement to PATH as JSON (it is printed to the console either way). Measure on an otherwise idle GPU; the figures come from the driver, so anything else using the card lands in whichever module was loading at the time.")
 parser.add_argument('--log', metavar='PATH', default=None,
                     help='mirror stderr log to this file (overwritten each run)')
 parser.add_argument('--log-level', default='INFO',
@@ -41,6 +43,7 @@ from unpythonic import timer
 with timer() as tim:
     import gc
     import importlib
+    import json
     import os
     import pathlib
     import secrets
@@ -1625,6 +1628,10 @@ if max_content_length is not None:
 
 # TODO: Maybe clean up the API: pass `config_module_name` to all modules, and let each `init_module` get whatever it needs from there. For implementation, see the modules that already do this.
 def init_server_modules():  # keep global namespace clean
+    # Which models fit on which card is a per-machine question, so measure it here rather than
+    # estimate it elsewhere. Loading only; see `VRAMLedger` for what that does and does not count.
+    vram_ledger = deviceinfo.VRAMLedger()
+
     def get_maybe_shared_spacy_device_string(module_name):
         # Seems slightly faster to run sentence-splitting on the CPU, at least for short-ish (chat message) inputs.
         # But if "natlang" is already serving a copy of spaCy, re-use that to save memory.
@@ -1641,50 +1648,68 @@ def init_server_modules():  # keep global namespace clean
         # One of 'standard_float', 'separable_float', 'standard_half', 'separable_half'.
         # FP16 boosts the rendering performance by ~1.5x, but is only supported on GPU.
         tha3_model_variant = "separable_half" if dtype is torch.float16 else "separable_float"
-        avatar.init_module(config_module_name, device_string, tha3_model_variant)
+        with vram_ledger.measure("avatar", device_string):
+            avatar.init_module(config_module_name, device_string, tha3_model_variant)
 
     if (record := server_config.enabled_modules.get("classify", None)) is not None:
         device_string, dtype = record["device_string"], record["dtype"]
-        classify.init_module(server_config.classification_model, device_string, dtype)
+        with vram_ledger.measure("classify", device_string):
+            classify.init_module(server_config.classification_model, device_string, dtype)
 
     if (record := server_config.enabled_modules.get("embeddings", None)) is not None:
         device_string, dtype = record["device_string"], record["dtype"]
-        embeddings.init_module(config_module_name, device_string, dtype)
+        with vram_ledger.measure("embeddings", device_string):
+            embeddings.init_module(config_module_name, device_string, dtype)
 
     if (record := server_config.enabled_modules.get("imagefx", None)) is not None:
         device_string, dtype = record["device_string"], record["dtype"]
-        imagefx.init_module(device_string, dtype)
+        with vram_ledger.measure("imagefx", device_string):
+            imagefx.init_module(device_string, dtype)
 
     if (record := server_config.enabled_modules.get("natlang", None)) is not None:
         device_string = record["device_string"]  # no configurable dtype
-        natlang.init_module(server_config.spacy_model,
-                            device_string)
+        with vram_ledger.measure("natlang", device_string):
+            natlang.init_module(server_config.spacy_model,
+                                device_string)
 
     if (record := server_config.enabled_modules.get("sanitize", None)) is not None:
         device_string = record["device_string"]  # no configurable dtype
-        sanitize.init_module(server_config.dehyphenation_model, device_string)
+        with vram_ledger.measure("sanitize", device_string):
+            sanitize.init_module(server_config.dehyphenation_model, device_string)
 
     if (record := server_config.enabled_modules.get("stt", None)) is not None:
         device_string, dtype = record["device_string"], record["dtype"]
-        stt.init_module(config_module_name, device_string, dtype)
+        with vram_ledger.measure("stt", device_string):
+            stt.init_module(config_module_name, device_string, dtype)
 
     if (record := server_config.enabled_modules.get("translate", None)) is not None:
         device_string, dtype = record["device_string"], record["dtype"]
         spacy_device_string = get_maybe_shared_spacy_device_string("translate")
-        translate.init_module(config_module_name,
-                              device_string,
-                              server_config.spacy_model,
-                              spacy_device_string,
-                              dtype)
+        with vram_ledger.measure("translate", device_string):
+            translate.init_module(config_module_name,
+                                  device_string,
+                                  server_config.spacy_model,
+                                  spacy_device_string,
+                                  dtype)
 
     if (record := server_config.enabled_modules.get("tts", None)) is not None:
         device_string = record["device_string"]  # no configurable dtype
-        tts.init_module(config_module_name, device_string)
+        with vram_ledger.measure("tts", device_string):
+            tts.init_module(config_module_name, device_string)
 
     if (record := server_config.enabled_modules.get("websearch", None)) is not None:  # no device/dtype settings; if a record exists (regardless of whether blank), this module is enabled.
         websearch.init_module(config_module_name)
     if (record := server_config.enabled_modules.get("webfetch", None)) is not None:  # no device/dtype settings; if a record exists (regardless of whether blank), this module is enabled.
         webfetch.init_module(config_module_name)
+
+    print(vram_ledger.format_report())
+    if args.vram_report is not None:
+        report_path = pathlib.Path(args.vram_report).expanduser().resolve()
+        report_path.write_text(json.dumps({"modules": vram_ledger.entries(),
+                                           "totals": vram_ledger.totals()},
+                                          indent=2) + "\n",
+                               encoding="utf-8")
+        print(f"{Fore.GREEN}{Style.BRIGHT}Wrote VRAM report to {report_path}{Style.RESET_ALL}")
 init_server_modules()
 
 # ----------------------------------------

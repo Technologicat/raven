@@ -2,12 +2,14 @@
 
 __all__ = ["get_device_and_dtype",
            "validate",
-           "cuda_sanity_check"]
+           "cuda_sanity_check",
+           "VRAMLedger"]
 
 import logging
 logger = logging.getLogger(__name__)
 
-from typing import Any, Callable, Dict, List, Optional, Tuple
+import contextlib
+from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
 
 import torch
 
@@ -224,3 +226,134 @@ def cuda_sanity_check() -> bool:
         return False
     logger.info("cuda_sanity_check: CUDA + NVRTC OK.")
     return True
+
+
+# --------------------------------------------------------------------------------
+# VRAM accounting
+
+_GIB = 1024 ** 3
+
+class VRAMLedger:
+    """Record how much GPU memory each of a sequence of load steps consumes.
+
+    Answers "will this set of models fit on that card, and which one is the expensive
+    one" - a question that has to be settled per machine, because the answer depends on
+    the card, on the model choices, and on what else is resident.
+
+    Usage::
+
+        ledger = VRAMLedger()
+        with ledger.measure("avatar", "cuda:0"):
+            avatar.init_module(...)
+        with ledger.measure("stt", "cuda:0"):
+            stt.init_module(...)
+        print(ledger.format_report())
+
+    **Two numbers per step, and the gap between them is the interesting part.**
+    `driver` is taken from `torch.cuda.mem_get_info`, i.e. straight from the driver, so it
+    counts every byte the step took regardless of who allocated it. `torch` is PyTorch's
+    own caching-allocator figure, which sees only what PyTorch allocated. A step that loads
+    a model through some other CUDA allocator - spaCy on GPU goes through cupy, for instance
+    - shows up in the first and is invisible to the second, and that divergence is worth
+    seeing rather than averaging away.
+
+    **Three caveats, all of which affect how the numbers should be read:**
+
+      - *The driver figure is device-global.* Anything else using the same GPU during a
+        measurement lands in the step that happened to be running. Measure on an otherwise
+        idle card - in particular with no LLM backend holding it.
+      - *This measures loading, not running.* Models that allocate lazily on first inference
+        contribute nothing here, so these figures are a floor on the real footprint. Peak
+        usage needs a warm-up call per module, which this does not do.
+      - *Shared models are attributed to whoever loaded first.* When one step reuses a model
+        another already loaded, the cost lands entirely on the earlier step and the later one
+        looks free. The totals stay right; the per-step split is a function of load order.
+
+    Non-CUDA devices are recorded as unmeasured rather than as zero: MPS, XPU and Vulkan
+    expose no equivalent of `mem_get_info`, and reporting 0 would read as "free".
+    """
+
+    def __init__(self) -> None:
+        self._entries: List[Dict[str, Any]] = []
+        self._baseline: Dict[str, Dict[str, int]] = {}  # device_string -> {"free", "total"} at first touch
+
+    def _snapshot(self, device_string: str) -> Optional[Tuple[int, int]]:
+        """Return `(free_bytes, allocated_by_torch_bytes)` for a CUDA device, or `None` if not measurable."""
+        if not device_string.startswith("cuda") or not torch.cuda.is_available():
+            return None
+        torch.cuda.synchronize(device_string)  # let queued work land, or it lands inside the next step
+        free, total = torch.cuda.mem_get_info(device_string)
+        if device_string not in self._baseline:
+            self._baseline[device_string] = {"free": free, "total": total}
+        return free, torch.cuda.memory_allocated(device_string)
+
+    @contextlib.contextmanager
+    def measure(self, label: str, device_string: str) -> Iterator[None]:
+        """Context manager: attribute whatever happens in the block to `label`, on `device_string`."""
+        before = self._snapshot(device_string)
+        try:
+            yield
+        finally:
+            after = self._snapshot(device_string)
+            if before is None or after is None:
+                self._entries.append({"label": label, "device_string": device_string,
+                                      "driver_bytes": None, "torch_bytes": None})
+            else:
+                free_before, torch_before = before
+                free_after, torch_after = after
+                self._entries.append({"label": label, "device_string": device_string,
+                                      "driver_bytes": free_before - free_after,
+                                      "torch_bytes": torch_after - torch_before})
+
+    def entries(self) -> List[Dict[str, Any]]:
+        """Return the recorded steps, in load order. Byte counts; `None` where not measurable."""
+        return list(self._entries)
+
+    def totals(self) -> Dict[str, Dict[str, Optional[int]]]:
+        """Per device: total VRAM, and how much of it the measured steps consumed.
+
+        `consumed` is measured against the device's state when the ledger first touched it, so it
+        excludes whatever was already resident - including the CUDA context, which is created before
+        any module loads and belongs to no module.
+        """
+        out: Dict[str, Dict[str, Optional[int]]] = {}
+        for device_string, base in self._baseline.items():
+            snapshot = self._snapshot(device_string)
+            free_now = snapshot[0] if snapshot is not None else None
+            out[device_string] = {"total_bytes": base["total"],
+                                  "free_at_start_bytes": base["free"],
+                                  "free_now_bytes": free_now,
+                                  "consumed_bytes": (base["free"] - free_now) if free_now is not None else None}
+        return out
+
+    def format_report(self) -> str:
+        """Return the ledger as a human-readable table."""
+        if not self._entries:
+            return "VRAM: nothing measured."
+
+        def gib(n: Optional[int]) -> str:
+            return "     -" if n is None else f"{n / _GIB:6.2f}"
+
+        lines = ["VRAM used by module loading (GiB; driver = all allocators, torch = PyTorch's only)",
+                 f"  {'module':<14} {'device':<10} {'driver':>7} {'torch':>7}"]
+        divergent = []
+        for entry in self._entries:
+            lines.append(f"  {entry['label']:<14} {entry['device_string']:<10} "
+                         f"{gib(entry['driver_bytes']):>7} {gib(entry['torch_bytes']):>7}")
+            driver, torch_bytes = entry["driver_bytes"], entry["torch_bytes"]
+            # A step whose driver cost is well above what PyTorch accounts for allocated through some
+            # other path. Worth naming: it is the case the torch-only figure would have missed entirely.
+            if driver is not None and torch_bytes is not None and driver - torch_bytes > 0.25 * _GIB:
+                divergent.append(entry["label"])
+
+        for device_string, totals in self.totals().items():
+            consumed, total = totals["consumed_bytes"], totals["total_bytes"]
+            free_now = totals["free_now_bytes"]
+            lines.append(f"  {'TOTAL':<14} {device_string:<10} {gib(consumed):>7}"
+                         f"   of {gib(total)} GiB on device, {gib(free_now)} GiB free")
+
+        if divergent:
+            lines.append(f"  Note: {', '.join(divergent)} allocated substantially outside PyTorch's allocator "
+                         f"(spaCy on GPU uses cupy, for instance).")
+        lines.append("  Loading only - models that allocate on first inference are not counted here.")
+        return "\n".join(lines)
