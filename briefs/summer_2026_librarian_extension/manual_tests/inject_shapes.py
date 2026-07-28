@@ -34,6 +34,7 @@ Usage:
 """
 
 import json
+import re
 import sys
 import urllib.error
 import urllib.request
@@ -337,11 +338,15 @@ def probe_reminder_constrains(base: str, model: str) -> None:
             continue
         lowered = got["content"].lower()
         declined = any(p in lowered for p in ("does not contain", "no information", "not mentioned",
-                                              "not appear", "cannot find", "don't have", "do not have",
-                                              "not provided", "no data", "unable to", "only provides",
-                                              "does not include", "not specified"))
-        # A figure offered with no source is the failure this reminder exists to prevent.
-        invented = (not declined) and any(ch.isdigit() for ch in got["content"])
+                                              "no mention", "not appear", "cannot find", "can't find",
+                                              "don't have", "do not have", "not provided", "no data",
+                                              "unable to", "only provides", "only contains",
+                                              "only reports", "does not include", "not specified",
+                                              "not available", "no specific"))
+        # The failure is a *drift figure* asserted for Kuiper-9. Testing for any digit does not work:
+        # the model names contain digits, so a correct decline that names Kuiper-7 and Kuiper-9 scores
+        # as a fabrication. Require a number attached to the unit instead.
+        invented = (not declined) and bool(re.search(r"\d+(?:\.\d+)?\s*(?:mk\b|millikelvin)", lowered))
         report(label, "declined correctly" if declined else ("CONFABULATED" if invented else "unclear"),
                show("reply", got["content"], limit=150))
 
