@@ -164,25 +164,33 @@ class TestMakeTimestamp:
 # ---------------------------------------------------------------------------
 
 class TestFormatDatetime:
-    def test_chat_datetime_now_format(self):
-        result = chatutil.format_chat_datetime_now()
+    def test_date_now_format(self):
+        result = chatutil.format_date_now()
         assert result.startswith("[System information:")
         assert result.endswith("]")
+
+    def test_time_now_format(self):
+        result = chatutil.format_time_now()
+        assert result.startswith("[System information:")
+        assert result.endswith("]")
+
+    def test_date_and_time_are_separate_injects(self):
+        # They are delivered by different routes (system block vs. tool output), so neither may
+        # carry the other's half - a date in the per-turn inject would defeat the split.
+        assert "Today is" in chatutil.format_date_now()
+        assert "Today is" not in chatutil.format_time_now()
+        assert "local time" in chatutil.format_time_now()
+        assert "local time" not in chatutil.format_date_now()
 
     def test_chatlog_datetime_now_has_weekday_date_time(self):
         result = chatutil.format_chatlog_datetime_now()
         parts = result.split()
         assert len(parts) == 3  # weekday, date, time
 
-    def test_chatlog_date_now_has_weekday_and_date(self):
-        result = chatutil.format_chatlog_date_now()
-        parts = result.split()
-        assert len(parts) == 2  # weekday, date
-
 
 class TestFormatReminders:
-    def test_focus_reminder_is_nonempty_string(self):
-        result = chatutil.format_reminder_to_focus_on_latest_input()
+    def test_conversational_reminder_is_nonempty_string(self):
+        result = chatutil.format_reminder_to_write_conversationally()
         assert isinstance(result, str)
         assert len(result) > 0
         assert "[System information:" in result

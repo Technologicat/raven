@@ -423,14 +423,17 @@ def setup(backend_url: str,
 
     user = librarian_config.llm_user_name
     char = librarian_config.llm_char_name
-    weekday_and_date = chatutil.format_chatlog_date_now()
 
     # SillyTavern would call these "macros".
+    #
+    # No date here, deliberately: this text is built once, at app start, so a date written into it goes wrong
+    # at the first midnight the session survives. Raven states the current date - weekday included, so that the
+    # model never has to do calendar arithmetic - in the system message on every turn instead; see
+    # `scaffold._perform_injects`.
     template_vars = env(user=user,
                         char=char,
                         model=model,
-                        context_length=context_length,  # loaded context window, for the card to tell the model its real size
-                        weekday_and_date=weekday_and_date)
+                        context_length=context_length)  # loaded context window, for the card to tell the model its real size
     system_prompt = librarian_config.setup_system_prompt(template_vars)
     character_card = librarian_config.setup_character_card(template_vars)
     greeting = librarian_config.llm_greeting

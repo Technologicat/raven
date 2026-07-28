@@ -501,14 +501,68 @@ Qwen3.5-4B, `tool+call-merged` is uniform across every model that matters, and `
 no branch on model size. Were E4B a target, the mitigation would still not be a role fork — it would be
 fewer, better results, which is the reranking work already queued.
 
+## Q11. Asked something the retrieved documents do not answer
+
+Found while verifying the implemented shapes end to end, so this one was measured through Raven's own
+`_perform_injects` output rather than a hand-built history (`manual_tests/absent_fact.py`). It is the case
+retrieval handles least gracefully: matches that are relevant to the topic and silent on the question.
+
+Qwen3.6-27B then tries to run another search. It cannot — Raven's document search is not a tool the model
+may call, it is a search Raven ran before the turn began — so with no tools declared it writes the call out
+as literal text, and that text is what the user gets instead of an answer:
+
+```
+<tool_call> <function=search_documents> <parameter=query> Kelvin-7 </parameter> </function> </tool_call>
+```
+
+Nine samples per variant, temperature 1.0, asking for a figure the documents do not contain:
+
+| variant | asked for another search |
+|---|---|
+| as shipped | 3/9 |
+| tool result ends "these are all the matches for this turn … you cannot search it again yourself" | 0/9 |
+| synthetic call removed, matches handed over as a `user` message | 1/3 |
+
+The third row is the control, and it rules out the obvious suspect: **the synthetic call is not what
+teaches the model to ask.** Removing it does not help, and one of those three replies additionally lost
+track of who had said what ("Wait, that was *me* in the previous turn?"), which is the confusion the
+synthetic call exists to prevent. The reaching comes from the empty-handed question.
+
+### The mitigation was rejected, and the way it failed is the lesson
+
+The 0/9 row looks like a fix and is not one. Sampled again at **temperature 0** with a budget it could not
+exhaust, that wording ran **29162 characters of reasoning and never produced a reply** — while sending
+nothing extra answered cleanly in 3157, declining the absent fact and offering the near miss.
+
+Which is Q4 again, in a costume. "You cannot search it again yourself" is a **prohibition**, and a
+prohibition is precisely what this rework exists to stop handing the model. Nine samples at T=1 said the
+mitigation worked; one sample at T=0 said it was the most expensive thing in the file. The methodological
+point is worth more than the result: *a shape that fixes the behaviour you are watching can wreck the
+behaviour you are not.* Sample at both temperatures before believing a win.
+
+A neutral rewording ("These are all the matches for this turn.", no capability claim) recovers T=0 — 3237
+characters, clean — but still blew up on 1 of 6 at T=1, and no baseline reasoning-length was measured at
+T=1 to compare against. Not enough to ship on.
+
+**So this ships unmitigated.** The model's instinct is correct: it is right to want a second, better-aimed
+search, and the query it wants ("Kelvin-7") is one that only exists after reading the first pass. The
+answer is to let it have one — the queued "RAG access via tool-call" work — not to talk it out of asking.
+
+Not measured across models: this was found late, on the 27B. Whether the weaker models reach for the tool
+as often is open, and cheap to check with the same probe.
+
 ## Still unmeasured
 
-- Whether the two reminders keep steering from the leading system block. `system_front` loses recency,
-  which is the one thing late placement buys. The reason late placement was chosen in the first place
-  — DeepSeek-R1 distills needing it for multi-turn to work — dates from early 2025 and is **not worth
-  designing around any more**: those models are two generations behind, and nothing in this sweep
-  suggests current ones need the help. Worth confirming the reminders still bite from the front, but
-  not worth preserving late placement on their account.
+- Whether the *style* reminder ("prefer writing your raw thoughts rather than a structured report") keeps
+  steering from the leading system block. `system_front` loses recency, which is the one thing late
+  placement buys. The **context-only** reminder does keep steering from there — Q11's runs were made
+  through the shipped shape, and the model declined the absent fact correctly — but the style half was
+  not separately checked, and it is the one aimed at a habit rather than at a decision.
+
+  The other half of that reminder, "reply to the user's most recent message", has been **retired**. It was
+  there for the DeepSeek-R1 distills, early 2025, and those are two generations behind; nothing in this
+  sweep suggests a current model needs telling. The `before` placement also protects the same property
+  directly, by leaving the user's question as the last message.
 - oobabooga, which is not installed on this machine and stale elsewhere. Every number here is LM
   Studio.
 - Whether any of this transfers to non-local backends.

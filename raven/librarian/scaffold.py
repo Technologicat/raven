@@ -6,6 +6,8 @@ __all__ = ["user_turn",
 import logging
 logger = logging.getLogger(__name__)
 
+import json
+
 from typing import Callable, Dict, List, Optional, TYPE_CHECKING
 
 from unpythonic import dyn, sym, Values
@@ -188,119 +190,192 @@ def _search_docs_with_bypass(llm_settings: env,
     return Values(action=action_continue, matches=docs_results)
 
 
-injectors = [chatutil.format_chat_datetime_now,  # let the LLM know the current local time and date
-             chatutil.format_reminder_to_focus_on_latest_input]  # remind the LLM to focus on user's last message (some models such as the distills of DeepSeek-R1 need this to support multi-turn conversation)
+def _context_is_present(history: List[Dict],
+                        docs_matches: List[Dict]) -> bool:
+    """Return whether the AI has any material to ground an answer in, beyond its own static knowledge.
+
+    Call this *before* adding any injects to `history`; the injects we add are themselves context-shaped,
+    so afterwards the answer is always `True` and the question no longer means anything.
+
+    Counted as context: this turn's document-database matches, any attachment the user has made anywhere
+    on this branch (an image or a document), and tool results *from this turn* (a web search, a fetched
+    page). The two are scoped differently on purpose, because they age differently. An attachment is
+    material sitting in the context, and stays usable for as long as it is in the window. A tool result
+    is the answer to one specific earlier question, and goes stale with it: last week's weather lookup is
+    no grounding at all for today's question about instrument calibration, so treating it as context would
+    leave the reminder stuck on for the rest of the conversation. Scoping tool results to the turn that
+    asked for them follows the same one-hop rule as `chatutil.compute_auto_allowed_hosts`.
+
+    Not counted: the conversation itself, nor the AI's own earlier replies - a model summarizing what it
+    previously said is exactly the ungrounded answer this is used to guard against.
+    """
+    if docs_matches:
+        return True
+    latest_user_position = max((position for position, message in enumerate(history) if message["role"] == "user"),
+                               default=-1)
+    for position, message in enumerate(history):
+        if message["role"] == "tool" and position > latest_user_position:  # this turn's tool results only
+            return True
+        for part in message.get("content", []):
+            if isinstance(part, dict) and part.get("type") in ("image_url", "text_file"):
+                return True
+    return False
+
+def _add_to_system_message(llm_settings: env,
+                           history: List[Dict],  # mutated!
+                           texts: List[str]) -> None:
+    """Append `texts` to the text content of the leading system message of `history`.
+
+    Injects that are *instruction-like* go here rather than into a message of their own. Measured across
+    the supported model families, the leading system block was the cheapest placement in deliberation
+    tokens and the only one that never provoked the model into remarking on the inject as if the user had
+    typed it. That is affordable only because these injects are constant within a session (or within a
+    day, for the date), so hoisting them costs the backend's prompt-prefix cache nothing.
+
+    Material that is *data* - retrieval results, the clock - does not belong here; see
+    `_synthetic_tool_exchange` for that, and note that the strictest chat templates permit exactly one
+    system message anyway, so a second one is not available to us even if we wanted it.
+
+    NOTE: `chatutil.linearize_chat` hands out the datastore's own message dicts, not copies. Hence the
+    system message is *replaced* with a modified copy rather than edited in place - editing in place
+    would write the injects into the stored system prompt, permanently, once per turn.
+    """
+    if not texts:
+        return
+    has_system_message = bool(history) and history[0]["role"] == "system"
+    old_texts = [chatutil.content_to_text(history[0]["content"])] if has_system_message else []
+    system_message = chatutil.create_chat_message(llm_settings=llm_settings,
+                                                  role="system",
+                                                  add_persona=False,
+                                                  text="\n\n".join([*old_texts, *texts]))
+    if has_system_message:
+        history[0] = system_message
+    else:  # no system prompt in this chat (unusual, but a client may build a history without one)
+        history.insert(0, system_message)
+
+def _synthetic_tool_exchange(llm_settings: env,
+                             call_id: str,
+                             function_name: str,
+                             arguments: Dict,
+                             result_text: str) -> List[Dict]:
+    """Return `[assistant message requesting a tool call, tool message answering it]`, for injected data.
+
+    "Synthetic" = neither message is real. The AI never asked for this call; Raven made the call on its
+    own initiative and is presenting the answer in the shape the model expects for one.
+
+    The assistant message is load-bearing, not decoration: given a bare `tool` message with no call to
+    answer, Gemma 4 ignores the material entirely and confabulates a confident wrong answer in its place -
+    reproducibly, across packagings and backend versions. Handing it the call it never made is what makes
+    the result legible as a result.
+
+    One `tool` message per call, as the OpenAI schema describes - a `tool` message answers exactly one
+    `tool_call_id`. So a set of retrieval matches rides as a single message, not one message per match;
+    sharing one call id across many messages is the shape that Gemma4-E4B reads as nothing at all.
+    """
+    call_message = chatutil.create_chat_message(llm_settings=llm_settings,
+                                                role="assistant",
+                                                add_persona=False,
+                                                text="",
+                                                tool_calls=[{"id": call_id,
+                                                             "type": "function",
+                                                             "function": {"name": function_name,
+                                                                          "arguments": json.dumps(arguments)}}])
+    result_message = chatutil.create_chat_message(llm_settings=llm_settings,
+                                                  role="tool",
+                                                  add_persona=False,
+                                                  text=result_text)
+    result_message["tool_call_id"] = call_id  # OAI spec: the linkage lives on the tool-response message
+    return [call_message, result_message]
+
 def _perform_injects(llm_settings: env,
                      history: List[Dict],  # mutated!
-                     continue_: bool,
                      speculate: bool,
+                     docs_query: Optional[str],
                      docs_matches: List[Dict]) -> None:
     """Perform the temporary injects to prepare for the AI's turn.
 
     These are not meant to be persistent, so we don't even add them to the datastore,
     but only insert them into the temporary linearized history that is fed to the LLM.
 
+    Two kinds of material go in, and they are shaped differently because they are asking for different
+    things. Instructions - the reminders, and the date - want to be obeyed, so they join the leading
+    system message. Data - the clock time, the document-database matches - wants to be read but not
+    obeyed, so it arrives as the answer to a tool call Raven makes on the model's behalf.
+
+    All of it lands *before* the user's latest message. That position is what keeps the model answering
+    the user instead of continuing the agent loop: with a tool result as the very last message, Qwen 3.6
+    will sometimes reply by emitting another `search_documents` call rather than an answer. It also keeps
+    the whole conversation ahead of the injects byte-identical from turn to turn, so the backend reprocesses
+    only the tail. (The front of the history, where the retrieval results used to go, is the worst of both:
+    a fresh prompt prefix every turn.) The rationale, and the measurements behind every choice here, are in
+    `briefs/context-inject-shape-measurements.md`.
+
+    The position is also why this needs no `continue_` flag: when continuing the AI's interrupted message,
+    the history must look as it did at the moment of interruption, and everything we add sits ahead of the
+    user's message, which is ahead of the message being continued either way.
+
     `llm_settings`: Obtain this by calling `raven.librarian.llmclient.setup` at app start time.
                     Contains (among other things) a mapping of roles to persona names.
 
     `history`: Linearized message history in the OpenAI format sent to the LLM.
 
-    `continue_`: Whether to continue AI's last message. Affects the inject position:
+    `speculate`: If `False`, and there is context to ground an answer in, remind the LLM to base its claims
+                 about that context on the context. With nothing to ground in, the reminder is skipped -
+                 asking a model to stick to documents that were never provided is a contradiction it will
+                 dutifully try to resolve, at a cost of up to 37x the deliberation, sometimes never
+                 terminating at all.
 
-                 If `False`, always-on injects are appended to the end. Usually you want this.
-
-                 If `True`, always-on injects are added just before the last message,
-                            which is the message being continued.
-
-    `speculate`: If `False`, remind the LLM to respond using in-context information only.
+    `docs_query`: The query string the document database was searched with, or `None` if it wasn't searched.
+                  Reported to the model as the arguments of the synthetic search call, so that the matches
+                  arrive as the answer to a legible question rather than as free-floating material.
 
     `docs_matches`: Docs search matches returned by `HybridIR` (see `_search_docs_with_bypass`).
     """
-    # # This causes Qwen3 to miss the user's last message. Maybe better to put the RAG results at another position.
-    # #
-    # # Format RAG results like a tool-call reply to the user's message.
-    # # First, find the user's latest message in the linearized history.
-    # for depth, message in enumerate(reversed(history)):
-    #     if message["role"] == "user":
-    #         break
-    # else:  # no user message found (should not happen)
-    #     depth = None
-    #     message = None
-    #
-    # if message is not None:
-    #     position = len(history) - depth
-    #     for docs_result in reversed(docs_matches):  # reverse to keep original order, because we insert each item at the same position.
-    #         # TODO: Should the RAG match notification show the query string, too?
-    #         search_result_text = f"Knowledge-base match from '{docs_result['document_id']}':\n\n{docs_result['text'].strip()}\n-----"
-    #         message_to_inject = chatutil.create_chat_message(llm_settings=settings,
-    #                                                           role="tool",
-    #                                                           text=search_result_text)
-    #         history.insert(position, message_to_inject)
+    grounding_material_exists = _context_is_present(history, docs_matches)  # ask before we add any ourselves
 
-    # All temporary injects go in as "user", never "system" — see the note at `inject_role` below for why.
-    # For the RAG results this is a workaround, not a design: they are system information, and the system
-    # role is what they want. But the strictest templates allow only a single system message, so several
-    # match notifications cannot be system messages no matter where they sit. Injecting the matches into
-    # the *content* of the one leading system message is the proper fix; it lands with the folding work
-    # (see TODO_DEFERRED.md), which has to solve the same shared-dict-mutation problem anyway.
-    inject_role = "user"
+    # Instruction-like injects -> leading system message.
+    system_injects = [chatutil.format_date_now(),
+                      chatutil.format_reminder_to_write_conversationally()]
+    if not speculate and grounding_material_exists:
+        system_injects.append(chatutil.format_reminder_to_use_information_from_context_only())
+    _add_to_system_message(llm_settings=llm_settings,
+                           history=history,
+                           texts=system_injects)
 
-    # Insert RAG results at the start of the history.
-    # TODO: This causes a full KV cache rebuild. Could we place them later in the chat history?
-    for docs_result in reversed(docs_matches):  # reverse to keep original order, because we insert each item at the same position.
-        # TODO: Should the RAG match notification show the query string, too?
-        search_result_text = f"[System information: Knowledge-base match from '{docs_result['document_id']}'.]\n\n{docs_result['text'].strip()}\n-----"
-        message_to_inject = chatutil.create_chat_message(llm_settings=llm_settings,
-                                                         role=inject_role,
-                                                         add_persona=False,
-                                                         text=search_result_text)
-        history.insert(1, message_to_inject)  # after system prompt / character card combo
+    # Data-like injects -> synthetic tool calls, placed just before the user's latest message.
+    data_injects = _synthetic_tool_exchange(llm_settings=llm_settings,
+                                            call_id="raven_clock",
+                                            function_name="get_current_time",
+                                            arguments={},
+                                            result_text=chatutil.format_time_now())
     if docs_matches:
-        n_matches_text = f"[System information: Knowledge base matched {len(docs_matches)} items.]"
-        message_to_inject = chatutil.create_chat_message(llm_settings=llm_settings,
-                                                         role=inject_role,
-                                                         add_persona=False,
-                                                         text=n_matches_text)
-        history.insert(1, message_to_inject)
+        match_blocks = [f"[System information: Knowledge-base match from '{docs_result['document_id']}'.]\n\n{docs_result['text'].strip()}\n-----"
+                        for docs_result in docs_matches]
+        # Asked about something the matches do not cover, the model sometimes reaches for another search -
+        # and since this search is Raven's own, run before the turn began, there is no such tool for it to
+        # reach for. It then writes the call out as literal text, and the user gets that instead of an
+        # answer (~1 turn in 3 on Qwen3.6-27B, asking for a figure the documents do not contain).
+        #
+        # Deliberately unmitigated. Telling the model it may not search again reads as a prohibition, and a
+        # prohibition is the thing this whole inject rework exists to stop handing it: that wording ran
+        # 29000 characters of deliberation without producing a reply, where saying nothing answered cleanly
+        # in 3000. The model's instinct is right - it *should* want a second, better-targeted search - so
+        # the fix is to let it have one.
+        # TODO: Expose the retriever as a real tool the model may call ("RAG access via tool-call" in
+        # TODO: TODO.md), which turns this failure into the feature it is reaching for.
+        data_injects.extend(_synthetic_tool_exchange(llm_settings=llm_settings,
+                                                     call_id="raven_docs",
+                                                     function_name="search_documents",
+                                                     arguments={"query": docs_query if docs_query is not None else ""},
+                                                     result_text="\n\n".join(match_blocks)))
 
-    # When we're continuing AI's latest message, the history should appear as it was at the point where generation was interrupted.
-    # Hence the always-on injects at the end of the history should be placed just before the AI's incomplete message, which will be continued.
-    #
-    # Otherwise, those injects should be placed at the end, since the AI will add a new message to the end.
-    def inject(message):
-        if continue_:
-            history.insert(-1, message)
-        else:
-            history.append(message)
-
-    # Why every inject above and below uses the "user" role rather than "system": the strictest chat
-    # templates permit exactly ONE system message, and only as the very first message. Qwen3.5's guard is
-    # `{%- if message.role == "system" %}{%- if not loop.first %}` -> `raise_exception`, so the second
-    # system message fails the whole request even when it sits ahead of the conversation. (Its error text,
-    # "System message must be at the beginning", reads as a position rule but is really a count rule.)
-    # Qwen3.6's template dropped the guard entirely.
-    #
-    # The always-on injects below have a second reason: they belong *after* the user's latest message —
-    # that is the point of a "focus on the latest input" reminder — where no template would accept a system
-    # message anyway. The cost is that the model sees them as the user's words, and will sometimes remark
-    # on them. Their text is bracketed and self-labelling ("[System information: ...]"), so
-    # `add_persona=False`: prefixing the user persona would read as the user narrating a system notice.
-
-    # Always-on injects, e.g. current local datetime
-    for thunk in injectors:
-        message_to_inject = chatutil.create_chat_message(llm_settings=llm_settings,
-                                                         role=inject_role,
-                                                         add_persona=False,
-                                                         text=thunk())
-        inject(message_to_inject)
-
-    # If speculation is off, remind the LLM to use information from the context only.
-    if not speculate:
-        message_to_inject = chatutil.create_chat_message(llm_settings=llm_settings,
-                                                         role=inject_role,
-                                                         add_persona=False,
-                                                         text=chatutil.format_reminder_to_use_information_from_context_only())
-        inject(message_to_inject)
+    for position in range(len(history) - 1, -1, -1):
+        if history[position]["role"] == "user":
+            break
+    else:  # No user message to place the injects ahead of. Nothing to reply to either, so this shouldn't happen.
+        logger.warning("_perform_injects: no user message in history; appending injects at the end.")
+        position = len(history)
+    history[position:position] = data_injects
 
 
 def _perform_and_store_tool_calls(llm_settings: env,
@@ -637,8 +712,8 @@ def ai_turn(llm_settings: env,
         # Prepare the final LLM prompt, by including the temporary injects (the document search results, too).
         _perform_injects(llm_settings=llm_settings,
                          history=message_history,
-                         continue_=continue_this_message,
                          speculate=speculate,
+                         docs_query=docs_query,
                          docs_matches=docs_matches)
 
         if on_llm_start is not None:

@@ -3,9 +3,9 @@
 __all__ = ["format_message_number",
            "format_persona",
            "format_message_heading",
-           "format_chat_datetime_now",
-           "format_chatlog_datetime_now", "format_chatlog_date_now",
-           "format_reminder_to_focus_on_latest_input",
+           "format_date_now", "format_time_now",
+           "format_chatlog_datetime_now",
+           "format_reminder_to_write_conversationally",
            "format_reminder_to_use_information_from_context_only",
            "make_timestamp",
            "text_content_part",
@@ -219,13 +219,30 @@ def _format_isodatetime(d: datetime.datetime) -> Tuple[str, str, str]:
     isotime = d.time().replace(microsecond=0).isoformat()
     return weekday, isodate, isotime
 
-def format_chat_datetime_now() -> str:
-    """Return the text content of a dynamic system message containing the current date, weekday, and local time.
+def format_date_now() -> str:
+    """Return the text content of a dynamic system message containing the current date and weekday.
 
     This is for a dynamic injection.
+
+    Split from `format_time_now` because the two differ in both shelf life and credibility:
+
+      - The date is good for a whole day, so it can ride in the leading system block, where instructions
+        are followed most reliably - and it needs that, because a date years past the model's training
+        cutoff contradicts its prior, and it will argue with anything it trusts less.
+      - The clock time changes every turn, so it stays out of the prefix that the backend would otherwise
+        have to reprocess on each turn. It can afford the weaker placement: every clock time already
+        existed when the model was trained, so there is nothing there to dispute.
     """
     weekday, isodate, isotime = _format_isodatetime(datetime.datetime.now())
-    return f"[System information: Today is {weekday}, {isodate} (in ISO format). The local time now is {isotime}.]"
+    return f"[System information: Today is {weekday}, {isodate} (in ISO format).]"
+
+def format_time_now() -> str:
+    """Return the text content of a dynamic system message containing the current local time.
+
+    This is for a dynamic injection. See `format_date_now` for why the two are separate.
+    """
+    weekday, isodate, isotime = _format_isodatetime(datetime.datetime.now())
+    return f"[System information: The local time now is {isotime}.]"
 
 def format_chatlog_datetime_now() -> str:
     """Return the current date, weekday, and local time in a human-readable format.
@@ -235,25 +252,23 @@ def format_chatlog_datetime_now() -> str:
     weekday, isodate, isotime = _format_isodatetime(datetime.datetime.now())
     return f"{weekday} {isodate} {isotime}"
 
-def format_chatlog_date_now() -> str:
-    """Return the current date and weekday in a human-readable format.
+def format_reminder_to_write_conversationally() -> str:
+    """Return the text content of a system message that asks the LLM to answer in prose rather than in report form.
 
-    This is mainly for the system prompt; LLMs like to be told the current date right there, not later in the chat log.
-    """
-    weekday, isodate, isotime = _format_isodatetime(datetime.datetime.now())
-    return f"{weekday} {isodate}"
+    Aimed at the reflex, strong in the Qwen 3 family, to answer a conversational question with headings and
+    bulleted sections. A chat is a discussion, and a discussion in outline form reads as a briefing document.
 
-def format_reminder_to_focus_on_latest_input() -> str:
-    """Return the text content of a system message that reminds the LLM to focus on the user's latest input.
-
-    Some models such as the distills of DeepSeek-R1 need this to enable multi-turn conversation to work correctly.
+    This used to also carry "Reply to the user's most recent message", for models - the distills of
+    DeepSeek-R1, early 2025 - that would otherwise answer some earlier turn instead. No model in the current
+    lineup needs telling: the temporary injects now sit ahead of the user's latest message rather than after
+    it, which leaves the question last, where a chat template already points the model at it.
 
     This is for a dynamic injection.
     """
-    return "[System information: IMPORTANT: Reply to the user's most recent message. In a discussion, prefer writing your raw thoughts rather than a structured report.]"
+    return "[System information: In a discussion, prefer writing your raw thoughts rather than a structured report.]"
 
 def format_reminder_to_use_information_from_context_only() -> str:
-    """Return the text content of a system message that reminds the LLM to use the information from the context only (not its internal static knowledge).
+    """Return the text content of a system message that reminds the LLM to ground its claims in the provided context (not its internal static knowledge).
 
     As with all things LLM, this isn't completely reliable, but tends to increase the chances of the model NOT responding based on its static knowledge.
     This is useful when summarizing or extracting information from RAG search results.
@@ -262,9 +277,18 @@ def format_reminder_to_use_information_from_context_only() -> str:
     but their content is irrelevant to the query - or when docs are not enabled, but there is some other data in the context, and the answer should be
     based on that.
 
+    The wording is deliberately about *grounding* rather than about a prohibition. Asking for context-only answers
+    reads, to a model that takes instructions literally, as a ban on general knowledge - and then a question like
+    "what is 2+2?" becomes a dilemma to be reasoned through instead of answered. Measured across the supported
+    model families, that phrasing cost 5-37x the deliberation of sending no reminder at all; one model never
+    terminated, and another refused outright. This phrasing measured within noise of sending nothing, while still
+    declining correctly when asked about something the documents do not contain. Caller-side, the reminder is sent
+    only when there actually is context to ground in - a reminder about "the provided documents" with no documents
+    provided is the self-contradiction that started the problem.
+
     This is for a dynamic injection.
     """
-    return "[System information: NOTE: Please answer based on the information provided in the context only.]"
+    return "[System information: Base claims about the provided documents on those documents. Answer general questions normally.]"
 
 
 # --------------------------------------------------------------------------------
@@ -984,7 +1008,10 @@ def scrub(persona: Optional[str],
     # The main case where we DON'T need to do this is when piping the output to a script, in which case the chat framework
     # is superfluous. In that use case, we really use the LLM as an instruct-tuned model, i.e. a natural language processor
     # that is programmed via free-form instructions in English. Raven's PDF importer does this a lot.
-    if add_persona and persona is not None:
+    # Empty content is left empty: a message whose whole content would be "Aria: " is a speaker label with
+    # nothing spoken. That shape is not hypothetical - an assistant message that only requests a tool call
+    # carries no text, and Raven's own injected tool calls are of exactly that kind.
+    if add_persona and persona is not None and text:
         text = f"{persona}: {text}"
 
     return text

@@ -1,5 +1,26 @@
 # Brief: rebuild the temporary context injects
 
+**Status: built, 2026-07-28.** All five changes landed in `scaffold._perform_injects` and `chatutil`, and
+were verified end to end against a live backend on Qwen3.6-27B and Qwen3.6-35B-A3B
+(`manual_tests/assembled_shape.py`). Four things went differently from the plan below, each for a reason
+worth carrying forward:
+
+- **No midnight watcher was needed** (§4). The plan assumed the date would be baked into the stored system
+  prompt, which is what forces a rollover watch. Injecting it fresh each turn into a *copy* of the leading
+  system message is always correct and needs no machinery. The date was removed from the system-prompt
+  template in `librarian/config.py` at the same time, so exactly one place now states it — two would have
+  been redundant on a good day and contradictory on a long one.
+- **The focus reminder was retired, not moved** (§2). It was two instructions welded together: "reply to
+  the user's most recent message" (the DeepSeek-R1 workaround, obsolete, and now protected structurally by
+  the `before` placement) and a style nudge against report-shaped answers. Only the second survives, as
+  `chatutil.format_reminder_to_write_conversationally`.
+- **The search query rides in the synthetic call's arguments** (§3), which retires the old
+  `# TODO: Should the RAG match notification show the query string, too?` — a tool call is the natural
+  place for it, and the model can then see what was asked on its behalf.
+- **A new failure was found and deliberately left unfixed:** asked something the documents do not answer,
+  the model reaches for another search it cannot have (Q11 in the measurements). The obvious mitigation
+  made things worse in the exact way Q4 warns about. The real fix is the queued RAG-tool work.
+
 **What:** rework `scaffold._perform_injects` — the material Raven adds to every AI turn that the user
 never typed: the current date and time, two behavioural reminders, and one message per RAG match. Change
 the role each takes, where each sits, and the wording of one of them.

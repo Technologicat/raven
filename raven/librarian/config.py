@@ -470,7 +470,6 @@ def setup_system_prompt(template_vars: env) -> str:
     user = template_vars.user  # noqa: F841, for documentation purposes
     char = template_vars.char  # noqa: F841, for documentation purposes
     model = template_vars.model  # noqa: F841, for documentation purposes
-    weekday_and_date = template_vars.weekday_and_date  # noqa: F841, for documentation purposes
     return textwrap.dedent("""""").strip()
 
 # ----------------------------------------
@@ -521,7 +520,6 @@ def setup_character_card_juha(template_vars: env) -> str:
 def setup_interaction_style(template_vars: env) -> str:
     model = template_vars.model  # noqa: F841, for documentation purposes
     context_length = template_vars.context_length  # noqa: F841, for documentation purposes
-    weekday_and_date = template_vars.weekday_and_date  # noqa: F841, for documentation purposes
     return textwrap.dedent(f"""
     **About the system**
 
@@ -530,8 +528,6 @@ def setup_interaction_style(template_vars: env) -> str:
     The knowledge cutoff date of the model is not specified, but is most likely within the year 2024. The knowledge cutoff date applies only to your internal knowledge. Any information provided in the context as well as web search results may be newer.
 
     You are running on a private, local system.
-
-    The current date is {weekday_and_date}.
 
     **Interaction tips**
 

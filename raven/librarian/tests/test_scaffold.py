@@ -791,17 +791,24 @@ def make_conversation(llm_settings):
 class TestPerformInjects:
     """`_perform_injects` builds the temporary history handed to the LLM.
 
-    The invariant these pin down is a chat-template contract, not a Raven preference: several
-    templates require every "system" message to precede the first user/assistant turn, and enforce
-    it with a hard `raise_exception` rather than by ignoring the stray message. Qwen3.5's template
-    does; Qwen3.6's dropped the guard. A violation therefore fails the whole request, and does so
-    only on the strict models — invisible while developing against a permissive one.
+    Two families of invariant are pinned here.
+
+    The first is a chat-template contract, not a Raven preference: several templates require every
+    "system" message to precede the first user/assistant turn, and enforce it with a hard
+    `raise_exception` rather than by ignoring the stray message. Qwen3.5's template does; Qwen3.6's
+    dropped the guard. A violation therefore fails the whole request, and does so only on the strict
+    models — invisible while developing against a permissive one.
+
+    The second is the shape and placement of the injected material, each item of which was chosen by
+    measurement rather than by taste (`briefs/context-inject-shape-measurements.md`). Nothing about
+    these shapes is self-evidently right, so they are worth holding still: a plausible-looking
+    simplification here costs an hour of live probing to catch.
     """
 
     def test_injects_add_no_system_message(self, llm_settings):
         history = make_conversation(llm_settings)
         scaffold._perform_injects(llm_settings=llm_settings, history=history,
-                                  continue_=False, speculate=False, docs_matches=[])
+                                  speculate=False, docs_query=None, docs_matches=[])
         assert_at_most_one_leading_system_message(history)
 
     def test_rag_matches_add_no_system_message(self, llm_settings):
@@ -809,25 +816,128 @@ class TestPerformInjects:
         # Qwen3.5 — several system messages are rejected even though all of them precede the conversation.
         history = make_conversation(llm_settings)
         scaffold._perform_injects(llm_settings=llm_settings, history=history,
-                                  continue_=False, speculate=False,
+                                  speculate=False, docs_query="what is X?",
                                   docs_matches=[sample_rag_match(document_id="a.txt"),
                                                 sample_rag_match(document_id="b.txt")])
         assert_at_most_one_leading_system_message(history)
 
-        # The matches are still injected, still ahead of the conversation, and still in corpus order.
-        texts = [chatutil.content_to_text(message["content"]) for message in history[1:4]]
-        assert "matched 2 items" in texts[0]
-        assert "a.txt" in texts[1]
-        assert "b.txt" in texts[2]
+    def test_rag_matches_ride_in_one_tool_message_in_corpus_order(self, llm_settings):
+        # A `tool` message answers exactly one `tool_call_id`, so all matches share one message rather
+        # than getting one each — the one-per-match form shares an id across messages, which Gemma4-E4B
+        # reads as nothing at all.
+        history = make_conversation(llm_settings)
+        scaffold._perform_injects(llm_settings=llm_settings, history=history,
+                                  speculate=False, docs_query="what is X?",
+                                  docs_matches=[sample_rag_match(document_id="a.txt"),
+                                                sample_rag_match(document_id="b.txt")])
+        docs_messages = [message for message in history
+                         if message["role"] == "tool" and "Knowledge-base match" in chatutil.content_to_text(message["content"])]
+        assert len(docs_messages) == 1
+        text = chatutil.content_to_text(docs_messages[0]["content"])
+        assert text.index("a.txt") < text.index("b.txt")  # corpus order preserved
 
-    def test_injects_add_no_system_message_when_continuing(self, llm_settings):
-        # When continuing, the AI's incomplete message is last and the injects go just before it.
+    def test_injected_tool_results_answer_a_tool_call(self, llm_settings):
+        # The synthetic assistant call is load-bearing, not decoration: handed a bare `tool` message with
+        # no call to answer, Gemma 4 ignores the material and confabulates a confident wrong answer.
+        history = make_conversation(llm_settings)
+        scaffold._perform_injects(llm_settings=llm_settings, history=history,
+                                  speculate=False, docs_query="what is X?",
+                                  docs_matches=[sample_rag_match()])
+        requested_call_ids = {call["id"]
+                              for message in history
+                              for call in message.get("tool_calls", [])}
+        answered_call_ids = {message["tool_call_id"] for message in history if message["role"] == "tool"}
+        assert answered_call_ids  # guard: the rest of this test is vacuous if nothing was injected
+        assert answered_call_ids == requested_call_ids
+
+    def test_injects_precede_the_users_latest_message(self, llm_settings):
+        # With a tool result as the last message, the history reads as a paused agent loop, and Qwen 3.6
+        # sometimes replies by requesting *another* search instead of answering. Leaving the user's
+        # question last is what keeps the model talking to the user.
+        history = make_conversation(llm_settings)
+        scaffold._perform_injects(llm_settings=llm_settings, history=history,
+                                  speculate=False, docs_query="what is X?",
+                                  docs_matches=[sample_rag_match()])
+        assert history[-1]["role"] == "user"
+        assert chatutil.content_to_text(history[-1]["content"]).endswith("What is X?")
+
+    def test_injects_do_not_disturb_a_message_being_continued(self, llm_settings):
+        # When continuing, the history must look as it did when generation was interrupted: the AI's
+        # incomplete message stays last, with the injects ahead of the user turn it is answering.
         history = make_conversation(llm_settings)
         history.append(chatutil.create_chat_message(llm_settings=llm_settings, role="assistant", text="X is"))
         scaffold._perform_injects(llm_settings=llm_settings, history=history,
-                                  continue_=True, speculate=False, docs_matches=[])
+                                  speculate=False, docs_query=None, docs_matches=[])
         assert_at_most_one_leading_system_message(history)
-        assert history[-1]["role"] == "assistant"  # the message being continued stays last
+        assert history[-1]["role"] == "assistant"
+        assert history[-2]["role"] == "user"
+
+    def test_reminders_and_date_go_into_the_system_message(self, llm_settings):
+        # Instruction-like injects want the leading system block: measured the cheapest placement in
+        # deliberation tokens, and the only one that never provoked the model into remarking on them.
+        history = make_conversation(llm_settings)
+        scaffold._perform_injects(llm_settings=llm_settings, history=history,
+                                  speculate=False, docs_query="what is X?",
+                                  docs_matches=[sample_rag_match()])
+        system_text = chatutil.content_to_text(history[0]["content"])
+        assert "You are a helpful assistant." in system_text  # the original system prompt survives
+        assert "Today is" in system_text
+        assert "structured report" in system_text
+        assert "Base claims about the provided documents" in system_text
+
+    def test_system_message_is_not_mutated_in_place(self, llm_settings):
+        # `chatutil.linearize_chat` hands out the datastore's own message dicts. Editing one here would
+        # write the injects into the stored system prompt, permanently, once per turn.
+        history = make_conversation(llm_settings)
+        stored_system_message = history[0]
+        stored_text = chatutil.content_to_text(stored_system_message["content"])
+        scaffold._perform_injects(llm_settings=llm_settings, history=history,
+                                  speculate=False, docs_query=None, docs_matches=[])
+        assert chatutil.content_to_text(stored_system_message["content"]) == stored_text
+
+    def test_context_only_reminder_is_skipped_without_context(self, llm_settings):
+        # Asking a model to stick to documents that were never provided is a contradiction it will
+        # dutifully try to resolve — up to 37x the deliberation, and on one model, never terminating.
+        history = make_conversation(llm_settings)
+        scaffold._perform_injects(llm_settings=llm_settings, history=history,
+                                  speculate=False, docs_query=None, docs_matches=[])
+        assert "Base claims about the provided documents" not in chatutil.content_to_text(history[0]["content"])
+
+    def test_context_only_reminder_counts_an_attachment_as_context(self, llm_settings):
+        # "Context" is broader than docs matches: an attached document or image is material to ground in,
+        # even on a turn where the document database returned nothing.
+        history = make_conversation(llm_settings)
+        history[-1]["content"].append(chatutil.text_file_content_part(url="sidecar:deadbeef.pdf", name="paper.pdf"))
+        scaffold._perform_injects(llm_settings=llm_settings, history=history,
+                                  speculate=False, docs_query=None, docs_matches=[])
+        assert "Base claims about the provided documents" in chatutil.content_to_text(history[0]["content"])
+
+    def test_context_only_reminder_ignores_a_stale_tool_result(self, llm_settings):
+        # A tool result answers one specific earlier question. Counting it as context forever would leave
+        # the reminder switched on for the rest of the conversation, however unrelated the later turns get.
+        history = [chatutil.create_chat_message(llm_settings=llm_settings, role="system", text="You are a helpful assistant."),
+                   chatutil.create_chat_message(llm_settings=llm_settings, role="user", text="What is the weather in Tampere?"),
+                   chatutil.create_chat_message(llm_settings=llm_settings, role="tool", text="Tampere: 17 C, cloudy."),
+                   chatutil.create_chat_message(llm_settings=llm_settings, role="assistant", text="It is 17 C and cloudy."),
+                   chatutil.create_chat_message(llm_settings=llm_settings, role="user", text="What is the baseline drift of the Kelvin-7 microarray?")]
+        scaffold._perform_injects(llm_settings=llm_settings, history=history,
+                                  speculate=False, docs_query=None, docs_matches=[])
+        assert "Base claims about the provided documents" not in chatutil.content_to_text(history[0]["content"])
+
+    def test_context_only_reminder_counts_this_turns_tool_result(self, llm_settings):
+        # Mid-agent-loop, on the other hand, the search we just ran is exactly the material to ground in.
+        history = make_conversation(llm_settings)
+        history.append(chatutil.create_chat_message(llm_settings=llm_settings, role="tool", text="Search result: X is a variable."))
+        scaffold._perform_injects(llm_settings=llm_settings, history=history,
+                                  speculate=False, docs_query=None, docs_matches=[])
+        assert "Base claims about the provided documents" in chatutil.content_to_text(history[0]["content"])
+
+    def test_speculation_on_sends_no_context_only_reminder(self, llm_settings):
+        history = make_conversation(llm_settings)
+        scaffold._perform_injects(llm_settings=llm_settings, history=history,
+                                  speculate=True, docs_query="what is X?",
+                                  docs_matches=[sample_rag_match()])
+        assert "Base claims about the provided documents" not in chatutil.content_to_text(history[0]["content"])
 
     def test_injects_carry_no_persona_prefix(self, llm_settings):
         # The inject text is bracketed and self-labelling; prefixing the speaker's persona to it
@@ -835,9 +945,9 @@ class TestPerformInjects:
         history = make_conversation(llm_settings)
         before = len(history)
         scaffold._perform_injects(llm_settings=llm_settings, history=history,
-                                  continue_=False, speculate=False, docs_matches=[])
+                                  speculate=False, docs_query=None, docs_matches=[])
 
-        injected = history[before:]
+        injected = [message for message in history[:before + 2] if message["role"] == "tool"]
         assert injected  # guard: the rest of this test is vacuous if nothing was injected
         for message in injected:
             assert chatutil.content_to_text(message["content"]).startswith("[System information:")

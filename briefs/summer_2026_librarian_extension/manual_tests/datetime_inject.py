@@ -43,7 +43,7 @@ TIMEOUT = 600
 
 SYSTEM_PROMPT = "You are Aria, a helpful research assistant. Answer the user's questions accurately and concisely."
 
-# Mirrors `chatutil.format_chat_datetime_now`. Duplicated rather than imported so this stays
+# Mirrors `chatutil.format_date_now` and `format_time_now`. Duplicated rather than imported so this stays
 # stdlib-only and can be piped to a machine with no venv; keep the wording in step with it.
 NOW = datetime.datetime.now()
 WEEKDAY = NOW.strftime("%A")
