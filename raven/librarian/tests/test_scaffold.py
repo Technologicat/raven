@@ -935,12 +935,14 @@ class TestPerformInjects:
                                   tool_context=grounding_context())
         assert "Base claims about the provided documents" in chatutil.content_to_text(history[0]["content"])
 
-    def test_context_only_reminder_ignores_a_stale_tool_result(self, llm_settings):
-        # A tool result answers one specific earlier question. Counting it as context forever would leave
-        # the reminder switched on for the rest of the conversation, however unrelated the later turns get.
-        # The turn declared nothing, so nothing grounds it — and this stays true however many `role="tool"`
-        # messages the branch happens to contain, which is the regression this guards: reintroducing an
-        # inference from the history's shape would switch the reminder back on here.
+    def test_context_only_reminder_ignores_the_shape_of_the_history(self, llm_settings):
+        # `_perform_injects` asks the turn's state, never the history's shape. Here the branch is full of
+        # `role="tool"` messages and the answer is still "nothing grounds this", because that is what was
+        # declared. Reintroducing an inference from message shape — the mechanism this replaced — would
+        # switch the reminder back on, which is the regression this guards.
+        #
+        # Whether a *stored* tool result like this one grounds a later turn is a separate question, decided
+        # by `_branch_grounding_is_present` from the node's recorded declaration, and tested there.
         history = [chatutil.create_chat_message(llm_settings=llm_settings, role="system", text="You are a helpful assistant."),
                    chatutil.create_chat_message(llm_settings=llm_settings, role="user", text="What is the weather in Tampere?"),
                    chatutil.create_chat_message(llm_settings=llm_settings, role="tool", text="Tampere: 17 C, cloudy."),
@@ -1206,3 +1208,85 @@ class TestToolCallRoundCap:
 
         run_ai_turn(forest, llm_settings, user_head, retriever=FakeRetriever())
         assert offered == [True, True]  # tools stayed on offer throughout; the cap never intervened
+
+
+# ---------------------------------------------------------------------------
+# Grounding carried across turns (persisted material stays material)
+# ---------------------------------------------------------------------------
+
+class TestBranchGrounding:
+    """A tool result is a persisted node, so it grounds for as long as it is in the window.
+
+    The rule is mechanical — *is this material still in the context* — rather than semantic, because
+    "has it gone stale" is a judgment none of this code can make. The automatic pre-turn search is the one
+    thing scoped to its own turn, and that is a fact about the data (it is never persisted) rather than a
+    policy about lifetimes.
+    """
+
+    def _forest_with_tool_node(self, llm_settings, text, generation_metadata):
+        forest = chattree.Forest()
+        head = chatutil.factory_reset_datastore(forest, llm_settings)
+        head = scaffold.user_turn(llm_settings=llm_settings, datastore=forest,
+                                  head_node_id=head, user_message_text="What is X?")
+        payload = chatutil.create_payload(llm_settings=llm_settings,
+                                          message=chatutil.create_chat_message(llm_settings=llm_settings,
+                                                                               role="tool", text=text))
+        payload["generation_metadata"] = generation_metadata
+        head = forest.create_node(payload=payload, parent_id=head)
+        head = scaffold.user_turn(llm_settings=llm_settings, datastore=forest,
+                                  head_node_id=head, user_message_text="And the follow-up?")
+        return forest, head
+
+    def test_an_earlier_declared_result_still_grounds(self, llm_settings):
+        forest, head = self._forest_with_tool_node(llm_settings, "X is foo.",
+                                                   {"status": "success", "function_name": "search_documents",
+                                                    "grounding": True})
+        assert scaffold._branch_grounding_is_present(forest, head)
+
+    def test_an_earlier_empty_search_does_not_ground(self, llm_settings):
+        # The declaration is what carries, not the presence of a tool node: "no matches" is a well-formed
+        # tool message holding nothing.
+        forest, head = self._forest_with_tool_node(llm_settings, "The document database contains no matches.",
+                                                   {"status": "success", "function_name": "search_documents",
+                                                    "grounding": False})
+        assert not scaffold._branch_grounding_is_present(forest, head)
+
+    def test_an_undeclared_nonempty_result_grounds(self, llm_settings):
+        # Tools that predate the declaration convention, and any future MCP tool, fall back to
+        # "it returned something".
+        forest, head = self._forest_with_tool_node(llm_settings, "Some retrieved material.",
+                                                   {"status": "success", "function_name": "mystery_tool"})
+        assert scaffold._branch_grounding_is_present(forest, head)
+
+    def test_a_failed_earlier_call_does_not_ground(self, llm_settings):
+        forest, head = self._forest_with_tool_node(llm_settings, "Tool call failed.",
+                                                   {"status": "error", "function_name": "websearch"})
+        assert not scaffold._branch_grounding_is_present(forest, head)
+
+    def test_a_conversation_with_no_tool_results_does_not_ground(self, llm_settings):
+        # The conversation itself is never grounding: a model summarizing its own earlier reply is exactly
+        # the ungrounded answer this guards against.
+        forest = chattree.Forest()
+        head = chatutil.factory_reset_datastore(forest, llm_settings)
+        head = scaffold.user_turn(llm_settings=llm_settings, datastore=forest,
+                                  head_node_id=head, user_message_text="What is X?")
+        assert not scaffold._branch_grounding_is_present(forest, head)
+
+    def test_ai_turn_seeds_the_flag_from_the_branch(self, monkeypatch, llm_settings):
+        # The end-to-end shape of the follow-up problem: turn 1's search grounded, turn 2 searches nothing,
+        # and the context-only reminder must still be sent because turn 1's material is still in the window.
+        forest, head = self._forest_with_tool_node(llm_settings, "X is foo.",
+                                                   {"status": "success", "function_name": "search_documents",
+                                                    "grounding": True})
+        seen = {}
+
+        def fake_invoke(**kw):
+            if kw.get("on_prompt_ready") is not None:
+                kw["on_prompt_ready"](kw["history"])
+            seen["history"] = kw["history"]
+            return make_invoke_result(content="Still foo.")
+
+        monkeypatch.setattr("raven.librarian.llmclient.invoke", fake_invoke)
+        run_ai_turn(forest, llm_settings, head, retriever=FakeRetriever(), speculate=False)
+        system_text = chatutil.content_to_text(seen["history"][0]["content"])
+        assert "Base claims about the provided documents" in system_text

@@ -129,12 +129,10 @@ The scope stays declaration-based either way. `_record_grounding` writes each to
 tool node's `generation_metadata`, so a branch walk reads what the tool said rather than re-inferring from
 message shape — which is what keeps an empty search from counting.
 
-> **Not yet implemented (2026-07-28).** The code still scopes *all* tool grounding to the current turn:
-> `tool_context.grounded` starts `False` each turn, so an earlier turn's tool result does not count. The
-> branch-scoped version needs `ai_turn` to seed the flag by walking the incoming branch before the loop —
-> and the walk has to read node *payloads*, not the linearized history, because `linearize_chat` hands out
-> message dicts and the declaration lives in `generation_metadata`. Seeding at context-creation keeps every
-> downstream reader unchanged.
+Implemented by seeding: `ai_turn` calls `_branch_grounding_is_present` when it creates the turn's context,
+so every downstream reader is unchanged and still just asks the flag. The walk goes over stored *nodes*
+rather than the linearized history, since `linearize_chat` hands out bare message dicts while the
+declaration lives in the node's `generation_metadata`.
 
 ### 4. The agent loop gets a cap, and the final generation is tool-free
 

@@ -190,14 +190,57 @@ def _search_docs_with_bypass(llm_settings: env,
     return Values(action=action_continue, matches=docs_results)
 
 
+def _grounding_was_declared(content: List[Dict],
+                            maybe_metadata: Optional[Dict]) -> bool:
+    """Whether one tool result counts as material to answer from, per what produced it.
+
+    Declared results say so themselves, by returning `(output, {"grounding": ...})` from the entrypoint.
+    `webfetch` is the case that must: its allowlist refusal is a perfectly non-empty string that grounds
+    nothing at all.
+
+    Undeclared results fall back to "it returned something". That is a reasonable default for a tool nobody
+    has annotated - a future MCP one, say - and it is wrong only in the direction a tool author can fix by
+    declaring.
+
+    `maybe_metadata`: the entrypoint's structured metadata, or `None` when it attached none. Its two homes
+                      are the live `tool_metadata` on a response record and, once stored, the tool node's
+                      `generation_metadata` - which is what lets an earlier turn's declaration still be read
+                      back off the branch.
+    """
+    declared = (maybe_metadata or {}).get("grounding")
+    if declared is None:
+        declared = bool(chatutil.content_to_text(content).strip())
+    return bool(declared)
+
+def _branch_grounding_is_present(datastore: chattree.Forest,
+                                 head_node_id: str) -> bool:
+    """Whether any tool result already on this branch provided material to answer from.
+
+    Walks the stored nodes rather than the linearized history, because the declaration lives in each tool
+    node's `generation_metadata` and `chatutil.linearize_chat` hands out bare message dicts.
+
+    Scoped to the whole branch, on the same rule as an attachment: the question is *is this material still
+    in the context*, which is answerable, rather than *has it gone stale*, which is not. A tool result is a
+    persisted node, so it remains in the model's context verbatim for as long as the window holds it. (The
+    automatic pre-turn search is the one thing that does not qualify - it is never persisted, so next turn
+    it is genuinely gone, and that is a fact about the data rather than a policy about lifetimes.)
+    """
+    node_id = head_node_id
+    while node_id is not None:
+        payload = datastore.get_payload(node_id)
+        generation_metadata = payload.get("generation_metadata") or {}
+        if payload["message"]["role"] == "tool" and generation_metadata.get("status", "success") == "success":
+            if _grounding_was_declared(payload["message"]["content"], generation_metadata):
+                return True
+        node_id = datastore.get_parent(node_id)
+    return False
+
 def _attachment_is_present(history: List[Dict]) -> bool:
     """Return whether the user has attached an image or a document anywhere on this branch.
 
-    Scoped to the whole branch, unlike a tool result: an attachment is *material*, sitting in the context
-    and usable for as long as it stays in the window. A tool result is the answer to one specific earlier
-    question and goes stale with it - last week's weather lookup grounds nothing about today's question on
-    instrument calibration - which is why those are counted for the turn that asked for them only, by
-    `_record_grounding`, following the same one-hop rule as `chatutil.compute_auto_allowed_hosts`.
+    The other half of the same rule `_branch_grounding_is_present` applies to tool results: an attachment is
+    material the user placed in the context directly, and stays usable for as long as it is in the window.
+    It differs only in having no producer to ask, so it is found by looking rather than by declaration.
 
     Not counted here, and not anywhere: the conversation itself, nor the AI's own earlier replies. A model
     summarizing what it previously said is exactly the ungrounded answer this is used to guard against.
@@ -400,14 +443,8 @@ def _record_grounding(tool_context: env,
                       tool_response_record: env) -> None:
     """Fold one tool result into `tool_context.grounded`. Monotonic: once grounded, stays grounded.
 
-    Grounding is *declared at the source* rather than inferred from message shape. An entrypoint that
-    knows whether its output is material to answer from says so, by returning `(output, {"grounding": ...})`
-    instead of a bare output; `webfetch` is the case that has to, because its allowlist refusal is a
-    perfectly non-empty string that grounds nothing.
-
-    Undeclared results fall back to "a successful call that returned something is material". That is a
-    good default for an unknown tool (notably a future MCP one), and it is wrong only in the direction
-    that a tool author can correct by declaring.
+    Grounding is *declared at the source* rather than inferred from message shape; see
+    `_grounding_was_declared` for what a declaration is and what an undeclared result falls back to.
 
     Why this matters enough to have its own mechanism: the reminder to base claims on the provided context
     is only sound when there *is* context. Sent with nothing to ground in, it is a self-contradiction that
@@ -417,10 +454,8 @@ def _record_grounding(tool_context: env,
         return
     if tool_response_record.status != "success":
         return
-    declared = (tool_response_record.tool_metadata or {}).get("grounding") if "tool_metadata" in tool_response_record else None
-    if declared is None:
-        declared = bool(chatutil.content_to_text(tool_response_record.data["content"]).strip())
-    tool_context.grounded = bool(declared)
+    maybe_metadata = tool_response_record.tool_metadata if "tool_metadata" in tool_response_record else None
+    tool_context.grounded = _grounding_was_declared(tool_response_record.data["content"], maybe_metadata)
 
 def _perform_and_store_tool_calls(llm_settings: env,
                                   datastore: chattree.Forest,
@@ -781,6 +816,8 @@ def ai_turn(llm_settings: env,
         # single gate the document tools read. Fails closed: a model that calls a tool we did not advertise
         # finds no retriever there and gets a refusal, rather than reaching around the user's switch.
         tool_context = _make_tool_context(retriever=(retriever if documents_available else None))
+        # Material an earlier turn's tools brought in is still sitting in the context, so it still grounds.
+        tool_context.grounded = _branch_grounding_is_present(datastore, head_node_id)
     if docs_matches:  # the auto-search grounds this turn as much as a tool call would
         tool_context.grounded = True
 
