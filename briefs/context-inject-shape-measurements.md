@@ -209,22 +209,45 @@ retained) and recovering the cache (user role at the end, narration wart retaine
 material is still unchanged, so the cache benefit of a late insert survives; but the last message is the
 user's question rather than a tool result, which should remove the "call again" temptation.
 
-Measured on Qwen3.6-27B — the worst offender, source of all three misses and half the stray tool calls:
+Measured on all three larger models, including Qwen3.6-27B — the worst offender, source of all three
+misses and half the stray tool calls:
 
-| role, placement | k=20 | k=100 |
+| model | `user` @ before | `tool+call` @ before |
 |---|---|---|
-| `user` @ before | 3/3 | 3/3 |
-| `tool+call` @ before | 3/3 | 3/3 |
+| Qwen3.6-27B | 3/3 · 3/3 | 3/3 · 3/3 |
+| Qwen3.6-35B-A3B | 3/3 · 3/3 | 3/3 · 3/3 |
+| Gemma4-26B-A4B | 3/3 · 3/3 | 3/3 · 3/3 |
 
-**12 of 12, both corpus sizes, both roles, controls clean, and not one `<tool_call>` leak.** Compare the
-same model at `tool+call` @ end: 2/3 and 1/3, with stray calls in both.
+(each cell k=20 · k=100)
+
+**36 of 36, every control clean, and not one `<tool_call>` leak.** Compare Qwen3.6-27B at `tool+call` @
+end: 2/3 and 1/3, with stray calls in both, plus a stray call in its control at each size.
 
 So the trade-off disappears. `before` keeps the honest tool role (and with it Gemma's requirement for a
-synthetic call), keeps the KV-cache prefix stable, and avoids the agent-loop misfire. That makes it the
-recommended placement, replacing both the current front insert and the end placement considered above.
+synthetic call), keeps the KV-cache prefix stable, and avoids the agent-loop misfire. **This is the
+recommended placement**, replacing both the current front insert and the end placement considered above.
 
-Still worth confirming on Qwen3.6-35B-A3B (one stray control call at `tool+call` @ end) and on Gemma 4,
-though neither showed the failure this shape exists to avoid.
+## Q8. Does a backend upgrade change any of this? (LM Studio 0.4.20 Build 1)
+
+`backend_capabilities.py` re-run on the newer build, against Qwen3.6-27B. Everything reproduced:
+
+- **`chat_template_kwargs` is still ignored.** `enable_thinking=False` still produced 712 characters of
+  reasoning where honouring it would produce zero. (Read the reasoning lengths, not the probe's
+  "all three alike" summary line — that check compares three stochastic samples, since `chat()` does not
+  pin temperature, so the raw numbers 679 / 712 / 916 are noise around "thinking happened regardless".)
+  Upstream `lmstudio-bug-tracker#1559` is therefore still open, prefill remains the only thinking toggle
+  on the OpenAI-compatible endpoint, and the design resting on that needs no rework.
+- **`min_p` honoured** though undocumented; unknown parameters still accepted with HTTP 200, so a status
+  code still proves nothing.
+- **Anthropic-compat native thinking control works**: `disabled` → `['text']`, `enabled` →
+  `['thinking', 'text']`. Prefill works on both endpoints. Streaming works.
+- **Reasoning history does not feed back on Qwen3.6-27B by any route.** Prompt tokens were 38 / 38 / 38 /
+  40 for baseline, a `reasoning_content` sibling, `+preserve_thinking=True`, and a native Anthropic
+  thinking block — against ~700 tokens of reasoning offered. Nothing landed. `preserve_thinking` exists
+  in the 3.6 template but rides on `chat_template_kwargs`, so it is unreachable in practice.
+
+So the version-sensitivity caution above was right in principle and did not bite: no measurement in this
+document changed under the upgrade.
 
 ### The same probe on Qwen3.5-9B, on the other machine
 
