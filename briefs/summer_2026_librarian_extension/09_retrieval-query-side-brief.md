@@ -136,6 +136,9 @@ A signal with no consumer is a statistic. The through-line for choosing among th
 score distribution can justify deciding how much effort to spend; it is thinner evidence for deciding what
 to say.** Effort decisions first, speech decisions only with measurement behind them.
 
+Two get built: **1 (set `k` per query)** now, since it depends on nothing else, and **3 (tell the model)**
+with the RAG tool surface, which it is gated on rather than merely sequenced after.
+
 **1. Set `k` per query (build this one).** `docs_num_results` is a fixed constant today, applied
 identically to a query that nailed one paper and a query that found mush. Let the shape set it: a sharp
 head means take the head — three, five — and a flat list means take few or none. This is the *fewer,
@@ -145,22 +148,40 @@ attention). It is also **evaluable offline against `evaluation/retrieval/`** —
 recall?" needs no LLM in the loop and runs in seconds per configuration, so it can be settled before it is
 shipped.
 
-**2. Trigger the re-query.** A flat distribution is precisely the condition under which a *better query*
-would help, so it is the natural trigger for pseudo-relevance feedback now (lever 4) and for the
-model-authored `search_documents` call once the RAG tool exists. The point is selectivity: the second pass
-costs latency, and this identifies the turns that are worth it rather than paying on every turn or never.
+**2. Trigger a mechanical re-query.** Where the second pass is Raven's own — pseudo-relevance feedback,
+lever 4 — a flat distribution is the condition that justifies paying for it, and the trigger is purely
+internal. The point is selectivity: the second pass costs something, and this identifies the turns worth
+spending it on rather than paying on every turn or never.
 
-Worth seeing that this is Q11 of `../context-inject-shape-measurements.md` arriving from the other side.
-The model reaching for another search, and the scores saying the first query was bad, are *the same
-event* detected by two independent means — which is a reason to trust both readings, and a reason the two
-mechanisms should share a trigger rather than fire independently.
+This is the *only* internal re-query trigger. Where the second pass is the model's own
+`search_documents` call, there is nothing for Raven to trigger — the model decides — so that case is not a
+separate consumer at all. It is consumer 3.
 
-**3. Tell the model — with the wording measured before it ships.** A line in the retrieval tool result
-("the best match for this query scored weakly") is honest, and it is *data* rather than instruction, which
-is the right side of the taxonomy in `08_context-injects-brief.md`. But it is also exactly the shape of
-thing that cost 29000 characters of deliberation in Q11's rejected mitigation. The probe for this already
-exists (`manual_tests/absent_fact.py`); run both temperatures and read the reasoning length, not just the
-verdict.
+**3. Tell the model (build this, after the RAG tool surface).** A line in the retrieval tool result — "the
+best match for this query scored weakly" — is *data* rather than instruction, which is the right side of
+the taxonomy in `08_context-injects-brief.md`.
+
+**On the tool route, telling the model and triggering the re-query are the same act.** A model that may
+author its own query does not need Raven to decide when; it needs to know that the first pass was thin.
+That is the whole mechanism, and it is why this consumer is gated on the RAG tool surface rather than
+merely sequenced after it — before the tool exists, telling the model its matches are weak informs it of
+a problem it has no means to act on, which is how Q11's rejected mitigation earned its 29000 characters of
+deliberation.
+
+Worth being precise about what this adds over Q11, since the two look redundant and are not. They are
+independent detectors of overlapping conditions, and each catches what the other misses:
+
+- **The model's own reading** notices that the documents are on-topic but do not contain the fact. That is
+  semantic, requires having read them, and fires with no signal from us — it is what Q11 observed.
+- **The score shape** notices that nothing scored well, without reading anything. It catches the case
+  where the retrieved text *looks* plausible and the corpus simply had nothing closer to offer.
+
+So the signal hands the model something it cannot get by reading: how good this match is relative to what
+the corpus could have produced. Additive, not duplicative.
+
+**Measure the wording before shipping it**, for the reason above — this is exactly the shape of thing that
+misfired in Q11. The probe already exists (`manual_tests/absent_fact.py`); run both temperatures and read
+the reasoning length, not just the verdict.
 
 **4. Not the no-match bypass — until it moves.** Firing the bypass on a flat result set is tempting and is
 currently wrong: a flat set is the case where a second query is *most* likely to rescue the turn, and the
