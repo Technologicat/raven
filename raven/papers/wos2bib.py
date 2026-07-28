@@ -54,6 +54,18 @@ def _format_author_addresses(author_addresses) -> str:
     return ""  # unrecognized — caller logs, result empty
 
 
+def _field(key: str, value) -> Field:
+    """One BibTeX field: `value` escaped, then wrapped in the braces that delimit a field value.
+
+    Every field goes through this, including the ones that look like they could not possibly need it.
+    Sorting fields into "needs escaping" and "surely safe" is what this replaces, and that sorting was
+    wrong: a DOI in the Web of Science hydrogen corpus contains a `{`, which unescaped ends the field value
+    early and takes the whole record with it (`10.1002/ceat.201900384{`, WOS:000599716800014). Nothing is
+    lost by escaping a field that did not need it - `bibtex_escape` leaves text without special characters
+    alone, and `bibtex_unescape` reverses it for display.
+    """
+    return Field(key=key, value=f"{{{bibtex_escape(str(value))}}}")
+
 def record_to_bibtex_entry(rec) -> tuple[Entry | None, str | None]:
     """Convert a single WOS record to a ``bibtexparser`` Entry.
 
@@ -100,32 +112,29 @@ def record_to_bibtex_entry(rec) -> tuple[Entry | None, str | None]:
     n_cited_references = rec.get("NR")
     abstract = rec.get("AB")
 
-    fields = [Field(key="Author", value=f"{{{authors_str}}}"),
-              Field(key="Year", value=f"{{{year_published}}}"),
-              Field(key="Title", value=f"{{{title}}}")]
+    fields = [_field("Author", authors_str),
+              _field("Year", year_published),
+              _field("Title", title)]
     if publication_name is not None:
-        fields.append(Field(key="Journal", value=f"{{{bibtex_escape(publication_name)}}}"))
+        fields.append(_field("Journal", publication_name))
     if volume is not None:
-        fields.append(Field(key="Volume", value=f"{{{volume}}}"))
+        fields.append(_field("Volume", volume))
     if issue is not None:
-        fields.append(Field(key="Number", value=f"{{{issue}}}"))  # yes, "Number".
+        fields.append(_field("Number", issue))  # yes, "Number".
     if pages != "":
-        fields.append(Field(key="Pages", value=f"{{{pages}}}"))
+        fields.append(_field("Pages", pages))
     if doi is not None:
-        fields.append(Field(key="DOI", value=f"{{{doi}}}"))
+        fields.append(_field("DOI", doi))
     if wos_categories_list:
-        fields.append(Field(key="Web-Of-Science-Categories",
-                            value=f"{{{bibtex_escape('; '.join(wos_categories_list))}}}"))
+        fields.append(_field("Web-Of-Science-Categories", "; ".join(wos_categories_list)))
     if abstract is not None:
-        fields.append(Field(key="Abstract", value=f"{{{bibtex_escape(abstract)}}}"))
+        fields.append(_field("Abstract", abstract))
     if author_addresses_str != "":
-        fields.append(Field(key="Affiliation", value=f"{{{bibtex_escape(author_addresses_str)}}}"))
+        fields.append(_field("Affiliation", author_addresses_str))
     if cited_references is not None:
-        newline = "\n"
-        fields.append(Field(key="Cited-References",
-                            value=f"{{{bibtex_escape(newline.join(cited_references))}}}"))
+        fields.append(_field("Cited-References", "\n".join(cited_references)))
     if n_cited_references is not None and n_cited_references > 0:
-        fields.append(Field(key="Number-Of-Cited-References", value=f"{{{n_cited_references}}}"))
+        fields.append(_field("Number-Of-Cited-References", n_cited_references))
 
     entry = Entry(entry_type=ptmap[publication_type],
                   key=accession_number,

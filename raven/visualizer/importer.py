@@ -23,6 +23,7 @@ import math
 import os
 import pathlib
 import pickle
+import re
 import sys
 import threading
 from typing import Optional
@@ -128,6 +129,62 @@ def update_status_and_log(msg, *, log_indent=0):
 
 # --------------------------------------------------------------------------------
 
+def _failed_block_key(failed_block):
+    """Best effort at naming the record a `ParsingFailedBlock` came from, e.g. `WOS:000258806000016`.
+
+    A failed block has no parsed key - that is what failing means - but its `raw` text still begins with
+    the `@type{key,` header line that would have provided one, so the name is a slice away. Falls back to
+    `"?"`, which is at least honest about it; the line number in the message is what actually locates it.
+    """
+    header = failed_block.raw.lstrip().split("\n", 1)[0]
+    start = header.find("{")
+    end = header.rfind(",")
+    return header[start + 1:end] if -1 < start < end else "?"
+
+def _unbalanced_fields_in(failed_block):
+    """Names of the fields in a failed record whose braces don't balance, e.g. `["Abstract"]`.
+
+    The point of the whole exercise: "this file has a broken record somewhere" is a shrug, while "the
+    `Abstract` field of `WOS:000258806000016` has unbalanced braces" is something the user can go and fix.
+    `bibtexparser` cannot say this - by the time it gives up, it reports only that it reached end of file
+    unexpectedly - but the raw text of the block it hands back can be read directly, and a field whose own
+    line opens more braces than it closes is the one that swallowed the rest of the record.
+
+    A field value legitimately spanning several lines (an `Affiliation` listing one author per line) also
+    shows up unbalanced line by line, so this is a shortlist rather than a verdict. It is still a far
+    shorter list than the record.
+    """
+    unbalanced = []
+    for line in failed_block.raw.splitlines():
+        match = re.match(r"\s*([A-Za-z][\w-]*)\s*=", line)
+        if match and line.count("{") != line.count("}"):
+            unbalanced.append(match.group(1))
+    return unbalanced
+
+def _report_unparseable_records(filename, library):
+    """Warn about records `bibtexparser` refused, which are silently absent from `library.entries`.
+
+    Worth its own pass because of the asymmetry it removes. A record that parses but lacks `author`, `year`
+    or `title` is skipped further down with a warning naming it; a record that never became an entry at all
+    would otherwise vanish without a word - and that is the case the user has no other way to notice, since
+    nothing downstream can miss what it never saw.
+
+    The usual cause is field content that is not valid BibTeX rather than anything structural: unbalanced
+    braces inside an `Abstract` abort the parse of the whole record, title and all. So the message points
+    at the offending line, which is where a fix has to happen.
+    """
+    if not library.failed_blocks:
+        return
+    plural_s = "s" if len(library.failed_blocks) != 1 else ""
+    logger.warning(f"parse_input_files: {len(library.failed_blocks)} record{plural_s} in {filename} could not "
+                   f"be parsed as BibTeX, and will be missing from the dataset. Usual cause: unbalanced "
+                   f"braces in a field value.")
+    for failed_block in library.failed_blocks:
+        unbalanced = _unbalanced_fields_in(failed_block)
+        suspects = f" Suspect field(s): {', '.join(unbalanced)}." if unbalanced else ""
+        logger.warning(f"parse_input_files: unparseable record '{_failed_block_key(failed_block)}' "
+                       f"at line {failed_block.start_line} of {filename}.{suspects}")
+
 def parse_input_files(*filenames):
     """Read in and parse BibTeX files `filenames`, and return an `unpythonic.env` containing the parsed data."""
     resolved_filenames = list(uniqify(str(pathlib.Path(fn).expanduser().resolve()) for fn in filenames))
@@ -142,6 +199,7 @@ def parse_input_files(*filenames):
                                               append_middleware=[bibtexparser.middlewares.NormalizeFieldKeys(),
                                                                  bibtexparser.middlewares.SeparateCoAuthors(),
                                                                  bibtexparser.middlewares.SplitNameParts()])
+            _report_unparseable_records(filename, library)
             bibtex_entries_by_filename[filename] = library.entries
     logger.info(f"    Done in {tim.dt:0.6g}s.")
 

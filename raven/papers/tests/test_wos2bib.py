@@ -211,3 +211,43 @@ class TestRecordsToLibrary:
         output = bibtexparser.writer.write(library)
         assert "@article{WOS:000123456789," in output
         assert "Smith, Alice and Jones, Bob" in output
+
+
+class TestEveryFieldIsEscaped:
+    """A brace anywhere in the source ends the field value early and takes the whole record with it.
+
+    Measured on the Web of Science hydrogen corpus: 8 records in 96296 were lost this way, silently, and
+    the field that did it was not one of the ones that looked risky.
+    """
+
+    def _reparse(self, record):
+        entry, reason = record_to_bibtex_entry(record)
+        assert reason is None
+        library = bibtexparser.Library()
+        library.add(entry)
+        return bibtexparser.parse_string(bibtexparser.write_string(library))
+
+    def test_a_brace_in_the_doi_does_not_destroy_the_record(self):
+        # Verbatim from WOS:000599716800014 -- a DOI is exactly the field one would assume is safe.
+        reparsed = self._reparse(_full_journal_record(DI="10.1002/ceat.201900384{"))
+        assert len(reparsed.entries) == 1
+        assert not reparsed.failed_blocks
+
+    def test_a_brace_in_the_title_does_not_destroy_the_record(self):
+        reparsed = self._reparse(_full_journal_record(TI="Widgets {and their discontents"))
+        assert len(reparsed.entries) == 1
+        assert not reparsed.failed_blocks
+
+    def test_a_brace_in_the_abstract_does_not_destroy_the_record(self):
+        # Verbatim shape from WOS:000258806000016: the author opened a brace and closed a parenthesis.
+        reparsed = self._reparse(_full_journal_record(AB="Defined as: System {[production] [utilization])."))
+        assert len(reparsed.entries) == 1
+        assert not reparsed.failed_blocks
+
+    def test_special_characters_survive_the_round_trip(self):
+        from raven.papers.utils import bibtex_unescape
+        title = "50% of $x$ & {y} [z] \\alpha"
+        reparsed = self._reparse(_full_journal_record(TI=title))
+        fields = {field.key.lower(): field.value for field in reparsed.entries[0].fields}
+        stored = fields["title"][1:-1]  # a stored value keeps the braces that delimit it
+        assert bibtex_unescape(stored) == title
