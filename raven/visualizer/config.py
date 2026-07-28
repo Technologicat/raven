@@ -306,7 +306,7 @@ copyright_stopwords = ["all", "right", "reserved"]
 
 # some common publisher names
 publisher_stopwords = ["elsevier", "elsevi",  # "elsevi" is an incorrect lemmatization of "elsevier", though I suppose it makes sense (and leaves me wondering what kind of publication would be the elseviest).
-                       "springer",  # we can't do the same for "spring", even though "springer" is much springer than a regular spring.
+                       "springer",  # we can't do the same for "spring", even though "springer" is much springer than a regular spring. (As of spaCy 3.8.14 / en_core_web_sm 3.8.0 we no longer need to: "Springer" lemmatizes to "springer", not "spring".)
                        "wiley",
                        "llc"]  # Some Company Name LLC
 

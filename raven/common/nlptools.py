@@ -766,8 +766,17 @@ def count_frequencies(tokens: Union[List[spacy.tokens.token.Token],
                  they will all count as occurrences of "process".
 
                  Note lemmatization may sometimes produce silly results. E.g. the publisher name
-                 "Elsevier" lemmatizes into "Elsevi", because the name looks like the comparative
-                 form of an adjective. Similarly "Springer" lemmatizes into "Spring".
+                 "Elsevier" lemmatizes into "elsevi", because in the copyright line that ends many
+                 abstracts it lands where an adjective would fit, gets tagged ADJ, and loses what
+                 looks like a comparative "-er". Capitalization does not save it - spaCy's tagger is
+                 a neural model reading context, so it is the syntactic position that decides.
+
+                 Which words this bites is therefore a property of the installed spaCy model, and
+                 changes when that is upgraded. On spaCy 3.8.14 / en_core_web_sm 3.8.0, "Elsevier"
+                 still mangles as described, while "Springer" - which used to yield "Spring" - now
+                 survives as "springer" in every context tried. Worth re-checking the publisher
+                 entries in Visualizer's `publisher_stopwords` after a model bump: stale ones are
+                 harmless, missing ones show up in the word cloud.
 
     `stopwords`: See `default_stopwords`.
 

@@ -409,10 +409,15 @@ class HybridIR:
 
         We use a spaCy NLP pipeline to do the analysis.
 
-        Lemmatization, not stemming - the distinction is worth keeping straight, because the two fail
-        differently. A stemmer chops suffixes by rule, so it happily turns "Springer" into "spring" and
-        silently merges a publisher with a season. A lemmatizer maps a word to its dictionary form using
-        the word's part of speech, so an unrecognized proper noun stays itself.
+        Lemmatization, not stemming - worth keeping straight, because the two fail differently. A stemmer
+        chops suffixes by rule; a lemmatizer maps a word to its dictionary form, choosing by the word's
+        part of speech. That is usually gentler, but it is not a guarantee, because the part of speech is
+        itself a guess: spaCy's tagger is a neural model reading context, and a name that lands where an
+        adjective would fit gets treated as one. "Elsevier" at the end of a copyright line is tagged ADJ
+        and lemmatized to "elsevi", as though it were the comparative of "elsevi" (spaCy 3.8.14,
+        en_core_web_sm 3.8.0; the lowercasing above makes no difference - it is the syntactic position that
+        decides). So an unusual proper noun may or may not survive tokenization, and a keyword search for
+        one is correspondingly a little lossy.
         """
         docs = self.nlp.analyze(text.lower())
         assert len(docs) == 1
