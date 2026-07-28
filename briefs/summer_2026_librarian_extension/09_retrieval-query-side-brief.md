@@ -130,6 +130,43 @@ equally well". The second case has no ranking problem to solve, so the failure i
 shape test on it measures the arithmetic, not the corpus. One more reason the raw scores have to survive
 to the fusion boundary.
 
+#### What consumes the signal
+
+A signal with no consumer is a statistic. The through-line for choosing among these: **the shape of a
+score distribution can justify deciding how much effort to spend; it is thinner evidence for deciding what
+to say.** Effort decisions first, speech decisions only with measurement behind them.
+
+**1. Set `k` per query (build this one).** `docs_num_results` is a fixed constant today, applied
+identically to a query that nailed one paper and a query that found mush. Let the shape set it: a sharp
+head means take the head — three, five — and a flat list means take few or none. This is the *fewer,
+better passages* outcome the reranking item wants, reached with no reranker, no VRAM, and no prompt
+change, and it pays in exactly the currency the reranking item is denominated in (context, KV cache,
+attention). It is also **evaluable offline against `evaluation/retrieval/`** — "does adaptive `k` cost
+recall?" needs no LLM in the loop and runs in seconds per configuration, so it can be settled before it is
+shipped.
+
+**2. Trigger the re-query.** A flat distribution is precisely the condition under which a *better query*
+would help, so it is the natural trigger for pseudo-relevance feedback now (lever 4) and for the
+model-authored `search_documents` call once the RAG tool exists. The point is selectivity: the second pass
+costs latency, and this identifies the turns that are worth it rather than paying on every turn or never.
+
+Worth seeing that this is Q11 of `../context-inject-shape-measurements.md` arriving from the other side.
+The model reaching for another search, and the scores saying the first query was bad, are *the same
+event* detected by two independent means — which is a reason to trust both readings, and a reason the two
+mechanisms should share a trigger rather than fire independently.
+
+**3. Tell the model — with the wording measured before it ships.** A line in the retrieval tool result
+("the best match for this query scored weakly") is honest, and it is *data* rather than instruction, which
+is the right side of the taxonomy in `08_context-injects-brief.md`. But it is also exactly the shape of
+thing that cost 29000 characters of deliberation in Q11's rejected mitigation. The probe for this already
+exists (`manual_tests/absent_fact.py`); run both temperatures and read the reasoning length, not just the
+verdict.
+
+**4. Not the no-match bypass — until it moves.** Firing the bypass on a flat result set is tempting and is
+currently wrong: a flat set is the case where a second query is *most* likely to rescue the turn, and the
+bypass ends the turn before that can happen. Once the bypass moves to the end of the agent loop — decided,
+see "Related" below — the model gets its second query first and this becomes a safe consumer.
+
 **Corpus-dependent, do not ship as a tuned constant:**
 
 - **Convex combination**, `alpha * norm(bm25) + (1 - alpha) * norm(vector)` with per-query min-max
@@ -180,6 +217,23 @@ everything asked. It costs one embedding call per sentence.
 sentences of wandering context ending in one specific question, which is what the multiline composer
 actually produces — retrieve at 0.292 MRR against 0.562 for focused ones. Nothing else in the brief has a
 measured effect that size. Build this first.
+
+**Its failure mode is the mirror image of the one it fixes**, and it has to be designed around rather than
+discovered later. Splitting throws away exactly the context that a *short* question depends on. "I'm
+working on alkaline electrolyzers. What is the specific energy consumption?" splits into a second sentence
+that is about nothing at all — the topic lived in the first one, and the query that needed it no longer
+has it.
+
+The fix is free, because nothing says the split has to be a partition: **query with the whole message
+*and* with each part, and fuse all of the result sets.** The whole-message query carries the context, the
+per-part queries carry the specificity, and neither has to be right about which shape the message is —
+which matters because that is not knowable in advance. Cost is one extra embedding call and one extra
+BM25 pass per part, both cheap next to a generation.
+
+Note what this does *not* fix: a message whose question is short and whose context is long enough to
+dilute the whole-message embedding is still hard, because both queries are individually weak. That case
+wants a query built by something that has read the message — which is pass 2, the RAG tool call, not
+anything in this brief.
 
 Recency is a usable prior when a cheaper cut is wanted: the last paragraph, or the sentence carrying the
 question mark, is what the user is actually asking.
@@ -254,6 +308,12 @@ evaluated offline against a labelled set in seconds, with no LLM in the loop at 
 
 - **RAG access via tool-call** (`TODO.md`) — pass 2, where the model authors the query. Composes with all
   of the above; lever 4 is its cheap cousin.
-- **Moving the no-match bypass to the end of the agent loop** — so that a bad pass-1 query can be rescued
-  by a pass-2 one instead of ending the turn. Only matters once the tool exists.
+- **Moving the no-match bypass to the end of the agent loop** — **decided, to be done with the RAG tool
+  work.** The guard currently conflates two jobs that were the same job when there was only one pass:
+  *whether the model runs* and *what the user is allowed to see*. Only the second is the anti-confabulation
+  property. Let the model run and re-query; if the loop terminates with nothing grounded and speculation is
+  off, substitute the no-match message then. The user still never sees an ungrounded answer, the model
+  gets its second query in the case where a better query is most likely to help, and the guard costs
+  nothing on the turns where retrieval worked. Not in this brief because it is a `scaffold` change, but it
+  is a precondition for consumer 4 above.
 - **Reranking itself** (`TODO_DEFERRED.md`) — this brief is what should run first.
