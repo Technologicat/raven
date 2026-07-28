@@ -50,8 +50,12 @@ measures 0.00 GiB today only because its filter chain is empty; these go into ex
 - *Avatar stutter* — deprioritized; a warm-up handles it without knowing the cause.
 - *Chat view drops a character* — one sighting, no recurrence; an open report, not a known defect, and
   nothing to test a fix against.
-- *RAG reranking and the query-side levers* (`briefs/summer_2026_librarian_extension/09`) — the evaluation
-  set exists and the baseline is measured, but this is quality work, not correctness.
+- *RAG reranking* — still quality work, not correctness. But the **query-side levers**
+  (`briefs/summer_2026_librarian_extension/09`) are no longer in this category: lever 1 and the confidence
+  signal are what the grounding marker needs to tell "matches arrived" from "matches were any good", and
+  without them it stays silent against a real corpus. That makes them a prerequisite for a phase-1 feature
+  that has already shipped, so they move onto the demo path. The alternative route, inline citations, does
+  not go through brief 09 at all and should be weighed against it rather than assumed to lose.
 - *Brief 03 section D* — wanted, to close out the last unfinished brief; not demo-visible.
 
 **Both "measure early" items are closed** (per-module VRAM, MoE vs dense), so nothing further blocks the

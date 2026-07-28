@@ -255,6 +255,36 @@ Deliberately styled as a *marker*, not a warning. On a general-knowledge questio
 correct and expected, and most such questions land there — no document database answers "what is 2+2?" —
 so a red badge would be crying wolf on the common case. Muted colour, with the explanation in a tooltip.
 
+#### The marker measures presence, not relevance — and that is a hole, found on the first test drive
+
+Asked "what is 2 + 2?" with documents on and speculation off, the marker did **not** appear. Retrieval had
+returned hydrogen-electrolysis documents, so material *was* present and `grounded` went true. The model's
+own reasoning named the problem: *"The documents provided are about hydrogen production and do not contain
+this answer."*
+
+So `grounded` answers **was there material**, while the marker's text claims **did the answer come from the
+corpus**. Those two questions come apart exactly here, and two things follow:
+
+- **The label overclaims.** What is measured is closer to "no documents matched" than to "answered from
+  general knowledge".
+- **Worse: against a real corpus the marker will almost never fire.** Retrieval nearly always returns
+  *something* — `semantic_distance_threshold` defaults to 0.8 cosine, which is permissive, and BM25 matches
+  on common words. The failure is therefore silent and in the dangerous direction: a feature that looks
+  like it works while never warning. `docs_num_results` changes only how much noise arrives, not whether.
+
+**This blocks on brief 09.** The signal the marker actually needs — *are these matches any good?* — is
+lever 1 (let the scores survive fusion) plus the `min_p`-style survivor count. RRF discards absolute scores
+today, so there is nothing to threshold on. That moves the query-side work from a parallel quality track to
+a prerequisite for a phase-1 feature already shipped.
+
+The other route is to ask the model instead of inferring: inline citations, validated against the result
+set. The transcript above is evidence it would work, since the model plainly knew the matches were
+irrelevant — it simply had no channel to say so in a form Raven could read.
+
+**Do not tighten `semantic_distance_threshold` as a stopgap.** It would look like a fix and is not one: the
+right cutoff depends on the corpus (scientific papers vs. fan fiction vs. general English), which is an
+open question in brief 09, not a constant waiting to be picked.
+
 This gives the toggle a better meaning than it has:
 
 - **speculate off** → *tell me when you go off-corpus* (reminder injected, badge shown)

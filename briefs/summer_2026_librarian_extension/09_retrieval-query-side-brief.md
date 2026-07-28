@@ -14,6 +14,23 @@ the *scoring* stage — so it is worth knowing what the *query* stage is current
 makes it measurable. Some of it may make reranking unnecessary at the current corpus size. That is an
 outcome, not a claim.
 
+## A shipped feature now depends on this (2026-07-28)
+
+This started as quality work with no hard deadline. It has since acquired a caller. Brief 10's grounding
+marker — *"this reply had nothing from your documents to stand on"* — needs to distinguish **matches
+arrived** from **matches were any good**, and on its first test drive it could not: asked "what is 2 + 2?",
+retrieval returned hydrogen-electrolysis documents, the marker read that as grounding, and stayed silent.
+
+The signal it needs is **lever 1 plus the confidence signal below** — absolute scores surviving fusion, and
+the `min_p`-style survivor count read off the distribution. Until those exist there is nothing to threshold
+on, and against a real corpus the marker will almost never fire, because retrieval nearly always returns
+*something*. That is a silent failure, not a visible one.
+
+So the ordering has changed: lever 1 and the confidence signal are now the front of this brief's queue,
+ahead of the multi-query decomposition that was going to be built first. (The alternative route does not
+run through here at all — inline citations, where the model reports its own grounding instead of Raven
+inferring it. Worth weighing against lever 1 rather than assuming this one wins.)
+
 ## The finding that motivates the rest
 
 Verified by reading `hybridir.py`, not inferred:
