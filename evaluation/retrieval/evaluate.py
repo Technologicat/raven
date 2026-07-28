@@ -36,6 +36,11 @@ from raven.librarian import hybridir
 
 QUESTIONS_PATH = pathlib.Path(__file__).parent / "questions.json"
 
+# Written on every run. A scoring run costs minutes of GPU time and its output is otherwise a terminal
+# scrollback, which is not a place results live - so the per-question ranks are persisted here, and a later
+# configuration can be compared against this one without re-running the baseline.
+RESULTS_PATH = pathlib.Path(__file__).parent / "results.json"
+
 
 def rank_of_gold(results: list[dict], gold: set[str]) -> int | None:
     """1-based rank of the first result whose document is in `gold`, or `None` if absent."""
@@ -113,6 +118,23 @@ def main() -> None:
     missing = sum(1 for r in ranks["hybrid (RRF, as shipped)"]["all"] if r is None)
     print(f"\ngold-document rank histogram (hybrid): "
           f"{dict(sorted(hist.items()))}, absent from top-{k}: {missing}")
+
+    # Per-question ranks, not just the summary: a later configuration is compared against this run
+    # question by question, and an aggregate cannot say *which* questions moved.
+    RESULTS_PATH.write_text(json.dumps(
+        {"k": k,
+         "n_questions": len(questions),
+         "corpus_size": payload["corpus_size"],
+         "generator_model": payload.get("generator_model"),
+         "summary": {kind: [summarize(name, ranks[name][kind], k) for name in conditions if ranks[name][kind]]
+                     for kind in ("all", "focused", "rambling")},
+         "per_question": [{"kind": item["kind"],
+                           "question": item["question"],
+                           "gold": item["gold"],
+                           "rank": {name: ranks[name]["all"][i] for name in conditions}}
+                          for i, item in enumerate(questions)]},
+        indent=2, ensure_ascii=False) + "\n")
+    print(f"wrote per-question results to {RESULTS_PATH}")
 
 
 if __name__ == "__main__":

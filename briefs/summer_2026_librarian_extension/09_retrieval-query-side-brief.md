@@ -41,18 +41,32 @@ stage wants its own retrieve-wide parameter, with `alpha` still doing its merge 
 
 ## Measured baseline (2026-07-28)
 
-An evaluation set now exists — `evaluation/retrieval/`, 30 known-item questions against the 11974-record
-corpus — and it reorders what follows. Numbers and method are in that directory's README; the two results
-that change the plan:
+An evaluation set now exists — `evaluation/retrieval/`, 99 known-item questions against the 11974-record
+corpus — and it reorders what follows. Numbers and method are in that directory's README.
 
-- **Long, wandering messages retrieve at roughly half the MRR of focused ones** (0.292 against 0.562), and
-  on those the fusion is *beaten by the vector arm alone*. This is the largest effect measured, and it is
-  lever 3's target. On that evidence lever 3 should be built first, not third.
-- **The fusion trails both single engines at R@5 while leading at R@20.** Exactly the shape rank-only
-  fusion predicts. But the gap is two questions wide at n=30 — grow the set to ~100 before acting on it.
+**What it establishes:**
 
-The set is cheap to grow (about four minutes per run) and cheap to re-score, so every lever below should
-be evaluated against it rather than argued about.
+- **Long, wandering messages retrieve far worse than focused ones** — MRR 0.315 against 0.535, R@5 0.41
+  against 0.66. This is the largest effect in the data, it is lever 3's target, and it replicated when the
+  set grew from 30 questions to 99. On that evidence **lever 3 should be built first**, not third.
+- **Fusion earns its place.** The hybrid leads both single engines on every metric (MRR 0.486 against
+  0.411 for BM25 and 0.363 for the vector arm).
+
+**What it retracted.** The first run, at n=30, showed the hybrid *trailing* both single engines at R@5
+while leading at R@20 — read at the time as rank-only fusion promoting mediocre-but-agreed-upon documents,
+which is the behaviour this brief's opening section predicts. At n=99 the effect reversed outright (R@5
+0.61 against 0.52 and 0.46). **It was noise, two questions wide.**
+
+That costs lever 1 one of its two supports, and the brief should be honest about which one is gone. The
+*structural* finding stands, because it is a property of the code rather than a measurement: fusion
+discards the scores, so the rank cannot carry quality information it was never given. What is gone is the
+claim that this is currently *hurting* — measured, RRF is doing its job well. So lever 1's remaining
+deliverable is the **confidence signal**, which is about detecting a bad query rather than about ranking
+good ones, and which the retraction does not touch. Replacing RRF itself has no measured motive.
+
+The set is cheap to re-score (minutes) and moderately expensive to regenerate (over an hour of GPU time at
+n≈100), so every lever below should be evaluated against it rather than argued about — and note that a
+30-question set was enough to carry a factor-of-two effect and not enough to carry a few points of R@5.
 
 **One caveat that constrains the whole brief, and it is easy to forget:** that corpus is one user's
 hydrogen collection. Librarian indexes whatever the user puts in the directory — another science of the
