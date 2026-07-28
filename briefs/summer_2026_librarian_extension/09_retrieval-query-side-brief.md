@@ -329,6 +329,29 @@ because it does something different: it does not rescue a failed query, it broad
 superseded; using POS tags to *stop destroying* the query we already have — so that `Elsevier` survives
 tokenization instead of becoming `elsevi` — is not query construction at all. That one stays.
 
+#### Second consumer: the tail of a result set that already worked
+
+The literature-review sweep above is a *recall* use — find more of the papers. There is a second one that
+is about *precision*, and it applies to every ordinary question rather than only to sweeps: when the top
+match is good and the distribution is sharp, the remaining `k-1` slots are usually filled with noise that
+merely happened to rank. PRF can spend those slots on more good matches instead, at zero LLM latency.
+
+This is the framing that survives the RAG tool surface, and the rescue framing is the one that doesn't.
+A model that can re-query will out-write any term-harvesting heuristic, because it has read the results —
+but it cannot cheaply tell that positions 3–10 are junk. It just reads them and gets diluted. Discarding
+a weak tail from the score distribution is a machine's job; writing a better question is the model's.
+
+Note this needs a *different metric* from the sweep, and the known-item set cannot supply either: it has
+one gold document per question, so it can say nothing about how well positions 2..k are spent.
+
+#### Build it to measure it, not to ship it
+
+The expansion is a pure function of a query and a result set, so it can be prototyped inside
+`evaluation/retrieval/` and scored offline, with no change to Librarian at all. Do that first. Promotion
+into the live retrieval path is a separate decision that should follow an **in-conversation** measurement
+taken *after* the RAG tool surface lands — because the tool changes what a weak pass 1 costs, and
+therefore changes what automatic expansion is worth. The standalone number cannot see that interaction.
+
 ## What reranking is still for, after the levers
 
 Sharpening the query does not make ranking *comparative*. A cross-encoder reads the query and a candidate

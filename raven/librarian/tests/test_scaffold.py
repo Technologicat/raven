@@ -951,3 +951,63 @@ class TestPerformInjects:
         assert injected  # guard: the rest of this test is vacuous if nothing was injected
         for message in injected:
             assert chatutil.content_to_text(message["content"]).startswith("[System information:")
+
+
+# ---------------------------------------------------------------------------
+# Grounding accumulation (the per-turn tool context)
+# ---------------------------------------------------------------------------
+
+def make_tool_record(text="Some result.", status="success", tool_metadata=None):
+    record = env(data=chatutil.create_message_from_parts("tool", [chatutil.text_content_part(text)]),
+                 status=status)
+    if tool_metadata is not None:
+        record.tool_metadata = tool_metadata
+    return record
+
+
+class TestGroundingAccumulation:
+    """Whether a turn has material to answer from is declared by tools, not inferred from message shape.
+
+    The reminder to base claims on the provided context is only sound when there *is* context; sent with
+    nothing to ground in, it measured 5-37x the deliberation of sending nothing (brief 08, Q4). So a tool
+    result that is textually present but materially empty must not read as grounding.
+    """
+
+    def test_successful_nonempty_result_grounds_by_default(self):
+        tool_context = scaffold._make_tool_context(retriever=None)
+        scaffold._record_grounding(tool_context, make_tool_record("Kelvin-7 drifts 0.3 K/h."))
+        assert tool_context.grounded
+
+    def test_failed_call_does_not_ground(self):
+        tool_context = scaffold._make_tool_context(retriever=None)
+        scaffold._record_grounding(tool_context, make_tool_record("Tool call failed.", status="error"))
+        assert not tool_context.grounded
+
+    def test_empty_result_does_not_ground(self):
+        # A search that found nothing is the case the whole mechanism exists for: it is a perfectly
+        # well-formed tool message carrying no material at all.
+        tool_context = scaffold._make_tool_context(retriever=None)
+        scaffold._record_grounding(tool_context, make_tool_record("   \n  "))
+        assert not tool_context.grounded
+
+    def test_declaration_overrides_the_default(self):
+        # webfetch's allowlist refusal is the live example: non-empty, successful, grounds nothing.
+        tool_context = scaffold._make_tool_context(retriever=None)
+        scaffold._record_grounding(tool_context,
+                                   make_tool_record("The host example.com is not on the configured allowlist.",
+                                                    tool_metadata={"grounding": False}))
+        assert not tool_context.grounded
+
+    def test_declaration_can_ground_an_empty_looking_result(self):
+        tool_context = scaffold._make_tool_context(retriever=None)
+        scaffold._record_grounding(tool_context, make_tool_record("", tool_metadata={"grounding": True}))
+        assert tool_context.grounded
+
+    def test_grounding_is_monotonic_within_a_turn(self):
+        # A tool call in round 1 must still count in round 3 - which is why the context is per-turn and
+        # not per-round. A later empty search cannot un-ground what an earlier one found.
+        tool_context = scaffold._make_tool_context(retriever=None)
+        scaffold._record_grounding(tool_context, make_tool_record("Found it."))
+        scaffold._record_grounding(tool_context, make_tool_record(""))
+        scaffold._record_grounding(tool_context, make_tool_record("failed", status="error"))
+        assert tool_context.grounded

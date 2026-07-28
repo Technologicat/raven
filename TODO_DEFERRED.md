@@ -3,6 +3,26 @@
 New items go at the **top**. (Both ends were in use up to 2026-07-27, which is how the two halves of the same
 Librarian session ended up ~1000 lines apart.)
 
+## `HybridIR.add` docstring recommends an ID scheme that would break the class
+
+The docstring says `document_id` is "Recommended to use `unpythonic.gensym(os.path.basename(path))` or
+something". Nothing in the tree does that, and following it would break `HybridIR`: `gensym` is
+non-deterministic across runs, so a re-index cannot recompute a document's ID — and `update` / `delete`
+match *by ID*. The `path` parameter's own docstring, two lines below, says `path` is used to check for
+changes at datastore load time, which needs a stable ID↔path mapping to be any use.
+
+What the code actually does is better than what the docstring recommends:
+`HybridIRFileSystemEventHandler._make_document_id_from_path` returns the path relative to `docs_dir`
+(`str(relp)`) — stable, unique, and legible to both a human and a model. That last part stops being
+incidental once the RAG tool surface lands (brief 10), because `document_id` becomes the handle the model
+passes to `fetch_document`.
+
+So the fix is to the *docstring*, not the code: recommend any stable unique string, and name the relative
+path as what the built-in scanner uses.
+
+Discovered while writing brief 10 (2026-07-28) — the stale recommendation was taken at face value and had
+to be corrected in the brief afterwards.
+
 ## EU AI Act Article 50 (transparency) compliance
 
 `briefs/ai-act-article-50-summary.md` has the analysis; Commission guidelines were adopted 20 July 2026 and the

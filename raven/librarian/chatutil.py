@@ -7,6 +7,7 @@ __all__ = ["format_message_number",
            "format_chatlog_datetime_now",
            "format_reminder_to_write_conversationally",
            "format_reminder_to_use_information_from_context_only",
+           "format_docs_match", "format_docs_matches",
            "make_timestamp",
            "text_content_part",
            "image_content_part",
@@ -289,6 +290,37 @@ def format_reminder_to_use_information_from_context_only() -> str:
     This is for a dynamic injection.
     """
     return "[System information: Base claims about the provided documents on those documents. Answer general questions normally.]"
+
+
+# --------------------------------------------------------------------------------
+# Document database match formatting
+
+def format_docs_match(match: Dict[str, Any]) -> str:
+    """Format one document-database match (a result dict from `hybridir.HybridIR.query`) for the LLM.
+
+    The single formatter for a match, shared by the two paths that produce one: the auto-search results
+    that `scaffold` injects on the model's behalf, and the results of a `search_documents` tool call the
+    model made itself. If these two ever drift apart, the model is being told two different things about
+    what a match *is* - so they are one function, not two similar ones.
+
+    The span (`offset`, `length`) is reported so that a match can be followed up with `fetch_document`:
+    a match is a window onto a larger document, and without its coordinates the model can ask only for
+    the whole thing. Both are in characters, matching the retriever's own units and the tool's parameters.
+
+    NOTE: `length` is that of the *unstripped* match text, and `offset` is its true offset in the source
+    document, so `document[offset:offset + length]` is exactly the matched span. The text is shown
+    stripped, purely because chunk boundaries tend to land in the middle of whitespace - so the displayed
+    block can start a few characters after `offset`. That mismatch is intentional; do not "fix" it by
+    reporting the offset of the stripped text, which would make the reported span no longer the span the
+    retriever found.
+    """
+    return (f"[System information: Knowledge-base match from '{match['document_id']}', "
+            f"at offset {match['offset']}, length {len(match['text'])} characters.]\n\n"
+            f"{match['text'].strip()}\n-----")
+
+def format_docs_matches(matches: List[Dict[str, Any]]) -> str:
+    """Format a list of document-database matches for the LLM, as one text blob. See `format_docs_match`."""
+    return "\n\n".join(format_docs_match(match) for match in matches)
 
 
 # --------------------------------------------------------------------------------

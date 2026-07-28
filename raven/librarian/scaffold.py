@@ -349,8 +349,6 @@ def _perform_injects(llm_settings: env,
                                             arguments={},
                                             result_text=chatutil.format_time_now())
     if docs_matches:
-        match_blocks = [f"[System information: Knowledge-base match from '{docs_result['document_id']}'.]\n\n{docs_result['text'].strip()}\n-----"
-                        for docs_result in docs_matches]
         # Asked about something the matches do not cover, the model sometimes reaches for another search -
         # and since this search is Raven's own, run before the turn began, there is no such tool for it to
         # reach for. It then writes the call out as literal text, and the user gets that instead of an
@@ -361,13 +359,14 @@ def _perform_injects(llm_settings: env,
         # 29000 characters of deliberation without producing a reply, where saying nothing answered cleanly
         # in 3000. The model's instinct is right - it *should* want a second, better-targeted search - so
         # the fix is to let it have one.
-        # TODO: Expose the retriever as a real tool the model may call ("RAG access via tool-call" in
-        # TODO: TODO.md), which turns this failure into the feature it is reaching for.
+        # TODO (brief 10): Expose the retriever as a real `search_documents` tool the model may call, which
+        # TODO (brief 10): turns this failure into the feature it is reaching for. The synthetic call below
+        # TODO (brief 10): already uses that name, so it becomes honest rather than a fiction once it lands.
         data_injects.extend(_synthetic_tool_exchange(llm_settings=llm_settings,
                                                      call_id="raven_docs",
                                                      function_name="search_documents",
                                                      arguments={"query": docs_query if docs_query is not None else ""},
-                                                     result_text="\n\n".join(match_blocks)))
+                                                     result_text=chatutil.format_docs_matches(docs_matches)))
 
     for position in range(len(history) - 1, -1, -1):
         if history[position]["role"] == "user":
@@ -378,10 +377,62 @@ def _perform_injects(llm_settings: env,
     history[position:position] = data_injects
 
 
+def _make_tool_context(retriever: "Optional[hybridir.HybridIR]") -> env:
+    """Create the per-turn tool-call request context (the `dyn.tool_context` payload).
+
+    One env per AI turn, not per tool round, because two kinds of field live here and only one of them is
+    per-round:
+
+      - *Accumulating* fields carry information forward across the rounds of a single turn. `grounded` is
+        the case that forces the per-turn lifetime: whether anything this turn gave the model material to
+        answer from is a question about the turn, and a tool call in round 1 must still count in round 3.
+      - *Volatile* fields are recomputed by `_perform_and_store_tool_calls` before each round, because
+        their correct value depends on what the earlier rounds did. `webfetch_allowed_hosts` is one: a
+        websearch in round 1 can auto-allow the hosts a webfetch reaches for in round 2.
+
+    Everything here is harness-supplied, never model-supplied - that separation is the point, and it is why
+    the retriever is handed over this way rather than being closed over at tool-registration time (it could
+    not be: `llmclient.setup` runs before `hybridir.setup` in both clients).
+
+    `retriever`: The document-database retriever the document tools search, or `None` if this app has no
+                 document database. The tools are duck-typed against `.query(...)`; see the module header
+                 for why `hybridir` is not imported at runtime.
+    """
+    return env(retriever=retriever,
+               webfetch_allowed_hosts=frozenset(),  # volatile: recomputed per round
+               grounded=False)  # accumulating: did anything this turn provide grounding material?
+
+def _record_grounding(tool_context: env,
+                      tool_response_record: env) -> None:
+    """Fold one tool result into `tool_context.grounded`. Monotonic: once grounded, stays grounded.
+
+    Grounding is *declared at the source* rather than inferred from message shape. An entrypoint that
+    knows whether its output is material to answer from says so, by returning `(output, {"grounding": ...})`
+    instead of a bare output; `webfetch` is the case that has to, because its allowlist refusal is a
+    perfectly non-empty string that grounds nothing.
+
+    Undeclared results fall back to "a successful call that returned something is material". That is a
+    good default for an unknown tool (notably a future MCP one), and it is wrong only in the direction
+    that a tool author can correct by declaring.
+
+    Why this matters enough to have its own mechanism: the reminder to base claims on the provided context
+    is only sound when there *is* context. Sent with nothing to ground in, it is a self-contradiction that
+    measured 5-37x the deliberation of sending nothing, with one model never terminating at all.
+    """
+    if tool_context.grounded:  # already grounded; nothing can un-ground it
+        return
+    if tool_response_record.status != "success":
+        return
+    declared = (tool_response_record.tool_metadata or {}).get("grounding") if "tool_metadata" in tool_response_record else None
+    if declared is None:
+        declared = bool(chatutil.content_to_text(tool_response_record.data["content"]).strip())
+    tool_context.grounded = bool(declared)
+
 def _perform_and_store_tool_calls(llm_settings: env,
                                   datastore: chattree.Forest,
                                   assistant_message: Dict,
                                   parent_node_id: str,
+                                  tool_context: env,
                                   on_tools_start: Optional[Callable] = None,
                                   on_call_lowlevel_start: Optional[Callable] = None,
                                   on_call_lowlevel_done: Optional[Callable] = None,
@@ -396,20 +447,24 @@ def _perform_and_store_tool_calls(llm_settings: env,
     so the per-turn request-context binding (`dyn.tool_context`), the `perform_tool_calls` dispatch, and
     the result→`generation_metadata` mapping all live in exactly one place.
 
-    The tool-call request context (harness-supplied, NOT model-supplied) is assembled and bound here for
-    the dynamic extent of the dispatch — the request-context pattern (cf. Racket's `parameterize`, Flask's
-    `g`). Entrypoints that need it read `dyn.tool_context`; see the field registry at
-    `llmclient.make_dynvar(tool_context=...)`. It is computed from `parent_node_id`, so the walk sees this
-    turn's user message and any prior tool results on the branch (e.g. a websearch whose result hosts may
-    inform a later webfetch auto-allow).
+    `tool_context`: The turn's request context, from `_make_tool_context` (which see for what belongs in
+                    it and why it outlives a single round). Bound to `dyn.tool_context` for the dynamic
+                    extent of the dispatch — the request-context pattern (cf. Racket's `parameterize`,
+                    Flask's `g`). Entrypoints that need it read `dyn.tool_context`; see the field registry
+                    at `llmclient.make_dynvar(tool_context=...)`.
+
+                    Its volatile fields are refreshed here, per round. `webfetch_allowed_hosts` is
+                    recomputed from `parent_node_id`, so the walk sees this turn's user message and any
+                    prior tool results on the branch — that is what lets a websearch in an earlier round
+                    auto-allow the hosts a webfetch reaches for in this one.
     """
     head_node_id = parent_node_id
     if on_tools_start is not None:
         on_tools_start(assistant_message["tool_calls"])
 
-    tool_context = env(webfetch_allowed_hosts=chatutil.compute_auto_allowed_hosts(
+    tool_context.webfetch_allowed_hosts = chatutil.compute_auto_allowed_hosts(
         datastore, head_node_id,
-        trust_search_results=librarian_config.webfetch_trust_search_results))
+        trust_search_results=librarian_config.webfetch_trust_search_results)
 
     # Each tool call produces exactly one response. No-ops if the message contains no tool calls.
     with dyn.let(tool_context=tool_context):
@@ -419,6 +474,8 @@ def _perform_and_store_tool_calls(llm_settings: env,
                                                              on_call_done=on_call_lowlevel_done)
 
     for tool_response_record in tool_response_records:
+        _record_grounding(tool_context, tool_response_record)
+
         def create_tool_payload() -> Dict:
             # OAI spec puts the tool-call linkage on the tool-response *message* as `tool_call_id` (matching the
             # `id` of the assistant's `tool_calls[i]` entry). The tool *execution* metadata (status, function
@@ -474,7 +531,8 @@ def ai_turn(llm_settings: env,
             on_call_lowlevel_start: Optional[Callable],
             on_call_lowlevel_done: Optional[Callable],
             on_tool_done: Optional[Callable],
-            on_tools_done: Optional[Callable]) -> str:
+            on_tools_done: Optional[Callable],
+            tool_context: Optional[env] = None) -> str:
     """AI's turn: LLM generation interleaved with tool responses, until there are no tool calls in the LLM's latest reply.
 
     This continues the current branch with as many chat nodes as needed: one for each LLM response, and one for each tool call.
@@ -661,6 +719,12 @@ def ai_turn(llm_settings: env,
 
                      This is meant as an optional UI hook to show that tool calls have finished processing.
 
+    `tool_context`: Not for application code, which should leave this at `None` so that the turn gets a
+                    fresh context (see `_make_tool_context`). It exists for callers that are *continuing*
+                    a turn already in progress — `retry_tool_calls` runs a tool call of its own before
+                    handing control back here, and its result must keep counting toward this turn's
+                    accumulated state rather than being forgotten at the handover.
+
     Returns the new HEAD node ID (i.e. the last chat node that was just added).
     """
     # Sanity check
@@ -703,6 +767,11 @@ def ai_turn(llm_settings: env,
         if retriever is None and docs_query is not None:
             logger.warning("ai_turn: A `docs_query` was supplied without a `retriever` to search with. Ignoring the query.")
         docs_matches = []
+
+    if tool_context is None:  # normal case; `retry_tool_calls` passes the context it already started
+        tool_context = _make_tool_context(retriever=retriever)
+    if docs_matches:  # the auto-search grounds this turn as much as a tool call would
+        tool_context.grounded = True
 
     continue_this_message = continue_  # we need to continue at most the first message in the agent loop
     while True:  # LLM agent loop - interleave LLM responses, tool calls and tool call results, until the LLM is done (no more tool calls).
@@ -795,6 +864,7 @@ def ai_turn(llm_settings: env,
                                                          datastore=datastore,
                                                          assistant_message=out.data,
                                                          parent_node_id=head_node_id,
+                                                         tool_context=tool_context,
                                                          on_tools_start=on_tools_start,
                                                          on_call_lowlevel_start=on_call_lowlevel_start,
                                                          on_call_lowlevel_done=on_call_lowlevel_done,
@@ -900,10 +970,12 @@ def retry_tool_calls(llm_settings: env,
     # 2. Re-run only the denied call, as a new sibling branch under the assistant's tool chain. Fire
     #    `on_tools_start` (GUI: tools starting), but defer `on_tools_done` until the suffix is also in place.
     synthetic_message = {**assistant_message, "tool_calls": calls_to_rerun}
+    tool_context = _make_tool_context(retriever=retriever)  # handed to `ai_turn` below, so the re-run call's grounding carries
     head_node_id = _perform_and_store_tool_calls(llm_settings=llm_settings,
                                                  datastore=datastore,
                                                  assistant_message=synthetic_message,
                                                  parent_node_id=parent_node_id,
+                                                 tool_context=tool_context,
                                                  on_tools_start=on_tools_start,
                                                  on_call_lowlevel_start=on_call_lowlevel_start,
                                                  on_call_lowlevel_done=on_call_lowlevel_done,
@@ -942,4 +1014,5 @@ def retry_tool_calls(llm_settings: env,
                    on_call_lowlevel_start=on_call_lowlevel_start,
                    on_call_lowlevel_done=on_call_lowlevel_done,
                    on_tool_done=on_tool_done,
-                   on_tools_done=on_tools_done)
+                   on_tools_done=on_tools_done,
+                   tool_context=tool_context)

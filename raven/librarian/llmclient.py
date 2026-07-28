@@ -32,7 +32,7 @@ import json
 import os
 import requests
 import sys
-from typing import Callable, Dict, List, Optional, Tuple, Union
+from typing import Callable, Collection, Dict, List, Optional, Tuple, Union
 
 import sseclient  # pip install sseclient-py
 
@@ -1010,6 +1010,7 @@ def invoke(settings: env,
            on_progress: Optional[Callable] = None,
            on_prompt_ready: Optional[Callable] = None,
            tools_enabled: bool = True,
+           tool_names: Optional[Collection[str]] = None,
            continue_: bool = False,
            max_tokens: Optional[int] = None,
            datastore: Optional[chattree.PersistentForest] = None) -> env:
@@ -1060,6 +1061,23 @@ def invoke(settings: env,
 
     `tools_enabled`: Whether the LLM is allowed to use the tools available in `llmclient.setup`.
                      This can be disabled e.g. to temporarily turn off websearch.
+
+    `tool_names`: Which of those tools to offer, by name. `None` (default) offers all of them; a collection
+                  of names offers only those. Ignored entirely when `tools_enabled` is `False`.
+
+                  The available names are the keys of `settings.tool_entrypoints` (equivalently, the
+                  `function.name` of each entry in `settings.tools`) — both built by `llmclient.setup`.
+                  A name that matches no tool is logged as a warning and otherwise ignored, since the
+                  alternative is a typo silently switching a tool off.
+
+                  Needed because tool availability is not one switch: the document tools are gated on the
+                  document database being enabled, while websearch is not, so the advertised list varies
+                  per turn rather than being a property of the session. Keep the list *stable within a
+                  turn* — tools appearing or vanishing between rounds of one agent loop is a shape models
+                  read as noise.
+
+                  A restriction that selects nothing removes the `tools` field entirely rather than sending
+                  an empty list, which not every backend accepts.
 
     `continue_`: If `False` (default), generate a new AI message. Most of the time, this is what you want.
                  The new message is returned.
@@ -1119,13 +1137,23 @@ def invoke(settings: env,
     if on_prompt_ready is not None:
         on_prompt_ready(history)
 
-    if tools_enabled:
+    if not tools_enabled:
+        logger.info("llmclient.invoke: Tool calling is disabled. Stripping tool specifications from request.")
+        data.pop("tools")  # Tools? What tools? (Pretend to LLM backend we don't have any -> no tool-calls.)
+    elif tool_names is None:
         logger.info("llmclient.invoke: Tool calling is enabled. Providing tool specifications in request.")
         # The `tools` field is already in `settings.request_data`, so there's nothing to do. The backend builds
         # the tool-calling instructions from it, using the model's own chat template.
     else:
-        logger.info("llmclient.invoke: Tool calling is disabled. Stripping tool specifications from request.")
-        data.pop("tools")  # Tools? What tools? (Pretend to LLM backend we don't have any -> no tool-calls.)
+        unknown_names = set(tool_names) - {tool["function"]["name"] for tool in data["tools"]}
+        if unknown_names:  # a typo here would silently switch a tool off, so say so rather than filter quietly
+            logger.warning(f"llmclient.invoke: Ignoring unknown tool name(s) {sorted(unknown_names)} in `tool_names`; "
+                           f"available: {sorted(settings.tool_entrypoints)}.")
+        data["tools"] = [tool for tool in data["tools"] if tool["function"]["name"] in tool_names]
+        logger.info(f"llmclient.invoke: Tool calling is enabled, restricted to {sorted(tool_names)}. "
+                    f"Providing {len(data['tools'])} tool specification(s) in request.")
+        if not data["tools"]:  # an empty `tools` list is not the same thing as no tools; some backends reject it
+            data.pop("tools")
 
     stream_response = requests.post(f"{settings.backend_url}/v1/chat/completions", headers=headers, json=data, verify=False, stream=True, timeout=librarian_config.llm_network_timeout_streaming)
 
@@ -1309,6 +1337,7 @@ def invoke(settings: env,
 def prefill(settings: env,
             history: List[Dict],
             tools_enabled: bool = True,
+            tool_names: Optional[Collection[str]] = None,
             datastore: Optional[chattree.PersistentForest] = None) -> Optional[env]:
     """Send `history` to the backend generating essentially no output. Returns the `invoke` env, or `None` on failure.
 
@@ -1322,7 +1351,9 @@ def prefill(settings: env,
       2. **KV-cache warm-up.** The backend processes (prefills) the prompt, so when the user's next turn sends the
          same prefix, the expensive prompt-processing pass is already cached and generation starts sooner.
 
-    `tools_enabled` should match the next turn's setting, so the tool definitions are counted (and cached) identically.
+    `tools_enabled` and `tool_names` should both match the next turn's settings, so the tool definitions are counted
+    (and cached) identically. A different tool list is a different prompt prefix: get it wrong and the warm-up warms
+    a prefix the real turn never sends, which costs the reprocessing it was supposed to save.
 
     `datastore`: passed through to `invoke` so image attachments in `history` are resolved and counted in the
                  prompt size (see `invoke`). `None` for text-only chats.
@@ -1339,6 +1370,7 @@ def prefill(settings: env,
                       history,
                       on_progress=None,
                       tools_enabled=tools_enabled,
+                      tool_names=tool_names,
                       max_tokens=1,
                       datastore=datastore)
     except Exception as exc:  # noqa: BLE001 -- best-effort; any failure just leaves the estimate in place
