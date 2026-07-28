@@ -259,13 +259,34 @@ Bonus: consecutive tool messages merge into one user turn (the `previtem`/`nexti
 matches become a single `<|im_start|>user` block with N `<tool_response>` sections, rather than N
 separate turns.
 
-Open question (Juha, 2026-07-19): whether to also synthesize the *tool call* — an assistant message
-with a `tool_calls` entry for the RAG autosearch — so the model understands why the material is
-there and what query produced it. Arguments for: it matches how models are trained to see tool
-results, it makes the autosearch legible rather than mysterious, and the OpenAI schema normally pairs
-a `tool` message with a `tool_call_id` from a preceding call (some backends validate this, even where
-the template does not). Argument against: it puts a call in the assistant's mouth that it never made.
-Worth testing both, since the template itself appears to render a standalone tool message fine.
+**Measured 2026-07-28** (`briefs/summer_2026_librarian_extension/manual_tests/inject_shapes.py`, probes 1 and 4;
+LM Studio 0.4.19 Build 2). The tool role works, and the synthetic tool call turns out to be **required**:
+
+| model | bare `tool` message | `tool` + synthetic `tool_call` |
+|---|---|---|
+| Qwen3.5-9B | material used | material used |
+| Qwen3.6-35B-A3B | material used | material used |
+| Qwen3.6-27B | material used | material used |
+| Gemma4-26B-A4B | **ignored — and confabulates** | material used |
+
+Gemma 4 does not merely skip a bare tool message; asked about the planted fact it invented a different,
+confident-sounding value ("±0.04% per 24-hour cycle"), which is the worst possible failure for a RAG path. With
+the preceding assistant `tool_calls` message supplying a `tool_call_id`, it reads the material correctly, at both
+the front and the end of the history. So the open question below is settled: **synthesize the call.** The
+argument against it — that it puts words in the assistant's mouth — is real but costs less than a backend-
+dependent silent-confabulation mode, and it is also the honest shape, since Raven *did* run that search.
+
+Also verified while reading the code: `chatutil.linearize_chat` returns `payload["message"]` — the stored dicts
+themselves, not copies. The list is fresh, so appending is safe, but merging into an existing message must copy
+it first or it writes through to the datastore. This is an implementation advantage for the tool shape, which
+only ever adds messages.
+
+Original open question (Juha, 2026-07-19), kept for the reasoning: whether to also synthesize the *tool call* —
+an assistant message with a `tool_calls` entry for the RAG autosearch — so the model understands why the material
+is there and what query produced it. Arguments for: it matches how models are trained to see tool results, it
+makes the autosearch legible rather than mysterious, and the OpenAI schema normally pairs a `tool` message with a
+`tool_call_id` from a preceding call (some backends validate this, even where the template does not). Argument
+against: it puts a call in the assistant's mouth that it never made.
 
 Note that reranking (see below) does **not** fix this on its own — two system messages break the rule
 as surely as nine — but it does shrink whatever merged block the proper fix produces.
@@ -336,6 +357,29 @@ Confirmed in live use (Qwen3.5-9B, 2026-07-19, Documents off + Speculation off):
 reasoning noted "the instructions say to answer based on information in context only, and there's no
 actual information needed to answer" before deciding how to proceed. Reasoning budget spent
 negotiating a constraint that should not have been sent.
+
+**Measured 2026-07-28** (`inject_shapes.py` probes 5 and 6). Asked "What is 2+2?" with no context supplied,
+reasoning characters spent, and whether an answer arrived at all:
+
+| wording | Qwen3.5-9B | Qwen3.6-35B-A3B | Qwen3.6-27B | Gemma4-26B-A4B |
+|---|---|---|---|---|
+| no reminder (control) | 1422 ✅ | 884 ✅ | 610 ✅ | 279 ✅ |
+| **current** | **52796 ❌ never terminates** | 10808 ✅ | 5025 ⚠️ hedged | 4704 ❌ refuses |
+| "prefer information from the context…" | 3935 ⚠️ | 1025 ⚠️ | 2375 ⚠️ | 1813 ⚠️ |
+| "Base claims about the provided documents on those documents. Answer general questions normally." | 1481 ✅ | 3743 ✅ | 988 ✅ | 759 ✅ |
+
+⚠️ = answers, but volunteers an unwanted "(drawing on general knowledge)" hedge, or leads with "the provided
+context does not contain…" before answering.
+
+The current wording is bad on **every** model tested, costing 5–37× the control's deliberation. Qwen3.5-9B never
+finishes: 52796 characters of reasoning against a 16000-token budget, `finish_reason=length`, no reply. Gemma 4
+answers "The provided information does not contain the answer to this question." Qwen is *right* to do this —
+"answer based on the context only" does prohibit answering from general knowledge, so the model is obeying a
+badly-formed instruction rather than misbehaving. The defect is ours. (It would be nicer if it reported the
+contradiction instead of looping, but that is a lot of executive function to ask of a 9B in mid-2026.)
+
+The fourth wording is the recommended replacement: within noise of no reminder at all on three of the four
+models, no hedging, and it still constrains claims about documents, which is the point of having it.
 
 Note that "context" is broader than docs-DB matches: explicit attachments (images, documents) and
 information the user supplied earlier in the chat history are context too, and any condition should
@@ -414,6 +458,38 @@ rather than something measured for these models; worth measuring before building
 
   So: test tool-role-late against system-merged-at-front for the two reminders. The arguments point
   in different directions and neither has been measured.
+
+**Measured 2026-07-28** (`inject_shapes.py` probe 3): all three always-on injects around the message
+"Testing 1 2 3", reasoning characters spent, with ✗ marking a reply that addressed the injects rather than
+the user:
+
+| shape | Qwen3.5-9B | Qwen3.6-35B-A3B | Qwen3.6-27B | Gemma4-26B-A4B |
+|---|---|---|---|---|
+| user (current) | 10260 (no reply in budget) | 1227 | 4077 | 6333 ✗ |
+| folded | 10572 (no reply in budget) | 1402 | 4178 | 584 |
+| tool | 5299 | 993 | 4701 | 641 |
+| **system_front** | **4823** | 1082 | **874** | **331** |
+| system_end | HTTP 400 (strict template) | 703 | 731 | 831 |
+
+Four things fall out, two of which contradict what this item assumed:
+
+- **The fold does not fix the narration.** On Qwen3.5-9B it measures identically to the status quo (10572 vs
+  10260) — the open question above ("whether the fold fixes this is untested") is answered, and the answer is no.
+  It *does* fix it on Gemma 4. So the fold is a model-dependent half-measure, not the shape to standardize on.
+- **Gemma 4 reproduces the self-reference bug exactly.** In the user shape its reasoning opens "User's most
+  recent message: '[System information: NOTE: Please answer based on the information provided in the context
+  only.]'" and it replies "Understood. I will only use the information provided in the context." — answering the
+  inject instead of the user. This is the failure the whole item exists for, on a second model family.
+- **`system_front` is cheapest or near-cheapest on all four, and never narrated.** Since the two reminders are
+  *constant*, merging them into the leading system block costs nothing in KV-cache terms — the objection in the
+  table below applies only to injects that vary per turn. The recency cost remains untested (the DeepSeek-R1
+  distills that motivated late placement were not among the models tried).
+- **The tool role reduces how strongly an instruction binds** — which is right for data and wrong for
+  instructions. Probe 2 on Qwen3.6-35B-A3B: with the injects in the user role the model refused a general-
+  knowledge question outright ("I cannot answer this question because the provided context does not contain
+  information about the capital of France"), and in the tool role it answered normally. That is not the tool role
+  fixing a bug; it is the model weighting the reminder less than it should. Anything we actually want obeyed must
+  not go there. Data-like injects, which only need to be read, are unaffected.
 
 The full trade-off for a *single* shape applied to everything, which is what the table below assumed,
 is three-way, and no single shape wins all of it:

@@ -30,7 +30,7 @@ its reasoning budget negotiating a reminder — are visible in the text and not 
 
 Usage:
     python inject_shapes.py                       # localhost:1234, first model
-    python inject_shapes.py <base_url> [model]
+    python inject_shapes.py <base_url> [model] [probes]   # probes e.g. "3,5,6"
 """
 
 import json
@@ -90,10 +90,14 @@ def post(base: str, path: str, payload: dict[str, Any]) -> dict[str, Any]:
 
 def ask(base: str, model: str, messages: list[dict], think: bool = False,
         max_tokens: int = 500) -> dict[str, str]:
-    """Send `messages`, returning `content` and `reasoning` as plain strings.
+    """Send `messages`, returning `content`, `reasoning` and `finish` as plain strings.
 
     With `think=False`, a closed-thought prefill suppresses the reasoning phase, so the whole
     token budget goes to the answer. An `_error` key survives into `content`.
+
+    `finish` is the backend's finish reason, and it is what separates "the model declined to
+    answer" from "the model was still going when the budget ran out" — a distinction every
+    empty reply below turns on.
     """
     wire = list(messages)
     if not think:
@@ -101,10 +105,12 @@ def ask(base: str, model: str, messages: list[dict], think: bool = False,
     body = post(base, "/v1/chat/completions",
                 {"model": model, "messages": wire, "max_tokens": max_tokens, "temperature": 0.0})
     if "_error" in body:
-        return {"content": body["_error"], "reasoning": ""}
-    msg = body.get("choices", [{}])[0].get("message", {})
+        return {"content": body["_error"], "reasoning": "", "finish": "error"}
+    choice = body.get("choices", [{}])[0]
+    msg = choice.get("message", {})
     return {"content": (msg.get("content") or "").strip(),
-            "reasoning": (msg.get("reasoning_content") or msg.get("reasoning") or "").strip()}
+            "reasoning": (msg.get("reasoning_content") or msg.get("reasoning") or "").strip(),
+            "finish": choice.get("finish_reason") or "?"}
 
 
 def build(shape: str, user_text: str, injects: list[str]) -> list[dict]:
@@ -227,19 +233,32 @@ def probe_material_placement(base: str, model: str) -> None:
     print("\n[4] Retrieved material at the FRONT (what we ship) vs at the END (what the KV cache wants).")
     print("    Front placement dates from Qwen 3.0, which ignored material injected late. If that no")
     print("    longer holds, the per-turn full-prefix rebuild buys nothing.")
+    print("    'tool+call' prefixes an assistant message carrying the tool_call the result answers.")
+    print("    Gemma 4 ignores a bare tool message and confabulates a value instead, so whether the")
+    print("    synthetic call is optional or load-bearing is a cross-model question, not a schema nicety.")
     filler = [{"role": "user", "content": "Remind me to check the calibration log later."},
               {"role": "assistant", "content": "Noted — I'll remind you about the calibration log."}]
     material = f"[System information: Knowledge-base match from 'kuiper7.txt'.]\n\n{NEEDLE_FACT}\n-----"
+    call = {"role": "assistant", "content": "",
+            "tool_calls": [{"id": "call_rag", "type": "function",
+                            "function": {"name": "search_documents",
+                                         "arguments": json.dumps({"query": "Kuiper-7 baseline drift"})}}]}
 
-    for role in ("user", "tool"):
+    def block(role: str) -> list[dict]:
+        """The injected material as it would appear on the wire, for one role choice."""
+        if role == "tool+call":
+            return [call, {"role": "tool", "tool_call_id": "call_rag", "content": material}]
+        return [{"role": role, "content": material}]
+
+    for role in ("user", "tool", "tool+call"):
         front = [{"role": "system", "content": SYSTEM_PROMPT},
-                 {"role": role, "content": material},
+                 *block(role),
                  *filler,
                  {"role": "user", "content": NEEDLE_QUESTION}]
         end = [{"role": "system", "content": SYSTEM_PROMPT},
                *filler,
                {"role": "user", "content": NEEDLE_QUESTION},
-               {"role": role, "content": material}]
+               *block(role)]
         for where, messages in (("front", front), ("end", end)):
             got = ask(base, model, messages)
             if got["content"].startswith("HTTP "):
@@ -274,6 +293,27 @@ def probe_context_only_wording(base: str, model: str) -> None:
             print(f"      {show('reasoning', got['reasoning'], limit=300)}")
 
 
+def probe_reminder_terminates(base: str, model: str) -> None:
+    print("\n[6] Does the context-only reminder terminate at all, given a budget it cannot exhaust?")
+    print("    Qwen3.5-9B does not: 52796 characters of reasoning at a 16k-token budget, still")
+    print("    finish_reason=length, no answer. It notices that 2+2 is general knowledge, that no")
+    print("    context was provided, and that it was told to use context only -- and loops on the")
+    print("    contradiction instead of reporting it. A reply that never arrives is the failure")
+    print("    mode a live audience would hit first, so this is the probe that has to stay green.")
+    for label, inject in (("current", CONTEXT_ONLY_INJECT),
+                          ("cite-or-say-so", "[System information: Base claims about the provided "
+                                             "documents on those documents. Answer general questions normally.]")):
+        got = ask(base, model, build("user", "What is 2+2?", [DATETIME_INJECT, inject]),
+                  think=True, max_tokens=16000)
+        if got["finish"] == "error":
+            report(label, f"REJECTED -- {got['content'][:80]}")
+            continue
+        terminated = got["finish"] != "length"
+        report(label, f"{'terminated' if terminated else 'DID NOT TERMINATE'} "
+                      f"(finish={got['finish']}, reasoning {len(got['reasoning'])} chars)",
+               show("reply", got["content"], limit=120))
+
+
 def main() -> None:
     base = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_BASE
     model = sys.argv[2] if len(sys.argv) > 2 else None
@@ -292,7 +332,7 @@ def main() -> None:
         print(f"models available: {ids}")
 
     probes = (probe_tool_role_accepted, probe_last_question_survives, probe_narration,
-              probe_material_placement, probe_context_only_wording)
+              probe_material_placement, probe_context_only_wording, probe_reminder_terminates)
     if len(sys.argv) > 3:  # e.g. "3,5" -- a full pass is minutes of generation, so allow a subset
         wanted = {int(n) for n in sys.argv[3].split(",")}
         probes = tuple(probe for n, probe in enumerate(probes, start=1) if n in wanted)
