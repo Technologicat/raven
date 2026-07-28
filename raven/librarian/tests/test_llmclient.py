@@ -931,3 +931,77 @@ class TestStrictTemplateWarnings:
         with caplog.at_level(logging.WARNING):
             llmclient._warn_about_strict_template_violations([])
         assert caplog.text == ""
+
+
+# ---------------------------------------------------------------------------
+# Budgeting text fetched into the context
+# ---------------------------------------------------------------------------
+
+class TestFetchBudget:
+    """How much of a document may be pulled into a conversation that is already partly full."""
+
+    def settings(self, context_length=10000):
+        return env(context_length=context_length, char_to_token_ratio=0.25)
+
+    def test_empty_conversation_gets_the_per_fetch_ceiling(self, monkeypatch):
+        # The per-fetch ceiling is the limit that normally binds: one document must not crowd out the
+        # conversation it is meant to inform, however much room happens to be free.
+        monkeypatch.setattr("raven.librarian.config.docs_fetch_max_fraction_of_context", 0.10)
+        monkeypatch.setattr("raven.librarian.config.docs_fetch_reserve_fraction_of_context", 0.25)
+        assert llmclient.budget_for_fetched_text(self.settings(), used_tokens=0) == 1000
+
+    def test_a_full_conversation_refuses_rather_than_serving_a_sliver(self, monkeypatch):
+        monkeypatch.setattr("raven.librarian.config.docs_fetch_max_fraction_of_context", 0.10)
+        monkeypatch.setattr("raven.librarian.config.docs_fetch_reserve_fraction_of_context", 0.25)
+        assert llmclient.budget_for_fetched_text(self.settings(), used_tokens=8000) <= 0
+
+    def test_the_reserve_shrinks_the_budget_before_it_refuses(self, monkeypatch):
+        # Two regimes, and this is the middle one. The reserve is not slack -- it is what the model's own
+        # reasoning after the fetch will consume, which the size estimate cannot see -- so it starts eating
+        # into the budget well before the window is exhausted, and only then refuses outright.
+        monkeypatch.setattr("raven.librarian.config.docs_fetch_max_fraction_of_context", 0.10)
+        monkeypatch.setattr("raven.librarian.config.docs_fetch_reserve_fraction_of_context", 0.25)
+        budget = llmclient.budget_for_fetched_text(self.settings(), used_tokens=7000)  # 30% still free
+        assert 0 < budget < 1000  # below the per-fetch ceiling, but still worth serving
+
+    def test_a_nonsensical_fraction_is_clamped_and_logged(self, monkeypatch, caplog):
+        monkeypatch.setattr("raven.librarian.config.docs_fetch_max_fraction_of_context", -0.5)
+        monkeypatch.setattr("raven.librarian.config.docs_fetch_reserve_fraction_of_context", 0.25)
+        caplog.set_level(logging.WARNING, logger="raven.librarian.llmclient")
+        assert llmclient.budget_for_fetched_text(self.settings(), used_tokens=0) == 0
+        assert "docs_fetch_max_fraction_of_context" in caplog.text
+
+
+class TestTruncateMiddle:
+    def test_short_text_is_returned_unchanged(self):
+        assert llmclient.truncate_middle("hello", 100) == "hello"
+
+    def test_result_fits_the_budget(self):
+        out = llmclient.truncate_middle("x" * 5000, 500)
+        assert len(out) <= 500
+
+    def test_both_ends_survive(self):
+        # The ends are what carry: for a paper, the abstract at one end and the conclusions at the other.
+        text = "BEGINNING" + "." * 5000 + "ENDING"
+        out = llmclient.truncate_middle(text, 500)
+        assert out.startswith("BEGINNING")
+        assert out.endswith("ENDING")
+
+    def test_the_omission_is_stated(self):
+        # Silently truncated text is indistinguishable from a document that simply ends there, and a model
+        # will summarize the fragment as though it were the whole.
+        out = llmclient.truncate_middle("x" * 5000, 500)
+        assert "characters omitted" in out
+
+    def test_a_budget_too_small_to_explain_itself_yields_nothing(self):
+        assert llmclient.truncate_middle("x" * 5000, 5) == ""
+
+    def test_token_budget_is_converted_not_used_as_characters(self):
+        # The failure this guards: treating a token budget as a character budget, wrong by ~4x.
+        settings = env(context_length=10000, char_to_token_ratio=0.25)
+        out = llmclient.fit_text_to_token_budget(settings, "x" * 100000, budget_tokens=100)
+        assert 300 < len(out) <= 400  # 100 tokens / 0.25 tokens-per-char = 400 characters
+
+    def test_no_budget_yields_nothing(self):
+        settings = env(context_length=10000, char_to_token_ratio=0.25)
+        assert llmclient.fit_text_to_token_budget(settings, "x" * 1000, budget_tokens=0) == ""

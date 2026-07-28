@@ -46,7 +46,6 @@ from ..common.gui import utils as guiutils
 from . import chattree
 from . import chatutil
 from . import config as librarian_config
-from . import textfilestore
 from . import hybridir
 from . import llmclient
 from . import scaffold
@@ -1910,47 +1909,15 @@ class DPGChatController:
     def update_context_fill_indicator(self) -> None:
         """Refresh the bottom-toolbar context-fill readout: the current chat's token size vs the loaded window.
 
-        Two-stage: this immediate pass approximates the prompt by the visible conversation content — the system
-        prompt, RAG injects, and tool definitions add some tokens not counted here, so it slightly under-reports —
-        and then schedules a debounced background prefill (`_schedule_context_prefill`) that, once the chat settles,
-        replaces the estimate with the backend's exact full-prompt `prompt_tokens` (and warms the KV cache).
-
-        Attached images each add a per-family estimate (`llmclient.image_token_cost`) — a VLM image consumes
-        context the char->token ratio can't see. Any image present forces the `~X%` (estimate) typography until
-        the background prefill lands the exact count. Attached documents add the token count of their extracted
-        text (they ride the wire as text, folded into the message at send), counted alongside the rest via
-        `count_tokens` — so unlike images they do not by themselves force the estimate typography.
+        Two-stage: this immediate pass counts the branch locally via `llmclient.count_branch_tokens` (which see
+        for what is and is not counted, and when the figure is exact), and then schedules a debounced background
+        prefill (`_schedule_context_prefill`) that, once the chat settles, replaces the estimate with the
+        backend's exact full-prompt `prompt_tokens` — and warms the KV cache on the way.
         """
         if not self.gui_updates_safe:
             return
         try:
-            node_ids = self.datastore.linearize_up(self.app_state["HEAD"])
-            text_segments = []
-            image_tokens = 0
-            for node_id in node_ids:
-                payload = self.datastore.get_payload(node_id)
-                message = payload["message"]
-                text_segments.append(chatutil.content_to_text(message.get("content")))
-                sidecars_meta = payload.get("general_metadata", {}).get("sidecars", {})
-                for part in message.get("content") or []:
-                    part_type = part.get("type")
-                    if part_type == "image_url":
-                        url = (part.get("image_url") or {}).get("url", "")
-                        filename = url[len(sidecarstore.SIDECAR_SCHEME):] if url.startswith(sidecarstore.SIDECAR_SCHEME) else None
-                        dims = (sidecars_meta.get(filename) or {}).get("stored_dimensions") if filename else None
-                        image_h, image_w = dims if dims else (1024, 1024)  # fallback for pre-stored-dims data; only matters for resolution-scaling families
-                        image_tokens += llmclient.image_token_cost(self.llm_settings, image_h, image_w)
-                    elif part_type == "text_file":
-                        # An attached document rides on the wire as text (folded in at wire-build), so its token
-                        # cost is exactly that text's — count it alongside the rest via `count_tokens`, not as a
-                        # separate estimate. Extraction is memoized on the content-addressed sidecar filename.
-                        file_url = (part.get("text_file") or {}).get("url", "")
-                        if file_url.startswith(sidecarstore.SIDECAR_SCHEME):
-                            text_segments.append(textfilestore.sidecar_to_text(self.datastore, file_url))
-            count, is_exact = llmclient.count_tokens(self.llm_settings, "".join(text_segments))
-            if image_tokens:
-                count += image_tokens
-                is_exact = False  # per-image token cost is an estimate, so the whole readout is now approximate
+            count, is_exact = llmclient.count_branch_tokens(self.llm_settings, self.datastore, self.app_state["HEAD"])
             self._render_context_fill(count, is_exact)
         except Exception:  # noqa: BLE001 -- a status readout must never break the GUI or a chat turn
             logger.exception("DPGChatController.update_context_fill_indicator: failed to update the context-fill readout")

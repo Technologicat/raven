@@ -109,6 +109,26 @@ web_num_results = 10
 # paused agent loop and prompts yet another call rather than a reply.
 max_tool_call_rounds = 5
 
+# How much of the context window one piece of retrieved text may occupy, as a fraction.
+#
+# Applies to any long text pulled in on demand — a document the LLM fetches with `fetch_document`, and
+# (later) an attached document folded into the message at wire-build. Text over the limit is truncated in
+# the middle, keeping the beginning and the end, with an explicit marker where the omission is. That shape
+# suits a scientific fulltext: the abstract, introduction and conclusions survive; the methods section in
+# the middle is what goes.
+docs_fetch_max_fraction_of_context = 0.10
+
+# How much of the context window to keep free for the discussion itself, as a fraction.
+#
+# A fetch is refused outright when the conversation has already grown past this, rather than truncated to
+# whatever slack is left — at that point the useful move is a new chat, not a sliver of a document.
+#
+# This reserve is doing real work, not sitting idle. The size estimate cannot see what the model generates
+# *after* the fetch: its own reasoning, which on a thinking model is the single largest consumer of the
+# turn. That is what the reserve is for. Tuning it down towards zero on the grounds that "the context is
+# only 60% full, so there is plenty of room" is the mistake it exists to prevent.
+docs_fetch_reserve_fraction_of_context = 0.25
+
 # --------------------------------------------------------------------------------
 # webfetch tool — client-side access policy
 #

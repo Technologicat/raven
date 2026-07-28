@@ -24,10 +24,18 @@ def llm_settings():
                          "assistant": "Aria",
                          "system": None,
                          "tool": None},
+               # Token accounting, as `llmclient.setup` builds it. `tokenizer=None` selects the estimate
+               # path (`count_tokens` tier 3), which needs no model files - the exactness of the count is
+               # not what any of these tests are about.
+               tokenizer=None,
+               char_to_token_ratio=0.27,
+               context_length=32768,
+               backend_flavor="lmstudio",
                # Tool registry, as `llmclient.setup` builds it: every tool is registered for the session,
                # and `ai_turn` picks the subset to offer on each turn. The entrypoints are never called
                # here (tests fake `perform_tool_calls`), so the names are what matter.
                tool_entrypoints={"websearch": None,
                                  "webfetch": None,
-                                 "search_documents": None},
-               document_tool_names=frozenset({"search_documents"}))
+                                 "search_documents": None,
+                                 "fetch_document": None},
+               document_tool_names=frozenset({"search_documents", "fetch_document"}))

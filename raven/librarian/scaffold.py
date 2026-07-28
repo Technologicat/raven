@@ -386,7 +386,8 @@ def _perform_injects(llm_settings: env,
     history[position:position] = data_injects
 
 
-def _make_tool_context(retriever: "Optional[hybridir.HybridIR]") -> env:
+def _make_tool_context(llm_settings: env,
+                       retriever: "Optional[hybridir.HybridIR]") -> env:
     """Create the per-turn tool-call request context (the `dyn.tool_context` payload).
 
     One env per AI turn, not per tool round, because two kinds of field live here and only one of them is
@@ -397,18 +398,25 @@ def _make_tool_context(retriever: "Optional[hybridir.HybridIR]") -> env:
         answer from is a question about the turn, and a tool call in round 1 must still count in round 3.
       - *Volatile* fields are recomputed by `_perform_and_store_tool_calls` before each round, because
         their correct value depends on what the earlier rounds did. `webfetch_allowed_hosts` is one: a
-        websearch in round 1 can auto-allow the hosts a webfetch reaches for in round 2.
+        websearch in round 1 can auto-allow the hosts a webfetch reaches for in round 2. `used_tokens` is
+        another: each round adds to the branch, so how much room is left changes as the turn proceeds.
 
     Everything here is harness-supplied, never model-supplied - that separation is the point, and it is why
     the retriever is handed over this way rather than being closed over at tool-registration time (it could
     not be: `llmclient.setup` runs before `hybridir.setup` in both clients).
 
+    `llm_settings`: Needed by tools that have to reason about the context window - `fetch_document` sizes
+                    what it returns against what is left of it. Carried here rather than closed over,
+                    because an entrypoint is called with the model's arguments and nothing else.
+
     `retriever`: The document-database retriever the document tools search, or `None` if this app has no
                  document database. The tools are duck-typed against `.query(...)`; see the module header
                  for why `hybridir` is not imported at runtime.
     """
-    return env(retriever=retriever,
+    return env(llm_settings=llm_settings,
+               retriever=retriever,
                webfetch_allowed_hosts=frozenset(),  # volatile: recomputed per round
+               used_tokens=0,  # volatile: recomputed per round
                grounded=False)  # accumulating: did anything this turn provide grounding material?
 
 def _record_grounding(tool_context: env,
@@ -466,6 +474,10 @@ def _perform_and_store_tool_calls(llm_settings: env,
     tool_context.webfetch_allowed_hosts = chatutil.compute_auto_allowed_hosts(
         datastore, head_node_id,
         trust_search_results=librarian_config.webfetch_trust_search_results)
+    # How full the context already is, for the tools that have to fit something into what is left. Volatile
+    # for a reason worth stating: by round three the model's own reasoning and the earlier rounds' results
+    # are in the branch, so a figure taken at turn start would claim room that has since been spent.
+    tool_context.used_tokens = llmclient.count_branch_tokens(llm_settings, datastore, head_node_id)[0]
 
     # Each tool call produces exactly one response. No-ops if the message contains no tool calls.
     with dyn.let(tool_context=tool_context):
@@ -756,7 +768,8 @@ def ai_turn(llm_settings: env,
         # The retriever goes in only when the documents are actually in play, so that its presence is the
         # single gate the document tools read. Fails closed: a model that calls a tool we did not advertise
         # finds no retriever there and gets a refusal, rather than reaching around the user's switch.
-        tool_context = _make_tool_context(retriever=(retriever if documents_available else None))
+        tool_context = _make_tool_context(llm_settings=llm_settings,
+                                          retriever=(retriever if documents_available else None))
         # Material an earlier turn's tools brought in is still sitting in the context, so it still grounds.
         tool_context.grounded = _branch_grounding_is_present(datastore, head_node_id)
     if docs_matches:  # the auto-search grounds this turn as much as a tool call would
@@ -989,7 +1002,8 @@ def retry_tool_calls(llm_settings: env,
     synthetic_message = {**assistant_message, "tool_calls": calls_to_rerun}
     # Handed to `ai_turn` below, so the re-run call's grounding carries across the handover instead of being
     # forgotten. Same gate as `ai_turn` applies: no retriever in the context unless the documents are in play.
-    tool_context = _make_tool_context(retriever=(retriever if docs_enabled else None))
+    tool_context = _make_tool_context(llm_settings=llm_settings,
+                                      retriever=(retriever if docs_enabled else None))
     head_node_id = _perform_and_store_tool_calls(llm_settings=llm_settings,
                                                  datastore=datastore,
                                                  assistant_message=synthetic_message,

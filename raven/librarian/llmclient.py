@@ -268,12 +268,75 @@ def search_documents_wrapper(query: str) -> Tuple[Union[str, List[Dict]], Dict]:
         return (CANONICAL_NO_DOCUMENT_MATCHES, {"grounding": False})
     return (chatutil.format_docs_matches(matches), {"grounding": True})
 
+CANONICAL_NO_SUCH_DOCUMENT = ("There is no document with that ID in the database. Document IDs come from "
+                              "search results; search first, then fetch by the ID a result reports.")
+
+def fetch_document_wrapper(document_id: str,
+                           offset: Optional[int] = None,
+                           length: Optional[int] = None) -> Tuple[Union[str, List[Dict]], Dict]:
+    """Read a document from the local database by ID; return its text, cut to what the context can hold.
+
+    Tool entrypoint for the LLM's `fetch_document` tool — the internal-engine counterpart of `webfetch`,
+    and the follow-up to `search_documents`. A search match is a window onto a larger document and reports
+    where that window sits, so the model can come back for the surrounding text, or for the whole thing.
+
+    `document_id` must come from a search result: the model has no other way to learn one, which makes this
+    search-then-fetch by construction, exactly as websearch precedes webfetch.
+
+    `offset`, `length`: character span to read, both optional. Omit both for the document from the start.
+    Out-of-range values are clamped rather than refused — an off-by-a-bit span is an ordinary mistake to
+    make about a document you have only seen one window of, and clamping answers the question that was
+    meant instead of starting a correction round-trip.
+
+    The text is fitted to what the conversation can still afford (`budget_for_fetched_text`), and truncated
+    in the middle if it does not fit, so a long paper keeps its abstract and its conclusions. A fetch that
+    cannot fit at all is refused with a canonical string rather than served as a sliver.
+
+    Returns `(output, metadata)`, declaring grounding as `search_documents` does — including the refusals,
+    which are non-empty strings that ground nothing.
+    """
+    retriever = getattr(dyn.tool_context, "retriever", None)
+    if retriever is None:
+        logger.info("fetch_document_wrapper: no retriever in the tool context; document database not in play this turn.")
+        return (CANONICAL_NO_DOCUMENT_DATABASE, {"grounding": False})
+
+    with retriever.datastore_lock:  # `documents` must not be read while a commit is rewriting it
+        document = retriever.documents.get(document_id)
+        text = document["text"] if document is not None else None
+    if text is None:
+        logger.info(f"fetch_document_wrapper: no document with ID '{document_id}'.")
+        return (CANONICAL_NO_SUCH_DOCUMENT, {"grounding": False})
+
+    start = min(max(offset or 0, 0), len(text))
+    end = min(start + length, len(text)) if length is not None and length > 0 else len(text)
+    span = text[start:end]
+
+    settings = dyn.tool_context.llm_settings
+    budget_tokens = budget_for_fetched_text(settings, used_tokens=dyn.tool_context.used_tokens)
+    fitted = fit_text_to_token_budget(settings, span, budget_tokens)
+    if not fitted:
+        logger.info(f"fetch_document_wrapper: no room to fetch '{document_id}' (budget {budget_tokens} tokens).")
+        return (CANONICAL_NO_ROOM_TO_FETCH, {"grounding": False})
+
+    logger.info(f"fetch_document_wrapper: '{document_id}' [{start}:{end}] -> {len(fitted)} of {len(span)} characters.")
+    header = (f"[System information: Document '{document_id}', characters {start} to {end} "
+              f"of {len(text)} total.]")
+    return (f"{header}\n\n{fitted}", {"grounding": True})
+
 def maybe_tool_names_for_turn(settings: env,
-                              documents_available: bool) -> set[str] | None:
+                              documents_available: bool) -> tuple[str, ...] | None:
     """Which tools to offer on one AI turn, as a `tool_names` value for `invoke` (or `prefill`).
 
     Returns `None` when every registered tool is on offer. Note that `None` is the *permissive* value here,
     not the restrictive one — hence the `maybe_` on the name, at every call site.
+
+    Sorted, and a tuple rather than the set it is computed from, so that the same turn always produces the
+    same sequence: set iteration order for strings varies with the interpreter's hash seed, i.e. between
+    runs of the same code. That would make logs of two identical turns differ for no reason.
+
+    It does not reach the wire — `invoke` filters the tool *spec list*, so the advertised order comes from
+    the hand-written list in `setup` and is already stable — but that is a property of code elsewhere, and
+    the next reader should not have to go and verify it before trusting a log line.
 
     `documents_available`: whether the document database is in play this turn, i.e. the user has it switched
                            on *and* this app has one. When it is not, the document tools are withheld;
@@ -287,7 +350,7 @@ def maybe_tool_names_for_turn(settings: env,
     """
     if documents_available:
         return None
-    return set(settings.tool_entrypoints) - set(settings.document_tool_names)
+    return tuple(sorted(set(settings.tool_entrypoints) - set(settings.document_tool_names)))
 
 # --------------------------------------------------------------------------------
 # Utilities
@@ -546,16 +609,33 @@ def setup(backend_url: str,
                                      # decision. Keeping the surface to one required string also leaves the
                                      # fewest ways to emit a malformed call.
                                      "properties": {"query": {"type": "string",
-                                                              "description": "Keywords or a natural-language question."}}}}}
+                                                              "description": "Keywords or a natural-language question."}}}}},
+        {"type": "function",
+         "function": {"name": "fetch_document",
+                      "description": ("Read a document from the user's local document database, by the ID "
+                                      "reported in a search result. Use this when a search match looks "
+                                      "relevant but you need more of the document around it."),
+                      "parameters": {"type": "object",
+                                     "additionalProperties": False,
+                                     "required": ["document_id"],
+                                     "properties": {"document_id": {"type": "string",
+                                                                    "description": "The document ID, as given in a search result."},
+                                                    # Spans are in characters because that is the unit the search
+                                                    # results report; a model left to guess would assume tokens.
+                                                    "offset": {"type": "integer",
+                                                               "description": "Character offset to start reading from. Omit to start at the beginning."},
+                                                    "length": {"type": "integer",
+                                                               "description": "How many characters to read. Omit to read to the end."}}}}}
     ]
     tool_entrypoints = {"websearch": websearch_wrapper,
                         "webfetch": webfetch_wrapper,
-                        "search_documents": search_documents_wrapper}
+                        "search_documents": search_documents_wrapper,
+                        "fetch_document": fetch_document_wrapper}
 
     # Tools that are only offered on turns where the document database is in play. Callers gate with
     # `invoke`'s `tool_names`; see `raven.librarian.scaffold.ai_turn`, which assembles the per-turn list.
     # Named here, next to the specs, so the two cannot drift.
-    document_tool_names = frozenset({"search_documents"})
+    document_tool_names = frozenset({"search_documents", "fetch_document"})
 
     # Set up the chat completion request metadata template. Tool-calling instructions are NOT injected
     # client-side: every tool-capable model new enough to matter carries them in its own chat template, and the
@@ -738,6 +818,148 @@ def image_token_cost(settings: env, height: int, width: int) -> int:
             chosen = value
             break
     return int(chosen(height, width)) if callable(chosen) else int(chosen)
+
+def count_branch_tokens(settings: env,
+                        datastore: chattree.Forest,
+                        head_node_id: str) -> Tuple[int, bool]:
+    """Estimate the token size of the conversation ending at `head_node_id`. Returns `(count, is_exact)`.
+
+    Counts the *visible conversation content* — every message from the root down to `head_node_id`. It
+    therefore under-reports the real prompt slightly: the system prompt's framing, the per-turn injects and
+    the tool definitions all add tokens that are not in the stored messages. For the backend's own exact
+    figure, submit the prompt and read `usage["prompt_tokens"]`; that is what `prefill` is for.
+
+    Attachments are counted in the two different ways they cost context. An image consumes tokens the
+    char->token ratio cannot see, so it is added as a per-family estimate (`image_token_cost`) and forces
+    `is_exact` to `False`. An attached document rides the wire as text (folded into the message at
+    wire-build), so its extracted text is counted alongside everything else and costs no accuracy.
+
+    Two callers, wanting the same number for different reasons: the GUI's context-fill readout, and the
+    budget that decides how much of a document `fetch_document` may return. Shared so they cannot disagree
+    about how full the context is.
+    """
+    text_segments = []
+    image_tokens = 0
+    for node_id in datastore.linearize_up(head_node_id):
+        payload = datastore.get_payload(node_id)
+        message = payload["message"]
+        text_segments.append(chatutil.content_to_text(message.get("content")))
+        sidecars_meta = payload.get("general_metadata", {}).get("sidecars", {})
+        for part in message.get("content") or []:
+            part_type = part.get("type")
+            if part_type == "image_url":
+                url = (part.get("image_url") or {}).get("url", "")
+                filename = url[len(sidecarstore.SIDECAR_SCHEME):] if url.startswith(sidecarstore.SIDECAR_SCHEME) else None
+                dims = (sidecars_meta.get(filename) or {}).get("stored_dimensions") if filename else None
+                image_h, image_w = dims if dims else (1024, 1024)  # fallback for pre-stored-dims data; only matters for resolution-scaling families
+                image_tokens += image_token_cost(settings, image_h, image_w)
+            elif part_type == "text_file":
+                file_url = (part.get("text_file") or {}).get("url", "")
+                if file_url.startswith(sidecarstore.SIDECAR_SCHEME):
+                    text_segments.append(textfilestore.sidecar_to_text(datastore, file_url))
+
+    count, is_exact = count_tokens(settings, "".join(text_segments))
+    if image_tokens:
+        count += image_tokens
+        is_exact = False  # per-image token cost is an estimate, so the whole figure is now approximate
+    return count, is_exact
+
+# Canonical refusal for a fetch that cannot fit, in the manner of `CANONICAL_NOT_ON_ALLOWLIST`. Phrased as a
+# statement of the situation with the remedy attached, never as a prohibition: a tool result that tells the
+# model what it may not do is the shape that measured 29000 characters of deliberation without producing a
+# reply. See `briefs/context-inject-shape-measurements.md`.
+CANONICAL_NO_ROOM_TO_FETCH = ("There is not enough room left in this conversation to read that document. "
+                              "Suggest starting a new chat if the user wants to work through it.")
+
+def _clamped_fraction(value: float,
+                      setting_name: str) -> float:
+    """Clamp a configured fraction to `[0, 1]`, warning if that was necessary.
+
+    These are hand-edited in a `.py` config, so a typo is a plain possibility rather than a hypothetical -
+    and both plausible slips are bad in different ways. A negative per-fetch ceiling would refuse every
+    fetch (looking like a broken tool), and a reserve above 1 would do the same for a different reason.
+    Clamping keeps a slip degrading gracefully instead of disabling a feature silently.
+
+    But clamping *quietly* would trade one silent failure for another: the feature would work, in a way the
+    config plainly does not describe, and the config would go on saying something untrue indefinitely. So
+    the log names the setting and both values. A fetch is a rare enough event that this cannot become spam,
+    and a misconfiguration that survives because nobody was told is the outcome worth avoiding here.
+    """
+    clamped = min(1.0, max(0.0, float(value)))
+    if clamped != value:
+        logger.warning(f"_clamped_fraction: config setting '{setting_name}' is {value}, which is outside "
+                       f"[0, 1]; using {clamped}. Fractions of the context window cannot be negative or "
+                       f"exceed the whole window.")
+    return clamped
+
+def budget_for_fetched_text(settings: env,
+                            used_tokens: int) -> int:
+    """How many tokens of fetched text this conversation can still afford. `<= 0` means "refuse the fetch".
+
+    Two limits, doing two different jobs, and the smaller one wins:
+
+      - A *per-fetch* ceiling (`config.docs_fetch_max_fraction_of_context`), so that one document cannot
+        crowd out the conversation it is supposed to inform. This is the one that normally binds, and what
+        oversized text is truncated *to*.
+      - A *floor* on what is left for the discussion (`config.docs_fetch_reserve_fraction_of_context`),
+        which binds only once the conversation has already grown large. When it does bind, the answer is to
+        refuse rather than to hand back a sliver: at that point the useful move is a new chat.
+
+    `used_tokens`: how much of the window the conversation already occupies, from `count_branch_tokens`.
+                   Recompute it per tool round rather than reusing a turn-start figure - the model's own
+                   reasoning and any earlier tool results in the same turn have already been added by then.
+    """
+    context_length = settings.context_length
+    per_fetch_ceiling = _clamped_fraction(librarian_config.docs_fetch_max_fraction_of_context,
+                                          "docs_fetch_max_fraction_of_context") * context_length
+    reserve = _clamped_fraction(librarian_config.docs_fetch_reserve_fraction_of_context,
+                                "docs_fetch_reserve_fraction_of_context") * context_length
+    return int(min(per_fetch_ceiling, context_length - used_tokens - reserve))
+
+def truncate_middle(text: str,
+                    max_characters: int) -> str:
+    """Return `text` shortened to at most `max_characters`, dropping from the middle, omission marked.
+
+    The middle is what goes because the ends are what carry: for a paper that keeps the abstract and
+    introduction at one end and the conclusions at the other, and spends the omission on the methods.
+
+    The marker is not decoration. Handed silently truncated text, a model has no way to tell a document that
+    stops mid-sentence from one that ends there, and will summarize the fragment as though it were the whole
+    - so the omission is stated, in characters, exactly where it happens.
+    """
+    if len(text) <= max_characters:
+        return text
+    marker_template = "\n\n[... {} characters omitted ...]\n\n"
+    # Reserve room for the marker itself, so the result really does fit. The marker's length depends on the
+    # number printed in it, which depends on how much is cut - so size it against the worst case (the full
+    # length), which errs towards keeping slightly less text rather than overshooting the budget.
+    keepable = max_characters - len(marker_template.format(len(text)))
+    if keepable <= 0:  # budget too small to say anything useful in
+        return ""
+    head_length = (keepable + 1) // 2  # odd character goes to the head: an opening is worth more than a tail
+    tail_length = keepable - head_length
+    head = text[:head_length]
+    tail = text[len(text) - tail_length:] if tail_length else ""
+    return head + marker_template.format(len(text) - head_length - tail_length) + tail
+
+def fit_text_to_token_budget(settings: env,
+                             text: str,
+                             budget_tokens: int) -> str:
+    """Return `text` cut down to roughly `budget_tokens`, or `""` if the budget cannot hold anything.
+
+    The token-facing front for `truncate_middle`. It exists so that callers never do the unit conversion
+    themselves: the budget is in tokens, the truncation is in characters, and getting that backwards
+    produces a limit wrong by a factor of about four in whichever direction hurts.
+
+    "Roughly" is honest rather than hedging. The conversion uses `settings.char_to_token_ratio`, the same
+    calibrated estimate `count_tokens` falls back on, which drifts with the text: dense markup and long
+    identifiers tokenize worse than prose. Exactness is not needed here - the reserve that
+    `budget_for_fetched_text` keeps free is far larger than the error.
+    """
+    if budget_tokens <= 0:
+        return ""
+    ratio = settings.char_to_token_ratio or _DEFAULT_CHAR_TO_TOKEN_RATIO  # tokens per character
+    return truncate_middle(text, int(budget_tokens / ratio))
 
 # --------------------------------------------------------------------------------
 # Streaming tool-call accumulation (shared by `invoke`)
