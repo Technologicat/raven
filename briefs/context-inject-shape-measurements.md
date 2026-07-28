@@ -143,7 +143,53 @@ guess at it. Two things make "twenty chunks" the wrong mental picture:
 Modelled that way, k=20 comes to ~29000 characters (~7-8k tokens) — an order of magnitude more than
 the Q3 probe used, and the number that should be quoted for the configured case.
 
-### Result at realistic scale, Qwen3.5-9B
+### Result at realistic scale, all four models
+
+Twelve conditions per model per corpus size: needle first / middle / last, material in the `user` or
+`tool+call` role, placed at the front or the end, each with a needle-absent control. Run on the machine
+with the 24 GB eGPU (a newer LM Studio; exact build not captured in the log).
+
+| role, placement | k=20 | k=100 |
+|---|---|---|
+| `user` @ front | 12/12 | 9/9 |
+| `user` @ end | 12/12 | 9/9 |
+| `tool+call` @ front | 12/12 | 9/9 |
+| **`tool+call` @ end** | **11/12** | **7/9** |
+
+81 of 84 found overall — and **81 of 81 excluding `tool+call` at the end**. No control invented the
+figure anywhere, so every hit is genuine. There is no depth effect and no corpus-size effect: k=100
+(~32k tokens) behaves like k=20 (~6.5k).
+
+**The one broken cell is `tool+call` placed at the end, and it fails in a specific way.** The misses are
+not the model overlooking the material; the model emitted *another* `search_documents` tool call instead
+of answering. Six replies did this — three that scored as misses, three controls:
+
+| model | k | where |
+|---|---|---|
+| Qwen3.6-27B | 20 | needle last, and the control |
+| Qwen3.6-27B | 100 | needle first, needle middle, and the control |
+| Qwen3.6-35B-A3B | 20 | the control |
+
+This is the trained agent-loop pattern doing its job. When a tool result is the last thing in the
+context, the model's next decision is "answer, or call again" — and the synthetic call we add to keep
+Gemma honest is exactly what makes the history read as mid-loop. Qwen3.5-9B and Gemma 4 never did it;
+Qwen 3.6 does, the dense 27B most.
+
+Two practical notes. The 27B's emitted calls were *malformed* (`<function/search_documents>` rather than
+`<function=...>`), so they would likely fail Raven's tool-call parsing rather than execute cleanly. And
+in a real turn a well-formed one would simply run a second search — a wasted round trip, or a loop.
+
+**Consequence for the design: the tool role and the end placement are individually safe and jointly
+unsafe.** Three combinations are clean on all four models — `user` at either position, and `tool+call`
+at the front — so the choice is between keeping the honest tool role (front placement, KV-cache rebuild
+retained) and recovering the cache (user role at the end, narration wart retained).
+
+**A fifth shape is worth measuring before settling**, because it may give both: place the material
+*immediately before* the user's final message rather than after it. The conversation prefix ahead of the
+material is still unchanged, so the cache benefit survives; but the last message is the user's question
+rather than a tool result, which should remove the "call again" temptation entirely. Not yet measured.
+
+### The same probe on Qwen3.5-9B, on the other machine
 
 Twelve conditions per corpus size: needle first / middle / last, material in the `user` or `tool+call`
 role, placed at the front or the end. Each with a needle-absent control.
@@ -159,9 +205,14 @@ rebuild every turn.
 
 Qwen3.5-9B is the weakest model in the set, so this is not a "the small one coped, the big ones surely
 will" argument — it is the model whose attention over 32k tokens should be least trustworthy, which is
-what makes a clean sweep informative. The other three ran out of VRAM for prompt processing on the
-16 GB machine (spilling to system RAM caps prefill near 300 tok/s), so their runs move to the machine
-with the 24 GB eGPU.
+what makes a clean sweep informative.
+
+**This doubles as the cross-version control.** The 9B was run on both machines, on two different LM
+Studio builds, and produced identical verdicts (12/12 at k=20 on each, same conditions). Q1 also
+reproduced exactly across the two builds, including Gemma's bare-`tool` failure. So the
+version-sensitivity worry recorded above did not materialize for these results — though it remains
+correct in principle, and `backend_capabilities.py` has *not* yet been re-run on the newer build, so
+the `chat_template_kwargs` question is still open.
 
 ## Q7. Does the replacement wording still refuse what it *should*?
 
@@ -169,15 +220,19 @@ Material about Kuiper-7 is supplied and the question asks about Kuiper-9 — nei
 general knowledge, so the only correct answer is that we do not know. This is the half Q4 does not
 measure, and a wording that never refuses anything would score perfectly there while being useless.
 
-Partial, pending the eGPU run: on **Qwen3.5-9B** and **Qwen3.6-35B-A3B**, all three wordings — none,
-current, and the proposed replacement — declined correctly. Representative reply under the proposed
-wording:
+**Answered: all four models, all three wordings, declined correctly.** Not one invented a figure for
+Kuiper-9. Representative reply under the proposed wording:
 
 > The provided information only contains data for the **Kuiper-7** sensor array. There is no mention of
 > a "Kuiper-9" sensor array or its baseline drift.
 
-So the early reading is that the replacement keeps the anti-confabulation behaviour while dropping the
-over-refusal — but two models is not the sweep, and this section is not settled until the other two run.
+So the replacement keeps the anti-confabulation behaviour while dropping the over-refusal measured in
+Q4. Taken together, Q4 and Q7 clear it on both halves, and it can be adopted.
+
+Worth noting what this also shows: the *system prompt alone* ("using the provided knowledge-base
+material") was enough for every model to decline correctly in the no-reminder control. The reminder is
+not carrying the anti-confabulation behaviour by itself, which is an argument for the mildest wording
+that does the job rather than the firmest.
 
 **Two verdicts in this probe's first runs were the detector's fault, not the models'**, and are worth
 recording so they are not mistaken for findings later: a correct decline reading "do **not** contain"
