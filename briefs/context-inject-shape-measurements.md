@@ -440,9 +440,34 @@ not a failure.
 
 Note the dispute markers survive into the reasoning even where the answer is right — Qwen3.6-35B-A3B
 mentions 2024 or "future date" under `user`, bare `tool` and `tool+call` alike. `system_front` was the
-only shape with none, and also the cheapest. Since the datetime inject cannot live in the system block
-(it changes per turn, so it would invalidate the prefix), that deliberation is the price of the
-placement.
+only shape with none, and also the cheapest.
+
+### Splitting date from time gets the system block back
+
+The obvious objection to `system_front` for this inject is that the datetime changes every turn, so it
+cannot sit in a stable prefix. **But the *date* does not change every turn — only the clock time does.**
+Put the date in the leading system block and deliver the time as tool output, and the prefix is stable
+for a whole day. The cost is that Librarian must watch for midnight and patch the system message when
+it rolls over; that is a cheap watcher against invalidating the KV cache on every single turn, which is
+what the combined inject costs today. (Juha's proposal, 2026-07-28.)
+
+Measured as the `split` shape — correct on every model tried, and consistently *cheaper* than
+`system_front` on the question that requires actually using the date:
+
+| model | `system_front` recite · compute | `split` recite · compute |
+|---|---|---|
+| Gemma4-31B | 605ch | **138ch · 289ch** |
+| Qwen3.6-27B | 447ch · 2345ch | **565ch · 1182ch** |
+| Gemma4-E4B | 524ch · 662ch | **142ch · 502ch** |
+
+So the split is not merely a cache optimization; it roughly halves the deliberation on the compute
+question for the two larger models. Why is not established. One hypothesis worth recording because it
+is testable rather than merely plausible (Juha, 2026-07-28): models may weight system-role content as
+more trusted than later turns, whether deliberately or as collateral from prompt-injection hardening —
+which would explain both the reduced arguing and why `system_front` was the only shape with no dispute
+markers. The competing explanation is simply that the system block now carries *less* text. Comparing
+identical claims in system versus user role, on something the model would otherwise resist, would
+separate the two.
 
 ## Still unmeasured
 

@@ -52,6 +52,12 @@ ISOTIME = NOW.strftime("%H:%M:%S")
 DATETIME_INJECT = (f"[System information: Today is {WEEKDAY}, {ISODATE} (in ISO format). "
                    f"The local time now is {ISOTIME}.]")
 
+# For the `split` shape. The date is constant for a whole day, so it can live in the leading system
+# block without costing the KV-cache prefix anything — the prefix only changes at midnight, which the
+# app can watch for and patch. Only the clock time has to arrive per-turn.
+DATE_INJECT = f"[System information: Today is {WEEKDAY}, {ISODATE} (in ISO format).]"
+TIME_INJECT = f"[System information: The local time now is {ISOTIME}.]"
+
 # The target is far enough out that the answer is unmistakably a computation, and close enough
 # that a model reasoning from a 2024 prior gets a wildly different number rather than a near miss.
 TARGET = NOW.date() + datetime.timedelta(days=60)
@@ -61,7 +67,7 @@ QUESTIONS = {"recite": "What is today's date?",
              "compute": f"How many days are there from today until {TARGET.isoformat()}? "
                         f"Answer with the number of days."}
 
-SHAPES = ("none", "user", "tool", "tool+call", "system_front")
+SHAPES = ("none", "user", "tool", "tool+call", "system_front", "split")
 
 # Markers of the model rejecting the supplied date rather than using it. "2024" and "2025" catch
 # the training-prior answer directly; the rest catch the hedge that precedes it.
@@ -106,6 +112,14 @@ def build(shape: str, question: str) -> list[dict]:
                   "tool_calls": [{"id": "call_clock", "type": "function",
                                   "function": {"name": "get_current_datetime", "arguments": "{}"}}]},
                  {"role": "tool", "tool_call_id": "call_clock", "content": DATETIME_INJECT}]
+    elif shape == "split":
+        # Date in the stable system block, clock time as tool output. Buys system-level placement for
+        # the part that provokes the least argument, while the per-turn part stays small.
+        system_text = SYSTEM_PROMPT + "\n\n" + DATE_INJECT
+        extra = [{"role": "assistant", "content": "",
+                  "tool_calls": [{"id": "call_clock", "type": "function",
+                                  "function": {"name": "get_current_time", "arguments": "{}"}}]},
+                 {"role": "tool", "tool_call_id": "call_clock", "content": TIME_INJECT}]
     else:
         raise ValueError(f"unknown shape {shape!r}; expected one of {SHAPES}")
 
