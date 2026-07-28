@@ -41,17 +41,19 @@ the eGPU machine, which also has the faster card — so their runs live on the s
 | Qwen3.6-27B | 18.54 GB |
 | Gemma4-26B-A4B | 17.99 GB |
 
-**The Gemma build situation is unresolved and the two machines differ.** On 0.4.19 the
-`lmstudio-community` build was used, and the unsloth build would not load at all (minja choking on
-Gemma's template); the working belief at the time was that LM Studio's workaround fired only for the
-`lmstudio-community` packaging. On 0.4.20 a `google/gemma-4-26b-a4b` build loaded without complaint and
-produced results matching the `lmstudio-community` ones for Q1, Q3 and Q7.
+**The Gemma build situation is now resolved: 0.4.20 fixed it.** Under 0.4.19 the unsloth (UD) Gemma
+build was unusable — note that it *loaded* fine and failed at **generation** time, minja choking on
+Gemma's template, so "it loads" was never sufficient evidence either way. Under 0.4.20 it both loads and
+generates: the Q1 tool-role re-check and the whole Q9 probe below ran on it without complaint.
 
-What that does **not** establish: whether the `google` build would load on 0.4.19, or whether unsloth
-loads on 0.4.20. One plausible reading is that 0.4.20 broadened Gemma template support — but that is a
-hypothesis from a single successful load, not a measurement, and it should be checked rather than
-repeated. What the matching *results* do support is that Gemma's bare-`tool` failure (Q1) is a property
-of the model rather than of one packaging, since it reproduced across two builds and two backends.
+Three Gemma packagings have now been exercised — `lmstudio-community` (0.4.19), `google` (0.4.20) and
+unsloth UD (0.4.20) — and Q1 behaves identically on all three: a bare `tool` message is ignored, a
+`tool`+synthetic-call pair is read. So that failure is a property of Gemma 4 itself, not of a packaging
+or a backend version.
+
+Practical note for telling builds apart: LM Studio requires vendor subdirectories on disk but does not
+show them in `lms ls`, so two 26B-A4B entries are distinguishable only by size (unsloth's UD quant is
+18.21 GB against google's 17.99 GB — larger because a dynamic quant compresses sensitive layers less).
 
 **Which of these numbers a backend upgrade can move.** Anything decided by the model reading prompt
 text — the placement sweep, reasoning spend, refusal and termination behaviour, the constraint check —
