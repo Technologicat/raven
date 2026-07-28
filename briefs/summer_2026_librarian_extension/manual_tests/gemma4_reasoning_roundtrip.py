@@ -1,11 +1,20 @@
-"""V4 probe: does LM Studio render a Gemma history with reasoning_content + tool_calls?
+"""Manual live probe: can LM Studio render a Gemma history carrying reasoning_content *and* tool_calls?
 
-Mirrors raven's resend payload shape (llmclient.invoke). The decisive question is whether
-LM Studio's minja can render Gemma's chat_template for a tool-call-bearing assistant turn
-(last night it threw "Cannot call something that is not a function: got UndefinedValue").
+NOT a pytest test — it needs LM Studio up with a Gemma model loaded, so it lives here rather than in the
+suite. It exits 1 with one line when no model is loaded.
 
-Run with LM Studio up and a Gemma model loaded. Usage:
-    python /tmp/v4_gemma_probe.py [base_url]
+The shape under test is the one Raven rebuilds on every tool-continuation turn (`llmclient.invoke`): an
+assistant message carrying both the out-of-band `reasoning_content` field and structured `tool_calls`,
+followed by the tool result. That combination is what has to survive the round trip, and it is not
+hypothetical — LM Studio's minja renderer has refused it with `Cannot call something that is not a
+function: got UndefinedValue`, which fails the whole request rather than one message. Knowing whether a
+given Gemma build renders it is the difference between a Raven bug and a backend one.
+
+Deliberately raw: it posts to `/v1/chat/completions` with `requests` rather than going through
+`llmclient`, so a failure here is the backend's and cannot be Raven's history-building code.
+
+Usage:
+    python gemma4_reasoning_roundtrip.py [base_url]
 """
 import json
 import sys
@@ -39,9 +48,9 @@ TOOLS = [{
     },
 }]
 
-# A resend history exactly as raven would rebuild it on a tool-continuation turn:
-# the assistant turn carries BOTH reasoning_content (sibling field) AND structured tool_calls,
-# followed by the tool result. This is the shape that broke minja last night.
+# A resend history exactly as raven rebuilds it on a tool-continuation turn: the assistant turn carries
+# BOTH reasoning_content (sibling field) AND structured tool_calls, followed by the tool result. This is
+# the combination that has broken minja.
 MESSAGES = [
     {"role": "system", "content": "You are a helpful assistant. Use tools when appropriate."},
     {"role": "user", "content": "What's the weather in Paris right now?"},
