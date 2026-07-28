@@ -147,7 +147,7 @@ As of 12/2025, many LLM frontends still operate in the paradigm of a traditional
 
 ## Document database
 
-The document database gives the LLM fact grounding via retrieval-augmented generation (RAG). Currently (v0.2.4), the RAG mechanism engineers the context via an automatic search, with the user's latest message as the search query. The search results are injected into the LLM's context before the AI replies.
+The document database gives the LLM fact grounding via retrieval-augmented generation (RAG). The context is engineered from two directions. An automatic search runs before the AI replies, using your latest message as the search query, and its results are injected into the LLM's context. The LLM can then search the database again itself, as a tool call, once it has seen what that first search returned — which is what lets it recover when your phrasing and the documents' phrasing do not line up.
 
 The number of search results to return can be configured in [`raven.librarian.config`](../librarian/config.py). This allows trading off speed vs. [recall](https://en.wikipedia.org/wiki/Precision_and_recall). Note that a higher number of search results will also take up more space in the LLM's context.
 
@@ -250,7 +250,7 @@ These techniques are well known, and even trivial, so spelling them out here is 
 
 Currently, *Librarian* only provides a set of hardcoded tools, and does **not** support MCP or skills.
 
-As of v0.2.4, *Librarian* only provides websearch, but we intend to expand this later.
+As of v0.2.8, *Librarian* provides web search, web fetch, and document database search. We intend to expand this later.
 
 If interested in the details, see `tools` in the `setup` function in [`raven.librarian.llmclient`](../librarian/llmclient.py), the related mechanisms in the `invoke` function in the same module, and the agent loop in [`raven.librarian.scaffold`](scaffold.py).
 
@@ -412,7 +412,7 @@ Below the avatar panel at the right, there are **mode toggles**:
   - If **OFF**, automatically strip tool specifications before sending the chatlog to the LLM, so that no tools are available for the LLM.
 - **Documents**
   - If **ON**, autosearch the document database each time you send a message to the AI, and inject the search results into the LLM's context.
-    - As of v0.2.4, this feature is rather rudimentary; the search query is always automatically set to the user's latest message (in the current linearized view, after sending the current message if any).
+    - The *automatic* search is rather rudimentary: the query is always the user's latest message (in the current linearized view, after sending the current message if any). The LLM's own `search_documents` tool is what covers the cases where that guess is poor — it can search again with a query it wrote after reading the first results.
     - This may make the LLM's prompt processing time much longer, especially if you have set up a high limit for the number of search results.
       - A **SYSTEM** indicator will glow at the upper left corner of the avatar panel while the LLM is processing the prompt.
         - Progress information for this is not available via the OpenAI-compatible web API, so it's a generic glowing indicator only.
