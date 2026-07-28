@@ -136,10 +136,12 @@ A signal with no consumer is a statistic. The through-line for choosing among th
 score distribution can justify deciding how much effort to spend; it is thinner evidence for deciding what
 to say.** Effort decisions first, speech decisions only with measurement behind them.
 
-Two get built: **1 (set `k` per query)** now, since it depends on nothing else, and **3 (tell the model)**
-with the RAG tool surface, which it is gated on rather than merely sequenced after.
+Organized by *which condition fires*, since that is what an implementer needs, and since the two
+conditions turn out to want quite different things.
 
-**1. Set `k` per query (build this one).** `docs_num_results` is a fixed constant today, applied
+##### Sharp head — the query worked
+
+**Set `k` per query (build this first).** `docs_num_results` is a fixed constant today, applied
 identically to a query that nailed one paper and a query that found mush. Let the shape set it: a sharp
 head means take the head — three, five — and a flat list means take few or none. This is the *fewer,
 better passages* outcome the reranking item wants, reached with no reranker, no VRAM, and no prompt
@@ -148,16 +150,16 @@ attention). It is also **evaluable offline against `evaluation/retrieval/`** —
 recall?" needs no LLM in the loop and runs in seconds per configuration, so it can be settled before it is
 shipped.
 
-**2. Trigger a mechanical re-query.** Where the second pass is Raven's own — pseudo-relevance feedback,
-lever 4 — a flat distribution is the condition that justifies paying for it, and the trigger is purely
-internal. The point is selectivity: the second pass costs something, and this identifies the turns worth
-spending it on rather than paying on every turn or never.
+**Deepen the pool with pseudo-relevance feedback (worth trying; see lever 4).** A confident pass 1 is the
+condition under which expanding the query from its own top results is safe, and it can surface papers the
+user's phrasing missed. Note that this pulls the *opposite* way from adaptive `k` on the same trigger —
+one widens the search, the other narrows what gets injected — and that is coherent rather than
+contradictory: PRF improves the pool, adaptive `k` decides how much of the improved pool to spend context
+on. Implement them in that order and the interaction is benign.
 
-This is the *only* internal re-query trigger. Where the second pass is the model's own
-`search_documents` call, there is nothing for Raven to trigger — the model decides — so that case is not a
-separate consumer at all. It is consumer 3.
+##### Flat list — the query did not work
 
-**3. Tell the model (build this, after the RAG tool surface).** A line in the retrieval tool result — "the
+**Tell the model (build this, after the RAG tool surface).** A line in the retrieval tool result — "the
 best match for this query scored weakly" — is *data* rather than instruction, which is the right side of
 the taxonomy in `08_context-injects-brief.md`.
 
@@ -183,7 +185,7 @@ the corpus could have produced. Additive, not duplicative.
 misfired in Q11. The probe already exists (`manual_tests/absent_fact.py`); run both temperatures and read
 the reasoning length, not just the verdict.
 
-**4. Not the no-match bypass — until it moves.** Firing the bypass on a flat result set is tempting and is
+**Not the no-match bypass — until it moves.** Firing the bypass on a flat result set is tempting and is
 currently wrong: a flat set is the case where a second query is *most* likely to rescue the turn, and the
 bypass ends the turn before that can happen. Once the bypass moves to the end of the agent loop — decided,
 see "Related" below — the model gets its second query first and this becomes a safe consumer.
@@ -259,17 +261,41 @@ anything in this brief.
 Recency is a usable prior when a cheaper cut is wanted: the last paragraph, or the sentence carrying the
 question mark, is what the user is actually asking.
 
-### 4. Pseudo-relevance feedback — a better query, for free
+### 4. Pseudo-relevance feedback — for depth, not for rescue
 
-Classical IR's answer to "the query was bad" (Rocchio / RM3): run the query, take the top few results,
-harvest their high-IDF terms, re-query with the expansion. No model, no VRAM, one extra BM25 pass.
+Classical IR's answer to a weak query (Rocchio / RM3): run it, take the top few results, harvest their
+high-IDF terms, re-query with the expansion. No model, no VRAM, one extra BM25 pass.
 
-It is worth naming here because it is *the pre-LLM version of the RAG tool call* — the same "read the
-first pass, ask a better question" move, done statistically instead of with a generation. Where the tool
-gives a smarter query for the price of a generation, PRF gives a somewhat better one for microseconds. The
-two compose: PRF sharpens pass 1, so the tool gets a better starting point on the turns it fires.
+**It is not a rescue mechanism, and an earlier draft of this brief had it wired backwards.** PRF is an
+*amplifier*: it expands the query using whatever pass 1 returned, so when those results are not relevant
+it drags the query further from the target — the classical failure known as **query drift**. So it must
+*not* fire on the flat-distribution signal, which is precisely "pass 1 found noise". It fires on a
+**sharp** one, to deepen a match that already worked.
 
-## What reranking is still for, after all four
+Re-wired that way it has a real use case, and it is one of Librarian's central ones: **the literature
+review sweep.** "Show me everything on X" is a *recall* question, and the user's phrasing is one sampling
+of the vocabulary a field uses — PRF re-queries with the field's own words, harvested from the papers the
+first query did find. That is exactly the gap between "the papers whose abstracts happen to match how the
+user phrased it" and "the papers about the thing".
+
+**Warning for whoever evaluates it: `evaluation/retrieval/` cannot score this lever.** The set is
+known-item — one gold document per question — so a mechanism that surfaces *more* relevant papers around
+an already-found one scores exactly zero improvement, and may score worse if the extra results displace
+the gold document. A null result there is not evidence against PRF; it is the metric being blind to the
+thing PRF does. Measuring it needs set-level relevance (pooled judgments over the union of
+configurations), which is the layer that directory's README describes as future work.
+
+The general objection that *does* stick, and applies to anything else proposed in this slot: **building a
+better query without reading the results is doing the LLM's job with 2010s tools.** Query construction
+from extracted named entities is that idea in a different costume. Once pass 1 has *failed*, the thing
+that can write a better query is the thing that can read — pass 2, the RAG tool call. PRF survives only
+because it does something different: it does not rescue a failed query, it broadens a successful one.
+
+*Not to be confused with lever 2*, which also uses spaCy's tagging. Using NER to *build* a query is
+superseded; using POS tags to *stop destroying* the query we already have — so that `Elsevier` survives
+tokenization instead of becoming `elsevi` — is not query construction at all. That one stays.
+
+## What reranking is still for, after the levers
 
 Sharpening the query does not make ranking *comparative*. A cross-encoder reads the query and a candidate
 *together* and answers "does this answer that", which no bag-of-words score and no independent embedding
