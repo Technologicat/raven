@@ -1,8 +1,15 @@
 # Brief: expose the document database as a tool the model may call
 
-**Status: designed 2026-07-28, not yet built.** Everything below is settled; what is *not* settled is
-called out explicitly as an open choice. Phase 1 of the Researchers' Night list (`TODO.md`), and the only
-item on it that is new construction rather than repair.
+**Status: step 1 of the build order built, 2026-07-28.** The tool surface, the per-turn tool gate, the
+agent-loop cap and grounding-by-declaration are in (`d04bd97`, `2050b88`, `797b4ca`, `1b7f234`). Steps 2–4
+— the grounding UX, the truncation budget with `fetch_document` and `list_consulted_documents`, and PRF —
+are designed here and not yet built. Phase 1 of the Researchers' Night list (`TODO.md`), and the only item
+on it that is new construction rather than repair.
+
+Three things were decided while building rather than before, and are folded in below: the `docs_enabled`
+split (§2), the accepted full-prompt reprocess when the cap fires (§4), and the rejection of a tool-call
+countdown (§4). Live behaviour is exercised by `manual_tests/rag_tool_rescue.py`, the successor to the
+`absent_fact.py` probe that measured the failure this work fixes.
 
 **What:** give the LLM `search_documents` and `fetch_document`, alongside the existing auto-search that
 Raven runs on the user's behalf. Keep both — they buy different things.
@@ -94,17 +101,33 @@ per-turn `tool_context`. Tools that do not declare fall back to "non-empty resul
 `webfetch` is the case that must declare explicitly: a denied fetch returns the canonical refusal string,
 which is non-empty, so the default heuristic would score a refusal as grounding.
 
-**Scoping differs by source, because lifetimes differ:**
+**Scoping is mechanical, not semantic:**
 
 | Source | Counts as grounding for | Why |
 |---|---|---|
-| User attachments (image, `text_file`) | the whole branch | material, sitting in the window |
-| Document *tool* results | the whole branch | persisted nodes; still in the history verbatim |
+| User attachments (image, `text_file`) | the whole branch | persisted; sitting in the window |
+| Any tool result (document, websearch, webfetch) | the whole branch | persisted nodes; in the history verbatim |
 | Document *auto-search* results | this turn only | never persisted; genuinely gone next turn |
-| websearch / webfetch results | this turn only | an answer to one question, which goes stale |
 
-The last row is today's one-hop rule and is deliberately unchanged — a SERP is an answer, not material,
-and that calibration was made on purpose (see `compute_auto_allowed_hosts`, same rule).
+The rule is simply *is this material still in the context* — a question with a checkable answer, unlike
+"has it gone stale", which is a judgment none of this code can make.
+
+**An earlier draft scoped web results to one turn and document results to the branch, and that was
+wrong.** The argument was that a SERP is the answer to one question and goes stale, while a document match
+is durable material. But the example that made it convincing — last week's weather grounds nothing about
+today's instrument-calibration question — is a *topic change*, and topic changes strand a document match
+exactly as thoroughly. Nothing here can see topical relevance, so both scopings were proxies; the
+mechanical one at least measures what it claims to.
+
+Two things the earlier draft leaned on have also moved. The harm it was avoiding — the reminder stuck on
+for the rest of a conversation — was severe when that reminder read as a ban on general knowledge, and is
+mild now that it says *"Answer general questions normally"*. And it cited `compute_auto_allowed_hosts`'s
+one-hop rule as precedent, which does not transfer: that rule governs which hosts may be fetched without
+asking, a security decision where conservative is right by default. Grounding is not a security question.
+
+The scope stays declaration-based either way. `_record_grounding` writes each tool's declaration into the
+tool node's `generation_metadata`, so a branch walk reads what the tool said rather than re-inferring from
+message shape — which is what keeps an empty search from counting.
 
 ### 4. The agent loop gets a cap, and the final generation is tool-free
 
