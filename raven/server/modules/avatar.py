@@ -359,7 +359,12 @@ def stop(instance_id: str) -> str:
     logger.info("stop: done")
 
 def start_talking(instance_id: str) -> str:
-    """Start talking animation (generic, non-lipsync)."""
+    """Start talking animation (generic, non-lipsync).
+
+    Mouth movement is randomized. This is the fallback for when no timestamped phoneme data exists to
+    drive a real lipsync from - which is the common case, since most speech synthesizers do not report
+    phoneme timings. Where they do, the client animates the mouth morphs directly and does not use this.
+    """
     if not module_initialized:
         raise RuntimeError("start_talking: Module not initialized. Please call `init_module` before using the API.")
 

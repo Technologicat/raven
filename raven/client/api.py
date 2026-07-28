@@ -282,6 +282,21 @@ def avatar_stop(instance_id: str) -> None:
     util.yell_on_error(response)
 
 def avatar_start_talking(instance_id: str) -> None:
+    """Start the generic talking animation: mouth movement randomized, with no audio and no lipsync.
+
+    **This is the fallback, not the alternative.** When timestamped phoneme data is available, use
+    `raven.client.tts.tts_speak_lipsynced` instead - it drives the mouth morphs from the actual phonemes,
+    and looks like speech rather than like a mouth opening and closing at random. For how an application
+    wires that up, see `raven.client.avatar_controller.speak_task`.
+
+    What this is for is the case where phoneme timestamps do not exist: most speech synthesizers do not
+    expose them, and without them there is nothing to drive a lipsync from. Randomizing the mouth is then
+    the best available option, and it does not look good. That constraint is also why Raven's TTS engine
+    choice is narrower than it would otherwise be - Kokoro is used partly because it reports per-word
+    phonemes and their timings.
+
+    Stop it with `avatar_stop_talking`.
+    """
     util.require()
     headers = copy.copy(util.api_config.raven_default_headers)
     headers["Content-Type"] = "application/json"
@@ -290,6 +305,10 @@ def avatar_start_talking(instance_id: str) -> None:
     util.yell_on_error(response)
 
 def avatar_stop_talking(instance_id: str) -> None:
+    """Stop the generic talking animation started by `avatar_start_talking`.
+
+    Not needed for lipsynced speech, which stops itself when the audio ends.
+    """
     util.require()
     headers = copy.copy(util.api_config.raven_default_headers)
     headers["Content-Type"] = "application/json"
