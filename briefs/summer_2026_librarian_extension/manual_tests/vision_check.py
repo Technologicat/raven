@@ -19,6 +19,18 @@ they had only been given a *text description*, while going on to describe the im
 the input was a latent from the mmproj all along. Worth knowing which way a given model answers,
 because that self-report has been unreliable in a specific, documented direction.
 
+**Known limitation: this measures resolution, not comprehension.** Counting shapes and reading
+small text are the easy half. Comprehension is what should degrade first as models get smaller,
+and it is the half not probed here — the screenshot mode's "what is this software for?" can be
+answered from layout alone by anything that recognizes a chat UI.
+
+Designing a better comprehension question is genuinely hard, because three requirements fight:
+it must *require* looking at the image, it must have a unique correct answer, and that answer
+must not already sit in the training data. Questions like "what is the Documents toggle for?"
+fail the second — the honest answer is in the README, not on screen. Left unsolved rather than
+papered over; treat a full score here as evidence the pipeline works, not that the model
+understands what it is looking at.
+
 Requires Pillow locally to synthesize the image; the backend can be remote (e.g. through an ssh
 tunnel), since only the encoded image travels.
 
