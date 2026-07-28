@@ -19,6 +19,44 @@ individual items carry a "Researchers' Night" note where they feed it. Working b
    remaining crash/race items. Not polish: this is whether the demo works.
 2. **Demo impressiveness** — `crt` and `atmospheric_dust` (both briefed), the avatar branch-switch glitch, RAG
    reranking for better answers on stage, citation surfacing, colorblind-safe signalling, lorebook if it fits.
+### The actual list, as of 2026-07-28 (60 days out)
+
+Phases 1 and 2 above are the framing; this is the concrete list they resolve to after today's work. Kept
+here rather than reconstructed each time, because reconstructing it means re-deciding things that were
+already decided.
+
+**Phase 1 — correctness. A live audience would see every one of these.**
+
+- **RAG access via tool-call** (see the Tools section). The largest item, the only one that is new
+  construction rather than repair, and promoted to phase 1 on measured evidence: asked something the
+  documents do not answer, Qwen3.6-27B writes a literal `<tool_call>` block instead of an answer roughly
+  one turn in three (Q11 in `briefs/context-inject-shape-measurements.md`). Carries two attached
+  decisions — the no-match bypass moves to the end of the agent loop, and telling the model its retrieval
+  was weak is gated on this landing.
+- **Markdown renderer: ATX headings don't render; fenced code blocks don't render; indented bullets
+  mis-render.** All three are content defects rather than cosmetic, and Qwen emits headings and code
+  fences constantly. The indented-bullet one is *not* fixed — the bullets fix that landed was a different
+  bug (stacking at origin in hidden containers), and the render path still has no dedent.
+- **Chat view scroll position jumps back down during generation.** Fires on every turn regardless of
+  content, unlike the Markdown cases, and removes the one useful thing to do while a thinking model works.
+- **Librarian: in-flight AI turn bleeds into a new chat** (turn-sequencing race).
+
+**Phase 2 — impressiveness.** `crt` and `atmospheric_dust`, both fully briefed and speced. Note `imagefx`
+measures 0.00 GiB today only because its filter chain is empty; these go into exactly that chain, so re-run
+`evaluation/vram/avatar_footprint.py` after they land.
+
+**Explicitly *not* on the demo path**, each for a recorded reason:
+
+- *Avatar stutter* — deprioritized; a warm-up handles it without knowing the cause.
+- *Chat view drops a character* — one sighting, no recurrence; an open report, not a known defect, and
+  nothing to test a fix against.
+- *RAG reranking and the query-side levers* (`briefs/summer_2026_librarian_extension/09`) — the evaluation
+  set exists and the baseline is measured, but this is quality work, not correctness.
+- *Brief 03 section D* — wanted, to close out the last unfinished brief; not demo-visible.
+
+**Both "measure early" items are closed** (per-module VRAM, MoE vs dense), so nothing further blocks the
+hardware plan. The remaining schedule risk is phase 3 getting eaten, which is what phase 3 always does.
+
 3. **Freeze and rehearse** — no new features; run the demo repeatedly on the actual hardware and fix what that
    surfaces. This window is the one that gets eaten, and it is where the real surprises live. It is also when the
    Librarian marathon restarts, since briefs 04 (MCP) and 06 (Hindsight) are off the deadline path by their own
