@@ -34,6 +34,17 @@ The Gemma quant is not interchangeable: the unsloth build fails to load, because
 workaround for Gemma's template fires only for the lmstudio-community build with its bundled template
 unoverridden.
 
+**Which of these numbers a backend upgrade can move.** Anything decided by the model reading prompt
+text — the placement sweep, reasoning spend, refusal and termination behaviour, the constraint check —
+should be robust: a different backend that builds the same prompt gets the same answer. Anything
+decided by how a *role* is rendered is not, because that goes through the loader's template handling,
+which is what changes between builds. That covers the bare-`tool`-versus-`tool+call` result (Q1),
+`system_end` acceptance, and Gemma's dependence on an LM Studio-specific template workaround. Re-run
+`backend_capabilities.py` after any upgrade before trusting the Q1 row — and note that the separate
+finding that LM Studio ignores `chat_template_kwargs` (upstream `lmstudio-bug-tracker#1559`) is
+precisely the kind of thing a release fixes, which would change the thinking-toggle design that rests
+on it.
+
 Two properties of the harness worth knowing before reading any number below:
 
 - **Thinking is suppressed by a closed-thought prefill** in the probes that only want an answer, since
