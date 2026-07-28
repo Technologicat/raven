@@ -190,32 +190,19 @@ def _search_docs_with_bypass(llm_settings: env,
     return Values(action=action_continue, matches=docs_results)
 
 
-def _context_is_present(history: List[Dict],
-                        docs_matches: List[Dict]) -> bool:
-    """Return whether the AI has any material to ground an answer in, beyond its own static knowledge.
+def _attachment_is_present(history: List[Dict]) -> bool:
+    """Return whether the user has attached an image or a document anywhere on this branch.
 
-    Call this *before* adding any injects to `history`; the injects we add are themselves context-shaped,
-    so afterwards the answer is always `True` and the question no longer means anything.
+    Scoped to the whole branch, unlike a tool result: an attachment is *material*, sitting in the context
+    and usable for as long as it stays in the window. A tool result is the answer to one specific earlier
+    question and goes stale with it - last week's weather lookup grounds nothing about today's question on
+    instrument calibration - which is why those are counted for the turn that asked for them only, by
+    `_record_grounding`, following the same one-hop rule as `chatutil.compute_auto_allowed_hosts`.
 
-    Counted as context: this turn's document-database matches, any attachment the user has made anywhere
-    on this branch (an image or a document), and tool results *from this turn* (a web search, a fetched
-    page). The two are scoped differently on purpose, because they age differently. An attachment is
-    material sitting in the context, and stays usable for as long as it is in the window. A tool result
-    is the answer to one specific earlier question, and goes stale with it: last week's weather lookup is
-    no grounding at all for today's question about instrument calibration, so treating it as context would
-    leave the reminder stuck on for the rest of the conversation. Scoping tool results to the turn that
-    asked for them follows the same one-hop rule as `chatutil.compute_auto_allowed_hosts`.
-
-    Not counted: the conversation itself, nor the AI's own earlier replies - a model summarizing what it
-    previously said is exactly the ungrounded answer this is used to guard against.
+    Not counted here, and not anywhere: the conversation itself, nor the AI's own earlier replies. A model
+    summarizing what it previously said is exactly the ungrounded answer this is used to guard against.
     """
-    if docs_matches:
-        return True
-    latest_user_position = max((position for position, message in enumerate(history) if message["role"] == "user"),
-                               default=-1)
-    for position, message in enumerate(history):
-        if message["role"] == "tool" and position > latest_user_position:  # this turn's tool results only
-            return True
+    for message in history:
         for part in message.get("content", []):
             if isinstance(part, dict) and part.get("type") in ("image_url", "text_file"):
                 return True
@@ -291,7 +278,8 @@ def _perform_injects(llm_settings: env,
                      history: List[Dict],  # mutated!
                      speculate: bool,
                      docs_query: Optional[str],
-                     docs_matches: List[Dict]) -> None:
+                     docs_matches: List[Dict],
+                     tool_context: env) -> None:
     """Perform the temporary injects to prepare for the AI's turn.
 
     These are not meant to be persistent, so we don't even add them to the datastore,
@@ -330,8 +318,14 @@ def _perform_injects(llm_settings: env,
                   arrive as the answer to a legible question rather than as free-floating material.
 
     `docs_matches`: Docs search matches returned by `HybridIR` (see `_search_docs_with_bypass`).
+
+    `tool_context`: The turn's request context (`_make_tool_context`). Read for `grounded`, which is where
+                    retrieval results and tool results report whether they actually provided material.
     """
-    grounding_material_exists = _context_is_present(history, docs_matches)  # ask before we add any ourselves
+    # Two sources, because they are scoped differently (see `_attachment_is_present`). `grounded` is
+    # *declared* by whatever produced the material; an attachment is not produced by anything, so it is
+    # still found by walking the branch.
+    grounding_material_exists = tool_context.grounded or _attachment_is_present(history)
 
     # Instruction-like injects -> leading system message.
     system_injects = [chatutil.format_date_now(),
@@ -813,7 +807,8 @@ def ai_turn(llm_settings: env,
                          history=message_history,
                          speculate=speculate,
                          docs_query=docs_query,
-                         docs_matches=docs_matches)
+                         docs_matches=docs_matches,
+                         tool_context=tool_context)
 
         if on_llm_start is not None:
             on_llm_start()

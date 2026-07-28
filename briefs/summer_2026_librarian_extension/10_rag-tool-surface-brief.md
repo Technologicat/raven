@@ -135,6 +135,15 @@ to *that round's tool results* — tail position, data-shaped, rare. That buys t
 mid-plan wraps up instead of being truncated) without the per-turn cost. Unmeasured; if built, measure it
 the way brief 08 measured the other inject wordings.
 
+**Accepted cost: the final tool-free invocation is a full prompt reprocess.** Withdrawing the tools changes
+the system block, so the one invocation that ends a capped turn cannot reuse the prefix — and it pays that
+on the longest prompt of the turn. Accepted anyway, because it happens only on the pathological path, and
+because it is what makes the cap a guarantee instead of a request: the prefix-preserving alternative (leave
+the tools advertised, add a "no further searches this turn" notice) can simply be ignored, and then the
+hard stop is needed regardless, one round later. If the reprocess ever proves expensive in practice, that
+notice is the escalation to try first, with the strip kept as the fallback. (How expensive it actually is
+has not been measured; `prefill` reports the backend's own prompt-token count, so it can be.)
+
 ### 5. Budgeted text, shared by the tool and by attachments
 
 One truncation engine, used by `fetch_document` and by the `text_file` attachment wire-fold. The
