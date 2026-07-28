@@ -39,22 +39,70 @@ result count, so retrieval over-fetches by `alpha` to land near `k` after mergin
 ("retrieve broadly for the reranker") would tangle two unrelated corrections in one number. A reranking
 stage wants its own retrieve-wide parameter, with `alpha` still doing its merge compensation on top.
 
+## Measured baseline (2026-07-28)
+
+An evaluation set now exists — `evaluation/retrieval/`, 30 known-item questions against the 11974-record
+corpus — and it reorders what follows. Numbers and method are in that directory's README; the two results
+that change the plan:
+
+- **Long, wandering messages retrieve at roughly half the MRR of focused ones** (0.292 against 0.562), and
+  on those the fusion is *beaten by the vector arm alone*. This is the largest effect measured, and it is
+  lever 3's target. On that evidence lever 3 should be built first, not third.
+- **The fusion trails both single engines at R@5 while leading at R@20.** Exactly the shape rank-only
+  fusion predicts. But the gap is two questions wide at n=30 — grow the set to ~100 before acting on it.
+
+The set is cheap to grow (about four minutes per run) and cheap to re-score, so every lever below should
+be evaluated against it rather than argued about.
+
+**One caveat that constrains the whole brief, and it is easy to forget:** that corpus is one user's
+hydrogen collection. Librarian indexes whatever the user puts in the directory — another science of the
+year, AI papers, fanfiction. Any conclusion here that takes the form of *a tuned constant* is a conclusion
+about hydrogen, not about retrieval. See the split under lever 1.
+
 ## The four levers, cheapest first
 
 ### 1. Let the scores survive fusion
 
 RRF is scale-free by design, which is its whole appeal — no calibration between BM25 scores and cosine
-distances. The cheap fix keeps that property and adds back only what is missing:
+distances, and no tuning against a corpus nobody has seen. That is the right default for a tool whose
+document set is chosen by the user, and it should stay the default.
 
-- **Use RRF for ordering and the raw scores for admission.** The thresholds already exist; make them do
-  more than a floor. A *relative* cutoff (drop anything below some fraction of the best score that engine
-  returned this query) distinguishes "top of a good batch" from "top of a bad one", which is the exact
-  distinction absolute thresholds cannot make.
-- Or **weight each engine's RRF contribution by its normalized score**, which is a two-line change and
-  keeps the rank-based backbone.
+But "raw scores are incomparable" is true of one engine and not the other, and the asymmetry is the
+opening:
 
-Either way the point is that a query which found nothing good should *return* less, rather than returning
-its best rubbish with a confident rank.
+- **Cosine distance is already calibrated.** With a normalized embedding model, 0.8 means roughly the same
+  thing for every query — which is why `semantic_distance_threshold` works as an absolute cutoff at all.
+- **BM25 is not.** Its scores move with IDF, document length and query length, so they are meaningful only
+  within one query's result set.
+
+So the two survive differently, and the split is the actionable part:
+
+**Corpus-independent, safe to ship as a default:**
+
+- **Vector distance as an absolute admission gate.** It can answer the question nothing currently answers
+  — *is anything here actually close?* — and it can do so because the calibration comes from the embedding
+  model, not from the corpus. A query that found nothing good should *return* less, rather than returning
+  its best rubbish with a confident rank.
+
+**Corpus-dependent, do not ship as a tuned constant:**
+
+- **Convex combination**, `alpha * norm(bm25) + (1 - alpha) * norm(vector)` with per-query min-max
+  normalization. This preserves the score *shape* that RRF flattens: a query where BM25's top hit towers
+  over the rest keeps that gap. The hybrid-retrieval literature reports it beating RRF when `alpha` can be
+  tuned in-domain, and losing when it cannot — *(recollection, not verified; check the source before this
+  sentence is relied on)* — which is precisely the trade Raven cannot make globally, because the domain is
+  whatever the user indexed.
+- **RRF's `K`** (currently the paper's default of 60, not a tuned value). Smaller `K` sharpens the
+  top-rank advantage. Cheap to sweep, and equally corpus-specific.
+
+If either of these is wanted, its home is a per-collection setting rather than a global constant — which
+is one more thing the queued docs-DB *scopes* work would make possible.
+
+**A caveat that catches people, including the author of this brief:** per-query min-max normalization does
+*not* solve the absolute-quality problem. It stretches every result set to [0, 1], so a uniformly terrible
+set still yields a confident-looking 1.0 at the top — the exact failure being chased. The absolute signal
+has to come from the vector arm's raw distance. Pair the two changes; shipping the normalization alone
+reproduces the bug in a new coat.
 
 ### 2. Route the two arms differently
 
@@ -80,8 +128,12 @@ centroid's nearest neighbours are chosen by *average* topicality rather than by 
 
 Split the message (per sentence, or per question mark, or per paragraph) and fuse the per-query result
 sets. A match then has to be good for *something specific that was asked*, not merely near the mean of
-everything asked. This is the single change most likely to move the metric, and it costs one embedding
-call per sentence.
+everything asked. It costs one embedding call per sentence.
+
+**This is now the measured priority, not a guess.** The evaluation set's `rambling` questions — several
+sentences of wandering context ending in one specific question, which is what the multiline composer
+actually produces — retrieve at 0.292 MRR against 0.562 for focused ones. Nothing else in the brief has a
+measured effect that size. Build this first.
 
 Recency is a usable prior when a cheaper cut is wanted: the last paragraph, or the sentence carrying the
 question mark, is what the user is actually asking.
