@@ -66,6 +66,19 @@ The retriever then goes into the tool context **only when the documents are in p
 presence the single gate the entrypoints read — and makes the gate fail closed: a model that calls a tool
 that was never advertised finds no retriever and gets a refusal, rather than reaching around the switch.
 
+**Cache cost, and why the loadout must not wobble.** Tool definitions are expanded into the *system block*
+by the model's own chat template, so changing the advertised list invalidates the prompt prefix from the
+very beginning — a full reprocess, not the tail reprocess that a changed inject costs. (Front-of-prompt
+placement is how the mainstream templates do it; not verified against the specific model in use. To check:
+`prefill` returns the backend's own `prompt_tokens`, so one call with `tool_names=None` and one with a
+restricted set gives the delta directly.)
+
+That is affordable only because the list is a function of `docs_enabled and retriever is not None`, so it
+is constant within a conversation and changes only when the user deliberately flips the toggle — one full
+reprocess per toggle, not per turn. Two rules follow, and both are already load-bearing: keep the list
+stable *within* a turn (see `invoke`'s `tool_names` docstring), and pass the same list to `prefill`, or the
+warm-up primes a prefix the real turn never sends and the reprocess gets paid twice.
+
 ### 3. Grounding is declared at the source, and scoped by lifetime
 
 `_context_is_present` currently infers grounding from message shape: any `role="tool"` message after the
@@ -105,6 +118,22 @@ the history ending on a tool call with no result — the paused-agent-loop shape
 is what makes Qwen answer with *another* call instead of an answer. So: at the cap, still run the
 requested calls, then make the final invocation with `tools` stripped. The cap counts rounds of tool
 calling; the last generation is always tool-free and therefore always an answer.
+
+**Considered and not built: telling the model how many calls it has left.** Three arguments against, and
+one variant that survives them.
+
+- *Placement makes it expensive.* A countdown changes every round. Put where instructions go — the leading
+  system block — it invalidates the prompt prefix from position 0 on **every round**, which is the same
+  cache damage a wobbling tool loadout causes, except paid continuously instead of once per toggle.
+- *It is prohibition-shaped.* "You have 2 tool calls remaining" is a constraint for a literal-minded model
+  to reason about, and that is the exact class of wording brief 08 measured at 5–37× the deliberation.
+- *It is a backstop, not a budget.* A model that reaches the cap is already looping; one that is not will
+  never see the number. Announcing it every turn optimizes a path that should not be taken.
+
+The variant worth revisiting: stay silent until the **last permitted round**, then attach a single notice
+to *that round's tool results* — tail position, data-shaped, rare. That buys the one real benefit (a model
+mid-plan wraps up instead of being truncated) without the per-turn cost. Unmeasured; if built, measure it
+the way brief 08 measured the other inject wordings.
 
 ### 5. Budgeted text, shared by the tool and by attachments
 

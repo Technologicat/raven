@@ -90,6 +90,25 @@ websearch_engine = "duckduckgo"
 # How many web search results to return, when the LLM uses the websearch tool.
 web_num_results = 10
 
+# How many rounds of tool calls the LLM may make within a single AI turn, before it has to answer.
+#
+# One "round" is one assistant message requesting tools, plus their results. The turn ends when the model
+# replies without asking for tools, so this is a backstop rather than a normal limit — a model that gets
+# what it needs stops on its own, well under any sane value here.
+#
+# The cap applies to all tools. Any tool whose *failure* suggests an immediate retry can loop — a search
+# that finds nothing invites rephrasing, a fetch that is refused invites another URL, and both can be done
+# forever. What differs between tools is how often the empty-handed case comes up: a local corpus returns
+# nothing at all for most queries outside its subject, while a web search almost always returns something
+# plausible-looking. (The server-side memoization of websearch does not help here — it collapses identical
+# queries, and a rephrasing loop issues different ones.)
+#
+# When the cap is reached, the requested calls still run; only the invocation *after* them is made with no
+# tools offered, so the model has to produce an answer. That ordering is deliberate: stopping the loop the
+# moment the cap is hit would leave the history ending on a tool call with no result, which reads as a
+# paused agent loop and prompts yet another call rather than a reply.
+max_tool_call_rounds = 5
+
 # --------------------------------------------------------------------------------
 # webfetch tool — client-side access policy
 #

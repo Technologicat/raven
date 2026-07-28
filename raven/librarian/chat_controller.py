@@ -1969,9 +1969,16 @@ class DPGChatController:
 
         history = chatutil.linearize_chat(datastore=self.datastore,
                                           node_id=task_env.head_node_id)
+        # The tool settings must match what the next turn will send, so the tool definitions are counted and
+        # cached identically. They sit in the system block at the very front of the prompt, so warming a
+        # different list warms a prefix that turn never sends — the whole prompt gets reprocessed anyway.
+        maybe_tool_names = llmclient.maybe_tool_names_for_turn(
+            self.llm_settings,
+            documents_available=(self.app_state["docs_enabled"] and self.retriever is not None))
         out = llmclient.prefill(self.llm_settings,
                                 history,
-                                tools_enabled=self.app_state["tools_enabled"],  # match the next turn, so tool defs are counted/cached identically
+                                tools_enabled=self.app_state["tools_enabled"],
+                                tool_names=maybe_tool_names,
                                 datastore=self.datastore)  # resolve any sidecar: image refs so the exact prompt size counts image tokens
 
         if task_env.cancelled or not self.gui_updates_safe:

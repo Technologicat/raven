@@ -268,6 +268,27 @@ def search_documents_wrapper(query: str) -> Tuple[Union[str, List[Dict]], Dict]:
         return (CANONICAL_NO_DOCUMENT_MATCHES, {"grounding": False})
     return (chatutil.format_docs_matches(matches), {"grounding": True})
 
+def maybe_tool_names_for_turn(settings: env,
+                              documents_available: bool) -> set[str] | None:
+    """Which tools to offer on one AI turn, as a `tool_names` value for `invoke` (or `prefill`).
+
+    Returns `None` when every registered tool is on offer. Note that `None` is the *permissive* value here,
+    not the restrictive one — hence the `maybe_` on the name, at every call site.
+
+    `documents_available`: whether the document database is in play this turn, i.e. the user has it switched
+                           on *and* this app has one. When it is not, the document tools are withheld;
+                           everything else (websearch, webfetch) is unaffected.
+
+    Shared so that the two callers cannot disagree. `scaffold.ai_turn` uses it to build the real request,
+    and the GUI's context prefill uses it to warm the KV cache — and those must produce the same list, since
+    tool definitions are expanded into the system block at the very front of the prompt. A prefill that
+    warms a different tool list warms a prefix the real turn never sends, so the full prompt is reprocessed
+    anyway, and the warm-up has cost time to achieve nothing.
+    """
+    if documents_available:
+        return None
+    return set(settings.tool_entrypoints) - set(settings.document_tool_names)
+
 # --------------------------------------------------------------------------------
 # Utilities
 

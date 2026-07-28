@@ -1091,3 +1091,78 @@ class TestDocumentToolGating:
         run_ai_turn(forest, llm_settings, user_head,
                     retriever=FakeRetriever(), docs_enabled=True, docs_query=None)
         assert seen["tool_names"] is None
+
+
+# ---------------------------------------------------------------------------
+# Agent-loop round cap
+# ---------------------------------------------------------------------------
+
+class TestToolCallRoundCap:
+    """A model that keeps rephrasing a failing search must still end up answering.
+
+    The cap ends the loop by *withdrawing the tools*, not by breaking out of it. Breaking out would leave
+    the turn's last message a tool result, which reads as a paused agent loop and draws yet another call
+    instead of a reply.
+    """
+
+    def _always_calls_tools(self, monkeypatch, counter):
+        def fake_invoke(**kw):
+            counter.append(kw.get("tools_enabled"))
+            if not kw.get("tools_enabled"):  # no tools on offer -> the model has to answer
+                return make_invoke_result(content="Fine, here is my answer.")
+            return make_invoke_result(content="",
+                                      tool_calls=[tool_call("search_documents", f"call_{len(counter)}")])
+
+        monkeypatch.setattr("raven.librarian.llmclient.invoke", fake_invoke)
+        monkeypatch.setattr("raven.librarian.llmclient.perform_tool_calls",
+                            lambda *a, **kw: [make_tool_response(content="No matches.",
+                                                                 function_name="search_documents")])
+
+    def test_loop_terminates_at_the_cap(self, monkeypatch, llm_settings, populated_forest):
+        forest, head = populated_forest
+        user_head = scaffold.user_turn(llm_settings=llm_settings, datastore=forest,
+                                       head_node_id=head, user_message_text="Find X")
+        monkeypatch.setattr("raven.librarian.config.max_tool_call_rounds", 3)
+        offered = []
+        self._always_calls_tools(monkeypatch, offered)
+
+        final_head = run_ai_turn(forest, llm_settings, user_head, retriever=FakeRetriever())
+
+        # 3 rounds with tools on offer, then one final invocation with none.
+        assert offered == [True, True, True, False]
+        assert forest.get_payload(final_head)["message"]["role"] == "assistant"
+
+    def test_the_final_reply_is_an_answer_not_a_tool_result(self, monkeypatch, llm_settings, populated_forest):
+        forest, head = populated_forest
+        user_head = scaffold.user_turn(llm_settings=llm_settings, datastore=forest,
+                                       head_node_id=head, user_message_text="Find X")
+        monkeypatch.setattr("raven.librarian.config.max_tool_call_rounds", 2)
+        self._always_calls_tools(monkeypatch, [])
+
+        final_head = run_ai_turn(forest, llm_settings, user_head, retriever=FakeRetriever())
+        payload = forest.get_payload(final_head)
+        assert payload["message"]["role"] == "assistant"
+        assert not payload["message"]["tool_calls"]
+
+    def test_an_ordinary_turn_never_reaches_the_cap(self, monkeypatch, llm_settings, populated_forest):
+        # A model that gets what it needs stops on its own, well under the cap - the cap is a backstop,
+        # not a normal limit, and must not perturb the common path.
+        forest, head = populated_forest
+        user_head = scaffold.user_turn(llm_settings=llm_settings, datastore=forest,
+                                       head_node_id=head, user_message_text="Find X")
+        offered = []
+
+        responses = iter([make_invoke_result(content="", tool_calls=[tool_call("search_documents", "call_0")]),
+                          make_invoke_result(content="X is foo.")])
+
+        def fake_invoke(**kw):
+            offered.append(kw.get("tools_enabled"))
+            return next(responses)
+
+        monkeypatch.setattr("raven.librarian.llmclient.invoke", fake_invoke)
+        monkeypatch.setattr("raven.librarian.llmclient.perform_tool_calls",
+                            lambda *a, **kw: [make_tool_response(content="X is foo.",
+                                                                 function_name="search_documents")])
+
+        run_ai_turn(forest, llm_settings, user_head, retriever=FakeRetriever())
+        assert offered == [True, True]  # tools stayed on offer throughout; the cap never intervened

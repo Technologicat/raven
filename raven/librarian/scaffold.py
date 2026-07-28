@@ -790,13 +790,21 @@ def ai_turn(llm_settings: env,
     if docs_matches:  # the auto-search grounds this turn as much as a tool call would
         tool_context.grounded = True
 
-    # Which tools to offer this turn. `None` means "all of them" - note this is the *permissive* value, not
-    # the restrictive one, so the maybe-ness is worth flagging at every use site.
-    maybe_tool_names = None if documents_available else (set(llm_settings.tool_entrypoints) -
-                                                         set(llm_settings.document_tool_names))
+    # Which tools to offer this turn (`None` = all of them; see the helper for why that reading is the
+    # permissive one). Shared with the GUI's context prefill, which must warm the same list.
+    maybe_tool_names = llmclient.maybe_tool_names_for_turn(llm_settings, documents_available=documents_available)
 
     continue_this_message = continue_  # we need to continue at most the first message in the agent loop
+    completed_tool_rounds = 0
     while True:  # LLM agent loop - interleave LLM responses, tool calls and tool call results, until the LLM is done (no more tool calls).
+        # Backstop against a model that keeps rephrasing a search that keeps finding nothing. Offering no
+        # tools is what ends the loop, rather than breaking out of it: a `break` here would leave the turn's
+        # last message a tool result, which reads as a paused agent loop and is answered with yet another
+        # tool call. Withdrawing the tools instead leaves the model no move except to reply.
+        tools_offered = tools_enabled and completed_tool_rounds < librarian_config.max_tool_call_rounds
+        if tools_enabled and not tools_offered:
+            logger.info(f"ai_turn: tool-call round cap ({librarian_config.max_tool_call_rounds}) reached; "
+                        "requesting the final reply with no tools offered.")
         message_history = chatutil.linearize_chat(datastore=datastore,
                                                   node_id=head_node_id)
 
@@ -814,7 +822,7 @@ def ai_turn(llm_settings: env,
                                    history=message_history,
                                    on_prompt_ready=on_prompt_ready,
                                    on_progress=on_llm_progress,  # this handles `action_stop` from `on_llm_progress`
-                                   tools_enabled=tools_enabled,
+                                   tools_enabled=tools_offered,
                                    tool_names=maybe_tool_names,
                                    continue_=continue_this_message,
                                    datastore=datastore)  # resolve any sidecar: image refs to data: URLs on the wire
@@ -893,6 +901,7 @@ def ai_turn(llm_settings: env,
                                                          on_call_lowlevel_done=on_call_lowlevel_done,
                                                          on_tool_done=on_tool_done,
                                                          on_tools_done=on_tools_done)
+            completed_tool_rounds += 1
         else:
             # When there are no more tool calls, the LLM is done replying.
             break
