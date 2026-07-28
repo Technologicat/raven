@@ -929,6 +929,25 @@ Raised during webfetch GUI smoke-testing (2026-06-03); flagged for a dedicated d
 from a combined emoji + super/subscript item on 2026-07-27 — the emoji half is a separate problem with
 its own fix, and lives in "Emoji support in the Markdown renderer" below.
 
+## Chat view scroll position jumps back down while the model is writing
+
+While a reply streams, the chat view's scroll position keeps being pulled back to the bottom, so
+scrolling up to re-read an earlier message during generation does not stay put — the next streamed
+chunk yanks the view down again. The user has to wait for the turn to finish before they can read
+anything else, which on a thinking model is a long time.
+
+Demo-facing (Researchers' Night, 2026-09-26), and arguably the most *felt* of the chat-view defects:
+it fires on every single turn, unlike the Markdown cases which need particular content. On stage it
+also removes the natural thing to do while the model thinks, which is to scroll back and talk about
+what it said last.
+
+Presumably the follow-the-tail autoscroll is unconditional, where it should engage only when the
+view is already at (or near) the bottom — the standard "stick to bottom unless the user has scrolled
+away" rule. Not investigated, so that is a hypothesis about the cause, not a diagnosis.
+
+Discussed in an earlier session and believed to be recorded here; it was not. Written down
+2026-07-28 after failing to find it (reported by Juha).
+
 ## Chat view drops a character mid-message ("What" renders as " hat")
 
 Observed 2026-07-18 in Librarian's chat view: an assistant greeting displayed as
@@ -945,6 +964,11 @@ The data is fine and the markdown stage is fine; both were checked:
 So the loss happens after markdown, in the rendering stage. The streaming path is ruled out: the
 observation was of a *stored* message re-rendered on load, in a later session than the one that
 generated it.
+
+**Still unreproduced as of 2026-07-28** — one sighting, ten days, no recurrence. Treat it as an open
+report rather than a known defect: it is not a Researchers' Night blocker on current evidence, and
+it should not be *worked* until it reappears, because there is nothing to test a fix against. If it
+does reappear, the thing to capture is the node ID and whether the window had just been resized.
 
 **It is intermittent.** Restarting Librarian re-rendered the same stored node correctly, and it had
 never been seen before that one occurrence. So this is not a deterministic function of the input —

@@ -31,11 +31,13 @@ individual items carry a "Researchers' Night" note where they feed it. Working b
   THA3's first inference at the talking-morph shape, the audio device open, and the postprocessor's first pass.
   Test whether it survives TTS-on-CPU, which would rule contention out.
 - **Per-module VRAM budget** — so the config variants are derived rather than guessed on the day.
-- **MoE vs dense decode speed** — 35B-A3B (current) against 27B dense, which is smarter but slower. Batch-1
-  decode is weight-bandwidth-bound, so the active-parameter ratio (3B vs 27B) is a *decent* first approximation
-  rather than a bad one; what compresses it is the fixed per-token overhead that doesn't scale with weights.
-  Expect somewhere in 3–9×, and measure rather than reason. Note eGPU measurements have to run on whichever
-  machine the eGPU is physically attached to.
+- ~~**MoE vs dense decode speed**~~ — **measured 2026-07-28 on the eGPU: ~110 tok/s for 35B-A3B against ~40
+  tok/s for 27B dense, so 2.75×.** That is *below* the 3–9× band predicted from the active-parameter ratio
+  (3B vs 27B), which says the fixed per-token overhead compresses it harder than expected — worth remembering
+  the next time an active-parameter ratio is used to predict a speedup. Decision: **the MoE is the demo
+  model**; 40 tok/s is usable but sluggish for a thinking model in front of an audience, and the 27B is the
+  fallback for a problem the MoE can't solve rather than the default. Model lineup in
+  `briefs/model-lineup-autumn-2026.md`.
 
 **Demo hardware shape**: LLM alone on the larger card, all nine raven-server modules on the internal one — the
 `config_dual_midvram` variant. Reducing context to buy headroom is a weak lever and not worth the cheat: Qwen 3.6
