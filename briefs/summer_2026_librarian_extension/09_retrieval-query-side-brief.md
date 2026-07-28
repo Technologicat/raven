@@ -266,6 +266,18 @@ question mark, is what the user is actually asking.
 Classical IR's answer to a weak query (Rocchio / RM3): run it, take the top few results, harvest their
 high-IDF terms, re-query with the expansion. No model, no VRAM, one extra BM25 pass.
 
+The lineage is worth knowing, because it explains the failure mode better than the algorithm does.
+*Relevance feedback* — Rocchio, 1971, in Salton's SMART system — formalized what searchers had always done
+by hand: read the good hits, notice the vocabulary the field actually uses, search again with it. The
+step that makes it work is the human *looking* first. **Pseudo-**relevance feedback is that loop with the
+looking removed: assume the top k were relevant, and skip the asking.
+(https://en.wikipedia.org/wiki/Relevance_feedback)
+
+So query drift is not a quirk of the algorithm; it is the missing judgment step, showing up exactly where
+you would expect. Nobody mines a page of junk results for better search terms. Which is what the
+confidence signal restores — it is not a new safeguard bolted on, it is the discrimination that "pseudo"
+threw away, recovered from the score distribution instead of from a person.
+
 **It is not a rescue mechanism, and an earlier draft of this brief had it wired backwards.** PRF is an
 *amplifier*: it expands the query using whatever pass 1 returned, so when those results are not relevant
 it drags the query further from the target — the classical failure known as **query drift**. So it must
