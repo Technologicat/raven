@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 import json
 
-from typing import Callable, Dict, List, Optional, TYPE_CHECKING
+from typing import Any, Callable, Collection, Dict, List, Optional, Tuple, TYPE_CHECKING
 
 from unpythonic import dyn
 from unpythonic.env import env
@@ -207,6 +207,66 @@ def _branch_grounding_is_present(datastore: chattree.Forest,
         node_id = datastore.get_parent(node_id)
     return False
 
+def _documents_named_by(payload: Dict) -> List[Tuple[str, Optional[str]]]:
+    """The knowledge-base documents one stored node reached, as `(document_id, query)` pairs.
+
+    Two producers write into a node, and both are read here, because "consulted" is deliberately silent
+    about who did the consulting:
+
+      - An **assistant** node carries the automatic pre-turn search in its `retrieval` payload - the query
+        Raven guessed from the user's message, and the matches it found.
+      - A **tool** node carries what the model asked for itself, in the metadata its entrypoint declared
+        (`llmclient.search_documents_wrapper`, `llmclient.fetch_document_wrapper`). A fetch has no query,
+        which is why the query half of the pair is optional rather than a placeholder string.
+    """
+    named = []
+    retrieval = payload.get("retrieval") or {}
+    query = retrieval.get("query")
+    for result in retrieval.get("results") or []:
+        if result.get("document_id"):
+            named.append((result["document_id"], query))
+    generation_metadata = payload.get("generation_metadata") or {}
+    for document_id in generation_metadata.get("document_ids") or []:
+        named.append((document_id, generation_metadata.get("docs_query")))
+    return named
+
+def _collect_consulted_documents(datastore: chattree.Forest,
+                                 head_node_id: str,
+                                 exclude_document_ids: Collection[str]) -> List[Dict[str, Any]]:
+    """The knowledge-base documents this branch has already looked at, newest first, deduplicated.
+
+    Closes a hole the automatic search leaves open. Its matches are injected for one turn and then dropped,
+    never persisted - so a follow-up question arrives with the model's own earlier reply in view and the
+    material behind it gone, with nothing to signal that. The IDs survive in the stored `retrieval` payload;
+    handing those back turns "I no longer know where that came from" into "read it again with
+    `fetch_document`".
+
+    Pointers rather than text, on purpose. Re-injecting the material grows without bound as a conversation
+    goes on; a list of IDs grows slowly, and is capped anyway
+    (`config.max_consulted_documents_listed`).
+
+    `exclude_document_ids`: documents whose full text is already in this turn's context - the current
+                            auto-search matches. Listing those would be redundancy in the one place that
+                            has to stay compact, since the material is sitting right beside the list.
+    """
+    seen = set(exclude_document_ids)
+    entries = []
+    node_id = head_node_id
+    while node_id is not None:
+        for document_id, query in _documents_named_by(datastore.get_payload(node_id)):
+            if document_id in seen:
+                continue
+            seen.add(document_id)
+            entries.append({"document_id": document_id, "query": query})
+        node_id = datastore.get_parent(node_id)
+
+    cap = librarian_config.max_consulted_documents_listed
+    if len(entries) > cap:
+        logger.info(f"_collect_consulted_documents: {len(entries)} documents consulted on this branch; "
+                    f"listing the {cap} most recent (config.max_consulted_documents_listed).")
+        entries = entries[:cap]
+    return entries
+
 def _attachment_is_present(history: List[Dict]) -> bool:
     """Return whether the user has attached an image or a document anywhere on this branch.
 
@@ -358,24 +418,26 @@ def _perform_injects(llm_settings: env,
                                             arguments={},
                                             result_text=chatutil.format_time_now())
     if docs_matches:
-        # Asked about something the matches do not cover, the model sometimes reaches for another search -
-        # and since this search is Raven's own, run before the turn began, there is no such tool for it to
-        # reach for. It then writes the call out as literal text, and the user gets that instead of an
-        # answer (~1 turn in 3 on Qwen3.6-27B, asking for a figure the documents do not contain).
-        #
-        # Deliberately unmitigated. Telling the model it may not search again reads as a prohibition, and a
-        # prohibition is the thing this whole inject rework exists to stop handing it: that wording ran
-        # 29000 characters of deliberation without producing a reply, where saying nothing answered cleanly
-        # in 3000. The model's instinct is right - it *should* want a second, better-targeted search - so
-        # the fix is to let it have one.
-        # TODO (brief 10): Expose the retriever as a real `search_documents` tool the model may call, which
-        # TODO (brief 10): turns this failure into the feature it is reaching for. The synthetic call below
-        # TODO (brief 10): already uses that name, so it becomes honest rather than a fiction once it lands.
+        # The synthetic call names the real tool, which is no longer a fiction: asked about something these
+        # matches do not cover, the model reaches for a second, better-aimed search, and now there is one to
+        # reach for. Before that tool existed it wrote the call out as literal text and the user got that
+        # instead of an answer, roughly one turn in three on Qwen3.6-27B.
         data_injects.extend(_synthetic_tool_exchange(llm_settings=llm_settings,
                                                      call_id="raven_docs",
                                                      function_name="search_documents",
                                                      arguments={"query": docs_query if docs_query is not None else ""},
                                                      result_text=chatutil.format_docs_matches(docs_matches)))
+    consulted_documents = getattr(tool_context, "consulted_documents", None)
+    if consulted_documents:
+        # Pushed, not merely offered as a tool, because the model cannot detect the gap it fills. At a
+        # follow-up question its own transcript shows it answering from documents, so nothing signals that
+        # the automatic search's matches were dropped after that turn. A tool covers the case where it knows
+        # to pull; this covers the case where it does not.
+        data_injects.extend(_synthetic_tool_exchange(llm_settings=llm_settings,
+                                                     call_id="raven_consulted",
+                                                     function_name="list_consulted_documents",
+                                                     arguments={},
+                                                     result_text=chatutil.format_consulted_documents(consulted_documents)))
 
     for position in range(len(history) - 1, -1, -1):
         if history[position]["role"] == "user":
@@ -417,7 +479,8 @@ def _make_tool_context(llm_settings: env,
                retriever=retriever,
                webfetch_allowed_hosts=frozenset(),  # volatile: recomputed per round
                used_tokens=0,  # volatile: recomputed per round
-               grounded=False)  # accumulating: did anything this turn provide grounding material?
+               grounded=False,  # accumulating: did anything this turn provide grounding material?
+               consulted_documents=[])  # fixed for the turn: what the branch had already read when it began
 
 def _record_grounding(tool_context: env,
                       tool_response_record: env) -> None:
@@ -775,6 +838,17 @@ def ai_turn(llm_settings: env,
     if docs_matches:  # the auto-search grounds this turn as much as a tool call would
         tool_context.grounded = True
 
+    # What this branch has already read, for the model to ask about and for the inject to push. Computed
+    # once per turn, from the branch as it stood when the turn began: a document a tool reaches for later in
+    # this same turn is still written out in full further down the history, so listing it as well would say
+    # the same thing twice in the one place that has to stay compact.
+    if documents_available:
+        tool_context.consulted_documents = llmclient.label_documents(
+            retriever,
+            _collect_consulted_documents(datastore=datastore,
+                                         head_node_id=head_node_id,
+                                         exclude_document_ids=[match["document_id"] for match in docs_matches]))
+
     # Which tools to offer this turn (`None` = all of them; see the helper for why that reading is the
     # permissive one). Shared with the GUI's context prefill, which must warm the same list.
     maybe_tool_names = llmclient.maybe_tool_names_for_turn(llm_settings, documents_available=documents_available)
@@ -1004,6 +1078,12 @@ def retry_tool_calls(llm_settings: env,
     # forgotten. Same gate as `ai_turn` applies: no retriever in the context unless the documents are in play.
     tool_context = _make_tool_context(llm_settings=llm_settings,
                                       retriever=(retriever if docs_enabled else None))
+    if docs_enabled:  # the re-run call may be, or may lead to, a `list_consulted_documents`
+        tool_context.consulted_documents = llmclient.label_documents(
+            retriever,
+            _collect_consulted_documents(datastore=datastore,
+                                         head_node_id=parent_node_id,
+                                         exclude_document_ids=[]))
     head_node_id = _perform_and_store_tool_calls(llm_settings=llm_settings,
                                                  datastore=datastore,
                                                  assistant_message=synthetic_message,

@@ -8,6 +8,7 @@ __all__ = ["format_message_number",
            "format_reminder_to_write_conversationally",
            "format_reminder_to_use_information_from_context_only",
            "format_docs_match", "format_docs_matches",
+           "document_label", "format_consulted_documents",
            "make_timestamp",
            "text_content_part",
            "image_content_part",
@@ -35,11 +36,15 @@ import re
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
+import bibtexparser
+
 from mcpyrate import colorizer
 
+from unpythonic import si_prefix
 from unpythonic.env import env
 
 from ..common import netutil
+from ..common import utils as common_utils
 
 from . import chattree
 
@@ -321,6 +326,148 @@ def format_docs_match(match: Dict[str, Any]) -> str:
 def format_docs_matches(matches: List[Dict[str, Any]]) -> str:
     """Format a list of document-database matches for the LLM, as one text blob. See `format_docs_match`."""
     return "\n\n".join(format_docs_match(match) for match in matches)
+
+# How much of a document's beginning `document_label` may look at. A title lives near the front, and
+# scanning a multi-megabyte reference database end to end - once per listed document, once per turn - would
+# be a lot of work for one line of display text.
+_DOCUMENT_LABEL_SCAN_LIMIT = 8192
+
+# Above this, a `.bib` is described as a database by size rather than parsed. A single BibTeX record with a
+# full abstract runs a few kilobytes; anything much larger holds many records, and reading a multi-megabyte
+# reference database end to end - once per listed document, once per turn - is a lot of work for one line
+# of display text.
+_BIBTEX_SINGLE_RECORD_LIMIT = 65536
+
+# Shorter than this, a line is punctuation or a page number rather than a title.
+_MINIMUM_PSEUDO_TITLE_LENGTH = 8
+
+# Long enough to identify a title, short enough that a list of twenty stays readable.
+_MAXIMUM_LABEL_LENGTH = 200
+
+def _shorten(text: str,
+             max_length: int) -> str:
+    """Cut `text` to `max_length`, marking that it was cut. For display labels, not for content."""
+    text = " ".join(text.split())  # a title wrapped across source lines reads as one line here
+    if len(text) <= max_length:
+        return text
+    return text[:max_length - 1].rstrip() + "…"
+
+def _bibtex_library(text: str) -> Optional[Any]:
+    """Parse `text` as BibTeX, returning the `bibtexparser` library, or `None` if it will not parse at all.
+
+    The middleware chain is the one `visualizer.importer` uses, and each link earns its place:
+
+      - `NormalizeFieldKeys` because the key case is not dependable - a Web of Science export writes
+        `Title = {...}`, the BibTeX literature writes `title = {...}`.
+      - `SeparateCoAuthors` then `SplitNameParts`, in that order, because the second raises without the
+        first. Between them they turn one `author` string into name parts that survive "Ludwig van
+        Beethoven", "Brinch Hansen, Per" and "Beeblebrox, IV, Zaphod".
+
+    (`raven.papers.bibtex` is the wrong tool here despite the name - it writes BibTeX, it does not read it.)
+    """
+    try:
+        library = bibtexparser.parse_string(text,
+                                            append_middleware=[bibtexparser.middlewares.NormalizeFieldKeys(),
+                                                               bibtexparser.middlewares.SeparateCoAuthors(),
+                                                               bibtexparser.middlewares.SplitNameParts()])
+    except Exception as exc:
+        logger.debug(f"_bibtex_library: not readable as BibTeX ({type(exc)}: {exc}).")
+        return None
+    return library
+
+def _bibtex_entry_label(entry: Any) -> str:
+    """Label one parsed BibTeX entry from its own fields, or `""` if it has no title to show."""
+    fields = {field.key: field.value for field in entry.fields}
+    title = str(fields.get("title", "")).strip("{} ")
+    if not title:
+        return ""
+    authors = fields.get("author") or []  # guarded: an authorless record is ordinary here, not worth a warning
+    year = str(fields.get("year", "")).strip("{} ")
+    attribution = " ".join(part for part in (common_utils.format_bibtex_authors(authors) if authors else "", year) if part)
+    return f'"{title}"' + (f" ({attribution})" if attribution else "")
+
+def document_label(text: str) -> str:
+    """Describe a document in one line, from the document itself. `""` when nothing in it describes it.
+
+    A search can return twenty documents, and fetching each one to find out what it is would be exactly the
+    waste that listing them is meant to avoid - so a list of document IDs needs something beside each ID
+    that is *decision-grade*: enough to tell whether this is the one worth reading in full.
+
+    A fallback chain over the best structured signal the document carries, rather than a heuristic:
+
+      1. **A BibTeX record** - its own `title` / `author` / `year`. Exact, no guessing. A `.bib` holding
+         *many* records is described as the database it is, by record count, because the useful decision
+         about one of those is not to fetch it: it is one document as far as the retriever is concerned,
+         however many works it lists. (Nothing stops a user dropping a whole reference database into the
+         document directory. `raven-burstbib` bursting it into one file per record is the better shape, and
+         is what `raven.papers` produces, but it is a recommendation rather than a requirement.)
+      2. **Anything else** - the first substantial line, as a pseudo-title. Weak, but it costs nothing and
+         is right surprisingly often (papers, notes and reports tend to open with their own titles).
+
+    There is deliberately no filename case in the chain, though a hand-curated stash often has descriptive
+    filenames carrying author, year and title. The caller shows the document ID anyway - it is the key to
+    fetch by - so a label that repeated it would say nothing twice, and `""` reads correctly as "the ID is
+    all there is".
+    """
+    lines = text[:_DOCUMENT_LABEL_SCAN_LIMIT].splitlines()
+    first_nonblank = next((line.lstrip() for line in lines if line.strip()), "")
+
+    if first_nonblank.startswith("@"):  # cheap gate, so a plain document never pays for a BibTeX parse
+        if len(text) > _BIBTEX_SINGLE_RECORD_LIMIT:  # too big to be one record; no need to read it to know
+            return f"BibTeX database, {si_prefix(len(text), precision=0)} characters"
+        library = _bibtex_library(text)
+        if library is not None:
+            # Failed blocks count as records: a duplicate BibTeX key makes `bibtexparser` refuse the second
+            # entry, and a file with a repeated key is still plainly a file of many records.
+            n_records = len(library.entries) + len(library.failed_blocks)
+            if n_records > 1:
+                return f"BibTeX database of {n_records} records"
+            if library.entries:
+                label = _bibtex_entry_label(library.entries[0])
+                if label:
+                    return _shorten(label, _MAXIMUM_LABEL_LENGTH)
+
+    for line in lines:
+        stripped = line.strip()
+        if len(stripped) >= _MINIMUM_PSEUDO_TITLE_LENGTH and not stripped.startswith("@"):
+            return _shorten(stripped, _MAXIMUM_LABEL_LENGTH)
+    return ""
+
+# The user's whole message is the auto-search query, so this can be an essay. It is shown to say *why* a
+# document is on the list, which the first line of it does.
+_MAXIMUM_SHOWN_QUERY_LENGTH = 120
+
+def format_consulted_documents(entries: List[Dict[str, Any]]) -> str:
+    """Format the documents this conversation has already looked at, for the LLM.
+
+    Each entry is a dict with `document_id`, and optionally `label` (see `document_label`) and `query` (what
+    surfaced it). Pointers, not text: re-injecting the material would grow without bound, while a list of
+    IDs does not - and `fetch_document` is what makes a pointer worth having.
+
+    "Consulted" is deliberately silent about *who* consulted: the list merges what Raven searched on the
+    user's behalf with what the model went and fetched itself, and naming an actor in either direction
+    would make half the entries read wrong.
+
+    Which is also why the header does not claim the text is gone. That is true only of the automatic
+    search, whose matches are injected for one turn and never persisted; a document the model fetched is a
+    stored tool node, still written out verbatim wherever the window still reaches. The list cannot tell
+    those apart from here, so it says what is true of both - these were consulted, and any that are no
+    longer written out can be read again.
+    """
+    lines = []
+    for entry in entries:
+        line = f"- {entry['document_id']}"
+        label = entry.get("label")
+        if label:
+            line += f" - {label}"
+        query = entry.get("query")
+        if query:
+            line += f" [surfaced by: {_shorten(query, _MAXIMUM_SHOWN_QUERY_LENGTH)}]"
+        lines.append(line)
+    header = ("[System information: Documents from the knowledge base that this conversation has already "
+              "consulted. Any whose text is no longer written out above can be read again with "
+              "`fetch_document`, by the ID shown.]")
+    return f"{header}\n\n" + "\n".join(lines)
 
 
 # --------------------------------------------------------------------------------

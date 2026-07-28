@@ -1,5 +1,7 @@
 """Unit tests for raven.librarian.scaffold (user_turn, ai_turn)."""
 
+import threading
+
 import pytest
 
 # `scaffold` transitively imports `llmclient` → `raven.client.api`, which pulls
@@ -83,11 +85,13 @@ def roles_up(forest, node_id):
 class FakeRetriever:
     """Minimal stand-in for `raven.librarian.hybridir.HybridIR`.
 
-    Only implements `.query(q, k, return_extra_info=False)`, which is the single method
-    that scaffold calls on the retriever.
+    Implements `.query(q, k, return_extra_info=False)`, plus the `documents` mapping and the
+    `datastore_lock` guarding it — between them, the whole retriever surface the librarian touches.
     """
-    def __init__(self, results=None):
+    def __init__(self, results=None, documents=None):
         self.results = list(results) if results is not None else []
+        self.documents = {document_id: {"text": text} for document_id, text in (documents or {}).items()}
+        self.datastore_lock = threading.RLock()
         self.calls = []
 
     def query(self, q, k=10, return_extra_info=False):
@@ -1312,3 +1316,99 @@ class TestBranchGrounding:
         run_ai_turn(forest, llm_settings, head, retriever=FakeRetriever(), speculate=False)
         system_text = chatutil.content_to_text(seen["history"][0]["content"])
         assert "Base claims about the provided documents" in system_text
+
+
+# ---------------------------------------------------------------------------
+# The provenance list: what this branch has already read
+# ---------------------------------------------------------------------------
+
+class TestConsultedDocuments:
+    """The automatic search's matches are injected once and never persisted, so a follow-up question
+    arrives with the reply in view and the material behind it gone. Only the IDs survive."""
+
+    def _forest_with_retrieval(self, llm_settings, *, query, document_ids):
+        forest = chattree.Forest()
+        root = forest.create_node(payload=chatutil.create_payload(
+            llm_settings=llm_settings,
+            message=chatutil.create_chat_message(llm_settings=llm_settings, role="user", text="Tell me about X.")),
+            parent_id=None)
+        payload = chatutil.create_payload(
+            llm_settings=llm_settings,
+            message=chatutil.create_chat_message(llm_settings=llm_settings, role="assistant", text="X is foo."))
+        payload["retrieval"] = {"query": query,
+                                "results": [sample_rag_match(document_id=document_id) for document_id in document_ids]}
+        return forest, forest.create_node(payload=payload, parent_id=root)
+
+    def test_an_earlier_turns_auto_search_is_remembered(self, llm_settings):
+        forest, head = self._forest_with_retrieval(llm_settings, query="about X", document_ids=["a.txt", "b.txt"])
+        entries = scaffold._collect_consulted_documents(forest, head, exclude_document_ids=[])
+        assert [entry["document_id"] for entry in entries] == ["a.txt", "b.txt"]
+        assert all(entry["query"] == "about X" for entry in entries)
+
+    def test_this_turns_matches_are_left_out(self, llm_settings):
+        # Their full text is sitting right beside the list; naming them again is redundancy in the one
+        # place that has to stay compact.
+        forest, head = self._forest_with_retrieval(llm_settings, query="q", document_ids=["a.txt", "b.txt"])
+        entries = scaffold._collect_consulted_documents(forest, head, exclude_document_ids=["a.txt"])
+        assert [entry["document_id"] for entry in entries] == ["b.txt"]
+
+    def test_a_document_appearing_twice_is_listed_once(self, llm_settings):
+        forest, head = self._forest_with_retrieval(llm_settings, query="q1", document_ids=["a.txt"])
+        payload = chatutil.create_payload(
+            llm_settings=llm_settings,
+            message=chatutil.create_chat_message(llm_settings=llm_settings, role="assistant", text="More."))
+        payload["retrieval"] = {"query": "q2", "results": [sample_rag_match(document_id="a.txt")]}
+        head = forest.create_node(payload=payload, parent_id=head)
+        entries = scaffold._collect_consulted_documents(forest, head, exclude_document_ids=[])
+        assert [entry["document_id"] for entry in entries] == ["a.txt"]
+        assert entries[0]["query"] == "q2"  # newest first, so the most recent query is the one shown
+
+    def test_what_the_model_fetched_counts_too(self, llm_settings):
+        # "Consulted" is silent about who consulted: a tool node's declared metadata is read alongside the
+        # automatic search's stored payload.
+        forest, head = self._forest_with_retrieval(llm_settings, query="q", document_ids=["a.txt"])
+        payload = chatutil.create_payload(
+            llm_settings=llm_settings,
+            message=chatutil.create_chat_message(llm_settings=llm_settings, role="tool", text="(document text)"))
+        payload["generation_metadata"] = {"status": "success", "document_ids": ["fetched.bib"]}
+        head = forest.create_node(payload=payload, parent_id=head)
+        entries = scaffold._collect_consulted_documents(forest, head, exclude_document_ids=[])
+        assert {entry["document_id"] for entry in entries} == {"a.txt", "fetched.bib"}
+
+    def test_the_list_is_capped_newest_first(self, monkeypatch, llm_settings):
+        monkeypatch.setattr("raven.librarian.config.max_consulted_documents_listed", 2)
+        forest, head = self._forest_with_retrieval(llm_settings, query="q",
+                                                   document_ids=["a.txt", "b.txt", "c.txt"])
+        entries = scaffold._collect_consulted_documents(forest, head, exclude_document_ids=[])
+        assert len(entries) == 2
+
+    def test_the_list_is_injected_so_the_model_need_not_ask(self, monkeypatch, llm_settings):
+        # Pushed rather than only offered as a tool: at a follow-up question the model's own transcript
+        # shows it answering from documents, so nothing signals that the material was dropped.
+        forest, head = self._forest_with_retrieval(llm_settings, query="about X", document_ids=["a.txt"])
+        seen = {}
+
+        def fake_invoke(**kw):
+            seen["history"] = kw["history"]
+            return make_invoke_result(content="Still foo.")
+
+        monkeypatch.setattr("raven.librarian.llmclient.invoke", fake_invoke)
+        run_ai_turn(forest, llm_settings, head,
+                    retriever=FakeRetriever(documents={"a.txt": "The Title Of The Document\n\nBody."}),
+                    docs_enabled=True)
+        wire_text = "\n".join(chatutil.content_to_text(message["content"]) for message in seen["history"])
+        assert "a.txt" in wire_text
+        assert "The Title Of The Document" in wire_text  # labelled, so the model can decide without fetching
+
+    def test_nothing_consulted_means_no_inject(self, monkeypatch, llm_settings, populated_forest):
+        forest, head = populated_forest
+        seen = {}
+
+        def fake_invoke(**kw):
+            seen["history"] = kw["history"]
+            return make_invoke_result(content="Hi.")
+
+        monkeypatch.setattr("raven.librarian.llmclient.invoke", fake_invoke)
+        run_ai_turn(forest, llm_settings, head, retriever=FakeRetriever(), docs_enabled=True)
+        wire_text = "\n".join(chatutil.content_to_text(message["content"]) for message in seen["history"])
+        assert "list_consulted_documents" not in wire_text

@@ -1111,3 +1111,67 @@ class TestFitAttachmentsToContext:
         first = llmclient.fit_attachments_to_context(self.settings(), 1000, [text])
         later = llmclient.fit_attachments_to_context(self.settings(), 1600, [text])
         assert first == later
+
+
+# ---------------------------------------------------------------------------
+# Labelling a document for a list the model has to make a decision from
+# ---------------------------------------------------------------------------
+
+class TestDocumentLabel:
+    """A search can return twenty documents; the label is what lets the model skip nineteen of them."""
+
+    def test_a_bibtex_record_is_read_from_its_own_fields(self):
+        # Web of Science output capitalizes the field keys, which is why the reader normalizes them
+        # rather than matching on `title = {`.
+        record = ("@article{WOS:000000000000001,\n"
+                  "\tAuthor = {Kataoka, N and Miya, A and Kiriyama, K},\n"
+                  "\tYear = {1997},\n"
+                  "\tTitle = {Studies on hydrogen production},\n"
+                  "\tJournal = {WATER SCIENCE AND TECHNOLOGY}\n}\n")
+        assert chatutil.document_label(record) == '"Studies on hydrogen production" (Kataoka et al. 1997)'
+
+    def test_author_names_survive_their_own_awkwardness(self):
+        # Names are their own small horror, so they go through the same machinery as Visualizer citations
+        # rather than a split on the first comma.
+        record = "@book{x, title={Trio}, author={Ludwig van Beethoven and Beeblebrox, IV, Zaphod}, year={1808}}"
+        assert chatutil.document_label(record) == '"Trio" (van Beethoven and Beeblebrox IV 1808)'
+
+    def test_a_whole_reference_database_is_described_as_one(self):
+        # A `.bib` the user dropped in whole is one document as far as the retriever is concerned, however
+        # many works it lists -- and the decision it needs to drive is *not* to fetch it.
+        record = "@article{a, title={One}}\n\n@article{b, title={Two}}\n"
+        assert chatutil.document_label(record) == "BibTeX database of 2 records"  # the count says "do not fetch this"
+
+    def test_a_plain_document_falls_back_to_its_first_line(self):
+        assert chatutil.document_label("Meeting minutes, 4 March\n\nPresent: ...") == "Meeting minutes, 4 March"
+
+    def test_a_document_that_describes_itself_with_nothing_gets_no_label(self):
+        # `""` reads correctly as "the ID is all there is" -- the caller shows the ID anyway.
+        assert chatutil.document_label("...\n\n") == ""
+
+    def test_the_label_does_not_run_away_with_the_list(self):
+        assert len(chatutil.document_label("T" * 5000)) < 250
+
+
+class TestFormatConsultedDocuments:
+    def test_an_entry_carries_id_label_and_query(self):
+        out = chatutil.format_consulted_documents([{"document_id": "a.bib", "label": '"Paper"', "query": "hydrogen"}])
+        assert "a.bib" in out
+        assert '"Paper"' in out
+        assert "hydrogen" in out
+
+    def test_an_unlabelled_entry_still_names_its_id(self):
+        out = chatutil.format_consulted_documents([{"document_id": "a.txt"}])
+        assert "a.txt" in out
+
+    def test_an_essay_length_query_is_shortened(self):
+        # The auto-search query is the user's whole message, so it can be an essay. It is shown to say
+        # *why* a document is on the list, which the first line of it does.
+        out = chatutil.format_consulted_documents([{"document_id": "a.txt", "query": "q" * 5000}])
+        assert len(out) < 1000
+
+    def test_the_header_does_not_claim_the_text_is_gone(self):
+        # True of the automatic search, whose matches are never persisted; false of a document the model
+        # fetched, which is a stored node still written out where the window reaches.
+        out = chatutil.format_consulted_documents([{"document_id": "a.txt"}])
+        assert "no longer written out above" in out

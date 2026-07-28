@@ -1,11 +1,15 @@
 # Brief: expose the document database as a tool the model may call
 
-**Status: steps 1 and 2 built 2026-07-28; step 3 all but `list_consulted_documents`, 2026-07-29.** The tool
-surface, the per-turn tool gate, the agent-loop cap, grounding-by-declaration and the grounding UX are in
-(`d04bd97`, `2050b88`, `797b4ca`, `1b7f234`, `7dc854c`), as are the truncation engine, `fetch_document`,
-and the attachment wire-fold budget (`40719cb`, and the commit carrying this line). What remains is
-`list_consulted_documents` — the provenance list, tool and inject. Phase 1 of the Researchers' Night list
-(`TODO.md`), and the only item on it that is new construction rather than repair.
+**Status: built, 2026-07-29.** The tool surface, the per-turn tool gate, the agent-loop cap,
+grounding-by-declaration and the grounding UX landed 2026-07-28 (`d04bd97`, `2050b88`, `797b4ca`,
+`1b7f234`, `7dc854c`); the truncation engine and `fetch_document` with it (`40719cb`), the attachment
+wire-fold budget as `250c297`, and `list_consulted_documents` in the commit carrying this line. Phase 1 of
+the Researchers' Night list (`TODO.md`), and the only item on it that was new construction rather than
+repair.
+
+**Not yet exercised against a real corpus.** `manual_tests/rag_tool_rescue.py` runs the tools against a
+stub retriever, so retrieval quality, the `retriever.documents` lock path and the labelling of real
+documents have all been checked against samples rather than in a live session. Worth a run before the demo.
 
 Three things were decided while building rather than before, and are folded in below: the `docs_enabled`
 split (§2), the accepted full-prompt reprocess when the cap fires (§4), and the rejection of a tool-call
@@ -387,6 +391,16 @@ different question from "what has this conversation looked at".
 present with their full text right beside it, so including them is redundancy in the one place that has to
 stay compact.
 
+**Two things the build changed here.** First, the tool path needed the same treatment as the auto-search
+path: `search_documents` and `fetch_document` now declare `document_ids` (and the query) in their result
+metadata, which `scaffold` already persists onto the tool node. Without that, "consulted" would have meant
+"consulted by Raven" while claiming otherwise. Second, the inject's header does *not* say the text is gone,
+which an earlier draft did — that is true only of the auto-search, whose matches are never persisted, while
+a fetched document is a stored node still written out wherever the window reaches. The list cannot tell
+those apart, so it says what holds for both: these were consulted, and any no longer written out can be
+read again. The list is also capped (`config.max_consulted_documents_listed`, newest first) and says in the
+log when the cap drops entries.
+
 **How to label an entry, resolved 2026-07-28.** The label has to be *decision-grade*, not merely good
 enough to rank: a search can return twenty documents, and fetching each one to find out what it is would be
 exactly the waste the list exists to prevent. `fetch_document`'s `(offset, length)` lowers the cost of a
@@ -406,6 +420,11 @@ So it is a fallback chain over the best *structured* signal available, not a heu
 2. **A descriptive filename** → the `document_id` already *is* the label; anything else is redundant.
 3. **Anything else** → the first non-trivial line, as a pseudo-title.
 
+**Built 2026-07-29, and the chain came out shorter than three.** Case (2), the descriptive filename,
+turned out not to be a case at all: the caller shows the `document_id` regardless — it is the key to fetch
+by — so a label that repeated it would say nothing twice. `""` reads correctly as *the ID is all there is*.
+What survives is BibTeX fields, else the first substantial line, else nothing.
+
 Two things checked against a real corpus before writing the formatter (2026-07-28), both of which change
 what case (1) has to handle:
 
@@ -419,9 +438,17 @@ what case (1) has to handle:
   database in there instead of burst output. One file is one HybridIR document (`HybridIR.add` takes a
   document per path and chunks it internally), so such a file is *one* document containing hundreds of
   records — retrievable chunk-wise, since a chunk lands near one record, but hopeless to fetch whole.
-  Case (1) therefore forks on the record count: one record → the title; several → the filename plus the
-  count, e.g. `refs.bib — BibTeX database, 342 records`. That is the decision-grade answer for this shape,
-  because the decision it drives is *don't fetch this*.
+  Case (1) therefore forks on the record count: one record → the title; several → `BibTeX database of 342
+  records`. That is the decision-grade answer for this shape, because the decision it drives is *don't
+  fetch this*. Over a size limit the count is not even read — a multi-megabyte database is described by
+  size instead, since parsing one per listed document per turn is a lot of work for a line of display text.
+
+As built, the BibTeX read goes through `NormalizeFieldKeys` → `SeparateCoAuthors` → `SplitNameParts`, then
+`common.utils.format_bibtex_authors` — the identical chain `visualizer.importer` uses. Two of those links
+are not optional: `SplitNameParts` *raises* without `SeparateCoAuthors` before it (which silently cost every
+label until it was added), and `format_bibtex_authors` is what survives "Ludwig van Beethoven",
+"Brinch Hansen, Per" and "Beeblebrox, IV, Zaphod". Reused rather than re-derived, since the machinery for
+getting names right was already in the tree.
 
 Note that (1) is worth more than labelling: a title that can be *parsed* is a title that can be *weighted*
 in retrieval, which is index-side work adjacent to brief 09. See the HybridIR title-field item in

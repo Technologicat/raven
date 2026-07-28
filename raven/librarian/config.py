@@ -280,6 +280,14 @@ llm_image_token_cost = {
 # especially if there are few documents in the database, or if the database does not talk about the queried topic.
 docs_num_results = 20
 
+# How many previously consulted documents to list back to the LLM (`list_consulted_documents`).
+#
+# The automatic search injects its matches for one turn and then drops them, so a follow-up question
+# arrives with the reply in view and the material behind it gone. The list hands back the IDs, which
+# `fetch_document` can turn into text again. Newest first, so the cap drops the documents the conversation
+# has moved furthest away from.
+max_consulted_documents_listed = 30
+
 # Magic directory: put your RAG documents here.
 # Add/modify/delete a file in this directory to trigger a document database index auto-update in Librarian and Minichat.
 llm_docs_dir = llmclient_userdata_dir / "documents"

@@ -39,13 +39,13 @@ import json
 import os
 import requests
 import sys
-from typing import Callable, Collection, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Collection, Dict, List, Optional, Tuple, TYPE_CHECKING, Union
 
 import sseclient  # pip install sseclient-py
 
 from mcpyrate import colorizer
 
-from unpythonic import dyn, make_dynvar, si_prefix, sym, timer
+from unpythonic import dyn, make_dynvar, si_prefix, sym, timer, uniqify
 from unpythonic.env import env
 
 from ..client import api
@@ -59,6 +59,11 @@ from . import config as librarian_config
 from . import textfilestore
 from . import imagestore
 from . import sidecarstore
+
+# The retriever is duck-typed at every use site, so that `llmclient` does not acquire a runtime dependency
+# on `hybridir`'s chromadb / bm25s / watchdog stack. Same arrangement as `scaffold`.
+if TYPE_CHECKING:
+    from . import hybridir
 
 action_ack = sym("ack")  # acknowledge LLM progress, keep generating
 action_stop = sym("stop")  # interrupt the LLM, stop generating now
@@ -259,7 +264,9 @@ def search_documents_wrapper(query: str) -> Tuple[Union[str, List[Dict]], Dict]:
 
     Returns `(output, metadata)`: the metadata declares whether the result is grounding material, which
     `scaffold._record_grounding` folds into the turn's state. Declaring it matters here because "no
-    matches" is a perfectly non-empty string that grounds nothing at all.
+    matches" is a perfectly non-empty string that grounds nothing at all. It also names which documents
+    were reached and by what query, which is what lets a later turn list them once their text has scrolled
+    out of the window (`scaffold._collect_consulted_documents`).
     """
     retriever = getattr(dyn.tool_context, "retriever", None)
     if retriever is None:
@@ -272,11 +279,68 @@ def search_documents_wrapper(query: str) -> Tuple[Union[str, List[Dict]], Dict]:
     plural_s = "es" if len(matches) != 1 else ""
     logger.info(f"search_documents_wrapper: {len(matches)} match{plural_s} for '{query}'.")
     if not matches:
-        return (CANONICAL_NO_DOCUMENT_MATCHES, {"grounding": False})
-    return (chatutil.format_docs_matches(matches), {"grounding": True})
+        return (CANONICAL_NO_DOCUMENT_MATCHES, {"grounding": False, "docs_query": query})
+    return (chatutil.format_docs_matches(matches),
+            {"grounding": True,
+             "docs_query": query,
+             "document_ids": list(uniqify(match["document_id"] for match in matches))})
 
 CANONICAL_NO_SUCH_DOCUMENT = ("There is no document with that ID in the database. Document IDs come from "
                               "search results; search first, then fetch by the ID a result reports.")
+
+def document_text(retriever: "Optional[hybridir.HybridIR]",
+                  document_id: str) -> Optional[str]:
+    """Read one document's full text out of the retriever, or `None` if it has no such document.
+
+    The lock is not optional: `documents` is rewritten wholesale when the retriever commits a batch of
+    filesystem changes, so a read that races one sees a half-swapped mapping.
+    """
+    if retriever is None:
+        return None
+    with retriever.datastore_lock:
+        document = retriever.documents.get(document_id)
+        return document["text"] if document is not None else None
+
+def label_documents(retriever: "Optional[hybridir.HybridIR]",
+                    entries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Fill in each entry's `label` from the document it names (`chatutil.document_label`).
+
+    Returns new dicts; the input is not modified. An entry naming a document that is no longer in the
+    database keeps an empty label rather than being dropped - the conversation did consult it, and saying
+    so with only an ID is more honest than pretending it was never there.
+    """
+    labelled = []
+    for entry in entries:
+        text = document_text(retriever, entry["document_id"])
+        labelled.append({**entry, "label": chatutil.document_label(text) if text else ""})
+    return labelled
+
+CANONICAL_NOTHING_CONSULTED = ("This conversation has not looked at any documents from the knowledge base yet. "
+                               "Search for some with `search_documents`.")
+
+def list_consulted_documents_wrapper() -> Tuple[str, Dict]:
+    """List the knowledge-base documents this conversation has already looked at, by ID.
+
+    Tool entrypoint for the LLM's `list_consulted_documents` tool. It answers a question the transcript
+    cannot: the automatic search injects its matches for one turn and then drops them, so a follow-up
+    question arrives with the model's own earlier reply visible and the material it was based on gone. The
+    IDs survive, and `fetch_document` turns one back into text. (A document the model *fetched* is a stored
+    node and is still written out where the window reaches; the list covers both, because from here they
+    are indistinguishable, and a pointer to something already in view costs one line.)
+
+    Pointers, not text, and that is the point - re-injecting the material would grow without bound.
+    Consequently this grounds *nothing*: a list of what one has read is not a thing one has read. The model
+    that wants the material has to go and fetch it, which is exactly the step the badge is measuring.
+
+    The list is assembled per turn by `scaffold` (which is where the branch is) and arrives through
+    `dyn.tool_context`, in the same manner as the retriever.
+    """
+    entries = getattr(dyn.tool_context, "consulted_documents", None)
+    if not entries:
+        logger.info("list_consulted_documents_wrapper: nothing consulted on this branch yet.")
+        return (CANONICAL_NOTHING_CONSULTED, {"grounding": False})
+    logger.info(f"list_consulted_documents_wrapper: {len(entries)} document(s).")
+    return (chatutil.format_consulted_documents(entries), {"grounding": False})
 
 def fetch_document_wrapper(document_id: str,
                            offset: Optional[int] = None,
@@ -307,9 +371,7 @@ def fetch_document_wrapper(document_id: str,
         logger.info("fetch_document_wrapper: no retriever in the tool context; document database not in play this turn.")
         return (CANONICAL_NO_DOCUMENT_DATABASE, {"grounding": False})
 
-    with retriever.datastore_lock:  # `documents` must not be read while a commit is rewriting it
-        document = retriever.documents.get(document_id)
-        text = document["text"] if document is not None else None
+    text = document_text(retriever, document_id)
     if text is None:
         logger.info(f"fetch_document_wrapper: no document with ID '{document_id}'.")
         return (CANONICAL_NO_SUCH_DOCUMENT, {"grounding": False})
@@ -328,7 +390,7 @@ def fetch_document_wrapper(document_id: str,
     logger.info(f"fetch_document_wrapper: '{document_id}' [{start}:{end}] -> {len(fitted)} of {len(span)} characters.")
     header = (f"[System information: Document '{document_id}', characters {start} to {end} "
               f"of {len(text)} total.]")
-    return (f"{header}\n\n{fitted}", {"grounding": True})
+    return (f"{header}\n\n{fitted}", {"grounding": True, "document_ids": [document_id]})
 
 def maybe_tool_names_for_turn(settings: env,
                               documents_available: bool) -> tuple[str, ...] | None:
@@ -632,17 +694,29 @@ def setup(backend_url: str,
                                                     "offset": {"type": "integer",
                                                                "description": "Character offset to start reading from. Omit to start at the beginning."},
                                                     "length": {"type": "integer",
-                                                               "description": "How many characters to read. Omit to read to the end."}}}}}
+                                                               "description": "How many characters to read. Omit to read to the end."}}}}},
+        {"type": "function",
+         "function": {"name": "list_consulted_documents",
+                      "description": ("List the documents from the user's local document database that this "
+                                      "conversation has already looked at. Use this when the discussion "
+                                      "refers back to material that is no longer written out above; the "
+                                      "list gives the IDs to read again with fetch_document."),
+                      # No parameters at all: the list is a property of the conversation, and nothing about
+                      # it is the model's to choose.
+                      "parameters": {"type": "object",
+                                     "additionalProperties": False,
+                                     "properties": {}}}}
     ]
     tool_entrypoints = {"websearch": websearch_wrapper,
                         "webfetch": webfetch_wrapper,
                         "search_documents": search_documents_wrapper,
-                        "fetch_document": fetch_document_wrapper}
+                        "fetch_document": fetch_document_wrapper,
+                        "list_consulted_documents": list_consulted_documents_wrapper}
 
     # Tools that are only offered on turns where the document database is in play. Callers gate with
     # `invoke`'s `tool_names`; see `raven.librarian.scaffold.ai_turn`, which assembles the per-turn list.
     # Named here, next to the specs, so the two cannot drift.
-    document_tool_names = frozenset({"search_documents", "fetch_document"})
+    document_tool_names = frozenset({"search_documents", "fetch_document", "list_consulted_documents"})
 
     # Set up the chat completion request metadata template. Tool-calling instructions are NOT injected
     # client-side: every tool-capable model new enough to matter carries them in its own chat template, and the
