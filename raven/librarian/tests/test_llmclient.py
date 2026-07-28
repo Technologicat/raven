@@ -1175,3 +1175,19 @@ class TestFormatConsultedDocuments:
         # fetched, which is a stored node still written out where the window reaches.
         out = chatutil.format_consulted_documents([{"document_id": "a.txt"}])
         assert "no longer written out above" in out
+
+    def test_a_title_survives_a_record_that_will_not_parse(self):
+        # Real corpora contain records that are not quite valid BibTeX: an abstract with unbalanced braces
+        # aborts the parse of the whole record, title and all (one in ~12000 on the hydrogen corpus).
+        record = ("@article{WOS:000000000000002,\n"
+                  "\tAuthor = {Afgan, Nain H. and Carvalho, Maria G.},\n"
+                  "\tTitle = {Sustainability assessment of a hybrid energy system},\n"
+                  "\tAbstract = {The Object structure is defined as: Hybrid Energy System {a, b},\n"
+                  "\tYear = {2008}\n}\n")
+        assert chatutil.document_label(record) == '"Sustainability assessment of a hybrid energy system"'
+
+    def test_a_broken_record_never_labels_itself_with_a_field_name(self):
+        # Falling through to "first substantial line" would surface `Author = {...}`, which looks like a bug
+        # even though nothing of ours went wrong. No label is the honest answer there.
+        record = "@article{k,\n\tAuthor = {Nobody, A.},\n\tAbstract = {unbalanced {\n}\n"
+        assert chatutil.document_label(record) == ""

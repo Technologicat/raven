@@ -375,6 +375,23 @@ def _bibtex_library(text: str) -> Optional[Any]:
         return None
     return library
 
+# A BibTeX `title` field on its own line, for records the real parser gave up on. Deliberately narrow: the
+# key is anchored to the start of a line and the value runs to the closing brace before the end of that
+# line, so this reads the shape `raven-burstbib` and Web of Science emit and declines anything cleverer.
+# Case-insensitive because Web of Science capitalizes its keys.
+_BIBTEX_TITLE_LINE = re.compile(r"^\s*title\s*=\s*\{(.*)\}\s*,?\s*$", re.IGNORECASE | re.MULTILINE)
+
+def _salvaged_bibtex_title(text: str) -> str:
+    """Dig a `title` out of a BibTeX record that would not parse, or `""` if there is none to find.
+
+    Records that are not quite valid BibTeX do occur: an abstract containing unbalanced braces aborts the
+    parse of the entire record, title and all. Since the alternative here is no label at all, a pattern
+    match on the one field we need is worth having - it is a repair path, not a second implementation of
+    the parser, and it runs only after the parser has already declined.
+    """
+    match = _BIBTEX_TITLE_LINE.search(text)
+    return match.group(1).strip("{} ") if match else ""
+
 def _bibtex_entry_label(entry: Any) -> str:
     """Label one parsed BibTeX entry from its own fields, or `""` if it has no title to show."""
     fields = {field.key: field.value for field in entry.fields}
@@ -401,7 +418,12 @@ def document_label(text: str) -> str:
          however many works it lists. (Nothing stops a user dropping a whole reference database into the
          document directory. `raven-burstbib` bursting it into one file per record is the better shape, and
          is what `raven.papers` produces, but it is a recommendation rather than a requirement.)
-      2. **Anything else** - the first substantial line, as a pseudo-title. Weak, but it costs nothing and
+      2. **A BibTeX record that will not parse** - its `title` field, dug out by pattern. Real corpora
+         contain records that are not quite valid BibTeX: one Web of Science export in ~12000 carries an
+         abstract with unbalanced braces, which aborts the parse of the whole record. The title is
+         nonetheless sitting right there on its own line, and a label is a place where a good guess beats
+         nothing.
+      3. **Anything else** - the first substantial line, as a pseudo-title. Weak, but it costs nothing and
          is right surprisingly often (papers, notes and reports tend to open with their own titles).
 
     There is deliberately no filename case in the chain, though a hand-curated stash often has descriptive
@@ -411,8 +433,9 @@ def document_label(text: str) -> str:
     """
     lines = text[:_DOCUMENT_LABEL_SCAN_LIMIT].splitlines()
     first_nonblank = next((line.lstrip() for line in lines if line.strip()), "")
+    looks_like_bibtex = first_nonblank.startswith("@")
 
-    if first_nonblank.startswith("@"):  # cheap gate, so a plain document never pays for a BibTeX parse
+    if looks_like_bibtex:  # cheap gate, so a plain document never pays for a BibTeX parse
         if len(text) > _BIBTEX_SINGLE_RECORD_LIMIT:  # too big to be one record; no need to read it to know
             return f"BibTeX database, {si_prefix(len(text), precision=0)} characters"
         library = _bibtex_library(text)
@@ -426,11 +449,21 @@ def document_label(text: str) -> str:
                 label = _bibtex_entry_label(library.entries[0])
                 if label:
                     return _shorten(label, _MAXIMUM_LABEL_LENGTH)
+        salvaged = _salvaged_bibtex_title(text)
+        if salvaged:
+            return _shorten(f'"{salvaged}"', _MAXIMUM_LABEL_LENGTH)
 
     for line in lines:
         stripped = line.strip()
-        if len(stripped) >= _MINIMUM_PSEUDO_TITLE_LENGTH and not stripped.startswith("@"):
-            return _shorten(stripped, _MAXIMUM_LABEL_LENGTH)
+        if len(stripped) < _MINIMUM_PSEUDO_TITLE_LENGTH:
+            continue
+        # In a record that failed to parse, every line is a `Key = {value}` pair, and the first one that is
+        # long enough is whichever field happens to come first - `Author = {...}` in Web of Science output.
+        # A label reading "Author = {Afgan, Nain H. and ...}" looks like a bug even though nothing went
+        # wrong that was ours, so a BibTeX file that gets this far gets no label rather than a silly one.
+        if looks_like_bibtex:
+            continue
+        return _shorten(stripped, _MAXIMUM_LABEL_LENGTH)
     return ""
 
 # The user's whole message is the auto-search query, so this can be an essay. It is shown to say *why* a

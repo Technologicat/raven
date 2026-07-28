@@ -3,6 +3,24 @@
 New items go at the **top**. (Both ends were in use up to 2026-07-27, which is how the two halves of the same
 Librarian session ended up ~1000 lines apart.)
 
+## Visualizer importer drops unparseable BibTeX records without saying so
+
+`importer.py` iterates `library.entries` and never looks at `library.failed_blocks`, so a record `bibtexparser`
+refused is missing from the dataset with no log line at all. The contrast is in the same loop: a record that
+parses but lacks `author`/`year`/`title` gets a `Skipping entry '<key>', reason: no title` warning. The record
+that never became an entry gets silence, which is the wrong way round — the silent case is the one the user
+cannot otherwise notice.
+
+`raven/papers/download.py:294` already has the pattern to copy (warn with the count, continue).
+
+Measured, not hypothetical: 1 record in 11974 on the hydrogen corpus (`WOS000258806000016`, "Sustainability
+assessment of a hybrid energy system"). The cause is unbalanced braces inside the `Abstract` field, which
+aborts the parse of the whole record including its perfectly good title — so the rate depends on how
+brace-happy the source abstracts are, not on anything Raven controls. `chatutil._salvaged_bibtex_title` shows
+the shape of a repair if the importer ever wants one, though warning is the first thing it needs.
+
+Discovered during the RAG tool surface work, while sweeping `chatutil.document_label` over the real corpus (2026-07-29).
+
 ## EU AI Act Article 50 (transparency) compliance
 
 `briefs/ai-act-article-50-summary.md` has the analysis; Commission guidelines were adopted 20 July 2026 and the
