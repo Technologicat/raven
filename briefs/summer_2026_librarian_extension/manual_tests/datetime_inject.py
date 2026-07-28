@@ -167,6 +167,11 @@ def main() -> None:
             print(f"    {kind:<8} {verdict:<44} finish={got['finish']} "
                   f"reasoning={len(got['reasoning'])}ch")
             print(f"             reply: {' '.join(got['content'].split())[:110]!r}")
+            if not ok and got["reasoning"]:
+                # The failing case is exactly the one whose reasoning is worth reading — how the
+                # model talked itself out of the answer. Show the tail, where it lands on a
+                # conclusion, rather than the opening restatement of the question.
+                print(f"             reasoning tail: {' '.join(got['reasoning'].split())[-400:]!r}")
     print("\ndone")
 
 

@@ -368,6 +368,51 @@ list is fresh, so appending to it is safe, but merging inject text into an exist
 that message first or it writes through to the datastore and corrupts the stored system prompt. This
 is a quiet advantage for any shape that only *adds* messages.
 
+## Q9. Telling the model what day it is
+
+`datetime_inject.py`. The datetime inject is the odd one out: **data rather than instruction**, so it
+only has to be read; and it **changes every turn**, so it can never sit in a stable cached prefix. Two
+questions per shape, because reciting a date back is easier than using it — the second asks for a day
+count to a date 60 days out, which a model reasoning from its training prior gets wildly wrong.
+
+| shape | Qwen3.5-9B | Qwen3.6-27B | Qwen3.6-35B-A3B | Gemma4-26B-A4B | Gemma4-E4B |
+|---|---|---|---|---|---|
+| none | ✗ · ✗ | ✗ · ✗ **"33"** | ✗ · ✗ | ✗ · ✗ | ✗ · ✗ |
+| `user` | ✓ · ✓ | ✓ · ✓ | ✓ · ✓ | ✓ · ✓ | ✓ · ✓ |
+| bare `tool` | ✓ · (budget) | ✓ · ✓ | ✓ · ✓ | ✗ · ✗ | ✗ · ✗ |
+| **`tool+call`** | ✓ · ✓ | ✓ · ✓ | ✓ · ✓ | ✓ · ✓ | ✓ · ✓ |
+| `system_front` | ✓ · ✓ | ✓ · ✓ | ✓ · ✓ | ✓ · ✓ | ✓ · ✓ |
+
+(recite · compute; ✓ compute means the 60-day count was correct)
+
+**The synthetic-tool-call form works everywhere, and the model genuinely *uses* the date** rather than
+reciting it — every ✓ in the compute column is a correct day count.
+
+**Ungrounded, every model is wrong, and the interesting part is *how*.** Gemma states a confident
+"Wednesday, May 22, 2024". Qwen3.6-27B refuses to give a date — "I don't have access to real-time
+data" — and then, asked for a day count, silently assumes one anyway and answers **"33"**: a confident
+wrong number with no hedge, which is the genuinely dangerous shape. Qwen3.6-35B-A3B instead never
+terminates on that question; its reasoning tail reads
+
+> "…Since I don't have it, I'll assume today is the date the user is asking. I'll just say 'I need
+> today's date'…"
+
+— oscillating between assuming and asking, and burning the budget without committing. So the larger MoE
+notices the contradiction and stalls where the dense 27B doesn't notice and confabulates. Two data
+points, so treat the ordering as an observation rather than a rule.
+
+**Bare `tool` splits exactly as it does for RAG material**: Qwen reads it, Gemma does not — and on
+Gemma the reasoning length under bare `tool` is *identical* to no inject at all (759 / 2169 chars on
+E4B), so the message is not reaching the model rather than being read and discounted. One Qwen3.5-9B
+cell is marked "(budget)" rather than ✗: it hit `finish=length` mid-reasoning, which is inconclusive,
+not a failure.
+
+Note the dispute markers survive into the reasoning even where the answer is right — Qwen3.6-35B-A3B
+mentions 2024 or "future date" under `user`, bare `tool` and `tool+call` alike. `system_front` was the
+only shape with none, and also the cheapest. Since the datetime inject cannot live in the system block
+(it changes per turn, so it would invalidate the prefix), that deliberation is the price of the
+placement.
+
 ## Still unmeasured
 
 - Whether the two reminders keep steering from the leading system block. `system_front` loses recency,

@@ -204,12 +204,21 @@ def post(base: str, payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def material_messages(role: str, blocks: list[str]) -> list[dict]:
-    """The retrieved material as it would go on the wire, for one role choice."""
-    if role == "tool+call":
+    """The retrieved material as it would go on the wire, for one role choice.
+
+    The two tool variants differ in a way that turns out to matter. `tool+call` emits one `tool`
+    message per result, all carrying the same `tool_call_id` — which is not what the OpenAI schema
+    describes, since a `tool` message answers *one* call. `tool+call-merged` sends the whole result
+    set as a single `tool` message, which is schema-correct. Most models tolerate the first; Gemma
+    E4B does not, and reads none of the material.
+    """
+    if role in ("tool+call", "tool+call-merged"):
         call = {"role": "assistant", "content": "",
                 "tool_calls": [{"id": "call_rag", "type": "function",
                                 "function": {"name": "search_documents",
                                              "arguments": json.dumps({"query": "specific energy consumption"})}}]}
+        if role == "tool+call-merged":
+            return [call, {"role": "tool", "tool_call_id": "call_rag", "content": "\n\n".join(blocks)}]
         return [call] + [{"role": "tool", "tool_call_id": "call_rag", "content": b} for b in blocks]
     return [{"role": role, "content": b} for b in blocks]
 
@@ -236,12 +245,13 @@ def run_one(base: str, model: str, role: str, where: str, blocks: list[str]) -> 
 
     body = post(base, {"model": model,
                        "messages": messages + [{"role": "assistant", "content": CLOSED_THINK}],
-                       "max_tokens": 400, "temperature": 0.0})
+                       "max_tokens": 1500, "temperature": 0.0})
     if "_error" in body:
         return {"error": body["_error"], "prompt_tokens": None, "content": ""}
     choice = body.get("choices", [{}])[0]
     return {"error": None,
             "prompt_tokens": body.get("usage", {}).get("prompt_tokens"),
+            "finish": choice.get("finish_reason") or "?",
             "content": (choice.get("message", {}).get("content") or "").strip()}
 
 
@@ -270,7 +280,7 @@ def main() -> None:
     # matches a role ("tool+call"), a placement ("before"), or a specific pair ("tool+call@before").
     wanted = {t.strip() for t in sys.argv[4].split(",")} if len(sys.argv) > 4 else None
 
-    for role in ("user", "tool+call"):
+    for role in ("user", "tool+call", "tool+call-merged"):
         for where in ("front", "before", "end"):
             if wanted is not None and not (wanted & {role, where, f"{role}@{where}"}):
                 continue
@@ -282,8 +292,12 @@ def main() -> None:
                     continue
                 found = NEEDLE_VALUE in got["content"]
                 tokens = got["prompt_tokens"]
+                # `finish` is load-bearing: a model whose reasoning arrives inline in `content`
+                # (Gemma E4B does this) can be cut off mid-thought, and the empty-handed result
+                # is indistinguishable from a genuine miss without it.
+                cut = "" if got["finish"] == "stop" else f" [finish={got['finish']}]"
                 print(f"    needle {depth_label:<7} {'FOUND ' if found else 'MISSED'} "
-                      f"(prompt {tokens} tok) {' '.join(got['content'].split())[:90]!r}")
+                      f"(prompt {tokens} tok){cut} {' '.join(got['content'].split())[:90]!r}")
 
             # Needle absent: anything containing the figure now is confabulation, and would have
             # scored as a hit above.
