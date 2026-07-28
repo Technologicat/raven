@@ -1412,3 +1412,58 @@ class TestConsultedDocuments:
         run_ai_turn(forest, llm_settings, head, retriever=FakeRetriever(), docs_enabled=True)
         wire_text = "\n".join(chatutil.content_to_text(message["content"]) for message in seen["history"])
         assert "list_consulted_documents" not in wire_text
+
+
+class TestSpentToolsNotice:
+    """Withdrawing the tools at the cap is not by itself enough to make the model answer.
+
+    Measured live: given a list of documents to work through, the model spends its rounds fetching them one
+    at a time, and on the invocation where the tools are gone it announces the *next* fetch and stops, with
+    no reply written at all. Five of six sampled turns that reached the cap ended empty.
+    """
+
+    def _system_text_of(self, monkeypatch, llm_settings, forest, head, *, rounds_before_reply):
+        """Run an AI turn whose model asks for a tool `rounds_before_reply` times, and return the last
+        system message it saw."""
+        seen = []
+        calls = {"n": 0}
+
+        def fake_invoke(**kw):
+            seen.append(chatutil.content_to_text(kw["history"][0]["content"]))
+            calls["n"] += 1
+            if calls["n"] <= rounds_before_reply:
+                return make_invoke_result(content="", tool_calls=[{"type": "function", "id": f"c{calls['n']}",
+                                                                   "index": "0",
+                                                                   "function": {"name": "websearch",
+                                                                                "arguments": '{"query": "x"}'}}])
+            return make_invoke_result(content="Here is the answer.")
+
+        monkeypatch.setattr("raven.librarian.llmclient.invoke", fake_invoke)
+        monkeypatch.setattr("raven.librarian.llmclient.perform_tool_calls",
+                            lambda settings, message, on_call_start, on_call_done: [
+                                env(data=chatutil.create_chat_message(llm_settings=llm_settings, role="tool",
+                                                                      text="(a result)"),
+                                    status="success", function_name="websearch", tool_call_id="c1")])
+        run_ai_turn(forest, llm_settings, head, retriever=None, docs_enabled=False)
+        return seen[-1]
+
+    def test_the_notice_is_absent_below_the_cap(self, monkeypatch, llm_settings, populated_forest):
+        forest, head = populated_forest
+        monkeypatch.setattr("raven.librarian.config.max_tool_call_rounds", 5)
+        system_text = self._system_text_of(monkeypatch, llm_settings, forest, head, rounds_before_reply=1)
+        assert "No further tool calls" not in system_text
+
+    def test_the_notice_arrives_when_the_cap_withdraws_the_tools(self, monkeypatch, llm_settings, populated_forest):
+        forest, head = populated_forest
+        monkeypatch.setattr("raven.librarian.config.max_tool_call_rounds", 2)
+        system_text = self._system_text_of(monkeypatch, llm_settings, forest, head, rounds_before_reply=99)
+        assert "No further tool calls" in system_text
+        assert "Write the answer now" in system_text
+
+    def test_the_notice_permits_an_incomplete_answer(self, monkeypatch, llm_settings, populated_forest):
+        # A model whose gathering was cut short mid-task otherwise has a reason to keep trying rather than
+        # to report what it has.
+        forest, head = populated_forest
+        monkeypatch.setattr("raven.librarian.config.max_tool_call_rounds", 1)
+        system_text = self._system_text_of(monkeypatch, llm_settings, forest, head, rounds_before_reply=99)
+        assert "say so in the answer" in system_text

@@ -7,6 +7,7 @@ __all__ = ["format_message_number",
            "format_chatlog_datetime_now",
            "format_reminder_to_write_conversationally",
            "format_reminder_to_use_information_from_context_only",
+           "format_notice_that_tools_are_spent",
            "format_docs_match", "format_docs_matches",
            "document_label", "format_consulted_documents",
            "make_timestamp",
@@ -295,6 +296,30 @@ def format_reminder_to_use_information_from_context_only() -> str:
     This is for a dynamic injection.
     """
     return "[System information: Base claims about the provided documents on those documents. Answer general questions normally.]"
+
+def format_notice_that_tools_are_spent() -> str:
+    """Return the text of a system message telling the LLM that this reply gets no more tool calls.
+
+    Sent on the final invocation of an AI turn that hit the tool-call round cap, and only then.
+
+    It exists because withdrawing the tools is not by itself enough to end the turn. That was the design's
+    assumption - offer no tools, and the model has no move except to answer - and measurement says
+    otherwise. Given a list of documents to work through, the model spends its rounds fetching them one at
+    a time, and on the invocation where the tools are gone it announces the *next* fetch ("Now let's get the
+    ABR reactor document") and then stops, having written no reply at all. Five of six sampled turns that
+    reached the cap ended with an empty assistant message. A model that believes it is still gathering does
+    not notice that gathering has become impossible; it has to be told.
+
+    Worded as a statement of the situation with the required action attached, never as a prohibition. "You
+    may not call any more tools" is the shape that measured 5-37x the deliberation elsewhere in this file,
+    and it would land here on a model that is *already* mid-task and looking for a way to continue.
+    Permission to say the answer is incomplete is part of that: without it, a model whose gathering was cut
+    short has a reason to keep trying rather than to report what it has.
+
+    This is for a dynamic injection.
+    """
+    return ("[System information: No further tool calls are available for this reply. Write the answer now, "
+            "from the information gathered above. If something you wanted is missing, say so in the answer.]")
 
 
 # --------------------------------------------------------------------------------

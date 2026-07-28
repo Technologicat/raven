@@ -150,7 +150,7 @@ def run_once(llm_settings, fact_is_findable):
                              speculate=False, markup=None,
                              on_docs_start=None, on_docs_done=None, on_prompt_ready=None,
                              on_llm_start=None, on_llm_progress=None, on_llm_done=None,
-                             on_nomatch_done=None, on_tools_start=None,
+                             on_tools_start=None,
                              on_call_lowlevel_start=None, on_call_lowlevel_done=None,
                              on_tool_done=None, on_tools_done=None)
 

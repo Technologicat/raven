@@ -354,7 +354,8 @@ def _perform_injects(llm_settings: env,
                      speculate: bool,
                      docs_query: Optional[str],
                      docs_matches: List[Dict],
-                     tool_context: env) -> None:
+                     tool_context: env,
+                     tools_are_spent: bool = False) -> None:
     """Perform the temporary injects to prepare for the AI's turn.
 
     These are not meant to be persistent, so we don't even add them to the datastore,
@@ -407,6 +408,8 @@ def _perform_injects(llm_settings: env,
                       chatutil.format_reminder_to_write_conversationally()]
     if not speculate and grounding_material_exists:
         system_injects.append(chatutil.format_reminder_to_use_information_from_context_only())
+    if tools_are_spent:
+        system_injects.append(chatutil.format_notice_that_tools_are_spent())
     _add_to_system_message(llm_settings=llm_settings,
                            history=history,
                            texts=system_injects)
@@ -873,7 +876,8 @@ def ai_turn(llm_settings: env,
                          speculate=speculate,
                          docs_query=docs_query,
                          docs_matches=docs_matches,
-                         tool_context=tool_context)
+                         tool_context=tool_context,
+                         tools_are_spent=(tools_enabled and not tools_offered))
 
         if on_llm_start is not None:
             on_llm_start()
