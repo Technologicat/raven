@@ -301,7 +301,7 @@ def invoke_settings(llm_settings):
     llm_settings.backend_url = "http://test-backend"
     llm_settings.backend_flavor = "lmstudio"
     llm_settings.tokenizer = None
-    llm_settings.char_to_token_ratio = 0.27
+    llm_settings.tokens_per_character = 0.27
     return llm_settings
 
 
@@ -484,7 +484,7 @@ class TestCountTokens:
     def test_tier3_calibrated_estimate_is_not_exact(self, invoke_settings):
         invoke_settings.tokenizer = None
         invoke_settings.backend_flavor = "lmstudio"
-        invoke_settings.char_to_token_ratio = 0.25
+        invoke_settings.tokens_per_character = 0.25
         count, is_exact = llmclient.count_tokens(invoke_settings, "x" * 40)
         assert (count, is_exact) == (10, False)  # round(40 * 0.25) = 10, estimate
 
@@ -531,7 +531,7 @@ class TestUsageCalibration:
             "[DONE]",
         ])
         llmclient.invoke(invoke_settings, _history("x" * 40), tools_enabled=False, on_prompt_ready=capture)
-        assert invoke_settings.char_to_token_ratio == pytest.approx(10 / sent["chars"])
+        assert invoke_settings.tokens_per_character == pytest.approx(10 / sent["chars"])
 
     def test_mismatched_tokenizer_warns(self, monkeypatch, caplog, invoke_settings):
         # Tokenizer counts 100 tokens for the content alone; backend reports only 50 for the full prompt ->
@@ -788,7 +788,11 @@ class TestInvokeTypedEvents:
 # ---------------------------------------------------------------------------
 
 class TestSerializeHistoryForWire:
-    settings = env(personas={"user": "U", "assistant": "AI", "system": None, "tool": None})
+    # The token-accounting fields are what the attachment fold sizes itself against: a 10000-token window
+    # at 0.25 tokens/character is 40000 characters, of which the 25% reserve leaves 30000 for attachments.
+    settings = env(personas={"user": "U", "assistant": "AI", "system": None, "tool": None},
+                   context_length=10000,
+                   tokens_per_character=0.25)
 
     def test_text_only_message_scrubbed_to_single_text_part(self):
         history = _history("hello there")
@@ -870,6 +874,32 @@ class TestSerializeHistoryForWire:
         assert "hello" in text
         assert "secret body" not in text
 
+    def test_an_oversized_attachment_is_truncated_rather_than_overflowing(self, tmp_path):
+        # Before the budget existed this folded wholesale and blew the window.
+        datastore, file_part = self._datastore_with_file(tmp_path, b"A" * 200000, name="huge.txt")
+        history = [{"role": "user",
+                    "content": [chatutil.text_content_part("summarize this"), file_part]}]
+        wire = llmclient._serialize_history_for_wire(self.settings, history,
+                                                     continue_=False, datastore=datastore)
+        text = "".join(p["text"] for p in wire[0]["content"])
+        assert len(text) < 40000  # fits the window it is going into
+        assert "characters omitted" in text  # and says where the missing part was
+        assert "[Attached file: huge.txt]" in text
+
+    def test_an_attachment_with_no_room_left_is_named_not_dropped(self, tmp_path):
+        # A silently vanished attachment leaves the model reading a message that refers to a document it
+        # cannot see, which it will resolve by guessing.
+        datastore, file_part = self._datastore_with_file(tmp_path, b"B" * 1000, name="late.txt")
+        history = [{"role": "user", "content": [chatutil.text_content_part("C" * 40000)]},
+                   {"role": "user",
+                    "content": [chatutil.text_content_part("and this too"), file_part]}]
+        wire = llmclient._serialize_history_for_wire(self.settings, history,
+                                                     continue_=False, datastore=datastore)
+        text = "".join(p["text"] for p in wire[1]["content"])
+        assert "late.txt" in text
+        assert "no room left" in text
+        assert "BBB" not in text
+
 
 # ---------------------------------------------------------------------------
 # Strict-chat-template shape warnings
@@ -941,18 +971,18 @@ class TestFetchBudget:
     """How much of a document may be pulled into a conversation that is already partly full."""
 
     def settings(self, context_length=10000):
-        return env(context_length=context_length, char_to_token_ratio=0.25)
+        return env(context_length=context_length, tokens_per_character=0.25)
 
     def test_empty_conversation_gets_the_per_fetch_ceiling(self, monkeypatch):
         # The per-fetch ceiling is the limit that normally binds: one document must not crowd out the
         # conversation it is meant to inform, however much room happens to be free.
         monkeypatch.setattr("raven.librarian.config.docs_fetch_max_fraction_of_context", 0.10)
-        monkeypatch.setattr("raven.librarian.config.docs_fetch_reserve_fraction_of_context", 0.25)
+        monkeypatch.setattr("raven.librarian.config.context_reserve_fraction", 0.25)
         assert llmclient.budget_for_fetched_text(self.settings(), used_tokens=0) == 1000
 
     def test_a_full_conversation_refuses_rather_than_serving_a_sliver(self, monkeypatch):
         monkeypatch.setattr("raven.librarian.config.docs_fetch_max_fraction_of_context", 0.10)
-        monkeypatch.setattr("raven.librarian.config.docs_fetch_reserve_fraction_of_context", 0.25)
+        monkeypatch.setattr("raven.librarian.config.context_reserve_fraction", 0.25)
         assert llmclient.budget_for_fetched_text(self.settings(), used_tokens=8000) <= 0
 
     def test_the_reserve_shrinks_the_budget_before_it_refuses(self, monkeypatch):
@@ -960,13 +990,13 @@ class TestFetchBudget:
         # reasoning after the fetch will consume, which the size estimate cannot see -- so it starts eating
         # into the budget well before the window is exhausted, and only then refuses outright.
         monkeypatch.setattr("raven.librarian.config.docs_fetch_max_fraction_of_context", 0.10)
-        monkeypatch.setattr("raven.librarian.config.docs_fetch_reserve_fraction_of_context", 0.25)
+        monkeypatch.setattr("raven.librarian.config.context_reserve_fraction", 0.25)
         budget = llmclient.budget_for_fetched_text(self.settings(), used_tokens=7000)  # 30% still free
         assert 0 < budget < 1000  # below the per-fetch ceiling, but still worth serving
 
     def test_a_nonsensical_fraction_is_clamped_and_logged(self, monkeypatch, caplog):
         monkeypatch.setattr("raven.librarian.config.docs_fetch_max_fraction_of_context", -0.5)
-        monkeypatch.setattr("raven.librarian.config.docs_fetch_reserve_fraction_of_context", 0.25)
+        monkeypatch.setattr("raven.librarian.config.context_reserve_fraction", 0.25)
         caplog.set_level(logging.WARNING, logger="raven.librarian.llmclient")
         assert llmclient.budget_for_fetched_text(self.settings(), used_tokens=0) == 0
         assert "docs_fetch_max_fraction_of_context" in caplog.text
@@ -998,10 +1028,86 @@ class TestTruncateMiddle:
 
     def test_token_budget_is_converted_not_used_as_characters(self):
         # The failure this guards: treating a token budget as a character budget, wrong by ~4x.
-        settings = env(context_length=10000, char_to_token_ratio=0.25)
+        settings = env(context_length=10000, tokens_per_character=0.25)
         out = llmclient.fit_text_to_token_budget(settings, "x" * 100000, budget_tokens=100)
         assert 300 < len(out) <= 400  # 100 tokens / 0.25 tokens-per-char = 400 characters
 
     def test_no_budget_yields_nothing(self):
-        settings = env(context_length=10000, char_to_token_ratio=0.25)
+        settings = env(context_length=10000, tokens_per_character=0.25)
         assert llmclient.fit_text_to_token_budget(settings, "x" * 1000, budget_tokens=0) == ""
+
+
+class TestShareCharacters:
+    """Max-min fair allocation of one budget over several attachments."""
+
+    def test_everyone_gets_what_they_asked_for_when_it_fits(self):
+        assert llmclient._share_characters([10, 20, 30], budget=100) == [10, 20, 30]
+
+    def test_equal_appetites_split_evenly(self):
+        assert llmclient._share_characters([500, 500], budget=100) == [50, 50]
+
+    def test_a_modest_item_is_served_in_full_and_its_leftovers_raise_the_rest(self):
+        # The point of max-min fairness over equal shares: cutting the 10-character item to 50 would free
+        # characters nobody was asking for, and the 500-character one would be no better off for it.
+        assert llmclient._share_characters([10, 500], budget=100) == [10, 90]
+
+    def test_order_does_not_matter(self):
+        # Two callers walk the same attachments in opposite directions and must agree.
+        forwards = llmclient._share_characters([10, 500, 60], budget=100)
+        backwards = llmclient._share_characters([60, 500, 10], budget=100)
+        assert forwards == list(reversed(backwards))
+
+    def test_no_budget_gives_nobody_anything(self):
+        assert llmclient._share_characters([100, 200], budget=0) == [0, 0]
+        assert llmclient._share_characters([100, 200], budget=-500) == [0, 0]
+
+
+class TestFitAttachmentsToContext:
+    """Sizing the user's attached documents against what the window has left."""
+
+    # 10000 tokens at 0.25 tokens/character = 40000 characters; the 25% reserve leaves 30000.
+    def settings(self):
+        return env(context_length=10000, tokens_per_character=0.25)
+
+    def test_attachments_that_fit_are_returned_unchanged(self, monkeypatch):
+        # The ordinary case, and it must be byte-identical to an unbudgeted fold: anything else would
+        # rewrite the prompt prefix for no reason.
+        monkeypatch.setattr("raven.librarian.config.context_reserve_fraction", 0.25)
+        texts = ["a" * 1000, "b" * 2000]
+        assert llmclient.fit_attachments_to_context(self.settings(), 500, texts) == texts
+
+    def test_an_oversized_attachment_is_cut_to_the_budget(self, monkeypatch):
+        monkeypatch.setattr("raven.librarian.config.context_reserve_fraction", 0.25)
+        out = llmclient.fit_attachments_to_context(self.settings(), 1000, ["a" * 200000])
+        assert len(out[0]) <= 29000  # 30000 minus the conversation, then quantized down
+        assert "characters omitted" in out[0]
+
+    def test_a_small_attachment_survives_beside_a_large_one(self, monkeypatch):
+        # An attachment the user is still discussing must not be shredded merely because a book arrived
+        # alongside it.
+        monkeypatch.setattr("raven.librarian.config.context_reserve_fraction", 0.25)
+        small = "the short note"
+        out = llmclient.fit_attachments_to_context(self.settings(), 0, [small, "a" * 200000])
+        assert out[0] == small
+        assert len(out[1]) < 200000
+
+    def test_no_per_attachment_ceiling(self, monkeypatch):
+        # Unlike a document the model fetches on a hunch, an attachment is an instruction to read this --
+        # so a lone attachment may occupy everything the reserve leaves.
+        monkeypatch.setattr("raven.librarian.config.context_reserve_fraction", 0.25)
+        monkeypatch.setattr("raven.librarian.config.docs_fetch_max_fraction_of_context", 0.10)
+        out = llmclient.fit_attachments_to_context(self.settings(), 0, ["a" * 200000])
+        assert len(out[0]) > 4000  # 10% of the window would have been 4000 characters
+
+    def test_a_full_conversation_leaves_nothing(self, monkeypatch):
+        monkeypatch.setattr("raven.librarian.config.context_reserve_fraction", 0.25)
+        assert llmclient.fit_attachments_to_context(self.settings(), 40000, ["a" * 1000]) == [""]
+
+    def test_the_budget_holds_still_as_the_conversation_grows(self, monkeypatch):
+        # Folded attachment text is part of the prompt prefix, so a budget that drifted turn by turn would
+        # force a full prompt reprocess every turn, exactly where the prompt is already enormous.
+        monkeypatch.setattr("raven.librarian.config.context_reserve_fraction", 0.25)
+        text = "a" * 200000
+        first = llmclient.fit_attachments_to_context(self.settings(), 1000, [text])
+        later = llmclient.fit_attachments_to_context(self.settings(), 1600, [text])
+        assert first == later

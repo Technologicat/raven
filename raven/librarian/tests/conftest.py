@@ -28,7 +28,7 @@ def llm_settings():
                # path (`count_tokens` tier 3), which needs no model files - the exactness of the count is
                # not what any of these tests are about.
                tokenizer=None,
-               char_to_token_ratio=0.27,
+               tokens_per_character=0.27,
                context_length=32768,
                backend_flavor="lmstudio",
                # Tool registry, as `llmclient.setup` builds it: every tool is registered for the session,

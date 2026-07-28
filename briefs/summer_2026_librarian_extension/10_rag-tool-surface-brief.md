@@ -1,10 +1,11 @@
 # Brief: expose the document database as a tool the model may call
 
-**Status: steps 1 and 2 built, 2026-07-28.** The tool surface, the per-turn tool gate, the agent-loop cap,
-grounding-by-declaration and the grounding UX are in (`d04bd97`, `2050b88`, `797b4ca`, `1b7f234`,
-`7dc854c`, and the commit carrying this line). Step 3 — the truncation budget with `fetch_document` and
-`list_consulted_documents` — is designed here and not yet built. Phase 1 of the Researchers' Night list (`TODO.md`), and the only item
-on it that is new construction rather than repair.
+**Status: steps 1 and 2 built 2026-07-28; step 3 all but `list_consulted_documents`, 2026-07-29.** The tool
+surface, the per-turn tool gate, the agent-loop cap, grounding-by-declaration and the grounding UX are in
+(`d04bd97`, `2050b88`, `797b4ca`, `1b7f234`, `7dc854c`), as are the truncation engine, `fetch_document`,
+and the attachment wire-fold budget (`40719cb`, and the commit carrying this line). What remains is
+`list_consulted_documents` — the provenance list, tool and inject. Phase 1 of the Researchers' Night list
+(`TODO.md`), and the only item on it that is new construction rather than repair.
 
 Three things were decided while building rather than before, and are folded in below: the `docs_enabled`
 split (§2), the accepted full-prompt reprocess when the cap fires (§4), and the rejection of a tool-call
@@ -189,6 +190,36 @@ The per-document cap is what you truncate *to*; the error is for when the conver
 the headroom. Middle-truncation with an explicit `[... N characters omitted ...]` marker, so the model
 knows the text is incomplete rather than inferring the paper stops mid-sentence — and on a fulltext it
 keeps the abstract/intro and the conclusions, which is the right half.
+
+**Built 2026-07-29, and the attachment half came out different from the fetch half.** The formula above is
+the fetch path and stands. Attachments turned out to want their own rules, for one reason: intent. A fetch
+is speculative — the model saw a search result and reached — so a per-document ceiling is exactly right
+there. An attachment is the user handing over a paper and saying *read this*; answering that with a tenth
+of the window is four pages, which is not an answer. So attachments have **no per-document ceiling**. They
+are bounded only by the reserve, and they share what it leaves among themselves. (The reserve knob is
+consequently no longer fetch-specific, and is now `context_reserve_fraction`.)
+
+Three things fell out of that, none of them obvious beforehand:
+
+- **The share is max-min fair** (water-filling), not equal. A short note attached beside a book is not cut
+  at all — it never reaches the level — and the book absorbs the whole shortfall. Equal shares would trim
+  the note to free characters nobody was asking for. The allocation is order-independent, which it has to
+  be: `count_branch_tokens` walks the branch head-upwards and `_serialize_history_for_wire` walks it
+  root-downwards, and the two must agree.
+- **The budget is quantized once it binds.** Folded attachment text sits in the prompt *prefix*, so a
+  budget that drifted by a few characters per turn — which it would, since the conversation grows under it
+  — would rewrite that prefix every turn and force a full prompt reprocess, precisely where the prompt is
+  already enormous. Rounding down to a coarse step keeps the fold byte-identical across a run of turns, at
+  a cost of at most one step of unused budget. Nothing is cut at all while everything fits, so the ordinary
+  case is unchanged.
+- **`count_branch_tokens` had to learn about the budget.** It feeds the GUI context-fill readout, and
+  counting the full attachment text would have it read past 100% for a conversation whose prompt fits
+  comfortably — what overflows never leaves the machine. Its docstring already promised that its two
+  callers "cannot disagree about how full the context is"; that promise is what made this a bug rather than
+  a nicety.
+
+An attachment with no room left is *named*, not dropped (`CANONICAL_ATTACHMENT_OMITTED`) — a message that
+refers to a document the model cannot see is one the model will resolve by guessing.
 
 Both fractions configurable. **The reserve is doing real work, not slack:** the estimate cannot see what
 the model generates *after* the fetch — its own reasoning, which on a thinking model is the largest single

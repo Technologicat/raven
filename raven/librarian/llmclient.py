@@ -16,6 +16,13 @@ __all__ = ["list_models",
            "setup",
            "count_tokens",
            "image_token_cost",
+           "count_branch_tokens",
+
+           "budget_for_fetched_text",
+           "truncate_middle",
+           "fit_text_to_token_budget",
+           "fit_attachments_to_context",
+
            "StreamParser",
            "invoke", "prefill", "action_ack", "action_stop",
            "perform_throwaway_task", "make_console_progress_handler",
@@ -673,7 +680,7 @@ def setup(backend_url: str,
     # Useful mainly with older models that tend to speak on behalf of the user.
     stopping_strings = [f"\n{user}:"]
 
-    # Token counting: load the optional local tokenizer for exact counts, and seed the char->token ratio used
+    # Token counting: load the optional local tokenizer for exact counts, and seed the tokens-per-character ratio used
     # by the estimate path (`count_tokens` tier 3) until real `usage` refines it (see `invoke`).
     tokenizer = _load_local_tokenizer(librarian_config.llm_tokenizer_path) if librarian_config.llm_tokenizer_path else None
 
@@ -684,7 +691,7 @@ def setup(backend_url: str,
                    model_is_vlm=model_info.is_vlm,  # whether the loaded model accepts image input: True/False, or None if unknown (gates image attach)
                    backend_supports_continue=(backend_flavor == "oobabooga"),  # ooba has an explicit continue flag; others don't
                    tokenizer=tokenizer,  # local HF tokenizer for exact counts, or None (see `count_tokens`)
-                   char_to_token_ratio=_DEFAULT_CHAR_TO_TOKEN_RATIO,  # estimate-path calibration; refined from usage in `invoke`
+                   tokens_per_character=_DEFAULT_TOKENS_PER_CHARACTER,  # estimate-path calibration; refined from usage in `invoke`
                    system_prompt=system_prompt,
                    character_card=character_card,
                    stopping_strings=stopping_strings,
@@ -754,7 +761,7 @@ def setup(backend_url: str,
 # "num_predict": 800,
 # "num_ctx": 65536,
 
-_DEFAULT_CHAR_TO_TOKEN_RATIO = 0.27  # tokens per character; rough English/markup default, refined from real usage
+_DEFAULT_TOKENS_PER_CHARACTER = 0.27  # tokens per character; rough English/markup default, refined from real usage
 _tokenizer_cache = {}  # path -> loaded tokenizer (or None if loading failed); avoids reloading the same tokenizer
 
 def _load_local_tokenizer(path: str):
@@ -786,7 +793,7 @@ def count_tokens(settings: env, text: str) -> Tuple[int, bool]:
     Useful for checking prompt length after injecting RAG context etc. Tiers, in order of preference:
       1. A configured local tokenizer (`config.llm_tokenizer_path`) — exact, offline, works on any backend.
       2. oobabooga's `/v1/internal/token-count` endpoint — exact.
-      3. A calibrated char->token ratio (refined from each call's real `usage`; see `invoke`) — an *estimate*.
+      3. A calibrated tokens-per-character ratio (refined from each call's real `usage`; see `invoke`) — an *estimate*.
     The `is_exact` flag drives the GUI context-fill indicator's `X%` (exact) vs `~X%` (estimate) typography.
     Callers that only want the number use `count_tokens(...)[0]`.
     """
@@ -794,12 +801,12 @@ def count_tokens(settings: env, text: str) -> Tuple[int, bool]:
         return len(settings.tokenizer.encode(text)), True
     if settings.backend_flavor == "oobabooga":
         return _ooba_token_count(settings.backend_url, text), True
-    return round(len(text) * settings.char_to_token_ratio), False
+    return round(len(text) * settings.tokens_per_character), False
 
 def image_token_cost(settings: env, height: int, width: int) -> int:
     """Estimated token cost of one attached image for the loaded model — for the context-fill budget.
 
-    A VLM image consumes a chunk of context that the text-only char->token ratio (`count_tokens` tier 3) can't
+    A VLM image consumes a chunk of context that the text-only tokens-per-character ratio (`count_tokens` tier 3) can't
     see, so the pre-send indicator has to add it explicitly. The per-family costs live in
     `config.llm_image_token_cost`, keyed by a lowercase substring matched against the loaded model's id/family
     (first match wins; the `None` key is the fallback for unknown families). Each entry is a flat token count
@@ -807,7 +814,7 @@ def image_token_cost(settings: env, height: int, width: int) -> int:
 
     Necessarily an *estimate*: it is a conservative published-scheme figure, refined away entirely once the
     backend reports the real `usage.prompt_tokens` for an image-bearing call (same self-correction path as the
-    char->token ratio). `height`/`width` are the stored (wire) dimensions; they only matter for the
+    tokens-per-character ratio). `height`/`width` are the stored (wire) dimensions; they only matter for the
     resolution-scaling families.
     """
     table = librarian_config.llm_image_token_cost
@@ -830,15 +837,19 @@ def count_branch_tokens(settings: env,
     figure, submit the prompt and read `usage["prompt_tokens"]`; that is what `prefill` is for.
 
     Attachments are counted in the two different ways they cost context. An image consumes tokens the
-    char->token ratio cannot see, so it is added as a per-family estimate (`image_token_cost`) and forces
+    tokens-per-character ratio cannot see, so it is added as a per-family estimate (`image_token_cost`) and forces
     `is_exact` to `False`. An attached document rides the wire as text (folded into the message at
-    wire-build), so its extracted text is counted alongside everything else and costs no accuracy.
+    wire-build), so its extracted text is counted alongside everything else and costs no accuracy - but it
+    is counted at the size that will actually be *sent*, after `fit_attachments_to_context` has had its say.
+    Counting the full text would read past 100% for a conversation whose prompt comfortably fits, since
+    what overflows never leaves the machine.
 
     Two callers, wanting the same number for different reasons: the GUI's context-fill readout, and the
     budget that decides how much of a document `fetch_document` may return. Shared so they cannot disagree
     about how full the context is.
     """
     text_segments = []
+    attachment_texts = []
     image_tokens = 0
     for node_id in datastore.linearize_up(head_node_id):
         payload = datastore.get_payload(node_id)
@@ -856,9 +867,11 @@ def count_branch_tokens(settings: env,
             elif part_type == "text_file":
                 file_url = (part.get("text_file") or {}).get("url", "")
                 if file_url.startswith(sidecarstore.SIDECAR_SCHEME):
-                    text_segments.append(textfilestore.sidecar_to_text(datastore, file_url))
+                    attachment_texts.append(textfilestore.sidecar_to_text(datastore, file_url))
 
-    count, is_exact = count_tokens(settings, "".join(text_segments))
+    conversation_characters = sum(len(segment) for segment in text_segments)
+    fitted_attachments = fit_attachments_to_context(settings, conversation_characters, attachment_texts)
+    count, is_exact = count_tokens(settings, "".join(text_segments + fitted_attachments))
     if image_tokens:
         count += image_tokens
         is_exact = False  # per-image token cost is an estimate, so the whole figure is now approximate
@@ -901,9 +914,9 @@ def budget_for_fetched_text(settings: env,
       - A *per-fetch* ceiling (`config.docs_fetch_max_fraction_of_context`), so that one document cannot
         crowd out the conversation it is supposed to inform. This is the one that normally binds, and what
         oversized text is truncated *to*.
-      - A *floor* on what is left for the discussion (`config.docs_fetch_reserve_fraction_of_context`),
-        which binds only once the conversation has already grown large. When it does bind, the answer is to
-        refuse rather than to hand back a sliver: at that point the useful move is a new chat.
+      - A *floor* on what is left for the discussion (`config.context_reserve_fraction`), which binds only
+        once the conversation has already grown large. When it does bind, the answer is to refuse rather
+        than to hand back a sliver: at that point the useful move is a new chat.
 
     `used_tokens`: how much of the window the conversation already occupies, from `count_branch_tokens`.
                    Recompute it per tool round rather than reusing a turn-start figure - the model's own
@@ -912,8 +925,8 @@ def budget_for_fetched_text(settings: env,
     context_length = settings.context_length
     per_fetch_ceiling = _clamped_fraction(librarian_config.docs_fetch_max_fraction_of_context,
                                           "docs_fetch_max_fraction_of_context") * context_length
-    reserve = _clamped_fraction(librarian_config.docs_fetch_reserve_fraction_of_context,
-                                "docs_fetch_reserve_fraction_of_context") * context_length
+    reserve = _clamped_fraction(librarian_config.context_reserve_fraction,
+                                "context_reserve_fraction") * context_length
     return int(min(per_fetch_ceiling, context_length - used_tokens - reserve))
 
 def truncate_middle(text: str,
@@ -951,15 +964,98 @@ def fit_text_to_token_budget(settings: env,
     themselves: the budget is in tokens, the truncation is in characters, and getting that backwards
     produces a limit wrong by a factor of about four in whichever direction hurts.
 
-    "Roughly" is honest rather than hedging. The conversion uses `settings.char_to_token_ratio`, the same
+    "Roughly" is honest rather than hedging. The conversion uses `settings.tokens_per_character`, the same
     calibrated estimate `count_tokens` falls back on, which drifts with the text: dense markup and long
     identifiers tokenize worse than prose. Exactness is not needed here - the reserve that
     `budget_for_fetched_text` keeps free is far larger than the error.
     """
     if budget_tokens <= 0:
         return ""
-    ratio = settings.char_to_token_ratio or _DEFAULT_CHAR_TO_TOKEN_RATIO  # tokens per character
-    return truncate_middle(text, int(budget_tokens / ratio))
+    tokens_per_character = settings.tokens_per_character or _DEFAULT_TOKENS_PER_CHARACTER
+    return truncate_middle(text, int(budget_tokens / tokens_per_character))  # tokens / (tokens/character) = characters
+
+# What stands in for an attachment the window has no room for at all, in the manner of
+# `CANONICAL_NO_ROOM_TO_FETCH`. The file is still named: a silently vanished attachment leaves the model
+# reading a message that refers to a document it cannot see, which it will resolve by guessing.
+CANONICAL_ATTACHMENT_OMITTED = "[Attached file: {name} - not shown, because there is no room left for it in the context window.]"
+
+# How coarsely the shared attachment budget is rounded down, in characters (~2200 tokens at the default
+# ratio). Purely a stability measure; see `fit_attachments_to_context`.
+_ATTACHMENT_BUDGET_QUANTUM = 8192
+
+def _share_characters(wanted: List[int],
+                      budget: int) -> List[int]:
+    """Split `budget` characters over items wanting `wanted` characters each. Returns the allowances.
+
+    Max-min fair (the classic water-filling allocation): raise a common level until the budget runs out,
+    and let anything that wanted less than the level through untouched. So a short attachment alongside a
+    book is not cut at all - it never reached the level - and the book absorbs the whole shortfall. Equal
+    shares would instead cut the short one to half the budget for no gain, since the characters freed that
+    way are ones nobody was asking for.
+
+    Order-independent by construction, which matters because two callers walk the same attachments in
+    opposite directions (`count_branch_tokens` from the head up, `_serialize_history_for_wire` from the
+    root down) and must arrive at the same numbers.
+    """
+    allowances = [0] * len(wanted)
+    if budget <= 0:
+        return allowances
+    remaining = budget
+    unsettled = list(range(len(wanted)))
+    while unsettled:
+        level = remaining // len(unsettled)
+        modest = [i for i in unsettled if wanted[i] <= level]
+        if not modest:  # everyone left wants more than an equal share of what is left: split it evenly
+            for i in unsettled:
+                allowances[i] = level
+            break
+        for i in modest:  # served in full, and their leftovers raise the level for the rest
+            allowances[i] = wanted[i]
+            remaining -= wanted[i]
+        unsettled = [i for i in unsettled if wanted[i] > level]
+    return allowances
+
+def fit_attachments_to_context(settings: env,
+                               conversation_characters: int,
+                               attachment_texts: List[str]) -> List[str]:
+    """Cut attached-document texts down to what the context window can carry. Returns them in the same order.
+
+    Attachments are governed differently from a document the model fetches (`budget_for_fetched_text`), and
+    the difference is one of intent. A fetch is speculative - the model saw a search result and reached for
+    it - so it gets a per-document ceiling that keeps a hunch from crowding out the conversation. An
+    attachment is the user handing over a paper and saying read this; a ceiling of a tenth of the window
+    would answer that by showing four pages. So attachments have no per-document ceiling. They are bounded
+    only by `config.context_reserve_fraction`, the floor under the discussion itself, and they share what
+    that leaves among themselves.
+
+    Nothing is cut while everything fits, which is the overwhelmingly common case and returns the texts
+    unchanged. The budget only binds where the alternative is not "a slightly shorter paper" but a request
+    that overflows the window outright - which is what the attachment path did before this existed.
+
+    The budget is quantized (`_ATTACHMENT_BUDGET_QUANTUM`) once it binds, and that is worth a word because
+    it looks like sloppiness. Folded attachment text is part of the prompt *prefix*, so a budget that
+    drifted by a few characters per turn - which it would, since the conversation grows under it - would
+    rewrite that prefix every turn and force the backend to reprocess the whole prompt each time, in
+    precisely the situation where the prompt is already enormous. Rounding down to a coarse step keeps the
+    fold byte-identical across a run of turns and costs at most one step of unused budget.
+
+    `conversation_characters`: how many characters of everything *else* the request carries - the messages,
+                              minus the attachment text being sized here. Characters rather than tokens
+                              throughout: this runs on the hot path, once per request, and the truncation
+                              it feeds is in characters anyway, so a token count would be converted back.
+    """
+    if not attachment_texts:
+        return []
+    tokens_per_character = settings.tokens_per_character or _DEFAULT_TOKENS_PER_CHARACTER
+    reserve = _clamped_fraction(librarian_config.context_reserve_fraction, "context_reserve_fraction")
+    window_characters = settings.context_length / tokens_per_character  # tokens / (tokens/character) = characters
+    budget = int(window_characters * (1.0 - reserve)) - conversation_characters
+    wanted = [len(text) for text in attachment_texts]
+    if sum(wanted) <= budget:
+        return list(attachment_texts)
+    budget -= budget % _ATTACHMENT_BUDGET_QUANTUM
+    allowances = _share_characters(wanted, budget)
+    return [truncate_middle(text, allowance) for text, allowance in zip(attachment_texts, allowances)]
 
 # --------------------------------------------------------------------------------
 # Streaming tool-call accumulation (shared by `invoke`)
@@ -1251,33 +1347,55 @@ def _serialize_history_for_wire(settings: env,
         header. Any model can therefore use an attached document — no vision capability required. Like image
         resolution this needs `datastore`; without it there are no `text_file` parts to fold.
 
+        The attachments of the *whole* request are sized together, against what the context window has left
+        once the conversation and the reserve are accounted for (`fit_attachments_to_context`). That is why
+        the fold takes two passes over the history rather than one: the budget one attachment gets depends
+        on how much the others are asking for, and on how long the conversation has become — neither of
+        which is known while looking at a single message. When everything fits, which is the ordinary case,
+        the result is the same text as an unbudgeted fold would produce.
+
     `continue_`: when `True`, the last message (the AI message being continued) is left exactly as-is — neither
                  scrubbed nor image/document-resolved (assistant continuations carry no attachments).
     """
     history = copy.deepcopy(history)
     end_idx = -1 if continue_ else None  # Don't touch the current AI message when continuing; else process all.
-    for message in history[:end_idx]:
-        scrubbed_text = chatutil.scrub(persona=settings.personas.get(message["role"], None),
-                                       text=chatutil.content_to_text(message["content"]),
-                                       thoughts_mode="discard",
-                                       markup=None,
-                                       add_persona=True)
+    messages = history[:end_idx]  # aliases the same dicts, so mutating a message below mutates `history`
 
-        # Fold any attached documents into the message text. A `text_file` part has no native wire form, so its
-        # plaintext (extracted on demand from the sidecar) rides as text under a clear header — which is why any
-        # model can use an attached document, no vision capability required. Resolution needs `datastore`;
-        # without it (throwaway tasks / prefill on attachment-free chats) there are no `text_file` parts anyway.
-        if datastore is not None:
-            file_blocks = []
-            for part in message["content"]:
-                if isinstance(part, dict) and part.get("type") == "text_file":
-                    url = part.get("text_file", {}).get("url", "")
-                    name = part.get("text_file", {}).get("name") or "attached file"
-                    if url.startswith(sidecarstore.SIDECAR_SCHEME):
-                        doc_text = textfilestore.sidecar_to_text(datastore, url)
-                        file_blocks.append(f"[Attached file: {name}]\n{doc_text}\n[End of attached file: {name}]")
-            if file_blocks:
-                scrubbed_text = "\n\n".join([scrubbed_text, *file_blocks]) if scrubbed_text else "\n\n".join(file_blocks)
+    # Pass 1: scrub the text, and collect the attached documents' plaintext. A `text_file` part has no native
+    # wire form, so its text (extracted on demand from the sidecar) has to ride as message text — which is why
+    # any model can use an attached document, no vision capability required. Extraction needs `datastore`;
+    # without it (throwaway tasks / prefill on attachment-free chats) there are no `text_file` parts anyway.
+    scrubbed_texts = []
+    attachments = []  # (message index, display name, extracted text)
+    for message_index, message in enumerate(messages):
+        scrubbed_texts.append(chatutil.scrub(persona=settings.personas.get(message["role"], None),
+                                             text=chatutil.content_to_text(message["content"]),
+                                             thoughts_mode="discard",
+                                             markup=None,
+                                             add_persona=True))
+        if datastore is None:
+            continue
+        for part in message["content"]:
+            if isinstance(part, dict) and part.get("type") == "text_file":
+                url = part.get("text_file", {}).get("url", "")
+                name = part.get("text_file", {}).get("name") or "attached file"
+                if url.startswith(sidecarstore.SIDECAR_SCHEME):
+                    attachments.append((message_index, name, textfilestore.sidecar_to_text(datastore, url)))
+
+    # Size all the attachments against one budget, then hand each message back its own share.
+    fitted_texts = fit_attachments_to_context(settings,
+                                              conversation_characters=sum(len(text) for text in scrubbed_texts),
+                                              attachment_texts=[text for _, _, text in attachments])
+    file_blocks = collections.defaultdict(list)
+    for (message_index, name, _), fitted_text in zip(attachments, fitted_texts):
+        if fitted_text:
+            file_blocks[message_index].append(f"[Attached file: {name}]\n{fitted_text}\n[End of attached file: {name}]")
+        else:  # nothing left to give it - say so rather than let the document silently disappear
+            file_blocks[message_index].append(CANONICAL_ATTACHMENT_OMITTED.format(name=name))
+
+    # Pass 2: rebuild each message's content from the scrubbed text, its attachment blocks, and its images.
+    for message_index, message in enumerate(messages):
+        scrubbed_text = "\n\n".join([text for text in (scrubbed_texts[message_index], *file_blocks[message_index]) if text])
 
         new_content = [chatutil.text_content_part(scrubbed_text)]
         for part in message["content"]:
@@ -1626,14 +1744,14 @@ def invoke(settings: env,
     else:
         n_tokens = n_chunks
 
-    # Refine the char->token calibration from this call's real prompt usage (the estimate path in
+    # Refine the tokens-per-character calibration from this call's real prompt usage (the estimate path in
     # `count_tokens`), and cross-check a configured local tokenizer against the backend: if the tokenizer counts
     # MORE tokens for the message content alone than the backend reported for the whole templated prompt, it
     # almost certainly doesn't match the served model.
     if usage is not None and usage.get("prompt_tokens"):
         prompt_content = "".join(chatutil.content_to_text(message.get("content")) for message in history)
         if prompt_content:
-            settings.char_to_token_ratio = usage["prompt_tokens"] / len(prompt_content)
+            settings.tokens_per_character = usage["prompt_tokens"] / len(prompt_content)
             if settings.tokenizer is not None:
                 tokenizer_count = len(settings.tokenizer.encode(prompt_content))
                 if tokenizer_count > usage["prompt_tokens"] * 1.1:

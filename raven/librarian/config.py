@@ -60,7 +60,7 @@ llm_model = None
 
 # Optional local HuggingFace tokenizer for *exact* token counting against backends without a token-count
 # endpoint (LM Studio, generic). `None` (default) disables it; counts then fall back to the backend's `usage`
-# stats and a calibrated char->token estimate.
+# stats and a calibrated tokens-per-character estimate.
 #
 # Value: a path to a directory containing `tokenizer.json` + `tokenizer_config.json`, or a HuggingFace repo id
 # (e.g. "Qwen/Qwen3.5-4B"). The tokenizer files are tiny (~10-15 MB) and load in milliseconds. It MUST match
@@ -109,25 +109,30 @@ web_num_results = 10
 # paused agent loop and prompts yet another call rather than a reply.
 max_tool_call_rounds = 5
 
-# How much of the context window one piece of retrieved text may occupy, as a fraction.
+# How much of the context window one document fetched by the LLM may occupy, as a fraction.
 #
-# Applies to any long text pulled in on demand — a document the LLM fetches with `fetch_document`, and
-# (later) an attached document folded into the message at wire-build. Text over the limit is truncated in
-# the middle, keeping the beginning and the end, with an explicit marker where the omission is. That shape
-# suits a scientific fulltext: the abstract, introduction and conclusions survive; the methods section in
-# the middle is what goes.
+# Text over the limit is truncated in the middle, keeping the beginning and the end, with an explicit
+# marker where the omission is. That shape suits a scientific fulltext: the abstract, introduction and
+# conclusions survive; the methods section in the middle is what goes.
+#
+# This ceiling is for text the *model* reaches for on a hunch, having seen a search result. Text the *user*
+# attached is governed by `context_reserve_fraction` alone, with no per-document ceiling: an attachment is
+# an instruction to read this, and capping it at a tenth of the window would answer that instruction with a
+# few pages. Attachments compete with each other for whatever the reserve leaves, share and share alike.
 docs_fetch_max_fraction_of_context = 0.10
 
 # How much of the context window to keep free for the discussion itself, as a fraction.
 #
-# A fetch is refused outright when the conversation has already grown past this, rather than truncated to
-# whatever slack is left — at that point the useful move is a new chat, not a sliver of a document.
+# Governs every long text that is not the conversation: documents the LLM fetches, and documents the user
+# attached (folded into the message at wire-build). A fetch is refused outright when the conversation has
+# already grown past this, rather than truncated to whatever slack is left — at that point the useful move
+# is a new chat, not a sliver of a document.
 #
 # This reserve is doing real work, not sitting idle. The size estimate cannot see what the model generates
 # *after* the fetch: its own reasoning, which on a thinking model is the single largest consumer of the
 # turn. That is what the reserve is for. Tuning it down towards zero on the grounds that "the context is
 # only 60% full, so there is plenty of room" is the mistake it exists to prevent.
-docs_fetch_reserve_fraction_of_context = 0.25
+context_reserve_fraction = 0.25
 
 # --------------------------------------------------------------------------------
 # webfetch tool — client-side access policy
@@ -247,15 +252,16 @@ store_original_image = True
 image_staging_dir = global_config.toplevel_userdata_dir / "staging" / "recovered_images"
 
 # Estimated per-image token cost, for the context-fill budget (a VLM image consumes non-trivial context that a
-# text-only char->token ratio can't see). Keyed by a lowercase substring matched against the loaded model's
-# family / arch / id; first match wins, `None` key is the fallback for unknown families. Each value is either a
-# flat token count (int) or a callable `(height, width) -> int` for models whose cost scales with resolution.
+# text-only tokens-per-character estimate can't see). Keyed by a lowercase substring matched against the
+# loaded model's family / arch / id; first match wins, `None` key is the fallback for unknown families. Each
+# value is either a flat token count (int) or a callable `(height, width) -> int` for models whose cost
+# scales with resolution.
 #
 # These are conservative estimates: the budget self-corrects from the backend's real `usage.prompt_tokens`
-# after the first image-bearing call (same mechanism as the char->token calibration), so over-estimating here
-# only means the pre-send indicator reads slightly high until the first exact count lands. Formulas as of
-# 2026-05, from each family's published image-tiling scheme (Gemma 4's discrete per-image budget, LLaVA's
-# 336-px tiles, Qwen-VL's 28-px patch grid).
+# after the first image-bearing call (same mechanism as the tokens-per-character calibration), so
+# over-estimating here only means the pre-send indicator reads slightly high until the first exact count
+# lands. Formulas as of 2026-05, from each family's published image-tiling scheme (Gemma 4's discrete
+# per-image budget, LLaVA's 336-px tiles, Qwen-VL's 28-px patch grid).
 gemma4_visual_token_budget = 1120  # Gemma 4's per-image budget is a server-side knob (70/140/280/560/1120); assume the max unless you know your server's setting.
 llm_image_token_cost = {
     "gemma4": lambda h, w: gemma4_visual_token_budget,
