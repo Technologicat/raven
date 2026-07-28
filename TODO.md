@@ -36,12 +36,20 @@ individual items carry a "Researchers' Night" note where they feed it. Working b
   device open, and the postprocessor's first pass. Test whether it survives TTS-on-CPU, which would rule
   contention out.
 
-  **One candidate the list was missing, from the VRAM work above:** a session allocates +80 MiB at creation
-  and reaches +386 MiB only once frames are flowing, so roughly 300 MiB is allocated *during the first
-  frames* — exactly when the stutter is reported. Allocator growth is a mechanism none of the existing
-  hypotheses covers, and they are all "cold code" rather than "cold memory". This is co-occurrence, not
-  evidence: the probe measured allocation timing, not frame timing. But it is cheap to test, by watching
-  whether pre-allocating (or a warm-up pass that forces the same buffers) moves the stutter.
+  **Two notes for whoever picks this up, both learned by getting it wrong first:**
+
+  - *The moment matters, and it is not startup.* The stutter is on an avatar that has already been
+    streaming frames steadily for a long time — Librarian starts the session well before anything is
+    spoken. So any hypothesis about session-start costs (including the ~300 MiB the VRAM probe sees
+    arriving during the first frames) is aimed at the wrong moment and can be dropped.
+  - *VRAM is the wrong instrument.* A stutter is dropped or late frames; memory usage cannot show it.
+    The measurement wanted is **frame inter-arrival timing** across the speech transition — with the
+    caveat that frames reach a client over HTTP, so client-observed timing carries scheduling noise
+    that server-side instrumentation would not.
+
+  And the entry point, which is easy to get wrong: `avatar_start_talking` is the *randomized-mouth idle*
+  animation, not lipsync. Real speech goes through `raven.client.tts.tts_speak_lipsynced`; for how an
+  application drives it, see `raven.client.avatar_controller.speak_task`.
 - ~~**Per-module VRAM budget**~~ — **measured 2026-07-28 on the 16 GB machine** (`raven-server --vram-report PATH`, instrumentation lives in `deviceinfo.VRAMLedger`). All nine modules resident cost **2.27 GiB** at load, leaving 13.0 GiB of 15.6 free:
 
   | module | GiB | | module | GiB |

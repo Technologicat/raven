@@ -30,6 +30,15 @@ does not give its memory back is a different bug, and this is the cheapest place
 chain is where `crt` and `atmospheric_dust` will live, and each filter adds its own working buffers, so
 re-run this after those land rather than assuming this figure still holds.
 
+**Speech is not exercised either, and this is not the tool for that question.** The avatar's reported
+stutter happens while it is speaking, on a session that has already been streaming frames for a long
+time - so it is not covered here, and extending this probe would not cover it either, because a stutter
+is dropped or late frames and VRAM cannot see that. The instrument for it is *frame inter-arrival
+timing*, not memory. Note also that `avatar_start_talking` is the randomized-mouth idle animation and
+not the lipsync path: real speech goes through `raven.client.tts.tts_speak_lipsynced` (see
+`raven.client.avatar_controller.speak_task` for how an application drives it), which synthesizes audio,
+plays it locally, and animates morphs from phoneme timestamps.
+
 Usage:
     python avatar_footprint.py [character.png] [n_frames]
 
