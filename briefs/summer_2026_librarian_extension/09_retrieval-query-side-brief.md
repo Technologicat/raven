@@ -200,7 +200,7 @@ on. Implement them in that order and the interaction is benign.
 
 **Tell the model (build this, after the RAG tool surface).** A line in the retrieval tool result — "the
 best match for this query scored weakly" — is *data* rather than instruction, which is the right side of
-the taxonomy in `08_context-injects-brief.md`.
+the taxonomy in `done/08_context-injects-brief.md`.
 
 **On the tool route, telling the model and triggering the re-query are the same act.** A model that may
 author its own query does not need Raven to decide when; it needs to know that the first pass was thin.

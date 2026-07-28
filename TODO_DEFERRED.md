@@ -87,7 +87,7 @@ clusters, as of 2026-07-27:
   **Built 2026-07-28**, closing "RAG injects: sent in the user role as a workaround", "Fold the temporary
   context injects…" (measured, and rejected in favour of the system block plus a tool result) and "Revisit
   the 'answer from context only' reminder". Measurements in `briefs/context-inject-shape-measurements.md`,
-  the plan they argued for in `briefs/summer_2026_librarian_extension/08_context-injects-brief.md`. Still
+  the plan they argued for in `briefs/summer_2026_librarian_extension/done/08_context-injects-brief.md`. Still
   open in this cluster: "RAG: rerank retrieved chunks…" and "Modernize the Librarian system prompt /
   character card", plus the new "RAG access via tool-call" motivation recorded under Q11 of the
   measurements — the model asks for a second, better-aimed search and currently has no way to get one.
