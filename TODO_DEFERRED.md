@@ -206,9 +206,18 @@ modern model at all. Noticed during brief-03 Half-2 image-attach testing (2026-0
 
 ## RAG: rerank retrieved chunks and inject only the best few
 
+**Do `briefs/summer_2026_librarian_extension/09_retrieval-query-side-brief.md` first.** It documents a
+verified finding that changes the diagnosis below: `_query_body` applies each engine's quality signal as
+an absolute cutoff *before* fusion, and `reciprocal_rank_fusion` then sums `1 / (rank + K)` over
+positions only. So the score-to-quality mapping is discarded one line before the rank that is supposed to
+carry it, and a top-of-a-bad-batch result is indistinguishable from a top-of-a-good-batch one. That is
+the reported symptom (less topical matches outscoring the ones that answer the question), and it gets
+*worse* as retrieval widens — which is the direction this item wants to push. The brief also carries the
+labelled-set setup that makes any of this measurable.
+
 `docs_num_results = 20` (`raven.librarian.config`), and `scaffold._perform_injects` injects *all* of
-them into the prompt, each as its own system message at index 1. That is a lot of material to hand a
-model for one question, and it costs three ways at once:
+them into the prompt, as one merged tool message placed before the user's latest message. That is a lot
+of material to hand a model for one question, and it costs three ways at once:
 
 - **Context.** Twenty chunks of scientific fulltext is a large fraction of the window before the
   conversation has even started, and the "Context-window budgeting and conversation compaction" item
@@ -296,6 +305,24 @@ Raven-server uses Flask/waitress without response compression currently. Adding 
 Not urgent — Raven's trusted-LAN-or-localhost deployment means bandwidth isn't the bottleneck for typical payloads (KB-range, not MB-range). Revisit if profiling shows wire time becoming a meaningful fraction of end-to-end latency, or when a JS client on a WAN-ish link enters the picture.
 
 Discovered during natlang wire-format migration (2026-04-21).
+
+## Uniform load-on-demand for Raven-server modules
+
+Raven-server keeps every model resident. That is the right default when the server owns the GPU, and the
+wrong one on a laptop dGPU where the VRAM budget is already spent on the LLM and the avatar — any new
+model (a reranker is the live example) has to displace something or not run at all.
+
+What this wants is not a one-off for whichever module needs it first, but *uniform* load-on-demand across
+the server modules: a module declares itself loadable-on-demand, and the server loads on first request
+and evicts under pressure. Bolting it onto one module invites each subsequent one to invent its own
+policy, which is how the eviction bugs get interesting.
+
+Unverified prior worth measuring before designing around it: on a laptop the PCIe link is narrow (x8 on
+a dGPU, x4 over a Thunderbolt eGPU), so load time may make on-demand a non-starter for anything but the
+smallest models. Nobody has timed it — and if it *is* slow, running the small model on CPU may beat
+loading it to GPU per turn.
+
+Raised while scoping RAG reranking (2026-07-28, Juha).
 
 ## Remaining server modules without a MaybeRemote
 
