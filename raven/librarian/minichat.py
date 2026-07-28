@@ -595,32 +595,30 @@ def minimal_chat_client(backend_url) -> None:
 
                 # Show LLM performance statistics
                 ai_message_node_payload = datastore.get_payload(node_id)
-                n_tokens = ai_message_node_payload["generation_metadata"]["n_tokens"]
-                dt = ai_message_node_payload["generation_metadata"]["dt"]
+                generation_metadata = ai_message_node_payload["generation_metadata"]
+                n_tokens = generation_metadata["n_tokens"]
+                dt = generation_metadata["dt"]
                 speed = n_tokens / dt
                 print(colorizer.colorize(f"[{n_tokens}t, {dt:0.2f}s, {speed:0.2f}t/s]", colorizer.Style.DIM))
+                # Say when the reply had nothing but the model's own knowledge to stand on. The field is
+                # present only when the user asked to be told (speculation off); absent means nothing to say.
+                if generation_metadata.get("grounded") is False:
+                    print(colorizer.colorize("[answered from general knowledge, not from the document database]",
+                                             colorizer.Style.DIM, colorizer.Fore.YELLOW))
                 print()
 
                 ai_message_number += 1
-
-            def on_nomatch_done(node_id: str) -> None:
-                nomatch_message_node_payload = datastore.get_payload(node_id)
-                chat_print_message(message_number=ai_message_number,
-                                   role="assistant",
-                                   persona=llm_settings.personas.get("assistant", None),
-                                   text=chatutil.content_to_text(nomatch_message_node_payload["message"]["content"]))
-                print()
 
             def on_tool_done(node_id: str) -> None:
                 nonlocal ai_message_number
 
                 app_state["HEAD"] = node_id  # update just in case of Ctrl+C or crash during tool calls
 
-                nomatch_message_node_payload = datastore.get_payload(node_id)
+                tool_message_node_payload = datastore.get_payload(node_id)
                 chat_print_message(message_number=ai_message_number,
                                    role="tool",
                                    persona=llm_settings.personas.get("tool", None),
-                                   text=chatutil.content_to_text(nomatch_message_node_payload["message"]["content"]))
+                                   text=chatutil.content_to_text(tool_message_node_payload["message"]["content"]))
                 print()
 
                 ai_message_number += 1
@@ -642,7 +640,6 @@ def minimal_chat_client(backend_url) -> None:
                                                 on_prompt_ready=None,  # debug/info hook
                                                 on_llm_progress=on_llm_progress,
                                                 on_llm_done=on_llm_done,
-                                                on_nomatch_done=on_nomatch_done,
                                                 on_tools_start=None,
                                                 on_call_lowlevel_start=None,
                                                 on_call_lowlevel_done=None,

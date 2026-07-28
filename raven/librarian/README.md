@@ -53,7 +53,7 @@
 - **Animated AI avatar** with emotional reactions based on LLM text output, lipsynced speech (English), and optional machine-translated subtitles (in a language of your choice).
 - **Voice mode**. Talk with the AI using your mic. (English only for now.)
 - **Document database** for fact grounding. Talk with the AI about the content of your documents. Powered by a local hybrid semantic and keyword search engine for optimal results.
-- **Tool use** (tool-calling) for more fact grounding. The AI has access to tools provided by the *Librarian* software. (Websearch only for now; we plan to extend this later.)
+- **Tool use** (tool-calling) for more fact grounding. The AI has access to tools provided by the *Librarian* software: websearch, web page fetching, and searching your document database itself when the automatic search did not find what it needed.
 - **Open source**. 2-clause BSD license.
 
 **:exclamation: *Raven-librarian* is currently under development. :exclamation:**
@@ -218,6 +218,10 @@ How tool use works:
 - The LLM may make another round of tool calls if it deems necessary to do so, and the process repeats.
 - Once the LLM is satisfied with the information it has, it proceeds to write its reply without making more tool calls.
 - Control returns to the user.
+
+There is a configurable ceiling on how many rounds of tool calls one reply may take (`max_tool_call_rounds` in [`raven.librarian.config`](../librarian/config.py)). It is a backstop, not a normal limit — an LLM that finds what it needs stops well below it. When the ceiling is reached, the requested calls still run, and only the round after them is sent with no tools offered, so the LLM has to write its reply.
+
+The document database is available to the LLM as a tool (`search_documents`) whenever the **Documents** mode toggle is on, in addition to the automatic search. The two do different jobs: the automatic search costs no extra round trip but has to guess a query from your message, while the tool lets the LLM write a better query *after* reading what the first search returned. This matters most when your question is about something the first search phrased badly — asking about a specific instrument by name, say, when your message mentioned it only in passing.
 
 ### Security warning
 
@@ -417,17 +421,17 @@ Below the avatar panel at the right, there are **mode toggles**:
   - If **OFF**, do not autosearch the document database.
     - This is useful when you know your topic doesn't need information from the documents you have fed into *Librarian*'s document database, for shorter processing times and less potential confusion.
 - **Speculation**
-  - Works together with the **Documents** mode toggle. An element for *defence in depth* in truthfulness.
-  - If **Documents** is **OFF**, then **Speculation** has no effect.
-  - If **Documents** is **ON**, and **Speculation** is **OFF**:
-    - If there is at least one match (whether real or spurious) from the autosearch, automatically remind the LLM to base its answer on the context only. (This reminder is not shown in the GUI.)
-    - If the autosearch returns zero matches, bypass the LLM, and instead write a machine-formatted message stating that there were no matches in the document database.
-      - Some other AI chatbots with RAG offer a similar feature.
+  - An element for *defence in depth* in truthfulness. It controls how much *Librarian* tells you about where an answer came from; it never withholds the answer.
+  - If **Speculation** is **OFF**:
+    - When there is material to ground an answer in — document matches, an attachment, a tool result — remind the LLM to base its claims about that material on that material. (This reminder is not shown in the GUI.)
       - Spurious matches are still possible, and may trip up your LLM.
         - E.g. *"What does your knowledge base say about whether cats can jump?"* may find matches in e.g. AI research literature due to the phrase *"knowledge base"*.
         - Whether the AI notices the case where all results are spurious and don't actually contain the requested information, depends on your particular LLM.
           - *Qwen3 30B A3B Thinking 2507* is pretty good at this (and will e.g. tell you that the search results were about AI, not cats), but as of 12/2025, anything smaller than 30B generally isn't.
-  - If both **Documents** and **Speculation** are **ON**, the LLM is free to respond as it wants. Anything goes!
+    - When there is **no** such material, the reply is marked **[general knowledge]** below the message. The AI still answers; the marker tells you the answer came from the model itself rather than from your documents.
+      - Note this is the *expected* state for a general question. Nobody's document database answers *"what is 2+2?"*, so asides get the marker, and that is the marker doing its job rather than reporting a problem.
+      - Up to v0.2.4 this case bypassed the LLM entirely, answering *"No matches in document database"* instead. That could not tell a question about your documents from a passing general question, so in the default configuration it refused the latter too — which meant flipping this toggle every time the discussion wandered.
+  - If **Speculation** is **ON**, the LLM is free to respond as it wants, and no marker is shown. Anything goes!
     - Most AI chatbots with RAG always operate like this.
 - **Speech**
 - **Subtitles**

@@ -130,7 +130,6 @@ def populated_forest(llm_settings):
 _AI_TURN_CALLBACKS = ("on_docs_start", "on_docs_done",
                       "on_prompt_ready",
                       "on_llm_start", "on_llm_progress", "on_llm_done",
-                      "on_nomatch_done",
                       "on_tools_start",
                       "on_call_lowlevel_start", "on_call_lowlevel_done",
                       "on_tool_done", "on_tools_done")
@@ -457,38 +456,64 @@ class TestAITurnRAG:
         all_content = "\n".join(chatutil.content_to_text(msg["content"]) for msg in prompt_snapshot[0])
         assert "SECRET-MARKER-CONTENT-42" in all_content
 
-    def test_rag_no_match_bypass_creates_nomatch_node(self, monkeypatch, llm_settings, populated_forest):
+    def test_rag_no_match_still_lets_the_model_answer(self, monkeypatch, llm_settings, populated_forest):
+        # An empty search used to end the turn before the LLM ran. It could not tell a question about the
+        # documents from a general-knowledge aside, so in the default configuration (docs on, speculation
+        # off) it answered "what is 2+2?" with "No matches in document database." The reply now goes
+        # through, carrying a record of what it did *not* have to stand on.
+        forest, head = populated_forest
+        user_head = scaffold.user_turn(llm_settings=llm_settings,
+                                       datastore=forest,
+                                       head_node_id=head,
+                                       user_message_text="What is 2+2?")
+
+        invoke_called = []
+        monkeypatch.setattr("raven.librarian.llmclient.invoke",
+                            lambda **kw: invoke_called.append(kw) or make_invoke_result(content="Four."))
+
+        llm_done_calls = []
+        final_head = run_ai_turn(forest, llm_settings, user_head,
+                                 retriever=FakeRetriever(results=[]),
+                                 docs_query="What is 2+2?",
+                                 speculate=False,
+                                 on_llm_done=lambda nid: llm_done_calls.append(nid))
+
+        assert len(invoke_called) == 1
+        payload = forest.get_payload(final_head)
+        assert payload["message"]["role"] == "assistant"
+        assert chatutil.content_to_text(payload["message"]["content"]).endswith("Four.")
+        assert payload["generation_metadata"]["grounded"] is False
+        assert payload["retrieval"]["results"] == []  # still recorded, for the citation mechanism
+        assert llm_done_calls == [final_head]
+
+    def test_a_grounded_reply_is_recorded_as_grounded(self, monkeypatch, llm_settings, populated_forest):
         forest, head = populated_forest
         user_head = scaffold.user_turn(llm_settings=llm_settings,
                                        datastore=forest,
                                        head_node_id=head,
                                        user_message_text="What is X?")
-
-        retriever = FakeRetriever(results=[])
-        invoke_called = []
         monkeypatch.setattr("raven.librarian.llmclient.invoke",
-                            lambda **kw: invoke_called.append(kw) or make_invoke_result())
-
-        nomatch_done_calls = []
-        llm_done_calls = []
+                            lambda **kw: make_invoke_result(content="X is foo."))
         final_head = run_ai_turn(forest, llm_settings, user_head,
-                                 retriever=retriever,
+                                 retriever=FakeRetriever(results=[sample_rag_match()]),
                                  docs_query="What is X?",
-                                 speculate=False,
-                                 on_nomatch_done=lambda nid: nomatch_done_calls.append(nid),
-                                 on_llm_done=lambda nid: llm_done_calls.append(nid))
+                                 speculate=False)
+        assert forest.get_payload(final_head)["generation_metadata"]["grounded"] is True
 
-        # The LLM must not be called in the no-match bypass path.
-        assert invoke_called == []
-        # A new assistant "no match" node should be created as a child of user_head.
-        assert forest.get_parent(final_head) == user_head
-        payload = forest.get_payload(final_head)
-        assert payload["message"]["role"] == "assistant"
-        # Retrieval metadata recorded with empty results.
-        assert payload["retrieval"]["results"] == []
-        # on_nomatch_done fires exactly once with the new node id; on_llm_done doesn't fire.
-        assert nomatch_done_calls == [final_head]
-        assert llm_done_calls == []
+    def test_speculation_on_records_no_grounding_verdict(self, monkeypatch, llm_settings, populated_forest):
+        # Absent means "nothing to say", which beats a third state: the user did not ask to be told.
+        forest, head = populated_forest
+        user_head = scaffold.user_turn(llm_settings=llm_settings,
+                                       datastore=forest,
+                                       head_node_id=head,
+                                       user_message_text="What is X?")
+        monkeypatch.setattr("raven.librarian.llmclient.invoke",
+                            lambda **kw: make_invoke_result(content="X is foo."))
+        final_head = run_ai_turn(forest, llm_settings, user_head,
+                                 retriever=FakeRetriever(results=[]),
+                                 docs_query="What is X?",
+                                 speculate=True)
+        assert "grounded" not in forest.get_payload(final_head)["generation_metadata"]
 
     def test_rag_no_match_with_speculate_invokes_llm(self, monkeypatch, llm_settings, populated_forest):
         forest, head = populated_forest
@@ -506,14 +531,11 @@ class TestAITurnRAG:
 
         monkeypatch.setattr("raven.librarian.llmclient.invoke", fake_invoke)
 
-        nomatch_done_calls = []
         final_head = run_ai_turn(forest, llm_settings, user_head,
                                  retriever=retriever,
                                  docs_query="What is X?",
-                                 speculate=True,
-                                 on_nomatch_done=lambda nid: nomatch_done_calls.append(nid))
+                                 speculate=True)
         assert len(invoke_called) == 1
-        assert nomatch_done_calls == []
         assert "speculate" in chatutil.content_to_text(forest.get_payload(final_head)["message"]["content"])
 
     def test_docs_query_without_retriever_logs_warning(self, monkeypatch, caplog, llm_settings, populated_forest):

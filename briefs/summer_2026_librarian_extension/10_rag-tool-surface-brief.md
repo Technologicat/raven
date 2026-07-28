@@ -1,9 +1,9 @@
 # Brief: expose the document database as a tool the model may call
 
-**Status: step 1 of the build order built, 2026-07-28.** The tool surface, the per-turn tool gate, the
-agent-loop cap and grounding-by-declaration are in (`d04bd97`, `2050b88`, `797b4ca`, `1b7f234`). Steps 2–4
-— the grounding UX, the truncation budget with `fetch_document` and `list_consulted_documents`, and PRF —
-are designed here and not yet built. Phase 1 of the Researchers' Night list (`TODO.md`), and the only item
+**Status: steps 1 and 2 built, 2026-07-28.** The tool surface, the per-turn tool gate, the agent-loop cap,
+grounding-by-declaration and the grounding UX are in (`d04bd97`, `2050b88`, `797b4ca`, `1b7f234`,
+`7dc854c`, and the commit carrying this line). Step 3 — the truncation budget with `fetch_document` and
+`list_consulted_documents` — is designed here and not yet built. Phase 1 of the Researchers' Night list (`TODO.md`), and the only item
 on it that is new construction rather than repair.
 
 Three things were decided while building rather than before, and are folded in below: the `docs_enabled`
@@ -249,8 +249,11 @@ provided documents on those documents. Answer general questions normally"*, whil
 exactly those general questions. Whatever is done, they have to agree.
 
 **Resolution: delete the bypass; mark the answer instead.** HEAD stays on the model's reply, which carries
-an unintrusive "answered from general knowledge, not from the document database" badge. No branch, no HEAD
-switch, no re-render.
+an unintrusive `[general knowledge]` marker. No branch, no HEAD switch, no re-render.
+
+Deliberately styled as a *marker*, not a warning. On a general-knowledge question the ungrounded state is
+correct and expected, and most such questions land there — no document database answers "what is 2+2?" —
+so a red badge would be crying wolf on the common case. Muted colour, with the explanation in a tooltip.
 
 This gives the toggle a better meaning than it has:
 
@@ -337,13 +340,16 @@ in the abstract.
    shared match formatter with offsets; `search_documents`; round cap with tools-stripped final call;
    grounding flag replaces the `_context_is_present` message-shape heuristic. *The measured Q11 fix, and
    it stands alone.*
-2. **Grounding UX** — delete the bypass, `grounded` metadata, badge, toggle semantics, tooltip, F1 card.
-   *Pure repair; needs (1)'s flag.*
+2. **Grounding UX** *(built)* — bypass deleted, `grounded` metadata on the reply, marker in both
+   frontends, toggle semantics, tooltip, F1 card.
 3. **Truncation engine, `fetch_document`, provenance list** — budget helper, `(offset, length)`, applied
    to the attachment wire-fold, plus the consulted-documents injection. *Largest, least demo-critical.*
-4. **PRF** — see brief 09. Prototype in `evaluation/retrieval/` and score it offline; promotion into the
-   live path is a separate decision that should follow an in-conversation measurement taken *after* (1)
-   lands, because the tool changes what a weak pass 1 costs.
+
+PRF was briefly listed here as a fourth step and belongs to
+`09_retrieval-query-side-brief.md` instead, which is where the query-side levers live and where the
+measurement caveats already are. Nothing in it depends on this brief beyond the observation recorded there:
+the tool changes what a weak first pass costs, so the measurement that decides PRF should be taken after
+step 1, in conversation, not standalone.
 
 ## Deliberately out of scope
 

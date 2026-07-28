@@ -379,6 +379,21 @@ class DPGChatMessage:
                              color=(120, 120, 120),
                              parent=text_vertical_layout_group)
 
+                # Say when the reply had nothing but the model's own knowledge to stand on. Present only
+                # when the user asked to be told (speculation off); absent means there is nothing to say,
+                # which is why this tests `is False` rather than falsiness.
+                #
+                # A marker, not a warning: on a general-knowledge question this is the correct and expected
+                # state, and most such questions land here — the answer to "what is 2+2?" is not in anyone's
+                # document database. Hence the muted colour rather than a red one.
+                if generation_metadata.get("grounded") is False:
+                    grounding_marker = dpg.add_text("[general knowledge]",
+                                                    color=(170, 145, 90),
+                                                    parent=text_vertical_layout_group)
+                    with dpg.tooltip(grounding_marker):
+                        dpg.add_text("Not based on your document database.\n"
+                                     "The model answered from what it already knew.")
+
         # If there is no linked chat node, this is a live streaming chat message, so the GUI widget should end here - it doesn't need the datastore control buttons or end spacers.
         # This makes the GUI look calmer while rendering a streaming message.
         if node_id is None:
@@ -2259,7 +2274,7 @@ class DPGChatController:
                     # Let the LLM keep generating (if it wants to).
                     return llmclient.action_ack
 
-                def on_done(node_id: str) -> None:   # For both `on_llm_done` and `on_nomatch_done`.
+                def on_done(node_id: str) -> None:
                     self.app_state["HEAD"] = node_id  # update just in case of Ctrl+C or crash during tool calls
                     task_env.text = io.StringIO()  # for next AI message (in case of tool calls)
                     if self.gui_updates_safe:
@@ -2289,7 +2304,7 @@ class DPGChatController:
 
                         # Update linearized chat view
                         logger.info("ai_turn.ai_turn_task.on_done: updating chat view with final message")
-                        delete_streaming_chat_message()  # if we are called by docs nomatch, the in-progress message shouldn't exist in the GUI; then this no-ops.
+                        delete_streaming_chat_message()  # no-ops when there is no in-progress message in the GUI
                         self.view.add_complete_message(node_id)
                         self.update_context_fill_indicator()  # AI message completed -> context grew
 
@@ -2362,7 +2377,6 @@ class DPGChatController:
                                         on_prompt_ready=on_prompt_ready,  # debug/info hook
                                         on_llm_progress=on_llm_progress,
                                         on_llm_done=on_done,
-                                        on_nomatch_done=on_done,
                                         on_tools_start=on_tools_start,
                                         on_call_lowlevel_start=on_call_lowlevel_start,
                                         on_call_lowlevel_done=on_call_lowlevel_done,
