@@ -469,6 +469,34 @@ markers. The competing explanation is simply that the system block now carries *
 identical claims in system versus user role, on something the model would otherwise resist, would
 separate the two.
 
+## Q10. Small models, for the on-the-road case (8 GB dGPU)
+
+Twelve samples per cell — three needle depths at k=5, 10, 20 and 40 — at the recommended `before`
+placement. The question is whether a small model needs a different inject shape, which would mean
+branching `_perform_injects` on model size.
+
+| k (prompt) | Gemma4-E4B `user` | Gemma4-E4B `tool+call-merged` | Qwen3.5-4B `user` | Qwen3.5-4B `tool+call-merged` |
+|---|---|---|---|---|
+| 5 (~1.6k) | 3/3 | 3/3 | 3/3 | 3/3 |
+| 10 (~3.3k) | 3/3 | 3/3 | 3/3 | 3/3 |
+| 20 (~6.5k) | 3/3 | **1/3** | 3/3 | 3/3 |
+| 40 (~12.9k) | 3/3 | 2/3 | 3/3 | 3/3 |
+| **total** | 12/12 | **9/12** | **12/12** | **12/12** |
+
+**Qwen3.5-4B is perfect at every volume in both roles**, matching models seven times its size on this
+task. At 3.59 GB it fits an 8 GB card with headroom for the avatar, which makes it the on-the-road
+candidate. Note it is a 3.5-generation model where the workstation-class ones here are 3.6; that gap did
+not show up in retrieval at 9B either.
+
+**Gemma4-E4B is the one model where the tool role costs accuracy.** It is flawless below ~10 results and
+degrades above that — but erratically (1/3 at k=20, 2/3 at k=40) rather than monotonically, so "volume"
+is directionally right and not the whole story. Its `user`-role column is unaffected at every size.
+
+The useful consequence is negative: **no behavioural fork is needed.** If the small-model slot is
+Qwen3.5-4B, `tool+call-merged` is uniform across every model that matters, and `_perform_injects` needs
+no branch on model size. Were E4B a target, the mitigation would still not be a role fork — it would be
+fewer, better results, which is the reranking work already queued.
+
 ## Still unmeasured
 
 - Whether the two reminders keep steering from the leading system block. `system_front` loses recency,
