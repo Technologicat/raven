@@ -436,7 +436,16 @@ class HybridIR:
     def add(self, document_id: str, path: str, text: str) -> str:
         """Queue a document for adding into the index. To save changes, call `commit`.
 
-        `document_id`: must be unique. Recommended to use `unpythonic.gensym(os.path.basename(path))` or something.
+        `document_id`: Must be unique, and **stable across runs** — `update` and `delete` match on it, so an
+                       ID you cannot recompute later is an ID you cannot revise or remove. That rules out
+                       anything freshly generated per call (a `gensym`, a UUID, a timestamp): re-indexing the
+                       same file would mint a new ID and add a second copy rather than update the first.
+
+                       Derive it from something the document has permanently. The built-in filesystem scanner
+                       uses the path relative to `docs_dir` (see `HybridIRFileSystemEventHandler`), which is
+                       unique, stable, and legible — worth keeping in mind, since a search result carries this
+                       ID and it may end up in front of a human or a language model.
+
         `path`: Full path (or URL) of the original file.
                 `HybridIR` uses this to check for changes to the file at datastore load time.
                 You can use this to easily locate the original file a given search result refers to.
