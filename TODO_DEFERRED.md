@@ -3,6 +3,45 @@
 New items go at the **top**. (Both ends were in use up to 2026-07-27, which is how the two halves of the same
 Librarian session ended up ~1000 lines apart.)
 
+## EU AI Act Article 50 (transparency) compliance
+
+`briefs/ai-act-article-50-summary.md` has the analysis; Commission guidelines were adopted 20 July 2026 and the
+Article applies from **2 August 2026**. Raven has been available since 2024, so it is a system already on the
+market before that date, which means the **2 December 2026** grace period applies — but only to the 50(2)
+machine-readable marking of generated content. The rest applies from August with no grace period.
+
+Work backwards from December, and note it lands right after Researchers' Night, so the demo build and the
+compliance build are the same autumn's work.
+
+Raised by Juha (2026-07-28).
+
+## Make the canned AI greeting optional
+
+A new chat opens with a canned greeting from the AI (`raven.librarian.config`, "Names, AI's greeting"). That is a
+2024-ism: as of mid-2026 the first message after the system prompt can just as well be the user's, and an opening
+line the AI did not choose is one more thing asserting a personality at a model that does not need it.
+
+Make it optional: blank in config means no greeting node at all, and starting a new chat then points HEAD at the
+system prompt instead. The assumption is baked into several places, and one of them fails silently rather than
+loudly:
+
+- `chat_controller._get_all_greeting_node_ids` identifies a greeting *structurally*, as any direct child of a
+  root (system prompt) node — deliberately, so that a chat stored under an older config's greeting is still
+  recognized. With no greeting node, the direct children of the system prompt are **the user's first messages**,
+  so every first message in every chat would be classified as a greeting. Reroll, continue, branch-from-here and
+  delete are all gated on `node_id not in greeting_node_ids`, so they would quietly go dead on exactly those
+  messages. This one needs a real fix, not a length tweak.
+- `chat_controller.py:653`, an `assert k < len(...) - 3` whose comment enumerates system prompt + greeting +
+  first user message.
+- `minichat.py:453`, `len(node_id_history) < 4`, counting the greeting as one of four expected nodes.
+- `chatutil.factory_reset_datastore` (creates the node) and `appstate._refresh_greeting` (rewrites it on load),
+  which is also where "blank means omit" has to be honoured.
+
+Related: [Modernize the Librarian system prompt / character card] — same question of how much identity the
+frontend should assert at a modern model.
+
+Raised by Juha (2026-07-28).
+
 ## TTS reads arXiv IDs digit by digit
 
 Qwen likes to cite arXiv papers by their full identifier, and the TTS then says
