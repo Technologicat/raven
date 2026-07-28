@@ -125,6 +125,14 @@ compares a query's results to each other. It survives an embedder swap for the s
 Its honest limit: it cannot tell "flat because nothing matches" from "flat because everything matches
 equally well". The second case has no ranking problem to solve, so the failure is benign.
 
+**Borrow the idea, not the number.** `min_p` operates on a proper probability distribution — normalized,
+summing to 1, bounded above by 1 — and none of that is true of BM25 scores, which are unnormalized and
+unbounded. The ratio-to-best test still works, and is in fact scale-free in a way `min_p` itself is not,
+which is exactly why it survives a corpus changing character or an embedder being swapped. But it also
+means the tuned values in circulation for LLM sampling (roughly 0.02 to 0.1) carry no information about
+what to use here: they were fitted against a distribution with different properties. The value has to come
+off the evaluation set.
+
 **Implementation trap:** this must run on the **per-engine raw scores, before fusion**. RRF output is
 `1/(rank + K)` by construction, so its distribution has the same shape whatever was retrieved — running a
 shape test on it measures the arithmetic, not the corpus. One more reason the raw scores have to survive
