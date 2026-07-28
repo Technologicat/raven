@@ -26,10 +26,22 @@ individual items carry a "Researchers' Night" note where they feed it. Working b
 
 **Measurements to take early**, because several decisions are blocked on numbers rather than on opinions:
 
-- **Avatar stutter** — is it warmup, GPU contention, or genuinely the GIL? The voice is already warmed at
-  startup, so "first speech" warmup is a weaker hypothesis than it sounds; what is still cold at that moment is
-  THA3's first inference at the talking-morph shape, the audio device open, and the postprocessor's first pass.
-  Test whether it survives TTS-on-CPU, which would rule contention out.
+- **Avatar stutter** — **deprioritized 2026-07-28, not a demo blocker.** It shows mainly at the start of a
+  session, which a warm-up handles without knowing the cause, and the slight stutter on the first TTS'd
+  sentence is within what games routinely ship. Investigate if the other items land with time to spare.
+
+  Kept because the hypotheses are still worth the eventual look: is it warmup, GPU contention, or genuinely
+  the GIL? The voice is already warmed at startup, so "first speech" warmup is a weaker hypothesis than it
+  sounds; what is still cold at that moment is THA3's first inference at the talking-morph shape, the audio
+  device open, and the postprocessor's first pass. Test whether it survives TTS-on-CPU, which would rule
+  contention out.
+
+  **One candidate the list was missing, from the VRAM work above:** a session allocates +80 MiB at creation
+  and reaches +386 MiB only once frames are flowing, so roughly 300 MiB is allocated *during the first
+  frames* — exactly when the stutter is reported. Allocator growth is a mechanism none of the existing
+  hypotheses covers, and they are all "cold code" rather than "cold memory". This is co-occurrence, not
+  evidence: the probe measured allocation timing, not frame timing. But it is cheap to test, by watching
+  whether pre-allocating (or a warm-up pass that forces the same buffers) moves the stutter.
 - ~~**Per-module VRAM budget**~~ — **measured 2026-07-28 on the 16 GB machine** (`raven-server --vram-report PATH`, instrumentation lives in `deviceinfo.VRAMLedger`). All nine modules resident cost **2.27 GiB** at load, leaving 13.0 GiB of 15.6 free:
 
   | module | GiB | | module | GiB |
