@@ -44,7 +44,13 @@ individual items carry a "Researchers' Night" note where they feed it. Working b
 
   **This is a floor, not the operating footprint**, and two rows say so. `avatar` genuinely loads THA3 eagerly (0.03 is the posing engine), but per-session render buffers and the Anime4K upscaler are allocated when a session starts, not at init. `imagefx` reads 0.00 because it is constructed with an empty filter chain — and `crt` plus `atmospheric_dust` are about to go into that chain. Inference activations are absent throughout.
 
-  Still to measure, and it is the number that actually decides the demo config: **peak during use**. That needs a warm-up request per module. Only worth doing if the LLM's budget turns out tight.
+  **The avatar's running footprint is now measured too** (`evaluation/vram/avatar_footprint.py`, which drives a real session over the client API and samples `nvidia-smi` from outside, so it adds no CUDA context of its own): **+386 MiB peak while animating**, against 30 MiB at load — 13x, and the reason load-time figures cannot be trusted for this module. Session creation alone is +80 MiB; the rest arrives once frames flow. Hit 25.4 FPS over 100 frames, i.e. the server's target rate.
+
+  So the whole server side, all nine modules with the avatar running, is **~2.9 GiB**. On 8 GB that leaves ~5 GiB for the LLM, which fits the on-the-road model with its KV cache. The module set is comfortably not the constraint.
+
+  Memory stays resident after unloading a session, which is expected — PyTorch's caching allocator keeps freed blocks reserved rather than returning them to the driver. `nvidia-smi` cannot distinguish that from a leak; doing so needs the server's own allocator stats.
+
+  Still unmeasured: peak during use for the other eight modules (needs a warm-up request each; only worth doing if the LLM budget turns out tight), and the postprocessor filter chain, which is where `crt` and `atmospheric_dust` will live and which currently measures 0.00 because it is empty.
 
   `embeddings` goes stale at the Nomic switch; the other eight should hold until the demo.
 - ~~**MoE vs dense decode speed**~~ — **measured 2026-07-28 on the eGPU: ~110 tok/s for 35B-A3B against ~40
