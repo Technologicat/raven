@@ -3,6 +3,21 @@
 New items go at the **top**. (Both ends were in use up to 2026-07-27, which is how the two halves of the same
 Librarian session ended up ~1000 lines apart.)
 
+## TTS reads arXiv IDs digit by digit
+
+Qwen likes to cite arXiv papers by their full identifier, and the TTS then says
+"twenty twenty six dot zero five ... v three" — long, and the least informative part of the sentence gets the most
+speaking time. Detect arXiv IDs in the TTS input (`avatar_controller.preprocess_task`, alongside the existing
+Markdown/emoji stripping) and either shorten them to something sayable or drop them from the spoken text while
+keeping them in the subtitle, which is where a reader can actually use them.
+
+The spoken and written forms can differ cheaply: `preprocess_task` already holds the sentence in one local and
+feeds it to `self.tts.synthesize` and to the subtitler separately, so a second, spoken-form local splits them
+without touching the surrounding structure. Prefer that over shortening in place — the ID is exactly the part a
+reader wants in full and a listener does not want at all.
+
+Discovered while fixing the zero-segment TTS crash (2026-07-28, reported by Juha).
+
 ## DPG now sets up font ranges itself; `setup_font_ranges` is a no-op that logs loudly
 
 Recent DearPyGui configures font ranges automatically, which makes `dpg.add_font_range` redundant — so
@@ -140,27 +155,6 @@ prompt-craft: modern models don't need the pep-talk hand-holding, and some of it
 keep the genuinely load-bearing behavioral constraints (cite only provided sources, metric units, admit
 uncertainty), drop the motivational filler, and reconsider how much identity the frontend should assert at a
 modern model at all. Noticed during brief-03 Half-2 image-attach testing (2026-07-17, Juha).
-
-## Sending an empty message starts an AI turn that answers Raven's own injects
-
-Observed 2026-07-19 (new chat, empty input, send): the AI turn runs, and the model responds to the
-temporary context injects — the datetime note and the behavioural reminders — because with an empty
-user message those are the only user-role content in the turn. The reply is Aria discussing her own
-instructions ("Got it — sounds like I should stick to the context provided when answering"), which is
-internal machinery leaking into the conversation.
-
-Before the injects moved to the user role this shape hard-failed on strict chat templates instead
-(no user message → template `raise_exception`), so it was never a *good* path; it has changed from a
-visible error into a plausible-looking but nonsense exchange, which is arguably worse. A stray Enter
-in the input box is enough to trigger it, so this is demo-relevant (Researchers' Night, September
-2026).
-
-Simplest fix is to refuse to start a turn on empty input — no user message, no AI turn — in both
-`app.py`'s send path and `minichat`. Consider whether "empty input" should mean "no text at all" or
-"no text *and* no attachments", since an image or document with no accompanying text is a legitimate
-message.
-
-Discovered while live-testing the chat-template fix (2026-07-19).
 
 ## RAG injects: sent in the user role as a workaround, want the system role back
 

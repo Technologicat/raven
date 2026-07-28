@@ -2021,11 +2021,17 @@ class DPGChatController:
                 docs_query = user_message_text or None  # image-only message: no text to search docs with
             else:
                 # Handle the RAG query: find the latest existing user message
-                docs_query = None  # if no user message, send `None` as query to AI -> no docs search
                 for dpg_chat_message in reversed(self.current_chat_history):
                     if dpg_chat_message.role == "user":
                         docs_query = dpg_chat_message.text
                         break
+                else:
+                    # Taking another turn needs a user turn to take it *about*. With nothing said yet, the only
+                    # user-role content reaching the model would be our own temporary injects — so it answers
+                    # those, discussing its own instructions instead of talking to anyone. A stray Enter in an
+                    # untouched chat is enough to land here, so do nothing, which is what a stray Enter should do.
+                    logger.info("chat_round: empty message, nothing attached, and no user message in this chat. Nothing to continue from; ignoring.")
+                    return
             if task_env.cancelled:  # during user turn
                 return
             self.ai_turn(docs_query=docs_query,

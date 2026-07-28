@@ -531,6 +531,13 @@ def minimal_chat_client(backend_url) -> None:
                 docs_query = user_message_text
             else:
                 docs_query = scan_history_for_docs_query(node_id_history)
+                if docs_query is None:  # the scan's sentinel for "this chat has no user message at all"
+                    # Taking another turn needs a user turn to take it *about*. With nothing said yet, the only
+                    # user-role content reaching the model would be our own temporary injects — so it answers
+                    # those, discussing its own instructions instead of talking to anyone.
+                    print("Nothing to reply to yet; write a message first.")
+                    print()
+                    return Values(action=action_next_round)
 
             return Values(action=action_proceed, docs_query=docs_query)
 
