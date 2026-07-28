@@ -314,6 +314,38 @@ def probe_reminder_terminates(base: str, model: str) -> None:
                show("reply", got["content"], limit=120))
 
 
+def probe_reminder_constrains(base: str, model: str) -> None:
+    print("\n[7] Does the replacement wording still refuse what it *should* refuse?")
+    print("    Probe 5 only measured over-refusal. The reminder's actual job is anti-confabulation, so a")
+    print("    wording that never refuses anything would score well there and be useless here. Material")
+    print("    about Kuiper-7 is supplied; the question asks about Kuiper-9, which is neither in the")
+    print("    documents nor general knowledge. The only correct answer is that we do not know.")
+    absent_question = "What baseline drift does the Kuiper-9 sensor array report?"
+    material = f"[System information: Knowledge-base match from 'kuiper7.txt'.]\n\n{NEEDLE_FACT}\n-----"
+    variants = {"none (control)": None,
+                "current": CONTEXT_ONLY_INJECT,
+                "cite-or-say-so": ("[System information: Base claims about the provided documents on those "
+                                   "documents. Answer general questions normally.]")}
+    for label, inject in variants.items():
+        messages = [{"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": material},
+                    {"role": "user", "content": absent_question},
+                    *([{"role": "user", "content": inject}] if inject else [])]
+        got = ask(base, model, messages, max_tokens=300)
+        if got["finish"] == "error":
+            report(label, f"REJECTED -- {got['content'][:80]}")
+            continue
+        lowered = got["content"].lower()
+        declined = any(p in lowered for p in ("does not contain", "no information", "not mentioned",
+                                              "not appear", "cannot find", "don't have", "do not have",
+                                              "not provided", "no data", "unable to", "only provides",
+                                              "does not include", "not specified"))
+        # A figure offered with no source is the failure this reminder exists to prevent.
+        invented = (not declined) and any(ch.isdigit() for ch in got["content"])
+        report(label, "declined correctly" if declined else ("CONFABULATED" if invented else "unclear"),
+               show("reply", got["content"], limit=150))
+
+
 def main() -> None:
     base = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_BASE
     model = sys.argv[2] if len(sys.argv) > 2 else None
@@ -332,7 +364,8 @@ def main() -> None:
         print(f"models available: {ids}")
 
     probes = (probe_tool_role_accepted, probe_last_question_survives, probe_narration,
-              probe_material_placement, probe_context_only_wording, probe_reminder_terminates)
+              probe_material_placement, probe_context_only_wording, probe_reminder_terminates,
+              probe_reminder_constrains)
     if len(sys.argv) > 3:  # e.g. "3,5" -- a full pass is minutes of generation, so allow a subset
         wanted = {int(n) for n in sys.argv[3].split(",")}
         probes = tuple(probe for n, probe in enumerate(probes, start=1) if n in wanted)

@@ -114,11 +114,23 @@ Every model used the planted fact at **both** the front and the end, in the `use
 `tool` role too, except Gemma, which needs `tool+call` (Q1). The Qwen-3.0-era constraint did not
 reproduce anywhere.
 
-**Caveat, and it is a real one:** this used one short needle in a nearly empty context. The case that
-motivated the front placement is twenty chunks of scientific fulltext in a filled window, where
-long-context attention is exactly what degrades. Treat this as "the old constraint is not obviously
-still true" rather than "placement no longer matters". A realistic-scale re-test is the outstanding
-work. `tool+call` was measured at both positions on Gemma only; the Qwens were measured bare.
+**Caveat, and it is a real one:** this used one short needle in a nearly empty context (~2450 prompt
+tokens), which is not the case that motivated the front placement. Treat it as "the old constraint is
+not obviously still true" rather than "placement no longer matters". `tool+call` was measured at both
+positions on Gemma only; the Qwens were measured bare.
+
+The realistic-scale re-test is `rag_placement.py`, which models HybridIR's actual output rather than a
+guess at it. Two things make "twenty chunks" the wrong mental picture:
+
+- **A result is not a chunk.** `chunk_size = 1000` characters with `overlap_fraction = 0.25` gives a
+  sliding window of stride 750, and `merge_contiguous_spans` seamlessly joins adjacent matched chunks
+  from the same document before `k` is applied. So a result spanning *n* chunks runs about
+  `1000 + (n-1)·750` characters, and `docs_num_results = 20` counts merged results, not chunks.
+- **Chunk length is what matters, not the source.** In the ~10k-document case Raven is aimed at, one
+  abstract is one *document*, often short enough that merging returns most of it.
+
+Modelled that way, k=20 comes to ~29000 characters (~7-8k tokens) — an order of magnitude more than
+the Q3 probe used, and the number that should be quoted for the configured case.
 
 ## Q4. The "answer from context only" reminder
 
@@ -147,8 +159,14 @@ instruction rather than misbehaving. It would be nicer if it reported the contra
 looping on it, but that is a lot of executive function to ask of a 9B in mid-2026.
 
 The fourth wording is the recommended replacement: within noise of sending no reminder at all on three
-of the four models, no hedging, and it still constrains claims about documents, which is the point of
-having the reminder.
+of the four models, and no hedging.
+
+**This only measures over-refusal, which is half the question.** The reminder's actual job is
+anti-confabulation, and a wording that never refuses anything would score perfectly above while being
+useless. Probe 7 measures the other half: material about Kuiper-7 is supplied and the question asks
+about Kuiper-9 — neither in the documents nor general knowledge, so the only correct answer is that we
+do not know. A replacement that answers 2+2 happily but also invents a figure for Kuiper-9 is not an
+improvement, it is a different failure. Do not adopt the new wording on the strength of Q4 alone.
 
 ## Q5. Does the tool role weaken an instruction?
 
@@ -181,10 +199,12 @@ is a quiet advantage for any shape that only *adds* messages.
 
 ## Still unmeasured
 
-- Realistic-scale placement (Q3): twenty real chunks in a filled context, rather than one short needle.
 - Whether the two reminders keep steering from the leading system block. `system_front` loses recency,
-  and late placement was originally chosen because DeepSeek-R1 distills needed it for multi-turn to
-  work. Those models were not among the four tested, and may no longer be worth designing around.
+  which is the one thing late placement buys. The reason late placement was chosen in the first place
+  — DeepSeek-R1 distills needing it for multi-turn to work — dates from early 2025 and is **not worth
+  designing around any more**: those models are two generations behind, and nothing in this sweep
+  suggests current ones need the help. Worth confirming the reminders still bite from the front, but
+  not worth preserving late placement on their account.
 - oobabooga, which is not installed on this machine and stale elsewhere. Every number here is LM
   Studio.
 - Whether any of this transfers to non-local backends.

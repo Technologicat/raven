@@ -10,6 +10,12 @@ Article applies from **2 August 2026**. Raven has been available since 2024, so 
 market before that date, which means the **2 December 2026** grace period applies — but only to the 50(2)
 machine-readable marking of generated content. The rest applies from August with no grace period.
 
+The implementation is briefed: `briefs/summer_2026_librarian_extension/07_export-provenance-brief.md`, which
+scopes it to attaching system-level provenance to exported chatlogs and messages, and explicitly rules out
+building text watermarking — the robust 50(2) mark acts on the logits during sampling, and Librarian samples
+un-watermarked third-party weights through an OpenAI-compatible backend, so there is nothing post-hoc to add.
+Depends on content-parts (brief 03).
+
 Work backwards from December, and note it lands right after Researchers' Night, so the demo build and the
 compliance build are the same autumn's work.
 
