@@ -575,6 +575,12 @@ def embed_sentences(embedder: SentenceTransformer, text: Union[str, List[str]]) 
 
     Returns a `list` for one input, a `list` of `list`s for more inputs. This is to keep the output easily JSONable
     (NumPy arrays aren't), to facilitate easily sending the data over the network.
+
+    **The returned vectors are unit-normalized**, for every model, because that is what cosine similarity wants.
+    Worth stating because it is not visible in the output: measuring the norms of what comes back tells you about
+    this function, not about the model. Should a model encode anything in its distance from the origin, that
+    information is gone by the time anyone can look - so a decision to keep or drop this belongs with whoever
+    changes the embedder, not with whoever reads the vectors.
     """
     vectors: Union[np.array, List[np.array]] = embedder.encode(text,
                                                                show_progress_bar=True,  # on console running this app

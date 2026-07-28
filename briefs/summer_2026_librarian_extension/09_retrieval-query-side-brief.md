@@ -59,7 +59,10 @@ hydrogen collection. Librarian indexes whatever the user puts in the directory �
 year, AI papers, fanfiction. Any conclusion here that takes the form of *a tuned constant* is a conclusion
 about hydrogen, not about retrieval. See the split under lever 1.
 
-## The four levers, cheapest first
+## The four levers
+
+Ordered cheapest first, which is *not* the order to build them in — the measured baseline above puts
+lever 3 first on evidence. Cost and priority are different questions, and both are worth seeing.
 
 ### 1. Let the scores survive fusion
 
@@ -79,10 +82,53 @@ So the two survive differently, and the split is the actionable part:
 
 **Corpus-independent, safe to ship as a default:**
 
-- **Vector distance as an absolute admission gate.** It can answer the question nothing currently answers
-  — *is anything here actually close?* — and it can do so because the calibration comes from the embedding
-  model, not from the corpus. A query that found nothing good should *return* less, rather than returning
-  its best rubbish with a confident rank.
+- **A query-local confidence signal, read off the shape of the score distribution.** This answers the
+  question nothing currently answers — *did this query find anything, or is its best result merely the
+  head of a flat list?* — and it does so without any constant to tune. See below; it went through two
+  worse designs before arriving here, and both are recorded because the reasons they failed are the
+  reasons this one works.
+
+#### The confidence signal, and the two designs it replaces
+
+The first attempt was **an absolute cutoff on vector distance**, on the grounds that cosine distance is
+calibrated by the embedding model. It is broken, for a reason worth keeping: applied per document, it
+discards exactly the results BM25 exists to catch — a rare proper noun, an acronym, an exact term the
+embedder has no signal for and the keyword arm nails. Gating those away removes the point of having two
+engines. Whatever this signal is, it must be **per query, advisory** — never a per-document filter.
+
+The second attempt was **calibrating a threshold against the corpus**: sample random chunk pairs at index
+time, take the background distance distribution, express the cutoff as a percentile of it. That handles
+the fact that the scale of "close" is a property of the collection — everything in a narrow corpus sits in
+one neighbourhood, so a constant that suits hydrogen abstracts is wrong for fanfiction. But a corpus is
+not a fixed object: documents are added, updated and deleted whenever the user drops a file in the magic
+directory, so the statistic goes stale continuously. It could ride the existing `commit()` lifecycle
+cheaply enough, but growth exposes a second flaw that recomputation does not fix — a corpus that has
+become *bimodal* has no single correct scale, so a global percentile is not stale so much as meaningless.
+
+What survives both objections is to stop asking about the corpus at all and ask only about **this query's
+own returned scores**, of which there are already `alpha * k`:
+
+- A query that found something produces a **sharp head and a long tail** — the top result stands off from
+  the rest.
+- A query that found nothing produces a **flat list** — everything equidistant, and the "best" result is
+  best by noise.
+
+This is `min_p` sampling, transplanted: keep what scores at least `min_p` times the best score. Note the
+inversion before implementing it, because it is counterintuitive — on a *flat* distribution the bar is low
+and nearly everything survives, on a sharp one almost nothing does. So the filter runs backwards for our
+purposes and the **survivor count is the signal**: few survivors means a confident query, many means noise.
+
+The properties that make this the one to build: no constant fitted to a corpus, no persisted statistic, no
+recalibration, and immunity to the corpus growing, shrinking or changing character — because it only ever
+compares a query's results to each other. It survives an embedder swap for the same reason.
+
+Its honest limit: it cannot tell "flat because nothing matches" from "flat because everything matches
+equally well". The second case has no ranking problem to solve, so the failure is benign.
+
+**Implementation trap:** this must run on the **per-engine raw scores, before fusion**. RRF output is
+`1/(rank + K)` by construction, so its distribution has the same shape whatever was retrieved — running a
+shape test on it measures the arithmetic, not the corpus. One more reason the raw scores have to survive
+to the fusion boundary.
 
 **Corpus-dependent, do not ship as a tuned constant:**
 
