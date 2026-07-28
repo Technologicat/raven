@@ -356,15 +356,28 @@ different question from "what has this conversation looked at".
 present with their full text right beside it, so including them is redundancy in the one place that has to
 stay compact.
 
-**Unresolved: how to label an entry usefully.** The query is a weak label *today* because
-`docs_query` is the user's raw message text, which is often an essay — and a `document_id` is a relative
-path, which is opaque for a corpus filed under accession numbers rather than titles. So an entry may carry
-nothing the model can judge "is this worth fetching?" by. Note the field is not the problem: it is the
-slot where a *good* query goes once brief 09's lever 3 lands, and the tool path already writes short
-model-authored queries into it. Candidate stopgaps, in preference order: truncate the query for display
-(becomes unnecessary as queries improve); or derive a pseudo-title from the document's first line, which
-is cheap since `retriever.documents[id]["text"]` is right there. Decide against a real corpus rather than
-in the abstract.
+**How to label an entry, resolved 2026-07-28.** The label has to be *decision-grade*, not merely good
+enough to rank: a search can return twenty documents, and fetching each one to find out what it is would be
+exactly the waste the list exists to prevent. `fetch_document`'s `(offset, length)` lowers the cost of a
+check but does not remove the need for a label.
+
+Neither obvious field is reliable on its own. `docs_query` is the user's raw message for the auto-search
+path, which is often an essay (it is the slot where a *good* query lands once brief 09's lever 3 arrives,
+and the tool path already writes short model-authored ones). A `document_id` is a path relative to
+`docs_dir`, which is a fine label for a hand-curated stash — those filenames tend to carry author, year and
+full title — and useless for a corpus filed under accession numbers.
+
+So it is a fallback chain over the best *structured* signal available, not a heuristic:
+
+1. **A BibTeX record** → the `title` / `author` / `year` fields. `raven-burstbib` writes each record
+   verbatim (`burstbib.burst_bibtex`), so line 1 is the `@article{slug,` header and the fields follow
+   immediately — the title is right there, and `raven.papers.bibtex` already parses it. Exact, no guessing.
+2. **A descriptive filename** → the `document_id` already *is* the label; anything else is redundant.
+3. **Anything else** → the first non-trivial line, as a pseudo-title.
+
+Note that (1) is worth more than labelling: a title that can be *parsed* is a title that can be *weighted*
+in retrieval, which is index-side work adjacent to brief 09. See the HybridIR title-field item in
+`TODO.md`.
 
 ## Build order
 
