@@ -516,6 +516,7 @@ def ai_turn(llm_settings: env,
             head_node_id: str,
             tools_enabled: bool,
             continue_: bool,
+            docs_enabled: bool,
             docs_query: Optional[str],
             docs_num_results: Optional[int],
             speculate: bool,
@@ -556,12 +557,23 @@ def ai_turn(llm_settings: env,
                  The chat node will be updated with the continued message, creating a new revision.
                  The new revision is set as active. The old revision is not removed.
 
+    `docs_enabled`: Whether the document database is in play at all this turn — the user-facing "docs on/off"
+                    switch. When `False`, no automatic search runs (whatever `docs_query` says) and the
+                    document tools are not offered to the LLM.
+
+                    Distinct from `docs_query` because the two answer different questions: this one is
+                    *may the documents be used*, `docs_query` is *search for this before the model runs*.
+                    They collapsed into one switch while the automatic search was the only way to reach the
+                    documents; with the tools, a turn that performs no automatic search may still legitimately
+                    let the model search for itself — which is exactly what a continuation turn does.
+
     `docs_query`: Optional query string to search with in the document database.
 
-                  If both this and `retriever` are supplied, `retriever` is queried, and the search results
-                  are injected into the context before sending the context to the LLM.
+                  If this, `retriever` and `docs_enabled` are all supplied, `retriever` is queried, and the
+                  search results are injected into the context before sending the context to the LLM.
 
-                  If `None`, no search is performed.
+                  If `None`, no automatic search is performed. Note this does not withdraw the document
+                  tools; use `docs_enabled=False` for that.
 
                   NOTE: The official way to NOT search for anything, when you have a document database,
                   is to set `docs_query=None`. If you instead disconnect by setting `retriever=None`,
@@ -735,8 +747,10 @@ def ai_turn(llm_settings: env,
             logger.error(f"ai_turn: {error_message}")
             raise ValueError(error_message)
 
+    documents_available = docs_enabled and retriever is not None
+
     # Search document database if requested
-    if retriever is not None and docs_query is not None:
+    if documents_available and docs_query is not None:
         if on_docs_start is not None:
             on_docs_start()
         docs_matches_to_report: List[Dict] = []  # captured for the `finally` so `on_docs_done` always fires
@@ -769,9 +783,17 @@ def ai_turn(llm_settings: env,
         docs_matches = []
 
     if tool_context is None:  # normal case; `retry_tool_calls` passes the context it already started
-        tool_context = _make_tool_context(retriever=retriever)
+        # The retriever goes in only when the documents are actually in play, so that its presence is the
+        # single gate the document tools read. Fails closed: a model that calls a tool we did not advertise
+        # finds no retriever there and gets a refusal, rather than reaching around the user's switch.
+        tool_context = _make_tool_context(retriever=(retriever if documents_available else None))
     if docs_matches:  # the auto-search grounds this turn as much as a tool call would
         tool_context.grounded = True
+
+    # Which tools to offer this turn. `None` means "all of them" - note this is the *permissive* value, not
+    # the restrictive one, so the maybe-ness is worth flagging at every use site.
+    maybe_tool_names = None if documents_available else (set(llm_settings.tool_entrypoints) -
+                                                         set(llm_settings.document_tool_names))
 
     continue_this_message = continue_  # we need to continue at most the first message in the agent loop
     while True:  # LLM agent loop - interleave LLM responses, tool calls and tool call results, until the LLM is done (no more tool calls).
@@ -793,6 +815,7 @@ def ai_turn(llm_settings: env,
                                    on_prompt_ready=on_prompt_ready,
                                    on_progress=on_llm_progress,  # this handles `action_stop` from `on_llm_progress`
                                    tools_enabled=tools_enabled,
+                                   tool_names=maybe_tool_names,
                                    continue_=continue_this_message,
                                    datastore=datastore)  # resolve any sidecar: image refs to data: URLs on the wire
         except Exception as exc:  # noqa: BLE001 -- any backend failure becomes a visible, rerollable message rather than a silent crash
@@ -895,6 +918,7 @@ def retry_tool_calls(llm_settings: env,
                      retriever: "Optional[hybridir.HybridIR]",
                      tool_node_id: str,
                      tools_enabled: bool,
+                     docs_enabled: bool,
                      speculate: bool,
                      markup: Optional[str],
                      docs_num_results: Optional[int],
@@ -932,7 +956,10 @@ def retry_tool_calls(llm_settings: env,
          the model ordered another call after `webfetch` in one message) onto the new branch. The turn's
          calls are issued together, so a suffix result cannot depend on the re-run call's new output.
       4. Continue from the rebuilt tool head via `ai_turn(continue_=False)` — the LLM responds to the now-
-         complete results and the agent loop proceeds. No new RAG search (matches loop continuation).
+         complete results and the agent loop proceeds. No new *automatic* RAG search (`docs_query=None`,
+         matching loop continuation), but the document tools stay available if `docs_enabled` — a
+         continuation is mid-turn, and a tool that vanishes between rounds of one agent loop is a shape
+         models read as noise.
 
     Returns the new HEAD node ID.
     """
@@ -970,7 +997,9 @@ def retry_tool_calls(llm_settings: env,
     # 2. Re-run only the denied call, as a new sibling branch under the assistant's tool chain. Fire
     #    `on_tools_start` (GUI: tools starting), but defer `on_tools_done` until the suffix is also in place.
     synthetic_message = {**assistant_message, "tool_calls": calls_to_rerun}
-    tool_context = _make_tool_context(retriever=retriever)  # handed to `ai_turn` below, so the re-run call's grounding carries
+    # Handed to `ai_turn` below, so the re-run call's grounding carries across the handover instead of being
+    # forgotten. Same gate as `ai_turn` applies: no retriever in the context unless the documents are in play.
+    tool_context = _make_tool_context(retriever=(retriever if docs_enabled else None))
     head_node_id = _perform_and_store_tool_calls(llm_settings=llm_settings,
                                                  datastore=datastore,
                                                  assistant_message=synthetic_message,
@@ -999,6 +1028,7 @@ def retry_tool_calls(llm_settings: env,
                    head_node_id=head_node_id,
                    tools_enabled=tools_enabled,
                    continue_=False,
+                   docs_enabled=docs_enabled,
                    docs_query=None,
                    docs_num_results=docs_num_results,
                    speculate=speculate,

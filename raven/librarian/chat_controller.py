@@ -2102,7 +2102,6 @@ class DPGChatController:
                                new branch (`scaffold.retry_tool_calls`) and continue from there. The same GUI
                                callback bundle is reused; `docs_query`/`continue_` are ignored in this mode.
         """
-        docs_query = docs_query if self.app_state["docs_enabled"] else None
 
         def ai_turn_task(task_env: env) -> None:
             if task_env.cancelled:  # while the task was in the queue
@@ -2370,6 +2369,7 @@ class DPGChatController:
                                                             head_node_id=self.app_state["HEAD"],
                                                             tools_enabled=self.app_state["tools_enabled"],
                                                             continue_=continue_,
+                                                            docs_enabled=self.app_state["docs_enabled"],
                                                             docs_query=docs_query,
                                                             docs_num_results=librarian_config.docs_num_results,
                                                             speculate=self.app_state["speculate_enabled"],
@@ -2381,6 +2381,7 @@ class DPGChatController:
                                                                      retriever=self.retriever,
                                                                      tool_node_id=_retry_tool_node_id,
                                                                      tools_enabled=self.app_state["tools_enabled"],
+                                                                     docs_enabled=self.app_state["docs_enabled"],
                                                                      speculate=self.app_state["speculate_enabled"],
                                                                      markup="markdown",
                                                                      docs_num_results=librarian_config.docs_num_results,

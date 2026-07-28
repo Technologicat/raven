@@ -542,8 +542,6 @@ def minimal_chat_client(backend_url) -> None:
             return Values(action=action_proceed, docs_query=docs_query)
 
         def ai_turn(docs_query: Optional[str]) -> Values:
-            docs_query = docs_query if app_state["docs_enabled"] else None
-
             node_id_history = datastore.linearize_up(app_state["HEAD"])  # latest history (ugh, we only need this here to get its length, for the sequential message number)
             ai_message_number = len(node_id_history)
 
@@ -633,6 +631,7 @@ def minimal_chat_client(backend_url) -> None:
                                                 head_node_id=app_state["HEAD"],
                                                 continue_=False,  # continue-incomplete-message mode not supported by minichat; see `raven.librarian.app` for a GUI frontend that supports this.
                                                 tools_enabled=app_state["tools_enabled"],
+                                                docs_enabled=app_state["docs_enabled"],
                                                 docs_query=docs_query,
                                                 docs_num_results=librarian_config.docs_num_results,
                                                 speculate=app_state["speculate_enabled"],

@@ -49,6 +49,23 @@ is what the gate requires.
 
 Both document tools are gated on docs-enabled **and** tools-enabled.
 
+**Found while building it: there was no "docs enabled" signal to gate on.** Both clients collapsed the
+user's docs toggle into `docs_query=None` before calling `ai_turn`, which was lossless only while the
+automatic search was the sole route to the documents. It is not lossless now: `retry_tool_calls` passes
+`docs_query=None` legitimately (a continuation runs no *new* automatic search), and gating tool
+availability on that would make the tools vanish between rounds of one agent loop — a shape models read
+as noise. And the "do we still need the autosearch?" question is live, so a turn that searches
+automatically and a turn that permits the model to search must be separately expressible.
+
+So `ai_turn` and `retry_tool_calls` take an explicit `docs_enabled`, and the clients pass their toggle
+instead of collapsing it. `docs_enabled` answers *may the documents be used*; `docs_query` answers *search
+for this before the model runs*. The collapse now happens in one place (`ai_turn`) rather than being
+duplicated in each client.
+
+The retriever then goes into the tool context **only when the documents are in play**, which makes its
+presence the single gate the entrypoints read — and makes the gate fail closed: a model that calls a tool
+that was never advertised finds no retriever and gets a refusal, rather than reaching around the switch.
+
 ### 3. Grounding is declared at the source, and scoped by lifetime
 
 `_context_is_present` currently infers grounding from message shape: any `role="tool"` message after the

@@ -220,6 +220,55 @@ def webfetch_wrapper(url: str) -> str | tuple[str, dict]:
     return result["content"]
 
 # --------------------------------------------------------------------------------
+# Document database integration (the local knowledge base; no server needed)
+
+# Canonical user-facing strings for the two ways a document search can come back empty-handed. Pre-templated
+# so the model reports the situation in consistent words instead of improvising an explanation of Raven's
+# internals - and deliberately phrased as *statements of fact*, never as prohibitions. A tool result that
+# tells the model what it may not do is the shape that measured 29000 characters of deliberation without
+# producing a reply; see `briefs/context-inject-shape-measurements.md`.
+CANONICAL_NO_DOCUMENT_DATABASE = ("The document database is not available in this conversation, so it cannot "
+                                  "be searched.")
+CANONICAL_NO_DOCUMENT_MATCHES = ("The document database contains no matches for that query. A differently "
+                                 "worded query may match, since this search is over the documents' own wording.")
+
+def search_documents_wrapper(query: str) -> Tuple[Union[str, List[Dict]], Dict]:
+    """Search the local document database (RAG); return the matches formatted for the LLM.
+
+    Tool entrypoint for the LLM's `search_documents` tool - the model-driven counterpart to the automatic
+    search `raven.librarian.scaffold` runs on the user's behalf before each turn. Both exist on purpose:
+    the automatic one buys a zero-latency first pass from a cheap heuristic query, this one buys a query
+    written by something that has *read* that first pass and can aim better.
+
+    The retriever arrives through `dyn.tool_context` (harness-supplied, never model-supplied), because
+    `llmclient.setup` runs before `hybridir.setup` in both clients and so no entrypoint can close over it
+    at registration time. An absent retriever means the document database is not in play this turn - either
+    the app has none, or the user has switched it off - and *that is the whole gate*: this function is
+    reachable only if the harness handed it a retriever, so a model that calls the tool anyway (it is not
+    advertised when unavailable) gets a plain refusal rather than access.
+
+    Results are formatted by `chatutil.format_docs_matches`, the same formatter the automatic search uses,
+    so a match reads identically whoever asked for it.
+
+    Returns `(output, metadata)`: the metadata declares whether the result is grounding material, which
+    `scaffold._record_grounding` folds into the turn's state. Declaring it matters here because "no
+    matches" is a perfectly non-empty string that grounds nothing at all.
+    """
+    retriever = getattr(dyn.tool_context, "retriever", None)
+    if retriever is None:
+        logger.info("search_documents_wrapper: no retriever in the tool context; document database not in play this turn.")
+        return (CANONICAL_NO_DOCUMENT_DATABASE, {"grounding": False})
+
+    matches = retriever.query(query,
+                              k=librarian_config.docs_num_results,
+                              return_extra_info=False)
+    plural_s = "es" if len(matches) != 1 else ""
+    logger.info(f"search_documents_wrapper: {len(matches)} match{plural_s} for '{query}'.")
+    if not matches:
+        return (CANONICAL_NO_DOCUMENT_MATCHES, {"grounding": False})
+    return (chatutil.format_docs_matches(matches), {"grounding": True})
+
+# --------------------------------------------------------------------------------
 # Utilities
 
 def list_models(backend_url: str) -> List[str]:
@@ -397,6 +446,12 @@ def setup(backend_url: str,
 
         `tool_entrypoints: Dict[str, Callable]`: The Python functions that implement the tools.
 
+        `document_tool_names: FrozenSet[str]`: Those tool names that search or read the document database, and so
+                                               should only be offered on turns where it is in play. Callers pass a
+                                               filtered name set to `invoke`'s `tool_names`; `scaffold.ai_turn`
+                                               does this. Every tool is *registered* regardless — availability is
+                                               a per-turn question, not a per-session one.
+
         `backend_url: str`: The `backend_url` argument, as-is.
 
         `request_data: Dict[str, Any]`: Generation settings for the LLM backend.
@@ -457,10 +512,29 @@ def setup(backend_url: str,
                                      "additionalProperties": False,
                                      "required": ["url"],
                                      "properties": {"url": {"type": "string",
-                                                            "description": "The URL to fetch."}}}}}
+                                                            "description": "The URL to fetch."}}}}},
+        {"type": "function",
+         "function": {"name": "search_documents",
+                      "description": ("Search the user's local document database. Use this to look for material "
+                                      "the conversation does not already contain, or to search again with a "
+                                      "better query once you have seen what a first search returned."),
+                      "parameters": {"type": "object",
+                                     "additionalProperties": False,
+                                     "required": ["query"],
+                                     # No `k`: how many results come back is host configuration, not a model
+                                     # decision. Keeping the surface to one required string also leaves the
+                                     # fewest ways to emit a malformed call.
+                                     "properties": {"query": {"type": "string",
+                                                              "description": "Keywords or a natural-language question."}}}}}
     ]
     tool_entrypoints = {"websearch": websearch_wrapper,
-                        "webfetch": webfetch_wrapper}
+                        "webfetch": webfetch_wrapper,
+                        "search_documents": search_documents_wrapper}
+
+    # Tools that are only offered on turns where the document database is in play. Callers gate with
+    # `invoke`'s `tool_names`; see `raven.librarian.scaffold.ai_turn`, which assembles the per-turn list.
+    # Named here, next to the specs, so the two cannot drift.
+    document_tool_names = frozenset({"search_documents"})
 
     # Set up the chat completion request metadata template. Tool-calling instructions are NOT injected
     # client-side: every tool-capable model new enough to matter carries them in its own chat template, and the
@@ -516,6 +590,7 @@ def setup(backend_url: str,
                    greeting=greeting,
                    tools=tools,  # for inspection
                    tool_entrypoints=tool_entrypoints,  # for our implementation to be able to call them
+                   document_tool_names=document_tool_names,  # subset of `tools` gated on the document database
                    backend_url=backend_url,
                    request_data=request_data,
                    personas=personas)

@@ -131,6 +131,7 @@ def run_ai_turn(forest, llm_settings, head, *,
                 retriever=None,
                 tools_enabled=True,
                 continue_=False,
+                docs_enabled=True,
                 docs_query=None,
                 docs_num_results=None,
                 speculate=True,
@@ -144,6 +145,7 @@ def run_ai_turn(forest, llm_settings, head, *,
                             head_node_id=head,
                             tools_enabled=tools_enabled,
                             continue_=continue_,
+                            docs_enabled=docs_enabled,
                             docs_query=docs_query,
                             docs_num_results=docs_num_results,
                             speculate=speculate,
@@ -620,6 +622,7 @@ class TestAITurnToolCalls:
 def run_retry(forest, llm_settings, tool_node_id, *,
               retriever=None,
               tools_enabled=True,
+              docs_enabled=True,
               speculate=True,
               markup=None,
               docs_num_results=None,
@@ -631,6 +634,7 @@ def run_retry(forest, llm_settings, tool_node_id, *,
                                      retriever=retriever,
                                      tool_node_id=tool_node_id,
                                      tools_enabled=tools_enabled,
+                                     docs_enabled=docs_enabled,
                                      speculate=speculate,
                                      markup=markup,
                                      docs_num_results=docs_num_results,
@@ -1011,3 +1015,79 @@ class TestGroundingAccumulation:
         scaffold._record_grounding(tool_context, make_tool_record(""))
         scaffold._record_grounding(tool_context, make_tool_record("failed", status="error"))
         assert tool_context.grounded
+
+
+# ---------------------------------------------------------------------------
+# Per-turn tool availability (the document tools follow the document database)
+# ---------------------------------------------------------------------------
+
+class TestDocumentToolGating:
+    """`docs_enabled` gates the document *tools*; `docs_query` gates the automatic *search*.
+
+    They collapsed into one switch while the automatic search was the only way to reach the documents.
+    They cannot stay collapsed: a continuation turn runs no automatic search but must keep offering the
+    tools, because a tool that appears and vanishes between rounds of one agent loop is a shape models
+    read as noise.
+    """
+
+    def _capture_tool_names(self, monkeypatch):
+        seen = {}
+
+        def fake_invoke(**kw):
+            seen["tool_names"] = kw.get("tool_names")
+            return make_invoke_result(content="OK")
+
+        monkeypatch.setattr("raven.librarian.llmclient.invoke", fake_invoke)
+        return seen
+
+    def test_documents_in_play_offers_every_tool(self, monkeypatch, llm_settings, populated_forest):
+        forest, head = populated_forest
+        user_head = scaffold.user_turn(llm_settings=llm_settings, datastore=forest,
+                                       head_node_id=head, user_message_text="What is X?")
+        seen = self._capture_tool_names(monkeypatch)
+        run_ai_turn(forest, llm_settings, user_head,
+                    retriever=FakeRetriever(results=[sample_rag_match()]),
+                    docs_enabled=True, docs_query="What is X?")
+        assert seen["tool_names"] is None  # `None` is the permissive value: offer all registered tools
+
+    def test_docs_disabled_withdraws_only_the_document_tools(self, monkeypatch, llm_settings, populated_forest):
+        forest, head = populated_forest
+        user_head = scaffold.user_turn(llm_settings=llm_settings, datastore=forest,
+                                       head_node_id=head, user_message_text="What is 2+2?")
+        seen = self._capture_tool_names(monkeypatch)
+        run_ai_turn(forest, llm_settings, user_head,
+                    retriever=FakeRetriever(results=[sample_rag_match()]),
+                    docs_enabled=False, docs_query="What is 2+2?")
+        assert "search_documents" not in seen["tool_names"]
+        assert "websearch" in seen["tool_names"]  # unrelated tools are untouched
+
+    def test_no_retriever_withdraws_the_document_tools(self, monkeypatch, llm_settings, populated_forest):
+        # An app with no document database at all must not advertise tools that search one.
+        forest, head = populated_forest
+        user_head = scaffold.user_turn(llm_settings=llm_settings, datastore=forest,
+                                       head_node_id=head, user_message_text="Hi")
+        seen = self._capture_tool_names(monkeypatch)
+        run_ai_turn(forest, llm_settings, user_head, retriever=None, docs_enabled=True)
+        assert "search_documents" not in seen["tool_names"]
+
+    def test_docs_disabled_runs_no_automatic_search(self, monkeypatch, llm_settings, populated_forest):
+        forest, head = populated_forest
+        user_head = scaffold.user_turn(llm_settings=llm_settings, datastore=forest,
+                                       head_node_id=head, user_message_text="What is X?")
+        retriever = FakeRetriever(results=[sample_rag_match()])
+        monkeypatch.setattr("raven.librarian.llmclient.invoke",
+                            lambda **kw: make_invoke_result(content="OK"))
+        run_ai_turn(forest, llm_settings, user_head,
+                    retriever=retriever, docs_enabled=False, docs_query="What is X?")
+        assert retriever.calls == []
+
+    def test_tools_offered_without_an_automatic_search(self, monkeypatch, llm_settings, populated_forest):
+        # The continuation shape: no `docs_query`, but the documents are still in play, so the model may
+        # still search for itself.
+        forest, head = populated_forest
+        user_head = scaffold.user_turn(llm_settings=llm_settings, datastore=forest,
+                                       head_node_id=head, user_message_text="Go on")
+        seen = self._capture_tool_names(monkeypatch)
+        run_ai_turn(forest, llm_settings, user_head,
+                    retriever=FakeRetriever(), docs_enabled=True, docs_query=None)
+        assert seen["tool_names"] is None
