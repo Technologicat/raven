@@ -3,6 +3,7 @@
 __all__ = ["absolutize_filename", "strip_ext", "make_cache_filename", "validate_cache_mtime", "create_directory",
            "open_file", "open_in_file_manager",
            "make_blank_index_array", "bail",
+           "bibtex_header_key", "bibtex_field_value", "bibtex_unbalanced_field_names",
            "format_bibtex_author", "format_bibtex_authors",
            "normalize_whitespace", "normalize_unicode",
            "unicodize_basic_markup",
@@ -156,6 +157,60 @@ def bail(exitcode: int = 0) -> NoReturn:
 
 # --------------------------------------------------------------------------------
 # BibTeX utilities
+
+# --------------------------------------------------------------------------------
+# Reading BibTeX by its surface syntax, for when the parser has refused
+#
+# These are not a second BibTeX parser and must not grow into one. They exist for the case where
+# `bibtexparser` has already declined a record - a stray brace in a field value ends the value early and
+# takes the rest of the record with it - and something useful can still be said about the wreckage. Three
+# callers, wanting three different things from the same shape:
+#
+#   - `papers.burstbib`, naming a record from its header line, which it does before parsing anything.
+#   - `librarian.chatutil`, salvaging a title so a document still gets a legible label.
+#   - `visualizer.importer`, naming the fields whose braces look wrong, so the user can go and fix the data.
+#
+# They live here rather than in `papers` because two of the three callers are not paper tooling.
+
+def bibtex_header_key(headerline: str) -> str:
+    """Get the record key out of a BibTeX header line: `@article{WOS:000123,` -> `WOS:000123`.
+
+    Returns `""` if `headerline` has no key to give. Verbatim - see `papers.burstbib.get_slug` for the
+    variant sanitized for use as a filename.
+    """
+    start = headerline.find("{")
+    end = headerline.rfind(",")
+    return headerline[start + 1:end] if -1 < start < end else ""
+
+# One `Key = ` at the start of a line, which is the shape every BibTeX writer in practice emits.
+_BIBTEX_FIELD_LINE = re.compile(r"^\s*([A-Za-z][\w-]*)\s*=")
+
+def bibtex_field_value(text: str, key: str) -> str:
+    """Get the value of the BibTeX field `key` from `text`, by pattern. `""` if there is none to find.
+
+    Case-insensitive, because the key case is not dependable: a Web of Science export writes `Title = {...}`,
+    the BibTeX literature writes `title = {...}`. Reads only a value that opens and closes on its own line,
+    which is what the writers emit and what keeps this from turning into a parser.
+    """
+    pattern = re.compile(r"^\s*" + re.escape(key) + r"\s*=\s*\{(.*)\}\s*,?\s*$",
+                         re.IGNORECASE | re.MULTILINE)
+    match = pattern.search(text)
+    return match.group(1).strip("{} ") if match else ""
+
+def bibtex_unbalanced_field_names(text: str) -> List[str]:
+    """Names of the fields in `text` whose own line opens more braces than it closes.
+
+    A shortlist of suspects rather than a verdict: a field value that legitimately spans several lines (an
+    `Affiliation` listing one author per line) is unbalanced line by line too. It is still a far shorter
+    list than the record, which is the difference between "this file has a broken record somewhere" and
+    something the user can act on.
+    """
+    names = []
+    for line in text.splitlines():
+        match = _BIBTEX_FIELD_LINE.match(line)
+        if match and line.count("{") != line.count("}"):
+            names.append(match.group(1))
+    return names
 
 def format_bibtex_author(author):
     """Format an author name for use in a citation.

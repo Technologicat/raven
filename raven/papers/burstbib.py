@@ -33,11 +33,8 @@ def get_slug(headerline: str) -> str:
 
     The slug is sanitized for use as a filename.
     """
-    start_of_slug = headerline.find("{")
-    end_of_slug = headerline.rfind(",")
-    if start_of_slug == -1 or end_of_slug == -1:
-        assert False
-    slug = headerline[(start_of_slug + 1):end_of_slug]
+    slug = common_utils.bibtex_header_key(headerline)
+    assert slug  # `is_headerline` gates every call site, so a header with no key cannot get here
     # Make safe for filename, to tolerate broken `.bib` files (users not familiar
     # with BibTeX may have used e.g. a DOI or an URL as the slug)
     slug = "".join(c for c in slug if c.isalnum() or c in stringmaps.filename_safe_nonalphanum)

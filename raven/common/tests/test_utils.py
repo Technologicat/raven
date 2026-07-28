@@ -544,3 +544,51 @@ class TestChunkifyText:
         chunks = utils.chunkify_text("", chunk_size=100, overlap=0, extra=0.4)
         assert len(chunks) == 1
         assert chunks[0]["text"] == ""
+
+
+# ---------------------------------------------------------------------------
+# Reading BibTeX by its surface syntax, for when the parser has refused
+# ---------------------------------------------------------------------------
+
+class TestBibtexHeaderKey:
+    def test_a_header_line_yields_its_key(self):
+        assert utils.bibtex_header_key("@article{WOS:000258806000016,") == "WOS:000258806000016"
+
+    def test_the_key_is_verbatim(self):
+        # Unlike `papers.burstbib.get_slug`, which sanitizes for use as a filename.
+        assert utils.bibtex_header_key("@misc{a/b:c,") == "a/b:c"
+
+    def test_a_line_that_is_not_a_header_yields_nothing(self):
+        assert utils.bibtex_header_key("Title = {Something}") == ""
+        assert utils.bibtex_header_key("") == ""
+
+
+class TestBibtexFieldValue:
+    def test_a_field_is_found_by_name(self):
+        assert utils.bibtex_field_value("@a{k,\n\tTitle = {Some Paper},\n}", "title") == "Some Paper"
+
+    def test_the_key_case_does_not_matter(self):
+        # A Web of Science export capitalizes its keys; the BibTeX literature does not.
+        assert utils.bibtex_field_value("@a{k,\n\ttitle = {Lower},\n}", "Title") == "Lower"
+
+    def test_it_reads_a_record_the_parser_would_refuse(self):
+        # The whole point: an unbalanced brace elsewhere aborts a real parse, title and all.
+        broken = "@a{k,\n\tAbstract = {System {[production]),\n\tTitle = {Still here},\n}"
+        assert utils.bibtex_field_value(broken, "title") == "Still here"
+
+    def test_an_absent_field_yields_nothing(self):
+        assert utils.bibtex_field_value("@a{k,\n\tYear = {2020},\n}", "title") == ""
+
+
+class TestBibtexUnbalancedFieldNames:
+    def test_the_offending_field_is_named(self):
+        broken = "@a{k,\n\tAbstract = {oops {,\n\tYear = {2020},\n}"
+        assert utils.bibtex_unbalanced_field_names(broken) == ["Abstract"]
+
+    def test_a_sound_record_names_nothing(self):
+        assert utils.bibtex_unbalanced_field_names("@a{k,\n\tYear = {2020},\n}") == []
+
+    def test_a_multiline_value_is_a_suspect_not_a_verdict(self):
+        # An `Affiliation` listing one author per line is unbalanced line by line and perfectly valid.
+        multiline = "@a{k,\n\tAffiliation = {First, Somewhere\nSecond, Elsewhere},\n}"
+        assert utils.bibtex_unbalanced_field_names(multiline) == ["Affiliation"]

@@ -375,23 +375,6 @@ def _bibtex_library(text: str) -> Optional[Any]:
         return None
     return library
 
-# A BibTeX `title` field on its own line, for records the real parser gave up on. Deliberately narrow: the
-# key is anchored to the start of a line and the value runs to the closing brace before the end of that
-# line, so this reads the shape `raven-burstbib` and Web of Science emit and declines anything cleverer.
-# Case-insensitive because Web of Science capitalizes its keys.
-_BIBTEX_TITLE_LINE = re.compile(r"^\s*title\s*=\s*\{(.*)\}\s*,?\s*$", re.IGNORECASE | re.MULTILINE)
-
-def _salvaged_bibtex_title(text: str) -> str:
-    """Dig a `title` out of a BibTeX record that would not parse, or `""` if there is none to find.
-
-    Records that are not quite valid BibTeX do occur: an abstract containing unbalanced braces aborts the
-    parse of the entire record, title and all. Since the alternative here is no label at all, a pattern
-    match on the one field we need is worth having - it is a repair path, not a second implementation of
-    the parser, and it runs only after the parser has already declined.
-    """
-    match = _BIBTEX_TITLE_LINE.search(text)
-    return match.group(1).strip("{} ") if match else ""
-
 def _bibtex_entry_label(entry: Any) -> str:
     """Label one parsed BibTeX entry from its own fields, or `""` if it has no title to show."""
     fields = {field.key: field.value for field in entry.fields}
@@ -449,7 +432,10 @@ def document_label(text: str) -> str:
                 label = _bibtex_entry_label(library.entries[0])
                 if label:
                     return _shorten(label, _MAXIMUM_LABEL_LENGTH)
-        salvaged = _salvaged_bibtex_title(text)
+        # Records that are not quite valid BibTeX do occur: an abstract with unbalanced braces aborts the
+        # parse of the whole record, title and all. Since the alternative is no label, read the one field
+        # we need by pattern - after the real parser has had its say, never instead of it.
+        salvaged = common_utils.bibtex_field_value(text, "title")
         if salvaged:
             return _shorten(f'"{salvaged}"', _MAXIMUM_LABEL_LENGTH)
 
