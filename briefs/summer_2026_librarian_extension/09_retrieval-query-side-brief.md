@@ -31,6 +31,16 @@ ahead of the multi-query decomposition that was going to be built first. (The al
 run through here at all — inline citations, where the model reports its own grounding instead of Raven
 inferring it. Worth weighing against lever 1 rather than assuming this one wins.)
 
+**And the marker is not the only thing the signal pays for: a no-confidence match set can be dropped
+instead of injected.** Injected matches are not free. They are prompt-processed on every turn they appear
+in, and a question the corpus cannot answer still produces a full batch of best-of-a-bad-lot matches — tens
+of thousands of tokens of noise, paid for as latency before the reply begins. Today the only remedy is
+manual: switch the **Documents** toggle off when the conversation moves off-corpus, which is what the
+toggle's tooltip now advises. A survivor count that says "nothing here cleared the bar" turns that into
+something Raven can decide per turn, which is the same decision the user is currently making by hand and by
+guess. So the confidence signal buys a correct marker, a cheaper turn, and one less thing to remember —
+worth counting when weighing it against the citations route, which fixes only the marker.
+
 ## The finding that motivates the rest
 
 Verified by reading `hybridir.py`, not inferred:

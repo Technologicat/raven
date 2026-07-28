@@ -826,7 +826,7 @@ with timer() as tim:
 
                         dpg.add_checkbox(label="Documents", default_value=app_state["docs_enabled"], callback=toggle_docs_enabled, tag="docs_enabled_checkbox")
                         dpg.add_tooltip("docs_enabled_checkbox", tag="docs_enabled_tooltip")  # tag
-                        dpg.add_text("Before responding, search document database for relevant information.", parent="docs_enabled_tooltip")  # tag
+                        dpg.add_text("Before responding, search document database for relevant information.\nAlso lets the AI search the database itself.\n\nThe search always injects its best matches, even when the topic is not\nin the database and those matches are noise. That costs prompt-processing\ntime before each reply, so it is worth switching off while discussing\nsomething the database does not cover.", parent="docs_enabled_tooltip")  # tag
 
                         dpg.add_checkbox(label="Speculation", default_value=app_state["speculate_enabled"], callback=toggle_speculate_enabled, tag="speculate_enabled_checkbox")
                         dpg.add_tooltip("speculate_enabled_checkbox", tag="speculate_enabled_tooltip")  # tag

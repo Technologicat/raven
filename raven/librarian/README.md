@@ -223,6 +223,8 @@ There is a configurable ceiling on how many rounds of tool calls one reply may t
 
 The document database is available to the LLM as a tool (`search_documents`) whenever the **Documents** mode toggle is on, in addition to the automatic search. The two do different jobs: the automatic search costs no extra round trip but has to guess a query from your message, while the tool lets the LLM write a better query *after* reading what the first search returned. This matters most when your question is about something the first search phrased badly — asking about a specific instrument by name, say, when your message mentioned it only in passing.
 
+There is a reason to switch **Documents** off, too. The automatic search injects its best matches whether or not they are any good, so a question the database has nothing to say about still costs the prompt-processing time for a batch of irrelevant matches — noticeable as a delay before the reply begins. When the conversation has moved to a topic your corpus does not cover, turning the toggle off is the cheaper mode.
+
 ### Security warning
 
 To keep tool use safe, there are [certain important considerations](https://simonwillison.net/2025/Jun/16/the-lethal-trifecta/). In short, giving an LLM access to all three of:

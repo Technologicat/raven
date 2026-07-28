@@ -371,9 +371,26 @@ So it is a fallback chain over the best *structured* signal available, not a heu
 
 1. **A BibTeX record** → the `title` / `author` / `year` fields. `raven-burstbib` writes each record
    verbatim (`burstbib.burst_bibtex`), so line 1 is the `@article{slug,` header and the fields follow
-   immediately — the title is right there, and `raven.papers.bibtex` already parses it. Exact, no guessing.
+   immediately. Exact, no guessing.
 2. **A descriptive filename** → the `document_id` already *is* the label; anything else is redundant.
 3. **Anything else** → the first non-trivial line, as a pseudo-title.
+
+Two things checked against a real corpus before writing the formatter (2026-07-28), both of which change
+what case (1) has to handle:
+
+- **The field keys are capitalized.** A `raven-burstbib` file written from a Web of Science export reads
+  `Author = {...}`, `Year = {...}`, `Title = {...}` — not the lowercase spelling the BibTeX literature
+  uses. So the extraction must normalize keys, and `raven.papers.bibtex` is the wrong tool for it: that
+  module *writes* BibTeX (`entries_to_bibtex`), it does not read it. The reading route is `bibtexparser`
+  directly, with the `NormalizeFieldKeys()` middleware, exactly as `visualizer/importer.py` already does
+  it — `bibtexparser` is a hard dependency of Raven already, so this costs nothing but the import.
+- **A `.bib` in `docs_dir` may hold many records.** Nothing forbids a user dropping a whole reference
+  database in there instead of burst output. One file is one HybridIR document (`HybridIR.add` takes a
+  document per path and chunks it internally), so such a file is *one* document containing hundreds of
+  records — retrievable chunk-wise, since a chunk lands near one record, but hopeless to fetch whole.
+  Case (1) therefore forks on the record count: one record → the title; several → the filename plus the
+  count, e.g. `refs.bib — BibTeX database, 342 records`. That is the decision-grade answer for this shape,
+  because the decision it drives is *don't fetch this*.
 
 Note that (1) is worth more than labelling: a title that can be *parsed* is a title that can be *weighted*
 in retrieval, which is index-side work adjacent to brief 09. See the HybridIR title-field item in
