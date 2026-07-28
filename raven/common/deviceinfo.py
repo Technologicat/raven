@@ -257,6 +257,14 @@ class VRAMLedger:
     - shows up in the first and is invisible to the second, and that divergence is worth
     seeing rather than averaging away.
 
+    The two diverge in *both* directions, and each direction means something different:
+
+      - `driver` **above** `torch`: the step allocated outside PyTorch's allocator, or PyTorch grew
+        its pool by more than the step asked for. This is the case a torch-only figure would miss.
+      - `driver` **below** `torch`: the step reused blocks an earlier step had reserved and freed.
+        PyTorch counts the allocation; no new memory left the driver's pool. Reads like an error and
+        is not one - it means the pool was already big enough.
+
     **Three caveats, all of which affect how the numbers should be read:**
 
       - *The driver figure is device-global.* Anything else using the same GPU during a

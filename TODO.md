@@ -30,7 +30,23 @@ individual items carry a "Researchers' Night" note where they feed it. Working b
   startup, so "first speech" warmup is a weaker hypothesis than it sounds; what is still cold at that moment is
   THA3's first inference at the talking-morph shape, the audio device open, and the postprocessor's first pass.
   Test whether it survives TTS-on-CPU, which would rule contention out.
-- **Per-module VRAM budget** — so the config variants are derived rather than guessed on the day.
+- ~~**Per-module VRAM budget**~~ — **measured 2026-07-28 on the 16 GB machine** (`raven-server --vram-report PATH`, instrumentation lives in `deviceinfo.VRAMLedger`). All nine modules resident cost **2.27 GiB** at load, leaving 13.0 GiB of 15.6 free:
+
+  | module | GiB | | module | GiB |
+  |---|---|---|---|---|
+  | embeddings | 0.83 | | tts | 0.34 |
+  | sanitize | 0.63 | | translate | 0.25 |
+  | classify | 0.14 | | stt | 0.04 |
+  | avatar | 0.03 | | natlang | 0.02 |
+  | imagefx | 0.00 | | | |
+
+  So the module set is not the constraint on either card; the LLM is. On 8 GB that leaves ~5.5 GiB before inference peaks, which fits the on-the-road model with room.
+
+  **This is a floor, not the operating footprint**, and two rows say so. `avatar` genuinely loads THA3 eagerly (0.03 is the posing engine), but per-session render buffers and the Anime4K upscaler are allocated when a session starts, not at init. `imagefx` reads 0.00 because it is constructed with an empty filter chain — and `crt` plus `atmospheric_dust` are about to go into that chain. Inference activations are absent throughout.
+
+  Still to measure, and it is the number that actually decides the demo config: **peak during use**. That needs a warm-up request per module. Only worth doing if the LLM's budget turns out tight.
+
+  `embeddings` goes stale at the Nomic switch; the other eight should hold until the demo.
 - ~~**MoE vs dense decode speed**~~ — **measured 2026-07-28 on the eGPU: ~110 tok/s for 35B-A3B against ~40
   tok/s for 27B dense, so 2.75×.** That is *below* the 3–9× band predicted from the active-parameter ratio
   (3B vs 27B), which says the fixed per-token overhead compresses it harder than expected — worth remembering
