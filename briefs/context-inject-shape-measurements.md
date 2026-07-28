@@ -21,18 +21,37 @@ python inject_shapes.py http://localhost:1234 <model> 3,5,6     # a subset
 
 ## Environment
 
-Measured 2026-07-28. LM Studio 0.4.19 (Build 2), all models at 131072 context, temperature 0.
+Measured 2026-07-28, all models at 131072 context, temperature 0, across two machines:
 
-| model | quant source | VRAM |
+| | 16 GB machine | eGPU machine (24 GB) |
 |---|---|---|
-| Qwen3.5-9B | unsloth | 6.89 GB |
-| Qwen3.6-35B-A3B | unsloth | 20.40 GB |
-| Qwen3.6-27B | unsloth | 18.54 GB |
-| Gemma4-26B-A4B | lmstudio-community | 17.99 GB |
+| LM Studio | 0.4.19 (Build 2) | 0.4.20 (Build 1) |
+| covers | Q1, Q2, Q4, Q5, and Q3 for Qwen3.5-9B | Q3 at realistic scale, Q7, and Q1 re-check |
+| Gemma build | `lmstudio-community` | `google/gemma-4-26b-a4b` |
+| Qwen3.5-9B build | unsloth | unsloth |
 
-The Gemma quant is not interchangeable: the unsloth build fails to load, because LM Studio's
-workaround for Gemma's template fires only for the lmstudio-community build with its bundled template
-unoverridden.
+Qwen3.5-9B ran on both, which makes it the cross-version control. The larger models could not keep
+prompt processing in 16 GB — spilling to system RAM caps prefill near 300 tok/s against 2.7 ktok/s on
+the eGPU machine, which also has the faster card — so their runs live on the second machine.
+
+| model | VRAM (16 GB machine) |
+|---|---|
+| Qwen3.5-9B | 6.89 GB |
+| Qwen3.6-35B-A3B | 20.40 GB |
+| Qwen3.6-27B | 18.54 GB |
+| Gemma4-26B-A4B | 17.99 GB |
+
+**The Gemma build situation is unresolved and the two machines differ.** On 0.4.19 the
+`lmstudio-community` build was used, and the unsloth build would not load at all (minja choking on
+Gemma's template); the working belief at the time was that LM Studio's workaround fired only for the
+`lmstudio-community` packaging. On 0.4.20 a `google/gemma-4-26b-a4b` build loaded without complaint and
+produced results matching the `lmstudio-community` ones for Q1, Q3 and Q7.
+
+What that does **not** establish: whether the `google` build would load on 0.4.19, or whether unsloth
+loads on 0.4.20. One plausible reading is that 0.4.20 broadened Gemma template support — but that is a
+hypothesis from a single successful load, not a measurement, and it should be checked rather than
+repeated. What the matching *results* do support is that Gemma's bare-`tool` failure (Q1) is a property
+of the model rather than of one packaging, since it reproduced across two builds and two backends.
 
 **Which of these numbers a backend upgrade can move.** Anything decided by the model reading prompt
 text — the placement sweep, reasoning spend, refusal and termination behaviour, the constraint check —
@@ -184,10 +203,28 @@ unsafe.** Three combinations are clean on all four models — `user` at either p
 at the front — so the choice is between keeping the honest tool role (front placement, KV-cache rebuild
 retained) and recovering the cache (user role at the end, narration wart retained).
 
-**A fifth shape is worth measuring before settling**, because it may give both: place the material
-*immediately before* the user's final message rather than after it. The conversation prefix ahead of the
-material is still unchanged, so the cache benefit survives; but the last message is the user's question
-rather than a tool result, which should remove the "call again" temptation entirely. Not yet measured.
+### The fifth shape resolves it: place the material *before* the user's question
+
+`system → conversation → material → question`, rather than after the question. The prefix ahead of the
+material is still unchanged, so the cache benefit of a late insert survives; but the last message is the
+user's question rather than a tool result, which should remove the "call again" temptation.
+
+Measured on Qwen3.6-27B — the worst offender, source of all three misses and half the stray tool calls:
+
+| role, placement | k=20 | k=100 |
+|---|---|---|
+| `user` @ before | 3/3 | 3/3 |
+| `tool+call` @ before | 3/3 | 3/3 |
+
+**12 of 12, both corpus sizes, both roles, controls clean, and not one `<tool_call>` leak.** Compare the
+same model at `tool+call` @ end: 2/3 and 1/3, with stray calls in both.
+
+So the trade-off disappears. `before` keeps the honest tool role (and with it Gemma's requirement for a
+synthetic call), keeps the KV-cache prefix stable, and avoids the agent-loop misfire. That makes it the
+recommended placement, replacing both the current front insert and the end placement considered above.
+
+Still worth confirming on Qwen3.6-35B-A3B (one stray control call at `tool+call` @ end) and on Gemma 4,
+though neither showed the failure this shape exists to avoid.
 
 ### The same probe on Qwen3.5-9B, on the other machine
 

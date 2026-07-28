@@ -31,7 +31,10 @@ hypothetical one.
 
 Usage:
     python rag_placement.py                                  # localhost:1234, first model, k=20
-    python rag_placement.py <base_url> [model] [n_results]
+    python rag_placement.py <base_url> [model] [n_results] [filter]
+
+The filter selects conditions: a role ("tool+call"), a placement ("before"), or a pair
+("tool+call@before"), comma-separated. Omit it to run the whole grid.
 """
 
 import json
@@ -222,6 +225,12 @@ def run_one(base: str, model: str, role: str, where: str, blocks: list[str]) -> 
 
     if where == "front":
         messages = [{"role": "system", "content": SYSTEM_PROMPT}, *material, *filler, question]
+    elif where == "before":
+        # Between the conversation and the user's question. Keeps the cache benefit of a late insert —
+        # everything ahead of the material is still a stable prefix — while leaving the *last* message
+        # the user's question rather than a tool result, which is what invites Qwen 3.6 to answer a
+        # `tool+call` block by emitting another tool call instead of an answer.
+        messages = [{"role": "system", "content": SYSTEM_PROMPT}, *filler, *material, question]
     else:
         messages = [{"role": "system", "content": SYSTEM_PROMPT}, *filler, question, *material]
 
@@ -257,8 +266,14 @@ def main() -> None:
     print(f"probing {base} with model {model!r}, {n_results} knowledge-base results")
     print(f"needle: {NEEDLE_VALUE} kWh/kg for {NEEDLE_SYSTEM}\n")
 
+    # Optional filter, so a single condition can be re-run without paying for the whole grid. A token
+    # matches a role ("tool+call"), a placement ("before"), or a specific pair ("tool+call@before").
+    wanted = {t.strip() for t in sys.argv[4].split(",")} if len(sys.argv) > 4 else None
+
     for role in ("user", "tool+call"):
-        for where in ("front", "end"):
+        for where in ("front", "before", "end"):
+            if wanted is not None and not (wanted & {role, where, f"{role}@{where}"}):
+                continue
             print(f"  --- material as {role}, placed at the {where} ---")
             for depth_label, depth in depths.items():
                 got = run_one(base, model, role, where, build_corpus(n_results, depth))
