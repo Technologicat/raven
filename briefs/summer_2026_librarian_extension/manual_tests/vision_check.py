@@ -24,7 +24,7 @@ tunnel), since only the encoded image travels.
 
 Usage:
     python vision_check.py                       # localhost:1234, first model
-    python vision_check.py <base_url> [model]
+    python vision_check.py <base_url> [model] [screenshot.png]
 """
 
 import base64
@@ -109,6 +109,42 @@ def main() -> None:
             print(f"{base} reports no models loaded")
             return
         model = ids[0]
+
+    # A real screenshot is the harder and more representative test: dense UI, text at several
+    # sizes, and a question ("what is this for?") that needs comprehension rather than enumeration.
+    # `SCREENSHOT` ships beside this file; pass a path to use a different one.
+    screenshot = sys.argv[3] if len(sys.argv) > 3 else None
+    if screenshot:
+        with open(screenshot, "rb") as f:
+            png = f.read()
+        data_url = "data:image/png;base64," + base64.b64encode(png).decode("ascii")
+        print(f"probing {base} with model {model!r}; screenshot {screenshot} ({len(png)} bytes)\n")
+
+        print("[1] Comprehension — what is this software for?")
+        got = ask_about_image(base, model, data_url, "What is this software for? Answer briefly.")
+        if got["finish"] == "error":
+            print(f"    REJECTED -- {got['content'][:160]}")
+            return
+        print(f"    reply: {' '.join(got['content'].split())[:400]!r}\n")
+
+        print("[2] OCR — the window title, including the version string (small text).")
+        got = ask_about_image(base, model, data_url,
+                              "Read the window title bar of this application. Answer with its exact text only.")
+        print(f"    reply: {' '.join(got['content'].split())[:120]!r}\n")
+
+        print("[3] Fine detail — a status readout in the smallest text on screen.")
+        got = ask_about_image(base, model, data_url,
+                              "At the bottom left there is a context-usage readout showing a percentage and "
+                              "a token count. Read it exactly.")
+        print(f"    reply: {' '.join(got['content'].split())[:160]!r}\n")
+
+        print("[4] Self-report — older Qwen VLMs claimed they were given a text description instead.")
+        got = ask_about_image(base, model, data_url,
+                              "Are you seeing an actual image, or were you given a text description of one? "
+                              "Answer honestly in one sentence.")
+        print(f"    reply: {' '.join(got['content'].split())[:300]!r}")
+        print("\ndone")
+        return
 
     png = make_image()
     data_url = "data:image/png;base64," + base64.b64encode(png).decode("ascii")
