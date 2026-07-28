@@ -249,8 +249,8 @@ once and cache alongside the mask tensor. Expose `brightness_compensation` in
 ### Reference
 
 Timothy Lottes' CRT shader (`CRT_Lottes.fxh`, as shipped with ReShade/vkBasalt
-— already installed and configured on maia for Arcana Heart 3), ported in
-spirit rather than transliterated.
+— already installed and configured on the personal machine for Arcana Heart 3),
+ported in spirit rather than transliterated.
 
 ### What exists
 

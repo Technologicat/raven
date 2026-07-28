@@ -403,11 +403,16 @@ class HybridIR:
         return self._query_progress_text
 
     def _tokenize(self, text: str) -> List[str]:
-        """Apply lowercasing, tokenization, stemming, stopword removal.
+        """Apply lowercasing, tokenization, lemmatization, stopword removal.
 
         Returns a list of tokens.
 
         We use a spaCy NLP pipeline to do the analysis.
+
+        Lemmatization, not stemming - the distinction is worth keeping straight, because the two fail
+        differently. A stemmer chops suffixes by rule, so it happily turns "Springer" into "spring" and
+        silently merges a publisher with a season. A lemmatizer maps a word to its dictionary form using
+        the word's part of speech, so an unrecognized proper noun stays itself.
         """
         docs = self.nlp.analyze(text.lower())
         assert len(docs) == 1
