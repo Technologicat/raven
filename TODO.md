@@ -15,8 +15,8 @@ Librarian has to be demo-ready and impressive by then. The date is the only hard
 individual items carry a "Researchers' Night" note where they feed it. Working backwards from 26 September:
 
 1. **Demo correctness** — the defects a live audience would *see*. The temporary-context-inject package (six
-   linked items in `TODO_DEFERRED.md`, listed under its cluster index), the TTS zero-segment crash, the Markdown
-   renderer defects, the remaining crash/race items. Not polish: this is whether the demo works.
+   linked items in `TODO_DEFERRED.md`, listed under its cluster index), the Markdown renderer defects, the
+   remaining crash/race items. Not polish: this is whether the demo works.
 2. **Demo impressiveness** — `crt` and `atmospheric_dust` (both briefed), the avatar branch-switch glitch, RAG
    reranking for better answers on stage, citation surfacing, colorblind-safe signalling, lorebook if it fits.
 3. **Freeze and rehearse** — no new features; run the demo repeatedly on the actual hardware and fix what that

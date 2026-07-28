@@ -44,9 +44,22 @@ def encode(audio_data: Union[np.array, List[np.array]],
               If `True`, return a generator, which yields a separate `bytes` object for
               each part of the encoded audio file that corresponds to one input array.
               Finally, it yields one more `bytes` object, resulting from finalization.
+
+    An empty chunk list encodes to no bytes at all (`b""`, or a generator that yields
+    nothing). There is no channel count to be had from zero chunks, so no container
+    header can be written; and callers of the TTS path already read empty audio as
+    "nothing to play" (see `raven.client.tts.tts_prepare`).
     """
     if not isinstance(audio_data, list):
         audio_data = [audio_data]
+
+    if not audio_data:
+        logger.info("encode: no audio chunks to encode; returning empty audio.")
+        if stream:
+            def empty_streamer():
+                return iter(())
+            return empty_streamer
+        return b""
 
     # `StreamingAudioWriter` will reshape the input data array, but it needs to be of a compatible size, and something that reshapes sensibly.
     dims = np.shape(audio_data[0])

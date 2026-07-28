@@ -168,6 +168,13 @@ def text_to_speech(voice: str,
                 f"Got {len(segment_audios_s16)} TTS response segment{plural_s}, "
                 f"total audio duration {total_audio_duration:0.6g}s.")
 
+    # Zero segments is a legitimate answer, not an error: the synthesizer produces it for input with no
+    # pronounceable content, such as a stray Markdown bullet that reached us as a "sentence" of its own.
+    # Encoding then yields empty audio, and a duration of zero, which clients read as "nothing to play" —
+    # so we only note it in the log, and let the normal response path below do the rest.
+    if not segment_audios_s16:
+        logger.info(f"text_to_speech: nothing pronounceable in '{text}'; returning empty audio.")
+
     # Our output format is inspired by Kokoro-FastAPI's "/dev/captioned_speech" endpoint (June 2025),
     # but we include the phonemes too (for lipsyncing) and the audio duration.
     output_headers = {"Content-Type": f"audio/{format}",

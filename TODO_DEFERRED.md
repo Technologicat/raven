@@ -1410,36 +1410,6 @@ Posture decision for Juha (security vs. convenience for the median scientific us
 review (2026-06-05); pre-existing since the webfetch brief (brief 01) shipped, not introduced by the
 content-parts refactor.
 
-## TTS crashes (server 400, IndexError) on a degenerate sentence like a lone `*`
-
-When the avatar speaks an AI response, `avatar_controller.preprocess_task` splits it into lines/sentences and
-sends each to Raven-server `/api/tts/speak`. A "sentence" that is just a markdown artifact with no speakable
-content — observed: a bare `*` (the trailing bullet of a markdown list, e.g. an answer ending `...naked eye:\n*`)
-— makes the server fail: `api_tts_speak: failed, reason: <class 'IndexError'>: list index out of range`, returned
-as HTTP 400. Client-side this surfaces at `client/tts.py:234 tts_prepare` → `util.yell_on_error` →
-`RuntimeError`, caught in `preprocess_task`; `stop_tts` then power-cycles the queues and the app recovers (the
-avatar just doesn't speak that response). Not fatal, but it aborts the whole utterance.
-
-Server-side root cause pinned (from the server traceback): the synthesizer correctly produces **0 segments**
-for `*` (`text_to_speech: ... Got 0 TTS response segments, total audio duration 0s`), but `text_to_speech`
-(`raven/server/modules/tts.py:179`) then unconditionally calls `audio_codec.encode(audio_data=segment_audios_s16,
-...)` on the empty list, and `encode` (`raven/common/audio/codec.py:52`) does `np.shape(audio_data[0])` →
-`IndexError: list index out of range`. So the crash is in the **encode step on zero segments**, not in the
-phonemizer. The TTS path is NOT touched by brief 02 — pre-existing robustness gap, newly triggered by a response
-ending on a lone bullet.
-
-Three robustification points (the input-strip *should* have caught `*` before any of this — that's the primary
-gap Juha flagged: "the TTS should already be stripping its input"):
-- (a) **Input stripping (primary)** — the existing TTS input cleaning (client `avatar_controller` sentence
-  preprocessing and/or the server-side text sanitize) should drop sentences with no speakable (alphanumeric)
-  content, so `*` / `-` / `---` never reach synthesis. Find why the current stripping lets a lone `*` through.
-- (b) **Server: guard zero segments** — `text_to_speech` should short-circuit when it gets 0 segments (return an
-  empty/silent response) instead of calling `audio_codec.encode` on an empty list.
-- (c) **codec.encode defense-in-depth** — `audio_codec.encode` should handle an empty `audio_data` list
-  gracefully rather than `audio_data[0]`-ing into an IndexError.
-
-Discovered during brief 02 live testing, reported by Juha (2026-06-04).
-
 ## Keyboard-layout-aware positional hotkeys across the fleet
 
 Some Raven apps bind hotkeys *positionally* — keys chosen for their physical location rather than the letter they produce. The first case is `raven-cherrypick`'s WASD navigation (an alias for the arrow keys, plus `Q`/`E` for page up/down, for one-handed triage). On AZERTY (French) that cluster sits at ZQSD; on QWERTZ (German/Swiss) `Z` and `Y` are swapped — so positional bindings land under the wrong fingers for those users.

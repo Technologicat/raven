@@ -61,6 +61,22 @@ class TestEncodeShapeValidation:
 
 
 # --------------------------------------------------------------------------------
+# Zero chunks
+#
+# The TTS server hands `encode` whatever the synthesizer produced, and for input with
+# no pronounceable content that is an empty list. Encoding must answer with empty audio
+# rather than reaching for a channel count that does not exist.
+
+class TestEncodeNoChunks:
+    def test_empty_list_encodes_to_no_bytes(self):
+        assert codec.encode([], format="wav", sample_rate=SAMPLE_RATE) == b""
+
+    def test_empty_list_streaming_yields_nothing(self):
+        streamer = codec.encode([], format="wav", sample_rate=SAMPLE_RATE, stream=True)
+        assert list(streamer()) == []
+
+
+# --------------------------------------------------------------------------------
 # Lossless round-trip (WAV and FLAC)
 
 class TestLosslessRoundtrip:

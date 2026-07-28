@@ -45,6 +45,7 @@ from unpythonic import gensym, slurp
 from unpythonic.env import env
 
 from ..common import bgtask
+from ..common import text as common_text
 from ..common.audio import player as audio_player
 
 from ..common.gui import utils as guiutils
@@ -596,15 +597,18 @@ class DPGAvatarController:
                 return
             batch_text = strip_emoji(batch_text)
             batch_text = batch_text.strip()  # once more, with feeling!
-            if not batch_text:
-                logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: batch {batch_uuid}: Text is empty after post-stripping emoji and leading/trailing whitespace. Skipping.")
+            if not common_text.is_speakable(batch_text):  # blank, or punctuation/symbols only
+                logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: batch {batch_uuid}: Text has nothing speakable after post-stripping emoji and leading/trailing whitespace. Skipping.")
                 return
             # Now we actually have some text that is worth sending to the TTS and to the translation/subtitling system.
 
             # Break into lines, and break each line into sentences.
             # TODO: This relies on the fact that LLMs don't insert newlines except as paragraph breaks.
             lines = batch_text.split("\n")
-            lines = [line.strip() for line in lines if line.strip() != ""]  # This (vs. doing it on the fly) buys us that we know when we are processing the last item.
+            # Filtering here (vs. doing it on the fly) buys us that we know when we are processing the last item.
+            # Dropping unspeakable lines is what keeps a dangling Markdown bullet — an answer ending "...naked eye:\n*"
+            # leaves a line that is just "*" — from becoming a sentence of its own, with no phonemes to synthesize.
+            lines = [line.strip() for line in lines if common_text.is_speakable(line)]
             plural_s = "s" if len(lines) != 1 else ""
             logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: batch {batch_uuid}: detected {len(lines)} non-blank line{plural_s}.")
             for lineno, line in enumerate(lines, start=1):
@@ -622,7 +626,7 @@ class DPGAvatarController:
                 logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: batch {batch_uuid}, line {lineno} out of {len(lines)}: detected {len(sentences)} sentence{plural_s} on this line.")
 
                 sentences = [str(sentence) for sentence in sentences]  # from spaCy rich internal format
-                sentences = [sentence.strip() for sentence in sentences if sentence.strip() != ""]  # Same here - now we know when we're processing the last item.
+                sentences = [sentence.strip() for sentence in sentences if common_text.is_speakable(sentence)]  # Same here - now we know when we're processing the last item.
                 for sentenceno, sentence in enumerate(sentences, start=1):
                     if task_env.cancelled:
                         return
