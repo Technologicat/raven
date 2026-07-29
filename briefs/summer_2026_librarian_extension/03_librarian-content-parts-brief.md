@@ -966,7 +966,9 @@ became a typed-parts list everywhere; tool results as parts; per-part renderer; 
 - **D — GC UX & navigation** (not started — this is the remaining brief-03 work): manual "Clean up & save"
   (dry-run preview + thumbnail grid + staging recovery); bidirectional tool-call↔response nav links. Open
   question: `prune_unreachable_nodes` currently runs only in `minichat`, not the GUI exit path — decide GUI-exit
-  prune vs. manual-only.
+  prune vs. manual-only. **Decided 2026-07-29: manual-only, at least for now.** A sweep on exit is work the
+  user did not ask for at the moment they are least able to see it, and the leak it prevents is slow.
+  The bulk of this checkpoint is DPG work rather than GC logic.
   - **Verified 2026-07-18 (sidecar GC is likewise unwired):** the GUI delete-branch path
     (`chat_controller.delete_subtree_callback` → `datastore.delete_subtree`) frees the tree nodes but never
     sweeps sidecar files, and `prune_unreferenced_sidecars` (mark-and-sweep, needs the datastore configured with

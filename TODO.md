@@ -205,7 +205,7 @@ every tier, chosen on measurements rather than reputation.
 
 - **[Medium]** Pre-filtering at import time (e.g. by year). Also: add option to re-scan a BibTeX database for new entries added since last import (import only new items, report them as such).
 
-- **[Medium]** BibTeX-encoded umlauts and verbatim braces: handle `{\"o}` → ö etc.; drop BibTeX verbatim braces (`{GPU}` → `GPU`). **[Verify]** against current codebase.
+- **[Medium]** BibTeX-encoded umlauts: handle `{\"o}` → ö etc. **Verified 2026-07-29 against the current codebase**, which splits this item in two: the *verbatim braces* half is already done — `common.utils.unicodize_basic_markup` turns `{GPU}` into `GPU`, and also reverses the LaTeX escapes `raven-wos2bib` emits (`\{`, `{[}`, `\%`, `\&`, `\$`), so the display path survived that converter being taught to escape every field. The *umlaut* half is not: `\"{o}` comes out as `"o`. Note the pairing — `papers.utils.bibtex_escape` / `bibtex_unescape` own the write and read sides of the same transformation, and `unicodize_basic_markup` is a third implementation of the read side used by the Visualizer. Worth checking whether they should be one.
 
 - **[Medium]** More flexible data import: configurable which fields to use for the semantic embedding; user-defined Python hook (`input record → object to embed`) as a plugin API for developers. Consider also: make the stopword list configurable (text file).
 

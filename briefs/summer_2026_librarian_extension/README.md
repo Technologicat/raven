@@ -21,3 +21,21 @@ for value alone.
 
 Not in this list and still open: the tool-budget split (`TODO.md`, Librarian / urgent), which is a
 follow-up to 10 rather than a brief of its own.
+
+## After those three
+
+Not ordered, and the ordering is a real question rather than a formality — they are wanted for three
+different reasons:
+
+- **04 — MCP client** (`04_librarian-mcp-client-brief.md`). The most practical going forward: it is how
+  external tools arrive, which is what an agentic per-document pass wants, and it is tool *supply* rather
+  than a plugin system (see the scriptable-scaffold item in `TODO.md`).
+- **05 — lorebook** (`05_librarian-lorebook-brief.md`). A UX improvement.
+- **06 — memory / Hindsight standup** (`06_hindsight-standup-brief.md`). The most interesting from a
+  research standpoint, and the one closest to the co-researcher line in the ECCOMAS talk — memory is what
+  separates a chat frontend from a collaborator that accumulates context about the work. Adjacent reading:
+  Seth Herd on language model cognitive architectures.
+
+Recording the reasons rather than a rank, because "most interesting" and "most useful next" are different
+orderings and both are legitimate. The three above are ordered for closure; these are not yet ordered at
+all.
