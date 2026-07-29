@@ -510,6 +510,12 @@ def _on_key(sender, app_data) -> None:
     if _help_window is not None and _help_window.is_visible():
         return
 
+    # So does the error messagebox — and it must be guarded here too, because a DPG modal blocks the mouse
+    # but not the keyboard: without this, the Enter that dismisses an error dialog also fires whatever Enter
+    # does in the viewer behind it. (The file dialog is guarded differently, by `widget.input_enabled` above.)
+    if messagebox.modal_dialog_window_exists() and dpg.is_item_visible("modal_dialog_window"):  # tag
+        return
+
     ctrl_pressed = dpg.is_key_down(dpg.mvKey_LControl) or dpg.is_key_down(dpg.mvKey_RControl)
     shift_pressed = dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)
 

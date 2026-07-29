@@ -1340,21 +1340,34 @@ dpg.set_viewport_resize_callback(_resize_gui)
 # --------------------------------------------------------------------------------
 # Hotkey support
 
+def is_attach_file_dialog_visible() -> bool:
+    """Return whether the attach-file dialog is open.
+
+    An abstraction over `dpg.is_item_visible`, not just a call to it, because the window might not exist yet.
+    """
+    if _filedialog_attach is None:
+        return False
+    return dpg.is_item_visible("attach_file_dialog")  # tag
+
+def is_any_modal_window_visible() -> bool:
+    """Return whether *some* modal window is open.
+
+    Currently the help card, the attach-file dialog, the cleanup dialog, and the messagebox.
+    """
+    return (help_window.is_visible() or
+            is_attach_file_dialog_visible() or
+            cleanup_dialog.is_open or
+            (messagebox.modal_dialog_window_exists() and dpg.is_item_visible("modal_dialog_window")))  # tag
+
 combobox_choice_map = None   # DPG tag or ID -> (choice_strings, callback)
 def librarian_hotkeys_callback(sender, app_data):
     global _last_input_ns
     _last_input_ns = time.monotonic_ns()
 
-    # # Hotkeys while an "open file" or "save as" dialog is shown - fdialog handles its own hotkeys
-    # if is_any_modal_window_visible():
-    #     return
-
-    # A DPG modal blocks the mouse but not the keyboard, so without this the chat hotkeys stay live behind the
-    # cleanup dialog — Enter would send a chat message while the user thinks they are confirming a deletion.
-    # Esc closes the dialog (the conventional way out of a modal); everything else is swallowed.
-    if cleanup_dialog.is_open:
-        if app_data == dpg.mvKey_Escape:
-            cleanup_dialog.close()
+    # The cleanup dialog is the one modal with no key handling of its own, so Esc is honored here. Everything
+    # else it swallows, via the general guard below.
+    if cleanup_dialog.is_open and app_data == dpg.mvKey_Escape:
+        cleanup_dialog.close()
         return
 
     key = app_data
@@ -1390,8 +1403,13 @@ def librarian_hotkeys_callback(sender, app_data):
     if key == dpg.mvKey_F11:  # de facto standard hotkey for toggle fullscreen
         toggle_fullscreen()
 
-    # Hotkeys while the Help card is shown - helpcard handles its own hotkeys
-    elif help_window.is_visible():
+    # Hotkeys while a modal window is shown - each modal handles its own keys (the help card, the file
+    # dialog and the messagebox have their own handlers; the cleanup dialog's Esc is handled above).
+    #
+    # A DPG modal blocks the mouse but NOT the keyboard, so without this the chat hotkeys stay live behind
+    # whatever is on top: Enter would send a chat message while the user believes they are confirming a
+    # deletion or picking a file. Nothing here is cosmetic.
+    elif is_any_modal_window_visible():
         return
 
     elif key == dpg.mvKey_F1:  # de facto standard hotkey for help

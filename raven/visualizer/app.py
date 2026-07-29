@@ -83,6 +83,7 @@ with timer() as tim:
 
     from ..common.gui import animation as gui_animation
     from ..common.gui import helpcard
+    from ..common.gui import messagebox
     from ..common.gui import utils as guiutils
 
     from .app_state import app_state  # Visualizer-wide shared state namespace (see `app_state.py`)
@@ -135,10 +136,18 @@ def is_any_modal_window_visible():
     """Return whether *some* modal window is open.
 
     Currently these are the help card, the "open file" dialog, and the "save word cloud" dialog.
+
+    The messagebox term is here ahead of any caller: this app shows no messagebox today, and the `messagebox`
+    import exists for this check alone. It is deliberate rather than speculative — the failure it forecloses
+    is the one *Raven-librarian* actually hit, where the guard was written before the app had modals and
+    nobody revisited it when the first one arrived. A modal blocks the mouse but not the keyboard, so an
+    unguarded hotkey keeps firing behind whatever is on top, and the symptom (Enter both dismissing a dialog
+    and doing something else) does not look like a missing line in this function.
     """
     return (is_open_file_dialog_visible() or word_cloud.is_save_dialog_visible() or
             is_open_import_dialog_visible() or is_save_import_dialog_visible() or
-            help_window.is_visible())
+            help_window.is_visible() or
+            (messagebox.modal_dialog_window_exists() and dpg.is_item_visible("modal_dialog_window")))  # tag
 
 # Register on `app_state` so submodules (e.g. `annotation`) can call it.
 app_state.is_any_modal_window_visible = is_any_modal_window_visible

@@ -456,11 +456,16 @@ video_recorder = AvatarVideoRecorder()
 def is_any_modal_window_visible():
     """Return whether *some* modal window is open.
 
-    Currently these are file dialogs and the help card.
+    Currently these are file dialogs, the help card, and the messagebox.
+
+    The messagebox belongs here for the same reason as the rest: a DPG modal blocks the mouse but not the
+    keyboard, so an app hotkey left unguarded still fires behind it — and the messagebox is the modal that
+    asks questions whose answer key (Enter) is also a hotkey elsewhere.
     """
     return (is_open_input_image_dialog_visible() or is_open_json_dialog_visible() or
             is_animator_settings_dialog_visible() or is_save_animator_settings_dialog_visible() or
-            (_help_window is not None and _help_window.is_visible()))
+            (_help_window is not None and _help_window.is_visible()) or
+            (messagebox.modal_dialog_window_exists() and dpg.is_item_visible("modal_dialog_window")))  # tag
 
 class PostprocessorSettingsEditorGUI:
     """Main app window for the postprocessor settings editor for `raven.avatar`."""

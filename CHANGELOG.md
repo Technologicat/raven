@@ -6,6 +6,8 @@
 
 *Raven-librarian*
 
+- keyboard shortcuts no longer fire behind a modal dialog. Opening the attach-file browser, or any dialog, left the chat hotkeys live underneath it — so Enter could send a chat message while you were picking a file. (`raven-xdot-viewer` had the same gap on its error dialogs.)
+
 - idle CPU/GPU throttle in the render loop. When the avatar is paused (auto-off after the configured idle timeout), no LLM turn is in flight, no RAG indexing is running, and there has been no recent user input, the GUI drops to ~12 fps instead of running flat-out. Same pattern as `raven-cherrypick`, `raven-xdot-viewer`, and `raven-avatar-pose-editor`.
 - new INDEXING indicator (red, pulsating) shows while the RAG document database is being updated in the background — previously silent CPU/GPU work that read as "the app is broken". Includes per-document progress (`[14 / 186] | filename | elapsed 6 seconds, ETA 01:14, total 01:20`) and `Saving…` during the rebuild + datastore save tail. Mnemonic borrowed from audio/video apps: red = recording.
 - the DOCS indicator (during RAG search) now reports per-phase progress — `Tokenizing query…`, `Embedding query…`, `Keyword search…`, `Semantic search…`, `Merging results…`.
