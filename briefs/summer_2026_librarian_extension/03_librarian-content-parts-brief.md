@@ -1005,6 +1005,30 @@ became a typed-parts list everywhere; tool results as parts; per-part renderer; 
     one, which kept its extension — and the commit swept the sidecar directory clean, description files
     included. Unit tests cover the operation half; the dialog is GUI-verified rather than tested.
 
+  **Scouted 2026-07-29, not yet built — the nav links (the last item in brief 03).** Every piece the §
+  above asks for already exists; this is wiring, not new machinery. Where each piece lives:
+
+  - **Both ids are already in the data, and one is already in hand at the render site.** The assistant side is
+    `message["tool_calls"][i]["id"]`, and `chat_controller.py:1118` iterates those very dicts — it just drops
+    the id, passing only `index` / `name` / `arguments` into `add_tool_call_invocation`. Threading `id` through
+    is a one-parameter change. The tool-response side is `message["tool_call_id"]`, canonical since the
+    migration. Precedent for the match itself: `scaffold.retry_tool_calls` (≈ line 1050) already finds a call
+    by `tc.get("id") == denied_tool_call_id`.
+  - **Build the maps from `chat_controller.current_chat_history`, not from the forest.** That list *is* the
+    HEAD lineage by construction, which is exactly the scope the § demands ("not the whole forest, because
+    branched alternates may have different responses") — so the constraint is satisfied by picking the right
+    source rather than by filtering. Each element carries `node_id` and `gui_container_group`. Take
+    `current_chat_history_lock` while walking it.
+  - **Scrolling is done.** `DPGLinearizedChatView.scroll_view(scroll_target_node_id=...)` resolves a node ID
+    to its widget and scrolls there; the branch-switch path already uses it. Node granularity only — which is
+    enough, because the § wants "scroll to the message, highlight the sub-element", not scroll-to-sub-element.
+  - **Highlight wants `gui_animation.PulsatingColor`** (the primitive the indicators use), aimed at the target.
+    A tool-call invocation's icon already has a stable tag (`chat_message_toolcall_icon_{index}_{gui_uuid}`),
+    so it is addressable as-is; its containing row group has no tag, so highlighting the whole row rather than
+    just the glyph means tagging the row first (`add_tool_call_invocation`, ≈ line 563).
+  - The remaining unknown is cosmetic, not structural: whether pulsing the icon alone reads as "this one", or
+    whether the row needs it. Decide by looking at it.
+
   **Settled with Juha 2026-07-29, at the start of implementation:**
   - **Placement — a second row under the existing separator**, labelled `Maintenance:`, below the `Open folder:`
     row in `mode_toggle_controls`. Not a third button on the folder row: that row's label would then be lying,
