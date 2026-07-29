@@ -3,6 +3,32 @@
 New items go at the **top**. (Both ends were in use up to 2026-07-27, which is how the two halves of the same
 Librarian session ended up ~1000 lines apart.)
 
+## Move the avatar backdrop onto `image.utils.fit_cover`
+
+`DPGAvatarRenderer.configure_backdrop` (`raven/client/avatar_renderer.py`) scales its backdrop with PIL —
+`scale = max(...)`, resize, crop — which is exactly what `raven.common.image.utils.fit_cover` now does. Porting
+it would leave one resampler in the constellation instead of two, and fold in the sibling `# TODO` already
+sitting there ("if the backdrop image is small and/or has a wild aspect ratio, would be more efficient to cut
+first, then scale").
+
+**Straight port ≠ speedup, so decide which of the two jobs this is.** A local `fit_cover` would run CPU torch
+against PIL's C implementation — a wash at best, because `configure_backdrop` is client-side and Librarian's
+client does no local GPU work by design. Real acceleration means doing the resize *server-side*, in `imagefx`.
+
+That is cheaper than it first looks: the backdrop already ships its pixels to `imagefx` for the blur, so a
+resize filter joins a round trip that is already happening. Two details decide whether it actually pays:
+
+- The blur is **conditional** (`if new_blur_state:`). With blur off there is no server call today, so a
+  delegated resize would *add* a round trip to the unblurred case rather than share one.
+- The resize currently runs **before** the blur, so it is the downscaled image that goes over the wire.
+  Delegating it inverts that — full-size pixels out, small ones back — which is more bytes for a large
+  backdrop, against a GPU resize that is nearly free. Whether that trade is worth it is a measurement, not
+  an argument.
+
+None of this is urgent: the resize fires on a window resize, never in a hot loop.
+
+Noticed while extracting `fit_contain` / `fit_cover` for the cleanup preview's thumbnail grid (2026-07-29).
+
 ## TODO.md goes stale because nothing in the workflow makes anyone visit it
 
 The two lists have different failure rates and the reason is mechanical rather than a matter of discipline.

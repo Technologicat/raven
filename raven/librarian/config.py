@@ -251,6 +251,11 @@ store_original_image = True
 # Covers both kinds: an orphaned sidecar may be an attached image or an attached document.
 attachment_staging_dir = global_config.toplevel_userdata_dir / "staging" / "recovered_attachments"
 
+# Side of the square thumbnail tiles in the cleanup preview's image grid, in pixels. Smaller than an inline
+# chat image (`gui_config.chat_inline_image_*`) because the grid shows many at once, and the job here is
+# recognition — "ah, that one" — not reading detail out of the picture.
+cleanup_thumbnail_size = 140
+
 # Estimated per-image token cost, for the context-fill budget (a VLM image consumes non-trivial context that a
 # text-only tokens-per-character estimate can't see). Keyed by a lowercase substring matched against the
 # loaded model's family / arch / id; first match wins, `None` key is the fallback for unknown families. Each

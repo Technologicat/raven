@@ -584,7 +584,7 @@ Mark-and-sweep, not reference-counting. Composes cleanly with chattree's existin
    per-op. Sidecar GC slots into the same trigger model.
 
 **The sweep operation.** `chattree.PersistentForest.prune_unreferenced_sidecars()` (no args) marks
-every reachable sidecar and sweeps the rest; `unreferenced_sidecars()` is the same computation
+every reachable sidecar and sweeps the rest; `list_unreferenced_sidecars()` is the same computation
 without deleting, for the dry-run preview. The mark phase scans two reference sites per revision:
 `sidecar:` URLs in `image_url` content-parts, and `original_sidecar` entries in
 `general_metadata["sidecars"]` (the case-2-preserved originals from §5, which have no content-part
@@ -963,12 +963,47 @@ became a typed-parts list everywhere; tool results as parts; per-part renderer; 
   No behavior change; `sidecarstore` has its own tests.
 - *(Env interlude, not brief-03 scope: the torch trio is pinned at `2.11.0` / `0.26.0` / `2.11.0` `+cu128` as of
   `af3a19b`, validated on the live server — NVRTC OK. See `pyproject.toml` / README for the pinning scheme.)*
-- **D — GC UX & navigation** (in progress — this is the remaining brief-03 work): manual "Clean up & save"
-  (dry-run preview + thumbnail grid + staging recovery); bidirectional tool-call↔response nav links. Open
-  question: `prune_unreachable_nodes` currently runs only in `minichat`, not the GUI exit path — decide GUI-exit
-  prune vs. manual-only. **Decided 2026-07-29: manual-only, at least for now.** A sweep on exit is work the
-  user did not ask for at the moment they are least able to see it, and the leak it prevents is slow.
-  The bulk of this checkpoint is DPG work rather than GC logic.
+- **D — GC UX & navigation** (manual "Clean up & save" **DONE**; bidirectional tool-call↔response nav links
+  remain — that is the last of brief 03). Open question resolved: `prune_unreachable_nodes` ran only in
+  `minichat`, not the GUI exit path. **Decided 2026-07-29: manual-only, at least for now.** A sweep on exit is
+  work the user did not ask for at the moment they are least able to see it, and the leak it prevents is slow.
+  The bulk of this checkpoint was DPG work rather than GC logic.
+
+  **Landed (2026-07-29)** as `raven.librarian.cleanup` — the operation and its dialog in one module, pure half
+  first. Details that were decided while building, and are not obvious from the code:
+
+  - **The dry run needed a substrate gap filled first.** `unreferenced_sidecars()` marked over *every* node,
+    so a preview taken before the node prune reported the attachments of unreachable nodes as live — i.e. it
+    under-reported exactly what the cleanup exists to reclaim. Added `Forest.list_unreachable_nodes()` (the
+    dry-run counterpart `prune_unreachable_nodes` never had) and `excluding_nodes=` on the sidecar dry run, so
+    the preview describes the state *after* step one. Both names gained the `list_` prefix in the same pass;
+    `unreferenced_sidecars` had slipped review as a bare noun in an earlier commit.
+  - **Thumbnails are letterboxed, not fitted.** The chat log fits an inline image to its own aspect ratio; a
+    grid wants a regular lattice, and cells of assorted heights read as damage. Cropping to square was the
+    alternative and is wrong here — it would discard the part of a forgotten image that identifies it.
+    Extracting this surfaced that `raven.common.image.utils` had two-thirds of the standard `object-fit`
+    family unnamed: `letterbox` was contain-plus-pad, the cover fit was inlined in the avatar backdrop, and
+    the plain contain fit was inlined in `chat_controller`. Now `fit_contain` / `fit_cover` / `letterbox`,
+    with `letterbox` implemented on `fit_contain`. Migrating the backdrop onto `fit_cover` is deferred (see
+    `TODO_DEFERRED.md` — it is a consistency win, and the speedup case is a measurement, not an argument).
+  - **A downsampled image and its preserved original are one attachment, not two.** Both are referenced from
+    the same payload, so both fall unreferenced together and a flat listing of the sweep's candidates showed
+    the same picture twice, under the same name, with the count inflated to match. `preview_cleanup` folds the
+    companion into the primary (`companion_filenames` / `companion_bytes`), so the tile reports the disk both
+    occupy. `archival_filename` resolves the pair the way the chat log's "show full-size image" already did —
+    original if there is one, else the file itself — and that is what the open and rescue actions use. Rescuing
+    the downsample would have handed the user a copy strictly worse than one sitting next to it.
+  - **Open-in-default-application per item**, matching the chat log's inline attachment actions. A 140 px tile
+    is enough to remember an image by but not to judge it, and a document has no tile at all — without this,
+    "do I still want this?" is only answerable after the deletion.
+  - **The dialog had to guard the hotkeys.** A DPG modal blocks the mouse but not the keyboard, so the chat
+    hotkeys stayed live behind it — Enter would have sent a chat message while the user thought they were
+    confirming a deletion. `librarian_hotkeys_callback` now returns early while the dialog is open, with Esc
+    closing it. The same gap exists for `messagebox` modals; the guard there is still commented out.
+  - **Verified end to end** on a synthetic datastore (6 images of assorted aspect ratios, 4 documents, one
+    unreachable node): rescue-all copied all ten out under their real filenames — including the undescribed
+    one, which kept its extension — and the commit swept the sidecar directory clean, description files
+    included. Unit tests cover the operation half; the dialog is GUI-verified rather than tested.
 
   **Settled with Juha 2026-07-29, at the start of implementation:**
   - **Placement — a second row under the existing separator**, labelled `Maintenance:`, below the `Open folder:`

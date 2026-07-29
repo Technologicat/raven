@@ -72,6 +72,7 @@ with timer() as tim:
 
     from . import appstate
     from .chat_controller import DPGChatController
+    from .cleanup import DPGCleanupDialog
     from . import config as librarian_config
     # from . import chattree
     from . import hybridir
@@ -855,8 +856,8 @@ with timer() as tim:
                             subtitle_explanation_str = "Closed-caption (CC) the avatar's speech."
                         dpg.add_text(f"{subtitle_explanation_str}\nUsed when TTS is ON.\nTakes effect from the AI's next chat message onward.", parent="subtitles_enabled_tooltip")  # tag
 
-                    # Utility actions — one-shot folder openers, kept a visually distinct group from the
-                    # persistent-state toggles above (their own row, under a separator). The panel below the
+                    # Utility actions — one-shot actions, kept a visually distinct group from the
+                    # persistent-state toggles above (their own rows, under a separator). The panel below the
                     # avatar has room to grow this into a collapsing header if more tools land here later.
                     dpg.add_separator()
                     with dpg.group(horizontal=True):
@@ -911,6 +912,21 @@ with timer() as tim:
                         dpg.bind_item_theme("util_open_datastore_dir_button", "disablable_widget_theme")  # tag
                         with dpg.tooltip("util_open_datastore_dir_button", tag="util_open_datastore_dir_tooltip"):  # tag
                             dpg.add_text("Open the chat data folder\n(chat history + attached images)", tag="util_open_datastore_dir_tooltip_text")  # tag
+
+                    # A destructive action gets its own row rather than a third seat on the folder row above:
+                    # that row's label would start lying, and "delete things forever" should not sit a few
+                    # pixels from two buttons whose worst outcome is a file manager opening.
+                    with dpg.group(horizontal=True):
+                        dpg.add_text("Maintenance:")
+
+                        dpg.add_button(label=fa.ICON_BROOM,
+                                       callback=lambda: cleanup_dialog.open(),
+                                       width=gui_config.toolbutton_w,
+                                       tag="util_cleanup_button")  # tag
+                        dpg.bind_item_font("util_cleanup_button", themes_and_fonts.icon_font_solid)  # tag
+                        dpg.bind_item_theme("util_cleanup_button", "disablable_widget_theme")  # tag
+                        with dpg.tooltip("util_cleanup_button", tag="util_cleanup_tooltip"):  # tag
+                            dpg.add_text("Clean up and save the chat data\n(shows what would be deleted first)", tag="util_cleanup_tooltip_text")  # tag
 
         # NOTE: If you add or remove buttons here, update also `number_of_below_chat_buttons` and/or `number_of_separators` (search for them in this module).
         # The bottom row is split into two child windows that mirror the panels above them: the chat-side
@@ -1333,6 +1349,14 @@ def librarian_hotkeys_callback(sender, app_data):
     # if is_any_modal_window_visible():
     #     return
 
+    # A DPG modal blocks the mouse but not the keyboard, so without this the chat hotkeys stay live behind the
+    # cleanup dialog — Enter would send a chat message while the user thinks they are confirming a deletion.
+    # Esc closes the dialog (the conventional way out of a modal); everything else is swallowed.
+    if cleanup_dialog.is_open:
+        if app_data == dpg.mvKey_Escape:
+            cleanup_dialog.close()
+        return
+
     key = app_data
     ctrl_pressed = dpg.is_key_down(dpg.mvKey_LControl) or dpg.is_key_down(dpg.mvKey_RControl)
     shift_pressed = dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)
@@ -1514,6 +1538,29 @@ chat_controller = DPGChatController(llm_settings=llm_settings,
                                     web_indicator_widget=web_indicator_group,
                                     executor=bg)
 
+def _cleanup_roots() -> Tuple[str]:
+    """The node IDs a cleanup must keep everything reachable from: the system prompt node, which is the root
+    of every chat in this datastore. Read fresh at each cleanup — a factory reset replaces that node, and a
+    stale ID here would declare the whole chat history unreachable."""
+    return (app_state["system_prompt_node_id"],)
+
+def _on_cleanup_committed(result: env) -> None:
+    """Acknowledge a completed cleanup on the button that started it (the dialog is gone by now)."""
+    message = (f"Reclaimed {len(result.deleted_sidecars)} attachment(s)" if result.deleted_sidecars
+               else "Saved; nothing to reclaim")
+    gui_animation.flash_button(button="util_cleanup_button",  # tag
+                               tooltip="util_cleanup_tooltip",  # tag
+                               text="util_cleanup_tooltip_text",  # tag
+                               ok=True, message=message, duration=gui_config.acknowledgment_duration)
+
+cleanup_dialog = DPGCleanupDialog(datastore=datastore,
+                                  get_roots=_cleanup_roots,
+                                  executor=bg,  # use the same thread pool as our main task manager
+                                  themes_and_fonts=themes_and_fonts,
+                                  save_app_state=lambda: appstate.save(state_file=state_file, state=app_state),
+                                  on_committed=_on_cleanup_committed,
+                                  centering_reference_window="librarian_main_window")  # tag
+
 # Set in `_gui_cancel_tasks` (the DPG exit callback) and again, defensively, in `gui_shutdown`. The two
 # startup frame callbacks (`_load_initial_animator_settings`, `_build_initial_chat_view`) run on DPG's
 # callback thread and can race app teardown: if the user closes the window mid-boot, a callback may still be
@@ -1543,6 +1590,7 @@ def _gui_cancel_tasks() -> None:
     _shutting_down = True  # also tells any in-flight startup frame callback to bail before it touches DPG
     chat_controller.cancel_tasks()        # cancel chat / AI-turn / context-prefill tasks (no wait)
     gui_resize_task_manager.clear(wait=False)  # cancel any in-flight GUI resize (it can use split_frame)
+    cleanup_dialog.task_manager.clear(wait=False)  # cancel thumbnail loading (it too can use split_frame)
     dpg_avatar_renderer.stop(wait=False)  # signal the avatar renderer's background (OpenGL) task to stop (no wait)
     avatar_controller.stop_tts()          # stop TTS playback (no wait)
 dpg.set_exit_callback(_gui_cancel_tasks)
