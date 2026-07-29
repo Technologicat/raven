@@ -1022,11 +1022,18 @@ became a typed-parts list everywhere; tool results as parts; per-part renderer; 
   - **Scrolling is done.** `DPGLinearizedChatView.scroll_view(scroll_target_node_id=...)` resolves a node ID
     to its widget and scrolls there; the branch-switch path already uses it. Node granularity only — which is
     enough, because the § wants "scroll to the message, highlight the sub-element", not scroll-to-sub-element.
-  - **Highlight wants `gui_animation.PulsatingColor`** (the primitive the indicators use), aimed at the target.
-    A tool-call invocation's icon already has a stable tag (`chat_message_toolcall_icon_{index}_{gui_uuid}`),
-    so it is addressable as-is; its containing row group has no tag, so highlighting the whole row rather than
+  - **Highlight wants a generalized `ButtonFlash`, and that is the one piece that does not exist yet.**
+    `PulsatingColor` was the first guess and is the wrong shape: it is a *cyclic* pulsation, right for a
+    status indicator that means "still happening" (INDEXING), wrong for "look here, once". A trace jump is
+    transient and self-terminating, which is exactly `ButtonFlash` — except that one only accepts buttons,
+    and the target here is a text row. Widening it beyond buttons has been on the roadmap for a while
+    (Juha, 2026-07-29), so this is the occasion: do the widening first, in `raven.common.gui.animation`, and
+    the nav links become its first caller. Fleet-wide win — every app that wants to draw the eye to a
+    non-button currently has nothing.
+  - A tool-call invocation's icon already has a stable tag (`chat_message_toolcall_icon_{index}_{gui_uuid}`),
+    so it is addressable as-is; its containing row group has no tag, so flashing the whole row rather than
     just the glyph means tagging the row first (`add_tool_call_invocation`, ≈ line 563).
-  - The remaining unknown is cosmetic, not structural: whether pulsing the icon alone reads as "this one", or
+  - The remaining unknown is cosmetic, not structural: whether flashing the icon alone reads as "this one", or
     whether the row needs it. Decide by looking at it.
 
   **Settled with Juha 2026-07-29, at the start of implementation:**
