@@ -288,6 +288,50 @@ items in `TODO_DEFERRED.md` (the importer's input boundary; the AI driving the v
 Visualizer image support). The importer change is a *direction*, not a decision — it revisits what the
 importer's input is and deserves a brief of its own. The Visualizer-as-looking-surface corollary is a decision.
 
+## Getting material in from a phone
+
+Raised 2026-07-29 (Juha). Belongs in the design track rather than in a TODO item because the open part of it is
+a scoping question, and scoping is what the rest of this sketch is already built on.
+
+The workflow: a paper is on your phone. You want to say *"here, look at this — what I want to discuss is…"*
+without mailing it to yourself, plugging in a cable, or walking it through a file manager. So Raven serves a
+small upload page over the local network, and the phone pushes the file straight in.
+
+**The destination question is the same one the constellation already answers twice.** An upload is either
+
+- **an attachment to the current conversation** — in context now, pinned to a message, gone when the branch is;
+  this is what the motivating example actually describes; or
+- **a document in a named scope** — durable, indexed, part of the corpus from then on.
+
+Both surfaces accept the same formats as of today, so the upload page inherits that for free and does not get
+to invent a third answer. What it must not do is *guess*: the two differ in whether the file becomes part of
+the library, which is exactly the kind of thing a user should never discover afterwards.
+
+**Current position, to be argued with: the phone should not be where the destination is chosen.** Picking a
+scope from a list on a touchscreen is the worst available place to do it. Instead the desktop displays a **QR
+code that already encodes the destination** — one for "this conversation", one per scope — and scanning it
+opens a page that is already pointed somewhere. The decision is made on the machine that has the context and a
+keyboard; the phone only supplies bytes. It also answers authentication without a separate mechanism, since the
+token in the scanned URL *is* the capability.
+
+**This cannot live in `raven-server`, and that is the structurally interesting part.** Everything Raven serves
+over HTTP today is GPU-bound inference, and the server is explicitly allowed to run on a different machine from
+the client. But an upload's destinations — the documents folder, the chat datastore — are **client-side**. So
+the upload endpoint belongs to Librarian, which would gain a server role it has never had, in a constellation
+whose client/server split has so far been "models on the server, everything else on the client".
+
+Which makes it the first place Raven accepts a **write** over the network. The existing HTTP surface is
+documented as trusted-network-only with no encryption, and that posture was chosen for a read-only inference
+API. An endpoint that drops files into a watched folder is a different risk: the folder is *ingested*, so a
+write there reaches the retrieval index and, from there, the model's context. Minimum shape: off by default, a
+short-lived token bound to one destination, a size cap, and the same extension filter the attach dialog uses.
+Worth designing deliberately rather than inheriting the inference API's assumptions by default.
+
+Open beyond that: whether an upload to a scope triggers the usual watched-folder ingestion (it should, and then
+the INDEXING indicator is the feedback), what the phone sees on success, and whether a conversation-scoped
+upload should arrive as a staged attachment the user still has to send — probably yes, so that the phone cannot
+inject a turn into a conversation on its own.
+
 ## Prerequisites already on the list
 
 None of this is new construction from zero; three existing `TODO.md` items are this one item seen from
