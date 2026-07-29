@@ -461,6 +461,9 @@ every tier, chosen on measurements rather than reputation.
   - HybridIR search (since chats will be indexed for memory); show matching snippet
 
 - **[Medium]** Nonlinear chat view / chat graph editor: XDot DPG viewer now exists. Librarian needs to generate `.xdot` code; manual layout (no GraphViz needed for simple chat trees). Limit visible depth (full chat tree at interactive FPS is not feasible). "Jump to chat node by ID" feature needed.
+  - The renderer takes a `Graph` of `Node`/`Edge` elements built from `Shape` primitives; `xdotwidget.parser` (xdot text → `Graph`) is one front-end among possible others. So emitting `.xdot` and building the `Graph` directly are both open, and neither needs the `dot` binary. Emitting xdot keeps a dumpable intermediate that can be opened in the XDot viewer to debug a layout — worth something for a view whose whole difficulty is positions; direct construction skips a serialize/parse round-trip. Not yet chosen.
+  - Since we lay out ourselves, keep positions **stable across incremental changes** — the tree gains a node per turn and a branch per reroll, and anything that re-positions existing nodes makes the picture jump while it is being read. Reingold–Tilford tidy-tree layout is the textbook fit and can hold existing nodes in place. (Complements the visible-depth limit above rather than replacing it: depth-limiting bounds the *cost*, stability bounds the *distraction*.)
+  - The natural home for this view is the panel a **no-avatar mode** frees up — see `TODO_DEFERRED.md`, "A no-avatar mode…". The two want designing together, since the panel is what the mode varies.
 
 - **[Medium]** Switch HEAD by chat node ID: exported chatlogs report IDs; allow jumping directly to a node; show "not found" error if node doesn't exist in this Librarian instance.
 

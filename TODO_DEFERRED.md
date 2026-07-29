@@ -1606,6 +1606,32 @@ UX side.
 
 Raised during the 0.2.8 format work (2026-07-29, Juha).
 
+## A no-avatar mode, with the chat tree in the panel the avatar vacates
+
+Raised 2026-07-29 (Juha), and the opposite end of the same axis as the avatar-first mode sketched in
+`briefs/lab-assistant-hci-sketch.md`. On the road, on a laptop, with no power outlet in sight, the avatar is
+the most expensive thing on screen — it holds VRAM that the LLM would rather have, and it renders continuously,
+which is exactly what a battery objects to. So: a mode that does not load it at all.
+
+**The natural occupant of the vacated panel is a visualization of the chat tree.** Librarian's history is a
+branching forest and always has been, but the GUI only ever shows the linearized path from HEAD to root — so
+the structure the datastore is built around is invisible in the app built on it. A laptop-sized window is also
+exactly where knowing "where am I in this conversation" pays most.
+
+Which suggests a framing worth adopting before building any of the three: **the right-hand panel is what the
+mode actually varies.** Avatar-first fills the window with the character; the standard mode shows avatar plus
+toggles; road mode shows the tree. That is one mechanism with a swappable panel, not three layouts — and
+deciding it now is much cheaper than discovering it after the second one is hardcoded.
+
+**The view itself is not tracked here** — it is `TODO.md`'s "Nonlinear chat view / chat graph editor", which
+already carries the mechanism (generate the layout ourselves, no GraphViz) and the constraints (limit visible
+depth; the full tree will not render at interactive FPS). This item is only about the *mode*, and about the
+observation that the two want designing together: the view needs a panel, and the mode is what frees one.
+
+What the mode adds on top of that view: not loading the avatar at all. That is where the VRAM and the battery
+saving come from, and it is a startup-path decision rather than a hide/show toggle — worth being explicit
+about, since a mode that merely hides the avatar panel saves nothing that matters here.
+
 ## Visualizer's importer should read the document database, not just `.bib` files
 
 Visualizer ingests BibTeX databases. That is where it started — scientific abstracts, one entry per paper — and
