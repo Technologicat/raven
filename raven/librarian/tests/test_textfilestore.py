@@ -3,7 +3,7 @@
 import pytest
 
 from raven.librarian import chattree, textfilestore
-from raven.common.tests import make_minimal_pdf
+from raven.common.tests import make_docx, make_minimal_pdf
 
 
 # ---------------------------------------------------------------------------
@@ -56,6 +56,22 @@ def test_store_pdf_records_pdf_mime_and_extension(datastore):
     assert result.sidecar_metadata["content_type"] == "application/pdf"
 
 
+@pytest.mark.parametrize("name, expected_mime", [
+    ("report.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+    ("deck.pptx", "application/vnd.openxmlformats-officedocument.presentationml.presentation"),
+    ("notes.odt", "application/vnd.oasis.opendocument.text"),
+    ("deck.odp", "application/vnd.oasis.opendocument.presentation"),
+])
+def test_store_office_document_records_its_own_mime(datastore, name, expected_mime):
+    # The MIME is provenance only, never dispatch — but "text/plain" on a Word document is a visibly wrong
+    # record, and it is what the fallback produces for any extension not in the table.
+    result = textfilestore.store_file_as_sidecar(datastore, make_docx(["x"]),
+                                             name=name,
+                                             provenance_url=f"file:///{name}",
+                                             provenance_source="user_attachment")
+    assert result.sidecar_metadata["content_type"] == expected_mime
+
+
 def test_store_from_path(datastore, tmp_path):
     p = tmp_path / "doc.md"
     p.write_text("# Title\n\nBody.", encoding="utf-8")
@@ -83,6 +99,17 @@ def test_sidecar_to_text_pdf(datastore):
                                              name="paper.pdf", provenance_url="file:///paper.pdf",
                                              provenance_source="user_attachment")
     assert textfilestore.sidecar_to_text(datastore, result.part["text_file"]["url"]) == "Extracted from a PDF attachment"
+
+
+def test_sidecar_to_text_office_document(datastore):
+    # The point of this one is the wiring, not the parsing: `docextract` is meant to be the single chokepoint, so
+    # a format added there must reach the attachment path without any edit on this side. If that ever stops
+    # being true, the two surfaces have started to drift and this is where it shows.
+    result = textfilestore.store_file_as_sidecar(datastore, make_docx(["Extracted from a Word attachment"]),
+                                             name="report.docx", provenance_url="file:///report.docx",
+                                             provenance_source="user_attachment")
+    text = textfilestore.sidecar_to_text(datastore, result.part["text_file"]["url"])
+    assert text == "Extracted from a Word attachment"
 
 
 def test_sidecar_to_text_is_memoized_on_immutable_filename(datastore):

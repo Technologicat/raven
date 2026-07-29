@@ -165,9 +165,18 @@ The search engine is local, and uses a hybrid algorithm with both semantic embed
 <i>A QA-type semantic embedding model maps questions and their answers near each other in the high-dimensional space (which usually has roughly 1000 dimensions). Schematic illustration in 3 dimensions.</i>
 </p>
 
-The document database accepts **plain text** documents and **PDFs**. Beside classical plain text `.txt`, markup languages that LLMs understand are fine - e.g. `.md`, `.bib`, and `.tex`. PDFs (born-digital, i.e. with a real text layer) have their text extracted automatically on import. The full list of recognized file extensions is configured in [`raven.librarian.config`](../librarian/config.py) as `llm_docs_exts`.
+The document database accepts **plain text** documents, **PDFs**, and **office documents**:
 
-A **scanned or image-only PDF** has no text layer, so nothing is extracted and it is skipped. To import one, run it through OCR first — e.g. [`ocrmypdf`](https://github.com/ocrmypdf/OCRmyPDF) (`ocrmypdf --force-ocr input.pdf output.pdf`) — to add a text layer.
+- **Plain text.** Beside classical plain text `.txt`, markup languages that LLMs understand are fine - e.g. `.md`, `.bib`, and `.tex`.
+- **PDF.** Born-digital PDFs, i.e. those with a real text layer, have their text extracted automatically on import.
+- **Office documents.** Word (`.docx`), PowerPoint (`.pptx`), and their LibreOffice/OpenDocument counterparts (`.odt`, `.odp`). Tables are read in place, so a value stays next to its label; text inside grouped shapes on a slide is read too, and so are presenter notes - on a lecture deck, the notes are often where the actual argument lives. The legacy binary formats (`.doc`, `.ppt`) are *not* supported, as reading those would mean calling out to a separate converter program.
+
+The same list applies to files you **attach to a chat message**, and it is the same code doing the reading in both cases - so anything you can drop into the document database, you can also attach to a message, and vice versa. The full list of recognized file extensions is configured in [`raven.librarian.config`](../librarian/config.py) as `llm_docs_exts`.
+
+Everything above is read for its **text layer only**. Whatever a document says through pictures - a figure, a photograph, a typeset equation that is really an image - does not come across, and a file whose content is entirely such material imports as empty. Two common cases:
+
+- A **scanned or image-only PDF** has no text layer, so nothing is extracted and it is skipped. To import one, run it through OCR first — e.g. [`ocrmypdf`](https://github.com/ocrmypdf/OCRmyPDF) (`ocrmypdf --force-ocr input.pdf output.pdf`) — to add a text layer.
+- A **slide deck that is mostly diagrams** imports only its titles and whatever prose it has. Its notes, if it has any, are often the more useful half in this situation.
 
 **To manage the content of the document database**, use a file manager: just put your document files in the document database directory. By default, *Librarian* looks for documents in `~/.config/raven/llmclient/documents`. The path can be configured in [`raven.librarian.config`](../librarian/config.py).
 

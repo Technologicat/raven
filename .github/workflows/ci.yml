@@ -68,7 +68,7 @@ jobs:
       - name: Install CI test dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pytest numpy "bibtexparser>=2.0.0b8" unpythonic Pillow tqdm requests feedparser wosfile pypdf pyyaml
+          pip install pytest numpy "bibtexparser>=2.0.0b8" unpythonic Pillow tqdm requests feedparser wosfile pypdf pyyaml python-docx python-pptx odfpy
           pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
           pip install -e . --no-deps
 

@@ -47,12 +47,18 @@ from . import sidecarstore
 _extracted_text_cache: dict[str, str] = {}
 
 
+# Spelled out rather than taken from `mimetypes.guess_type`, whose answers depend on the host's mime.types file
+# — provenance recorded in a datastore should not differ between two machines that attached the same document.
+_MIME_TYPES = {"pdf": "application/pdf",
+               "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+               "pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+               "odt": "application/vnd.oasis.opendocument.text",
+               "odp": "application/vnd.oasis.opendocument.presentation"}
+
+
 def _mime_for_ext(ext: str) -> str:
     """A reasonable MIME type for a document extension (no leading dot). Informational provenance only."""
-    ext = ext.lower().lstrip(".")
-    if ext == "pdf":
-        return "application/pdf"
-    return "text/plain"
+    return _MIME_TYPES.get(ext.lower().lstrip("."), "text/plain")
 
 
 def store_file_as_sidecar(datastore: chattree.PersistentForest,

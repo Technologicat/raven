@@ -68,7 +68,14 @@ dependencies = [
     "tqdm>=4.0",  # server.stt, papers (arXiv download)
     "trafilatura>=2.0.0",  # server.webfetch; readability extraction (HTML -> clean text/markdown)
     "youtube-transcript-api>=1.0.0",  # server.webfetch; transcript extraction for YouTube URLs
-    "pypdf>=6.14.2",
+    "pypdf>=6.14.2",  # raven.common.docextract: PDF text layer
+    # The rest of `raven.common.docextract`'s backends. Office formats are all zipped XML, but each family needs
+    # its own reader; `odfpy` covers both OpenDocument formats we accept. `python-docx` is floored at 1.1 for
+    # `iter_inner_content`, which walks a body's paragraphs and tables in document order — without it, table
+    # text can only be appended after the prose, which scrambles the reading order a chunker depends on.
+    "python-docx>=1.1.0",  # .docx
+    "python-pptx>=1.0.0",  # .pptx
+    "odfpy>=1.4.1",  # .odt, .odp
 ]
 
 keywords=["visualization", "semantic-analysis", "application", "AI", "NLP", "GUI"]

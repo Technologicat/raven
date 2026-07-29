@@ -1479,6 +1479,14 @@ Two halves, gated differently:
   one. Blocked on the Nomic embedder (text and vision in one aligned space): until then there is no way to
   retrieve an image by a text query except captioning at ingest time. Tracked as part of the multimodal search
   plan in `TODO.md` ("RAG PDF ingestion — polish", and the Nomic multimodal-search item).
+  - **Visualizer needs images too, and that is the expensive half.** Once the docs DB accepts images, a
+    constellation where the Librarian can hold an image but the Visualizer cannot show one is incomplete in the
+    same arbitrary way this item is about. Placing images *on the map* is the easy part — a shared text/vision
+    embedding space means an image gets a position exactly the way an abstract does, with no new machinery. The
+    cost is on the presentation side: the tooltip and the info panel are built around a record that is title +
+    abstract + keywords, and neither has any notion of showing a picture. Expect real UX design work there
+    (what a hovered image looks like at tooltip size, how a mixed text/image cluster reads, what the info panel
+    does with a record whose content *is* the image), not just a rendering branch.
 
 Raised during the 0.2.8 release scoping (2026-07-29, Juha).
 
@@ -1527,3 +1535,31 @@ the empty-model case and say so up front — either at startup, or by disabling 
 the way the paperclip does on a text-only model.
 
 Discovered during brief 07 (2026-07-29, raised by Juha).
+
+## Librarian leaks its server-side avatar instance when it doesn't exit normally
+
+Librarian releases its avatar instance in `app_shutdown` (`raven/librarian/app.py`), which is registered with
+`atexit`. That covers the normal exit, but `atexit` handlers run only when the interpreter shuts down cleanly —
+so every abnormal exit leaves an orphaned instance on the server, holding VRAM and a render slot until the
+server process is restarted. Observed: seven stale instances accumulated on the server during one session of
+GUI testing.
+
+Two paths reach it, and the first is by far the common one:
+
+- **A signal kills the process.** Librarian installs no `signal` handlers at all, so `SIGTERM` (plain `kill`,
+  a session manager logging out, a supervisor stopping the app) terminates it at the C level with no Python
+  cleanup — `app_shutdown` never runs. This is what produced the seven instances: the test-harness `kill`s
+  during this session. A `signal.signal(SIGTERM, ...)` handler that calls `app_shutdown` and then re-raises
+  fixes the whole class, and is the actual ask: *if the process is still alive enough to make an HTTP call,
+  it should make this one.*
+- **`sys.exit` from a non-main thread.** `_load_initial_animator_settings` calls `sys.exit(255)` on two error
+  paths, and by its own comment it runs on DPG's callback thread. `sys.exit` outside the main thread raises
+  `SystemExit` in *that* thread only, so it neither runs `atexit` nor actually exits the process. Both paths
+  are reached after `avatar_instance_id` is assigned, so both leak. (That this leaves the process running
+  rather than exiting is inferred from how `SystemExit` propagates out of a worker thread; worth confirming
+  against DPG's callback dispatch before fixing, since the fix differs depending on the answer.)
+
+Worth keeping the unload best-effort in either case — the server may legitimately be gone first, which
+`app_shutdown` already handles by swallowing `ConnectionError`.
+
+Discovered during brief 07 GUI testing (2026-07-29, raised by Juha).
