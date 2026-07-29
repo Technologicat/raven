@@ -19,9 +19,11 @@ Two things to get right in the bypass branch (`Upscaler.upscale`):
   lobe than bicubic, not less — the same reasoning applies with more force. What changes is that the split's
   hardcoded `mode="bicubic"` has to become the selected filter, and the `c == 3 or quality == "bilinear"`
   fast path stays as it is.
-- **`order` needs a home.** `lanczos.resize` takes an `order` (kernel size / ringing trade-off) that
-  `F.interpolate` has no equivalent for. Either pick `DEFAULT_ORDER` and say so, or expose it — but do not
-  let it become a silent hardcode in a function whose whole job is offering the user a quality choice.
+- **`order` stays at `DEFAULT_ORDER`** (decided by Juha, 2026-07-29). `lanczos.resize` takes an `order`
+  (kernel size / ringing trade-off) that `F.interpolate` has no equivalent for, so the question came up of
+  whether to surface it. It should not be: `quality` is a short list of named presets rather than a knob
+  panel, and the bypass filters it would sit beside take no parameters either. Pass the default and leave
+  the parameter alone.
 
 The real cost is not the code but the **duplicated option list**: the valid values appear in `Upscaler`'s
 validation and docstring, `raven/avatar/settings_editor/app.py:625` (hardcoded list) and `:477`,
