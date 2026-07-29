@@ -72,7 +72,7 @@ with timer() as tim:
 
     from . import appstate
     from .chat_controller import DPGChatController
-    from .cleanup import DPGCleanupDialog
+    from .cleanup_dialog import DPGCleanupDialog
     from . import config as librarian_config
     # from . import chattree
     from . import hybridir
