@@ -1461,6 +1461,28 @@ which has to be kept in sync with the pinned trio in `pyproject.toml`). The gene
 
 Discovered during the plain-text/PDF interlude (2026-07-18, Juha: a coworker's new M-series Mac on current macOS).
 
+## Same file formats in the docs DB and in chat attachments
+
+The docs database and chat attachments should accept the *same* set of formats. A user who can attach a file
+to a message reasonably expects to be able to drop it in the documents folder, and vice versa; a split between
+the two is arbitrary from outside.
+
+This is cheap to hold to, because `raven.common.docextract` is already the single chokepoint for both — the RAG
+ingester and the attachment path both call `extract_text`. Adding a format there serves both surfaces at once,
+so the symmetry costs nothing extra as long as new formats are added *there* rather than at one call site.
+
+Two halves, gated differently:
+
+- **Office documents** (`.docx`, `.odt`, `.pptx`): no blocker. See the size estimate in the release discussion —
+  one `_extract_*` per format behind the existing contract.
+- **Images**: blocked on the Nomic embedder (text and vision in one aligned space). Until then there is no way
+  to retrieve an image by a text query except captioning at ingest time. Tracked as part of the multimodal
+  search plan in `TODO.md` ("RAG PDF ingestion — polish", and the Nomic multimodal-search item); the point to
+  keep in view is that when images do land in the docs DB, they must land in attachments too, and by then the
+  attachment side already has them — so it is the docs DB catching up, not a new capability.
+
+Raised during the 0.2.8 release scoping (2026-07-29, Juha).
+
 ## Librarian doesn't check that the LLM backend has a model loaded
 
 Starting Librarian against a backend with no model loaded produces no warning; the first turn fails with a raw
