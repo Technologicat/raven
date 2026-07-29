@@ -40,9 +40,10 @@
   - **Tool-call invocations are now visible in the chat history** — the function name and arguments the AI called (e.g. `websearch(query='...')`), shown with a cogs icon between the AI's message and the tool result, instead of silently vanishing. Works whether the call arrived as a structured field or inline tags.
   - Existing chats load seamlessly under the new format: thinking traces and tool-call invocations stored inline in older chats are migrated automatically on first load (and the migration is safe to re-run).
 
-- exported chat text now carries **origin metadata**, as a YAML front-matter block that names the generator, the export time, which messages came from a human, which from the AI, and which model produced each AI message. Both export routes emit it: the whole-chatlog copy (F8) gets one manifest for the document, and a single copied AI or tool message gets a one-message manifest of its own, since a lifted fragment travels without the document's. Copying one of your *own* messages is unchanged — there is no AI generation to disclose, and it keeps the copy clean for editing and resending.
+- **AI content is now disclosed as such**, on screen and in anything you copy out (EU AI Act Article 50).
+  - The notice below the chat states outright that you are interacting with an AI system, ahead of the existing note that its answers need checking. The old wording only implied it. Always visible and not dismissable.
+  - Exported chat text carries **origin metadata**, as a YAML front-matter block that names the generator, the export time, which messages came from a human, which from the AI, and which model produced each AI message. Both export routes emit it: the whole-chatlog copy (F8) gets one manifest for the document, and a single copied AI or tool message gets a one-message manifest of its own, since a lifted fragment travels without the document's. Copying one of your *own* messages is unchanged — there is no AI generation to disclose, and it keeps the copy clean for editing and resending.
   - This is what a system on this side of the model boundary can honestly attest to. The robust mark for AI-generated text is a watermark applied while the model samples; *Raven-librarian* runs third-party models through an OpenAI-compatible backend and never sees the sampler, so it records the provenance it does know rather than claiming a mark it cannot make.
-- the notice below the chat now states outright that you are interacting with an AI system, ahead of the existing note that its answers need checking. The old wording only implied it.
 
 *Raven-visualizer*
 
@@ -78,6 +79,10 @@
 - New `--log <path>` and `--log-level {DEBUG,INFO,WARNING,ERROR,CRITICAL}` CLI options on all major apps (`raven-visualizer`, `raven-importer`, `raven-librarian`, `raven-server`, `raven-minichat`, `raven-xdot-viewer`, `raven-cherrypick`, `raven-conference-timer`, `raven-avatar-pose-editor`, `raven-avatar-settings-editor`) plus the bibliography tools that emit log records (`raven-pdf2bib`, `raven-wos2bib`, `raven-csv2bib`). `--log` mirrors stderr to a file (overwritten each run) so users can capture session logs for bug reports without redirecting their terminal — especially useful for the GUI apps where the launching terminal is often a side window. The logfile path accepts `~` and is resolved to an absolute path. The mirroring survives third-party libraries (notably `flair`) that call `logging.shutdown()` on import.
 
 **Changed**:
+
+*Raven-librarian*
+
+- with **Documents** on and **Speculation** off, a question your document database has nothing on is now **answered anyway**, with a `[no sources retrieved]` marker below the reply. Previously the language model was bypassed entirely and the reply was *"No matches in document database. Please try another query."* — which could not tell a question *about your documents* from a passing general question, so it refused the latter too, and the toggle had to be flipped every time the discussion wandered. The marker reports what was *retrieved*, not whether the answer used it.
 
 *Raven-pdf2bib*
 

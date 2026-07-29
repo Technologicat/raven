@@ -393,7 +393,7 @@ def _perform_injects(llm_settings: env,
                   Reported to the model as the arguments of the synthetic search call, so that the matches
                   arrive as the answer to a legible question rather than as free-floating material.
 
-    `docs_matches`: Docs search matches returned by `HybridIR` (see `_search_docs_with_bypass`).
+    `docs_matches`: Docs search matches returned by `HybridIR` (see `_search_docs`).
 
     `tool_context`: The turn's request context (`_make_tool_context`). Read for `grounded`, which is where
                     retrieval results and tool results report whether they actually provided material.
@@ -660,7 +660,7 @@ def ai_turn(llm_settings: env,
 
     `docs_num_results`: How many `docs_query` results to return, at most. Used only if `docs_query` is supplied.
 
-                        If not supplied, use the default of `_search_docs_with_bypass`, which see.
+                        If not supplied, use the default of `_search_docs`, which see.
 
     `speculate`: Used only if `docs_query` is supplied.
 

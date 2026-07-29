@@ -435,7 +435,6 @@ Below the avatar panel at the right, there are **mode toggles**:
     - When **nothing** was retrieved — no document matches, no attachments, no tool results — the reply is marked **[no sources retrieved]** below the message. The AI still answers.
       - The marker reports what was *retrieved*, not whether the reply used it. A search that returns irrelevant matches still counts as retrieval, so the absence of the marker means something came back, not that the answer rests on it. Telling those apart needs either relevance-aware retrieval scores or citations from the AI itself; both are planned, neither is built.
       - Note this is the *expected* state for a general question. Nobody's document database answers *"what is 2+2?"*, so asides get the marker, and that is the marker doing its job rather than reporting a problem.
-      - Up to v0.2.4 this case bypassed the LLM entirely, answering *"No matches in document database"* instead. That could not tell a question about your documents from a passing general question, so in the default configuration it refused the latter too — which meant flipping this toggle every time the discussion wandered.
   - If **Speculation** is **ON**, the LLM is free to respond as it wants, and no marker is shown. Anything goes!
     - Most AI chatbots with RAG always operate like this.
 - **Speech**

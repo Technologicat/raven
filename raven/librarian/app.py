@@ -197,6 +197,17 @@ print()
 IDLE_SLEEP_S = 0.08   # ~12 fps when idle
 INPUT_ACTIVE_S = 0.5  # stay at full fps for this long after last user input
 
+# The AI-disclosure notice shown below the avatar. Module-level because both the widget that renders it and
+# `_center_ai_warning`, which measures it to place it, need the exact same string.
+_AI_WARNING_TEXT = "You are interacting with an AI system. Response quality and factual accuracy depend on the connected AI — always verify important facts independently."
+_AI_WARNING_ICON_W = 23  # the warning glyph, plus the gap DPG leaves between members of a horizontal group
+_WINDOW_PADDING = 8      # DPG's default WindowPadding; `setup_themes` overrides only rounding (see `config.py`)
+# Residual offset after accounting for the padding, measured from a screenshot: the label still sat this many
+# pixels right of the panel's center. Empirical, not derived - the group's reported width does not include the
+# warning glyph's left side bearing, and DPG exposes no way to ask for it. Verified by re-measuring at two
+# window widths; if the icon or the font changes, re-measure rather than trusting this number.
+_AI_WARNING_CENTERING_BIAS = 7
+
 _AMBIENT_ANIMATOR_COUNT = gui_animation.animator.active_count
 
 _last_input_ns: int = 0  # monotonic_ns timestamp of last user input
@@ -902,210 +913,213 @@ with timer() as tim:
                             dpg.add_text("Open the chat data folder\n(chat history + attached images)", tag="util_open_datastore_dir_tooltip_text")  # tag
 
         # NOTE: If you add or remove buttons here, update also `number_of_below_chat_buttons` and/or `number_of_separators` (search for them in this module).
-        with dpg.child_window(tag="chat_global_buttons",
-                              height=gui_config.ai_warning_h,
-                              no_scrollbar=True,
-                              no_scroll_with_mouse=True):
-            with dpg.group(horizontal=True):
-                def add_separator(*, width=None, line=True, line_offset=None):
-                    if width is None:
-                        width = gui_config.toolbar_separator_w
-                    guiutils.add_toolbar_separator(horizontal=True,
-                                                   toolbar_extent=gui_config.toolbar_inner_h,
-                                                   size=width, line=line,
-                                                   line_offset=line_offset)
-                if gui_config.toolbutton_indent is None:
-                    toolbutton_h = gui_config.toolbutton_w  # square buttons
-                    gui_config.toolbutton_indent = (gui_config.toolbar_inner_h - toolbutton_h) // 2  # pixels, to center the buttons
+        # The bottom row is split into two child windows that mirror the panels above them: the chat-side
+        # buttons sit under the chat panel, the AI-disclosure label under the avatar panel. Splitting is what
+        # makes the label centerable at all - in one full-width row its position depended on the total width
+        # of everything to its left, including the variable-width context-fill readout, so it drifted.
+        with dpg.group(horizontal=True):
+            with dpg.child_window(tag="chat_global_buttons",  # tag
+                                  width=gui_config.chat_panel_w,
+                                  height=gui_config.ai_warning_h,
+                                  no_scrollbar=True,
+                                  no_scroll_with_mouse=True):
+                with dpg.group(horizontal=True):
+                    def add_separator(*, width=None, line=True, line_offset=None):
+                        if width is None:
+                            width = gui_config.toolbar_separator_w
+                        guiutils.add_toolbar_separator(horizontal=True,
+                                                       toolbar_extent=gui_config.toolbar_inner_h,
+                                                       size=width, line=line,
+                                                       line_offset=line_offset)
+                    if gui_config.toolbutton_indent is None:
+                        toolbutton_h = gui_config.toolbutton_w  # square buttons
+                        gui_config.toolbutton_indent = (gui_config.toolbar_inner_h - toolbutton_h) // 2  # pixels, to center the buttons
 
-                def start_new_chat_callback() -> None:
-                    new_chat_head_node_id = app_state["new_chat_HEAD"]
-                    app_state["HEAD"] = new_chat_head_node_id
-                    chat_controller.view.build()
-                    dpg.focus_item("chat_field")  # tag  # Focus the chat field for convenience, since the whole point of a new chat is to immediately start a new conversation.
-                    # Acknowledge the action in the GUI.
-                    gui_animation.animator.add(gui_animation.ButtonFlash(message="New chat started!",
-                                                                         target_button=new_chat_button,
-                                                                         target_tooltip=new_chat_tooltip,
-                                                                         target_text=new_chat_tooltip_text,
-                                                                         original_theme=dpg.get_item_theme(new_chat_tooltip),
-                                                                         duration=gui_config.acknowledgment_duration))
+                    def start_new_chat_callback() -> None:
+                        new_chat_head_node_id = app_state["new_chat_HEAD"]
+                        app_state["HEAD"] = new_chat_head_node_id
+                        chat_controller.view.build()
+                        dpg.focus_item("chat_field")  # tag  # Focus the chat field for convenience, since the whole point of a new chat is to immediately start a new conversation.
+                        # Acknowledge the action in the GUI.
+                        gui_animation.animator.add(gui_animation.ButtonFlash(message="New chat started!",
+                                                                             target_button=new_chat_button,
+                                                                             target_tooltip=new_chat_tooltip,
+                                                                             target_text=new_chat_tooltip_text,
+                                                                             original_theme=dpg.get_item_theme(new_chat_tooltip),
+                                                                             duration=gui_config.acknowledgment_duration))
 
-                def copy_chatlog_to_clipboard_as_markdown_callback() -> None:
-                    shift_pressed = dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)
-                    if (chatlog_text := chat_controller.view.get_chatlog_as_markdown(include_metadata=shift_pressed)) is not None:
-                        dpg.set_clipboard_text(chatlog_text)
-                    # Acknowledge the action in the GUI.
-                    mode = "with node IDs" if shift_pressed else "as-is"
-                    gui_animation.animator.add(gui_animation.ButtonFlash(message=f"Copied to clipboard! ({mode})",
-                                                                         target_button=copy_chat_button,
-                                                                         target_tooltip=copy_chat_tooltip,
-                                                                         target_text=copy_chat_tooltip_text,
-                                                                         original_theme=dpg.get_item_theme(copy_chat_tooltip),
-                                                                         duration=gui_config.acknowledgment_duration))
+                    def copy_chatlog_to_clipboard_as_markdown_callback() -> None:
+                        shift_pressed = dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)
+                        if (chatlog_text := chat_controller.view.get_chatlog_as_markdown(include_metadata=shift_pressed)) is not None:
+                            dpg.set_clipboard_text(chatlog_text)
+                        # Acknowledge the action in the GUI.
+                        mode = "with node IDs" if shift_pressed else "as-is"
+                        gui_animation.animator.add(gui_animation.ButtonFlash(message=f"Copied to clipboard! ({mode})",
+                                                                             target_button=copy_chat_button,
+                                                                             target_tooltip=copy_chat_tooltip,
+                                                                             target_text=copy_chat_tooltip_text,
+                                                                             original_theme=dpg.get_item_theme(copy_chat_tooltip),
+                                                                             duration=gui_config.acknowledgment_duration))
 
-                def stop_text_generation_callback() -> None:
-                    chat_controller.stop_ai_turn()
-                    # Acknowledge the action in the GUI.
-                    gui_animation.animator.add(gui_animation.ButtonFlash(message="Interrupted!",
-                                                                         target_button=stop_generation_button,
-                                                                         target_tooltip=stop_generation_tooltip,
-                                                                         target_text=stop_generation_tooltip_text,
-                                                                         original_theme=dpg.get_item_theme(stop_generation_tooltip),
-                                                                         duration=gui_config.acknowledgment_duration))
+                    def stop_text_generation_callback() -> None:
+                        chat_controller.stop_ai_turn()
+                        # Acknowledge the action in the GUI.
+                        gui_animation.animator.add(gui_animation.ButtonFlash(message="Interrupted!",
+                                                                             target_button=stop_generation_button,
+                                                                             target_tooltip=stop_generation_tooltip,
+                                                                             target_text=stop_generation_tooltip_text,
+                                                                             original_theme=dpg.get_item_theme(stop_generation_tooltip),
+                                                                             duration=gui_config.acknowledgment_duration))
 
-                def stop_speech_callback() -> None:
-                    avatar_controller.stop_tts()
-                    # Acknowledge the action in the GUI.
-                    gui_animation.animator.add(gui_animation.ButtonFlash(message="Stopped speaking!",
-                                                                         target_button=stop_speech_button,
-                                                                         target_tooltip=stop_speech_tooltip,
-                                                                         target_text=stop_speech_tooltip_text,
-                                                                         original_theme=dpg.get_item_theme(stop_speech_tooltip),
-                                                                         duration=gui_config.acknowledgment_duration))
+                    def stop_speech_callback() -> None:
+                        avatar_controller.stop_tts()
+                        # Acknowledge the action in the GUI.
+                        gui_animation.animator.add(gui_animation.ButtonFlash(message="Stopped speaking!",
+                                                                             target_button=stop_speech_button,
+                                                                             target_tooltip=stop_speech_tooltip,
+                                                                             target_text=stop_speech_tooltip_text,
+                                                                             original_theme=dpg.get_item_theme(stop_speech_tooltip),
+                                                                             duration=gui_config.acknowledgment_duration))
 
-                def toggle_fullscreen():
-                    dpg.toggle_viewport_fullscreen()
-                    resize_gui()
+                    def toggle_fullscreen():
+                        dpg.toggle_viewport_fullscreen()
+                        resize_gui()
 
-                new_chat_button = dpg.add_button(label=fa.ICON_FILE,
-                                                 callback=start_new_chat_callback,
-                                                 width=gui_config.toolbutton_w,
-                                                 tag="chat_new_button")
-                dpg.bind_item_font("chat_new_button", themes_and_fonts.icon_font_solid)  # tag
-                dpg.bind_item_theme("chat_new_button", "disablable_widget_theme")  # tag
-                new_chat_tooltip = dpg.add_tooltip("chat_new_button")  # tag
-                new_chat_tooltip_text = dpg.add_text("Start new chat [Ctrl+N]", parent=new_chat_tooltip)
+                    new_chat_button = dpg.add_button(label=fa.ICON_FILE,
+                                                     callback=start_new_chat_callback,
+                                                     width=gui_config.toolbutton_w,
+                                                     tag="chat_new_button")
+                    dpg.bind_item_font("chat_new_button", themes_and_fonts.icon_font_solid)  # tag
+                    dpg.bind_item_theme("chat_new_button", "disablable_widget_theme")  # tag
+                    new_chat_tooltip = dpg.add_tooltip("chat_new_button")  # tag
+                    new_chat_tooltip_text = dpg.add_text("Start new chat [Ctrl+N]", parent=new_chat_tooltip)
 
-                dpg.add_button(label=fa.ICON_DIAGRAM_PROJECT,
-                               callback=lambda: None,  # TODO
-                               enabled=False,
-                               width=gui_config.toolbutton_w,
-                               tag="chat_open_graph_button")
-                dpg.bind_item_font("chat_open_graph_button", themes_and_fonts.icon_font_solid)  # tag
-                dpg.bind_item_theme("chat_open_graph_button", "disablable_widget_theme")  # tag
-                open_graph_tooltip = dpg.add_tooltip("chat_open_graph_button")  # tag
-                dpg.add_text("Open graph view", parent=open_graph_tooltip)
+                    dpg.add_button(label=fa.ICON_DIAGRAM_PROJECT,
+                                   callback=lambda: None,  # TODO
+                                   enabled=False,
+                                   width=gui_config.toolbutton_w,
+                                   tag="chat_open_graph_button")
+                    dpg.bind_item_font("chat_open_graph_button", themes_and_fonts.icon_font_solid)  # tag
+                    dpg.bind_item_theme("chat_open_graph_button", "disablable_widget_theme")  # tag
+                    open_graph_tooltip = dpg.add_tooltip("chat_open_graph_button")  # tag
+                    dpg.add_text("Open graph view", parent=open_graph_tooltip)
 
-                add_separator(line=False)
+                    add_separator(line=False)
 
-                copy_chat_button = dpg.add_button(label=fa.ICON_COPY,
-                                                  callback=copy_chatlog_to_clipboard_as_markdown_callback,
-                                                  width=gui_config.toolbutton_w,
-                                                  tag="chat_copy_to_clipboard_button")
-                dpg.bind_item_font("chat_copy_to_clipboard_button", themes_and_fonts.icon_font_solid)  # tag
-                dpg.bind_item_theme("chat_copy_to_clipboard_button", "disablable_widget_theme")  # tag
-                copy_chat_tooltip = dpg.add_tooltip("chat_copy_to_clipboard_button")  # tag
-                copy_chat_tooltip_text = dpg.add_text("Copy this conversation to clipboard [F8]\n    no modifier: as-is\n    with Shift: include message node IDs", parent=copy_chat_tooltip)
+                    copy_chat_button = dpg.add_button(label=fa.ICON_COPY,
+                                                      callback=copy_chatlog_to_clipboard_as_markdown_callback,
+                                                      width=gui_config.toolbutton_w,
+                                                      tag="chat_copy_to_clipboard_button")
+                    dpg.bind_item_font("chat_copy_to_clipboard_button", themes_and_fonts.icon_font_solid)  # tag
+                    dpg.bind_item_theme("chat_copy_to_clipboard_button", "disablable_widget_theme")  # tag
+                    copy_chat_tooltip = dpg.add_tooltip("chat_copy_to_clipboard_button")  # tag
+                    copy_chat_tooltip_text = dpg.add_text("Copy this conversation to clipboard [F8]\n    no modifier: as-is\n    with Shift: include message node IDs", parent=copy_chat_tooltip)
 
-                stop_generation_button = dpg.add_button(label=fa.ICON_SQUARE,
-                                                        callback=stop_text_generation_callback,
+                    stop_generation_button = dpg.add_button(label=fa.ICON_SQUARE,
+                                                            callback=stop_text_generation_callback,
+                                                            enabled=False,
+                                                            width=gui_config.toolbutton_w,
+                                                            tag="chat_stop_generation_button")
+                    dpg.bind_item_font("chat_stop_generation_button", themes_and_fonts.icon_font_solid)  # tag
+                    dpg.bind_item_theme("chat_stop_generation_button", "disablable_widget_theme")  # tag
+                    stop_generation_tooltip = dpg.add_tooltip("chat_stop_generation_button")  # tag
+                    stop_generation_tooltip_text = dpg.add_text("Interrupt the AI [Ctrl+G]\nThis stops the AI when it is writing.", parent=stop_generation_tooltip)
+
+                    stop_speech_button = dpg.add_button(label=fa.ICON_COMMENT_SLASH,
+                                                        callback=stop_speech_callback,
                                                         enabled=False,
                                                         width=gui_config.toolbutton_w,
-                                                        tag="chat_stop_generation_button")
-                dpg.bind_item_font("chat_stop_generation_button", themes_and_fonts.icon_font_solid)  # tag
-                dpg.bind_item_theme("chat_stop_generation_button", "disablable_widget_theme")  # tag
-                stop_generation_tooltip = dpg.add_tooltip("chat_stop_generation_button")  # tag
-                stop_generation_tooltip_text = dpg.add_text("Interrupt the AI [Ctrl+G]\nThis stops the AI when it is writing.", parent=stop_generation_tooltip)
+                                                        tag="chat_stop_speech_button")
+                    dpg.bind_item_font("chat_stop_speech_button", themes_and_fonts.icon_font_solid)  # tag
+                    dpg.bind_item_theme("chat_stop_speech_button", "disablable_widget_theme")  # tag
+                    stop_speech_tooltip = dpg.add_tooltip("chat_stop_speech_button")  # tag
+                    stop_speech_tooltip_text = dpg.add_text("Stop speaking [Ctrl+S]", parent=stop_speech_tooltip)
 
-                stop_speech_button = dpg.add_button(label=fa.ICON_COMMENT_SLASH,
-                                                    callback=stop_speech_callback,
-                                                    enabled=False,
-                                                    width=gui_config.toolbutton_w,
-                                                    tag="chat_stop_speech_button")
-                dpg.bind_item_font("chat_stop_speech_button", themes_and_fonts.icon_font_solid)  # tag
-                dpg.bind_item_theme("chat_stop_speech_button", "disablable_widget_theme")  # tag
-                stop_speech_tooltip = dpg.add_tooltip("chat_stop_speech_button")  # tag
-                stop_speech_tooltip_text = dpg.add_text("Stop speaking [Ctrl+S]", parent=stop_speech_tooltip)
+                    add_separator(line=False)
 
-                add_separator(line=False)
+                    dpg.add_button(label=fa.ICON_EXPAND,
+                                   callback=toggle_fullscreen,
+                                   width=gui_config.toolbutton_w,
+                                   tag="fullscreen_button")
+                    dpg.bind_item_font("fullscreen_button", themes_and_fonts.icon_font_solid)  # tag
+                    with dpg.tooltip("fullscreen_button", tag="fullscreen_tooltip"):  # tag
+                        dpg.add_text("Toggle fullscreen [F11]",
+                                     tag="fullscreen_tooltip_text")
 
-                dpg.add_button(label=fa.ICON_EXPAND,
-                               callback=toggle_fullscreen,
-                               width=gui_config.toolbutton_w,
-                               tag="fullscreen_button")
-                dpg.bind_item_font("fullscreen_button", themes_and_fonts.icon_font_solid)  # tag
-                with dpg.tooltip("fullscreen_button", tag="fullscreen_tooltip"):  # tag
-                    dpg.add_text("Toggle fullscreen [F11]",
-                                 tag="fullscreen_tooltip_text")
+                    # We'll define and bind the callback later, when we set up the help window.
+                    dpg.add_button(label=fa.ICON_CIRCLE_QUESTION,
+                                   width=gui_config.toolbutton_w,
+                                   tag="help_button")
+                    dpg.bind_item_font("help_button", themes_and_fonts.icon_font_regular)  # tag
+                    with dpg.tooltip("help_button", tag="help_tooltip"):  # tag
+                        dpg.add_text("Open the Help card [F1]",
+                                     tag="help_tooltip_text")
 
-                # We'll define and bind the callback later, when we set up the help window.
-                dpg.add_button(label=fa.ICON_CIRCLE_QUESTION,
-                               width=gui_config.toolbutton_w,
-                               tag="help_button")
-                dpg.bind_item_font("help_button", themes_and_fonts.icon_font_regular)  # tag
-                with dpg.tooltip("help_button", tag="help_tooltip"):  # tag
-                    dpg.add_text("Open the Help card [F1]",
-                                 tag="help_tooltip_text")
+                    add_separator(line=False)
 
-                add_separator(line=False)
+                    # Context-fill readout: how full the model's loaded context window is for the current chat.
+                    # Updated by `DPGChatController.update_context_fill_indicator`. Provisional placement in the
+                    # bottom toolbar; revisit when the multiline input / file-upload work reshapes this area.
+                    context_fill_text_widget = dpg.add_text("", color=(160, 160, 160), tag="context_fill_text")  # tag
+                    with dpg.tooltip("context_fill_text"):  # tag
+                        dpg.add_text("Conversation size vs the model's loaded context window.\n"
+                                     "A leading '~' means an estimate (no exact tokenizer configured for this backend).",
+                                     tag="context_fill_tooltip_text")
 
-                # Context-fill readout: how full the model's loaded context window is for the current chat.
-                # Updated by `DPGChatController.update_context_fill_indicator`. Provisional placement in the
-                # bottom toolbar; revisit when the multiline input / file-upload work reshapes this area.
-                context_fill_text_widget = dpg.add_text("", color=(160, 160, 160), tag="context_fill_text")  # tag
-                with dpg.tooltip("context_fill_text"):  # tag
-                    dpg.add_text("Conversation size vs the model's loaded context window.\n"
-                                 "A leading '~' means an estimate (no exact tokenizer configured for this backend).",
-                                 tag="context_fill_tooltip_text")
+                    # # DEBUG / TESTING button
+                    # _testing_data_eyes_enabled = False
+                    # def testing_callback() -> None:
+                    #     global _testing_data_eyes_enabled
+                    #     _testing_data_eyes_enabled = not _testing_data_eyes_enabled
+                    #     if _testing_data_eyes_enabled:
+                    #         avatar_controller.start_data_eyes(config=avatar_record)
+                    #     else:
+                    #         avatar_controller.stop_data_eyes(config=avatar_record)
+                    #     # Acknowledge the action in the GUI.
+                    #     gui_animation.animator.add(gui_animation.ButtonFlash(message="Ran the action being tested!",
+                    #                                                          target_button=testing_button,
+                    #                                                          target_tooltip=testing_tooltip,
+                    #                                                          target_text=testing_tooltip_text,
+                    #                                                          original_theme=dpg.get_item_theme(testing_tooltip),
+                    #                                                          duration=gui_config.acknowledgment_duration))
+                    # testing_button = dpg.add_button(label=fa.ICON_VOLCANO,
+                    #                                 callback=testing_callback,
+                    #                                 width=gui_config.toolbutton_w,
+                    #                                 tag="chat_testing_button")
+                    # dpg.bind_item_font("chat_testing_button", themes_and_fonts.icon_font_solid)  # tag
+                    # dpg.bind_item_theme("chat_testing_button", "disablable_widget_theme")  # tag
+                    # testing_tooltip = dpg.add_tooltip("chat_testing_button")  # tag
+                    # testing_tooltip_text = dpg.add_text("Developer button for testing purposes. What will it do today?!", parent=testing_tooltip)
 
-                # # DEBUG / TESTING button
-                # _testing_data_eyes_enabled = False
-                # def testing_callback() -> None:
-                #     global _testing_data_eyes_enabled
-                #     _testing_data_eyes_enabled = not _testing_data_eyes_enabled
-                #     if _testing_data_eyes_enabled:
-                #         avatar_controller.start_data_eyes(config=avatar_record)
-                #     else:
-                #         avatar_controller.stop_data_eyes(config=avatar_record)
-                #     # Acknowledge the action in the GUI.
-                #     gui_animation.animator.add(gui_animation.ButtonFlash(message="Ran the action being tested!",
-                #                                                          target_button=testing_button,
-                #                                                          target_tooltip=testing_tooltip,
-                #                                                          target_text=testing_tooltip_text,
-                #                                                          original_theme=dpg.get_item_theme(testing_tooltip),
-                #                                                          duration=gui_config.acknowledgment_duration))
-                # testing_button = dpg.add_button(label=fa.ICON_VOLCANO,
-                #                                 callback=testing_callback,
-                #                                 width=gui_config.toolbutton_w,
-                #                                 tag="chat_testing_button")
-                # dpg.bind_item_font("chat_testing_button", themes_and_fonts.icon_font_solid)  # tag
-                # dpg.bind_item_theme("chat_testing_button", "disablable_widget_theme")  # tag
-                # testing_tooltip = dpg.add_tooltip("chat_testing_button")  # tag
-                # testing_tooltip_text = dpg.add_text("Developer button for testing purposes. What will it do today?!", parent=testing_tooltip)
-
-                number_of_below_chat_buttons = 7
-                number_of_separators = 3  # +1 for the separator before the context-fill readout
-                context_fill_reserve_w = 170  # provisional: horizontal room for the context-fill readout text
-                # This row spans the whole window, not just the chat panel, and everything to the left of the
-                # AI-disclosure label is fixed-width - so the spacer absorbs the slack and pins the label to the
-                # right end of the row. The right margin is empirical (it puts the label where the old one-line
-                # version ended); the rest is derived from the widget sizes actually laid out to its left.
-                ai_warning_icon_w = 23  # the warning glyph, plus the gap DPG leaves between group members
-                ai_warning_right_margin = 108
-                ai_warning_spacer_base_size = gui_config.main_window_w - ai_warning_right_margin - (ai_warning_icon_w + gui_config.ai_warning_w) - number_of_below_chat_buttons * (gui_config.toolbutton_w + 8) - number_of_separators * (gui_config.toolbar_separator_w) - context_fill_reserve_w
-                dpg.add_spacer(width=ai_warning_spacer_base_size, tag="ai_warning_spacer")
-
-                # The first clause is the disclosure proper: EU AI Act Article 50(1) asks that a person be told
-                # they are interacting with an AI system, and its exception for cases where that is obvious is to
-                # be read narrowly - so state it outright rather than leaving it to be inferred from "the connected
-                # AI". The second clause is the older quality warning, which is good practice but not the disclosure.
-                # Deliberately always visible and not dismissable: "at the start of the first interaction" is then
-                # satisfied trivially, and there is no way to configure the app out of compliance.
+            # The AI-disclosure label, in its own child window under the avatar panel so it can be centered there.
+            #
+            # The first clause is the disclosure proper: EU AI Act Article 50(1) asks that a person be told they are
+            # interacting with an AI system, and its exception for cases where that is obvious is to be read narrowly -
+            # so state it outright rather than leaving it to be inferred from "the connected AI". The second clause is
+            # the older quality warning, which is good practice but not the disclosure. Deliberately always visible and
+            # not dismissable: "at the start of the first interaction" is then satisfied trivially, and there is no way
+            # to configure the app out of compliance.
+            with dpg.child_window(tag="ai_warning_panel",  # tag
+                                  width=_get_avatar_panel_base_size()[0],
+                                  height=gui_config.ai_warning_h,
+                                  no_scrollbar=True,
+                                  no_scroll_with_mouse=True):
                 with dpg.group(horizontal=True):
-                    # The label wraps to two lines, so the icon has to drop to the block's vertical center rather
-                    # than sit on the first line. Half a line would be 10 px at font size 20, but the triangle
-                    # glyph reads a touch low there - its ink sits lower in the em box than the text's does - so
-                    # 9 px is what actually looks centered. A vertical group adds item_spacing_y (4 px) after the
-                    # spacer, so the spacer itself supplies the remaining 5.
-                    with dpg.group():
-                        dpg.add_spacer(height=5)
-                        dpg.add_text(fa.ICON_TRIANGLE_EXCLAMATION, color=(255, 180, 120), tag="ai_warning_icon")  # orange
-                    dpg.add_text("You are interacting with an AI system. Response quality and factual accuracy depend on the connected AI — always verify important facts independently.",
-                                 color=(255, 180, 120),
-                                 wrap=gui_config.ai_warning_w,
-                                 tag="ai_warning_text")  # orange
-                dpg.bind_item_font("ai_warning_icon", themes_and_fonts.icon_font_solid)  # tag
+                    dpg.add_spacer(width=0, tag="ai_warning_centering_spacer")  # tag  # width set by `_center_ai_warning`
+                    with dpg.group(horizontal=True, tag="ai_warning_block"):  # tag  # measured by `_center_ai_warning`
+                        # The label wraps to two lines, so the icon has to drop to the block's vertical center
+                        # rather than sit on the first line. Half a line would be 10 px at font size 20, but the
+                        # triangle glyph reads a touch low there - its ink sits lower in the em box than the text's
+                        # does - so 9 px is what actually looks centered. A vertical group adds item_spacing_y
+                        # (4 px) after the spacer, so the spacer itself supplies the remaining 5.
+                        with dpg.group():
+                            dpg.add_spacer(height=5)
+                            dpg.add_text(fa.ICON_TRIANGLE_EXCLAMATION, color=(255, 180, 120), tag="ai_warning_icon")  # orange
+                        dpg.add_text(_AI_WARNING_TEXT,
+                                     color=(255, 180, 120),
+                                     wrap=gui_config.ai_warning_w,
+                                     tag="ai_warning_text")  # orange
+        dpg.bind_item_font("ai_warning_icon", themes_and_fonts.icon_font_solid)  # tag
 
 # --------------------------------------------------------------------------------
 # Animations, live updates
@@ -1210,6 +1224,34 @@ def resize_gui() -> None:
         _resize_gui()
     logger.debug("resize_gui: Done.")
 
+def _center_ai_warning(avatar_panel_w: int) -> None:
+    """Horizontally center the AI-disclosure label within the avatar-side panel of the bottom row.
+
+    `avatar_panel_w`: current width of the avatar panel, in pixels.
+
+    Centering is done by widening a leading spacer rather than by positioning the text, because the label
+    is a wrapped two-line block inside a horizontal group, and DPG has no "center this group" affordance.
+
+    The block's width is taken from the laid-out widget (`get_item_rect_size` on the group holding the icon
+    and the text) rather than reconstructed from its parts. Reconstructing it was off by a constant 18 px:
+    it has to account for the child window's padding, for the gap DPG puts between group members, and for
+    the fact that a wrapped text's allocated box is not its measured ink width (550 px of wrap allowance
+    renders 521 px of glyphs). Measuring the assembled group gets all three for free, and cannot drift if
+    the wording, the wrap width, or the theme's spacing changes.
+
+    Before the first frame the group has no size yet; the estimate from the parts is used until then, and
+    the next resize pass corrects it.
+    """
+    block_w, _ = guiutils.get_widget_size("ai_warning_block")  # tag
+    if not block_w:  # not laid out yet (called before the first frame)
+        text_w, _ = dpg.get_text_size(_AI_WARNING_TEXT, wrap_width=gui_config.ai_warning_w)
+        block_w = _AI_WARNING_ICON_W + text_w
+    # The spacer lives in the child window's *content* box, which is inset by WindowPadding on each side,
+    # so the width to center within is the panel minus that padding - not the panel's outer width.
+    content_w = avatar_panel_w - 2 * _WINDOW_PADDING
+    dpg.set_item_width("ai_warning_centering_spacer", max(0, int((content_w - block_w) / 2) - _AI_WARNING_CENTERING_BIAS))  # tag
+
+
 def _resize_panels() -> None:
     """Resize the panels in the main window RIGHT NOW, based on main window size."""
     global _animator_settings  # intent only; loaded during app startup
@@ -1225,10 +1267,11 @@ def _resize_panels() -> None:
     chat_field_w = _get_chat_field_width(main_window_w=w)
     dpg.set_item_width("chat_field", chat_field_w)  # tag
 
-    extra_w = w - gui_config.main_window_w
-    dpg.set_item_width("ai_warning_spacer", ai_warning_spacer_base_size + extra_w)  # tag
+    dpg.set_item_width("chat_global_buttons", chat_panel_w)  # tag
 
     avatar_panel_w, avatar_panel_h = _get_avatar_panel_size(main_window_w=w, main_window_h=h)
+    dpg.set_item_width("ai_warning_panel", avatar_panel_w)  # tag
+    _center_ai_warning(avatar_panel_w)
     avatar_controller.subtitle_bottom_y0 = _get_subtitle_bottom_y0(avatar_panel_h)  # takes effect from next subtitle shown
     avatar_controller.reposition_subtitle()  # apply new position to current subtitle, if any
     dpg.set_item_width("avatar_panel", avatar_panel_w)  # tag
