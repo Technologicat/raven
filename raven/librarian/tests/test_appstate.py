@@ -366,7 +366,7 @@ class TestLoadConfiguresSidecarGC:
         datastore.create_node(_payload_with_refs(image_url=f"sidecar:{kept}"), parent_id=state["HEAD"])
 
         assert datastore.prune_unreferenced_sidecars() == []
-        assert datastore.sidecar_metadata(kept) == {"name": "kept.png"}
+        assert datastore.get_sidecar_metadata(kept) == {"name": "kept.png"}
 
     def test_metadata_is_deleted_along_with_its_sidecar(self, tmp_path, llm_settings):
         # Otherwise the descriptions accumulate as their own slow leak — the exact failure the sweep exists for.
@@ -399,19 +399,19 @@ class TestSidecarMetadata:
     def test_roundtrip(self, tmp_path, llm_settings):
         datastore, _, _, _ = _load(tmp_path, llm_settings)
         filename = datastore.store_sidecar(b"bytes", "pdf", metadata={"name": "paper.pdf", "size_bytes": 5})
-        assert datastore.sidecar_metadata(filename) == {"name": "paper.pdf", "size_bytes": 5}
+        assert datastore.get_sidecar_metadata(filename) == {"name": "paper.pdf", "size_bytes": 5}
 
     def test_absent_metadata_reads_as_none(self, tmp_path, llm_settings):
         # A sidecar stored before descriptions existed. Must not raise — the preview falls back to the hash.
         datastore, _, _, _ = _load(tmp_path, llm_settings)
         filename = datastore.store_sidecar(b"undescribed", "png")
-        assert datastore.sidecar_metadata(filename) is None
+        assert datastore.get_sidecar_metadata(filename) is None
 
     def test_corrupt_metadata_reads_as_none(self, tmp_path, llm_settings):
         datastore, _, _, _ = _load(tmp_path, llm_settings)
         filename = datastore.store_sidecar(b"bytes", "png", metadata={"name": "a.png"})
         datastore.sidecar_path(f"{filename}.meta.json").write_text("{not json", encoding="utf-8")
-        assert datastore.sidecar_metadata(filename) is None
+        assert datastore.get_sidecar_metadata(filename) is None
 
     def test_first_write_wins(self, tmp_path, llm_settings):
         # Content-addressed storage means identical bytes attached twice collide on one file. A later name --
@@ -420,7 +420,7 @@ class TestSidecarMetadata:
         first = datastore.store_sidecar(b"same bytes", "png", metadata={"name": "original.png"})
         second = datastore.store_sidecar(b"same bytes", "png", metadata={"name": "tmp12345.png"})
         assert first == second
-        assert datastore.sidecar_metadata(first) == {"name": "original.png"}
+        assert datastore.get_sidecar_metadata(first) == {"name": "original.png"}
 
     def test_two_sidecars_differing_only_in_extension_do_not_share_metadata(self, tmp_path, llm_settings):
         # The suffix appends to the whole filename rather than replacing the extension, so `<hash>.png` and
@@ -428,8 +428,8 @@ class TestSidecarMetadata:
         datastore, _, _, _ = _load(tmp_path, llm_settings)
         png = datastore.store_sidecar(b"png bytes", "png", metadata={"name": "a.png"})
         jpg = datastore.store_sidecar(b"jpg bytes", "jpg", metadata={"name": "a.jpg"})
-        assert datastore.sidecar_metadata(png) == {"name": "a.png"}
-        assert datastore.sidecar_metadata(jpg) == {"name": "a.jpg"}
+        assert datastore.get_sidecar_metadata(png) == {"name": "a.png"}
+        assert datastore.get_sidecar_metadata(jpg) == {"name": "a.jpg"}
 
 
 class TestBackfillSidecarMetadata:
@@ -443,7 +443,7 @@ class TestBackfillSidecarMetadata:
         datastore.create_node(payload, parent_id=state["HEAD"])
 
         assert appstate.backfill_sidecar_metadata(datastore) == 1
-        assert datastore.sidecar_metadata(filename)["name"] == "thesis.pdf"
+        assert datastore.get_sidecar_metadata(filename)["name"] == "thesis.pdf"
 
     def test_is_idempotent(self, tmp_path, llm_settings):
         datastore, state, _, _ = _load(tmp_path, llm_settings)
@@ -454,7 +454,7 @@ class TestBackfillSidecarMetadata:
 
         assert appstate.backfill_sidecar_metadata(datastore) == 1
         assert appstate.backfill_sidecar_metadata(datastore) == 0
-        assert datastore.sidecar_metadata(filename) == {"name": "plot.png"}
+        assert datastore.get_sidecar_metadata(filename) == {"name": "plot.png"}
 
     def test_does_not_invent_files_for_absent_sidecars(self, tmp_path, llm_settings):
         # Provenance can name a sidecar whose bytes are gone (deleted by hand, or lost). Writing a description
@@ -479,4 +479,4 @@ class TestBackfillSidecarMetadata:
         appstate.save(state_file=state_path, state=state)
 
         reloaded, _, _, _ = _load(tmp_path, llm_settings)
-        assert reloaded.sidecar_metadata(filename)["name"] == "reloaded.pdf"
+        assert reloaded.get_sidecar_metadata(filename)["name"] == "reloaded.pdf"

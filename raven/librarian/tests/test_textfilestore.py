@@ -166,7 +166,7 @@ class TestSidecarSelfDescription:
                                                  name="thesis.pdf",
                                                  provenance_url="file:///thesis.pdf",
                                                  provenance_source="user_attachment")
-        stored = datastore.sidecar_metadata(result.filename)
+        stored = datastore.get_sidecar_metadata(result.filename)
         assert stored is not None
         assert stored["name"] == "thesis.pdf"
         assert stored["url"] == "file:///thesis.pdf"
@@ -178,7 +178,7 @@ class TestSidecarSelfDescription:
                                                  name="notes.txt",
                                                  provenance_url="file:///notes.txt",
                                                  provenance_source="user_attachment")
-        assert datastore.sidecar_metadata(result.filename) == result.sidecar_metadata
+        assert datastore.get_sidecar_metadata(result.filename) == result.sidecar_metadata
 
     def test_description_survives_deletion_of_the_referencing_node(self, datastore):
         # The whole point, stated as a test: delete the message, and the file can still say what it was.
@@ -192,4 +192,4 @@ class TestSidecarSelfDescription:
         datastore.delete_subtree(node_id)
 
         assert datastore.unreferenced_sidecars() == [result.filename]
-        assert datastore.sidecar_metadata(result.filename)["name"] == "orphaned.pdf"
+        assert datastore.get_sidecar_metadata(result.filename)["name"] == "orphaned.pdf"

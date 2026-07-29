@@ -789,13 +789,18 @@ class PersistentForest(Forest):
                 logger.info(f"PersistentForest._load: PersistentForest loaded successfully ({len(data)} node{plural_s}).")
 
     # --------------------------------------------------------------------------------
-    # Image sidecar storage
+    # Attachment sidecar storage
     #
-    # Images attached to messages are stored as files next to the datastore JSON, in `<datastore>.images/`,
-    # referenced from messages by `sidecar:<filename>` URLs. Files are named by content hash (`<sha256>.<ext>`),
-    # so attaching the same image twice costs one file. These methods own the sidecar *files*; deciding what to
-    # store and which files are still referenced lives one layer up (see `raven.librarian.imagestore`), keeping
-    # this storage layer free of chat-message-schema knowledge.
+    # Attachments to messages — images, and documents such as PDFs and office files — are stored as files next
+    # to the datastore JSON, referenced from messages by `sidecar:<filename>` URLs. Files are named by content
+    # hash (`<sha256>.<ext>`), so attaching the same file twice costs one file. These methods own the sidecar
+    # *files*; deciding what to store and which files are still referenced lives one layer up (see
+    # `raven.librarian.imagestore` and `raven.librarian.textfilestore`), keeping this storage layer free of
+    # chat-message-schema knowledge.
+    #
+    # The directory is named `<datastore>.images/` — from when images were the only kind of attachment. The name
+    # is kept because renaming it would strand the sidecars of every existing datastore; it is a directory name,
+    # not a description of the contents.
 
     # Suffix marking a sidecar's metadata sibling (`<sha256>.<ext>.meta.json`). A sidecar is named by content
     # hash, so the file carries no trace of what it is; this is where its human-readable name and stored-at
@@ -806,7 +811,7 @@ class PersistentForest(Forest):
     def _get_sidecar_dir(self) -> pathlib.Path:
         return pathlib.Path(self.datastore_file).expanduser().resolve().with_suffix(".images")
     sidecar_dir = property(fget=_get_sidecar_dir,
-                           doc="Directory holding this datastore's image sidecar files: `<datastore>.images/`, alongside the JSON. Derived from `datastore_file`; created lazily on the first `store_sidecar`.")
+                           doc="Directory holding this datastore's attachment sidecar files: `<datastore>.images/`, alongside the JSON. Derived from `datastore_file`; created lazily on the first `store_sidecar`.")
 
     def store_sidecar(self, data: bytes, ext: str, metadata: dict[str, Any] | None = None) -> str:
         """Store `data` as a sidecar file; return its content-hash filename `<sha256>.<ext>`.
@@ -816,7 +821,7 @@ class PersistentForest(Forest):
         needed. The caller decides *what* bytes to store — the verbatim original, or a re-encoded downsample
         (see `raven.librarian.imagestore.store_image_as_sidecar`).
 
-        `metadata`, if given, is written to a sibling file describing this sidecar — see `sidecar_metadata` for
+        `metadata`, if given, is written to a sibling file describing this sidecar — see `get_sidecar_metadata` for
         what it is for and why it is stored beside the file rather than only in the referencing payload. It is
         persisted as an opaque JSON dict; `chattree` neither reads nor interprets its contents, exactly as with
         node payloads. Must be JSON-serializable.
@@ -845,7 +850,7 @@ class PersistentForest(Forest):
         already has metadata, and `False` again if the write fails. A caller that needs to know whether the
         description on disk is now the one it passed has to read the return value; nothing here reports the two
         cases apart, because no caller so far cares which way it declined. See
-        `store_sidecar` for why a later name must not displace an earlier one, and `sidecar_metadata` for what
+        `store_sidecar` for why a later name must not displace an earlier one, and `get_sidecar_metadata` for what
         the description is for.
 
         Also the backfill entry point for datastores predating sidecar metadata. Those still hold the provenance
@@ -870,7 +875,7 @@ class PersistentForest(Forest):
                 return False
             return True
 
-    def sidecar_metadata(self, filename: str) -> dict[str, Any] | None:
+    def get_sidecar_metadata(self, filename: str) -> dict[str, Any] | None:
         """Return the stored description of sidecar `filename`, or `None` if it has none.
 
         A sidecar is named by content hash, so the file itself says nothing about where it came from. The
@@ -894,7 +899,7 @@ class PersistentForest(Forest):
         except FileNotFoundError:
             return None
         except (OSError, json.JSONDecodeError) as exc:
-            logger.warning(f"PersistentForest.sidecar_metadata: could not read metadata for '{filename}': "
+            logger.warning(f"PersistentForest.get_sidecar_metadata: could not read metadata for '{filename}': "
                            f"{type(exc)}: {exc}")
             return None
 
@@ -989,7 +994,7 @@ class PersistentForest(Forest):
 
         Mark-and-sweep GC. The mark phase (`_referenced_sidecars`) delegates per-payload reading to the
         `sidecar_extractor` configured at construction; the sweep deletes everything else in the sidecar
-        directory. Pairs with `prune_unreachable_nodes`: run that first, so images referenced only by
+        directory. Pairs with `prune_unreachable_nodes`: run that first, so attachments referenced only by
         now-unreachable nodes become unreferenced here and get swept. If no `sidecar_extractor` is configured
         this is a safe no-op — it will not delete files it cannot prove are unreferenced (returns `[]`, and
         warns if any sidecars exist).
