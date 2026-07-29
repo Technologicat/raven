@@ -1473,15 +1473,46 @@ so the symmetry costs nothing extra as long as new formats are added *there* rat
 
 Two halves, gated differently:
 
-- **Office documents** (`.docx`, `.odt`, `.pptx`): no blocker. See the size estimate in the release discussion —
-  one `_extract_*` per format behind the existing contract.
-- **Images**: blocked on the Nomic embedder (text and vision in one aligned space). Until then there is no way
-  to retrieve an image by a text query except captioning at ingest time. Tracked as part of the multimodal
-  search plan in `TODO.md` ("RAG PDF ingestion — polish", and the Nomic multimodal-search item); the point to
-  keep in view is that when images do land in the docs DB, they must land in attachments too, and by then the
-  attachment side already has them — so it is the docs DB catching up, not a new capability.
+- **Office documents** (`.docx`, `.odt`, `.pptx`, `.odp`): no blocker; done for 0.2.8.
+- **Images**: the asymmetry runs the other way. Attachments have supported images since brief 03 — it is the
+  docs DB that lacks them, so this is the database catching up to a capability that already exists, not a new
+  one. Blocked on the Nomic embedder (text and vision in one aligned space): until then there is no way to
+  retrieve an image by a text query except captioning at ingest time. Tracked as part of the multimodal search
+  plan in `TODO.md` ("RAG PDF ingestion — polish", and the Nomic multimodal-search item).
 
 Raised during the 0.2.8 release scoping (2026-07-29, Juha).
+
+## Spreadsheets in the docs DB and attachments (`.xlsx`, `.ods`)
+
+Left out of the office-formats work deliberately: a spreadsheet is a different problem class wearing the same
+file picker. Its content is tabular, so "the text of this file" is not well defined — reading a sheet row-major
+into a paragraph produces something that chunks badly for retrieval and reads poorly when folded into a chat
+message. Getting it right means deciding how a table becomes prose (or whether it should become Markdown table
+syntax instead, which the model can actually read), and how a multi-sheet workbook maps onto one document.
+
+Worth doing eventually — research data does arrive as spreadsheets — but as its own design question, not as
+three more lines in the extractor's dispatch.
+
+Raised while scoping office-format support (2026-07-29, Juha).
+
+## Read documents as page images, for figure- and math-heavy sources
+
+Current extraction is **text-layer only**, for PDFs and (as of 0.2.8) office formats alike. That loses exactly
+what matters in the sources this project exists to read: equations, plots, diagrams, tables-as-figures. A paper
+whose argument lives in its figures extracts to prose that omits the argument.
+
+The other route is to render each page to an image and hand it to a vision model — which Raven can already do
+for an *attached* image, so the missing piece is the rendering and the decision of when to use it. Design
+questions: when to choose images over text (always for the figure pages? a heuristic? user's choice per file?),
+the token cost (a page image is expensive next to a page of text — interacts with the attachment budget in
+`llmclient.fit_attachments_to_context`), what to store in the sidecar (the original file, the rendered pages,
+or both), and how a page image participates in RAG retrieval at all (this is the same wall the images item
+hits — it wants the Nomic aligned space, or captioning).
+
+Distinct from OCR for scanned documents (`TODO.md`, "RAG PDF ingestion — polish"): OCR recovers text that was
+always meant to be text. This is about content that is *not* text and never was.
+
+Raised while scoping office-format support (2026-07-29, Juha).
 
 ## Librarian doesn't check that the LLM backend has a model loaded
 
