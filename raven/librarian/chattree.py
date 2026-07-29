@@ -808,7 +808,7 @@ class PersistentForest(Forest):
     sidecar_dir = property(fget=_get_sidecar_dir,
                            doc="Directory holding this datastore's image sidecar files: `<datastore>.images/`, alongside the JSON. Derived from `datastore_file`; created lazily on the first `store_sidecar`.")
 
-    def store_sidecar(self, data: bytes, ext: str, metadata: Dict[str, Any] | None = None) -> str:
+    def store_sidecar(self, data: bytes, ext: str, metadata: dict[str, Any] | None = None) -> str:
         """Store `data` as a sidecar file; return its content-hash filename `<sha256>.<ext>`.
 
         Content-addressed: storing identical bytes twice writes one file and returns the same name (natural
@@ -838,7 +838,7 @@ class PersistentForest(Forest):
                 self.set_sidecar_metadata(filename, metadata)
         return filename
 
-    def set_sidecar_metadata(self, filename: str, metadata: Dict[str, Any]) -> bool:
+    def set_sidecar_metadata(self, filename: str, metadata: dict[str, Any]) -> bool:
         """Attach a description to an already-stored sidecar. Return whether it was written.
 
         First write wins: returns `False` without touching anything if `filename` already has metadata. See
@@ -867,7 +867,7 @@ class PersistentForest(Forest):
                 return False
             return True
 
-    def sidecar_metadata(self, filename: str) -> Dict[str, Any] | None:
+    def sidecar_metadata(self, filename: str) -> dict[str, Any] | None:
         """Return the stored description of sidecar `filename`, or `None` if it has none.
 
         A sidecar is named by content hash, so the file itself says nothing about where it came from. The

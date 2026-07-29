@@ -39,7 +39,7 @@ _DEFAULT_FLAGS = {"tools_enabled": True,
 # --------------------------------------------------------------------------------
 # Sidecar GC configuration
 
-def sidecar_refs_in_payload(payload: Dict) -> set:
+def sidecar_refs_in_payload(payload: dict) -> set[str]:
     """Return every sidecar filename referenced by one node `payload` — the GC mark interpreter for the apps.
 
     The union of the two per-kind interpreters (`imagestore` for attached images, `textfilestore` for attached

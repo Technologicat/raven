@@ -110,7 +110,7 @@ def content_part_sidecar_refs(payload: dict, part_type: str) -> set[str]:
     return referenced
 
 
-def provenance_entries_in_payload(payload: dict) -> dict:
+def provenance_entries_in_payload(payload: dict) -> dict[str, dict]:
     """Return `{sidecar filename: provenance entry}` recorded in a node `payload`, for every kind at once.
 
     The counterpart to `content_part_sidecar_refs`: that answers *which* sidecars a payload references, this
