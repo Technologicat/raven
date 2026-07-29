@@ -358,6 +358,26 @@ class TestLoadConfiguresSidecarGC:
         orphan = datastore.store_sidecar(b"not referenced by anything", "png")
         assert datastore.unreferenced_sidecars() == [orphan]
 
+    def test_metadata_files_are_not_swept_as_orphans(self, tmp_path, llm_settings):
+        # A metadata file lives in the sidecar directory but is not a sidecar, so no payload will ever reference
+        # it. If the sweep treated it as a candidate, the whole set would go on the first cleanup.
+        datastore, state, _, _ = _load(tmp_path, llm_settings)
+        kept = datastore.store_sidecar(b"kept bytes", "png", metadata={"name": "kept.png"})
+        datastore.create_node(_payload_with_refs(image_url=f"sidecar:{kept}"), parent_id=state["HEAD"])
+
+        assert datastore.prune_unreferenced_sidecars() == []
+        assert datastore.sidecar_metadata(kept) == {"name": "kept.png"}
+
+    def test_metadata_is_deleted_along_with_its_sidecar(self, tmp_path, llm_settings):
+        # Otherwise the descriptions accumulate as their own slow leak — the exact failure the sweep exists for.
+        datastore, _, _, _ = _load(tmp_path, llm_settings)
+        orphan = datastore.store_sidecar(b"orphan bytes", "png", metadata={"name": "orphan.png"})
+        metadata_path = datastore.sidecar_path(f"{orphan}.meta.json")
+        assert metadata_path.exists()
+
+        assert datastore.prune_unreferenced_sidecars() == [orphan]
+        assert not metadata_path.exists()
+
     def test_referenced_attachments_survive_a_sweep(self, tmp_path, llm_settings):
         # The end-to-end property both halves of the extractor exist for: an image and a document attached to a
         # reachable node are still there after a cleanup, and only the orphan goes.
@@ -373,3 +393,90 @@ class TestLoadConfiguresSidecarGC:
         assert datastore.sidecar_path(image).exists()
         assert datastore.sidecar_path(document).exists()
         assert not datastore.sidecar_path(orphan).exists()
+
+
+class TestSidecarMetadata:
+    def test_roundtrip(self, tmp_path, llm_settings):
+        datastore, _, _, _ = _load(tmp_path, llm_settings)
+        filename = datastore.store_sidecar(b"bytes", "pdf", metadata={"name": "paper.pdf", "size_bytes": 5})
+        assert datastore.sidecar_metadata(filename) == {"name": "paper.pdf", "size_bytes": 5}
+
+    def test_absent_metadata_reads_as_none(self, tmp_path, llm_settings):
+        # A sidecar stored before descriptions existed. Must not raise — the preview falls back to the hash.
+        datastore, _, _, _ = _load(tmp_path, llm_settings)
+        filename = datastore.store_sidecar(b"undescribed", "png")
+        assert datastore.sidecar_metadata(filename) is None
+
+    def test_corrupt_metadata_reads_as_none(self, tmp_path, llm_settings):
+        datastore, _, _, _ = _load(tmp_path, llm_settings)
+        filename = datastore.store_sidecar(b"bytes", "png", metadata={"name": "a.png"})
+        datastore.sidecar_path(f"{filename}.meta.json").write_text("{not json", encoding="utf-8")
+        assert datastore.sidecar_metadata(filename) is None
+
+    def test_first_write_wins(self, tmp_path, llm_settings):
+        # Content-addressed storage means identical bytes attached twice collide on one file. A later name --
+        # possibly a temp file or a mangled copy -- must not displace the record made the first time.
+        datastore, _, _, _ = _load(tmp_path, llm_settings)
+        first = datastore.store_sidecar(b"same bytes", "png", metadata={"name": "original.png"})
+        second = datastore.store_sidecar(b"same bytes", "png", metadata={"name": "tmp12345.png"})
+        assert first == second
+        assert datastore.sidecar_metadata(first) == {"name": "original.png"}
+
+    def test_two_sidecars_differing_only_in_extension_do_not_share_metadata(self, tmp_path, llm_settings):
+        # The suffix appends to the whole filename rather than replacing the extension, so `<hash>.png` and
+        # `<hash>.jpg` get their own descriptions. (Different bytes here, since the hash is over the content.)
+        datastore, _, _, _ = _load(tmp_path, llm_settings)
+        png = datastore.store_sidecar(b"png bytes", "png", metadata={"name": "a.png"})
+        jpg = datastore.store_sidecar(b"jpg bytes", "jpg", metadata={"name": "a.jpg"})
+        assert datastore.sidecar_metadata(png) == {"name": "a.png"}
+        assert datastore.sidecar_metadata(jpg) == {"name": "a.jpg"}
+
+
+class TestBackfillSidecarMetadata:
+    def test_recovers_names_from_referencing_payloads(self, tmp_path, llm_settings):
+        # The migration case: a datastore written before descriptions existed still holds the provenance in the
+        # payloads, so everything still referenced can be named.
+        datastore, state, _, _ = _load(tmp_path, llm_settings)
+        filename = datastore.store_sidecar(b"undescribed bytes", "pdf")
+        payload = _payload_with_refs(text_file_url=f"sidecar:{filename}")
+        payload["general_metadata"]["sidecars"] = {filename: {"name": "thesis.pdf", "source": "user_attachment"}}
+        datastore.create_node(payload, parent_id=state["HEAD"])
+
+        assert appstate.backfill_sidecar_metadata(datastore) == 1
+        assert datastore.sidecar_metadata(filename)["name"] == "thesis.pdf"
+
+    def test_is_idempotent(self, tmp_path, llm_settings):
+        datastore, state, _, _ = _load(tmp_path, llm_settings)
+        filename = datastore.store_sidecar(b"bytes", "png")
+        payload = _payload_with_refs(image_url=f"sidecar:{filename}")
+        payload["general_metadata"]["sidecars"] = {filename: {"name": "plot.png"}}
+        datastore.create_node(payload, parent_id=state["HEAD"])
+
+        assert appstate.backfill_sidecar_metadata(datastore) == 1
+        assert appstate.backfill_sidecar_metadata(datastore) == 0
+        assert datastore.sidecar_metadata(filename) == {"name": "plot.png"}
+
+    def test_does_not_invent_files_for_absent_sidecars(self, tmp_path, llm_settings):
+        # Provenance can name a sidecar whose bytes are gone (deleted by hand, or lost). Writing a description
+        # for a file that does not exist would leave a stray the sweep then has to collect.
+        datastore, state, _, _ = _load(tmp_path, llm_settings)
+        payload = _payload_with_refs(image_url="sidecar:deadbeef.png")
+        payload["general_metadata"]["sidecars"] = {"deadbeef.png": {"name": "gone.png"}}
+        datastore.create_node(payload, parent_id=state["HEAD"])
+
+        assert appstate.backfill_sidecar_metadata(datastore) == 0
+        assert not datastore.sidecar_path("deadbeef.png.meta.json").exists()
+
+    def test_runs_at_load(self, tmp_path, llm_settings):
+        # Wired into `load`, not merely available: this is a migration, so it has to happen without anyone
+        # remembering to ask for it.
+        datastore, state, datastore_path, state_path = _load(tmp_path, llm_settings)
+        filename = datastore.store_sidecar(b"bytes for reload", "pdf")
+        payload = _payload_with_refs(text_file_url=f"sidecar:{filename}")
+        payload["general_metadata"]["sidecars"] = {filename: {"name": "reloaded.pdf"}}
+        datastore.create_node(payload, parent_id=state["HEAD"])
+        datastore.save()
+        appstate.save(state_file=state_path, state=state)
+
+        reloaded, _, _, _ = _load(tmp_path, llm_settings)
+        assert reloaded.sidecar_metadata(filename)["name"] == "reloaded.pdf"

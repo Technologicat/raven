@@ -6,7 +6,8 @@ This module is shared between `minichat` (command-line app) and `app` (Raven-lib
 """
 
 __all__ = ["sidecar_refs_in_payload",
-           "load", "save"]
+           "load", "save",
+           "backfill_sidecar_metadata"]
 
 import logging
 logger = logging.getLogger(__name__)
@@ -22,6 +23,7 @@ from unpythonic.env import env
 from . import chattree
 from . import chatutil
 from . import imagestore
+from . import sidecarstore
 from . import textfilestore
 
 # Default values for the persistent per-app state flags (the toggles that the Librarian apps
@@ -289,6 +291,11 @@ def load(llm_settings: env,
         logger.info(f"load: Key 'HEAD' in '{mayberel_state_file}' (resolved to '{state_file}') points to nonexistent chat node '{state['HEAD']}', resetting it to 'new_chat_HEAD'")
         state["HEAD"] = state["new_chat_HEAD"]
 
+    # Recover descriptions for sidecars stored before they were written beside the file. Runs at load rather
+    # than at cleanup time because the payloads are the only place the names exist, and a node deletion takes
+    # them with it — by the time a cleanup runs, anything already orphaned is past recovering.
+    backfill_sidecar_metadata(datastore)
+
     # Set up auto-persist for app state
     if autosave:
         atexit.register(functools.partial(save,
@@ -296,6 +303,34 @@ def load(llm_settings: env,
                                           state=state))
 
     return datastore, state
+
+def backfill_sidecar_metadata(datastore: chattree.PersistentForest) -> int:
+    """Write a description beside every referenced sidecar that lacks one. Return how many were written.
+
+    A migration for datastores predating sidecar metadata. Those still carry the provenance in the payloads
+    that reference each sidecar, so the name, source and timestamp can be copied out to where they survive the
+    referencing node — which is what a cleanup preview needs, since an orphan has no payload left to ask.
+
+    Only reaches sidecars that are still referenced. Anything orphaned by a deletion that already happened
+    stays anonymous: the payload naming it went with the node, and nothing else ever recorded it.
+
+    Idempotent, and safe to run at every load — `set_sidecar_metadata` is first-write-wins, so an existing
+    description is never overwritten by a later attachment of the same bytes under a different name.
+    """
+    written = 0
+    with datastore.lock:
+        for node in datastore.nodes.values():
+            for payload in node.get("data", {}).values():  # every revision: an older one may name a sidecar the current one dropped
+                for filename, provenance in sidecarstore.provenance_entries_in_payload(payload).items():
+                    try:
+                        if datastore.sidecar_path(filename).exists() and datastore.set_sidecar_metadata(filename, provenance):
+                            written += 1
+                    except ValueError:  # unsafe filename from a corrupt datastore; `sidecar_path` refuses it
+                        logger.warning(f"backfill_sidecar_metadata: skipping unsafe sidecar filename '{filename}'.")
+    if written:
+        plural_s = "s" if written != 1 else ""
+        logger.info(f"backfill_sidecar_metadata: recovered description{plural_s} for {written} sidecar{plural_s}.")
+    return written
 
 def save(state_file: Union[str, pathlib.Path],
          state: Dict) -> None:

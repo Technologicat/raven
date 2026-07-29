@@ -19,7 +19,8 @@ __all__ = ["SIDECAR_SCHEME",
            "read_source_bytes",
            "base_provenance",
            "sidecar_filename_from_url",
-           "content_part_sidecar_refs"]
+           "content_part_sidecar_refs",
+           "provenance_entries_in_payload"]
 
 import datetime
 import pathlib
@@ -107,3 +108,25 @@ def content_part_sidecar_refs(payload: dict, part_type: str) -> set[str]:
                 if part_url.startswith(SIDECAR_SCHEME):
                     referenced.add(part_url[len(SIDECAR_SCHEME):])
     return referenced
+
+
+def provenance_entries_in_payload(payload: dict) -> dict:
+    """Return `{sidecar filename: provenance entry}` recorded in a node `payload`, for every kind at once.
+
+    The counterpart to `content_part_sidecar_refs`: that answers *which* sidecars a payload references, this
+    answers *what is known about them*. Both attached images and attached documents write into the same
+    `general_metadata["sidecars"]` mapping, so one reader covers both — the entries differ in their fields, not
+    in where they live.
+
+    Used to backfill sidecar descriptions for datastores predating them. The information is only recoverable
+    while the referencing payload still exists, which is why it is worth copying beside the file: once a node is
+    deleted, its sidecars are orphaned *and* anonymous, and the cleanup preview has nothing to show but a hash.
+
+    Returns `{}` for a payload with no attachments, and skips malformed entries rather than raising — this runs
+    over data written by older versions, where being lenient costs less than being right.
+    """
+    sidecars = payload.get("general_metadata", {}).get("sidecars", {})
+    if not isinstance(sidecars, dict):
+        return {}
+    return {filename: entry for filename, entry in sidecars.items()
+            if isinstance(filename, str) and isinstance(entry, dict)}

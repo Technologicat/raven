@@ -93,11 +93,14 @@ def store_file_as_sidecar(datastore: chattree.PersistentForest,
     ext = pathlib.Path(name).suffix.lstrip(".").lower() or "txt"
     content_type = content_type or _mime_for_ext(ext)
 
-    filename = datastore.store_sidecar(raw, ext)
     metadata = sidecarstore.base_provenance(url=provenance_url, source=provenance_source,
                                             content_type=content_type, fetched_at=fetched_at)
     metadata["name"] = name
     metadata["size_bytes"] = len(raw)
+    # The same provenance goes into the payload (as the caller's return value) and beside the file. The payload
+    # copy is what the chat log reads; the file-side copy is what remains once the referencing node is deleted,
+    # which is exactly when a cleanup preview needs to say what the orphan was.
+    filename = datastore.store_sidecar(raw, ext, metadata=metadata)
     return env(part=chatutil.text_file_content_part(f"{sidecarstore.SIDECAR_SCHEME}{filename}", name),
                filename=filename,
                sidecar_metadata=metadata)

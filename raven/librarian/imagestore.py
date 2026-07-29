@@ -130,10 +130,12 @@ def store_image_as_sidecar(datastore: chattree.PersistentForest,
 
     if not needs_downsample:
         # Case 1: store the verbatim original as the primary — preserves embedded metadata, no re-encode.
-        filename = datastore.store_sidecar(raw, pil_format.lower())
         metadata = sidecarstore.base_provenance(url=provenance_url, source=provenance_source,
                                                 content_type=content_type, fetched_at=fetched_at)
         metadata["stored_dimensions"] = [height, width]  # dims of the bytes actually on disk (= original here)
+        # Stored beside the file as well as in the payload: the payload copy dies with its node, and an orphan
+        # with no description is a hash in a cleanup preview.
+        filename = datastore.store_sidecar(raw, pil_format.lower(), metadata=metadata)
         return env(part=chatutil.image_content_part(f"{sidecarstore.SIDECAR_SCHEME}{filename}"),
                    filename=filename,
                    sidecar_metadata=metadata)

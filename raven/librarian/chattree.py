@@ -797,18 +797,34 @@ class PersistentForest(Forest):
     # store and which files are still referenced lives one layer up (see `raven.librarian.imagestore`), keeping
     # this storage layer free of chat-message-schema knowledge.
 
+    # Suffix marking a sidecar's metadata sibling (`<sha256>.<ext>.meta.json`). A sidecar is named by content
+    # hash, so the file carries no trace of what it is; this is where its human-readable name and stored-at
+    # timestamp live. A suffix on the full sidecar filename rather than a replaced extension, so that two
+    # sidecars differing only in extension cannot collide on one metadata file.
+    _SIDECAR_METADATA_SUFFIX = ".meta.json"
+
     def _get_sidecar_dir(self) -> pathlib.Path:
         return pathlib.Path(self.datastore_file).expanduser().resolve().with_suffix(".images")
     sidecar_dir = property(fget=_get_sidecar_dir,
                            doc="Directory holding this datastore's image sidecar files: `<datastore>.images/`, alongside the JSON. Derived from `datastore_file`; created lazily on the first `store_sidecar`.")
 
-    def store_sidecar(self, data: bytes, ext: str) -> str:
-        """Store image bytes `data` as a sidecar file; return its content-hash filename `<sha256>.<ext>`.
+    def store_sidecar(self, data: bytes, ext: str, metadata: Dict[str, Any] | None = None) -> str:
+        """Store `data` as a sidecar file; return its content-hash filename `<sha256>.<ext>`.
 
         Content-addressed: storing identical bytes twice writes one file and returns the same name (natural
         dedup). `ext` is the extension without a leading dot (e.g. "png", "jpeg"). Creates `sidecar_dir` if
         needed. The caller decides *what* bytes to store — the verbatim original, or a re-encoded downsample
         (see `raven.librarian.imagestore.store_image_as_sidecar`).
+
+        `metadata`, if given, is written to a sibling file describing this sidecar — see `sidecar_metadata` for
+        what it is for and why it is stored beside the file rather than only in the referencing payload. It is
+        persisted as an opaque JSON dict; `chattree` neither reads nor interprets its contents, exactly as with
+        node payloads. Must be JSON-serializable.
+
+        Deduplication applies to the metadata too, and **first write wins**: attaching identical bytes a second
+        time under a different name does not overwrite the record made the first time. Overwriting would let a
+        later and possibly worse name — a temp file, a copy with a mangled name — displace a good one, and there
+        is no way to tell from here which of two names is the better description of the same bytes.
         """
         filename = f"{hashlib.sha256(data).hexdigest()}.{ext.lstrip('.')}"
         with self.lock:
@@ -818,7 +834,81 @@ class PersistentForest(Forest):
             if not path.exists():  # content-addressed: identical bytes -> identical name -> already on disk
                 with open(path, "wb") as sidecar_file:
                     sidecar_file.write(data)
+            if metadata is not None:
+                self.set_sidecar_metadata(filename, metadata)
         return filename
+
+    def set_sidecar_metadata(self, filename: str, metadata: Dict[str, Any]) -> bool:
+        """Attach a description to an already-stored sidecar. Return whether it was written.
+
+        First write wins: returns `False` without touching anything if `filename` already has metadata. See
+        `store_sidecar` for why a later name must not displace an earlier one, and `sidecar_metadata` for what
+        the description is for.
+
+        Also the backfill entry point for datastores predating sidecar metadata. Those still hold the provenance
+        in the payloads that reference each sidecar, so it can be recovered for everything currently referenced
+        — an orphan from a deletion that already happened is past saving, since the payload that named it went
+        with the node.
+
+        Never raises on a write failure: the sidecar is on disk and usable either way, and a description that
+        could not be written is a display problem rather than a reason to fail the caller's operation.
+        """
+        with self.lock:
+            metadata_path = self._sidecar_metadata_path(filename)
+            if metadata_path.exists():
+                return False
+            try:
+                common_utils.create_directory(metadata_path.parent)
+                with open(metadata_path, "w", encoding="utf-8") as metadata_file:
+                    json.dump(metadata, metadata_file, indent=2)
+            except (OSError, TypeError, ValueError) as exc:
+                logger.warning(f"PersistentForest.set_sidecar_metadata: could not write metadata for "
+                               f"'{filename}': {type(exc)}: {exc}")
+                return False
+            return True
+
+    def sidecar_metadata(self, filename: str) -> Dict[str, Any] | None:
+        """Return the stored description of sidecar `filename`, or `None` if it has none.
+
+        A sidecar is named by content hash, so the file itself says nothing about where it came from. The
+        human-readable name lives in the payload that references it — which is exactly what an *orphaned*
+        sidecar no longer has, and orphans are precisely the ones a cleanup preview needs to name. Hence a
+        description written beside the file at store time, surviving independently of the tree.
+
+        Returns `None` for a sidecar stored before this existed, or if the metadata file is unreadable or
+        corrupt: a missing description is a display problem, never a reason to fail an operation on the file.
+        """
+        metadata_path = self._sidecar_metadata_path(filename)
+        try:
+            with open(metadata_path, "r", encoding="utf-8") as metadata_file:
+                return json.load(metadata_file)
+        except FileNotFoundError:
+            return None
+        except (OSError, json.JSONDecodeError) as exc:
+            logger.warning(f"PersistentForest.sidecar_metadata: could not read metadata for '{filename}': "
+                           f"{type(exc)}: {exc}")
+            return None
+
+    def _sidecar_metadata_path(self, filename: str) -> pathlib.Path:
+        """Path of the metadata sibling describing sidecar `filename`. Validates `filename`; existence unchecked."""
+        path = self.sidecar_path(filename)
+        return path.with_name(f"{path.name}{self._SIDECAR_METADATA_SUFFIX}")
+
+    def _prune_orphaned_sidecar_metadata(self) -> None:
+        """Delete metadata files whose sidecar is gone.
+
+        The sweep removes each description along with its file, so this only finds strays — a sidecar deleted by
+        hand, or by a version that did not know about metadata. Since a metadata file is never referenced by
+        anything, nothing else would ever collect it.
+        """
+        directory = self.sidecar_dir
+        if not directory.is_dir():
+            return
+        for entry in directory.iterdir():
+            if entry.is_file() and entry.name.endswith(self._SIDECAR_METADATA_SUFFIX):
+                described = entry.name[:-len(self._SIDECAR_METADATA_SUFFIX)]
+                if not (directory / described).exists():
+                    entry.unlink(missing_ok=True)
 
     def _validate_sidecar_filename(self, filename: str) -> None:
         # Filenames reaching here come from stored `sidecar:` URLs, i.e. from datastore data — refuse anything
@@ -837,16 +927,22 @@ class PersistentForest(Forest):
             return sidecar_file.read()
 
     def list_sidecar_files(self) -> list[str]:
-        """List the filenames present in `sidecar_dir` (bare names, not paths), sorted. Empty if the directory doesn't exist yet.
+        """List the sidecar filenames present in `sidecar_dir` (bare names, not paths), sorted. Empty if the directory doesn't exist yet.
 
         Sorted rather than in raw `iterdir` order so that everything built on it — the GC sweep, its log line,
         and the dry-run preview — is deterministic and platform-independent (filesystem iteration order is not).
         A UI is free to re-sort by a more meaningful key (size, provenance URL) on top.
+
+        Metadata siblings are *not* listed: they live in the same directory but describe sidecars rather than
+        being ones. The exclusion is load-bearing rather than cosmetic — the GC sweep deletes every listed file
+        no payload references, and no payload ever references a metadata file, so listing them here would delete
+        the whole set on the first cleanup.
         """
         directory = self.sidecar_dir
         if not directory.is_dir():
             return []
-        return sorted(entry.name for entry in directory.iterdir() if entry.is_file())
+        return sorted(entry.name for entry in directory.iterdir()
+                      if entry.is_file() and not entry.name.endswith(self._SIDECAR_METADATA_SUFFIX))
 
     def _referenced_sidecars(self) -> set[str]:
         """Union of sidecar filenames referenced by every revision of every node — the GC "mark" phase.
@@ -899,7 +995,11 @@ class PersistentForest(Forest):
             for filename in self.list_sidecar_files():
                 if filename not in referenced:
                     (self.sidecar_dir / filename).unlink()
+                    # The description goes with the file it describes; otherwise the metadata accumulates as its
+                    # own slow leak, which is the very thing this sweep exists to stop.
+                    self._sidecar_metadata_path(filename).unlink(missing_ok=True)
                     deleted.append(filename)
+            self._prune_orphaned_sidecar_metadata()
             if deleted:
                 plural_s = "s" if len(deleted) != 1 else ""
                 logger.info(f"PersistentForest.prune_unreferenced_sidecars: deleted {len(deleted)} unreferenced sidecar file{plural_s}.")

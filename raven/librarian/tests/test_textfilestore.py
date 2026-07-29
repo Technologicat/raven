@@ -152,3 +152,44 @@ def test_sidecar_refs_collects_only_text_file_refs():
 
 def test_sidecar_refs_legacy_string_content_is_empty():
     assert textfilestore.sidecar_refs_in_payload({"message": {"content": "bare pre-migration string"}}) == set()
+
+
+# ---------------------------------------------------------------------------
+# The stored file describes itself
+# ---------------------------------------------------------------------------
+
+class TestSidecarSelfDescription:
+    def test_stored_document_carries_its_provenance_beside_the_file(self, datastore):
+        # The payload copy of the provenance dies with its node. This copy is what a cleanup preview reads to
+        # name an orphan, so it has to be written at store time -- there is no later chance.
+        result = textfilestore.store_file_as_sidecar(datastore, b"some document text",
+                                                 name="thesis.pdf",
+                                                 provenance_url="file:///thesis.pdf",
+                                                 provenance_source="user_attachment")
+        stored = datastore.sidecar_metadata(result.filename)
+        assert stored is not None
+        assert stored["name"] == "thesis.pdf"
+        assert stored["url"] == "file:///thesis.pdf"
+
+    def test_description_matches_the_payload_provenance(self, datastore):
+        # One dict, written to two places. If they can differ, the preview and the chat log can disagree about
+        # what the same file is.
+        result = textfilestore.store_file_as_sidecar(datastore, b"content",
+                                                 name="notes.txt",
+                                                 provenance_url="file:///notes.txt",
+                                                 provenance_source="user_attachment")
+        assert datastore.sidecar_metadata(result.filename) == result.sidecar_metadata
+
+    def test_description_survives_deletion_of_the_referencing_node(self, datastore):
+        # The whole point, stated as a test: delete the message, and the file can still say what it was.
+        result = textfilestore.store_file_as_sidecar(datastore, b"orphan me",
+                                                 name="orphaned.pdf",
+                                                 provenance_url="file:///orphaned.pdf",
+                                                 provenance_source="user_attachment")
+        node_id = datastore.create_node({"message": {"role": "user", "content": [result.part]},
+                                         "general_metadata": {"sidecars": {result.filename: result.sidecar_metadata}}},
+                                        parent_id=None)
+        datastore.delete_subtree(node_id)
+
+        assert datastore.unreferenced_sidecars() == [result.filename]
+        assert datastore.sidecar_metadata(result.filename)["name"] == "orphaned.pdf"

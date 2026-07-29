@@ -1592,6 +1592,39 @@ UX side.
 
 Raised during the 0.2.8 format work (2026-07-29, Juha).
 
+## Visualizer's importer should read the document database, not just `.bib` files
+
+Visualizer ingests BibTeX databases. That is where it started — scientific abstracts, one entry per paper — and
+it is now the wrong boundary. What the importer actually wants as its source is **the same document database
+Librarian searches**, with scope support, so that the two apps are two views of one corpus rather than two
+corpora that happen to live on the same machine.
+
+The payoff is the plain-language version: someone drops a pile of Word documents into the documents folder and
+gets a semantic map of them. No conversion step, no separate import, no BibTeX in sight. That is a different
+product from "a tool for visualizing bibliographies", and a much easier one to explain.
+
+Several things that already exist turn out to be pointing here:
+
+- **The document database already accepts far more than abstracts** — plain text, PDF, office formats, saved
+  web pages (2026-07-29). Every one of those is a document with text; nothing about mapping them semantically
+  is specific to a BibTeX entry.
+- **Scoping is already planned for the docs DB** (subdirectories as umbrella topics — see the Librarian
+  README's note that all documents currently share one search namespace). The same scope concept is what a map
+  needs: map this topic, not the entire library.
+- **`raven-burstbib` exists to bridge the gap in the other direction**, splitting a `.bib` into per-entry files
+  so Librarian can read them. If the importer read the docs DB directly, that tool becomes a convenience rather
+  than a required step, and BibTeX becomes one input format among several rather than the privileged one.
+
+Gated on the Nomic migration, which is where the shared embedding space comes from — today the two apps embed
+separately and there is no single space to place both in. Also interacts with the image-support and
+cleanup-view items above: once both apps read one corpus in one space, "show me the map", "search my documents"
+and "show me what cleanup is about to delete" are the same machinery pointed at different subsets.
+
+Substantial enough to deserve a brief rather than an incremental change — it revisits what the importer's input
+*is*, and the importer is already flagged for a stage-separation refactor.
+
+Raised during the 0.2.8 format work (2026-07-29, Juha).
+
 ## Semantic grouping in the sidecar cleanup preview (once Nomic lands)
 
 The "Clean up & save" preview lists the orphaned sidecars it is about to delete. There is no grouping, because
@@ -1603,16 +1636,28 @@ The Nomic embedder (text and vision in one aligned space — see the format-symm
 possible here, because it gives *every* orphan a vector regardless of kind. An image and a PDF land in the same
 space, so the orphan set becomes clusterable as one collection rather than two.
 
-The payoff is not prettier tiles, it is a better decision. Laid out by cluster with a label per group, the
-dialog says "these nine are the plot figures from the thesis discussion, these three are the conference slides"
+The payoff is not prettier tiles, it is a better decision. Laid out by cluster with a label per group, the view
+says "these nine are the plot figures from the thesis discussion, these three are the conference slides"
 instead of showing twelve unlabelled squares — and recovery moves to *per cluster*, which is the granularity a
-person actually thinks at when deciding what to keep. Visualizer already owns this machinery (HDBSCAN
-clustering plus keyword extraction for cluster labels), for the same reason and against the same problem.
+person actually thinks at when deciding what to keep.
 
-Worth revisiting when the Nomic migration lands, not before — everything here is downstream of the shared
-embedding space.
+**But this belongs in Visualizer, not in a Librarian dialog** (decided 2026-07-29). Visualizer already *is* a
+semantic map: clustering, cluster labelling by keyword extraction, selection, tooltips, an info panel. A
+cluster view built into Librarian's cleanup dialog would be a second, worse copy of an app we already ship,
+maintained separately and diverging. The right shape is for the orphan set to become something Visualizer can
+open — the cleanup dialog stays a plain list for the everyday "delete 40 MB of nothing" case, and the "I need
+to actually look at these" case hands off to the tool built for looking.
 
-Raised while implementing brief 03 D (2026-07-29, Juha's idea).
+That makes this dependent on Librarian↔Visualizer integration as well as on Nomic, and worth *not* starting
+until both are in place. Note the overlap with the Visualizer image-support item above: showing an orphaned
+attachment on the map needs the same tooltip and info-panel work, so the two land together or not at all.
+
+One consequence to plan for rather than discover: a GC view is not a *reading* view, it is a *choosing* view —
+the user has to mark items for deletion or rescue. Visualizer's selection model was built for inspecting a map,
+not for accumulating a working set across clusters and acting on it. Expect the selection UX to want a revisit
+at that point, and treat that as part of the cost of this item rather than as a surprise inside it.
+
+Raised while implementing brief 03 D (2026-07-29, Juha's idea, and Juha's placement call).
 
 ## HTML pages whose content is produced by running them
 
