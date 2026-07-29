@@ -314,7 +314,7 @@ def backfill_sidecar_metadata(datastore: chattree.PersistentForest) -> int:
     Only reaches sidecars that are still referenced. Anything orphaned by a deletion that already happened
     stays anonymous: the payload naming it went with the node, and nothing else ever recorded it.
 
-    Idempotent, and safe to run at every load — `set_sidecar_metadata` is first-write-wins, so an existing
+    Idempotent, and safe to run at every load — `maybe_set_sidecar_metadata` is first-write-wins, so an existing
     description is never overwritten by a later attachment of the same bytes under a different name.
     """
     written = 0
@@ -323,7 +323,7 @@ def backfill_sidecar_metadata(datastore: chattree.PersistentForest) -> int:
             for payload in node.get("data", {}).values():  # every revision: an older one may name a sidecar the current one dropped
                 for filename, provenance in sidecarstore.provenance_entries_in_payload(payload).items():
                     try:
-                        if datastore.sidecar_path(filename).exists() and datastore.set_sidecar_metadata(filename, provenance):
+                        if datastore.sidecar_path(filename).exists() and datastore.maybe_set_sidecar_metadata(filename, provenance):
                             written += 1
                     except ValueError:  # unsafe filename from a corrupt datastore; `sidecar_path` refuses it
                         logger.warning(f"backfill_sidecar_metadata: skipping unsafe sidecar filename '{filename}'.")

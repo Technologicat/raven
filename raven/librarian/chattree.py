@@ -835,13 +835,16 @@ class PersistentForest(Forest):
                 with open(path, "wb") as sidecar_file:
                     sidecar_file.write(data)
             if metadata is not None:
-                self.set_sidecar_metadata(filename, metadata)
+                self.maybe_set_sidecar_metadata(filename, metadata)
         return filename
 
-    def set_sidecar_metadata(self, filename: str, metadata: dict[str, Any]) -> bool:
-        """Attach a description to an already-stored sidecar. Return whether it was written.
+    def maybe_set_sidecar_metadata(self, filename: str, metadata: dict[str, Any]) -> bool:
+        """Attach a description to an already-stored sidecar, if it does not have one. Return whether it was written.
 
-        First write wins: returns `False` without touching anything if `filename` already has metadata. See
+        The *maybe* is the first-write-wins rule: returns `False` without touching anything if `filename`
+        already has metadata, and `False` again if the write fails. A caller that needs to know whether the
+        description on disk is now the one it passed has to read the return value; nothing here reports the two
+        cases apart, because no caller so far cares which way it declined. See
         `store_sidecar` for why a later name must not displace an earlier one, and `sidecar_metadata` for what
         the description is for.
 
@@ -862,7 +865,7 @@ class PersistentForest(Forest):
                 with open(metadata_path, "w", encoding="utf-8") as metadata_file:
                     json.dump(metadata, metadata_file, indent=2)
             except (OSError, TypeError, ValueError) as exc:
-                logger.warning(f"PersistentForest.set_sidecar_metadata: could not write metadata for "
+                logger.warning(f"PersistentForest.maybe_set_sidecar_metadata: could not write metadata for "
                                f"'{filename}': {type(exc)}: {exc}")
                 return False
             return True
@@ -874,6 +877,12 @@ class PersistentForest(Forest):
         human-readable name lives in the payload that references it — which is exactly what an *orphaned*
         sidecar no longer has, and orphans are precisely the ones a cleanup preview needs to name. Hence a
         description written beside the file at store time, surviving independently of the tree.
+
+        The cleanup preview is what motivated it, but the larger effect is that the sidecar directory becomes
+        **self-describing**. Without these, `<datastore>.images/` is a pile of hash-named files that can only be
+        interpreted by loading the datastore and cross-referencing every payload. With them, anything that can
+        read a directory — a person, a shell script, an agent asked to tidy up — can tell what each file is,
+        where it came from and when it arrived, without Raven's help and without the datastore being present.
 
         Returns `None` for a sidecar stored before this existed, or if the metadata file is unreadable or
         corrupt: a missing description is a display problem, never a reason to fail an operation on the file.

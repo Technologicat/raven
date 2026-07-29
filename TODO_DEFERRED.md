@@ -1606,6 +1606,42 @@ UX side.
 
 Raised during the 0.2.8 format work (2026-07-29, Juha).
 
+## Version the chat datastore file, so migrations can be skipped once applied
+
+Raised 2026-07-29 (Juha), from noticing that `appstate.backfill_sidecar_metadata` walks every revision of every
+node at every load. Nothing today tells a loaded datastore apart from one that has already been through each
+migration, so all of them run unconditionally and their cost is paid on every startup forever.
+
+**The version belongs to the file, not to a node.** The first instinct is a lone root node holding it, and that
+runs straight into two problems: `prune_unreachable_nodes` would collect it, and `_get_system_prompt_node_id`
+takes root nodes to be system prompts, so it would be misread as one. Both are symptoms of the same thing —
+metadata about the file is not data in the forest, and putting it there means every consumer of the forest has
+to learn to ignore it.
+
+So: an **envelope**. `PersistentForest._save` currently writes the bare nodes dict
+(`json.dump(self.nodes, ...)`), so the change is to write `{"format_version": N, "nodes": {...}}` and have
+`_load` detect which shape it is holding. Detection is unambiguous rather than heuristic: node IDs are gensym
+strings (`gensym#forest-node:...`), so a top-level key named `nodes` or `format_version` cannot be one.
+
+Preferred here over a companion `<datastore>.meta.json`, which can be separated from the data it describes — by
+a partial copy, a backup that catches one file, a manual move. The envelope travels with the thing it versions.
+
+Note this is not an argument against companion metadata files in general, and specifically not against the
+per-sidecar `<filename>.meta.json` descriptions: those *want* to be separate files, because their whole point
+is to be readable without the datastore, and a sidecar that loses its description degrades to a hash rather
+than becoming dangerous. A format version is the opposite case — useless on its own and actively harmful when
+it disagrees with the file it claims to describe.
+
+Three migrations would be gated by it, and the version has to cover all of them: `chattree._upgrade` (forest
+structure), `chatutil.upgrade_datastore` (payload schema), and `appstate.backfill_sidecar_metadata`. One
+integer, each landed migration a step from N to N+1.
+
+**Handle the too-new case from the start**, because it is the one that corrupts rather than merely wastes time.
+A datastore written by a newer Raven and opened by an older one is the dangerous direction: the old build has
+no way to know it is looking at a format it does not understand, and will happily write back a version of the
+data with the newer fields dropped. Refusing to open — or opening read-only with a clear message — is the whole
+reason to have a version number rather than just a migration marker.
+
 ## A no-avatar mode, with the chat tree in the panel the avatar vacates
 
 Raised 2026-07-29 (Juha), and the opposite end of the same axis as the avatar-first mode sketched in
