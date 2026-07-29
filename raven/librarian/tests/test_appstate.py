@@ -307,3 +307,69 @@ class TestDirectoryCreation:
               datastore_name=str(pathlib.Path("some") / "nested" / "dir" / "data.json"),
               state_name=str(pathlib.Path("some") / "nested" / "dir" / "state.json"))
         assert nested.exists()
+
+
+# ---------------------------------------------------------------------------
+# Sidecar GC configuration
+#
+# These guard a failure mode that destroys user data without any error: the mark phase deletes whatever it does
+# not mark, so an extractor that misses a kind of reference sweeps away live attachments on the next cleanup.
+# Nothing else names a sidecar — they are content-addressed — so a wrong sweep is unrecoverable and silent.
+# ---------------------------------------------------------------------------
+
+def _payload_with_refs(image_url=None, text_file_url=None, original_sidecar=None):
+    """A node payload referencing the given sidecars, in the shapes the mark phase has to recognize."""
+    content = []
+    if image_url is not None:
+        content.append({"type": "image_url", "image_url": {"url": image_url}})
+    if text_file_url is not None:
+        content.append({"type": "text_file", "text_file": {"url": text_file_url, "name": "doc.pdf"}})
+    payload = {"message": {"role": "user", "content": content}, "general_metadata": {}}
+    if original_sidecar is not None:
+        # The preserved-original case: referenced from provenance, with no content-part of its own.
+        payload["general_metadata"]["sidecars"] = {"primary.png": {"original_sidecar": original_sidecar}}
+    return payload
+
+
+class TestSidecarRefsInPayload:
+    def test_collects_image_document_and_preserved_original(self):
+        refs = appstate.sidecar_refs_in_payload(_payload_with_refs(image_url="sidecar:img.png",
+                                                                  text_file_url="sidecar:doc.pdf",
+                                                                  original_sidecar="orig.png"))
+        assert refs == {"img.png", "doc.pdf", "orig.png"}
+
+    def test_documents_alone_are_seen(self):
+        # The regression this pins: an extractor that only knew about images would return an empty set here,
+        # and every attached document in the datastore would be swept on the next cleanup.
+        assert appstate.sidecar_refs_in_payload(_payload_with_refs(text_file_url="sidecar:doc.pdf")) == {"doc.pdf"}
+
+    def test_images_alone_are_seen(self):
+        assert appstate.sidecar_refs_in_payload(_payload_with_refs(image_url="sidecar:img.png")) == {"img.png"}
+
+    def test_payload_without_attachments_yields_nothing(self):
+        assert appstate.sidecar_refs_in_payload(_payload_with_refs()) == set()
+
+
+class TestLoadConfiguresSidecarGC:
+    def test_loaded_datastore_can_determine_references(self, tmp_path, llm_settings):
+        # Without an extractor configured, `unreferenced_sidecars` reports nothing at all (it fails safe rather
+        # than deleting blind), which would leave the cleanup feature inert while looking like it worked.
+        datastore, _, _, _ = _load(tmp_path, llm_settings)
+        orphan = datastore.store_sidecar(b"not referenced by anything", "png")
+        assert datastore.unreferenced_sidecars() == [orphan]
+
+    def test_referenced_attachments_survive_a_sweep(self, tmp_path, llm_settings):
+        # The end-to-end property both halves of the extractor exist for: an image and a document attached to a
+        # reachable node are still there after a cleanup, and only the orphan goes.
+        datastore, state, _, _ = _load(tmp_path, llm_settings)
+        image = datastore.store_sidecar(b"image bytes", "png")
+        document = datastore.store_sidecar(b"document bytes", "pdf")
+        orphan = datastore.store_sidecar(b"orphan bytes", "png")
+        datastore.create_node(_payload_with_refs(image_url=f"sidecar:{image}",
+                                                text_file_url=f"sidecar:{document}"),
+                              parent_id=state["HEAD"])
+
+        assert datastore.prune_unreferenced_sidecars() == [orphan]
+        assert datastore.sidecar_path(image).exists()
+        assert datastore.sidecar_path(document).exists()
+        assert not datastore.sidecar_path(orphan).exists()

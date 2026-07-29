@@ -963,12 +963,56 @@ became a typed-parts list everywhere; tool results as parts; per-part renderer; 
   No behavior change; `sidecarstore` has its own tests.
 - *(Env interlude, not brief-03 scope: the torch trio is pinned at `2.11.0` / `0.26.0` / `2.11.0` `+cu128` as of
   `af3a19b`, validated on the live server — NVRTC OK. See `pyproject.toml` / README for the pinning scheme.)*
-- **D — GC UX & navigation** (not started — this is the remaining brief-03 work): manual "Clean up & save"
+- **D — GC UX & navigation** (in progress — this is the remaining brief-03 work): manual "Clean up & save"
   (dry-run preview + thumbnail grid + staging recovery); bidirectional tool-call↔response nav links. Open
   question: `prune_unreachable_nodes` currently runs only in `minichat`, not the GUI exit path — decide GUI-exit
   prune vs. manual-only. **Decided 2026-07-29: manual-only, at least for now.** A sweep on exit is work the
   user did not ask for at the moment they are least able to see it, and the leak it prevents is slow.
   The bulk of this checkpoint is DPG work rather than GC logic.
+
+  **Settled with Juha 2026-07-29, at the start of implementation:**
+  - **Placement — a second row under the existing separator**, labelled `Maintenance:`, below the `Open folder:`
+    row in `mode_toggle_controls`. Not a third button on the folder row: that row's label would then be lying,
+    and it would seat a destructive action a few pixels from two harmless ones. Not yet a collapsing `Tools`
+    header either (the forward caveat above) — that costs a click on every use and hides the folder openers,
+    which is a bad trade at three utilities. Revisit at four.
+  - **Preview shows two sections: an image grid, then a document list.** The grid in the original design predates
+    document sidecars, and a `.pdf` has no thumbnail. Rather than putting a file-type icon in a picture grid,
+    the two kinds are rendered as what they are — thumbnails for images, name + size rows for documents. It
+    costs a second rendering path and a second set of recovery wiring, and buys a preview where neither kind is
+    pretending to be the other. The point of the grid is recognizing a forgotten image *by looking at it*; a
+    document is recognized by its name, so a list serves it better than a tile would.
+  - **Consequence for config:** `image_staging_dir` is misnamed once documents can be recovered too. Renamed to
+    `attachment_staging_dir` (default `staging/recovered_attachments`) while it still has no callers, so no
+    migration is needed.
+  - **A sidecar describes itself, in a metadata file written when it is stored.** A sidecar filename is a
+    content hash, so the preview has no human-readable name to show and nothing to sort by. The name does exist
+    in the payload that references the sidecar (`general_metadata["sidecars"][filename]`: `name` for a document,
+    a provenance `url` whose basename serves for an image) — but that is precisely what an orphan no longer has.
+
+    Harvesting the names from the tree just before pruning was considered and **rejected**: `delete_subtree`
+    pops nodes immediately, so the GUI's own delete-branch action destroys the payload at delete time, not at
+    cleanup time. By the time a cleanup runs, the names for anything deleted that way are long gone. Harvesting
+    would only have worked for nodes still present-but-unreachable, which is the rarer half of the problem.
+
+    So each sidecar gets a small metadata file written alongside it at store time — original name, stored-at
+    timestamp, content type, source URL — surviving independently of the tree that referenced it. `chattree`
+    persists it as an opaque dict, exactly as it does payloads, so its schema-opacity invariant is untouched.
+
+    This looks like the "register the refs" pattern §8 rejected, and is not: that rejection was about
+    duplicating *which sidecars a payload references*, where a drifted copy silently GCs a live file. This
+    duplicates a *description of the stored file*, which nothing about GC correctness depends on — a stale name
+    is cosmetic. The failure modes are not comparable, so the earlier decision does not carry over.
+
+    Two consequences to get right: the metadata files live in the sidecar directory but are **not** sidecars, so
+    the sweep must skip them as candidates and delete each one along with the sidecar it describes; and because
+    storage is content-addressed, attaching identical bytes twice under different names collides. First write
+    wins — a later attach does not overwrite the original record.
+
+    This is what makes an **alphabetical (case-insensitive) sort by name** possible in the preview, which is the
+    sort that helps while everything is one flat unordered set. Semantic grouping is the better answer but is
+    gated on Nomic; see the corresponding `TODO_DEFERRED.md` item. Sidecars stored before this landed have no
+    metadata file and fall back to displaying the hash.
   - **Verified 2026-07-18 (sidecar GC is likewise unwired):** the GUI delete-branch path
     (`chat_controller.delete_subtree_callback` → `datastore.delete_subtree`) frees the tree nodes but never
     sweeps sidecar files, and `prune_unreferenced_sidecars` (mark-and-sweep, needs the datastore configured with

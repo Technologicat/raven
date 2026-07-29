@@ -246,10 +246,10 @@ image_store_max_megapixels = 1.0
 # sidecar IS the original in that case).
 store_original_image = True
 
-# Where per-thumbnail / bulk "Save a copy to staging" rescues land when cleaning up unreferenced sidecars
-# (the manual "Clean up & save" flow). User-level, not per-datastore — recovered images are user data, not
-# chat-specific.
-image_staging_dir = global_config.toplevel_userdata_dir / "staging" / "recovered_images"
+# Where per-item / bulk "Save a copy to staging" rescues land when cleaning up unreferenced sidecars (the manual
+# "Clean up & save" flow). User-level, not per-datastore — a recovered attachment is user data, not chat-specific.
+# Covers both kinds: an orphaned sidecar may be an attached image or an attached document.
+attachment_staging_dir = global_config.toplevel_userdata_dir / "staging" / "recovered_attachments"
 
 # Estimated per-image token cost, for the context-fill budget (a VLM image consumes non-trivial context that a
 # text-only tokens-per-character estimate can't see). Keyed by a lowercase substring matched against the

@@ -1592,6 +1592,28 @@ UX side.
 
 Raised during the 0.2.8 format work (2026-07-29, Juha).
 
+## Semantic grouping in the sidecar cleanup preview (once Nomic lands)
+
+The "Clean up & save" preview lists the orphaned sidecars it is about to delete. There is no grouping, because
+today there is nothing to group *by*: sidecars are content-addressed, so the set is globally unordered, the
+filenames are hashes, and the only other handle is a per-file provenance URL that may be absent. The preview
+therefore shows an arbitrary wall of tiles, and the recovery decision is per-file.
+
+The Nomic embedder (text and vision in one aligned space — see the format-symmetry item) changes what is
+possible here, because it gives *every* orphan a vector regardless of kind. An image and a PDF land in the same
+space, so the orphan set becomes clusterable as one collection rather than two.
+
+The payoff is not prettier tiles, it is a better decision. Laid out by cluster with a label per group, the
+dialog says "these nine are the plot figures from the thesis discussion, these three are the conference slides"
+instead of showing twelve unlabelled squares — and recovery moves to *per cluster*, which is the granularity a
+person actually thinks at when deciding what to keep. Visualizer already owns this machinery (HDBSCAN
+clustering plus keyword extraction for cluster labels), for the same reason and against the same problem.
+
+Worth revisiting when the Nomic migration lands, not before — everything here is downstream of the shared
+embedding space.
+
+Raised while implementing brief 03 D (2026-07-29, Juha's idea).
+
 ## HTML pages whose content is produced by running them
 
 `raven.common.docextract` reads HTML through `trafilatura`'s readability extraction, which looks at markup. A

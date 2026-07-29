@@ -5,7 +5,8 @@ Importantly, contains the HEAD node ID of the current chat, as well as some pers
 This module is shared between `minichat` (command-line app) and `app` (Raven-librarian GUI app).
 """
 
-__all__ = ["load", "save"]
+__all__ = ["sidecar_refs_in_payload",
+           "load", "save"]
 
 import logging
 logger = logging.getLogger(__name__)
@@ -20,6 +21,8 @@ from unpythonic.env import env
 
 from . import chattree
 from . import chatutil
+from . import imagestore
+from . import textfilestore
 
 # Default values for the persistent per-app state flags (the toggles that the Librarian apps
 # expose to the user). `load` uses these to fill any missing keys from an on-disk state file;
@@ -30,6 +33,24 @@ _DEFAULT_FLAGS = {"tools_enabled": True,
                   "speculate_enabled": False,
                   "avatar_speech_enabled": True,
                   "avatar_subtitles_enabled": True}
+
+# --------------------------------------------------------------------------------
+# Sidecar GC configuration
+
+def sidecar_refs_in_payload(payload: Dict) -> set:
+    """Return every sidecar filename referenced by one node `payload` — the GC mark interpreter for the apps.
+
+    The union of the two per-kind interpreters (`imagestore` for attached images, `textfilestore` for attached
+    documents), which is what a datastore holding both kinds needs. `chattree` drives the revision traversal and
+    calls this to read the references out of each payload, because payloads are opaque to it by design.
+
+    The union matters more than it looks. The mark phase deletes whatever it does not mark, so a datastore
+    configured with only one of the two interpreters would sweep away every sidecar of the other kind on the
+    first cleanup — silently, since the files are content-addressed and nothing else names them. Having one
+    function that both apps get by default is what keeps that from being an easy mistake to make.
+    """
+    return imagestore.sidecar_refs_in_payload(payload) | textfilestore.sidecar_refs_in_payload(payload)
+
 
 # --------------------------------------------------------------------------------
 # Helper functions
@@ -216,7 +237,8 @@ def load(llm_settings: env,
         logger.info(f"load: Loaded app state from '{mayberel_state_file}' (resolved to '{state_file}').")
 
     # Load datastore
-    datastore = chattree.PersistentForest(datastore_file, autosave=autosave)  # This autoloads; auto-persists iff autosave.
+    datastore = chattree.PersistentForest(datastore_file, autosave=autosave,  # This autoloads; auto-persists iff autosave.
+                                          sidecar_extractor=sidecar_refs_in_payload)
     with datastore.lock:
         if datastore.nodes:
             logger.info(f"load: Loaded chat datastore from '{mayberel_datastore_file}' (resolved to '{datastore_file}'). Found {len(datastore.nodes)} chat nodes in datastore.")
