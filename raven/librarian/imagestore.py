@@ -163,16 +163,27 @@ def store_image_as_sidecar(datastore: chattree.PersistentForest,
     else:
         out_format = pil_format if pil_format in ("JPEG", "PNG", "WEBP", "BMP", "TIFF") else "PNG"
 
-    primary_filename = datastore.store_sidecar(codec.encode(downsampled, out_format), out_format.lower())
     metadata = sidecarstore.base_provenance(url=provenance_url, source=provenance_source,
                                             content_type=content_type, fetched_at=fetched_at)
     metadata["stored_dimensions"] = [new_height, new_width]  # dims of the downsampled bytes actually on disk (= what goes on the wire)
     metadata["original_dimensions"] = [height, width]
     metadata["original_size_bytes"] = original_size_bytes
     if librarian_config.store_original_image:
-        # Keep the full-resolution original verbatim (metadata intact) as a second sidecar.
-        original_filename = datastore.store_sidecar(raw, pil_format.lower())
+        # Keep the full-resolution original verbatim (metadata intact) as a second sidecar. It gets a
+        # description of its own rather than sharing the primary's: it is a separate file in the directory, and
+        # one that no content-part ever points at, so without one it is the single most inexplicable thing in
+        # there — a large hash-named image referenced by nothing.
+        original_metadata = sidecarstore.base_provenance(url=provenance_url, source=provenance_source,
+                                                         content_type=content_type, fetched_at=fetched_at)
+        original_metadata["stored_dimensions"] = [height, width]  # this file *is* the original, at full size
+        original_metadata["role"] = "preserved_original"
+        original_filename = datastore.store_sidecar(raw, pil_format.lower(), metadata=original_metadata)
         metadata["original_sidecar"] = original_filename
+
+    # Stored last, so `metadata` is complete — `original_sidecar` included — by the time it is written beside
+    # the file. `store_sidecar`'s metadata is first-write-wins, so a later call could not fill it in afterwards.
+    primary_filename = datastore.store_sidecar(codec.encode(downsampled, out_format), out_format.lower(),
+                                               metadata=metadata)
 
     return env(part=chatutil.image_content_part(f"{sidecarstore.SIDECAR_SCHEME}{primary_filename}"),
                filename=primary_filename,

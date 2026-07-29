@@ -206,3 +206,51 @@ def test_prune_without_extractor_is_safe_noop(tmp_path):
     ds.store_sidecar(b"\x89PNG\r\n\x1a\n" + b"x" * 32, "png")
     assert ds.prune_unreferenced_sidecars() == []
     assert len(ds.list_sidecar_files()) == 1  # untouched
+
+
+# ---------------------------------------------------------------------------
+# Every stored sidecar describes itself
+#
+# Regression: the downsample path stored both its files with no metadata, so exactly the images big enough to
+# be worth recognizing later were the ones that became anonymous hashes on disk.
+# ---------------------------------------------------------------------------
+
+def test_verbatim_primary_is_described(datastore):
+    result = imagestore.store_image_as_sidecar(datastore, _png_bytes(64, 64),
+                                               provenance_url="file:///small.png",
+                                               provenance_source="user_attachment")
+    assert datastore.get_sidecar_metadata(result.filename) == result.sidecar_metadata
+
+
+def test_downsampled_primary_is_described(datastore):
+    result = imagestore.store_image_as_sidecar(datastore, _png_bytes(2000, 2000),
+                                               provenance_url="file:///big.png",
+                                               provenance_source="user_attachment")
+    stored = datastore.get_sidecar_metadata(result.filename)
+    assert stored is not None
+    assert stored["url"] == "file:///big.png"
+    # Written after the original, so the back-reference made it in -- the reason the primary is stored last.
+    assert stored["original_sidecar"] == result.sidecar_metadata["original_sidecar"]
+
+
+def test_preserved_original_is_described_too(datastore):
+    # The original is the one file in the directory that no content-part points at, so without a description of
+    # its own it is the least explicable thing there: a large hash-named image referenced by nothing.
+    result = imagestore.store_image_as_sidecar(datastore, _png_bytes(2000, 2000),
+                                               provenance_url="file:///big.png",
+                                               provenance_source="user_attachment")
+    original = datastore.get_sidecar_metadata(result.sidecar_metadata["original_sidecar"])
+    assert original is not None
+    assert original["role"] == "preserved_original"
+    assert original["stored_dimensions"] == [2000, 2000]  # this file is the full-size original
+    assert original["url"] == "file:///big.png"
+
+
+def test_every_sidecar_on_disk_has_a_description(datastore):
+    # The property the cleanup preview and a browsable sidecar directory both rest on.
+    imagestore.store_image_as_sidecar(datastore, _png_bytes(2000, 2000),
+                                      provenance_url="file:///big.png",
+                                      provenance_source="user_attachment")
+    undescribed = [name for name in datastore.list_sidecar_files()
+                   if datastore.get_sidecar_metadata(name) is None]
+    assert undescribed == []
