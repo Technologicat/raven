@@ -1543,9 +1543,9 @@ the server going away mid-session. It has been survivable because the person run
 the person who can read its log.
 
 Two things change that, and both are on the design track rather than hypothetical. An **avatar-first mode**
-(`briefs/lab-assistant-hci-sketch.md`) has no console to be sitting at and no log to fall back on, so an
+(`briefs/design/lab-assistant-hci-sketch.md`) has no console to be sitting at and no log to fall back on, so an
 unreported failure is indistinguishable from an assistant ignoring you. And anything **served to a phone**
-(`briefs/corpus-interrogation-sketch.md`) reports to a device with no access to the log at all.
+(`briefs/design/corpus-interrogation-sketch.md`) reports to a device with no access to the log at all.
 
 So the sweep is worth doing as its own pass rather than one dialog at a time — and worth doing before either of
 those tracks, which will otherwise each build half of it differently.
@@ -1609,7 +1609,7 @@ Raised during the 0.2.8 format work (2026-07-29, Juha).
 ## A no-avatar mode, with the chat tree in the panel the avatar vacates
 
 Raised 2026-07-29 (Juha), and the opposite end of the same axis as the avatar-first mode sketched in
-`briefs/lab-assistant-hci-sketch.md`. On the road, on a laptop, with no power outlet in sight, the avatar is
+`briefs/design/lab-assistant-hci-sketch.md`. On the road, on a laptop, with no power outlet in sight, the avatar is
 the most expensive thing on screen — it holds VRAM that the LLM would rather have, and it renders continuously,
 which is exactly what a battery objects to. So: a mode that does not load it at all.
 
