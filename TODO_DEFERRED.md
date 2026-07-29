@@ -1536,6 +1536,20 @@ the way the paperclip does on a text-only model.
 
 Discovered during brief 07 (2026-07-29, raised by Juha).
 
+**This is one instance of a general gap: Librarian's error handling is a standing TODO**, deferred in favour of
+prototyping. Beyond the LLM-failure path — which does surface properly, as a spoken and rerollable message
+since 2026-07-27 — most failures are not reported to the user at all: no model loaded, an unreadable document,
+the server going away mid-session. It has been survivable because the person running Librarian has so far been
+the person who can read its log.
+
+Two things change that, and both are on the design track rather than hypothetical. An **avatar-first mode**
+(`briefs/lab-assistant-hci-sketch.md`) has no console to be sitting at and no log to fall back on, so an
+unreported failure is indistinguishable from an assistant ignoring you. And anything **served to a phone**
+(`briefs/corpus-interrogation-sketch.md`) reports to a device with no access to the log at all.
+
+So the sweep is worth doing as its own pass rather than one dialog at a time — and worth doing before either of
+those tracks, which will otherwise each build half of it differently.
+
 ## No way for the user to attach a document from a URL
 
 The attach button takes a local file. There is no affordance for "attach *this URL* as a document to my

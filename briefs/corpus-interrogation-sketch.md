@@ -315,18 +315,19 @@ opens a page that is already pointed somewhere. The decision is made on the mach
 keyboard; the phone only supplies bytes. It also answers authentication without a separate mechanism, since the
 token in the scanned URL *is* the capability.
 
-**This cannot live in `raven-server`, and that is the structurally interesting part.** Everything Raven serves
-over HTTP today is GPU-bound inference, and the server is explicitly allowed to run on a different machine from
-the client. But an upload's destinations — the documents folder, the chat datastore — are **client-side**. So
-the upload endpoint belongs to Librarian, which would gain a server role it has never had, in a constellation
-whose client/server split has so far been "models on the server, everything else on the client".
+**Where the endpoint lives is genuinely unsettled, and is not this feature's question to answer.** The naive
+reading — an upload's destinations (the documents folder, the chat datastore) are client-side, so Librarian
+grows a server role — was proposed and **rejected** (Juha, 2026-07-29): it puts an HTTP listener in a client,
+and it is unclear which client, since Visualizer will want its own reasons to receive things and the
+constellation gains apps over time. That objection generalizes past uploads, and the whole question is worked
+out in `constellation-architecture-sketch.md`. Treat this feature as *waiting on* that, not as deciding it.
 
-Which makes it the first place Raven accepts a **write** over the network. The existing HTTP surface is
-documented as trusted-network-only with no encryption, and that posture was chosen for a read-only inference
-API. An endpoint that drops files into a watched folder is a different risk: the folder is *ingested*, so a
-write there reaches the retrieval index and, from there, the model's context. Minimum shape: off by default, a
-short-lived token bound to one destination, a size cap, and the same extension filter the attach dialog uses.
-Worth designing deliberately rather than inheriting the inference API's assumptions by default.
+What does belong here regardless of the answer: this is the first place Raven accepts a **write** from the
+network. The existing HTTP surface is documented as trusted-network-only with no encryption, and that posture
+was chosen for a read-only inference API. A write into a watched folder is a different risk, because the folder
+is *ingested* — so it reaches the retrieval index and from there the model's context. Minimum shape: off by
+default, a short-lived token bound to one destination, a size cap, and the same extension filter the attach
+dialog uses. Worth designing deliberately rather than inheriting the inference API's assumptions.
 
 Open beyond that: whether an upload to a scope triggers the usual watched-folder ingestion (it should, and then
 the INDEXING indicator is the feedback), what the phone sees on success, and whether a conversation-scoped

@@ -77,14 +77,26 @@ Worth doing the cheap version first and finding out whether the expensive one is
 
 ## What hiding the GUI costs, and has to be paid back
 
-**Every error has to become speakable.** Today failures surface as modal messageboxes and status indicators —
-the LLM backend is down, no model is loaded, a document could not be read, the server went away. In a mode
-where the GUI is not on screen, a silent failure is indistinguishable from an assistant that is ignoring you.
-So each error path needs a spoken form, and the avatar needs a way to look wrong — the expression machinery is
-already there and is the obvious carrier.
+**Every error has to become speakable, and this mode is what will finally force the error handling.** LLM
+failures are surfaced as a spoken, rerollable message as of 2026-07-27 — the hardest and most common case, done,
+with a pattern to copy. The rest of the failure surface mostly **does not surface at all**: no model loaded, a
+document that could not be read, the server gone away. Librarian's error handling is a standing TODO, deferred
+in favour of prototyping, and that has been survivable only because a developer at the console can read a log.
 
-This is a real constraint on the mode rather than a polish item: it means the mode cannot ship covering only
-the happy path, because the happy path is the half that already works without it.
+So the honest framing is not "convert the existing GUI errors to speech" — there is much less to convert than
+it looks. It is that an avatar-first mode has no log to fall back on and no console to be sitting at, so a
+failure that goes unreported is indistinguishable from an assistant ignoring you. The mode does not merely
+*need* error handling; it is the thing that makes its absence intolerable, and therefore the occasion to do it.
+
+**The avatar looking wrong is a separate lever from the avatar saying so, and only the first is automatic.**
+Expression comes from a BERT classifier over the message text (`update_emotion_from_text`, run on streaming
+paragraphs and again on the final text). So an error surfaced *as a message* already gets some expression — but
+whichever the classifier happens to read off the wording, which is not the same as a deliberate one. Making the
+avatar visibly concerned on failure means setting the emotion explicitly on those paths rather than trusting
+the classifier to infer distress from a sentence about an HTTP timeout.
+
+Still a constraint on the mode rather than a polish item: it cannot ship covering only the happy path, because
+the happy path is the half that already works without it.
 
 **Not everything should be voice.** The GUI stays on the console deliberately. Reading a long reply, comparing
 two branches, checking where a claim came from, editing a message — these are better with a screen and a
