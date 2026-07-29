@@ -235,6 +235,59 @@ same NLP machinery, so the loop closes:
 
 Which suggests the result belongs in *both* apps, not only in whichever one launched it.
 
+## One corpus, several views — and the views become addressable
+
+Added 2026-07-29, from the session that finished the document-format work. It belongs in this sketch rather
+than in a TODO item because it changes what the thing being built *is*, and because two of the constraints
+above turn out to be describing it without saying so.
+
+**"Not just papers" became literal.** The document database now ingests office documents and saved web pages
+alongside plain text and PDF. The named targets from the talk — internal company reports, patents, news
+articles — mostly arrive as `.docx` and saved HTML, not as BibTeX. The constraint was always stated; as of now
+nothing in the ingestion path contradicts it.
+
+**But the two apps still read different corpora, and that is the split to close.** Visualizer imports `.bib`
+files; Librarian reads the document database. They are two collections that happen to share a machine. The
+importer's input boundary is a historical accident — it started with Web of Science exports, one entry per
+paper — and what it actually wants as its source is the same document database Librarian searches, scoped.
+
+That is not a convenience. Look at step 1 of the workflow above: *load ten thousand studies into Visualizer*.
+Under one corpus, that step stops being an import and becomes a **view** — drop the files in a folder, and both
+the map and the chat already see them. The handoff named under prerequisites ("Visualizer↔Librarian
+integration") shrinks from moving data between apps to naming a subset both are already looking at. And the
+plain-language version of the whole thing gets much easier to say: *put your documents in a folder, get a map
+of them, then ask questions about the parts you care about.*
+
+**Then the views become things you can ask for.** Once the map, the retrieval hits, and any other
+show-me-this-set surface are the same machinery pointed at different subsets, each is a plausible tool call —
+and Librarian already has tool-calling and Whisper STT on the mic button. *"Show me the map"*, *"search my
+documents"* are not descriptions of features at that point; they are utterances. What is missing today is not
+the interface but something for such a tool to point at, which is exactly what the shared corpus supplies.
+
+This is where this sketch's track and the **digital lab assistant** track named under "One angle among several"
+stop being siblings and start being one thing. The interrogation flow *is* a view-control problem — select a
+subset, ask it something, get a handle back — and the assistant's HCI is how you address a view without
+hunting for a button. Worth noting they were listed as separate directions above; that reads, in hindsight, as
+having described one system from two sides.
+
+**Corollary, decided rather than speculative: Visualizer is the constellation's surface for looking at a set.**
+Settled 2026-07-29 for a concrete case — the sidecar-cleanup preview wants semantic grouping once there is a
+shared embedding space, and building a clustering view inside a Librarian dialog would be a second, worse copy
+of an app already shipped. Stated generally: a new need to show a set of items semantically routes to
+Visualizer rather than growing another GUI. That is a real constraint on future design, and a cheap one to
+honour early and expensive to retrofit.
+
+One consequence to plan for. A view used for *choosing* — mark these for deletion, interrogate those — is not
+the view Visualizer was built for, which inspects a map. Accumulating a working set across clusters and acting
+on it is a different selection model, so expect the selection UX to want a revisit when the first choosing-view
+lands, and budget it rather than discover it.
+
+**Status: all of it gated on the Nomic migration**, which is where a single embedding space for text and images
+comes from; today the two apps embed separately and there is no shared space to place both in. Recorded as
+items in `TODO_DEFERRED.md` (the importer's input boundary; the AI driving the views; the cleanup view's home;
+Visualizer image support). The importer change is a *direction*, not a decision — it revisits what the
+importer's input is and deserves a brief of its own. The Visualizer-as-looking-surface corollary is a decision.
+
 ## Prerequisites already on the list
 
 None of this is new construction from zero; three existing `TODO.md` items are this one item seen from
@@ -242,8 +295,13 @@ different sides.
 
 - **Document scopes** — the load-bearing one. "These two hundred" has to be *nameable* before it can be
   interrogated, and the scope key for a Visualizer-derived selection is the dataset's file path. Every
-  other part of this waits on that.
-- **Visualizer↔Librarian integration** — the handoff itself, over the local network.
+  other part of this waits on that. Note that scoping is doing double duty: it is what makes a selection
+  addressable *and* what the importer needs in order to map one topic rather than the whole library.
+- **Visualizer's importer reading the document database** (added 2026-07-29, `TODO_DEFERRED.md`) — the
+  prerequisite that was hiding. Without it "the corpus" means two different collections depending on which app
+  is asked, and every handoff below is a data transfer rather than a change of view. See the section above.
+- **Visualizer↔Librarian integration** — the handoff itself, over the local network. Smaller than it looks once
+  the previous item lands: naming a subset both apps already see, rather than moving documents between them.
 - **Save/load selection for reproducible reports** — the same selection, persisted, is what makes a result
   citable rather than a one-off.
 
