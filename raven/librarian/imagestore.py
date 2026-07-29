@@ -89,7 +89,8 @@ def store_image_as_sidecar(datastore: chattree.PersistentForest,
     `provenance_url`: the `url` recorded in the provenance entry — where the image came from. For a
                       user-attached local file, `"file:///<absolute_path>"`; for a future paste/fetch,
                       the `https://...` source. Recorded as provenance only; never used as a live reference.
-    `provenance_source`: the categorical pathway — `"user_attachment"`, `"paste_url"`, or `"mcp:<server>"`.
+    `provenance_source`: the categorical pathway; see `sidecarstore.base_provenance` for the vocabulary.
+                         `"user_attachment"` is the only value anything currently emits.
     `content_type`: original MIME type; sniffed from the image if `None`. Recorded verbatim even when the
                     stored primary is a re-encoded downsample (it documents the *original*).
     `fetched_at`: materialization timestamp string; current local time if `None`.

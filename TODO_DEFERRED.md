@@ -1536,6 +1536,39 @@ the way the paperclip does on a text-only model.
 
 Discovered during brief 07 (2026-07-29, raised by Juha).
 
+## No way for the user to attach a document from a URL
+
+The attach button takes a local file. There is no affordance for "attach *this URL* as a document to my
+message", even though the storage layer was designed expecting one: `sidecarstore.base_provenance` names
+`"paste_url"` as a `provenance_source`, and nothing in the tree emits it.
+
+What exists today is not a substitute. A user who pastes a URL into the chat is relying on the *model* to
+decide to call `webfetch` — which needs tools enabled, needs the model to actually make that call, fetches
+again on every reroll, stores nothing locally (so the chat does not reload offline the way an attachment
+does), and contributes nothing to the context-fill estimate before it happens. An attachment is a different
+thing: pinned content, materialized once, owned by the message.
+
+The work splits in two, and the halves are not the same size:
+
+- **An article page.** Nearly free — `client.api.webfetch_fetch(url)` already returns `{"content": markdown,
+  "url", "title", "spaSuspected"}` with the server doing the two-tier fetch, SSRF and scheme checks, and URL
+  rewriting. Store `content` as a `.md` sidecar, `provenance_url=url`, `provenance_source="paste_url"`, and it
+  arrives as a document chip like any other. Most of the cost is GUI: where the URL is entered, and what the
+  chip shows while the fetch is in flight.
+- **A file behind a link** — an arXiv PDF, a `.docx` on a course page. This one has no plumbing at all.
+  `webfetch` is built to return *extracted text*, so there is no path that hands back raw bytes, and pointing
+  it at a PDF gets a readability pass over binary rather than a stored document. Doing it properly means a new
+  server endpoint that returns bytes plus content type, under the same SSRF and scheme checks, with a size cap
+  (a fetch the user initiated is still a fetch of something unseen) and dispatch on the returned content type
+  rather than on the URL's apparent extension. Worth noting that for an academic user this is probably the
+  more valuable half — a paper is usually a PDF behind a link, not an article page.
+
+Doing only the first half is defensible and would close most of the everyday gap, but it should be a deliberate
+choice rather than an accident of which one was easier — the button says "attach from URL" either way, and a
+user whose arXiv link silently produces a readability pass over PDF bytes has been misled by their own tool.
+
+Raised during the 0.2.8 format work (2026-07-29, Juha).
+
 ## HTML pages whose content is produced by running them
 
 `raven.common.docextract` reads HTML through `trafilatura`'s readability extraction, which looks at markup. A

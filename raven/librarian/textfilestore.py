@@ -76,7 +76,8 @@ def store_file_as_sidecar(datastore: chattree.PersistentForest,
     `name`: the original filename (e.g. `"report.pdf"`), kept for display and for the wire header, and used to
             derive the sidecar's file extension so the extractor later dispatches by type.
     `provenance_url`: the `url` recorded in provenance — for a user-attached local file, `"file:///<abspath>"`.
-    `provenance_source`: the categorical pathway — `"user_attachment"`, `"paste_url"`, or `"mcp:<server>"`.
+    `provenance_source`: the categorical pathway; see `sidecarstore.base_provenance` for the vocabulary.
+                         `"user_attachment"` is the only value anything currently emits.
     `content_type`: original MIME type; derived from the extension if `None`.
     `fetched_at`: materialization timestamp string; current local time if `None`.
 
