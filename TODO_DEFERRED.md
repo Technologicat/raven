@@ -1623,6 +1623,12 @@ mode actually varies.** Avatar-first fills the window with the character; the st
 toggles; road mode shows the tree. That is one mechanism with a swappable panel, not three layouts — and
 deciding it now is much cheaper than discovering it after the second one is hardcoded.
 
+The classic mode makes that concrete rather than merely tidy: there the chat tree is **toggleable, overlaying
+the avatar panel exactly** when open. So the same rect has alternative occupants at runtime, and the no-avatar
+mode is the degenerate case where one of them is never constructed at all. Which also means the classic mode
+gets a slice of this item's benefit for free, if the avatar is *paused* while covered rather than left
+rendering frames nobody can see.
+
 **The view itself is not tracked here** — it is `TODO.md`'s "Nonlinear chat view / chat graph editor", which
 already carries the mechanism (generate the layout ourselves, no GraphViz) and the constraints (limit visible
 depth; the full tree will not render at interactive FPS). This item is only about the *mode*, and about the
