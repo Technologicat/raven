@@ -1625,6 +1625,34 @@ Substantial enough to deserve a brief rather than an incremental change — it r
 
 Raised during the 0.2.8 format work (2026-07-29, Juha).
 
+## Let the AI drive the constellation's own views (tools, and then voice)
+
+Falls out of the item above, and is easy to miss because it looks like prose: *"show me the map"*, *"search my
+documents"*, *"show me what cleanup is about to delete"* are not descriptions of features, they are things a
+person would **say**. Once the apps share one corpus in one embedding space, each is a plausible tool call.
+
+What makes this cheap rather than speculative is that the hard parts already exist and are load-bearing
+elsewhere. Librarian has tool-calling with validation and dispatch (`websearch`, `webfetch` are the working
+examples). It has Whisper STT on the mic button, and an avatar the user is already addressing. What is missing
+is not the interface — it is that there is currently nothing for such a tool to *point at*, because the map and
+the chat do not share a corpus. That is exactly what the importer item above changes.
+
+The shape, roughly: a small family of view-control tools the model can call — open a map of a named scope,
+show the retrieval hits for a query as a map rather than a list, show the cleanup preview. Each is a thin call
+onto machinery that would already exist; the tool layer is what turns it from a button someone has to find into
+something they can ask for.
+
+Worth noting *why* this is more than a gimmick, since "voice control" usually is one. The scope names are the
+user's own folder names, the queries are their own words, and the objects are their own documents — so the
+utterance is short, unambiguous, and about material the model already has in context from the conversation that
+prompted it. That is the narrow case where speech beats a mouse, rather than the broad case where it loses.
+
+Sequenced after the importer/corpus work, not before: without the shared corpus there is nothing to point at,
+and a tool that opens an empty map is worse than no tool.
+
+Raised during the 0.2.8 format work (2026-07-29, Juha's observation, from noticing that the phrases were
+commands).
+
 ## Semantic grouping in the sidecar cleanup preview (once Nomic lands)
 
 The "Clean up & save" preview lists the orphaned sidecars it is about to delete. There is no grouping, because
