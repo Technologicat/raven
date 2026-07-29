@@ -67,6 +67,16 @@ Legacy `flake8rc` also present (used by Emacs flycheck, not by CI or CC).
 
 1. **Lint after every code change**: `ruff check <changed .py files>`. Do this before review, testing, or committing. Catches unused imports and dead names early.
 
+### CHANGELOG layout: group by component
+
+Raven ships many separate user-facing apps, so within each of **Added** / **Changed** / **Fixed**, entries are grouped under an italic component header and the per-entry `*Raven-<app>*:` prefix is dropped — the header carries it. Entries then read as continuations of the header, so they start lowercase.
+
+Component order is fixed, so a reader learns where to look: *Raven-librarian*, *Raven-visualizer*, *Raven-server*, *Raven-avatar*, *Raven-cherrypick*, *Raven-arxiv-download*, then *Constellation-wide* for anything cross-cutting (install, device strings, CLI options shared by every app, client-side HTTP behavior). Omit a component that has no entries in that section. An entry spanning two tools goes under the primary one and names the other inline ("with `raven-wos2bib`: …").
+
+**File a new entry into its group when you write it.** The failure this prevents: 0.2.8 accumulated 58 flat entries — 24 of them opening with `*Raven-librarian*:` — before anyone noticed the prefix was a heading doing prose duty, and regrouping after the fact is a large, error-prone reshuffle that has to be verified entry by entry.
+
+This is Raven-local, not fleet-wide: elsewhere in the fleet a project *is* the component, so a header would be noise. Wording rules (density, nesting, users-not-commits, "was it broken in the last tagged release?") are fleet-wide and live in the `changelog` skill.
+
 ### Live GUI testing on a shared desktop
 
 Raven's apps are DPG, so verifying GUI work means running them — and the agent and the human are on the *same X session*. Keyboard focus is therefore a shared, single-holder resource: a window that maps or gets activated takes focus away from wherever the human is typing, and their next keystrokes land in the app instead of their editor or terminal. (Observed the obvious way: a launched Librarian window swallowed a half-typed message and its Enter, which sent an empty chat turn.)
