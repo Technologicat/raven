@@ -5,7 +5,7 @@ Multi-stage downsampling for large reduction ratios (>2×): repeatedly halve
 with a Lanczos strided convolution, then a final general Lanczos pass for the
 remaining ratio. This keeps the kernel compact while maintaining full quality.
 
-The kernel order *a* (default 3) is configurable.  Higher orders give better
+The kernel order *a* (default 4) is configurable.  Higher orders give better
 stopband attenuation (less aliasing) at the cost of slightly more computation
 and ringing on sharp edges:
 
@@ -178,7 +178,7 @@ def resize(tensor: torch.Tensor,
            order: int = DEFAULT_ORDER) -> torch.Tensor:
     """Resize a ``(B, C, H, W)`` tensor using Lanczos interpolation.
 
-    *order* controls the kernel size (default 3).  Higher values give sharper
+    *order* controls the kernel size (default 4).  Higher values give sharper
     frequency cutoff at the cost of more computation and ringing:
 
       - 3: industry standard, 12 taps per halving step.

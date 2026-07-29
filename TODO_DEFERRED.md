@@ -3,6 +3,132 @@
 New items go at the **top**. (Both ends were in use up to 2026-07-27, which is how the two halves of the same
 Librarian session ended up ~1000 lines apart.)
 
+## The avatar upscaler offers bilinear and bicubic, but not Lanczos
+
+`raven.common.video.upscaler.Upscaler`'s `quality` parameter takes `"low"` / `"high"` (Anime4K model sizes)
+or `"bilinear"` / `"bicubic"` (bypass Anime4K entirely, straight to `torch.nn.functional.interpolate`).
+`raven.common.image.lanczos` belongs in that second group and is missing from it — it is GPU-enabled, already
+a Raven dependency, and takes `(B, C, H, W)` in and out, which is exactly the shape the bypass branch already
+juggles with its `.unsqueeze(0)` / `[0]`. Its docstring states it works for both directions, so nothing about
+the upscaling use is out of scope for it.
+
+Two things to get right in the bypass branch (`Upscaler.upscale`):
+
+- **Alpha stays bilinear.** The branch already splits RGB from alpha for bicubic, because bicubic's negative
+  lobes ring at silhouette edges. Lanczos is a windowed sinc with *several* lobes, so it has more negative
+  lobe than bicubic, not less — the same reasoning applies with more force. What changes is that the split's
+  hardcoded `mode="bicubic"` has to become the selected filter, and the `c == 3 or quality == "bilinear"`
+  fast path stays as it is.
+- **`order` needs a home.** `lanczos.resize` takes an `order` (kernel size / ringing trade-off) that
+  `F.interpolate` has no equivalent for. Either pick `DEFAULT_ORDER` and say so, or expose it — but do not
+  let it become a silent hardcode in a function whose whole job is offering the user a quality choice.
+
+The real cost is not the code but the **duplicated option list**: the valid values appear in `Upscaler`'s
+validation and docstring, `raven/avatar/settings_editor/app.py:625` (hardcoded list) and `:477`,
+`raven/server/config.py:278`, `raven/librarian/config.py:470`, and `raven.client.mayberemote`'s docstring —
+several of them carrying the same hand-maintained "what each value means" comment. Adding one entry means
+editing all of them, and the next addition will too. Worth considering whether the list should have a single
+source of truth while touching them anyway.
+
+Note also that `quality` already mixes two different axes — model size for Anime4K, filter choice for the
+bypass. Lanczos joins the second axis, so it fits the existing shape; it does make the conflation more
+visible, but untangling it is a separate (and API-breaking) question.
+
+Raised by Juha (2026-07-29).
+
+## Browse *all* attachments in the datastore, not just the orphaned ones
+
+The cleanup dialog (`raven/librarian/cleanup_dialog.py`) turned out to be a decent attachment browser that
+happens to be filtered to orphans. Point the same machinery at `list_sidecar_files()` instead of
+`list_unreferenced_sidecars()` and it browses the whole sidecar directory. Two use cases, and the second is
+the one that recurs:
+
+- A human-readable view of `<datastore>.images/`, which a file manager cannot give: the grid shows titles
+  rather than SHA-256 filenames, and folds a downscaled image and its preserved original into one item.
+- *"I'm sure I attached paper X at some point, but which chat was it?"* — which the file manager cannot
+  answer at all.
+
+**Most of it is already built.** `cleanup.describe_sidecar`, the companion fold that merges original with
+downscaled, `SidecarEntry.archival_filename`, the thumbnail grid, and click-to-open-the-original all work off
+a list of filenames and do not care where that list came from. What is genuinely new is one datastore method
+and one labelling decision.
+
+**The datastore side is one method.** `PersistentForest._referenced_sidecars` already walks every revision of
+every node, calls the `sidecar_extractor`, and discards *which* node each hit came from. Collect it instead
+and you have `sidecar_reference_map() -> dict[str, set[str]]`; the existing mark phase becomes a projection
+of that map, and `excluding_nodes=` a filter on it. Orphans then fall out as the empty-set entries, so the
+browser can show them inline, marked, with the same rescue/delete affordances the cleanup dialog gives them
+— one code path, not a parallel one.
+
+**Navigating to the message is likewise assembled from parts that exist.** A referencing node names its
+place by walking up; `chat_controller.py:924`'s `descend` already picks a leaf below a given node
+(it is what the branch switcher uses); `DPGLinearizedChatView.scroll_view(scroll_target_node_id=...)` already
+scrolls to a message. Three wrinkles decide the UX, and only the first is obvious:
+
+- **"Which chat" is not a well-formed question** — see the labelling paragraph below. What the picker is
+  really choosing between is *labelled subtrees*, and two branches of one root can be two of them. Once the
+  labels are right this collapses to one level of ambiguity rather than two; auto-descend then resolves only
+  what is left *below* the chosen label.
+- **A reference can live in an old revision.** Sidecar references are collected per revision, so an
+  attachment may be referenced by a superseded revision of a node whose current revision no longer shows it.
+  Scrolling there lands the user on a message that visibly does not contain the thing they searched for.
+  Either scope the map to current revisions, or say so in the UI — but decide deliberately rather than
+  discovering it in testing.
+- **Orphans have no chat to open**, which is exactly why they get the delete button instead. The affordance
+  set is per-item, not per-dialog.
+
+**The labelling is the real work, and it is wanted elsewhere anyway.** Nothing in `chattree` or `chatutil`
+labels a chat today — a picker listing three of them by node UUID is useless, so this item is gated on it.
+But "give each chat a title" is the wrong shape, and the branching history is why: **a label on the root
+labels the whole multiverse**, so every branch under it inherits one name — which is precisely the case the
+picker exists to tell apart.
+
+Git has the answer already, and it is worth taking wholesale: labels attach to **nodes**, sparsely, and
+"where am I" is resolved by *reachability* rather than by a field on the thing you are in. Tags name commits;
+branch names name tips; a commit with no name of its own is described by what it is reachable from. The chat
+analogue: a label on any node applies to its subtree until a deeper label overrides it, so a node's
+displayed name is its **nearest labelled ancestor** (plus the message itself, when that is the finer
+distinction the user needs). The root carries an automatic label so there is always a fallback, and a branch
+point is exactly where a user would want to add one by hand.
+
+The tiering then has to change with it. `chatutil.document_label`'s *shape* still applies — use the good
+source when there is one, fall back to something dug out of the content — but the tiers must be computed
+**at the labelled node**, not at the root:
+
+- Stored label, if a human set one. This is the one that matters; the rest exist so the list is usable before
+  anyone has.
+- Auto-generated from **what diverged at that node**, not from the opening turns. Two branches that split at
+  message 20 share every one of those turns, so an opening-turns summary hands them identical names — worst
+  exactly where the picker is needed. The divergent subtree is what distinguishes them, so that is what the
+  generator has to read.
+- The node's own message, truncated.
+
+Store the label on the node, make it editable, and the chat tree browser gets the same field for free.
+
+**One dialog or two** is open. The cleanup dialog's safety framing (dry run, then an explicit destructive
+commit) does not belong on a browse-everything window, so the likely answer is two thin dialogs over one
+shared grid widget rather than one dialog with a filter dropdown.
+
+Raised by Juha (2026-07-29), right after the cleanup dialog landed.
+
+## The attachment sidecar directory is called `<datastore>.images/`
+
+The name dates from when images were the only kind of attachment; it now also holds PDFs and text documents,
+and will hold office formats. It reads as "this was not thought out in advance", and it costs discoverability
+for anyone poking around the datastore looking for *attachments*.
+
+`chattree.py`'s comment above `_get_sidecar_dir` argues for keeping it: renaming would strand the sidecars of
+every existing datastore, and it is a directory name rather than a description. The first half is the real
+objection, and it is answerable — a rename-if-present at load time is a small, one-shot migration. Note it
+does not fit in `_upgrade`, which migrates the loaded *nodes* dict and knows nothing about the filesystem, so
+it needs its own step in the load path (and the payloads need no change at all: `sidecar:<filename>` URLs
+name the file, not the directory).
+
+Worth doing together with the browser item above, since that one puts the directory in front of users for the
+first time.
+
+Raised by Juha (2026-07-29), while finishing brief 03.
+
 ## Move the avatar backdrop onto `image.utils.fit_cover`
 
 `DPGAvatarRenderer.configure_backdrop` (`raven/client/avatar_renderer.py`) scales its backdrop with PIL —
@@ -15,15 +141,24 @@ first, then scale").
 against PIL's C implementation — a wash at best, because `configure_backdrop` is client-side and Librarian's
 client does no local GPU work by design. Real acceleration means doing the resize *server-side*, in `imagefx`.
 
-That is cheaper than it first looks: the backdrop already ships its pixels to `imagefx` for the blur, so a
-resize filter joins a round trip that is already happening. Two details decide whether it actually pays:
+**That is more expensive than it first looks, because the blur round trip cannot carry the resize.** The two
+jobs are separate endpoints of the `imagefx` module, not two filters in one chain:
 
-- The blur is **conditional** (`if new_blur_state:`). With blur off there is no server call today, so a
-  delegated resize would *add* a round trip to the unblurred case rather than share one.
-- The resize currently runs **before** the blur, so it is the downscaled image that goes over the wire.
-  Delegating it inverts that — full-size pixels out, small ones back — which is more bytes for a large
-  backdrop, against a GPU resize that is nearly free. Whether that trade is worth it is a measurement, not
-  an argument.
+- `/api/imagefx/process` runs the postprocessor chain, and is **resolution-preserving by construction** —
+  `postprocessor.render_into(image_rgba)` writes into the tensor it was given. There is no chain entry that
+  could change the output size, so a "resize filter" is not a thing that can be added to the blur call.
+- `/api/imagefx/upscale` is where resolution changes live, and it is backed by Anime4K — an *upscaler*. A
+  backdrop cover-fit is usually a **downscale** (a large wallpaper into a window), so this is likely the
+  wrong tool for the job rather than merely a second call.
+
+So server-side resize means either two round trips (send, resize, receive, send again, blur, receive) or a
+new Lanczos resize endpoint alongside the two — and the blur is **conditional** (`if new_blur_state:`), so in
+the unblurred case there is no server call today to piggyback on at all. Any of those is a real piece of
+work, not a redirect of an existing one.
+
+Then there is the byte cost, which points the same way. The resize currently runs **before** the blur, so it
+is the already-downscaled image that goes over the wire; delegating inverts that — full-size pixels out,
+small ones back.
 
 None of this is urgent: the resize fires on a window resize, never in a hot loop.
 
