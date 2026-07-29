@@ -92,7 +92,8 @@ pulling on different parts of the same tech:
   **co-researcher** (in the `substrate-independent` glossary sense — a dual to a researcher, different
   skills and different blind spots, a collaborator rather than a subordinate), with the avatar as an
   on-site natural-language interface, literature monitoring with novelty detection, and lab-equipment
-  status by asking.
+  status by asking. **Worked out separately in `lab-assistant-hci-sketch.md`** (2026-07-29) — and see the
+  section below on the views becoming addressable, which is where the two tracks turn out to be one thing.
 - **Trend and network tracking in research literature** — the Visualizer side, half-built.
 - Whatever else the work turns up. Research as usual.
 
