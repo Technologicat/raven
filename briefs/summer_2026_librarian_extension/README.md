@@ -37,5 +37,8 @@ different reasons:
   Seth Herd on language model cognitive architectures.
 
 Recording the reasons rather than a rank, because "most interesting" and "most useful next" are different
-orderings and both are legitimate. The three above are ordered for closure; these are not yet ordered at
-all.
+orderings and both are legitimate.
+
+**05 goes first of the three** (decided 2026-07-29), on size: it is likely smaller than either 04 or 06,
+and the point of this whole ordering is to close briefs faster than new ones open. 04 and 06 remain
+unordered against each other.

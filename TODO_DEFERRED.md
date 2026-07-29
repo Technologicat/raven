@@ -3,6 +3,32 @@
 New items go at the **top**. (Both ends were in use up to 2026-07-27, which is how the two halves of the same
 Librarian session ended up ~1000 lines apart.)
 
+## TODO.md goes stale because nothing in the workflow makes anyone visit it
+
+The two lists have different failure rates and the reason is mechanical rather than a matter of discipline.
+`TODO_DEFERRED.md` stays fresh because the workflow *writes to it as a side effect of doing other work*:
+there is a trigger (notice something unrelated mid-task, append it), a closing ritual (resolved items are
+deleted), and a reminder (mention new entries after committing). It is maintained by accident.
+
+`TODO.md` has none of those. It is a plan rather than a byproduct, so nothing forces a visit, and items rot
+quietly. Verified tonight: the BibTeX umlaut item had been fully implemented for some unknown length of
+time and still sat there marked `[Verify]`, while the RAG-by-tool-call item on the same page was accurate —
+because that one pointed at a brief, and closing the brief was a ritual that made someone read it.
+
+That contrast suggests the fix rather than more diligence. **Briefs do not go stale, because closing one is
+an event.** So candidate directions, in rough order of how much they change:
+
+- Make TODO.md items *point at* briefs wherever a brief exists, so the brief's status line is the truth and
+  TODO.md degrades to an index. Cheap, and already how the accurate items behave.
+- Give the `[Verify]` marker a ritual — a periodic sweep that actually runs the checks. Tonight showed
+  these markers work exactly when someone runs them and never otherwise.
+- Reconcile TODO.md as part of closing a brief, explicitly, the way `CHANGELOG.md` is written alongside a
+  fix rather than reconstructed at release time.
+
+Worth thinking about before the list grows further; not worth a big refactor of the file itself.
+
+Discovered while closing brief 10 and finding a stale item next to an accurate one (2026-07-29).
+
 ## EU AI Act Article 50 (transparency) compliance
 
 `briefs/ai-act-article-50-summary.md` has the analysis; Commission guidelines were adopted 20 July 2026 and the
