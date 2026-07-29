@@ -170,6 +170,7 @@ The document database accepts **plain text** documents, **PDFs**, and **office d
 - **Plain text.** Beside classical plain text `.txt`, markup languages that LLMs understand are fine - e.g. `.md`, `.bib`, and `.tex`.
 - **PDF.** Born-digital PDFs, i.e. those with a real text layer, have their text extracted automatically on import.
 - **Office documents.** Word (`.docx`), PowerPoint (`.pptx`), and their LibreOffice/OpenDocument counterparts (`.odt`, `.odp`). Tables are read in place, so a value stays next to its label; text inside grouped shapes on a slide is read too, and so are presenter notes - on a lecture deck, the notes are often where the actual argument lives. The legacy binary formats (`.doc`, `.ppt`) are *not* supported, as reading those would mean calling out to a separate converter program.
+- **Web pages** (`.html`, `.htm`) saved to disk. Navigation, sidebars and footers are stripped, leaving the article - the same readability extraction the AI's `webfetch` tool uses on live pages, so a saved page reads like a fetched one. The page's `<title>` is kept as a heading, since a filename downloaded off the web often names nothing.
 
 The same list applies to files you **attach to a chat message**, and it is the same code doing the reading in both cases - so anything you can drop into the document database, you can also attach to a message, and vice versa. The full list of recognized file extensions is configured in [`raven.librarian.config`](../librarian/config.py) as `llm_docs_exts`.
 
@@ -177,6 +178,7 @@ Everything above is read for its **text layer only**. Whatever a document says t
 
 - A **scanned or image-only PDF** has no text layer, so nothing is extracted and it is skipped. To import one, run it through OCR first — e.g. [`ocrmypdf`](https://github.com/ocrmypdf/OCRmyPDF) (`ocrmypdf --force-ocr input.pdf output.pdf`) — to add a text layer.
 - A **slide deck that is mostly diagrams** imports only its titles and whatever prose it has. Its notes, if it has any, are often the more useful half in this situation.
+- A **web page that builds its content with JavaScript** has nothing to read in its markup, so it imports as empty. This covers both the saved shell of a dynamic site (whose content was never in the file - fetch the URL with the AI's `webfetch` tool instead) and a self-contained single-file app that carries its data inline as a script (whose content *is* in the file, but in a form we do not currently read). Nothing here runs a page's scripts: putting a file in the documents folder must never be enough to make it execute.
 
 **To manage the content of the document database**, use a file manager: just put your document files in the document database directory. By default, *Librarian* looks for documents in `~/.config/raven/llmclient/documents`. The path can be configured in [`raven.librarian.config`](../librarian/config.py).
 

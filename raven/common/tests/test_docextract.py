@@ -29,7 +29,8 @@ def test_supported_extensions_is_the_full_advertised_set():
     # extension here would break that workflow at the far end of the constellation, where nothing points back.
     assert set(docextract.supported_extensions()) == {".txt", ".md", ".rst", ".org", ".bib", ".tex",
                                                       ".pdf",
-                                                      ".docx", ".pptx", ".odt", ".odp"}
+                                                      ".docx", ".pptx", ".odt", ".odp",
+                                                      ".html", ".htm"}
 
 
 def test_supported_extensions_has_no_duplicates():
@@ -49,6 +50,8 @@ def test_supported_extensions_has_no_duplicates():
     ("deck.pptx", True),
     ("notes.odt", True),
     ("deck.odp", True),
+    ("saved-page.html", True),
+    ("saved-page.htm", True),
     ("sheet.xlsx", False),  # spreadsheets are a separate problem class; see TODO_DEFERRED.md
     ("legacy.doc", False),
     ("photo.png", False),
@@ -235,6 +238,89 @@ def test_odp_slides_in_order(tmp_path):
     p = tmp_path / "deck.odp"
     p.write_bytes(make_odp([["Slide one title", "point a"], ["Slide two title"]]))
     assert docextract.extract_text(p) == "Slide one title\npoint a\nSlide two title"
+
+
+# ---------------------------------------------------------------------------
+# HTML
+# ---------------------------------------------------------------------------
+
+# Long enough that a readability extractor scores the paragraphs as body content rather than as page chrome.
+_ARTICLE_HTML = b"""<!DOCTYPE html><html><head><title>On Alignment</title></head><body>
+<nav>Home | Archive | About</nav>
+<article>
+<p>The first paragraph makes a claim about optimization pressure and how it interacts with proxy
+measures over long horizons.</p>
+<p>The second paragraph elaborates, at sufficient length that a readability extractor treats it as
+real body content rather than as chrome.</p>
+</article>
+<footer>Copyright 2026</footer></body></html>"""
+
+
+def test_html_extracts_body_and_drops_chrome(tmp_path):
+    p = tmp_path / "post.html"
+    p.write_bytes(_ARTICLE_HTML)
+    text = docextract.extract_text(p)
+    assert "optimization pressure" in text
+    assert "Home | Archive | About" not in text  # nav
+    assert "Copyright 2026" not in text          # footer
+
+
+def test_html_title_is_recovered(tmp_path):
+    # Readability extraction drops `<title>`, and on a saved page it is often the only thing naming the
+    # document — filenames off the web are routinely useless.
+    p = tmp_path / "post.html"
+    p.write_bytes(_ARTICLE_HTML)
+    assert docextract.extract_text(p).startswith("# On Alignment")
+
+
+def test_html_title_not_duplicated_when_body_already_opens_with_it(tmp_path):
+    # A page whose `<h1>` restates its `<title>` is the common case, and the heading survives extraction.
+    p = tmp_path / "post.html"
+    p.write_bytes(b"""<!DOCTYPE html><html><head><title>On Alignment</title></head><body><article>
+<h1>On Alignment</h1>
+<p>A paragraph long enough to be scored as real body content by a readability extractor rather than
+being discarded as page chrome or navigation.</p></article></body></html>""")
+    assert docextract.extract_text(p).count("On Alignment") == 1
+
+
+def test_html_declared_encoding_is_honored(tmp_path):
+    # The file is handed to the extractor as bytes precisely so its own declaration decides the encoding. Were
+    # it decoded as UTF-8 here, this well-formed page would raise instead of reading.
+    p = tmp_path / "page.html"
+    p.write_bytes('<html><head><meta charset="iso-8859-1"><title>P\xe4iv\xe4</title></head><body>'
+                  '<p>Sein\xe4joen kaupunki on suomalainen kaupunki jossa on paljon asukkaita ja se '
+                  'sijaitsee Etel\xe4-Pohjanmaalla.</p></body></html>'.encode("iso-8859-1"))
+    text = docextract.extract_text(p)
+    assert "Seinäjoen" in text
+    assert "Päivä" in text
+
+
+def test_html_htm_extension(tmp_path):
+    p = tmp_path / "post.htm"
+    p.write_bytes(_ARTICLE_HTML)
+    assert "optimization pressure" in docextract.extract_text(p)
+
+
+def test_html_script_built_page_still_indexes_under_its_title(tmp_path):
+    # A self-contained app that carries its data as a script literal and builds the DOM at load — the shape a
+    # chat assistant emits as an artifact. Its body is unreadable to us, but the title is recovered separately,
+    # so the document is at least findable by name rather than vanishing from the database entirely. Reading
+    # the data itself is a separate, larger question; see TODO_DEFERRED.md.
+    p = tmp_path / "diva_modules.html"
+    p.write_bytes(b"""<!DOCTYPE html><html><head><title>Module List</title></head><body>
+<div id="app"></div>
+<script>const MODULES = [{name: "Miku", cost: 3}]; render(MODULES);</script>
+</body></html>""")
+    assert docextract.extract_text(p) == "# Module List"
+
+
+def test_html_single_page_app_shell_returns_none(tmp_path):
+    # The bare shell of a JS-rendered page holds no content: it was never in the file, and nothing here runs the
+    # scripts that would fetch it. That is "empty", not an error — the same answer a scanned PDF gets.
+    p = tmp_path / "app.html"
+    p.write_bytes(b'<!DOCTYPE html><html><head></head><body><div id="root"></div>'
+                  b'<script src="bundle.js"></script></body></html>')
+    assert docextract.extract_text(p) is None
 
 
 # ---------------------------------------------------------------------------

@@ -66,7 +66,7 @@ dependencies = [
     "feedparser>=6.0",  # papers: arXiv search
     "requests>=2.31",  # client, librarian, papers (arXiv tools)
     "tqdm>=4.0",  # server.stt, papers (arXiv download)
-    "trafilatura>=2.0.0",  # server.webfetch; readability extraction (HTML -> clean text/markdown)
+    "trafilatura>=2.0.0",  # readability extraction (HTML -> clean text/markdown): server.webfetch for fetched pages, raven.common.docextract for saved ones
     "youtube-transcript-api>=1.0.0",  # server.webfetch; transcript extraction for YouTube URLs
     "pypdf>=6.14.2",  # raven.common.docextract: PDF text layer
     # The rest of `raven.common.docextract`'s backends. Office formats are all zipped XML, but each family needs

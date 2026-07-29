@@ -297,7 +297,8 @@ llm_docs_dir = llmclient_userdata_dir / "documents"
 # office document whose content is all pictures). Handled by `raven.common.docextract`, which is the single
 # text-extraction backend — keep this list within the set it supports (`docextract.supported_extensions()`).
 llm_docs_exts = [".txt", ".md", ".rst", ".org", ".bib", ".tex", ".pdf",
-                 ".docx", ".pptx", ".odt", ".odp"]
+                 ".docx", ".pptx", ".odt", ".odp",
+                 ".html", ".htm"]
 
 # Whether to scan also subdirectories of `llm_docs_dir`.
 llm_docs_dir_recursive = False

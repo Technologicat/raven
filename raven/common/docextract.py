@@ -1,4 +1,4 @@
-"""Extract indexable plaintext from document files (plain text, PDF, and office documents).
+"""Extract indexable plaintext from document files (plain text, PDF, office documents, and HTML).
 
 This is the single source of truth for "given a document file, give me its text" across Raven. The RAG
 document-database ingester (`raven.librarian.hybridir`), the chat document attachment feature, and the
@@ -22,6 +22,14 @@ it can tell the user *why* their file could not be read.
 
 PDF text extraction handles born-digital PDFs (a real text layer). A scanned/image-only PDF has no text to
 extract and comes back as `None`; OCR for those is a separate, later concern.
+
+HTML goes through the same readability extraction the web-fetch tool uses, so a page saved to disk reads the way
+the same page fetched live would. What that misses is a page whose text is produced by *running* it: the bare
+shell of a JS-rendered site, and equally a self-contained single-file app that carries its data inline as a
+script literal and builds the DOM at load. In the second case the content genuinely is in the file — it is just
+in a `<script>` element, which readability extraction ignores, and reading it would mean deciding where inline
+data ends and a minified bundle begins. Neither is attempted here; both extract as empty, the way a scanned PDF
+does.
 
 Every format here is read for its *text layer* only. Whatever a document says through pictures — a figure, a
 photograph, a typeset equation rendered as an image — is not recovered, and a file whose content is entirely
@@ -189,6 +197,46 @@ def _extract_odf(path: pathlib.Path) -> str:
                                       f"{type(exc).__name__}: {exc}") from exc
 
 
+def _extract_html(path: pathlib.Path) -> str:
+    # `trafilatura` is imported here rather than at module level because it costs about 0.3 s — three times the
+    # whole office stack put together — and most sessions never open an HTML document. `raven.server.modules
+    # .webfetch` defers it at its use site for the same reason, and this is the same extractor doing the same
+    # job on bytes that arrived from disk instead of from the network.
+    import trafilatura  # noqa: PLC0415 -- deferred: keep the readability stack off the common import path
+
+    # Handed over as bytes, not text: an HTML file declares its own encoding in a meta tag or an XML
+    # declaration, and a page saved off the web is about as likely to be Latin-1 as UTF-8. Decoding it ourselves
+    # would mean either guessing or raising on a file that is perfectly well-formed and says so in its header.
+    raw = path.read_bytes()
+    try:
+        # Markdown rather than bare text, so headings, lists and tables survive as structure the chunker can see
+        # — the document database already accepts Markdown as an input format, so nothing downstream is
+        # surprised by it. `favor_recall` errs toward keeping borderline content: for a retrieval index, a
+        # paragraph wrongly kept costs far less than one wrongly discarded.
+        body = trafilatura.extract(raw, output_format="markdown", include_tables=True, favor_recall=True) or ""
+        title = _html_title(trafilatura, raw)
+    except Exception as exc:  # noqa: BLE001 -- trafilatura surfaces malformed input as several unrelated types
+        raise DocumentExtractionError(f"extract_text: '{path}' could not be read as an HTML document: "
+                                      f"{type(exc).__name__}: {exc}") from exc
+
+    # Readability extraction keeps the article's own headings but drops `<title>`, which on a saved page is
+    # often the only thing that names it — the filename frequently does not. Skipped when the body already
+    # opens with that same heading, which is the common case for a page whose `<h1>` restates its title.
+    if title and body.lstrip().split("\n", 1)[0].lstrip("#").strip() != title:
+        return f"# {title}\n\n{body}" if body else f"# {title}"
+    return body
+
+
+def _html_title(trafilatura: Any, raw: bytes) -> str | None:
+    """Best-effort page title from HTML bytes. `None` when there isn't one, or the metadata pass fails."""
+    try:
+        metadata = trafilatura.extract_metadata(raw)
+    except Exception:  # noqa: BLE001 -- a title is a nicety; never let its absence cost us the body text
+        return None
+    title = getattr(metadata, "title", None) if metadata is not None else None
+    return title.strip() if title else None
+
+
 # The formats that need a real parser, and who parses them. Anything not listed here is read as plain text, so
 # this table plus `_PLAINTEXT_EXTS` is the whole capability list — `supported_extensions` derives from the two
 # rather than repeating them, which is what keeps the dispatch and the advertised formats from drifting apart.
@@ -196,7 +244,9 @@ _EXTRACTORS = {".pdf": _extract_pdf,
                ".docx": _extract_docx,
                ".pptx": _extract_pptx,
                ".odt": _extract_odf,
-               ".odp": _extract_odf}
+               ".odp": _extract_odf,
+               ".html": _extract_html,
+               ".htm": _extract_html}
 
 
 def supported_extensions() -> tuple[str, ...]:

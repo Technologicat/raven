@@ -105,8 +105,9 @@ def store_file_as_sidecar(datastore: chattree.PersistentForest,
 def sidecar_to_text(datastore: chattree.PersistentForest, url: str) -> str:
     """Resolve a stored `sidecar:<filename>` document URL to its extracted plaintext, memoized by filename.
 
-    Reads the sidecar file and extracts its text via `raven.common.docextract` (plain text verbatim; PDF text
-    layer via pypdf). Used by `llmclient.invoke` to fold an attached document into the outgoing message text.
+    Reads the sidecar file and extracts its text via `raven.common.docextract`, which decides what each format
+    means — plain text verbatim, a PDF's text layer, an office document's prose and tables, an HTML page's
+    readable content. Used by `llmclient.invoke` to fold an attached document into the outgoing message text.
     An extraction failure or an empty document degrades to a short bracketed placeholder rather than raising, so
     a single unreadable attachment can never break the LLM call.
     """

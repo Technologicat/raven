@@ -1536,6 +1536,75 @@ the way the paperclip does on a text-only model.
 
 Discovered during brief 07 (2026-07-29, raised by Juha).
 
+## HTML pages whose content is produced by running them
+
+`raven.common.docextract` reads HTML through `trafilatura`'s readability extraction, which looks at markup. A
+page that has no text in its markup — because a script writes it at load — therefore extracts as empty, and the
+attachment path folds in `[no extractable text]` while the docs DB skips the file.
+
+Two rather different situations share that symptom, and only the second is worth solving:
+
+- **The bare shell of a JS-rendered site.** The content is genuinely absent from the file; it lives on a server
+  the page would have fetched. Nothing local can recover it, and the honest recourse is to fetch the URL with
+  the `webfetch` tool instead of attaching the saved file. Not a gap — a correct refusal.
+- **A self-contained single-file app.** The data *is* in the file, as a literal inside a `<script>` element,
+  and the DOM is built from it at load. Here the extractor is leaving real, present content on the floor. The
+  motivating example is a mod-listing table built with claude.ai (`diva_modules.html`), which renders exactly
+  the sort of table a reader would want indexed.
+
+  **Expect this to stop being a corner case.** Chat assistants now emit self-contained HTML artifacts as a
+  routine output format, so a growing share of the documents a user has worth keeping will arrive in precisely
+  this shape — and unlike a scanned PDF, there is no lossy origin to blame, the content is right there. That
+  makes this the highest-value of the reading gaps on this list, and a fair candidate for its own brief rather
+  than an incremental fix.
+
+  Partly mitigated today: the `<title>` is recovered separately from the body, so such a file indexes under its
+  own name instead of vanishing. That is enough to find the document, and not nearly enough to search it.
+
+The hard part of the second case is telling inline *data* from inline *code*. Dumping every `<script>` body into
+the index would work beautifully for a hand-built page carrying a JSON array, and catastrophically for a page
+carrying a minified React bundle — hundreds of kilobytes of unreadable tokens poisoning retrieval for everything
+else in the database. Some possible shapes, none yet chosen:
+
+- Read only *declared* data: `<script type="application/json">` and `application/ld+json`. Unambiguous and
+  cheap, but does not catch the motivating case, which uses a plain `<script>` with a JS array.
+- Fall back to script text only when readability found nothing *and* the inline script volume is under some
+  budget. Heuristic, but degrades in the right direction: it fires exactly when there is nothing to lose.
+- Render the page in a headless browser and read the resulting DOM. Solves it completely, and is the one option
+  that also handles a shell page with a reachable server. **Ruled out for the automatic paths**, and this is a
+  settled decision rather than an open trade-off: dropping a file into a watched folder must never be enough to
+  start executing that file's scripts. Webfetch's Tier 2 is a different posture — a URL someone explicitly
+  asked to fetch — and the SSRF and sandboxing care taken there is the measure of what automatic rendering
+  would have to earn. If it is ever built, it belongs behind a per-file action the user takes deliberately,
+  never behind the ingester or the attach dialog.
+
+Raised while adding HTML support (2026-07-29, Juha's example).
+
+## Rendering LaTeX equations in the chat log
+
+Models emit LaTeX — `$...$`, `$$...$$`, `\begin{equation}` — whenever the subject is mathematical, and Librarian
+currently shows it as source. For a research assistant aimed at scientific work this is the wrong way round: the
+notation exists because it is easier to *read* than the prose it replaces, and we are showing the half that is
+harder.
+
+This is the *output* side, and distinct from the two document-reading items it sounds like:
+
+- Different from "Read documents as page images": that is about getting math *in* from a source whose equations
+  are pictures. This is about getting math *out* to the screen, from source we already have in the best possible
+  form.
+- Different from `.tex` ingestion, which already works — the file is read as text, and the model handles it fine.
+
+The work is in the renderer. `DearPyGui_Markdown` (vendored, and already substantially ours) knows nothing about
+math, so something has to turn a LaTeX fragment into pixels and splice it into the flow of a message: a
+typesetting pass producing a texture per equation, at the right baseline and the right size for the surrounding
+font. Streaming makes it sharper — an equation is only renderable once its closing delimiter has arrived, so the
+renderer needs to hold an incomplete fragment as source and swap in the rendered form when it completes, without
+reflowing everything above it.
+
+Not tracked before now because it was too large to take on solo; that calculus has changed.
+
+Raised during the 0.2.8 format work (2026-07-29, Juha).
+
 ## Librarian leaks its server-side avatar instance when it doesn't exit normally
 
 Librarian releases its avatar instance in `app_shutdown` (`raven/librarian/app.py`), which is registered with
