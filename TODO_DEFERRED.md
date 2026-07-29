@@ -1567,6 +1567,29 @@ Doing only the first half is defensible and would close most of the everyday gap
 choice rather than an accident of which one was easier — the button says "attach from URL" either way, and a
 user whose arXiv link silently produces a readability pass over PDF bytes has been misled by their own tool.
 
+**The button has to DWIM, and that is the hard part rather than the fetching.** One URL, and the user's intent
+is not recoverable from it. The canonical case is an arXiv abstract page, which is simultaneously:
+
+- an article page whose abstract is exactly what someone might want attached, cheaply, without pulling down a
+  40-page PDF;
+- a page carrying a link to the full text, where what the user wanted was the *paper*, and the abstract page is
+  merely how they navigated to it;
+- and a page whose full text may also exist as HTML (`arxiv.org/html/...`), which `webfetch` already rewrites
+  toward — so even "fetch the full text" has two answers with different fidelity.
+
+No amount of content sniffing settles that, because the ambiguity is about intent, not about bytes. So the
+design question is what the UI does with it: fetch one and say which, offer the choice when a page advertises a
+full-text link, or attach the page and let the model follow the link with `webfetch`. Whatever is chosen, the
+user has to be able to see which reading they got — silently picking one and being right half the time is the
+outcome to avoid.
+
+**Targeted at 0.2.9**, deliberately out of 0.2.8's scope: the second half is not small, and the DWIM question
+above wants deciding rather than guessing. Until then the workaround is the obvious one and worth stating in
+the docs if users ask — download the document, then attach the file.
+
+The backend was built anticipating this, during brief 03; what is missing is the fetch machinery and the whole
+UX side.
+
 Raised during the 0.2.8 format work (2026-07-29, Juha).
 
 ## HTML pages whose content is produced by running them
