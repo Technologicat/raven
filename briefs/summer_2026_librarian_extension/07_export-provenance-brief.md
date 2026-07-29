@@ -155,15 +155,15 @@ in §7, since it's the same disclosure surface and the context is loaded.)
 
 ## 6. Implementation checkpoints
 
-- [ ] **A — manifest builder.** A pure helper (chatutil-level) that takes the linearized history
+- [x] **A — manifest builder.** A pure helper (chatutil-level) that takes the linearized history
       and returns the YAML front-matter string. Testable without GUI. Emits `ai_generated`,
       `messages[]` with per-node `origin` / `model` / `generated_at`.
-- [ ] **B — wire into `get_chatlog_as_markdown`.** Prepend the manifest; leave the debug-metadata
+- [x] **B — wire into `get_chatlog_as_markdown`.** Prepend the manifest; leave the debug-metadata
       path untouched behind `include_metadata`.
-- [ ] **C — single-message copy.** Reuse the checkpoint-A builder to emit a one-message
+- [x] **C — single-message copy.** Reuse the checkpoint-A builder to emit a one-message
       front-matter block in `copy_message_to_clipboard_callback`; assistant/tool only, nothing for
       `user`-role copies (see §3). No separate marker format.
-- [ ] **D — tests.** Round-trip: export a known small history, parse the front matter back
+- [x] **D — tests.** Round-trip: export a known small history, parse the front matter back
       (`yaml.safe_load` on the fenced block), assert origins/models line up with the payloads.
       One case each: user-only, mixed, tool-bearing, streaming node with `model is None`
       (must degrade gracefully — the existing code already tolerates a `None` node ID, match that).
@@ -212,6 +212,6 @@ do not attempt to make one widget screen-reader-visible in isolation. (Real futu
 scope, not now: Raven already has TTS — a *self-voicing* mode needs only tab-focus + focus events,
 not an OS a11y tree, and would sidestep DPG entirely. Backlog, not this brief.)
 
-- [ ] **E — label wording + layout.** Update `ai_warning_text`; bump `ai_warning_h`; verify the
+- [x] **E — label wording + layout.** Update `ai_warning_text`; bump `ai_warning_h`; verify the
       spacer math and resize handler cope with two lines. Add a one-line note to the docs recording
       the screen-reader limitation and the self-voicing backlog item.

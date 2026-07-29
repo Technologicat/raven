@@ -7,9 +7,11 @@ import re
 import time
 
 import pytest
+import yaml
 
 from unpythonic.env import env
 
+import raven
 from raven.librarian import chattree, chatutil
 
 
@@ -186,6 +188,103 @@ class TestFormatDatetime:
         result = chatutil.format_chatlog_datetime_now()
         parts = result.split()
         assert len(parts) == 3  # weekday, date, time
+
+
+# ---------------------------------------------------------------------------
+# Provenance manifest (EU AI Act Article 50(2) origin marking)
+# ---------------------------------------------------------------------------
+
+def _payload(role, *, model=None, datetime_str="2026-07-29 14:22:58"):
+    """A chat node payload carrying just the keys the manifest reads."""
+    payload = {"message": {"role": role, "content": [{"type": "text", "text": "..."}]},
+               "general_metadata": {"datetime": datetime_str, "persona": None}}
+    if model is not None:
+        payload["generation_metadata"] = {"model": model, "n_tokens": 10, "dt": 1.0}
+    return payload
+
+def _parse_front_matter(text):
+    """Parse the leading YAML front-matter block of `text`, the way a downstream consumer would.
+
+    Deliberately strict about position and delimiters - the point of the manifest is that a parser
+    that knows nothing about Raven can find it, and it can only do that if it is the first thing
+    in the document and fenced exactly as the convention says.
+    """
+    assert text.startswith("---\n")
+    _, body, _ = text.split("---\n", 2)
+    return yaml.safe_load(body)
+
+
+class TestFormatProvenanceManifest:
+    def test_manifest_is_leading_yaml_front_matter(self):
+        result = chatutil.format_provenance_manifest([_payload("user")])
+        assert result.startswith("---\n")
+        assert result.endswith("---\n")
+        manifest = _parse_front_matter(result)
+        assert manifest["generator"] == "raven-librarian"
+        assert manifest["generator_version"] == raven.__version__
+
+    def test_user_only_export_is_not_ai_generated(self):
+        manifest = _parse_front_matter(chatutil.format_provenance_manifest([_payload("user"),
+                                                                            _payload("user")]))
+        assert manifest["ai_generated"] is False
+        assert [entry["origin"] for entry in manifest["messages"]] == ["user", "user"]
+
+    def test_assistant_message_makes_the_export_ai_generated(self):
+        manifest = _parse_front_matter(chatutil.format_provenance_manifest([_payload("user"),
+                                                                            _payload("assistant", model="Test-Model-7B")]))
+        assert manifest["ai_generated"] is True
+
+    def test_tool_output_alone_is_not_ai_generated(self):
+        # Tool messages are retrieved external content, not model-generated prose. Claiming otherwise
+        # would assert a synthesis that did not happen.
+        manifest = _parse_front_matter(chatutil.format_provenance_manifest([_payload("user"),
+                                                                            _payload("tool")]))
+        assert manifest["ai_generated"] is False
+        assert manifest["messages"][1]["origin"] == "tool"
+
+    def test_origins_and_models_line_up_with_the_payloads(self):
+        payloads = [_payload("system"),
+                    _payload("user", datetime_str="2026-07-29 14:22:40"),
+                    _payload("tool", datetime_str="2026-07-29 14:22:50"),
+                    _payload("assistant", model="Test-Model-7B", datetime_str="2026-07-29 14:22:58")]
+        manifest = _parse_front_matter(chatutil.format_provenance_manifest(payloads))
+        assert [entry["n"] for entry in manifest["messages"]] == [0, 1, 2, 3]
+        assert [entry["origin"] for entry in manifest["messages"]] == ["system", "user", "tool", "assistant"]
+        assert manifest["messages"][3]["model"] == "Test-Model-7B"
+        assert manifest["messages"][3]["generated_at"] == "2026-07-29 14:22:58"
+        assert manifest["messages"][1]["generated_at"] == "2026-07-29 14:22:40"
+
+    def test_missing_generation_metadata_degrades_gracefully(self):
+        # An interrupted or errored reply has no `generation_metadata`. The entry must still say the
+        # message was AI-generated - the origin is the disclosure; the model name is a detail.
+        manifest = _parse_front_matter(chatutil.format_provenance_manifest([_payload("assistant")]))
+        assert manifest["ai_generated"] is True
+        assert manifest["messages"][0]["origin"] == "assistant"
+        assert "model" not in manifest["messages"][0]  # absent, rather than a null to be confused with a real value
+
+    def test_model_name_containing_yaml_syntax_survives_the_round_trip(self):
+        # The model name is arbitrary text from the backend. A colon in it would end the key/value
+        # pair early if the manifest were built by string concatenation.
+        payloads = [_payload("assistant", model="vendor/Weird: Model #3 [q4_0]")]
+        manifest = _parse_front_matter(chatutil.format_provenance_manifest(payloads))
+        assert manifest["messages"][0]["model"] == "vendor/Weird: Model #3 [q4_0]"
+
+    def test_empty_history_yields_a_manifest_with_no_messages(self):
+        manifest = _parse_front_matter(chatutil.format_provenance_manifest([]))
+        assert manifest["messages"] == []
+        assert manifest["ai_generated"] is False
+
+    def test_exported_at_is_stamped_when_not_given(self):
+        manifest = _parse_front_matter(chatutil.format_provenance_manifest([_payload("user")]))
+        # Parses as an ISO 8601 timestamp, and carries the local UTC offset (unlike the stored
+        # per-message datetimes, which have none).
+        stamp = datetime.datetime.fromisoformat(manifest["exported_at"])
+        assert stamp.tzinfo is not None
+
+    def test_exported_at_is_reproduced_verbatim_when_given(self):
+        manifest = _parse_front_matter(chatutil.format_provenance_manifest([_payload("user")],
+                                                                            exported_at="2026-07-29T14:23:11+03:00"))
+        assert manifest["exported_at"] == "2026-07-29T14:23:11+03:00"
 
 
 class TestFormatReminders:

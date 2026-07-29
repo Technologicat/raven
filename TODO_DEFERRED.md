@@ -1460,3 +1460,17 @@ which has to be kept in sync with the pinned trio in `pyproject.toml`). The gene
 `pytorch-cu128` source so torch resolves from PyPI — stays, since that applies to *all* Macs.
 
 Discovered during the plain-text/PDF interlude (2026-07-18, Juha: a coworker's new M-series Mac on current macOS).
+
+## Librarian doesn't check that the LLM backend has a model loaded
+
+Starting Librarian against a backend with no model loaded produces no warning; the first turn fails with a raw
+`HTTP 400 Bad Request` and the backend's own error text ("No models loaded. Please load a model in the developer
+page or use the `lms load` command."). This surfaces as an assistant error message — the failure is visible, but
+only after the user has composed and sent something, and the wording is the backend's rather than a Raven-side
+"no model is loaded; load one in your backend and reroll."
+
+The connection-time query in `llmclient.setup` already talks to the backend, so it is the natural place to notice
+the empty-model case and say so up front — either at startup, or by disabling send with an explanatory tooltip
+the way the paperclip does on a text-only model.
+
+Discovered during brief 07 (2026-07-29, raised by Juha).

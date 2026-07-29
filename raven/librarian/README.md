@@ -444,6 +444,40 @@ Below the avatar panel at the right, there are **mode toggles**:
 
 The toggles persist across sessions. They are stored in the app state file, which by default is saved in `~/.config/raven/llmclient/state.json`. The file is loaded at app startup, and saved at app exit.
 
+# AI transparency
+
+Two disclosures, aimed at two different readers.
+
+**On screen**, a permanent notice below the chat states that you are interacting with an AI system, and that its answers need independent checking. It is always visible and cannot be dismissed or configured away.
+
+**In exported text**, the clipboard copy carries a YAML front-matter block recording where each message came from:
+
+```yaml
+---
+generator: raven-librarian
+generator_version: 0.2.8-dev
+exported_at: '2026-07-29T14:23:11+03:00'
+ai_generated: true
+messages:
+- n: 0
+  origin: user
+- n: 1
+  origin: assistant
+  model: Qwen3-VL-30B-A3B
+  generated_at: '2026-07-29 14:22:58'
+---
+```
+
+Both export routes emit it — the whole-chatlog copy (F8), and the per-message copy button, which emits a one-message manifest because a lifted fragment travels without the document's. Copying one of *your own* messages emits nothing: there is no AI generation to disclose, and a header would only be something to delete before pasting the question back into the chat field.
+
+Front matter rather than a sentence in the prose, because a mark only a human can read is only half a mark — this one a parser can key on, and Markdown tooling already looks for it in that position.
+
+## What this does not do
+
+- **It is not a watermark.** The robust mark for AI-generated text is applied *while the model samples*, inside the sampling loop. *Raven-librarian* sends prompts to a third-party model through an OpenAI-compatible backend and never sees the logits, so there is nothing for it to add to text it merely received. That mark, if it ever exists, has to come from whoever runs the model. What is recorded here is the provenance this side of the boundary actually knows. If a backend ever *does* return marked text, *Raven-librarian* passes it through unaltered.
+- **It is not tamper-evident.** Anyone can delete the block. It is a good-faith record for a cooperative reader, not a cryptographic one (contrast [C2PA](https://c2pa.org/) Content Credentials, whose signed manifests are built for the adversarial case).
+- **The on-screen notice is not reachable by a screen reader.** This is a property of the whole GUI, not of the notice: Dear PyGui renders immediate-mode, and exposes no operating-system accessibility tree, so *no* part of the interface is visible to assistive technology. The notice is in the same modality as everything around it rather than being singled out. The route worth taking eventually is *self-voicing* — *Raven-librarian* already has speech synthesis, so reading the focused widget aloud needs only focus tracking, not an accessibility tree. Not implemented.
+
 # Configuration
 
 As explained in the main README, configuration is currently fed in as several Python modules that exist specifically as configuration files.

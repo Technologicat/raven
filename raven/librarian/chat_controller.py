@@ -631,15 +631,25 @@ class DPGChatMessage:
                                                                   text=self.text,
                                                                   add_heading=shift_pressed)
 
+            node_payload = self.parent_view.chat_controller.datastore.get_payload(node_id)  # auto-selects active revision  TODO: later (chat editing), we need to set the revision to load
+
+            # A lifted fragment travels without the document manifest the full-log export carries, so it needs
+            # its own - same format, because a one-message manifest and a fifty-message one should not need two
+            # parsers. Human turns get none: there is no AI generation to disclose, and a YAML block on a copied
+            # question would just be something to delete before pasting it back into the chat field.
+            if role != "user":
+                manifest = f"{chatutil.format_provenance_manifest([node_payload])}\n"
+            else:
+                manifest = ""
+
             if shift_pressed:
-                node_payload = self.parent_view.chat_controller.datastore.get_payload(node_id)  # auto-selects active revision  TODO: later (chat editing), we need to set the revision to load
                 payload_datetime = node_payload["general_metadata"]["datetime"]  # of the active payload revision!
                 node_active_revision = self.parent_view.chat_controller.datastore.get_revision(node_id)
-                header = f"*Node ID*: `{node_id}` {payload_datetime} R{node_active_revision}\n\n"  # yes, it'll say `None` when no node ID is available (incoming streaming message), which is exactly what we want.
+                header = f"*Node ID*: `{node_id}` {payload_datetime} R{node_active_revision}\n\n"
             else:
                 header = ""
             mode = "with node ID" if shift_pressed else "as-is"
-            dpg.set_clipboard_text(f"{header}{formatted_message}\n")
+            dpg.set_clipboard_text(f"{manifest}{header}{formatted_message}\n")
             # Acknowledge the action in the GUI.
             gui_animation.animator.add(gui_animation.ButtonFlash(message=f"Copied to clipboard! ({mode})",
                                                                  target_button=copy_message_button,
@@ -1423,10 +1433,16 @@ class DPGLinearizedChatView:
             if not self.chat_controller.current_chat_history:
                 return None
 
+            # Read the payloads up front: the provenance manifest describes the whole export, so it has to be
+            # built before any message text is written, and it must land first in the output for a front-matter
+            # parser to see it at all.
+            node_payloads = [self.chat_controller.datastore.get_payload(dpg_chat_message.node_id)  # auto-selects active revision  TODO: later (chat editing), we need to set the revision to load
+                             for dpg_chat_message in self.chat_controller.current_chat_history]
+
             output_text = io.StringIO()
-            output_text.write(f"# Raven-librarian chatlog\n\n- *HEAD node ID*: `{self.chat_controller.current_chat_history[-1].node_id}`\n- *Log generated*: {chatutil.format_chatlog_datetime_now()}\n\n{'-' * 80}\n\n")
-            for message_number, dpg_chat_message in enumerate(self.chat_controller.current_chat_history):
-                node_payload = self.chat_controller.datastore.get_payload(dpg_chat_message.node_id)  # auto-selects active revision  TODO: later (chat editing), we need to set the revision to load
+            output_text.write(chatutil.format_provenance_manifest(node_payloads))
+            output_text.write(f"\n# Raven-librarian chatlog\n\n- *HEAD node ID*: `{self.chat_controller.current_chat_history[-1].node_id}`\n- *Log generated*: {chatutil.format_chatlog_datetime_now()}\n\n{'-' * 80}\n\n")
+            for message_number, (dpg_chat_message, node_payload) in enumerate(zip(self.chat_controller.current_chat_history, node_payloads)):
                 message = node_payload["message"]
                 role = message["role"]
                 persona = node_payload["general_metadata"]["persona"]  # stored persona for this chat message

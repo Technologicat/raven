@@ -57,6 +57,10 @@
 
 - *Raven-arxiv-download*: prints the paper's citation (`Authors (Year) - Title`) just before downloading its PDF, so it stays on screen during the rate-limit wait — a mistyped ID that resolved to the wrong paper is caught before the download completes. Only shown when a paper is actually being fetched; already-present papers are reported by their existing one-line status.
 
+- *Raven-librarian*: exported chat text now carries **origin metadata**, as a YAML front-matter block that names the generator, the export time, which messages came from a human, which from the AI, and which model produced each AI message. Both export routes emit it: the whole-chatlog copy (F8) gets one manifest for the document, and a single copied AI or tool message gets a one-message manifest of its own, since a lifted fragment travels without the document's. Copying one of your *own* messages is unchanged — there is no AI generation to disclose, and it keeps the copy clean for editing and resending.
+  - This is what a system on this side of the model boundary can honestly attest to. The robust mark for AI-generated text is a watermark applied while the model samples; *Raven-librarian* runs third-party models through an OpenAI-compatible backend and never sees the sampler, so it records the provenance it does know rather than claiming a mark it cannot make.
+- *Raven-librarian*: the notice below the chat now states outright that you are interacting with an AI system, ahead of the existing note that its answers need checking. The old wording only implied it.
+
 - *Raven-visualizer*: logs whether *Raven-server* is reachable once at startup, so its presence or absence is explicit from the first line of output rather than only surfacing when the importer first reaches for it. The server is optional for the Visualizer, so both outcomes log at info level.
 
 **Changed**:
@@ -66,6 +70,7 @@
 
 **Fixed**:
 
+- *Raven-librarian*: the F8 hotkey (copy the chatlog to the clipboard) now works. It raised a `TypeError` and copied nothing; only the equivalent toolbar button worked, which is why the failure went unnoticed.
 - *Raven-visualizer* / `raven-wos2bib`: BibTeX records with a brace in an unexpected field are no longer lost. The converter escaped some field values but not others, so a single `{` in, say, a DOI ended the field early and made the whole record unparseable — 8 records in 96296 on the Web of Science hydrogen corpus. Every field is now escaped. Existing `.bib` files converted with an earlier version keep the defect; reconvert them from the Web of Science source to recover the lost records.
 - *Raven-visualizer* importer: a BibTeX record that fails to parse is now reported instead of silently missing from the dataset. The warning names the file, the record key, the line, and which field's braces look unbalanced, so the offending data can be found and fixed. Previously a record that lacked a title was reported but one that could not be parsed at all was not — the wrong way round, since the second is the case that leaves no other trace.
 - *Raven-librarian* RAG: adding a new document to the database no longer logs a spurious `KeyError` traceback, and the indexing progress no longer counts a single new file as two changes. A new file's filesystem create+modify events could queue a *delete* for a document that was never indexed (more likely with larger files such as PDFs, which emit several write events while being copied in); the delete half of an update is now emitted only when the document actually exists.

@@ -359,7 +359,15 @@ gui_config = env(  # ----------------------------------------
                  # GUI element sizes, in pixels.
                  main_window_w=1920, main_window_h=1040,  # The default size just fits onto a 1080p screen in Linux Mint.
                  help_window_w=1700, help_window_h=1000,  # The help content is static, these values have been chosen to fit it.
-                 ai_warning_h=42,
+                 # The AI-disclosure label below the chat. Two lines' worth of height, because the
+                 # disclosure states two separate things (that the interlocutor is an AI, and that its
+                 # output needs checking) and does not fit on one line at the default window width.
+                 ai_warning_h=62,
+                 # Wrap width for the label text. An upper bound, not the rendered width: at this setting the
+                 # break falls between "accuracy" and "depend", giving lines of 521 and 518 px. The usable
+                 # range is 521 (the first line's own width) to 576 (one word more would fit); the midpoint
+                 # leaves room on both sides for font-metric drift.
+                 ai_warning_w=550,
                  # Composer (chat input) geometry. The composer is a vertical stack: multiline text field,
                  # an optional staged-image thumbnail strip, and a button toolbar. Its outer height
                  # (`chat_controls_h`) is FIXED so that showing/hiding the strip never rescales the chat or

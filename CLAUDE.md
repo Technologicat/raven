@@ -67,6 +67,17 @@ Legacy `flake8rc` also present (used by Emacs flycheck, not by CI or CC).
 
 1. **Lint after every code change**: `ruff check <changed .py files>`. Do this before review, testing, or committing. Catches unused imports and dead names early.
 
+### Live GUI testing on a shared desktop
+
+Raven's apps are DPG, so verifying GUI work means running them — and the agent and the human are on the *same X session*. Keyboard focus is therefore a shared, single-holder resource: a window that maps or gets activated takes focus away from wherever the human is typing, and their next keystrokes land in the app instead of their editor or terminal. (Observed the obvious way: a launched Librarian window swallowed a half-typed message and its Enter, which sent an empty chat turn.)
+
+- **Screenshots need no focus** — `import -window <id> shot.png` captures an unfocused window fine. Prefer a screenshot-only check; it is never intrusive. `wmctrl -l` or `xdotool search --name <title>` gets the window ID.
+- **Synthetic input does need focus.** GLFW ignores the `XSendEvent`-based `xdotool key --window <id>`, so driving the GUI means really activating the window. When doing that: **say so first**, keep the burst short, and **restore focus afterwards** — capture `PREV=$(xdotool getactivewindow)` *before* launching or activating, and `xdotool windowactivate --sync "$PREV"` when done.
+- **Announce a launch even without input injection**, because the mapping window itself steals focus.
+- **When tuning placement or sizing, render the candidates side by side** into one image rather than asking about them one at a time. The eye ranks a comparison; it can't rank a sequence, so serial single-shot proposals cost a restart per candidate.
+- **Never `pkill -f raven-<app>`.** The pattern matches the agent's own shell command line, so it kills the invoking shell (exit 144) and usually leaves the app running. Select real PIDs instead: `pgrep -af raven-librarian | awk '$2 ~ /python/ {print $1}' | xargs -r kill`.
+- Needs `xdotool` and `xclip` installed (clipboard round-trip: press the hotkey, then `xclip -o -selection clipboard`). This is how a clipboard-export feature gets verified end-to-end rather than only through unit tests.
+
 ### DPG Pitfalls
 
 **Before editing any DPG code, read `dpg-notes.md` first** (project root) — the full DPG reference: threading model, callback dispatch, `split_frame` mechanics, texture upload ordering, keyboard input / keycode traps, window sizing gotchas, diagnosing background-task races. "DPG code" = anything importing `dearpygui`, the render loop, key/mouse handlers, or texture / `split_frame` work. The pitfalls listed below are an index, not a substitute for the full notes. **When you discover a new DPG gotcha, record it in `dpg-notes.md`** (and add a one-line pointer below if it's pitfall-grade).

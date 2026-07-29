@@ -931,7 +931,7 @@ with timer() as tim:
                                                                          original_theme=dpg.get_item_theme(new_chat_tooltip),
                                                                          duration=gui_config.acknowledgment_duration))
 
-                def copy_chatlog_to_clipboard_as_markdown_callback(self) -> None:
+                def copy_chatlog_to_clipboard_as_markdown_callback() -> None:
                     shift_pressed = dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)
                     if (chatlog_text := chat_controller.view.get_chatlog_as_markdown(include_metadata=shift_pressed)) is not None:
                         dpg.set_clipboard_text(chatlog_text)
@@ -1077,12 +1077,34 @@ with timer() as tim:
                 number_of_below_chat_buttons = 7
                 number_of_separators = 3  # +1 for the separator before the context-fill readout
                 context_fill_reserve_w = 170  # provisional: horizontal room for the context-fill readout text
-                ai_warning_spacer_base_size = gui_config.chat_panel_w - number_of_below_chat_buttons * (gui_config.toolbutton_w + 8) - number_of_separators * (gui_config.toolbar_separator_w) - context_fill_reserve_w + 60
+                # This row spans the whole window, not just the chat panel, and everything to the left of the
+                # AI-disclosure label is fixed-width - so the spacer absorbs the slack and pins the label to the
+                # right end of the row. The right margin is empirical (it puts the label where the old one-line
+                # version ended); the rest is derived from the widget sizes actually laid out to its left.
+                ai_warning_icon_w = 23  # the warning glyph, plus the gap DPG leaves between group members
+                ai_warning_right_margin = 108
+                ai_warning_spacer_base_size = gui_config.main_window_w - ai_warning_right_margin - (ai_warning_icon_w + gui_config.ai_warning_w) - number_of_below_chat_buttons * (gui_config.toolbutton_w + 8) - number_of_separators * (gui_config.toolbar_separator_w) - context_fill_reserve_w
                 dpg.add_spacer(width=ai_warning_spacer_base_size, tag="ai_warning_spacer")
 
+                # The first clause is the disclosure proper: EU AI Act Article 50(1) asks that a person be told
+                # they are interacting with an AI system, and its exception for cases where that is obvious is to
+                # be read narrowly - so state it outright rather than leaving it to be inferred from "the connected
+                # AI". The second clause is the older quality warning, which is good practice but not the disclosure.
+                # Deliberately always visible and not dismissable: "at the start of the first interaction" is then
+                # satisfied trivially, and there is no way to configure the app out of compliance.
                 with dpg.group(horizontal=True):
-                    dpg.add_text(fa.ICON_TRIANGLE_EXCLAMATION, color=(255, 180, 120), tag="ai_warning_icon")  # orange
-                    dpg.add_text("Response quality and factual accuracy depend on the connected AI. Always verify important facts independently.", color=(255, 180, 120), tag="ai_warning_text")  # orange
+                    # The label wraps to two lines, so the icon has to drop to the block's vertical center rather
+                    # than sit on the first line. Half a line would be 10 px at font size 20, but the triangle
+                    # glyph reads a touch low there - its ink sits lower in the em box than the text's does - so
+                    # 9 px is what actually looks centered. A vertical group adds item_spacing_y (4 px) after the
+                    # spacer, so the spacer itself supplies the remaining 5.
+                    with dpg.group():
+                        dpg.add_spacer(height=5)
+                        dpg.add_text(fa.ICON_TRIANGLE_EXCLAMATION, color=(255, 180, 120), tag="ai_warning_icon")  # orange
+                    dpg.add_text("You are interacting with an AI system. Response quality and factual accuracy depend on the connected AI — always verify important facts independently.",
+                                 color=(255, 180, 120),
+                                 wrap=gui_config.ai_warning_w,
+                                 tag="ai_warning_text")  # orange
                 dpg.bind_item_font("ai_warning_icon", themes_and_fonts.icon_font_solid)  # tag
 
 # --------------------------------------------------------------------------------
