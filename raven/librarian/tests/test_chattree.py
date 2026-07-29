@@ -558,6 +558,20 @@ class TestMaintenance:
         assert orphan not in forest.nodes
         assert r1 in forest.nodes
 
+    def test_list_unreachable_nodes_is_a_dry_run(self, forest):
+        """The dry run names exactly what the prune would delete, and deletes nothing itself."""
+        r1 = forest.create_node("keep", parent_id=None)
+        kept_child = forest.create_node("keep_child", parent_id=r1)
+        orphan = forest.create_node("orphan", parent_id=None)
+        orphan_child = forest.create_node("orphan_child", parent_id=orphan)
+
+        doomed = forest.list_unreachable_nodes(r1)
+        assert set(doomed) == {orphan, orphan_child}  # the whole unreachable subtree, not just its root
+        assert set(forest.nodes) == {r1, kept_child, orphan, orphan_child}  # nothing deleted
+
+        forest.prune_unreachable_nodes(r1)
+        assert set(forest.nodes) == {r1, kept_child}  # ...and the prune agrees with what the dry run said
+
     def test_prune_unreachable_with_multiple_roots(self, forest):
         r1 = forest.create_node("r1", parent_id=None)
         r2 = forest.create_node("r2", parent_id=None)
@@ -679,7 +693,7 @@ class TestSidecarStorage:
         orphan = pf.store_sidecar(b"orphan", "png")
         pf.create_node({"sidecars": [kept]}, parent_id=None)
 
-        assert pf.unreferenced_sidecars() == [orphan]          # dry-run reports, deletes nothing
+        assert pf.list_unreferenced_sidecars() == [orphan]          # dry-run reports, deletes nothing
         assert set(pf.list_sidecar_files()) == {kept, orphan}
         assert pf.prune_unreferenced_sidecars() == [orphan]    # sweep
         assert pf.list_sidecar_files() == [kept]
@@ -694,9 +708,32 @@ class TestSidecarStorage:
         assert pf.prune_unreferenced_sidecars() == []          # old revision still references it -> kept
         assert pf.list_sidecar_files() == [old_img]
 
+    def test_dry_run_can_discount_doomed_nodes(self, tmp_path):
+        """`excluding_nodes` is what lets a preview describe the state *after* the node prune, not before.
+
+        Without it, an attachment referenced only by an unreachable node still counts as live, and the preview
+        under-reports exactly the files the cleanup exists to reclaim.
+        """
+        pf = PersistentForest(tmp_path / "chat.json", autosave=False,
+                              sidecar_extractor=_refs_from_sidecars_list)
+        kept = pf.store_sidecar(b"kept", "png")
+        doomed_file = pf.store_sidecar(b"doomed", "png")
+        root = pf.create_node({"sidecars": [kept]}, parent_id=None)
+        unreachable = pf.create_node({"sidecars": [doomed_file]}, parent_id=None)
+
+        assert pf.list_unreferenced_sidecars() == []  # both are referenced, as things stand
+        doomed_nodes = pf.list_unreachable_nodes(root)
+        assert doomed_nodes == [unreachable]
+        assert pf.list_unreferenced_sidecars(excluding_nodes=doomed_nodes) == [doomed_file]
+
+        # ...and running the real thing in that order produces what the preview promised.
+        pf.prune_unreachable_nodes(root)
+        assert pf.prune_unreferenced_sidecars() == [doomed_file]
+        assert pf.list_sidecar_files() == [kept]
+
     def test_prune_without_extractor_is_noop(self, tmp_path):
         pf = PersistentForest(tmp_path / "chat.json", autosave=False)  # no extractor
         pf.store_sidecar(b"data", "png")
         assert pf.prune_unreferenced_sidecars() == []
         assert len(pf.list_sidecar_files()) == 1
-        assert pf.unreferenced_sidecars() == []
+        assert pf.list_unreferenced_sidecars() == []

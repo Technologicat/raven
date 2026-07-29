@@ -65,17 +65,6 @@ role_to_colors = {"assistant": {"front": gui_config.chat_color_ai_front, "back":
 web_access_tool_names = frozenset(("websearch", "webfetch"))
 
 
-def _provenance_filename(maybe_url: Optional[str]) -> Optional[str]:
-    """Best-effort original filename from an image's provenance URL: the basename of a `file://` or `https://` URL.
-
-    Returns `None` for an inline `data:` URL (carries no filename), an empty URL, or a URL whose path has no
-    basename (e.g. a bare host). Percent-escapes are decoded, so `.../my%20photo.png` -> `my photo.png`."""
-    if not maybe_url or maybe_url.startswith("data:"):
-        return None
-    path = urllib.parse.urlparse(maybe_url).path
-    name = pathlib.Path(urllib.parse.unquote(path)).name
-    return name or None
-
 def _open_source_url(url: str) -> None:
     """Open an image's recorded provenance source: a `file://` local original in its default application,
     anything else (an `https://` page) in the web browser. Raises like the underlying opener when a local
@@ -1205,7 +1194,7 @@ class DPGCompleteChatMessage(DPGChatMessage):
                                      height=texture.h,
                                      parent=cluster)
             with dpg.tooltip(image_id):  # original filename only; the action buttons carry their own tooltips
-                dpg.add_text(_provenance_filename(meta.get("url")) or "attached image")
+                dpg.add_text(sidecarstore.provenance_filename_from_url(meta.get("url")) or "attached image")
 
             # Per-image provenance actions. "Show original" resolves to the archival copy — the verbatim original
             # kept as a second sidecar (case 2 of the image store), or the primary itself when that is the
@@ -1881,18 +1870,15 @@ class DPGChatController:
             if cached is not None:
                 return cached
             try:
-                from ..common.image import codec, lanczos  # deferred: pulls torch / Pillow only when an image is shown
+                from ..common.image import codec  # deferred: pulls torch / Pillow only when an image is shown
                 from ..common.image import utils as image_utils
                 raw = self.datastore.read_sidecar(filename)
                 arr = image_utils.ensure_rgba(codec.decode(raw))  # (H, W, 4) uint8
-                src_h, src_w = int(arr.shape[0]), int(arr.shape[1])
-                scale = min(gui_config.chat_inline_image_h / src_h,
-                            gui_config.chat_inline_image_w / src_w,
-                            1.0)  # 1.0 cap: show a small image at native size, never upscale
-                disp_h = max(1, round(src_h * scale))
-                disp_w = max(1, round(src_w * scale))
                 tensor = image_utils.np_to_tensor(arr, device="cpu")  # (1, 4, H, W) float32
-                tensor = lanczos.resize(tensor, disp_h, disp_w)
+                tensor = image_utils.fit_contain(tensor,  # no upscale: a small image shows at native size
+                                                 gui_config.chat_inline_image_h,
+                                                 gui_config.chat_inline_image_w)
+                disp_h, disp_w = int(tensor.shape[2]), int(tensor.shape[3])
                 flat = image_utils.tensor_to_dpg_flat(tensor)  # flat float32 RGBA in [0, 1]
                 texture_tag = f"chat_inline_image_{filename}"  # tag  # filename is a content-addressed sha256.ext, so unique
                 dpg.add_static_texture(disp_w, disp_h, flat,

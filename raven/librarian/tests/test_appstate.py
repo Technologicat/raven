@@ -352,11 +352,11 @@ class TestSidecarRefsInPayload:
 
 class TestLoadConfiguresSidecarGC:
     def test_loaded_datastore_can_determine_references(self, tmp_path, llm_settings):
-        # Without an extractor configured, `unreferenced_sidecars` reports nothing at all (it fails safe rather
+        # Without an extractor configured, `list_unreferenced_sidecars` reports nothing at all (it fails safe rather
         # than deleting blind), which would leave the cleanup feature inert while looking like it worked.
         datastore, _, _, _ = _load(tmp_path, llm_settings)
         orphan = datastore.store_sidecar(b"not referenced by anything", "png")
-        assert datastore.unreferenced_sidecars() == [orphan]
+        assert datastore.list_unreferenced_sidecars() == [orphan]
 
     def test_metadata_files_are_not_swept_as_orphans(self, tmp_path, llm_settings):
         # A metadata file lives in the sidecar directory but is not a sidecar, so no payload will ever reference

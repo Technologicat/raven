@@ -18,12 +18,14 @@ __all__ = ["SIDECAR_SCHEME",
            "format_now",
            "read_source_bytes",
            "base_provenance",
+           "provenance_filename_from_url",
            "sidecar_filename_from_url",
            "content_part_sidecar_refs",
            "provenance_entries_in_payload"]
 
 import datetime
 import pathlib
+import urllib.parse
 
 # The Raven-internal URL scheme marking an attachment part as "resolve against the datastore's sidecar directory".
 # A `sidecar:` URL never leaves the datastore: a saved chat reloads offline, survives the source going away, and
@@ -72,6 +74,22 @@ def base_provenance(*,
             "fetched_at": fetched_at or format_now(),
             "content_type": content_type,
             "source": source}
+
+
+def provenance_filename_from_url(maybe_url: str | None) -> str | None:
+    """Best-effort original filename from a provenance URL: the basename of a `file://` or `https://` URL.
+
+    Returns `None` for an inline `data:` URL (carries no filename), an empty URL, or a URL whose path has no
+    basename (e.g. a bare host). Percent-escapes are decoded, so `.../my%20photo.png` -> `my photo.png`.
+
+    This is how an *image* sidecar recovers a human-readable name: unlike a document, it has no `name` field of
+    its own, because the stored bytes may be a re-encoded downsample rather than the file the user picked.
+    """
+    if not maybe_url or maybe_url.startswith("data:"):
+        return None
+    path = urllib.parse.urlparse(maybe_url).path
+    name = pathlib.Path(urllib.parse.unquote(path)).name
+    return name or None
 
 
 def sidecar_filename_from_url(url: str, *, caller: str) -> str:

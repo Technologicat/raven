@@ -191,5 +191,5 @@ class TestSidecarSelfDescription:
                                         parent_id=None)
         datastore.delete_subtree(node_id)
 
-        assert datastore.unreferenced_sidecars() == [result.filename]
+        assert datastore.list_unreferenced_sidecars() == [result.filename]
         assert datastore.get_sidecar_metadata(result.filename)["name"] == "orphaned.pdf"

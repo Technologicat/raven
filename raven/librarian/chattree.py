@@ -18,7 +18,7 @@ import json
 import pathlib
 import threading
 import time
-from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Tuple, Union
 
 from unpythonic import gensym, partition
 
@@ -608,18 +608,22 @@ class Forest:
         """
         return [node["id"] for node in self.nodes.values() if node["parent"] is None]
 
-    def prune_unreachable_nodes(self, *roots: str) -> None:
-        """Delete any nodes that are not reachable from any of the `roots` (list of root node unique IDs).
+    def list_unreachable_nodes(self, *roots: str) -> List[str]:
+        """Return the IDs of nodes not reachable from any of the `roots` (list of root node unique IDs).
 
         Note this walks only down (children), not up (parent chain).
 
-        Convenient for purging unreachable nodes before saving the forest to disk.
+        The dry run for `prune_unreachable_nodes`: the same computation, without deleting anything. Useful for
+        a pre-commit preview ("would delete N nodes"), and for asking what *else* a prune would take with it —
+        e.g. which attachment sidecars only these nodes still reference (see `list_unreferenced_sidecars`).
+
+        The result is sorted, so anything built on it is deterministic (the underlying set iteration is not).
         """
         with self.lock:
             reachable_node_ids = set()
             def find_nodes_reachable_from(node_id):
                 if node_id not in self.nodes:
-                    logger.warning(f"Forest.prune_unreachable_nodes: trying to scan non-existent node '{node_id}'. Ignoring error.")
+                    logger.warning(f"Forest.list_unreachable_nodes: trying to scan non-existent node '{node_id}'. Ignoring error.")
                     return
                 reachable_node_ids.add(node_id)
                 node = self.nodes[node_id]
@@ -628,8 +632,17 @@ class Forest:
 
             for root_node_id in roots:
                 find_nodes_reachable_from(root_node_id)
-            all_node_ids = set(self.nodes.keys())
-            unreachable_node_ids = all_node_ids.difference(reachable_node_ids)
+            return sorted(set(self.nodes.keys()).difference(reachable_node_ids))
+
+    def prune_unreachable_nodes(self, *roots: str) -> None:
+        """Delete any nodes that are not reachable from any of the `roots` (list of root node unique IDs).
+
+        Note this walks only down (children), not up (parent chain).
+
+        Convenient for purging unreachable nodes before saving the forest to disk.
+        """
+        with self.lock:
+            unreachable_node_ids = self.list_unreachable_nodes(*roots)
 
             if unreachable_node_ids:
                 plural_s = "s" if len(unreachable_node_ids) != 1 else ""
@@ -958,35 +971,47 @@ class PersistentForest(Forest):
         return sorted(entry.name for entry in directory.iterdir()
                       if entry.is_file() and not entry.name.endswith(self._SIDECAR_METADATA_SUFFIX))
 
-    def _referenced_sidecars(self) -> set[str]:
+    def _referenced_sidecars(self, *, excluding_nodes: Iterable[str] = ()) -> set[str]:
         """Union of sidecar filenames referenced by every revision of every node — the GC "mark" phase.
 
         `chattree` owns this traversal over its own revision model; the per-payload interpretation is delegated
         to the `sidecar_extractor` configured at construction, because payloads are opaque to `chattree` by design.
         Returns an empty set if no extractor is configured (callers guard against acting on that).
+
+        `excluding_nodes` names node IDs to treat as already gone — see `list_unreferenced_sidecars`.
         """
         if self._sidecar_extractor is None:
             return set()
+        skip = set(excluding_nodes)
         referenced = set()
         with self.lock:
-            for node in self.nodes.values():
+            for node_id, node in self.nodes.items():
+                if node_id in skip:
+                    continue
                 for payload in node.get("data", {}).values():  # every revision of every node
                     referenced |= set(self._sidecar_extractor(payload))
         return referenced
 
-    def unreferenced_sidecars(self) -> list[str]:
+    def list_unreferenced_sidecars(self, *, excluding_nodes: Iterable[str] = ()) -> list[str]:
         """Sidecar filenames present on disk but referenced by no revision — the GC dry-run.
 
         The same computation as `prune_unreferenced_sidecars` without deleting, for a pre-commit preview
         ("would delete N files, X MB"). Returns `[]` (deleting nothing) if no `sidecar_extractor` is configured
         — references can't be determined, so nothing is reported as safe to delete.
+
+        `excluding_nodes` names node IDs to treat as though they had already been deleted, so that the answer
+        describes a *future* state rather than the current one. This is what makes an honest preview of the
+        full cleanup possible: the two prune steps run as a pair (`prune_unreachable_nodes` first, then
+        `prune_unreferenced_sidecars`), so a dry run taken before either has run must discount the references
+        held by nodes the first step is about to delete — otherwise it under-reports exactly the attachments
+        the cleanup is there to reclaim. Pass `list_unreachable_nodes(*roots)` to preview that pair.
         """
         with self.lock:
             if self._sidecar_extractor is None:
                 if self.list_sidecar_files():
-                    logger.warning("PersistentForest.unreferenced_sidecars: no sidecar_extractor configured; cannot determine references.")
+                    logger.warning("PersistentForest.list_unreferenced_sidecars: no sidecar_extractor configured; cannot determine references.")
                 return []
-            referenced = self._referenced_sidecars()
+            referenced = self._referenced_sidecars(excluding_nodes=excluding_nodes)
             return [filename for filename in self.list_sidecar_files() if filename not in referenced]
 
     def prune_unreferenced_sidecars(self) -> list[str]:

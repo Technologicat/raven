@@ -188,7 +188,7 @@ def test_prune_keeps_referenced_sweeps_orphans(datastore):
     datastore.create_node(payload, parent_id=None)
 
     # dry-run first: reports exactly the orphan, deletes nothing.
-    would_delete = datastore.unreferenced_sidecars()
+    would_delete = datastore.list_unreferenced_sidecars()
     assert would_delete == [orphan.filename]
     assert orphan.filename in datastore.list_sidecar_files()  # untouched by the dry-run
 
