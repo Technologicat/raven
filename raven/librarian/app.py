@@ -1312,6 +1312,13 @@ def librarian_hotkeys_callback(sender, app_data):
     #   - the help card (search "HelpWindow")
     #   - any tooltip naming the key (search its bracketed hint, e.g. "[Ctrl+O]")
 
+    # A global action's closure must take NO parameters. Below, such a closure is called directly by name,
+    # while the toolbar binds the same object as a DPG `callback=` - and DPG passes `sender` positionally,
+    # so a stray parameter is absorbed there and the button keeps working while the hotkey raises TypeError.
+    # That asymmetry hid a dead F8 for months. The per-message actions are immune by construction: they go
+    # through `fire_event_if_exists`, which invokes the very callable the button is bound to, so the two
+    # surfaces cannot drift apart.
+
     # Hotkeys that are always available, regardless of any dialogs (even if modal)
     if key == dpg.mvKey_F11:  # de facto standard hotkey for toggle fullscreen
         toggle_fullscreen()
