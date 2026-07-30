@@ -570,13 +570,9 @@ class DPGChatMessage:
 
         with self.paragraphs_lock:
             row = dpg.add_group(horizontal=True, parent=self.gui_text_group)
-            icon_tag = f"chat_message_toolcall_icon_{index}_{self.gui_uuid}"  # tag
-            dpg.add_text(fa.ICON_GEARS, color=tool_color, tag=icon_tag, parent=row)  # tag
-            dpg.bind_item_font(icon_tag, self.parent_view.themes_and_fonts.icon_font_solid)  # tag
-            dpg.add_text(f"{name}({signature})",
-                         color=tool_color,
-                         wrap=max(0, self.get_chat_text_width() - 40),  # leave room for the leading icon
-                         parent=row)
+            # The jump button leads the row, ahead of the icon: a call signature can be any length, so a
+            # trailing button would sit at a different x on every row, and several calls in one turn would
+            # scatter their controls across the message instead of forming a column the eye can run down.
             if tool_call_id is not None:
                 self._add_action_button(parent=row,
                                         icon=fa.ICON_ARROW_DOWN,  # plain directional arrow = "go to the related item", as in Visualizer's info panel
@@ -584,6 +580,14 @@ class DPGChatMessage:
                                         ok_message="Jumped to the result!",
                                         fail_message="No result recorded for this call",
                                         action=self._make_jump_to_tool_response(tool_call_id))
+            icon_tag = f"chat_message_toolcall_icon_{index}_{self.gui_uuid}"  # tag
+            dpg.add_text(fa.ICON_GEARS, color=tool_color, tag=icon_tag, parent=row)  # tag
+            dpg.bind_item_font(icon_tag, self.parent_view.themes_and_fonts.icon_font_solid)  # tag
+            dpg.add_text(f"{name}({signature})",
+                         color=tool_color,
+                         # Leave room for the leading icon, and for the jump button when there is one.
+                         wrap=max(0, self.get_chat_text_width() - 40 - (gui_config.toolbutton_w if tool_call_id is not None else 0)),
+                         parent=row)
 
     def _make_jump_to_tool_call(self, tool_call_id: str) -> Callable[[], None]:
         """Build the callback that scrolls to, and flashes, the tool-call sub-element with id `tool_call_id`."""
@@ -1459,12 +1463,24 @@ class DPGLinearizedChatView:
                         return dpg_chat_message.gui_container_group
                 return None
             if (target_message_widget := get_target_widget()) is not None:
-                x0, y0 = guiutils.get_widget_pos(target_message_widget)
-                logger.info(f"DPGLinearizedChatView.scroll_view: Position of scroll target chat node is ({x0}, {y0}) (in GUI container coordinates).")
+                # `get_widget_pos` reports *viewport* (on-screen) coordinates, while `set_y_scroll` wants an
+                # offset into the panel's scrollable content. The two coincide only when the panel happens to
+                # be scrolled to the top — which is why this went unnoticed for so long: the only previous
+                # caller scrolls immediately after a full rebuild, when it is. From an already-scrolled view
+                # the target is on screen by definition, so its viewport y is small and the panel jumped to
+                # the top instead. Convert: undo the panel's own origin, then add back where we already are.
+                # Same transformation as `raven.visualizer.info_panel.scroll_to_item`, deliberately: the
+                # panel origin is offset by the content area's outer + inner padding, so that the target
+                # lands at the top of the *content* rather than 11 px below it.
+                _, target_viewport_y = guiutils.get_widget_pos(target_message_widget)
+                _, panel_viewport_y = guiutils.get_widget_pos(self.gui_parent)
+                content_origin_y = panel_viewport_y + guiutils.DPG_WINDOW_PADDING + guiutils.DPG_FRAME_PADDING_Y
+                y0 = (target_viewport_y - content_origin_y) + dpg.get_y_scroll(self.gui_parent)
+                logger.info(f"DPGLinearizedChatView.scroll_view: Scroll target chat node is at content y = {y0} (viewport y = {target_viewport_y}, panel origin y = {panel_viewport_y}).")
             else:
                 y0 = max_y_scroll
                 logger.warning(f"DPGLinearizedChatView.scroll_view: Scroll target chat node '{scroll_target_node_id}' not found in view, scrolling to end instead.")
-            y_scroll = min(y0, max_y_scroll)
+            y_scroll = min(max(0, y0), max_y_scroll)
         else:
             logger.info("DPGLinearizedChatView.scroll_view: No scroll target chat node specified, scrolling to end.")
             y_scroll = max_y_scroll

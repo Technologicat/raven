@@ -79,6 +79,77 @@ happens, that icon choice is worth revisiting — it is a two-line change in `ad
 
 Discovered while picking icons for the tool-call navigation links (2026-07-30).
 
+## Chat view scrolling: keys, smoothness, and end-of-scroll feedback
+
+Verified 2026-07-30: Librarian's key handler (`app._on_key`) covers F1, F8, F11, Return, the arrows (sibling
+navigation), a handful of letters and Escape — and nothing for scrolling the chat log. The only way through a
+long chat is the mouse wheel, which is painful when a single tool result runs to dozens of screens (see the
+sibling item on webfetch results).
+
+**Visualizer's info panel is the reference implementation**, not a thing to invent: `scroll_to_position`,
+`go_to_top`, `go_to_bottom`, the page-up/page-down handlers and `update_navigation_controls` (which
+enables/disables the buttons by scroll position) already exist there with the semantics wanted here. Port the
+shape rather than a new one, and Librarian gets the on-screen buttons for free as well.
+
+Two traps specific to this:
+
+- **Page Up / Page Down do not match their constants.** They arrive as **517 / 518**, while `dpg.mvKey_Prior`
+  / `dpg.mvKey_Next` are stale DPG-1.x values (266 / 267). Comparing against the constant silently never
+  fires — no error, just a dead key. Documented in `dpg-notes.md` ("Keyboard input") and CLAUDE.md pitfall 7;
+  this is precisely the feature that would hit it.
+- **Home / End are ambiguous while the composer has focus.** In a text field they mean start/end of line, and
+  the user will expect that. The handler needs to route by focus rather than claim the keys globally.
+
+**Two more gaps in the same area, noticed alongside** (Juha, 2026-07-30) — and all three share the same
+reference implementation, so they are one job rather than three:
+
+- **No smooth scrolling.** `scroll_view` sets `dpg.set_y_scroll` directly, so every jump is instantaneous and
+  the reader loses their place — including the new tool-call navigation links, where "where did it take me?"
+  is the whole question. `raven.common.gui.animation.SmoothScrolling` already exists and is what Visualizer's
+  `scroll_to_position` uses.
+- **No scroll-past-end feedback.** Visualizer has `ScrollEndFlasher` (an animated overlay, arrows at top and
+  bottom) so that hitting the end of the content is visibly the end rather than an unresponsive view.
+  Librarian has nothing.
+
+Doing the keys without the other two would be the wrong order: page-down onto an instant jump with no
+end-of-content signal is worse than the mouse wheel it replaces.
+
+Raised by Juha (2026-07-30), while scrolling through a chat with several full-page webfetch results.
+
+## Store large tool results as attachments instead of dumping them into the chat log
+
+A `webfetch` result is currently rendered inline as the tool message's text, so fetching a paper drops its
+entire body into the chat log — dozens of screens to scroll past, and the same bytes into the datastore JSON
+(the 1.1 MB test datastore is mostly fetched article text). It is unreadable as a log and it is the reason
+the missing PageUp/PageDown above hurts.
+
+**The attachment machinery already does exactly what is wanted here.** A `text_file` content part stores the
+bytes as a content-addressed sidecar, the chat log shows a compact chip instead of the content, and
+`llmclient._serialize_history_for_wire` folds the extracted text back into the message at wire-build time —
+so *the model sees no difference*, which is the property that makes this safe. Store the fetched document as
+a sidecar and the tool message becomes a chip plus, say, the first paragraph.
+
+What falls out for free, beyond the readability:
+
+- **Content addressing.** Fetching the same URL in two branches costs one file instead of two copies.
+- **Provenance.** The fetch URL is exactly what `sidecarstore.base_provenance` records, and the existing
+  "Open source" / "Show original" buttons then work on tool results too.
+- **The chip's name shortening**, and the rest of the attachment display logic.
+- **A smaller datastore**, since the JSON keeps a `sidecar:` reference rather than the text.
+
+Design questions to settle first:
+
+- **A size threshold.** A short websearch summary is *better* inline; only large results should become
+  attachments. Where the line sits is a judgment call, and the behaviour should not flip confusingly around it.
+- **What the message shows instead.** Nothing, a title, or the first paragraph — the last is probably right,
+  since a tool result the user cannot see at all is a step backwards from the current what-you-see-is-what-you-get
+  design.
+- **Whether it applies to `websearch` too**, whose results are a list of snippets rather than one document.
+- **Interaction with the context-fill indicator**, which counts document tokens by appending `sidecar_to_text`
+  output — this path already exists, so it should just work, but confirm rather than assume.
+
+Raised by Juha (2026-07-30).
+
 ## Make the DPG reference a skill, so it loads when it is needed
 
 `CLAUDE.md` says "**Before editing any DPG code, read `dpg-notes.md` first**" and defines what counts as DPG
@@ -141,12 +212,43 @@ Genuinely *not* an instance, for contrast: `vumeter.py`'s `bgcolor = (64, 64, 64
 (45, 45, 48)`. That one deliberately differs from the default and cites it only to say so — its value would
 not change if the theme did.
 
+**A naming convention already exists, in two of the smaller apps** (found 2026-07-30 while scanning for the
+spacing literals). `raven/xdot_viewer/config.py` and `raven/conference_timer/config.py` name each constant
+after the DPG style variable it mirrors:
+
+```python
+DPG_WINDOW_PADDING_Y = 8    # mvStyleVar_WindowPadding[1]
+DPG_FRAME_PADDING_Y  = 3    # mvStyleVar_FramePadding[1]
+DPG_ITEM_SPACING_Y   = 4    # mvStyleVar_ItemSpacing[1]
+```
+
+**Adopt that fleet-wide, in preference to naming the constant after its use.** Librarian and Visualizer now
+have `margin` / `panel_inner_padding`, which say what the value is *for* rather than what it *is* — a weaker
+choice, and demonstrably so: `raven/avatar/settings_editor/app.py:490` computes `2 * 8 + 2 * 8` because
+`WindowPadding.x` and `ItemSpacing.x` are **two distinct quantities that both happen to be 8 today**. One
+`margin` constant would assert they are the same thing, and the day DPG changes one of them, every use site
+has to be re-derived from scratch. Note too that xdot_viewer calls the 3 `FRAME_PADDING`, which suggests
+`panel_inner_padding` is misnaming something DPG already has a name for — worth confirming by measurement
+(compare `get_item_rect_min` of a child window against that of its first child) rather than by assumption.
+
+Sites found by the scan:
+
+- `raven/visualizer/info_panel.py:248` — `_get_content_area_start_pos`, now `margin + panel_inner_padding`.
+- `raven/visualizer/info_panel.py:639` — the same `8 + 3` pair again, computing the content area's *bottom*
+  edge (`y0_content + h_content - 8 - 3`). Still literal.
+- `raven/librarian/chat_controller.py` — `scroll_view`, now `margin + panel_inner_padding`.
+- `raven/avatar/settings_editor/app.py:490, 516, 530` — `2 * 8 + 2 * 8`, a `-16`, and a `pos=(8, 32)`.
+- `raven/avatar/pose_editor/app.py` — several `image_size - 16` (i.e. 2×8) plus an `add_spacer(height=8)`.
+
+**Both avatar editors have no `gui_config` at all**, so adopting the convention there means introducing one
+(or importing the shared constants from wherever they end up living — arguably `raven.common.gui`, since
+these are DPG facts rather than per-app choices).
+
 Two separable pieces of work, and the cheap one is worth doing even if the other never is:
 
-- **Collapse the duplication.** Named constants for the DPG-default facts Raven depends on (background gray,
-  grid color, standard margin), referenced everywhere that currently repeats a literal. Costs nothing, and
-  makes the blast radius visible — right now, "what breaks if the DPG default theme changes?" can only be
-  answered by grepping for magic numbers across four modules.
+- **Collapse the duplication**, on the convention above. Costs nothing, and makes the blast radius visible —
+  right now, "what breaks if the DPG default theme changes?" can only be answered by grepping for magic
+  numbers across six modules in five apps.
 - **Restore rather than guess, wherever DPG allows it.** Per-widget getters exist for some properties and not
   others; the audit is to find which sites can be converted (as the `WidgetFlash` text path was) and which
   are genuinely stuck until upstream grows a getter. Those that are stuck should at least say so, so the next

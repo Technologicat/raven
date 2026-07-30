@@ -1164,7 +1164,12 @@ def remove_persona_from_start_of_line(persona: Optional[str],
     """
     if persona is None:
         return text
-    _persona_at_start_of_line = re.compile(f"^{persona}:\\s+", re.MULTILINE)
+    # `[ \t]*` rather than `\s+`, for two reasons. It must match with *nothing* after the colon: an assistant
+    # turn that only makes tool calls has "Aria:" as its entire text, and requiring trailing whitespace left
+    # that marker on screen with no message under it. And it must not cross a line break, or "Aria:\n\ntext"
+    # would lose the blank line that separates its paragraphs. The optional `\n` then removes the line the
+    # marker was alone on, instead of leaving it empty.
+    _persona_at_start_of_line = re.compile(f"^{re.escape(persona)}:[ \t]*\n?", re.MULTILINE)
     text = re.sub(_persona_at_start_of_line, r"", text)
     return text
 

@@ -338,6 +338,29 @@ class TestRemovePersona:
         result = chatutil.remove_persona_from_start_of_line("Aria", text)
         assert result == "hello Aria: world"
 
+    def test_bare_marker_with_nothing_after_it_is_removed(self):
+        """An assistant turn that only makes tool calls has the marker as its entire text.
+
+        This is not a hypothetical: such a turn rendered as a lone "Aria:" above the tool-call rows, with no
+        message under it, because the pattern used to require whitespace after the colon.
+        """
+        assert chatutil.remove_persona_from_start_of_line("Aria", "Aria:") == ""
+
+    def test_marker_alone_on_a_line_takes_the_line_with_it(self):
+        text = "Aria:\nhello"
+        assert chatutil.remove_persona_from_start_of_line("Aria", text) == "hello"
+
+    def test_paragraph_break_after_marker_survives(self):
+        """The separator must not eat newlines, or the message loses its paragraph structure."""
+        text = "Aria:\n\nfirst para\n\nsecond para"
+        result = chatutil.remove_persona_from_start_of_line("Aria", text)
+        assert result == "\nfirst para\n\nsecond para"
+
+    def test_persona_with_regex_metacharacters_is_matched_literally(self):
+        """A persona name is data, not a pattern — an unescaped one would misbehave or raise."""
+        assert chatutil.remove_persona_from_start_of_line("A.I.", "A.I.: hello") == "hello"
+        assert chatutil.remove_persona_from_start_of_line("A.I.", "AXIX: hello") == "AXIX: hello"
+
 
 # ---------------------------------------------------------------------------
 # scrub — the main complex function

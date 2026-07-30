@@ -248,9 +248,8 @@ def update_height():
 def _get_content_area_start_pos():
     """Return `(x0, y0)`, the upper left corner of the content area, in viewport coordinates."""
     x0, y0 = guiutils.get_widget_pos("item_information_panel")  # tag
-    x0_content = x0 + 8 + 3  # 8px outer padding + 3px inner padding
-    y0_content = y0 + 8 + 3
-    return x0_content, y0_content
+    inset = guiutils.DPG_WINDOW_PADDING + guiutils.DPG_FRAME_PADDING_Y  # a child window's content inset
+    return x0 + inset, y0 + inset
 
 
 def _get_content_area_size():

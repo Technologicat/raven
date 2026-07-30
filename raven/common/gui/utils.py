@@ -16,7 +16,8 @@ __all__ = ["bootup", "load_extra_font",  # high-level bootup API, you usually wa
            "recenter_window",
            "compute_tooltip_position_scalar",  # re-exported from layout_math
            "add_toolbar_separator",
-           "get_pixels_per_plotter_data_unit"]
+           "get_pixels_per_plotter_data_unit",
+           "DPG_WINDOW_PADDING", "DPG_FRAME_PADDING_Y"]  # default-theme metrics Raven has to know
 
 import logging
 logger = logging.getLogger(__name__)
@@ -388,6 +389,22 @@ def has_child_items(widget: Union[str, int]) -> bool:
 # ---------------------------------------------------------------------------
 # Widget geometry
 # ---------------------------------------------------------------------------
+
+# Metrics of DPG's default theme that Raven's layout math has to know.
+#
+# DPG exposes no getter for theme values, so code that must line up with the theme — converting a widget's
+# viewport position into a scroll offset, sizing a panel to its content area — cannot ask, and has to carry
+# the number. These are the default-theme values, and they live here rather than in a per-app config because
+# they are facts about DPG, not choices any app made.
+#
+# **Named after the style variable each mirrors, not after what it is used for.** Several are equal by
+# coincidence in the default theme (`WindowPadding.x` and `ItemSpacing.x` are both 8), so a constant called
+# "margin" would assert that two distinct quantities are one, and could not be corrected if a future theme
+# separated them. Same convention as `raven.xdot_viewer.config` and `raven.conference_timer.config`, which
+# named theirs first.
+DPG_WINDOW_PADDING = 8  # mvStyleVar_WindowPadding; both components are 8 in the default theme
+DPG_FRAME_PADDING_Y = 3  # mvStyleVar_FramePadding[1] (the x component is 4, and is not needed so far)
+
 
 def get_widget_pos(widget: Union[str, int]) -> Tuple[int, int]:
     """Return `widget`'s (DPG tag or ID) position `(x0, y0)`, in viewport coordinates.

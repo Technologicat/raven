@@ -1278,7 +1278,7 @@ def _center_ai_warning(avatar_panel_w: int) -> None:
 
 def _resize_panels() -> None:
     """Resize the panels in the main window RIGHT NOW, based on main window size."""
-    global _animator_settings  # intent only; loaded during app startup
+    global _animator_settings  # noqa: F824 -- intent only; loaded during app startup, never rebound here
 
     w, h = guiutils.get_widget_size(main_window)
 
