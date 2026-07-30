@@ -38,10 +38,15 @@ feature fits when both halves hold:
 2. It is not already available *in this form* — local, private, yours, and part of one workspace rather than
    one product per task.
 
-**Which scifi machine, though.** "A scifi machine" alone is too loose: this one does not control 3D printers,
-and the genre's AI systems notoriously include several nobody should be building. "A system of this kind"
-would be circular. Three properties bound it without circularity, and none of them is about the technology:
-two describe the *relationship*, and the third says who decides what it can reach.
+Both halves need unpacking, and they are different jobs. The two sections below take them in turn: what bounds
+the machine in half 1, and why half 2 is about form rather than category.
+
+## Which scifi machine, though
+
+"A scifi machine" alone is too loose: this one does not control 3D printers, and the genre's AI systems
+notoriously include several nobody should be building. "A system of this kind" would be circular. Three
+properties bound it without circularity, and none of them is about the technology: two describe the
+*relationship*, and the third says who decides what it can reach.
 
 - **It assists someone doing their own work**, rather than doing the work instead of them. The researcher stays
   the researcher, and this is an instrument they use. That is also the line against a coding agent or a general
@@ -62,13 +67,15 @@ two describe the *relationship*, and the third says who decides what it can reac
 None of this bounds how many steps it may take unattended, so the scriptable agent layer on the list
 (`TODO_DEFERRED.md`, headless agent-harness mode for `ai_turn`) sits inside it rather than against it.
 
-The second half is what keeps this from being nostalgia. The interesting region is the gap between what that
-future assumed was ordinary and what is actually on anyone's desk today — a research assistant that is local,
-private, and yours; that talks and listens; that sees what you show it; that remembers the work; that is a
-collaborator rather than a search box.
+## Form, not category
 
-**Form, not category.** A category test would be the wrong one and would rule out the flagships: LLM frontends
-are abundant, and topic-analysis tools exist. What does not exist is either of them in this form, or the two of
+The second half of the test is what keeps this from being nostalgia. The interesting region is the gap between
+what that future assumed was ordinary and what is actually on anyone's desk today — a research assistant that
+is local, private, and yours; that talks and listens; that sees what you show it; that remembers the work; that
+is a collaborator rather than a search box.
+
+Read as a *category* test it would be the wrong one, and would rule out the flagships: LLM frontends are
+abundant, and topic-analysis tools exist. What does not exist is either of them in this form, or the two of
 them as views on one corpus. So the gap has three shapes, and only the first is novelty:
 
 - **Not built yet.**
