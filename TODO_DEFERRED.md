@@ -2484,10 +2484,26 @@ for chat attachments, adding a second specialized model **increases** total foot
 The middle option only pays off where no VLM would otherwise be resident at all.
 
 Which shifts the justification, for the better. The strongest reason for this feature is not "so a text-only
-model can cope" — that was the weakest of the three, and it is the one small VLMs erode. It is **RAG
-indexing**: retrieval needs text *in the index*, and no chat-side model capability substitutes for that,
-however good it gets. The economics are favourable too, because extraction runs once per image at ingest
-rather than per query, so a VLM pass is affordable exactly where it is needed.
+model can cope" — that was the weakest of the three, and it is the one small VLMs erode. It is **RAG indexing**,
+and specifically the *keyword* half of it. The economics are favourable too: extraction runs once per image at
+ingest rather than per query, so a VLM pass is affordable exactly where it is wanted.
+
+**Which half of hybrid retrieval needs this, after Nomic** (Juha, 2026-07-30 — and worth stating precisely,
+because the loose version of this claim does not survive the embedder upgrade):
+
+- **Semantic search will not need it.** Nomic embeds images directly into the shared space, so a figure becomes
+  retrievable by meaning with no text anywhere in the pipeline. Any argument of the form "RAG needs text" is
+  wrong once that lands.
+- **BM25 still will.** Keyword search is over tokens; an image contributes none, so a figure stays invisible to
+  the keyword half however good the embedder gets. Extracting its text and running it through the existing
+  tokenizer (lowercase, lemmatize, stopword removal) puts it back in — no new machinery, just a new source of
+  text feeding the same path.
+
+That division is not a consolation prize; the halves are complementary here in a principled way. A figure's
+text is largely rare, specific tokens — variable names, symbols, proper nouns, instrument labels — which is
+exactly the material BM25 is good at and exactly what dense embeddings blur. So the embedder gets the gestalt
+of the figure and BM25 gets the precise strings on it, which is the same reason the retrieval is hybrid in the
+first place.
 
 So the likely shape is: transcribe with the VLM at ingest, store the result as searchable text alongside the
 image, and let the chat path keep sending pixels to whatever model is loaded.
