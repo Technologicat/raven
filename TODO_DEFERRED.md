@@ -2483,6 +2483,27 @@ Backend options, none evaluated: `cairosvg` (needs the cairo library), `svglib` 
 `rsvg-convert` or the Inkscape CLI (external binaries — fine on a dev box, not acceptable as a runtime
 dependency for a distributable app). Prefer an importable library over a subprocess for the usual reasons.
 
+**Where the code goes: `raven.common.image.codec`, not a new module** (decided 2026-07-30, in answer to
+"do we need an `imageextract` to go with `docextract`?"). `codec` is already the format-agnostic decoder — it
+sniffs magic bytes and reads QOI natively alongside everything Pillow handles — so SVG is one more branch in
+`_sniff_format`/`decode` plus an entry in `IMAGE_EXTENSIONS`. Put it there and `imagestore` needs no SVG case at
+all, while every other consumer of `codec` gains SVG for free.
+
+- **Render at the SVG's own declared size** (`width`/`height`, or the `viewBox`), so `decode` keeps its
+  signature and does not grow a size parameter that only one format honours. The existing downscale-to-cap in
+  `imagestore` then applies unchanged. A "render at least N megapixels" policy, if a tiny declared size ever
+  makes a figure illegible, is a storage-layer decision and belongs with the cap rather than in the decoder.
+- **The wire-format re-encode stays in `imagestore`.** The existing QOI branch there is *not* about decoding —
+  `codec` can already read QOI — it is about the stored sidecar having to be a format a `data:` URL can carry
+  to the model. SVG needs the same, so that branch generalizes from "QOI → PNG" to "anything the wire cannot
+  carry → PNG", which is a small cleanup worth doing at the same time.
+
+**`imageextract` *is* a real module — for the other job.** The true parallel to `docextract` is bytes → plain
+text: OCR for raster images, and the `<text>` elements for SVG. That is a separate concern from decoding
+pixels, it feeds RAG rather than the VLM wire, and it is what would let a non-vision model use a figure at all.
+Worth building when that need arrives; not needed for rasterization, and folding the two jobs under one name
+would be the mistake to avoid.
+
 Related: [Same file formats in the docs DB and in chat attachments], and the spreadsheet item above — three
 formats, three genuinely different problem classes behind one file picker.
 
