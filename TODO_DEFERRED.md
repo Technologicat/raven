@@ -59,6 +59,37 @@ happens, that icon choice is worth revisiting — it is a two-line change in `ad
 
 Discovered while picking icons for the tool-call navigation links (2026-07-30).
 
+## The context prefill trips the "no user message" template warning on every new chat
+
+Opening a new chat and leaving it idle logs:
+
+```
+WARNING raven.librarian.llmclient: _warn_about_strict_template_violations: history has no user message;
+roles are [system, assistant]. Strict chat templates reject this.
+```
+
+Confirmed from the log ordering (2026-07-30): the warning is immediately followed by
+`DPGChatController._context_prefill_entrypoint` reporting its token count for the *greeting* node, at about
+`context_prefill_idle_delay` seconds after the chat settles. So it is the prefill, whose whole job is to send
+the current branch — and on a new chat that branch is `[system prompt, greeting]`, with no user message in it
+yet, exactly as the warning says.
+
+The warning is doing its job; it is simply pointed at a caller it was not written for. It exists to tell a
+*user* that their conversation is malformed, and here nothing is wrong and there is nothing to act on. Fires
+on every new chat, so it also trains the reader to ignore a warning that would matter in a real turn.
+
+Two ways out, and the choice is not obvious:
+
+- **Silence it for the prefill**, by passing a flag through. Simple, but note the warning is *literally true*
+  — a strict template really could reject that request, which would make the prefill fail on some backends.
+  Silencing it hides a real (if harmless) incompatibility.
+- **Skip the prefill when the branch has no user message.** Arguably more correct: there is not much to warm
+  for a two-message prefix, and the exact token count it fetches is for a state the user is about to leave
+  the moment they type. But it does cost the indicator its exact count on a fresh chat, downgrading `X%` to
+  `~X%` until the first turn.
+
+Noticed by Juha (2026-07-30) in a live-test log.
+
 ## Chat view scrolling: keys, smoothness, and end-of-scroll feedback
 
 Verified 2026-07-30: Librarian's key handler (`app._on_key`) covers F1, F8, F11, Return, the arrows (sibling
