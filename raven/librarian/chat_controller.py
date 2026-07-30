@@ -1459,7 +1459,8 @@ class DPGLinearizedChatView:
         once per streamed chunk, before that chunk is rendered; if a single transient displacement makes it
         `False`, the next sample is taken from a view that has fallen one chunk further behind, so it stays
         `False` and the gap only grows. Even a momentary displacement of a line or two — never mind a whole
-        swapped-out paragraph — is enough to freeze the view where the stream began for the rest of the turn.
+        swapped-out paragraph — is enough to freeze the view for the rest of the turn, wherever it happened to
+        be at that moment.
 
         So the position is compared against `self._commanded_y_scroll` — where *we* last put it. Content
         growing moves the maximum but not the position, so the position still matches what we commanded and
