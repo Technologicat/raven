@@ -68,6 +68,11 @@ _PIN_TOLERANCE_PX = 2 * gui_config.font_size  # two lines of text
 # shape a wrong refusal takes, and the logged numbers say which comparison let it through.
 _PIN_NEAR_MISS_FACTOR = 20
 
+# How many times `scroll_view` re-issues a scroll that DPG clamped to a momentarily smaller content height.
+# A count rather than a pixel threshold, deliberately: the shortfall is the height of whatever was swapped out
+# of the view, which is unbounded, so there is no tolerance that could cover it.
+_SCROLL_VERIFY_ATTEMPTS = 3
+
 # --------------------------------------------------------------------------------
 
 role_to_colors = {"assistant": {"front": gui_config.chat_color_ai_front, "back": gui_config.chat_color_ai_back},
@@ -1453,8 +1458,8 @@ class DPGLinearizedChatView:
         Getting that wrong latches, which is what makes it severe rather than occasional. The answer is sampled
         once per streamed chunk, before that chunk is rendered; if a single transient displacement makes it
         `False`, the next sample is taken from a view that has fallen one chunk further behind, so it stays
-        `False` and the gap only grows. A momentary displacement of two lines is enough to freeze the view
-        where the stream began for the rest of the turn.
+        `False` and the gap only grows. Even a momentary displacement of a line or two — never mind a whole
+        swapped-out paragraph — is enough to freeze the view where the stream began for the rest of the turn.
 
         So the position is compared against `self._commanded_y_scroll` — where *we* last put it. Content
         growing moves the maximum but not the position, so the position still matches what we commanded and
@@ -1462,6 +1467,13 @@ class DPGLinearizedChatView:
         one thing content arrival cannot do. That distinction needs no scroll events, which is essential:
         of the three ways this panel moves — scrollbar drag, mouse wheel, navigation keys — the drag is
         handled inside ImGui and raises nothing we could hook.
+
+        The comparison is only as good as the record it compares against, which is why `scroll_view` verifies
+        that its command was applied rather than assuming it. A command DPG silently clamped would leave the
+        position disagreeing with the record, which is indistinguishable here from the user having scrolled.
+
+        Each call decides on current evidence and stores no verdict. A wrong answer therefore costs one chunk
+        rather than the remainder of the reply.
 
         The tolerance (`_PIN_TOLERANCE_PX`) absorbs the drift of a scroll that has effectively, but not
         exactly, arrived. It is a genuine trade-off in both directions, which is why it is instrumented rather
@@ -1514,12 +1526,12 @@ class DPGLinearizedChatView:
                         "look at: a nonzero drift with no user scrolling means something moved the position "
                         "behind our back.")
 
-        # A user scroll away from the tail is sticky, so a single ambiguous frame later on cannot resume
-        # dragging them back. Re-armed by the next scroll-to-end, which the `at_end` branch above still
-        # reaches when the user returns to the bottom themselves.
-        if not follow:
-            self._commanded_scroll_was_to_end = False
-
+        # Deliberately *not* recording this refusal anywhere. Making it sticky looks like the careful choice —
+        # it would stop one ambiguous frame from resuming the drag — but it is both unnecessary and harmful. A
+        # reader who really has scrolled away keeps failing the drift test on every later sample all by itself,
+        # because they stay where they put themselves and we issue no further commands. What stickiness adds is
+        # amplification: any single wrong refusal becomes permanent for the rest of the reply. Observed exactly
+        # that way, so the state stays where it is and each sample decides on current evidence.
         return follow
 
     def restore_scroll_after_swap(self, was_following: bool, y_scroll: int) -> None:
@@ -1666,6 +1678,35 @@ class DPGLinearizedChatView:
             to_end = True
         logger.info(f"DPGLinearizedChatView.scroll_view:{frames_str}{waited_str}: max_y_scroll = {max_y_scroll}, scrolling to y = {y_scroll}")
         self._set_y_scroll(y_scroll, to_end=to_end)
+
+        # Verify that the command actually took, and re-issue it if not.
+        #
+        # A streaming paragraph is replaced by delete-then-add, and the `dpg.mutex()` that would make the pair
+        # atomic within one frame is disabled in `replace_last_paragraph` (it hangs the app). So the render
+        # loop can apply our value during the interval when the old paragraph is gone: the content is briefly
+        # shorter, DPG clamps us to that smaller maximum, and the content then grows back — leaving the view
+        # short of the end by the height of that paragraph, with no error anywhere. The model decides where
+        # its newlines go, so a "paragraph" can be a line or a screenful, and the shortfall is unbounded.
+        #
+        # Left unhandled, that is not a cosmetic miss. `should_follow_tail` compares the position against what
+        # we commanded, so a clamped command makes the position disagree with the command, which is exactly
+        # the signature of the user having scrolled away, and the view stops following for the rest of the
+        # reply. Verifying here is what keeps that comparison meaningful.
+        for attempt in range(1, _SCROLL_VERIFY_ATTEMPTS + 1):
+            if max_wait_frames <= 0:  # cannot wait, so cannot verify; see the render-thread note above
+                break
+            guiutils.split_frame(operation="scroll_view: verify the scroll position was applied")
+            actual_y_scroll = dpg.get_y_scroll(self.gui_parent)
+            if actual_y_scroll >= y_scroll:  # reached it (or content moved on and we are past it) — done
+                break
+            max_y_scroll = dpg.get_y_scroll_max(self.gui_parent)
+            y_scroll = max_y_scroll if to_end else min(y_scroll, max_y_scroll)
+            if actual_y_scroll >= y_scroll:  # the shortfall was the content's, not a clamp: nothing to re-issue
+                break
+            logger.info(f"DPGLinearizedChatView.scroll_view: attempt {attempt}: position is {actual_y_scroll}, "
+                        f"short of the requested {y_scroll} (max_y_scroll = {max_y_scroll}); the content was "
+                        "briefly shorter when DPG applied it. Re-issuing.")
+            self._set_y_scroll(y_scroll, to_end=to_end)
 
     def get_chatlog_as_markdown(self, include_metadata: bool) -> Optional[str]:
         """Format this linearized chat as Markdown, for e.g. copying to the clipboard or saving to a file.
