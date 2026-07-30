@@ -1609,10 +1609,28 @@ So the loss happens after markdown, in the rendering stage. The streaming path i
 observation was of a *stored* message re-rendered on load, in a later session than the one that
 generated it.
 
-**Still unreproduced as of 2026-07-28** — one sighting, ten days, no recurrence. Treat it as an open
-report rather than a known defect: it is not a Researchers' Night blocker on current evidence, and
-it should not be *worked* until it reappears, because there is nothing to test a fix against. If it
-does reappear, the thing to capture is the node ID and whether the window had just been resized.
+**Second sighting 2026-07-30** (Juha), twelve days after the first, so it is a real recurring defect
+rather than a one-off — but still rare enough that there is nothing to test a fix against on demand.
+This time the AI's **greeting** rendered as "ow can I help you today", losing the leading `H`. It did
+not recur after restarting Librarian on the same data.
+
+That occurrence exonerates the two stages that had not yet been checked, both verified against the
+actual stored bytes:
+
+- The datastore holds `"Aria: How can I help you today?"` — correct, `H` present.
+- `chatutil.remove_persona_from_start_of_line` returns `"How can I help you today?"` — correct. (Worth
+  checking, because it had been modified hours earlier; it was not the cause.)
+- `chat_controller._render_text_paragraphs` writes each split line verbatim; there is no off-by-one in it.
+
+**What the two sightings have in common, which one alone could not show:** the character lost is the
+*first* of the text that follows something the pipeline consumed — the `W` of "What" after a run of
+whitespace, the `H` of "How" after the stripped `"Aria: "` prefix. Whatever drops it does so at a
+boundary, one character too far.
+
+Also new: the second occurrence was a **freshly created** greeting node (written that session by
+`appstate`'s system-prompt repair), not an aged one — so it is not a property of old stored data.
+
+If it reappears, capture the node ID and whether the window had just been resized.
 
 **It is intermittent.** Restarting Librarian re-rendered the same stored node correctly, and it had
 never been seen before that one occurrence. So this is not a deterministic function of the input —
