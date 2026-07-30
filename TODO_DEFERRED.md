@@ -114,6 +114,12 @@ reference implementation, so they are one job rather than three:
 Doing the keys without the other two would be the wrong order: page-down onto an instant jump with no
 end-of-content signal is worse than the mouse wheel it replaces.
 
+**Deliberately not doing: next/previous-message jump buttons.** They were considered and set aside (Juha,
+2026-07-30) because they treat a symptom. The reason a reader wants to skip a whole message is that one
+message is dozens of screens long, and that is the webfetch-bloat item below — fix the cause and a message
+is chip-sized again, at which point paging covers it. Revisit only if messages are still unwieldy *after*
+large tool results become attachments.
+
 Raised by Juha (2026-07-30), while scrolling through a chat with several full-page webfetch results.
 
 ## Store large tool results as attachments instead of dumping them into the chat log

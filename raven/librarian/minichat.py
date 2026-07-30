@@ -67,8 +67,8 @@ def minimal_chat_client(backend_url) -> None:
     """Minimal LLM chat client, for testing/debugging."""
 
     history_file = librarian_config.llmclient_userdata_dir / "history"      # user input history (readline)
-    datastore_file = librarian_config.llmclient_userdata_dir / "data.json"  # chat node datastore
-    state_file = librarian_config.llmclient_userdata_dir / "state.json"     # important node IDs for the chat client state
+    datastore_file = librarian_config.llm_datastore_file
+    state_file = librarian_config.llm_state_file
 
     docs_dir = pathlib.Path(librarian_config.llm_docs_dir).expanduser().resolve()  # RAG documents (put your documents in this directory)
     db_dir = pathlib.Path(librarian_config.llm_database_dir).expanduser().resolve()  # RAG search indices datastore

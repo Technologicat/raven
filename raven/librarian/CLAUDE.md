@@ -87,7 +87,7 @@ Each layer only imports from layers below it. No circular dependencies.
 
 ## Where the data lives on disk
 
-Everything sits under `librarian_config.llmclient_userdata_dir` — `~/.config/raven/llmclient/` by default. The *directory* is config; the two filenames are not, and are built independently by `app.py` (≈ line 246) and `minichat.py` (≈ line 70). They match, which is why the GUI and the CLI share one datastore:
+Everything sits under `librarian_config.llmclient_userdata_dir` — `~/.config/raven/llmclient/` by default. The paths are config (`llm_datastore_file`, `llm_state_file`), read by both frontends, so the GUI and the CLI share one chat history by construction rather than by two literals happening to agree:
 
 | Path | What |
 |---|---|

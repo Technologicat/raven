@@ -243,11 +243,10 @@ llm_settings = llmclient.setup(backend_url=llm_backend_url)
 
 logger.info("Loading chat datastore.")
 with timer() as tim:
-    datastore_file = librarian_config.llmclient_userdata_dir / "data.json"  # chat node datastore
-    state_file = librarian_config.llmclient_userdata_dir / "state.json"     # important node IDs for the chat client state
-
     # Persistent, branching chat history, and app settings (these will auto-persist at app exit).
-    datastore, app_state = appstate.load(llm_settings, datastore_file, state_file)
+    datastore, app_state = appstate.load(llm_settings,
+                                         librarian_config.llm_datastore_file,
+                                         librarian_config.llm_state_file)
 logger.info(f"Datastore loaded in {tim.dt:0.6g}s.")
 
 logger.info("Loading RAG (retrieval-augmented generation) document store.")
@@ -1583,7 +1582,7 @@ cleanup_dialog = DPGCleanupDialog(datastore=datastore,
                                   get_roots=_cleanup_roots,
                                   executor=bg,  # use the same thread pool as our main task manager
                                   themes_and_fonts=themes_and_fonts,
-                                  save_app_state=lambda: appstate.save(state_file=state_file, state=app_state),
+                                  save_app_state=lambda: appstate.save(state_file=librarian_config.llm_state_file, state=app_state),
                                   on_committed=_on_cleanup_committed,
                                   centering_reference_window="librarian_main_window")  # tag
 

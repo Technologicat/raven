@@ -20,6 +20,14 @@ from ..common.video import colorspace
 
 llmclient_userdata_dir = global_config.toplevel_userdata_dir / "llmclient"
 
+# The two files the chat frontends persist to. Config rather than per-frontend literals because the GUI and
+# the CLI are meant to share one chat history: they did, but only because two separately written pairs of
+# filenames happened to agree, with nothing enforcing it and nothing to notice if one drifted.
+llm_datastore_file = llmclient_userdata_dir / "data.json"  # chat node datastore
+llm_state_file = llmclient_userdata_dir / "state.json"  # important node IDs for the chat client state
+# Attachment sidecars live beside the datastore, in a directory derived from its name — see
+# `chattree.PersistentForest.sidecar_dir`.
+
 # URL used to connect to the LLM API.
 #
 # This has been tested with local LLMs only, but theoretically cloud LLMs should work, too.
