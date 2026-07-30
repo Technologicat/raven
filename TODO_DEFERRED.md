@@ -41,12 +41,15 @@ Two things to keep straight while sweeping:
   DPG style values coincide in the default theme (`WindowPadding.x` and `ItemSpacing.x` are both 8), so
   replacing a coincidental 8 asserts an identity that is not there. The test is what the number *means* at
   that site, not what it equals. A literal that is genuinely a chosen gap stays a literal.
-- **Two per-app copies predate the shared home.** `raven/xdot_viewer/config.py` defines
+- **Two per-app copies predate the shared home, and go away in this pass** (decided with Juha, 2026-07-31 —
+  the guiutils definitions are the ones that stay). `raven/xdot_viewer/config.py` defines
   `DPG_WINDOW_PADDING_Y`, `DPG_FRAME_PADDING_Y`, `DPG_ITEM_SPACING_Y` and `DPG_SCROLLBAR_SIZE`;
   `raven/conference_timer/config.py` defines `DPG_WINDOW_PADDING`. These named theirs first and the guiutils
   block credits them, but the argument in that block — these are facts about DPG, not choices an app made —
-  now applies to them too. Folding them into guiutils would also promote the two metrics guiutils lacks
-  (`ItemSpacing`, `ScrollbarSize`), which is probably the more valuable half of the job.
+  now applies to them too. Folding them in also promotes the two metrics guiutils lacks (`ItemSpacing`,
+  `ScrollbarSize`), which is probably the more valuable half of the job. Watch the name change while moving
+  xdot_viewer's: its `DPG_WINDOW_PADDING_Y` is guiutils' `DPG_WINDOW_PADDING` (both components are 8, so
+  guiutils dropped the axis suffix).
 
 Note that xdot_viewer's derived sizes carry empirical fudge terms (`-13`, "+2 empirical (ImGui internal
 leading/rounding)"). Those are not margins misnamed, they are unexplained residue — worth a separate look at
