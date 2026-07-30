@@ -243,6 +243,13 @@ reference implementation, so they are one job rather than three:
     top/bottom), so nothing ever retargets repeatedly and there is no fight to lose. The case is new to
     Librarian rather than something to port, so expect to design it rather than copy it.
 
+    The structural reason, which is what makes it non-transferable: the info panel's content changes in
+    discrete wholesale swaps, built double-buffered in a hidden group and swapped in complete, so the panel
+    never presents a partially-grown state that something would have to follow — one anchored restore
+    afterwards (`compute_scroll_anchors` and friends) covers the whole change. A streaming chat has no
+    equivalent "finished" moment to restore to; it grows continuously, so it must follow continuously, and
+    only then does "the user grabbed the scrollbar while we were following" become reachable at all.
+
     It half falls out of the design, and the half that does not is the one that matters:
 
     - **Falls out:** `SmoothScrolling` stops advancing by itself, because its guard requires
