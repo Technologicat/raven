@@ -78,15 +78,20 @@ The warning is doing its job; it is simply pointed at a caller it was not writte
 *user* that their conversation is malformed, and here nothing is wrong and there is nothing to act on. Fires
 on every new chat, so it also trains the reader to ignore a warning that would matter in a real turn.
 
-Two ways out, and the choice is not obvious:
+**Preferred fix (Juha, 2026-07-30): report it only if the backend actually rejects the request.** Keep the
+check, but hold its result instead of logging it, and emit it as part of the error path when the request
+fails. This is strictly better than the two obvious alternatives because it does not trade anything away:
 
-- **Silence it for the prefill**, by passing a flag through. Simple, but note the warning is *literally true*
-  — a strict template really could reject that request, which would make the prefill fail on some backends.
-  Silencing it hides a real (if harmless) incompatibility.
-- **Skip the prefill when the branch has no user message.** Arguably more correct: there is not much to warm
-  for a two-message prefix, and the exact token count it fetches is for a state the user is about to leave
-  the moment they type. But it does cost the indicator its exact count on a fresh chat, downgrading `X%` to
-  `~X%` until the first turn.
+- The warning's whole purpose is to explain a rejection by a strict template. Attaching it to the rejection
+  that actually happened makes it *more* useful, not less — it becomes a diagnosis of a real failure rather
+  than a standing prediction about a hypothetical one.
+- No false positives, so the reader stops learning to ignore it, which is the real damage a
+  fires-every-time warning does.
+- Nothing is silenced: a backend that does reject `[system, greeting]` still gets its explanation.
+
+The alternatives, recorded because they were considered and are worse: *silencing it for the prefill* hides a
+real (if usually harmless) incompatibility, and *skipping the prefill when the branch has no user message*
+costs the context indicator its exact count on a fresh chat, downgrading `X%` to `~X%` until the first turn.
 
 Noticed by Juha (2026-07-30) in a live-test log.
 
