@@ -221,12 +221,16 @@ reference implementation, so they are one job rather than three:
   - **An in-flight animation must not read as a user scroll.** `should_follow_tail` decides by comparing the
     current position against the one it last commanded. An animation makes that briefly false *by design*: the
     panel is mid-travel, so the position is nowhere near the commanded target for several frames, which reads
-    exactly like the user having dragged the scrollbar — and the consequence is the sticky one, so following
-    stops for the rest of the turn. The commanded position must therefore be understood as the animation's
-    *target* while one is in flight, not the panel's instantaneous offset. Retargeting itself is free:
-    constructing a `SmoothScrolling` for a window that already has one *updates the existing instance's*
-    `target_y_scroll` instead of starting a second animation, so streaming chunks chase a moving end smoothly
-    rather than fighting for the scrollbar.
+    exactly like the user having dragged the scrollbar. The commanded position must therefore be understood as
+    the animation's *target* while one is in flight, not the panel's instantaneous offset.
+
+    The good news is that both sides already track the same quantity under different names —
+    `SmoothScrolling.prev_frame_new_y_scroll` (the last value it wrote, which it waits to see reported back)
+    and the chat view's `_commanded_y_scroll`. So the join is to let the animation own the record while it
+    runs, rather than to invent a third mechanism. Retargeting is free on top of that: constructing a
+    `SmoothScrolling` for a window that already has one *updates the existing instance's* `target_y_scroll`
+    instead of starting a second animation, so streaming chunks chase a moving end smoothly rather than
+    fighting for the scrollbar.
   - **The two halves sit on opposite sides of the `split_frame` boundary.** `scroll_view`'s settle-wait uses
     `split_frame` and therefore may only run off the render loop; `SmoothScrolling.render_frame` runs *in* the
     render loop and must never wait, which is why it counts `update_pending_frames` instead. So the animation
