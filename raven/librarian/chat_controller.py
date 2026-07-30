@@ -53,18 +53,19 @@ from . import sidecarstore
 
 gui_config = librarian_config.gui_config  # shorthand, this is used a lot
 
-# How close to the end of the chat still counts as "pinned to the bottom", in pixels — the tolerance used by
-# `DPGLinearizedChatView.is_pinned_to_bottom` to decide whether the view should keep following new content.
+# Slack, in pixels, for the two comparisons in `DPGLinearizedChatView.should_follow_tail`: how close to the end
+# still counts as being at the end, and how far the scroll position may sit from where we put it before we
+# conclude that the user moved it.
 #
 # Not a config knob yet, because the right value is still being measured; see the diagnostics in that method.
 # It is squeezed from both sides. Too small, and the view stops following immediately after the user sends a
 # message: `dpg.set_y_scroll` is applied by the render loop, so a position sampled before the next frame can
 # still report the pre-scroll value, leaving a gap the size of whatever was just added. Too large, and
-# scrolling up a line or two from the end still counts as pinned, so the arrow keys look broken.
+# scrolling up a line or two from the end still counts as being at the end, so the arrow keys look broken.
 _PIN_TOLERANCE_PX = 2 * gui_config.font_size  # two lines of text
 
-# A "not pinned" verdict within this many tolerances of the end is reported at INFO as a near miss: that is
-# the signature of a tolerance set too low, and the logged gap says how much it would have to grow.
+# A refusal to follow, within this many tolerances of the end, is reported at INFO as a near miss: that is the
+# shape a wrong refusal takes, and the logged numbers say which comparison let it through.
 _PIN_NEAR_MISS_FACTOR = 20
 
 # --------------------------------------------------------------------------------
@@ -1436,70 +1437,144 @@ class DPGLinearizedChatView:
         self.chat_messages_container_group_widget = dpg.add_group(tag=f"chat_messages_container_group_{self.gui_uuid}",
                                                                   parent=gui_parent)
 
-    def is_pinned_to_bottom(self) -> bool:
-        """Whether the view is currently at (or within one line of) the end of the chat.
+        # Where we last put the scroll position ourselves, and whether that was a scroll to the end. Needed to
+        # tell our own scrolling apart from the user's; see `should_follow_tail`.
+        self._commanded_y_scroll: Optional[int] = None
+        self._commanded_scroll_was_to_end = False
 
-        Decided from the scroll *position*, deliberately, rather than by watching for the user to scroll.
-        Three different things move this panel — dragging the scrollbar, the mouse wheel, and (once they
-        exist) the navigation keys — and DPG surfaces them differently; a scrollbar drag is handled inside
-        ImGui and may raise nothing we could hook at all. Position is where all three end up, so reading it
-        needs no per-path handling and cannot miss one.
+    def should_follow_tail(self) -> bool:
+        """Whether new content should pull the view along with it.
+
+        Not the same question as "is the view at the bottom", and the difference is the whole bug this exists
+        to avoid. Two endpoints move here: the user moves the scroll *position*, and arriving content moves the
+        *maximum*. A position-only test cannot tell those apart — both show up as a gap — so it reads new
+        content as "the user scrolled away".
+
+        Getting that wrong latches, which is what makes it severe rather than occasional. The answer is sampled
+        once per streamed chunk, before that chunk is rendered; if a single transient displacement makes it
+        `False`, the next sample is taken from a view that has fallen one chunk further behind, so it stays
+        `False` and the gap only grows. A momentary displacement of two lines is enough to freeze the view
+        where the stream began for the rest of the turn.
+
+        So the position is compared against `self._commanded_y_scroll` — where *we* last put it. Content
+        growing moves the maximum but not the position, so the position still matches what we commanded and
+        following continues. The user scrolling moves the position away from what we commanded, which is the
+        one thing content arrival cannot do. That distinction needs no scroll events, which is essential:
+        of the three ways this panel moves — scrollbar drag, mouse wheel, navigation keys — the drag is
+        handled inside ImGui and raises nothing we could hook.
 
         The tolerance (`_PIN_TOLERANCE_PX`) absorbs the drift of a scroll that has effectively, but not
-        exactly, arrived — and it is a genuine trade-off in both directions, which is why it is instrumented
-        rather than guessed. Too small and the view stops following right after the user sends a message; too
-        large and a deliberate scroll of one or two lines away from the end still counts as pinned, so the
-        arrow keys appear not to work.
+        exactly, arrived. It is a genuine trade-off in both directions, which is why it is instrumented rather
+        than guessed: too small and the view stops following right after the user sends a message; too large
+        and a deliberate scroll of one or two lines away from the end still counts as following, so the arrow
+        keys appear not to work.
 
-        Diagnostics: every call logs the numbers at DEBUG. A *near miss* — not pinned, but within a few
-        tolerances of the end — additionally logs at INFO, since that is precisely the case where the
-        tolerance is too small, and the reported gap is how much it would need to grow. Run with
-        `logsetup.init(level=logging.DEBUG)` for the full trace, or just watch INFO for the near misses.
+        Diagnostics: every call logs the numbers and which branch decided, at DEBUG. Run with
+        `logsetup.init(level=logging.DEBUG)` for the full trace. A refusal that is *near* the end additionally
+        logs at INFO, because that is the shape a wrong answer takes: if it fires on a turn you expected to be
+        followed, the reported numbers say which of the two branches let it through.
         """
         max_y_scroll = dpg.get_y_scroll_max(self.gui_parent)
+        if max_y_scroll <= 0:  # no scrollbar: the tail is always in view
+            logger.debug("DPGLinearizedChatView.should_follow_tail: no scrollbar -> True")
+            return True
+
         y_scroll = dpg.get_y_scroll(self.gui_parent)
         gap = max_y_scroll - y_scroll  # how far above the end we are, in pixels
-        pinned = (max_y_scroll <= 0) or (gap <= _PIN_TOLERANCE_PX)  # no scrollbar: the tail is always in view
-        logger.debug(f"DPGLinearizedChatView.is_pinned_to_bottom: y_scroll={y_scroll}, max_y_scroll={max_y_scroll}, "
-                     f"gap={gap}, tolerance={_PIN_TOLERANCE_PX} -> pinned={pinned}")
-        if not pinned and 0 < gap <= _PIN_NEAR_MISS_FACTOR * _PIN_TOLERANCE_PX:
-            logger.info(f"DPGLinearizedChatView.is_pinned_to_bottom: NEAR MISS — gap={gap}px exceeds "
-                        f"tolerance={_PIN_TOLERANCE_PX}px, so the view will not follow. If this fires when you "
-                        f"expected it to follow, the tolerance needs to be at least {gap}px.")
-        return pinned
+        at_end = (gap <= _PIN_TOLERANCE_PX)
 
-    def restore_scroll_after_swap(self, was_pinned: bool, y_scroll: int) -> None:
+        # Has the position moved since we last set it? Content arriving cannot do that — it moves
+        # `max_y_scroll` and leaves `y_scroll` alone — so a mismatch means the user moved it. Compare against
+        # the *clamped* command, since DPG pulls the position down by itself when content shrinks, and that is
+        # our doing rather than the user's.
+        if self._commanded_y_scroll is not None:
+            expected_y_scroll = min(self._commanded_y_scroll, max_y_scroll)
+            drift = abs(y_scroll - expected_y_scroll)
+            undisturbed = (drift <= _PIN_TOLERANCE_PX)
+        else:
+            expected_y_scroll = None
+            drift = None
+            undisturbed = False
+
+        # Following continues if we are at the end by position (however we got there — including the user
+        # scrolling back down, which is how this recovers), or if we were following the tail and the position
+        # is still where we left it.
+        follow = at_end or (self._commanded_scroll_was_to_end and undisturbed)
+
+        logger.debug(f"DPGLinearizedChatView.should_follow_tail: y_scroll={y_scroll}, max_y_scroll={max_y_scroll}, "
+                     f"gap={gap} (tolerance={_PIN_TOLERANCE_PX}) -> at_end={at_end}; "
+                     f"commanded={self._commanded_y_scroll} (to_end={self._commanded_scroll_was_to_end}), "
+                     f"expected={expected_y_scroll}, drift={drift} -> undisturbed={undisturbed}; "
+                     f"-> follow={follow}")
+        if not follow and 0 < gap <= _PIN_NEAR_MISS_FACTOR * _PIN_TOLERANCE_PX:
+            logger.info(f"DPGLinearizedChatView.should_follow_tail: NEAR MISS — gap={gap}px exceeds "
+                        f"tolerance={_PIN_TOLERANCE_PX}px and the position has drifted {drift}px from the "
+                        f"{self._commanded_y_scroll} we last commanded (to_end={self._commanded_scroll_was_to_end}), "
+                        "so the view will not follow. If you expected it to follow, the drift is the number to "
+                        "look at: a nonzero drift with no user scrolling means something moved the position "
+                        "behind our back.")
+
+        # A user scroll away from the tail is sticky, so a single ambiguous frame later on cannot resume
+        # dragging them back. Re-armed by the next scroll-to-end, which the `at_end` branch above still
+        # reaches when the user returns to the bottom themselves.
+        if not follow:
+            self._commanded_scroll_was_to_end = False
+
+        return follow
+
+    def restore_scroll_after_swap(self, was_following: bool, y_scroll: int) -> None:
         """Put the view back after content was *replaced* — deleted and re-added — rather than appended.
 
-        `was_pinned`, `y_scroll`: what `is_pinned_to_bottom` and `dpg.get_y_scroll` reported **before** the swap.
+        `was_following`, `y_scroll`: what `should_follow_tail` and `dpg.get_y_scroll` reported **before** the swap.
 
         Appending only ever grows the container, so a reader below the fold keeps their offset for free and
         `follow_tail` is enough. A swap briefly *shrinks* it, and DPG clamps the scroll position to the
         smaller maximum at the next layout — which the render loop can perform mid-swap, since these
-        callbacks run on the LLM task thread rather than the main one. A pinned reader recovers from that on
-        their own (the re-pin scrolls to the new end afterwards); an unpinned one does not, so their offset
-        is restored explicitly.
+        callbacks run on the LLM task thread rather than the main one. A reader who was following recovers
+        from that on their own (the scroll to the new end happens afterwards); one who was not does not, so
+        their offset is restored explicitly.
         """
-        dpg.split_frame()  # let the replacement lay out, so both branches below act on final geometry
-        if was_pinned:
+        guiutils.split_frame(operation="restore_scroll_after_swap: lay out the replacement content")
+        if was_following:
             self.scroll_view()
         else:
-            dpg.set_y_scroll(self.gui_parent, y_scroll)
+            self._set_y_scroll(y_scroll, to_end=False)
 
-    def follow_tail(self, was_pinned: bool) -> None:
-        """Re-pin the view to the end of the chat, but only if it `was_pinned` *before* the content grew.
+    def follow_tail(self, was_following: bool) -> None:
+        """Scroll the view to the end of the chat, but only if it `was_following` *before* the content grew.
 
-        `was_pinned`: what `is_pinned_to_bottom` reported **before** whatever just added content.
+        `was_following`: what `should_follow_tail` reported **before** whatever just added content.
 
         That ordering is the whole point, and is why this takes the answer instead of asking for itself.
-        Appending text grows the container, so `max_y_scroll` rises and a view that was pinned to the bottom
-        is no longer at the bottom the instant the new content lands. A version that sampled here would read
-        "the user has scrolled away" on every chunk, never follow, and leave the view frozen where the stream
+        Appending text grows the container, so `max_y_scroll` rises and a view that was at the bottom is no
+        longer at the bottom the instant the new content lands. A version that sampled here would read "the
+        user has scrolled away" on every chunk, never follow, and leave the view frozen where the stream
         began — failing in the opposite direction from the bug it fixes, while looking entirely reasonable.
         """
-        if not was_pinned:
+        if not was_following:
             return
         self.scroll_view()  # waits for the new content to lay out, so this reaches the *new* end
+
+    def _set_y_scroll(self, y_scroll: int, *, to_end: bool) -> None:
+        """Move the scroll position, remembering what we asked for.
+
+        `y_scroll`: An actual position, in content coordinates. Must be non-negative: the remembered value is
+                    compared against the panel's reported position later, so a sentinel that DPG resolves on
+                    its own would be compared against whatever it resolved to and read as a user scroll.
+                    "Go to the end" is expressed by `to_end` plus the concrete maximum, which the caller has
+                    already had to compute in order to clamp.
+        `to_end`: Whether this scroll was a scroll to the end of the content, i.e. whether the view should
+                  keep following the tail as more content arrives.
+
+        Every scroll this class performs goes through here, so that `should_follow_tail` can tell our own
+        scrolling from the user's. A bare `dpg.set_y_scroll` elsewhere would look exactly like a user scroll
+        and silently stop the view following.
+        """
+        if y_scroll < 0:
+            raise ValueError(f"_set_y_scroll: expected a non-negative position, got {y_scroll}")
+        self._commanded_y_scroll = y_scroll
+        self._commanded_scroll_was_to_end = to_end
+        dpg.set_y_scroll(self.gui_parent, y_scroll)
 
     def scroll_view(self,
                     max_wait_frames: int = 10,
@@ -1516,10 +1591,7 @@ class DPGLinearizedChatView:
                            a content change by more than one frame — the same lag `SmoothScrolling` budgets
                            four frames for. Reading it too early returns the maximum from *before* the
                            content was added, and then "scroll to the end" lands where the previous message
-                           ended. That misses in two ways at once: the view visibly fails to reach the
-                           message the user just sent, and a `is_pinned_to_bottom` sampled afterwards
-                           compares a position against a maximum that has since grown, so it reports the
-                           reader as having scrolled away and the reply is never followed.
+                           ended, so the view visibly fails to reach the message the user just sent.
 
         `target_y`: y coordinate to scroll to, in coordinate system of `self.gui_parent`.
                     If not provided (default), scroll to end.
@@ -1588,11 +1660,13 @@ class DPGLinearizedChatView:
                 y0 = max_y_scroll
                 logger.warning(f"DPGLinearizedChatView.scroll_view: Scroll target chat node '{scroll_target_node_id}' not found in view, scrolling to end instead.")
             y_scroll = min(max(0, y0), max_y_scroll)
+            to_end = False  # a jump to a specific message: the reader wants to be *there*, not at the tail
         else:
             logger.info("DPGLinearizedChatView.scroll_view: No scroll target chat node specified, scrolling to end.")
             y_scroll = max_y_scroll
+            to_end = True
         logger.info(f"DPGLinearizedChatView.scroll_view:{frames_str}{waited_str}: max_y_scroll = {max_y_scroll}, scrolling to y = {y_scroll}")
-        dpg.set_y_scroll(self.gui_parent, y_scroll)
+        self._set_y_scroll(y_scroll, to_end=to_end)
 
     def get_chatlog_as_markdown(self, include_metadata: bool) -> Optional[str]:
         """Format this linearized chat as Markdown, for e.g. copying to the clipboard or saving to a file.
@@ -1645,7 +1719,7 @@ class DPGLinearizedChatView:
                        This is *unconditional*, so pass it only where jumping to the new message is the
                        expected answer to something the user just did. For a message that appears on its
                        own — an AI reply finalizing, a tool result arriving — pass `False`, and instead
-                       sample `is_pinned_to_bottom` before the call and hand it to `follow_tail` after, so
+                       sample `should_follow_tail` before the call and hand it to `follow_tail` after, so
                        a reader who has scrolled up is left where they put themselves.
         """
         with self.chat_controller.current_chat_history_lock:
@@ -2374,10 +2448,10 @@ class DPGChatController:
                             old_dpg_chat_message.demolish()
 
                         # Sampled before the new message widget exists — creating it is itself a content change.
-                        was_pinned = self.view.is_pinned_to_bottom()
+                        was_following = self.view.should_follow_tail()
                         streaming_chat_message = DPGStreamingChatMessage(gui_parent=self.view.chat_messages_container_group_widget,
                                                                          parent_view=self.view)
-                        self.view.follow_tail(was_pinned)
+                        self.view.follow_tail(was_following)
 
                         if self.indicator_glow_animation is not None:
                             self.indicator_glow_animation.reset()  # start new pulsation cycle
@@ -2427,7 +2501,7 @@ class DPGChatController:
                     # reply only for a reader who is already at the end of it. Someone who scrolled up to
                     # re-read an earlier message stays where they put themselves, instead of being dragged
                     # back down by every chunk — which, on a thinking model, meant waiting out the whole turn.
-                    was_pinned = self.view.is_pinned_to_bottom()
+                    was_following = self.view.should_follow_tail()
 
                     if self.gui_updates_safe and chunk_text:  # avoid triggering on an empty event
                         dpg.hide_item(self.llm_indicator_widget)  # hide prompt processing indicator
@@ -2450,7 +2524,7 @@ class DPGChatController:
                         task_env.text = io.StringIO()
                         task_env.t0 = time.monotonic()
                         task_env.n_chunks0 = n_chunks
-                        self.view.follow_tail(was_pinned)
+                        self.view.follow_tail(was_following)
                     task_env.current_is_thought = is_thought
 
                     # Accumulate the chunk, then render. Write *before* reading the paragraph so the chunk is
@@ -2470,7 +2544,7 @@ class DPGChatController:
                         streaming_chat_message.add_paragraph("",
                                                              is_thought=is_thought)
                         task_env.text = io.StringIO()
-                        self.view.follow_tail(was_pinned)
+                        self.view.follow_tail(was_following)
                     # - update at least every 0.5 sec, even if the LLM is slow
                     # - update after every 10 chunks, but with a rate limit
                     elif dt >= 0.5 or (dt >= 0.25 and dchunks >= 10):  # commit changes to in-progress last paragraph
@@ -2478,7 +2552,7 @@ class DPGChatController:
                         task_env.n_chunks0 = n_chunks
                         streaming_chat_message.replace_last_paragraph(paragraph_text,
                                                                       is_thought=is_thought)  # at first paragraph, will auto-create the paragraph if not created yet
-                        self.view.follow_tail(was_pinned)
+                        self.view.follow_tail(was_following)
 
                     # Let the LLM keep generating (if it wants to).
                     return llmclient.action_ack
@@ -2516,11 +2590,11 @@ class DPGChatController:
                         # The streaming message finalizing is an automatic step, not something the user asked
                         # for, so it must not move a reader who has scrolled away any more than the chunks did.
                         # This one replaces rather than appends, so the offset is restored too, not just the pin.
-                        was_pinned = self.view.is_pinned_to_bottom()
+                        was_following = self.view.should_follow_tail()
                         y_scroll = dpg.get_y_scroll(self.view.gui_parent)
                         delete_streaming_chat_message()  # no-ops when there is no in-progress message in the GUI
                         self.view.add_complete_message(node_id, scroll_view=False)
-                        self.view.restore_scroll_after_swap(was_pinned, y_scroll)
+                        self.view.restore_scroll_after_swap(was_following, y_scroll)
                         self.update_context_fill_indicator()  # AI message completed -> context grew
 
                         logger.info("ai_turn.ai_turn_task.on_done: all done.")
@@ -2566,11 +2640,11 @@ class DPGChatController:
                     self.app_state["HEAD"] = node_id  # update just in case of Ctrl+C or crash during tool calls
                     task_env.text = io.StringIO()  # for next AI message (in case of tool calls)
                     if self.gui_updates_safe:
-                        was_pinned = self.view.is_pinned_to_bottom()  # a tool result also arrives on its own
+                        was_following = self.view.should_follow_tail()  # a tool result also arrives on its own
                         y_scroll = dpg.get_y_scroll(self.view.gui_parent)
                         delete_streaming_chat_message()  # it shouldn't exist when this triggers, but robustness.
                         self.view.add_complete_message(node_id, scroll_view=False)
-                        self.view.restore_scroll_after_swap(was_pinned, y_scroll)
+                        self.view.restore_scroll_after_swap(was_following, y_scroll)
                         self.update_context_fill_indicator()  # tool result added -> context grew
 
                 def on_tools_done() -> None:

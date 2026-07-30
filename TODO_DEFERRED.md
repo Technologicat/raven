@@ -176,14 +176,15 @@ reference implementation, so they are one job rather than three:
   is the whole question. `raven.common.gui.animation.SmoothScrolling` already exists and is what Visualizer's
   `scroll_to_position` uses. Two things to get right when porting it, both discovered while reading the code
   rather than by tripping over them:
-  - **The pin predicate must consult the animation's target, not only the current position.** While a scroll
-    animation is in flight the panel is mid-travel, so `is_pinned_to_bottom` reads a position hundreds of
-    pixels short of the end and answers "the reader scrolled away". `follow_tail` then declines to retarget,
-    the in-flight animation finishes at its now-stale target, and the view stops short of the end and stays
-    there — the same failure the settle-wait just fixed, arriving by a different route. Retargeting is
-    otherwise free: creating a `SmoothScrolling` for a window that already has one *updates the existing
-    instance's* `target_y_scroll` rather than starting a second animation, so streaming chunks chase a moving
-    end smoothly instead of fighting for the scrollbar.
+  - **An in-flight animation must not read as a user scroll.** `should_follow_tail` decides by comparing the
+    current position against the one it last commanded. An animation makes that briefly false *by design*: the
+    panel is mid-travel, so the position is nowhere near the commanded target for several frames, which reads
+    exactly like the user having dragged the scrollbar — and the consequence is the sticky one, so following
+    stops for the rest of the turn. The commanded position must therefore be understood as the animation's
+    *target* while one is in flight, not the panel's instantaneous offset. Retargeting itself is free:
+    constructing a `SmoothScrolling` for a window that already has one *updates the existing instance's*
+    `target_y_scroll` instead of starting a second animation, so streaming chunks chase a moving end smoothly
+    rather than fighting for the scrollbar.
   - **The two halves sit on opposite sides of the `split_frame` boundary.** `scroll_view`'s settle-wait uses
     `split_frame` and therefore may only run off the render loop; `SmoothScrolling.render_frame` runs *in* the
     render loop and must never wait, which is why it counts `update_pending_frames` instead. So the animation
@@ -221,8 +222,8 @@ indicator group is also the wrong home on its own terms: INDEXING / DOCS / SYSTE
 is busy and you can only wait", whereas this one is actionable, and it sits far from both where the eye is and
 where the click would take you.
 
-Cheap because the parts exist: the predicate is `is_pinned_to_bottom`, and the click is `scroll_view()`, which
-becomes smooth for free once smooth scrolling lands.
+Cheap because the parts exist: the predicate is `should_follow_tail` (negated), and the click is
+`scroll_view()`, which becomes smooth for free once smooth scrolling lands.
 
 **Deliberately not doing: next/previous-message jump buttons.** They were considered and set aside (Juha,
 2026-07-30) because they treat a symptom. The reason a reader wants to skip a whole message is that one
@@ -1676,30 +1677,43 @@ it fires on every single turn, unlike the Markdown cases which need particular c
 also removes the natural thing to do while the model thinks, which is to scroll back and talk about
 what it said last.
 
-**Built 2026-07-30 and half-working; one fault remains, diagnosed.** Honouring a scrolled-away reader works,
-including across tool calls. Re-pinning does not, and *the same fault also stops the view scrolling to the
-user's own message on Send* — which is the visible symptom and the better one to chase.
+**Built 2026-07-30; two faults found and fixed, the second one live-measured. Awaiting confirmation.**
+Honouring a scrolled-away reader worked from the start, including across tool calls. Making the view *follow*
+did not.
 
-**Root cause: `dpg.get_y_scroll_max` lags a content change by more than the one frame we wait for.**
-`add_complete_message` does a single `split_frame()` and then `scroll_view()` reads the maximum — which is
-still the *old* maximum if the newly added message has not been laid out yet. So the view scrolls to where the
-previous message ended (observed: after sending, the view still showed the greeting), and `on_llm_start` then
-samples a position equal to the old maximum while the real one is larger. The gap is the height of the message
-just added, so the pin reads false and the reply is never followed. One fault, two symptoms.
+**Fault 1 — `dpg.get_y_scroll_max` lags a content change by more than one frame.** `scroll_view` read the
+maximum before the newly added message had been laid out, so "scroll to the end" landed where the *previous*
+message ended (on Send, the view stayed on the greeting). Fixed with a settle-wait: the loop used to stop as
+soon as `max_y_scroll > 0` and now stops only once that value is also unchanged from the previous frame, still
+bounded by `max_wait_frames`. Same lag `SmoothScrolling` budgets four frames for (`update_pending_threshold =
+4`). The wait lives in `scroll_view` alone — `add_complete_message` and `follow_tail` no longer `split_frame`
+on their own account, since one owner of the timing is the point.
 
-This is the same lag `raven.common.gui.animation.SmoothScrolling` already documents and budgets four frames
-for (`update_pending_threshold = 4`, "Only proceed if DPG has actually applied our previous update").
+**Fault 2 — the predicate could not tell arriving content from a user scroll, and getting it wrong latched.**
+This was the one that kept the view frozen, and the log made it unmistakable: over a single reply the gap grew
+52 → 68 → 120 → 146 → 172 → 198 → 224 px and never recovered, with `scroll_view` never called once.
 
-**The fix is therefore not a bigger pin tolerance** — that would have masked the second symptom while leaving
-the view parked at the wrong place. It is a settle-wait, **written 2026-07-30, awaiting live confirmation**:
-`scroll_view`'s wait loop used to stop as soon as `max_y_scroll > 0`, and now stops only once that value is
-also *unchanged from the previous frame*, still bounded by `max_wait_frames`. A scroll-to-end then reaches the
-real end, and the pin sample afterwards is correct by construction. The wait now lives in `scroll_view` alone
-— `add_complete_message` and `follow_tail` no longer do a `split_frame` of their own, since one owner of the
-timing is the point.
+The mechanism: `is_pinned_to_bottom` compared the position against `max_y_scroll`. But two endpoints move
+independently — the user moves the position, arriving content moves the maximum — so both causes produced the
+same gap, and the view read its own content arriving as a reason to stop following. Because the verdict is
+sampled once per chunk *before* that chunk renders, one false answer guarantees the next sample is taken from a
+view one chunk further behind: monotonically worse, no recovery. A 52 px displacement (measured before the
+first chunk, source not identified — the settle-wait had already reported the maximum stable at 481 px) was
+enough to disable following for the whole turn.
 
-Diagnostics are already in place: `is_pinned_to_bottom` logs every verdict at DEBUG and a near miss at INFO,
-so **the fix is confirmed when the near-miss line goes silent** on a turn the reader expected to be followed.
+Fixed by comparing against **the position we last commanded**, not the maximum. Content arrival cannot change
+that relationship; a user scroll is exactly a change to the position we did not ask for. All of the view's own
+scrolling now goes through one private setter that records the commanded value and whether it was a
+scroll-to-end, so the two causes separate with one remembered integer and no scroll events. Renamed to
+`should_follow_tail`, because "is it at the bottom" is no longer the question it answers — it deliberately
+returns `True` for a view that is *not* at the bottom but is still following. A refusal is sticky (so one
+ambiguous frame cannot resume dragging a reader back), and recovers when the reader returns to the bottom
+themselves, which the at-the-end branch still catches.
+
+Diagnostics: `should_follow_tail` logs both comparisons and the deciding branch at DEBUG, and a near-miss
+refusal at INFO. **Confirmed when the near-miss line goes silent** on a turn the reader expected to be
+followed. The number to read is now the *drift* — a nonzero drift with no user scrolling means something moved
+the position behind our back, which is a different bug than a tolerance being too small.
 
 **Earlier, and already fixed:** the follow-the-tail autoscroll was unconditional. `chat_controller.py` calls `self.view.scroll_view()` with no target — which scrolls to the end
 — at four points during a streaming turn (≈ lines 2267, 2335, 2356, 2365). The fix is the standard rule:

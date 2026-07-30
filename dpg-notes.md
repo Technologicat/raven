@@ -546,11 +546,20 @@ Background-thread GUI updates interact with this. Raven updates the GUI from wor
 
 The consequence is a design rule: **decide "has the user scrolled away?" from the scroll position, never from scroll events.** Position is where all three paths end up, so `dpg.get_y_scroll` needs no per-path handling and cannot silently miss one. Watching for the *act* of scrolling means enumerating the paths, and the one that is hardest to hook is the one users reach for most on a long document.
 
+**But position compared against what?** Not against `max_y_scroll` — that is the trap, and it is easy to walk into because it looks like the same thing. Two independent endpoints move: the user moves the *position*, arriving content moves the *maximum*. Comparing position to maximum collapses both into one number, so "content grew" is indistinguishable from "the user scrolled up", and follow-the-tail logic reads the arrival of its own content as a reason to stop following.
+
+Compare the position against **the position you last commanded** instead. Content arrival cannot change that relationship — it moves the maximum and leaves the position alone — while a user scroll is precisely a change to the position that you did not ask for. One remembered integer, no events, and the two causes separate cleanly. Two details make it hold:
+
+- **Clamp the remembered value by the current maximum before comparing**, since DPG pulls the position down by itself when content shrinks, and that is your doing rather than the user's.
+- **Remember a concrete position, never a sentinel.** Any "resolve this for me" form (a negative value, say) is resolved by DPG, so the remembered number and the reported number describe different things and every subsequent comparison reads as a user scroll. Compute the maximum yourself — you need it for clamping anyway — and record that. Raven's chat view enforces this with a precondition on its scroll setter. (The installed `dpg.set_y_scroll` docstring documents no such sentinel, only the `when=` flag; the precondition exists so it cannot matter either way.)
+
+Get this wrong and it **latches**, which is why it is worth the care. The verdict is sampled once per arriving chunk, before that chunk renders; a single transient displacement makes the answer "not following", after which every later sample is taken from a view that has fallen one more chunk behind. The gap grows monotonically and never recovers, so a two-line hiccup freezes the view for the whole turn. Measured on a live reply before the fix: 52 → 68 → 120 → 146 → 172 → 198 → 224 px.
+
 ## `max_y_scroll` moves when content is added
 
 `dpg.get_y_scroll_max` is a function of the current content height, so appending to a container changes it immediately. Anything that asks "is the view at the bottom?" in order to decide whether to *keep* it at the bottom must sample that **before** adding the content, and act **after**. Sampling afterwards reports "not at the bottom" every time — the content grew, the position did not — so follow-the-tail logic written that way never engages, and the view sticks wherever the stream started.
 
-Raven's chat view carries this as an explicit split: `DPGLinearizedChatView.is_pinned_to_bottom()` samples, and `follow_tail(was_pinned)` takes the sampled answer as an argument rather than asking for itself, precisely so the ordering cannot be lost at a call site.
+Raven's chat view carries this as an explicit split: `DPGLinearizedChatView.should_follow_tail()` samples, and `follow_tail(was_following)` takes the sampled answer as an argument rather than asking for itself, precisely so the ordering cannot be lost at a call site. Every scroll the view performs goes through one private setter that records what was asked for, so the "compare against what you commanded" test above has something to compare against — a bare `dpg.set_y_scroll` anywhere else would be indistinguishable from a user scroll and would silently stop the view following.
 
 Note the hazard is not confined to streaming: a user can scroll *while* content is arriving, so a "user-initiated" scroll is not automatically a quiet moment either. What differs is the consequence — a scroll-end flasher that guesses wrong shows one wrong flash, while follow-the-tail that guesses wrong stops working for the rest of the turn.
 
