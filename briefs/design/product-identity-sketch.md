@@ -33,9 +33,34 @@ That is where it belongs, and there is plenty of room there.
 The framing earns its keep only if it can settle an argument, so here is the form it takes as a test. A
 feature fits when both halves hold:
 
-1. It is something you would expect a scifi machine to do.
+1. It is something you would expect the *lab computer* to do — the machine a researcher talks to while doing
+   their own work.
 2. It is not already available *in this form* — local, private, yours, and part of one workspace rather than
    one product per task.
+
+**Which scifi machine, though.** "A scifi machine" alone is too loose: this one does not control 3D printers,
+and the genre's AI systems notoriously include several nobody should be building. "A system of this kind"
+would be circular. Three properties bound it without circularity, and none of them is about the technology:
+two describe the *relationship*, and the third says who decides what it can reach.
+
+- **It assists someone doing their own work**, rather than doing the work instead of them. The researcher stays
+  the researcher, and this is an instrument they use. That is also the line against a coding agent or a general
+  agent harness, where handing the task over is precisely the point.
+- **It reports rather than acting on its own initiative.** Note that this is *not* a bound on what it may
+  reach: the lab-assistant direction takes it well outside your own files — asking instruments for their
+  status, and an experiment controller for the results of a run, over MCP
+  (`lab-assistant-hci-sketch.md`). The bound is that its job is to tell you things so that *you* can decide,
+  not to pursue goals in the world by itself.
+- **What it may reach is yours to grant.** Today this holds by inventory: the tool surface is `websearch`,
+  `webfetch`, `search_documents`, `fetch_document` and `list_consulted_documents`, none of which write
+  anywhere. But an inventory is not a guarantee, and the MCP client (brief 04) makes the surface whatever the
+  user connects. So it has to be carried by policy instead, and the pattern already exists for `webfetch`,
+  split across two layers: network-level refusals server-side (private-network addresses, non-HTTP(S)
+  schemes), and a client-side allowlist constraining which public sites the model may visit on its own
+  initiative.
+
+None of this bounds how many steps it may take unattended, so the scriptable agent layer on the list
+(`TODO_DEFERRED.md`, headless agent-harness mode for `ai_turn`) sits inside it rather than against it.
 
 The second half is what keeps this from being nostalgia. The interesting region is the gap between what that
 future assumed was ordinary and what is actually on anyone's desk today — a research assistant that is local,
@@ -51,53 +76,31 @@ them as views on one corpus. So the gap has three shapes, and only the first is 
   one.
 - **Built, but never put together** — where the integration is the contribution rather than the parts.
 
-**The avatar is the sharpest instance**, and worth spelling out, because it is where the crowded-category
-reading misleads most. Talking-avatar systems exist and are good: Alibaba's
-[TaoAvatar](https://arxiv.org/abs/2503.17032) (CVPR 2025) does full-body photoreal avatars for AR via 3D
-Gaussian splatting, and Alibaba-Quark's [LiveAvatar](https://arxiv.org/abs/2512.04677) (ECCV 2026) streams
-audio-driven avatar video of unbounded length from a 14B diffusion model — with demos wired to an LLM for live
-dialogue. "Talking avatar driven by a language model" is not an empty category.
+**The avatar is the sharpest instance**, since it is where the crowded-category reading misleads most. Three
+systems sit near it, and each removes one objection the claim would otherwise have to survive:
 
-What is absent is the form. Both are avatar *engines* — photoreal humans, generation-first — and they differ
-from each other in the way that makes the point:
+- **[LiveAvatar](https://arxiv.org/abs/2512.04677)** (Alibaba-Quark, ECCV 2026) — streaming audio-driven avatar
+  video of unbounded length from a 14B diffusion model, demos wired to an LLM for live dialogue. So "talking
+  avatar driven by a language model" is not an empty category. But its real-time figures are on five H800s,
+  against the desktop GPU that is already there.
+- **[TaoAvatar](https://arxiv.org/abs/2503.17032)** (Alibaba, CVPR 2025) — full-body photoreal avatars for AR
+  via 3D Gaussian splatting, and deliberately light: on-device on phones and headsets, 90 FPS on an Apple
+  Vision Pro. So the compute objection does not apply here at all, and the whole distance is form — photoreal
+  rather than anime, an AR avatar rather than an interface, nothing resembling an LLM frontend around it.
+- **[Character.AI](https://blog.character.ai/avatar-fx-cutting-edge-video-generation-by-character-ai/)** — the
+  strongest counter, because there the character *is* the product, at scale and in earnest; AvatarFX (April
+  2025) animates it from a still image, in styles including 2D cartoon. What it is not is local, private, or
+  yours: closed and cloud-hosted, nothing to install, read, or lift. And the character is what you came for,
+  rather than how you reach a corpus, a map, and a set of tools.
 
-- **LiveAvatar is heavy**: those real-time figures are on five H800s, where Raven's avatar runs on the desktop
-  GPU that is already there. Against this one the contrast is locality and price.
-- **TaoAvatar is light** — deliberately so, targeting on-device use on phones and headsets, 90 FPS on an Apple
-  Vision Pro. So against this one the compute argument does not apply *at all*, and the distance is entirely
-  about form: photoreal rather than anime, an AR avatar rather than an interface, and nothing resembling an
-  LLM frontend around it.
-
-Which is the useful half. Where the easy objection — "you only get to do that because you spend less compute"
-— is unavailable, the gap is still there, and it is a gap in what anyone is *trying to build*.
-
-**Character.AI is the strongest counter and deserves stating as such**, because for them the character is not a
-feature of the product, it *is* the product — at scale, and not as a novelty. They have moved the same
-direction: [AvatarFX](https://blog.character.ai/avatar-fx-cutting-edge-video-generation-by-character-ai/)
-(April 2025) animates a character from a still image with synchronized speech and expression, in styles
-including 2D cartoon, alongside Scenes and Streams. So "treats an animated character as central, and means it"
-is not a claim Raven gets to make alone.
-
-What separates it is the rest of the form, and the separation is clean rather than a matter of degree:
-
-- **It is closed and cloud-hosted**, so it fails the form test at the first clause — not local, not private,
-  not yours. Nothing to install, nothing to read, nothing to lift, and the conversations are on someone else's
-  machine. That also puts it out of channels 1 and 2 entirely: it proves nothing about what you can run
-  yourself, and there is nothing to borrow.
-- **The use case is companionship and entertainment**, not a working instrument. The character is what you came
-  for. In Raven the character is how you reach a corpus, a map, and a set of tools — the interface to work
-  being done, not the work itself.
-
-So the claim that survives all three, and the one this document actually makes: nobody else is putting **a
-talking anime character into a local, open LLM frontend and treating it as the interface to a research
-instrument**. SillyTavern briefly did, through ST-Extras, which hosted Raven-avatar's direct ancestor, and that
-path closed when the project moved away from Python and dropped Extras.
-
-Credit where it is due, since the lineage is easy to overstate: ST-Extras was an existing product with a
-working if rudimentary THA3 demo — around 10 FPS on a 3070 Ti — and the emotion classifier already in place.
-The classifier was lifted wholesale, its license permitting it. What is Juha's is the idle animation, the
-lipsync driver — THA3 has always had the speech morphs, but nothing in Extras drove them — the performance
-work that made the thing usable, and the postprocessor.
+What survives all three: nobody else is putting **a talking anime character into a local, open LLM frontend
+and treating it as the interface to a research instrument**. SillyTavern briefly did, through ST-Extras, which
+hosted Raven-avatar's direct ancestor; that path closed when the project moved away from Python and dropped
+Extras. Credit where due, since the lineage is easy to overstate — Extras was an existing product with a
+working if rudimentary THA3 demo (~10 FPS on a 3070 Ti) and the emotion classifier already in place. Our
+improvements to the system - which then moved to Raven - are the idle animation, the lipsync driver
+(THA3 has always had the speech morphs; nothing drove them), the performance work that made it usable,
+and the postprocessor.
 
 That is all three shapes at once: *not built* (a local anime-character interface for a research tool),
 *not like this* (avatar engines exist; this form does not), and *never put together* (the character, lipsync
@@ -108,6 +111,14 @@ Most of Raven's existing direction already passes that test, which is a sign the
 than imposed: the avatar as an interface you speak to (`lab-assistant-hci-sketch.md`), screening ten thousand
 papers down to the ones worth reading (`corpus-interrogation-sketch.md`), the whole thing running on one or two
 local GPUs and sending nothing anywhere.
+
+**Why the current shape is literature-heavy, and why that is not the definition.** The first-half-of-the-2020s
+jump in language technology lands most naturally on text, and a corpus is made of text — so literature work is
+where the capability arrives first. The need is real rather than assumed: researchers read a great deal, and
+the volume of published work has outrun the reading (`corpus-interrogation-sketch.md` carries that argument in
+full). But arriving first is not the same as being the boundary. Taken as the identity, "literature tool" would
+make the lab-assistant direction look like drift, when it is the same product reaching the next thing the same
+capability is good for.
 
 ## The future, building itself
 
@@ -152,6 +163,11 @@ well — which was the plan regardless.
 ## Aesthetic influences
 
 **Cyberpunk**, and where applicable **early-2000s anime — the fake-HDR / bloom era.**
+
+**The register is a blend, and the two dates are not in tension.** Cyberpunk is a 1980s–90s genre, which is
+precisely why it reads as retrofuturism today: the future it imagined has aged into one. The early-2000s
+reference is not a second genre but a rendering technique — the digital bloom the postprocessor implements. So
+the dates belong to different things: one to what is depicted, the other to how it is lit.
 
 Both are already operative rather than aspirational, which is the reason to write them down: the code has been
 built to them for a while and the intent was never recorded outside conversation.
@@ -220,7 +236,8 @@ a list, filed as maintenance:
 
 - **How far into the working surfaces does the register reach?** Palette and typography are agreed; the
   boundary past that is undrawn.
-- **Is the 1990s specifically right** as the aesthetic anchor, or is it the broader "future that was expected
-  and did not arrive"? The decade may be a useful anchor or a false precision. Either way this is a question
-  about the *look*: the product-scope question is settled above, and retro-futurism does not bound it.
 - **Where does any of this get said out loud** — README, talk, or nowhere, and only enacted?
+- **What is the permission model once the tool surface is user-extensible?** Brief 04 covers the adapter,
+  transports, namespacing and lifecycle, but has no gating section. "It reports rather than acting on its own
+  initiative" stops being self-enforcing the moment a connected MCP server can offer a tool that acts — and
+  the lab direction points at exactly the systems where that matters.
