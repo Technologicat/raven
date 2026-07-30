@@ -479,3 +479,41 @@ Cost is one frame (~16 ms) of latency on the deferred action — imperceptible, 
 ## Investigation history
 
 - 2026-06-06: Traced a raven-cherrypick mis-tag (fast `C`+`Right` tagging the next image instead of the current one) to same-frame keycode-order dispatch; confirmed empirically that every triage letter outranks every arrow, so navigation always fires first. Fixed by deferring keyboard navigation one frame (`_request_nav`). Resolved the long-standing "mysterious 517/518" in the same pass — the `mvKey_Prior`/`mvKey_Next` constants are stale DPG-1.x values; the live codes are 517/518.
+
+# Testing DPG code
+
+## DPG runs without a mapped window, so GUI code is unit-testable
+
+`dpg.create_context()` + `dpg.create_viewport()` + `dpg.setup_dearpygui()` gives a fully working DPG — real widgets, real themes, working getters — **without** `dpg.show_viewport()`. Nothing is mapped, so nothing takes focus and nothing appears on screen. This matters on a shared desktop, where the alternative (launching the app) interrupts whoever is using it.
+
+That makes a large class of GUI code testable against real DPG state rather than mocks:
+
+```python
+dpg = pytest.importorskip("dearpygui.dearpygui", reason="dearpygui not installed (GUI toolkit absent in CI)")
+
+@pytest.fixture(scope="module")
+def dpg_context():
+    dpg.create_context()
+    dpg.create_viewport(width=100, height=100)  # never shown
+    dpg.setup_dearpygui()
+    yield
+    dpg.destroy_context()
+```
+
+Guard with `importorskip` — Raven's CI installs no GUI toolkit deliberately, so these are local-only tests. Create the context once per module: it is not cheap, and DPG holds global state, so per-test contexts are both slow and a good way to find out which of your other tests leaked a widget.
+
+**Animations need no wall-clock waiting.** `animator.render_frame()` is what Raven's render loop calls; a test can call it directly and step the animation as fast as the CPU allows, with a wall-clock deadline so a bug fails the test instead of hanging the suite.
+
+Wait on a condition specific to the animation under test, *not* on `animator.active_count` reaching zero. `animator` is a process-wide singleton, so an empty-animator condition also waits on anything else running — and if something ambient never ends (a cyclic `PulsatingColor`, say), the test times out blaming the wrong animation. `WidgetFlash` deregisters itself from `WidgetFlash.instances` as it finishes, which is the exact event; other animation types need their own equivalent.
+
+**What this is good for, and what it isn't.** Worth testing: state machines, "restore what you borrowed" contracts, teardown ordering, de-duplication logic, anything holding a lock — behavior that is invisible to the eye and breaks silently. Not worth testing: whether it *looks* right. Layout, spacing and color are a screenshot's job (see "Live GUI testing on a shared desktop" in `CLAUDE.md`), not an assertion's.
+
+First use: `raven/common/gui/tests/test_animation.py`, covering `WidgetFlash`'s color/theme restoration and its ghost-vs-reified de-duplication — both of which had latent bugs that no amount of looking at the screen would have revealed.
+
+## Introspection gaps to expect
+
+`dpg.get_item_configuration(item)["color"]` reports color as **normalized floats** while `dpg.configure_item(item, color=...)` takes **0–255**, so a read-modify-write round trip has to scale. An unset color reads back as the sentinel `[-1.0, 0.0, 0.0, 1.0]`, and writing that sentinel back (scaled) correctly restores "unset".
+
+`dpg.get_item_theme(item)` returns `None` for an unbound widget, and `dpg.bind_item_theme(item, None)` unbinds — so capture-and-restore of a theme is symmetric with no special case. (`0` also unbinds; prefer `None`.)
+
+There is **no getter for theme contents** — you cannot ask a theme for its colors or spacings. Code that needs to restore a themed value therefore tends to hardcode a measured literal instead; see the audit item in `TODO_DEFERRED.md`. Where a *per-widget* getter exists (as for a text widget's own color), use it — the gap is theme state specifically, not all of DPG.

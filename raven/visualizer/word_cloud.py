@@ -136,8 +136,8 @@ def _render_worker(*, task_env):
                 dpg.set_item_label("word_cloud_window", "Word cloud [updating]")
                 dpg.set_item_label("word_cloud_button", fa.ICON_CLOUD_BOLT)
                 dpg.set_value("word_cloud_button_tooltip_text", "Generating word cloud, just for you. Please wait. [F10]")
-                gui_animation.animator.add(gui_animation.ButtonFlash(message=None,
-                                                                     target_button="word_cloud_button",
+                gui_animation.animator.add(gui_animation.WidgetFlash(message=None,
+                                                                     target="word_cloud_button",
                                                                      target_tooltip=None,  # we handle the tooltip manually
                                                                      target_text=None,
                                                                      original_theme=app_state.themes_and_fonts.global_theme,
@@ -228,8 +228,8 @@ def save_to_file(filename):
     logger.debug(f"save_to_file: Dispatching a save to '{filename}', and acknowledging in GUI.")
 
     # The animation can run while we're saving.
-    gui_animation.animator.add(gui_animation.ButtonFlash(message=f"Saved to '{filename}'!",
-                                                         target_button="word_cloud_save_button",
+    gui_animation.animator.add(gui_animation.WidgetFlash(message=f"Saved to '{filename}'!",
+                                                         target="word_cloud_save_button",
                                                          target_tooltip="word_cloud_save_tooltip",
                                                          target_text="word_cloud_save_tooltip_text",
                                                          original_theme=dpg.get_item_theme("word_cloud_save_tooltip"),

@@ -3,7 +3,8 @@
 __all__ = ["Animator", "animator",  # controller and its global instance (need only one per app)
            "Animation", "Overlay",  # base classes
            "Dimmer",  # overlays
-           "ButtonFlash", "flash_button", "SmoothScrolling", "PulsatingColor",  # animations (+ ButtonFlash convenience)
+           "WidgetFlash", "flash_button", "highlight_widget",  # the flash animation, and its two conveniences
+           "SmoothScrolling", "PulsatingColor",  # animations
            "ScrollEndFlasher",  # animated overlay
            "pulsation_envelope",  # utility: the cosine-squared curve used by pulsating animations
            "action_continue", "action_finish", "action_cancel"]  # return values for `render_frame`
@@ -272,7 +273,7 @@ class Dimmer(Overlay):
 # --------------------------------------------------------------------------------
 # Animations
 
-class ButtonFlash(Animation):
+class WidgetFlash(Animation):
     # For some animation types, such as this one, for any given GUI element, at most one instance
     # of the animation should be active at a time.
     #
@@ -288,32 +289,43 @@ class ButtonFlash(Animation):
     # specific animation type), and then exits at the next frame.
     class_lock = threading.RLock()
     id_counter = 0  # for generating unique DPG IDs
-    instances = {}  # DPG tag or ID (of `target_button`) -> animation instance
+    instances = {}  # DPG tag or ID (of `target`) -> animation instance
 
     # TODO: We could also customize `__new__` to return the existing instance, see `unpythpnic.symbol.sym`.
     def __init__(self,
                  message: str,
-                 target_button: Union[str, int],
+                 target: Union[str, int],
                  target_tooltip: Union[str, int],
                  target_text: Union[str, int],
                  original_theme: Union[str, int],
                  duration: float,
                  flash_color: Tuple = (96, 128, 96),
                  text_color: Tuple = (180, 255, 180)):
-        """Animation to flash a button (and its tooltip, if visible) to draw the user's attention.
+        """Animation to flash a GUI widget (and its tooltip, if visible) to draw the user's attention.
 
-        This is useful to let the user know that pressing the button actually took,
-        when its action has no other immediately visible effects.
+        Two uses, sharing one transient fade-out shape. As an *acknowledgment*, it tells the user that
+        pressing a button actually took, when the action has no other immediately visible effect. As a
+        *highlight*, it draws the eye to the widget a navigation jump just landed on.
 
-        Each GUI element (determined by `target_button`) can only have one `ButtonFlash`
-        animation running at a time. If an instance already exists, trying to create the animation
-        will restart the existing instance instead (and update its message to `message`).
+        Which visual channel is animated depends on what `target` is, because the two kinds of widget have
+        nothing in common to fade:
+
+          - A **text widget** has no background, so its own text color is faded from `text_color` back to
+            whatever it was. Set per-widget (`configure_item`), which is where an `add_text(color=...)` keeps
+            its color — a theme's text color would not override that.
+          - **Anything else** is treated as a button-like widget: an animated theme fades its background
+            (and its tooltip's popup background) from `flash_color` back to the default.
+
+        Each GUI element (determined by `target`) can only have one `WidgetFlash` animation running at a
+        time. If an instance already exists, trying to create the animation will restart the existing
+        instance instead (and update its message to `message`).
 
         `message`: str, text to show in the `target_text` widget while the animation is running.
                    Original content will be restored automatically when the animation finishes normally.
                    Can be `None` for "don't change", or also when `target_text is None`.
 
-        `target_button`: DPG tag or ID, the button to animate (by flashing its background).
+        `target`: DPG tag or ID, the widget to animate. A text widget flashes its text color; anything else
+                  flashes its background. Whatever theme it had is restored when the flash ends.
 
         `target_tooltip`: DPG tag or ID, the tooltip to animate (by flashing its background).
                           Can be `None`.
@@ -322,7 +334,7 @@ class ButtonFlash(Animation):
                        and the text color, for the duration of the animation). Can be `None`.
 
                        The text can be inside the tooltip (when `target_tooltip is not None`),
-                       but is really completely independent of `target_button` and `target_tooltip`.
+                       but is really completely independent of `target` and `target_tooltip`.
 
         `original_theme`: DPG tag or ID, the theme to restore to the tooltip when the flashing ends.
                           Mandatory when `target_tooltip is not None`, and only used in that case.
@@ -330,14 +342,17 @@ class ButtonFlash(Animation):
         `duration`: float, animation duration in seconds.
 
         `flash_color`: tuple `(R, G, B)`, each component in [0, 255]. Default is light green.
+                       The background color a button-like `target` starts from. Unused for a text `target`.
 
         `text_color`: tuple `(R, G, B)`, each component in [0, 255]. Default is light green.
+                      For a button-like `target`, the (constant) text color during the flash. For a text
+                      `target`, the color its text starts from before fading back to its own.
         """
         super().__init__()
         self.instance_lock = threading.Lock()
 
         self.message = message
-        self.target_button = target_button
+        self.target = target
         self.target_tooltip = target_tooltip
         self.target_text = target_text
         self.original_theme = original_theme
@@ -348,6 +363,9 @@ class ButtonFlash(Animation):
         # These are used during animation
         self.theme = None
         self.original_message = None
+        self.target_is_text = False  # set in `start`; selects which visual channel is animated
+        self.original_target_color = None  # for a text target: its own color, to fade back to
+        self.original_target_theme = None  # whatever was bound before we bound ours
         self.reified = False  # `True`: running; `False`: ghost mode, update other instance and exit.
 
         self.start()
@@ -364,6 +382,20 @@ class ButtonFlash(Animation):
 
         r = numutils.clamp(animation_pos)
         r = numutils.nonanalytic_smooth_transition(r)
+
+        if self.target_is_text:
+            # The target may be deleted mid-flash (a chat view rebuild does exactly this), and then there is
+            # nothing left to fade. Ending here rather than pressing on lets `finish` release the resources.
+            if not dpg.does_item_exist(self.target):
+                return action_finish
+            R0, G0, B0 = self.text_color
+            R1, G1, B1, A1 = self.original_target_color  # the item's own color; no guessing needed here
+            R = R0 * (1.0 - r) + R1 * r
+            G = G0 * (1.0 - r) + G1 * r
+            B = B0 * (1.0 - r) + B1 * r
+            with guiutils.nonexistent_ok():
+                dpg.configure_item(self.target, color=(R, G, B, A1))
+            return action_continue
 
         R0, G0, B0 = self.flash_color
         R1, G1, B1 = 45, 45, 48  # default button background color  TODO: read from global theme
@@ -394,12 +426,31 @@ class ButtonFlash(Animation):
 
             with type(self).class_lock:
                 # If an instance is already running on this GUI element, just restart it (and update its message).
-                if self.target_button in type(self).instances:
-                    other = type(self).instances[self.target_button]
+                if self.target in type(self).instances:
+                    other = type(self).instances[self.target]
                     other.message = self.message
                     if other.target_text is not None:
                         dpg.set_value(other.target_text, other.message)
                     other.reset()
+                    return
+
+                # Which visual channel to animate. A text item has no background to flash, so the text color
+                # is all there is; anything else is treated as button-like. Read from DPG rather than declared
+                # by the caller, so that existing call sites need no new argument.
+                self.target_is_text = False
+                with guiutils.nonexistent_ok():
+                    self.target_is_text = dpg.get_item_type(self.target).endswith("mvText")
+
+                if self.target_is_text:
+                    # `get_item_configuration` reports color as normalized floats while `configure_item` takes
+                    # 0-255, so scale on the way in; the round trip is then exact, including the `r = -1`
+                    # sentinel DPG uses for "no explicit color" (which restores to unset, as it should).
+                    with guiutils.nonexistent_ok():
+                        self.original_target_color = [255.0 * c for c in dpg.get_item_configuration(self.target)["color"]]
+                    if self.original_target_color is None:  # target vanished between construction and here
+                        return
+                    type(self).instances[self.target] = self
+                    self.reified = True
                     return
 
                 with dpg.theme(tag=f"acknowledgement_highlight_theme_{type(self).id_counter}") as self.theme:  # create unique DPG ID each time
@@ -421,8 +472,13 @@ class ButtonFlash(Animation):
                         self.highlight_disabled_active_color = dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, self.flash_color, category=dpg.mvThemeCat_Core)
                 type(self).id_counter += 1
 
+                # Capture what was bound before we take the widget over, so `finish` puts back exactly that.
+                # `get_item_theme` returns `None` for an unbound widget and `bind_item_theme` accepts `None`
+                # to unbind, so the round trip is symmetric and needs no special case for "had no theme".
                 with guiutils.nonexistent_ok():
-                    dpg.bind_item_theme(self.target_button, self.theme)
+                    self.original_target_theme = dpg.get_item_theme(self.target)
+                with guiutils.nonexistent_ok():
+                    dpg.bind_item_theme(self.target, self.theme)
                 if self.target_tooltip is not None:
                     with guiutils.nonexistent_ok():
                         dpg.bind_item_theme(self.target_tooltip, self.theme)
@@ -432,14 +488,36 @@ class ButtonFlash(Animation):
                         dpg.set_value(self.target_text, self.message)
                         dpg.bind_item_theme(self.target_text, self.theme)
 
-                type(self).instances[self.target_button] = self
-                self.reified = True  # This is the instance that animates `self.target_button`.
+                type(self).instances[self.target] = self
+                self.reified = True  # This is the instance that animates `self.target`.
 
     def finish(self) -> None:
         """Clean up resources upon the end of the animation."""
         with self.instance_lock:
+            # A ghost instance allocated nothing and registered nothing, so it has nothing to release — and
+            # must not act as though it had. The normal route never brings one here (`render_frame` returns
+            # `action_cancel`, which the animator handles without calling `finish`), but `Animator.clear` and
+            # `Animator.cancel(finalize=True)` finalize every registered animation indiscriminately. Without
+            # this guard a ghost would rebind the theme of a widget its reified twin is still animating, and
+            # pop that twin out of `instances` — after which the next flash on the same widget would reify a
+            # second instance and bind over the first.
+            if not self.reified:
+                return
+
+            if self.target_is_text:
+                with guiutils.nonexistent_ok():
+                    dpg.configure_item(self.target, color=self.original_target_color)
+                self.original_target_color = None
+                self.reified = False
+                with type(self).class_lock:
+                    type(self).instances.pop(self.target, None)
+                return
+
+            # Restore whatever the widget had, rather than assuming it was the standard button theme. Binding
+            # a fixed theme here would silently *give* one to a widget that had none, so a flash would leave a
+            # visible mark on the thing it was only supposed to draw attention to.
             with guiutils.nonexistent_ok():
-                dpg.bind_item_theme(self.target_button, "disablable_widget_theme")  # tag
+                dpg.bind_item_theme(self.target, self.original_target_theme)
 
             if self.target_tooltip is not None:
                 with guiutils.nonexistent_ok():
@@ -457,7 +535,7 @@ class ButtonFlash(Animation):
             self.reified = False
 
             with type(self).class_lock:
-                type(self).instances.pop(self.target_button)
+                type(self).instances.pop(self.target, None)
 
 def flash_button(*,
                  button: Union[str, int],
@@ -468,7 +546,7 @@ def flash_button(*,
                  ok: bool = True) -> None:
     """Flash a button as a non-intrusive acknowledgment of an action — green for success, red for failure.
 
-    Convenience wrapper over `ButtonFlash` and the shared `animator`: it picks the success/failure colors from
+    Convenience wrapper over `WidgetFlash` and the shared `animator`: it picks the success/failure colors from
     `ok` and reads the tooltip's current theme to restore afterward, so call sites don't repeat that
     boilerplate. This is the standard way to confirm a button press whose effect isn't otherwise immediately
     visible (a copy, a folder opened elsewhere), and to report that such an action failed without a modal
@@ -481,16 +559,42 @@ def flash_button(*,
     `text`: the text widget whose content becomes `message` during the flash — typically the text inside
             `tooltip`, but independent of it.
     `ok`: `True` (default) flashes green (success); `False` flashes red (failure). The green matches
-          `ButtonFlash`'s own default colors, so a plain success acknowledgment need not think about color.
+          `WidgetFlash`'s own default colors, so a plain success acknowledgment need not think about color.
     """
-    animator.add(ButtonFlash(message=message,
-                             target_button=button,
+    animator.add(WidgetFlash(message=message,
+                             target=button,
                              target_tooltip=tooltip,
                              target_text=text,
                              original_theme=(dpg.get_item_theme(tooltip) if tooltip is not None else 0),
                              duration=duration,
                              flash_color=((96, 128, 96) if ok else (150, 96, 96)),
                              text_color=((180, 255, 180) if ok else (255, 180, 180))))
+
+def highlight_widget(*,
+                     widget: Union[str, int],
+                     duration: float,
+                     color: Tuple = (255, 255, 255)) -> None:
+    """Flash `widget` to show the user where a navigation jump landed.
+
+    The sibling of `flash_button`: same transient fade, different job. `flash_button` answers "your click
+    took"; this answers "here is the thing you asked to see", for a widget the user did not press and which
+    would otherwise be indistinguishable from its neighbours after the view scrolls to it.
+
+    `widget`: the widget to flash (DPG tag or ID). A text widget flashes its text color back to its own;
+              anything else flashes its background.
+    `duration`: flash duration in seconds.
+    `color`: the color to flash from, fading back to the widget's own. White by default — a navigation
+             landing is not a success or failure report, so it deliberately avoids the green/red that
+             `flash_button` uses to mean exactly that.
+    """
+    animator.add(WidgetFlash(message=None,
+                             target=widget,
+                             target_tooltip=None,
+                             target_text=None,
+                             original_theme=0,
+                             duration=duration,
+                             flash_color=color,
+                             text_color=color))
 
 # --------------------------------------------------------------------------------
 

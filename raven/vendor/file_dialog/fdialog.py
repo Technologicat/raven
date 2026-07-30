@@ -798,8 +798,8 @@ class FileDialog:
         logger.debug(f"refresh: instance '{self.tag}' ({self.instance_tag}), refreshing at cwd = '{cwd}'")
         self.reset_dir(default_path=cwd)
         # Raven: Acknowledge the action in the GUI.
-        gui_animation.animator.add(gui_animation.ButtonFlash(message="",
-                                                             target_button=self.button_refresh,
+        gui_animation.animator.add(gui_animation.WidgetFlash(message="",
+                                                             target=self.button_refresh,
                                                              target_tooltip=None,
                                                              target_text=None,
                                                              original_theme=dpg.get_item_theme(self.button_refresh),
@@ -809,8 +809,8 @@ class FileDialog:
         logger.debug(f"back_to_default_path: instance '{self.tag}' ({self.instance_tag}), going back to '{self.default_path}'")
         self.chdir(self.default_path)
         # Raven: Acknowledge the action in the GUI.
-        gui_animation.animator.add(gui_animation.ButtonFlash(message="",
-                                                             target_button=self.button_back_to_default_path,
+        gui_animation.animator.add(gui_animation.WidgetFlash(message="",
+                                                             target=self.button_back_to_default_path,
                                                              target_tooltip=None,
                                                              target_text=None,
                                                              original_theme=dpg.get_item_theme(self.button_back_to_default_path),
@@ -833,8 +833,8 @@ class FileDialog:
                 save_as_file_name = dpg.get_value(f"ex_search_{self.instance_tag}")
                 if not save_as_file_name:
                     logger.debug(f"ok: instance '{self.tag}' ({self.instance_tag}), search field is empty, cannot save with empty filename; rejecting the ok.")
-                    gui_animation.animator.add(gui_animation.ButtonFlash(message="Please enter a filename",
-                                                                         target_button=self.btn_ok,
+                    gui_animation.animator.add(gui_animation.WidgetFlash(message="Please enter a filename",
+                                                                         target=self.btn_ok,
                                                                          target_tooltip=None,
                                                                          target_text=self.text_notification,
                                                                          original_theme=dpg.get_item_theme(self.btn_ok),
@@ -855,8 +855,8 @@ class FileDialog:
                         self.selected_files.extend(self.shown_items)
                     else:
                         logger.debug(f"ok: instance '{self.tag}' ({self.instance_tag}), multiple items are shown, multi_selection is disabled; rejecting the ok.")
-                        gui_animation.animator.add(gui_animation.ButtonFlash(message="Please select an item",
-                                                                             target_button=self.btn_ok,
+                        gui_animation.animator.add(gui_animation.WidgetFlash(message="Please select an item",
+                                                                             target=self.btn_ok,
                                                                              target_tooltip=None,
                                                                              target_text=self.text_notification,
                                                                              original_theme=dpg.get_item_theme(self.btn_ok),
@@ -870,8 +870,8 @@ class FileDialog:
                         msg = "Please select at least one item"
                     else:
                         msg = "Please select an item"
-                    gui_animation.animator.add(gui_animation.ButtonFlash(message=msg,
-                                                                         target_button=self.btn_ok,
+                    gui_animation.animator.add(gui_animation.WidgetFlash(message=msg,
+                                                                         target=self.btn_ok,
                                                                          target_tooltip=None,
                                                                          target_text=self.text_notification,
                                                                          original_theme=dpg.get_item_theme(self.btn_ok),
@@ -901,8 +901,8 @@ class FileDialog:
         self.last_ok_time = current_time
         if self.save_mode and os.path.exists(self.selected_files[0]) and not double_okd:
             # Raven: Acknowledge the action in the GUI.
-            gui_animation.animator.add(gui_animation.ButtonFlash(message="Press again to overwrite file",
-                                                                 target_button=self.btn_ok,
+            gui_animation.animator.add(gui_animation.WidgetFlash(message="Press again to overwrite file",
+                                                                 target=self.btn_ok,
                                                                  target_tooltip=None,
                                                                  target_text=self.text_notification,
                                                                  original_theme=dpg.get_item_theme(self.btn_ok),

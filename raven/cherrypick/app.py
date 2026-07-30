@@ -737,9 +737,9 @@ def _on_compare_enter() -> None:
     dpg.set_value("cherrypick_compare_tooltip_text",
                   "Exit compare mode [Esc]")
     # Flash the button green.
-    gui_animation.animator.add(gui_animation.ButtonFlash(
+    gui_animation.animator.add(gui_animation.WidgetFlash(
         message=None,
-        target_button="cherrypick_compare_btn",
+        target="cherrypick_compare_btn",
         target_tooltip=None,
         target_text=None,
         original_theme="disablable_widget_theme",

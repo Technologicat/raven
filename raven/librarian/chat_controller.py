@@ -640,8 +640,8 @@ class DPGChatMessage:
             mode = "with node ID" if shift_pressed else "as-is"
             dpg.set_clipboard_text(f"{manifest}{header}{formatted_message}\n")
             # Acknowledge the action in the GUI.
-            gui_animation.animator.add(gui_animation.ButtonFlash(message=f"Copied to clipboard! ({mode})",
-                                                                 target_button=copy_message_button,
+            gui_animation.animator.add(gui_animation.WidgetFlash(message=f"Copied to clipboard! ({mode})",
+                                                                 target=copy_message_button,
                                                                  target_tooltip=copy_message_tooltip,
                                                                  target_text=copy_message_tooltip_text,
                                                                  original_theme=dpg.get_item_theme(copy_message_tooltip),
@@ -760,8 +760,8 @@ class DPGChatMessage:
                                                                                         video_offset=librarian_config.avatar_config.video_offset)
 
                     # Acknowledge the action in the GUI.
-                    gui_animation.animator.add(gui_animation.ButtonFlash(message="Sent to avatar!",
-                                                                         target_button=speak_message_button,
+                    gui_animation.animator.add(gui_animation.WidgetFlash(message="Sent to avatar!",
+                                                                         target=speak_message_button,
                                                                          target_tooltip=speak_message_tooltip,
                                                                          target_text=speak_message_tooltip_text,
                                                                          original_theme=dpg.get_item_theme(speak_message_tooltip),
@@ -849,8 +849,8 @@ class DPGChatMessage:
                 self.parent_view.chat_controller.app_state["HEAD"] = new_HEAD
                 self.parent_view.build()
             else:
-                gui_animation.animator.add(gui_animation.ButtonFlash(message="Press again to confirm.\nDeletion CANNOT BE UNDONE.",
-                                                                     target_button=delete_subtree_button,
+                gui_animation.animator.add(gui_animation.WidgetFlash(message="Press again to confirm.\nDeletion CANNOT BE UNDONE.",
+                                                                     target=delete_subtree_button,
                                                                      target_tooltip=delete_subtree_tooltip,
                                                                      target_text=delete_subtree_tooltip_text,
                                                                      original_theme=dpg.get_item_theme(delete_subtree_tooltip),
@@ -915,7 +915,7 @@ class DPGChatMessage:
             approve_retry_tooltip = dpg.add_tooltip(approve_retry_button)
             dpg.add_text(f"Approve host '{maybe_denied_host}' for this session, and retry the fetch (on a new branch)", parent=approve_retry_tooltip)
 
-        # # TODO: Meh, `raven.common.gui.animation.ButtonFlash` doesn't play together with `dpg_markdown`.
+        # # TODO: Meh, `raven.common.gui.animation.WidgetFlash` doesn't play together with `dpg_markdown`.
         # c_red = '<font color="(255, 96, 96)">'
         # c_end = '</font>'
         # delete_subtree_tooltip_text = dpg_markdown.add_text(f"Delete branch (this node and {c_red}**all**{c_end} descendants!)", parent=delete_subtree_tooltip)

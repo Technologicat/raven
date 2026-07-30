@@ -38,6 +38,56 @@ visible, but untangling it is a separate (and API-breaking) question.
 
 Raised by Juha (2026-07-29).
 
+## GUI: hardcoded stand-ins for values DPG has no getter for
+
+DPG exposes very few getters for theme state — there is no way to ask a theme for its colors or spacings —
+so code that wants to *restore* a value ends up guessing a literal instead. Found while widening `ButtonFlash`
+into `WidgetFlash`, where the theme-restore case turned out to be exactly this bug: `finish` rebound a fixed
+theme rather than the one the widget actually had, so flashing a widget that had no theme silently left one
+on it.
+
+**The tell is intent, not syntax.** A literal is an instance of this whenever the code's *intent* is "be
+whatever the theme is" and the literal is standing in for a question it cannot ask. That covers cases which
+look at first like ordinary configuration — `plotter_background_color=(37, 37, 38)  # measured from DPG
+default theme using GIMP` is not a color someone chose, it is a getter call performed with GIMP. Sorting by
+"is it in config.py" gets this wrong; sorting by "would this value have to change if the theme changed" gets
+it right.
+
+By that test the scan finds, in Raven's own code:
+
+- `raven/common/gui/animation.py` — `WidgetFlash`'s button path fades to `45, 45, 48` because it cannot ask
+  what the background was. Its text path escapes this: `get_item_configuration` *does* report a widget's own
+  color, so it fades back to the real value. Where a per-widget getter exists, use it — the gap is theme
+  state specifically, not everything.
+- `raven/common/gui/utils.py` (≈ line 293) — `disablable_widget_theme`'s disabled colors, with the TODO right
+  above them.
+- `raven/visualizer/info_panel.py` (≈ line 849) — "the info panel content background color in the default
+  theme".
+- `raven/visualizer/config.py` — `plotter_background_color` and `plotter_grid_color`, both annotated
+  "measured from DPG default theme using GIMP".
+- `raven/librarian/config.py` — the four `chat_color_*_back`, all `(45, 45, 48)`: the chat backgrounds want to
+  be the app background.
+- `raven/librarian/config.py` — `margin=8  # the DPG default theme uses 8 elsewhere`. Worth noting because it
+  is a **spacing**, not a color: the missing getters are not only about color, so an audit that greps for RGB
+  triples will miss half of it.
+
+Genuinely *not* an instance, for contrast: `vumeter.py`'s `bgcolor = (64, 64, 64)  # cf. DPG default gray:
+(45, 45, 48)`. That one deliberately differs from the default and cites it only to say so — its value would
+not change if the theme did.
+
+Two separable pieces of work, and the cheap one is worth doing even if the other never is:
+
+- **Collapse the duplication.** Named constants for the DPG-default facts Raven depends on (background gray,
+  grid color, standard margin), referenced everywhere that currently repeats a literal. Costs nothing, and
+  makes the blast radius visible — right now, "what breaks if the DPG default theme changes?" can only be
+  answered by grepping for magic numbers across four modules.
+- **Restore rather than guess, wherever DPG allows it.** Per-widget getters exist for some properties and not
+  others; the audit is to find which sites can be converted (as the `WidgetFlash` text path was) and which
+  are genuinely stuck until upstream grows a getter. Those that are stuck should at least say so, so the next
+  reader knows it is a workaround rather than a choice.
+
+Raised by Juha (2026-07-30), while reviewing the `WidgetFlash` theme-restore fix.
+
 ## Web status panel: check on a long job without being at the machine
 
 The motivating case is concrete: a ~12k-abstract hydrogen indexing run, and no way to see how it is doing
@@ -762,11 +812,28 @@ Cross-referencing `raven/common/**/*.py` against existing `tests/` dirs, the fol
 - `raven/common/hfutil.py` — HuggingFace model installer. Side-effectful but the path-computation / repo-name-parsing parts are testable with tmpdir + monkeypatched `snapshot_download`.
 - `raven/common/deviceinfo.py` — GPU detection, dual-GPU ordering. Small surface area; the logic that matters (device counting, visibility filtering, user-facing string formatting) can be tested with a monkeypatched `torch.cuda`.
 
-The following are deliberately untested and should stay that way (consistent with the "test the algorithm layer, not GUI code" principle recorded in memory):
+The following are untested, and were long assumed untestable (the "test the algorithm layer, not GUI code"
+principle):
 
-- `raven/common/audio/{player,recorder}.py` — audio hardware I/O.
-- `raven/common/gui/{animation,fontsetup,helpcard,messagebox,utils,vumeter,widgetfinder}.py` — DPG glue.
+- `raven/common/audio/{player,recorder}.py` — audio hardware I/O. Genuinely hardware-bound; leave.
+- `raven/common/gui/{fontsetup,helpcard,messagebox,utils,vumeter,widgetfinder}.py` — DPG glue.
 - `raven/common/gui/xdotwidget/{widget,renderer,highlight,constants}.py` — rendering / DPG-bound.
+
+**That blanket exclusion is now known to be too broad** (2026-07-30). DPG runs headlessly enough to test:
+`create_context()` + `create_viewport()` + `setup_dearpygui()`, *without* `show_viewport()`, gives real
+widgets, real themes and a steppable animator with no window mapped and no focus taken — so a test can drive
+actual DPG state rather than mocks. `raven/common/gui/tests/test_animation.py` is the first case
+(`WidgetFlash`'s restore contract and its ghost/reified de-duplication), guarded by
+`importorskip("dearpygui")` so it runs locally and skips in CI, which installs no GUI toolkit. Technique
+recorded in `dpg-notes.md`.
+
+So the list above is a list of *candidates*, not exclusions. What to select for is behavior a human cannot
+reliably eyeball: state machines, restore-what-you-borrowed contracts, teardown ordering, anything with a
+lock. What still does not pay is appearance — whether a layout looks right is a screenshot's job, not an
+assertion's.
+
+Worth a pass in that spirit over `messagebox` (modal state and the `split_frame` dance), `widgetfinder`, and
+`vumeter`'s level math.
 
 Priority if picking one up: `bgtask` (most likely to harbour concurrency bugs; test-time cost is low), then `layout_math` (easy win), then `hfutil`/`deviceinfo` (requires monkeypatching but small).
 
