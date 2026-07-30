@@ -137,7 +137,13 @@ a sidecar and the tool message becomes a chip plus, say, the first paragraph.
 
 What falls out for free, beyond the readability:
 
-- **Content addressing.** Fetching the same URL in two branches costs one file instead of two copies.
+- **Content addressing, which buys archival value more than it buys dedup.** Sidecars are keyed by content,
+  not by URL, so two fetches of one URL collapse to a single file only when the bytes are identical. That is
+  the right behaviour rather than a limitation: a page can change between fetches, and each message then keeps
+  the version it actually saw instead of silently adopting a newer one. It also means a later 404 costs
+  nothing — the stored copy is still there, and is now the only copy. Storing fetched text is a hedge against
+  link rot as much as a space saving, which is the same argument that put attachments in the datastore in the
+  first place.
 - **Provenance.** The fetch URL is exactly what `sidecarstore.base_provenance` records, and the existing
   "Open source" / "Show original" buttons then work on tool results too.
 - **The chip's name shortening**, and the rest of the attachment display logic.
@@ -150,7 +156,9 @@ Design questions to settle first:
 - **What the message shows instead.** Nothing, a title, or the first paragraph — the last is probably right,
   since a tool result the user cannot see at all is a step backwards from the current what-you-see-is-what-you-get
   design.
-- **Whether it applies to `websearch` too**, whose results are a list of snippets rather than one document.
+- **Not `websearch`** (decided by Juha, 2026-07-30). Its result is at most ~20 links and titles, and the links
+  are clickable — the user wants to *see* those, so hiding them behind a chip would be a regression. This
+  applies to `webfetch`, whose result is one long document.
 - **Interaction with the context-fill indicator**, which counts document tokens by appending `sidecar_to_text`
   output — this path already exists, so it should just work, but confirm rather than assume.
 
