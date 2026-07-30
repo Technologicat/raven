@@ -636,8 +636,14 @@ Called from four places: `raven/avatar/pose_editor/app.py`, `raven/common/gui/ut
 that need it) and removing it outright, then update `dpg-notes.md`, whose "`setup_font_ranges` and extended
 Unicode" section documents the old behaviour as current.
 
-Note the two dev machines are on different DPG versions as of 2026-07-27, so this reproduces on one and not the
-other — check the installed version before concluding anything about it.
+**Corrected 2026-07-30: both dev machines are on DPG 2.3.1**, so it reproduces on both, and the earlier note
+here — that they differed and it therefore showed on only one — is no longer true (the versions presumably
+converged on a bump nobody recorded). Verified with `python -c "import dearpygui; print(dearpygui.__version__)"`
+in the project venv; do that rather than trusting either this note or memory.
+
+**Scoped into 0.2.8** (Juha, 2026-07-30) alongside the context-prefill warning: both are the same defect in
+different clothes — output that looks alarming, means nothing, and fires on every run, which teaches the
+reader to skim past logs that will one day matter. Four DeprecationWarnings on every GUI app start.
 
 Discovered while reconciling the TODO lists (2026-07-27, reported by Juha).
 
@@ -1599,8 +1605,28 @@ it fires on every single turn, unlike the Markdown cases which need particular c
 also removes the natural thing to do while the model thinks, which is to scroll back and talk about
 what it said last.
 
-**Confirmed 2026-07-30**, upgrading the earlier hypothesis to a diagnosis: the follow-the-tail autoscroll is
-unconditional. `chat_controller.py` calls `self.view.scroll_view()` with no target — which scrolls to the end
+**Built 2026-07-30 and half-working; one fault remains, diagnosed.** Honouring a scrolled-away reader works,
+including across tool calls. Re-pinning does not, and *the same fault also stops the view scrolling to the
+user's own message on Send* — which is the visible symptom and the better one to chase.
+
+**Root cause: `dpg.get_y_scroll_max` lags a content change by more than the one frame we wait for.**
+`add_complete_message` does a single `split_frame()` and then `scroll_view()` reads the maximum — which is
+still the *old* maximum if the newly added message has not been laid out yet. So the view scrolls to where the
+previous message ended (observed: after sending, the view still showed the greeting), and `on_llm_start` then
+samples a position equal to the old maximum while the real one is larger. The gap is the height of the message
+just added, so the pin reads false and the reply is never followed. One fault, two symptoms.
+
+This is the same lag `raven.common.gui.animation.SmoothScrolling` already documents and budgets four frames
+for (`update_pending_threshold = 4`, "Only proceed if DPG has actually applied our previous update").
+
+**The fix is therefore not a bigger pin tolerance** — that would have masked the second symptom while leaving
+the view parked at the wrong place. `scroll_view`'s existing wait loop only waits while `max_y_scroll <= 0`;
+it needs to wait until the value has *settled* (stops growing), bounded by `max_wait_frames`. Then a
+scroll-to-end reaches the real end, and the pin sample afterwards is correct by construction. Diagnostics are
+already in place: `is_pinned_to_bottom` logs every verdict at DEBUG and a near miss at INFO, so the fix is
+confirmed when the near-miss line goes silent.
+
+**Earlier, and already fixed:** the follow-the-tail autoscroll was unconditional. `chat_controller.py` calls `self.view.scroll_view()` with no target — which scrolls to the end
 — at four points during a streaming turn (≈ lines 2267, 2335, 2356, 2365). The fix is the standard rule:
 stick to the bottom only while the view *was* at (or near) the bottom, and stop following the moment the user
 scrolls away.

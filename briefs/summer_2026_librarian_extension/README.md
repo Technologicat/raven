@@ -38,6 +38,20 @@ letter and lose the point. The chat-view scrolling work (keys, smooth scrolling,
 and the streaming autoscroll fix) is the sibling of this and is a *defect* set rather than a feature, so it
 was never covered by the freeze.
 
+**Also admitted 2026-07-30, as defects rather than features** (the freeze covers features): the chat-view
+scrolling set — keys, smooth scrolling, end-of-scroll feedback, and the streaming autoscroll that dragged a
+reader back to the bottom on every chunk — plus two "crying wolf" log-noise items, the context-prefill
+strict-template warning and `setup_font_ranges`' DeprecationWarnings. The last two are one defect in two
+costumes: output that looks alarming, means nothing, and fires every run, which teaches the reader to skim
+past logs that will one day matter.
+
+**Considered and left out**, with reasons, so they are not re-litigated: the Markdown renderer set (four
+separate defects inside vendored code — a project, not a fix), the dropped-character render bug
+(unreproducible on demand, so there is nothing to test a fix against), TTS reading arXiv IDs digit by digit
+(tedious rather than broken), and FileDialog's OS drag-and-drop and image previews. The FileDialog pair are
+the ones that bite hardest in practice (Juha) but they are *enhancements*, and the demo they would serve can
+ride a later release — 0.2.9 or beyond.
+
 The rule still holds for everything else: nothing further is admitted without an argument of the same
 shape, made explicitly here.
 
