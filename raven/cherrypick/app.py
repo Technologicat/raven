@@ -742,7 +742,6 @@ def _on_compare_enter() -> None:
         target="cherrypick_compare_btn",
         target_tooltip=None,
         target_text=None,
-        original_theme="disablable_widget_theme",
         duration=1.0))
     # Disable inapplicable toolbar items.
     for tag in _COMPARE_DISABLE_ITEMS:

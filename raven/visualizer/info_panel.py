@@ -475,7 +475,6 @@ def _copy_report_to_clipboard(*, report_format):
                                                          target="copy_report_to_clipboard_button",  # tag
                                                          target_tooltip="copy_report_tooltip",  # tag
                                                          target_text="copy_report_tooltip_text",  # tag
-                                                         original_theme=dpg.get_item_theme("copy_report_tooltip"),  # tag
                                                          duration=gui_config.acknowledgment_duration))
 
 
@@ -513,7 +512,6 @@ def _copy_entry_to_clipboard(item):
                                                          target=button,
                                                          target_tooltip=tooltip,
                                                          target_text=tooltip_text,
-                                                         original_theme=dpg.get_item_theme(tooltip),
                                                          duration=gui_config.acknowledgment_duration))
 
 

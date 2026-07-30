@@ -802,7 +802,6 @@ class FileDialog:
                                                              target=self.button_refresh,
                                                              target_tooltip=None,
                                                              target_text=None,
-                                                             original_theme=dpg.get_item_theme(self.button_refresh),
                                                              duration=1.0))
 
     def back_to_default_path(self):
@@ -813,7 +812,6 @@ class FileDialog:
                                                              target=self.button_back_to_default_path,
                                                              target_tooltip=None,
                                                              target_text=None,
-                                                             original_theme=dpg.get_item_theme(self.button_back_to_default_path),
                                                              duration=1.0))
 
     def _update_search(self):
@@ -837,7 +835,6 @@ class FileDialog:
                                                                          target=self.btn_ok,
                                                                          target_tooltip=None,
                                                                          target_text=self.text_notification,
-                                                                         original_theme=dpg.get_item_theme(self.btn_ok),
                                                                          flash_color=(255, 32, 32),  # orange for warning
                                                                          text_color=(255, 255, 255),
                                                                          duration=1.0))
@@ -859,7 +856,6 @@ class FileDialog:
                                                                              target=self.btn_ok,
                                                                              target_tooltip=None,
                                                                              target_text=self.text_notification,
-                                                                             original_theme=dpg.get_item_theme(self.btn_ok),
                                                                              flash_color=(255, 32, 32),  # orange for warning
                                                                              text_color=(255, 255, 255),
                                                                              duration=1.0))
@@ -874,7 +870,6 @@ class FileDialog:
                                                                          target=self.btn_ok,
                                                                          target_tooltip=None,
                                                                          target_text=self.text_notification,
-                                                                         original_theme=dpg.get_item_theme(self.btn_ok),
                                                                          flash_color=(255, 32, 32),  # orange for warning
                                                                          text_color=(255, 255, 255),
                                                                          duration=1.0))
@@ -905,7 +900,6 @@ class FileDialog:
                                                                  target=self.btn_ok,
                                                                  target_tooltip=None,
                                                                  target_text=self.text_notification,
-                                                                 original_theme=dpg.get_item_theme(self.btn_ok),
                                                                  flash_color=(255, 32, 32),  # orange for warning
                                                                  text_color=(255, 255, 255),
                                                                  duration=confirm_duration))

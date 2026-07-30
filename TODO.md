@@ -144,7 +144,7 @@ every tier, chosen on measurements rather than reputation.
 
 - **[High]** Revisit logging system: library modules should not reconfigure the logger (verify exact behavior against Python `logging` stdlib docs, but currently each module sets the log level, which is the entrypoint's responsibility). Move logging configuration to entrypoints only. Add a "detailed debug" level at that time for particularly spammy-but-useful log lines (e.g. `SmoothScrolling.render_frame`, `_managed_task`, `binary_search_item`).
 
-- **[Medium]** Flash the search field when focused by hotkey. Currently affects Visualizer main window, fdialog component, and XDot Viewer. Generalize `ButtonFlash` for GUI elements other than buttons.
+- **[Medium]** Flash the search field when focused by hotkey. Currently affects Visualizer main window, fdialog component, and XDot Viewer. **The enabler is done** (2026-07-30): `ButtonFlash` is now `WidgetFlash` and animates any widget — a text widget fades its own text color, anything else fades a theme background — with `animation.highlight_widget` as the convenience entry point, alongside `flash_button`. What remains is applying it at the three search fields, which is the actual item.
 
 - **[Medium]** `vis_data` → `entries` rename across the whole constellation, including importers and BibTeX tooling in `raven.papers`.
 

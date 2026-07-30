@@ -140,7 +140,6 @@ def _render_worker(*, task_env):
                                                                      target="word_cloud_button",
                                                                      target_tooltip=None,  # we handle the tooltip manually
                                                                      target_text=None,
-                                                                     original_theme=app_state.themes_and_fonts.global_theme,
                                                                      duration=gui_config.acknowledgment_duration))
 
                 # Combine keyword counts of the specified items
@@ -232,7 +231,6 @@ def save_to_file(filename):
                                                          target="word_cloud_save_button",
                                                          target_tooltip="word_cloud_save_tooltip",
                                                          target_text="word_cloud_save_tooltip_text",
-                                                         original_theme=dpg.get_item_theme("word_cloud_save_tooltip"),
                                                          duration=gui_config.acknowledgment_duration))
 
     def write_task():

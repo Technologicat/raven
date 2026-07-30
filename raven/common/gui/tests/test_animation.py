@@ -120,6 +120,37 @@ class TestButtonTarget:
         _run_flash_to_completion(button)
         assert dpg.get_item_theme(button) == original
 
+    def test_each_flashed_widget_gets_back_its_own_theme(self, dpg_context):
+        """Button, tooltip and text are three independent widgets, so one shared snapshot is not enough.
+
+        The flash binds its animated theme to all three. Restoring a single captured theme to all three then
+        hands two of them a theme belonging to the third — which is the same "silently gives a widget a theme
+        it never had" fault as leaving a fixed theme behind, just distributed. Here the text widget is the one
+        that would visibly acquire the tooltip's theme.
+        """
+        with dpg.theme() as text_theme:
+            with dpg.theme_component(dpg.mvAll):
+                dpg.add_theme_color(dpg.mvThemeCol_Text, (1, 2, 3))
+        with dpg.theme() as tooltip_theme:
+            with dpg.theme_component(dpg.mvAll):
+                dpg.add_theme_color(dpg.mvThemeCol_PopupBg, (4, 5, 6))
+
+        with dpg.window():
+            button = dpg.add_button(label="b")
+            with dpg.tooltip(button) as tooltip:
+                notification = dpg.add_text("ready")
+        dpg.bind_item_theme(tooltip, tooltip_theme)
+        dpg.bind_item_theme(notification, text_theme)
+
+        animation.flash_button(button=button, message="working", duration=0.3,
+                               tooltip=tooltip, text=notification)
+        _run_flash_to_completion(button)
+
+        assert dpg.get_item_theme(button) is None, "the button had no theme and must be left with none"
+        assert dpg.get_item_theme(tooltip) == tooltip_theme
+        assert dpg.get_item_theme(notification) == text_theme
+        assert dpg.get_value(notification) == "ready", "the message must be restored too"
+
 
 class TestDeduplication:
     def test_second_flash_on_the_same_widget_does_not_reify(self, widgets):
@@ -129,7 +160,7 @@ class TestDeduplication:
         reified = animation.WidgetFlash.instances[text]
 
         ghost = animation.WidgetFlash(message=None, target=text, target_tooltip=None, target_text=None,
-                                      original_theme=0, duration=5.0)
+                                      duration=5.0)
         assert not ghost.reified
         assert animation.WidgetFlash.instances[text] is reified
 
@@ -146,7 +177,7 @@ class TestDeduplication:
         color_while_running = _widget_color(text)
 
         ghost = animation.WidgetFlash(message=None, target=text, target_tooltip=None, target_text=None,
-                                      original_theme=0, duration=5.0)
+                                      duration=5.0)
         ghost.finish()
 
         assert animation.WidgetFlash.instances.get(text) is reified

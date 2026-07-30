@@ -1477,9 +1477,9 @@ Raven convention: parameters should use abstract types from `collections.abc` (`
 
 Discovered during raven-cherrypick compare mode planning (2026-03-30).
 
-## Audit toolbar buttons for ButtonFlash acknowledgment
+## Audit toolbar buttons for WidgetFlash acknowledgment
 
-Check existing toolbar buttons in raven-cherrypick and raven-xdot-viewer for whether their actions should flash green on activation (Raven's convention for acknowledging a click or hotkey press). Other Raven apps (Librarian, Visualizer) already use `ButtonFlash` consistently — cherrypick and xdot-viewer may be missing it.
+Check existing toolbar buttons in raven-cherrypick and raven-xdot-viewer for whether their actions should flash green on activation (Raven's convention for acknowledging a click or hotkey press). Other Raven apps (Librarian, Visualizer) already use `WidgetFlash` (via `flash_button`) consistently — cherrypick and xdot-viewer may be missing it.
 
 Discovered during raven-cherrypick compare mode planning (2026-03-30).
 
@@ -2322,32 +2322,17 @@ found-indicator, the VU meter's green/yellow/red — the latter has position red
 
 Discovered during brief-03 Half-2 (2026-07-17, flagged by Juha).
 
-## Consolidate flash palette + internalize `ButtonFlash.original_theme`
+## Consolidate the flash palette into named constants
 
-Two related cleanups in `raven.common.gui.animation`, both fleet-wide (touching multiple apps), so deferred out
-of the checkpoint that surfaced them:
+A cleanup in `raven.common.gui.animation`, fleet-wide (touching multiple apps), so deferred out of the
+checkpoint that surfaced it.
 
-- **Named palette constants.** The flash colors are magic tuples repeated across the codebase: the ok-green
-  `(96, 128, 96)` / `(180, 255, 180)` is *literally* `ButtonFlash`'s own default, re-hardcoded in `flash_button`;
-  the text-green `(180, 255, 180)` ("search green") recurs in ~7 places (`vumeter`, `visualizer/app`,
-  `visualizer/annotation`, `xdot_viewer/app`, …); the error-red `(150, 96, 96)` / `(255, 180, 180)` is newer.
-  Extract a small named palette (success/failure flash background + text) and have `ButtonFlash`'s defaults,
-  `flash_button`, and the scattered literals reference it.
-- **Internalize `original_theme`.** `ButtonFlash` takes an `original_theme` argument that every caller fills with
-  `dpg.get_item_theme(<the tooltip>)` — apparently boilerplate the animation could read itself, at reification
-  time in `start()` (before it binds the flash theme), where the true pre-flash theme is still bound. Ghost-mode
-  instances (which don't reallocate) never capture, so the reified instance's snapshot is always the correct
-  one. Removing the parameter would delete the boilerplate at all 19 call sites (across `librarian/app`,
-  `librarian/chat_controller`, vendored `file_dialog/fdialog`, `visualizer/word_cloud`, `visualizer/info_panel`,
-  `cherrypick/app`) and remove the `else 0` placeholder in `flash_button`.
-  - **Verify first — the parameter may exist for a reason.** The plan assumes `dpg.get_item_theme` returns a
-    usable value for every item type ButtonFlash is applied to. Callers already call it successfully on the
-    *tooltip* items they pass, so internalizing the tooltip snapshot is behavior-preserving there — but the same
-    is unproven for `target_text` items and any other type. It's plausible the explicit parameter exists
-    precisely because `get_item_theme` misbehaves on some item (and the reason was never written down). Before
-    deleting the parameter, confirm `get_item_theme` round-trips on every item type actually flashed; if it
-    doesn't somewhere, keep the parameter (or a per-widget capture) and document *that* as the reason.
-
+The flash colors are magic tuples repeated across the codebase: the ok-green `(96, 128, 96)` /
+`(180, 255, 180)` is *literally* `WidgetFlash`'s own default, re-hardcoded in `flash_button`; the text-green
+`(180, 255, 180)` ("search green") recurs in ~7 places (`vumeter`, `visualizer/app`, `visualizer/annotation`,
+`xdot_viewer/app`, …); the error-red `(150, 96, 96)` / `(255, 180, 180)` is newer. Extract a small named
+palette (success/failure flash background + text) and have `WidgetFlash`'s defaults, `flash_button`, and the
+scattered literals reference it.
 Discovered during brief-03 Half-2 checkpoint C (2026-07-17, flagged by Juha while reviewing `flash_button`).
 
 ## Expose the docs-DB source files behind a reply's RAG citations

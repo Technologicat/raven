@@ -297,7 +297,6 @@ class WidgetFlash(Animation):
                  target: Union[str, int],
                  target_tooltip: Union[str, int],
                  target_text: Union[str, int],
-                 original_theme: Union[str, int],
                  duration: float,
                  flash_color: Tuple = (96, 128, 96),
                  text_color: Tuple = (180, 255, 180)):
@@ -336,9 +335,6 @@ class WidgetFlash(Animation):
                        The text can be inside the tooltip (when `target_tooltip is not None`),
                        but is really completely independent of `target` and `target_tooltip`.
 
-        `original_theme`: DPG tag or ID, the theme to restore to the tooltip when the flashing ends.
-                          Mandatory when `target_tooltip is not None`, and only used in that case.
-
         `duration`: float, animation duration in seconds.
 
         `flash_color`: tuple `(R, G, B)`, each component in [0, 255]. Default is light green.
@@ -355,7 +351,6 @@ class WidgetFlash(Animation):
         self.target = target
         self.target_tooltip = target_tooltip
         self.target_text = target_text
-        self.original_theme = original_theme
         self.duration = duration
         self.flash_color = flash_color
         self.text_color = text_color
@@ -365,7 +360,12 @@ class WidgetFlash(Animation):
         self.original_message = None
         self.target_is_text = False  # set in `start`; selects which visual channel is animated
         self.original_target_color = None  # for a text target: its own color, to fade back to
-        self.original_target_theme = None  # whatever was bound before we bound ours
+        # Whatever was bound before we bound ours. One snapshot per widget, because these are three independent
+        # widgets that each may or may not have had a theme: restoring a single shared snapshot to all of them
+        # hands two of them a theme belonging to the third.
+        self.original_target_theme = None
+        self.original_tooltip_theme = None
+        self.original_text_theme = None
         self.reified = False  # `True`: running; `False`: ghost mode, update other instance and exit.
 
         self.start()
@@ -477,14 +477,15 @@ class WidgetFlash(Animation):
                 # to unbind, so the round trip is symmetric and needs no special case for "had no theme".
                 with guiutils.nonexistent_ok():
                     self.original_target_theme = dpg.get_item_theme(self.target)
-                with guiutils.nonexistent_ok():
                     dpg.bind_item_theme(self.target, self.theme)
                 if self.target_tooltip is not None:
                     with guiutils.nonexistent_ok():
+                        self.original_tooltip_theme = dpg.get_item_theme(self.target_tooltip)
                         dpg.bind_item_theme(self.target_tooltip, self.theme)
                 if self.target_text is not None:
-                    self.original_message = dpg.get_value(self.target_text)
                     with guiutils.nonexistent_ok():
+                        self.original_message = dpg.get_value(self.target_text)
+                        self.original_text_theme = dpg.get_item_theme(self.target_text)
                         dpg.set_value(self.target_text, self.message)
                         dpg.bind_item_theme(self.target_text, self.theme)
 
@@ -521,12 +522,12 @@ class WidgetFlash(Animation):
 
             if self.target_tooltip is not None:
                 with guiutils.nonexistent_ok():
-                    dpg.bind_item_theme(self.target_tooltip, self.original_theme)
+                    dpg.bind_item_theme(self.target_tooltip, self.original_tooltip_theme)
 
             if self.target_text is not None:
                 with guiutils.nonexistent_ok():
                     dpg.set_value(self.target_text, self.original_message)
-                    dpg.bind_item_theme(self.target_text, self.original_theme)
+                    dpg.bind_item_theme(self.target_text, self.original_text_theme)
 
             with guiutils.nonexistent_ok():
                 dpg.delete_item(self.theme)
@@ -547,10 +548,9 @@ def flash_button(*,
     """Flash a button as a non-intrusive acknowledgment of an action — green for success, red for failure.
 
     Convenience wrapper over `WidgetFlash` and the shared `animator`: it picks the success/failure colors from
-    `ok` and reads the tooltip's current theme to restore afterward, so call sites don't repeat that
-    boilerplate. This is the standard way to confirm a button press whose effect isn't otherwise immediately
-    visible (a copy, a folder opened elsewhere), and to report that such an action failed without a modal
-    dialog.
+    `ok`, so call sites don't repeat that. This is the standard way to confirm a button press whose effect
+    isn't otherwise immediately visible (a copy, a folder opened elsewhere), and to report that such an action
+    failed without a modal dialog.
 
     `button`: the button to flash (DPG tag or ID).
     `message`: text shown in `text` for the flash duration, then restored (`None` leaves the text unchanged).
@@ -565,7 +565,6 @@ def flash_button(*,
                              target=button,
                              target_tooltip=tooltip,
                              target_text=text,
-                             original_theme=(dpg.get_item_theme(tooltip) if tooltip is not None else 0),
                              duration=duration,
                              flash_color=((96, 128, 96) if ok else (150, 96, 96)),
                              text_color=((180, 255, 180) if ok else (255, 180, 180))))
@@ -591,7 +590,6 @@ def highlight_widget(*,
                              target=widget,
                              target_tooltip=None,
                              target_text=None,
-                             original_theme=0,
                              duration=duration,
                              flash_color=color,
                              text_color=color))

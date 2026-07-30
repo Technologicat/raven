@@ -214,7 +214,7 @@ When compare mode starts (including warm-up), the button changes to
 `ICON_STOP` with tooltip `"Exit compare mode [Esc]"`. On exit, it
 reverts to `ICON_PLAY` with tooltip `"Compare selected [Enter]"`.
 
-Flash the button green on activation via `ButtonFlash` (Raven
+Flash the button green on activation via `WidgetFlash` (Raven
 convention for acknowledging a click or hotkey press).
 
 ### Hotkey routing
