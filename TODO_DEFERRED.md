@@ -270,7 +270,35 @@ reference implementation, so they are one job rather than three:
     unifying them into one "scroll to here" helper.
 - **No scroll-past-end feedback.** Visualizer has `ScrollEndFlasher` (an animated overlay, arrows at top and
   bottom) so that hitting the end of the content is visibly the end rather than an unresponsive view.
-  Librarian has nothing.
+  Librarian has nothing. Scouted 2026-07-30, and the expected difficulty is misplaced rather than absent:
+  - **Wiring it is nearly free.** The constructor is fully parameterized (`target`, `tag`, `duration`, `font`,
+    `text_top`, `text_bottom`) with nothing Visualizer-specific, so it is about one call — see
+    `info_panel.build_window`.
+  - **The drag case has a purpose-built hook.** `custom_finish_pred` is a 1-arg predicate called before each
+    rendered frame; returning `True` finishes the animation. "Stop flashing because the user took the
+    scrollbar" is expressible without modifying the class.
+  - **`show_by_position` wants the *target*, not the current position**, precisely to sidestep the read lag —
+    its docstring says so and points at `SmoothScrolling`. Pass the value computed in `scroll_view`, not
+    `dpg.get_y_scroll`. Note it tests both ends by exact equality, with no tolerance, which suits a
+    followed tail (we command exactly `max_y_scroll`) but would not suit a position sampled from the panel.
+  - **Where the real risk sits: overlay geometry under Librarian's dynamic resize.** It is an `Overlay`, and
+    the sibling `Dimmer` carries both a `get_frame_count() < 10` guard and an `overlay_update_lock` added
+    against a crash from hammering F11 during rebuilds. Librarian resizes its panels and rebuilds the chat
+    view on resize, so that is the interaction to test early rather than last.
+
+  **The flasher must be off while tail-following** (Juha, 2026-07-30). Every followed scroll lands at exactly
+  `max_y_scroll` by construction, so `show_by_position` answers `"bottom"` every time and the overlay strobes
+  once per streamed chunk for the length of the reply.
+
+  The reason is semantic rather than a matter of degree, which is why the fix is a rule and not a tuning knob:
+  the flasher asserts *"you tried to go further and could not"* — a statement about a **user's** thwarted
+  intent. Automatic tail-following has no thwarted intent; reaching the end is its purpose. So the flasher
+  belongs to user-initiated scrolls only, and `SmoothScrolling` already accepts `flasher` per construction —
+  pass `None` when following the tail, pass the flasher for keys, nav-link jumps, and the jump-to-latest pill.
+
+  **`to_end` cannot gate this by itself.** A jump-to-latest click is also a scroll to the end, and there the
+  flash is *wanted* — it confirms arrival. What distinguishes the cases is provenance, not destination, so the
+  scroll path needs to carry "who asked for this" separately from "where is it going".
 
 All three knobs these want — `smooth_scrolling`, `smooth_scrolling_step_parameter`,
 `scroll_ends_here_duration` — are already present in `raven/librarian/config.py`, commented out with their
