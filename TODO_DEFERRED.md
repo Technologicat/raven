@@ -2461,12 +2461,32 @@ three distinct reasons, which is what makes it worth building rather than a nice
 is XML parsing: no OCR engine, no model, no GPU, deterministic output. That is a small self-contained piece of
 work with immediate value, and it is not blocked on any of the decisions the raster half needs.
 
-**The raster half needs a choice that is not obvious.** Classic OCR (Tesseract and friends) versus asking a VLM
-to transcribe the image. The VLM route is tempting because Raven already has one and it handles diagrams far
-better than OCR does — but it needs a vision model, which is precisely what reason one above exists to avoid.
-So the VLM route cannot serve the main motivation, and classic OCR keeps a real niche despite being the weaker
-reader. Possibly both, chosen by what the session has available. If OCR lands, it is ML-bearing and belongs in
-the three-layer `common` / `server.modules` / `mayberemote` shape like the other inference subsystems.
+**The raster half needs a choice that is not obvious, and plain OCR is weaker here than it first looks.** In a
+figure or an infographic much of the information is carried by the *layout* — what is next to what, what points
+at what, how the panels are ordered — so extracting the text alone discards most of the content (Juha's
+estimate: ~90%) and returns a bag of labels with the relationships stripped out. That is enough for "find the
+figure that mentions X", and not enough for a model to reason about the figure. Worth stating plainly, because
+the first motivation above ("a non-vision model can use the figure") is only partly deliverable by plain OCR,
+and an item that promised otherwise would be setting up a disappointment.
+
+That splits the raster half by image kind rather than giving it one answer:
+
+- **Text-bearing images** — scanned pages, screenshots, photographed slides. Classic OCR (Tesseract and
+  friends) is genuinely adequate: the content *is* the text, and reading order is mostly linear.
+- **Figures and infographics** — the case that motivated the SVG work. Needs layout-aware extraction, which
+  means either a VLM transcription pass, or one of the newer document-understanding models that emit structure
+  rather than a flat string.
+
+Both of those are large neural models, which erodes the "works without the big model" motivation — though a
+document-layout model is plausibly much smaller than a general VLM, and might run where a VLM will not. Worth
+checking rather than assuming; if it holds, that is the interesting middle option.
+
+*Unverified pointer:* IBM released document-understanding work in this space recently (Docling, and a
+Granite-family vision model for document conversion). Name, capabilities and model size all need checking
+before anything is built on it — recorded as a lead, not a recommendation.
+
+If any of this lands it is ML-bearing and belongs in the three-layer `common` / `server.modules` /
+`mayberemote` shape like the other inference subsystems.
 
 Per the naming discussion in the SVG item: grow this as "give me the text of this file" alongside `docextract`,
 rather than as an `imageextract` module that would cement a document-versus-image split the page-images work
