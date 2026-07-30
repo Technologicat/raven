@@ -3,6 +3,43 @@
 New items go at the **top**. (Both ends were in use up to 2026-07-27, which is how the two halves of the same
 Librarian session ended up ~1000 lines apart.)
 
+## The subtitle translator silently drops `=` (and probably other symbols)
+
+The AI answered "2 + 2 = 4." and the subtitle read "2 + 2  4." — two spaces where the `=` had been
+(screenshot, 2026-07-30). The chat panel rendered the same string correctly, so nothing is wrong with the text
+the model produced.
+
+**Not the Markdown or emoji stripper**, which is where suspicion naturally falls since both run over this text
+in `avatar_controller.preprocess_task`. Tested both directly: `strip_markdown.strip_markdown` passes `=`
+through in every form tried (`2 + 2 = 4.`, `a = b`, `x == y`, `E = mc^2`, `set x=1`), and
+`emoji.replace_emoji` removes only the emoji, leaving `=` alone.
+
+**The pipeline's own logs localize it exactly**, and no new instrumentation was needed — `process_item` already
+logs both forms per sentence:
+
+    original: 2 + 2 = 4.
+    subtitle: 2 + 2  4.
+
+The only step between those two values is `_translate_sentence`; the no-translation branch assigns
+`subtitle = sentence` verbatim and cannot lose a character. Librarian ships `translator_source_lang="en"` /
+`translator_target_lang="fi"`, so the translator is in the path by default, and the server-side NMT model drops
+the `=`. Presumably it is out of vocabulary or normalized away — that part is not verified, and it would decide
+whether other symbols go the same way (`<`, `>`, `%`, `→` are the obvious ones to test).
+
+**Speech is unaffected**: `self.tts.synthesize` receives `sentence`, not `subtitle`, so the spoken form still
+has the `=`. Only the written line loses it, which is the reverse of the usual concern and worth remembering —
+subtitles are the accessibility path, so a maths answer degrading only there is the bad direction.
+
+Fix directions, none tried: mask symbols with placeholders around the translation call and restore them
+afterwards; or verify that non-alphabetic tokens survive and fall back to the untranslated sentence when they
+do not; or (cheapest, weakest) special-case the handful of symbols that matter. The masking approach is the
+only one that generalizes, since the failure is a property of the model rather than of `=`.
+
+Related: [TTS reads arXiv IDs digit by digit] — same function, and the same observation that the spoken and
+written forms are already separate locals and can legitimately differ.
+
+Discovered by Juha (2026-07-30), during the chat-view scrolling live tests.
+
 ## Revisit `recenter_window`'s degrade-instead-of-raise policy
 
 `guiutils.recenter_window` passes `required=False` for its offscreen-measure wait, so calling it from the
