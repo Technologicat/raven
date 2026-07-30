@@ -55,6 +55,25 @@ ride a later release — 0.2.9 or beyond.
 The rule still holds for everything else: nothing further is admitted without an argument of the same
 shape, made explicitly here.
 
+### What is left, as of end of 2026-07-30
+
+Done and confirmed: **03 §D** (archived), and the **streaming autoscroll** half of the scrolling set — the view
+now follows a reply for a reader at the end and leaves a scrolled-away reader alone, verified live over a
+thinking block and a multi-screenful `webfetch` answer. Details and the three faults it took are in
+`TODO_DEFERRED.md`, "Chat view scroll position jumps back down while the model is writing".
+
+Still open, in the order they are expected to be done:
+
+1. **Chat view scrolling, the rest** — smooth scrolling, the end-of-scroll flasher, Home/End/PageUp/PageDown,
+   and the jump-to-latest pill. Traps already scouted; see `TODO_DEFERRED.md`, "Chat view scrolling: keys,
+   smoothness, and end-of-scroll feedback".
+2. **The two log-noise fixes** — the context-prefill strict-template warning, and `setup_font_ranges`'
+   DeprecationWarnings.
+3. **Large `webfetch` results become attachments** — the one feature admitted past the freeze.
+4. **Brief 09** — the retrieval query side, and the last blocker.
+
+Then the release-prep checklist below.
+
 The reason to wait rather than ship at 07: both remaining items leave a user-visible half-feature.
 Sidecar attachments have no way to remove strays until §D wires the sweep — `prune_unreferenced_sidecars`
 still has no non-test caller, so a released 0.2.8 would grow attachment files with no way to reclaim
