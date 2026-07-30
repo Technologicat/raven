@@ -301,11 +301,24 @@ reference implementation, so they are one job rather than three:
 
     The good news is that both sides already track the same quantity under different names —
     `SmoothScrolling.prev_frame_new_y_scroll` (the last value it wrote, which it waits to see reported back)
-    and the chat view's `_commanded_y_scroll`. So the join is to let the animation own the record while it
-    runs, rather than to invent a third mechanism. Retargeting is free on top of that: constructing a
-    `SmoothScrolling` for a window that already has one *updates the existing instance's* `target_y_scroll`
-    instead of starting a second animation, so streaming chunks chase a moving end smoothly rather than
-    fighting for the scrollbar.
+    and the chat view's `_commanded_y_scroll`. So the join is to let the animation do the writing, rather than
+    to invent a third mechanism. Retargeting is free on top of that: constructing a `SmoothScrolling` for a
+    window that already has one *updates the existing instance's* `target_y_scroll` instead of starting a
+    second animation, so streaming chunks chase a moving end smoothly rather than fighting for the scrollbar.
+
+    **The animation cannot own the storage, though — only the writing** (Juha, 2026-07-31). It does not
+    outlive its own scroll: `finish` pops the instance from `SmoothScrolling.instances`, and `Animator`
+    drops it from the registry on `action_finish`, so `prev_frame_new_y_scroll` dies with the object. The
+    check is needed exactly in the gaps where no animation exists — sitting still after a reply has finished
+    streaming, deciding whether the jump-to-latest pill belongs on screen — and the wheel and the scrollbar
+    handle never enter the animation at all, which is what makes them detectable in the first place.
+
+    So the app holds the value and the animation updates it: pass a `box` and write to it in the same breath
+    as every `dpg.set_y_scroll` (three sites — two smooth, one not). Storage survives; there is still exactly
+    one writer, so nothing can drift. This folds into the `start()` retarget fix below rather than adding a
+    second one. Note that `finish_callback` is *not* a usable alternative route for getting the value back
+    out: it does not run on `action_cancel`, and a retargeting instance never reifies, so its callback never
+    fires at all.
 
     **Compare against the last written value, not the target.** These come apart precisely while an animation
     runs, which is the whole case in question: the position is *supposed* to differ from the target then, so a
@@ -389,7 +402,9 @@ reference implementation, so they are one job rather than three:
   This is a case where editing our own class is the cleaner design rather than working around it: `flasher`,
   `smooth` and `smooth_step` are properties of *this* scroll request, and the surviving instance is only a
   vehicle. (`smooth_step` needs `other._sv.rate` updated alongside the field, the same way `target_y_scroll`
-  already pairs with `other._sv.target`.)
+  already pairs with `other._sv.target`.) The commanded-position box from the smooth-scrolling item above
+  joins the same list — not because callers will realistically pass different boxes for one window, but
+  because "adopt the new request wholesale" is a simpler rule to hold than one with a carve-out in it.
 
   **`finish_callback` is the exception, and needs deciding rather than sweeping in.** It belongs to the caller
   that created the instance and may be load-bearing for *that* caller's teardown — Visualizer passes
