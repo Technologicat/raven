@@ -38,6 +38,72 @@ visible, but untangling it is a separate (and API-breaking) question.
 
 Raised by Juha (2026-07-29).
 
+## `app.py` and `minichat.py` each name the datastore paths separately
+
+Both frontends independently build the same two paths:
+
+```python
+datastore_file = librarian_config.llmclient_userdata_dir / "data.json"  # chat node datastore
+state_file = librarian_config.llmclient_userdata_dir / "state.json"     # important node IDs for the chat client state
+```
+
+(`app.py` ≈ line 246, `minichat.py` ≈ line 70.) They agree today, which is load-bearing — the GUI and the CLI
+are supposed to share one datastore, and that only holds because two separate literals happen to match.
+Nothing enforces it, and nothing would notice if one drifted; the symptom would be a CLI that quietly cannot
+see the chats the GUI made.
+
+The directory is already config (`llmclient_userdata_dir`), so the fix is to move the two filenames there
+too and have both frontends read them. Small, but it converts an invariant maintained by coincidence into one
+maintained by construction.
+
+Noticed while documenting the on-disk layout (2026-07-30, Juha — "which is silly").
+
+## Updating the vendored FontAwesome means both files, not just the header
+
+`CLAUDE.md` notes the vendored `IconsFontAwesome6.py` is an outdated version. Measured 2026-07-30, the
+situation is more specific than that: the header and the shipped fonts are **exactly in sync** —
+`fa-solid-900.ttf` carries 1969 codepoints over 1395 distinct glyph names, the header names all 1395, and no
+glyph in the font lacks a constant. (The 574-codepoint surplus is pure aliasing: 461 names have two
+codepoints, e.g. `angle-down` at both U+2304 and U+F107. It is *not* a set of icons waiting to be exposed.)
+
+So regenerating the header alone would gain nothing. An update means fetching newer `fa-solid-900.ttf` /
+`fa-regular-400.ttf` webfonts **and** regenerating the header from the matching `icons.yml`, as one change —
+and then checking the font atlas still fits (see `dpg-notes.md`, "Font atlas limits"; more glyphs is exactly
+the direction that breaks it).
+
+Concrete motivation, for whenever this is picked up: `arrow-down-to-bracket` does not exist in this version,
+which is why the tool-call navigation links use the symmetric `ARROW_UP_LONG` / `ARROW_DOWN_LONG` pair
+instead of the `arrow-up-from-bracket` / `arrow-down-to-bracket` pair brief 03 suggested. If the update
+happens, that icon choice is worth revisiting — it is a two-line change in `add_tool_call_invocation` and
+`build_buttons`.
+
+Discovered while picking icons for the tool-call navigation links (2026-07-30).
+
+## Make the DPG reference a skill, so it loads when it is needed
+
+`CLAUDE.md` says "**Before editing any DPG code, read `dpg-notes.md` first**" and defines what counts as DPG
+code. That is about as strong as prose gets, and it still depends on the agent noticing and obeying a line —
+which is a weak trigger for a 519-line reference that matters on exactly the tasks where getting it wrong is
+expensive.
+
+A **project-scoped skill** in `raven/.claude/skills/` fixes the trigger mechanically: skills are surfaced by
+description match, so "editing DPG code" pulls it in without anyone remembering to. Project-scoped rather
+than fleet-wide (`~/.claude/skills/`) because the notes cite Raven modules throughout, and a repo-local skill
+is version-controlled with the code it documents — so it travels between machines and cannot drift from the
+tree it describes. If `raven.common` is ever extracted as `corvid`, promoting it is a move, not a rewrite.
+
+**The skill body must be a router, not a copy.** A short index saying which section of `dpg-notes.md` answers
+which question, and nothing else. Duplicating the content is how one of the two copies goes stale, and the
+human-facing file has to stay authoritative — that is what a person reads in an IDE, where no skill exists.
+
+Explicitly *not* an `@include` of `dpg-notes.md` in `CLAUDE.md`: that loads all 519 lines into every
+conversation, including the ones about BibTeX parsing. See the sibling item "Audit and slim down project
+CLAUDE.md" — Raven's has not been through an optimization pass yet (the global one has, and has nothing left
+to trim), so adding to it is the wrong direction.
+
+Raised by Juha (2026-07-30), after noticing `dpg-notes.md` is not auto-loaded and so is unlikely to be seen
+at the moment it is needed.
+
 ## GUI: hardcoded stand-ins for values DPG has no getter for
 
 DPG exposes very few getters for theme state — there is no way to ask a theme for its colors or spacings —

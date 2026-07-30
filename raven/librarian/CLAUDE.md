@@ -85,6 +85,21 @@ Each layer only imports from layers below it. No circular dependencies.
  "avatar_speech_enabled": True, "avatar_subtitles_enabled": True}
 ```
 
+## Where the data lives on disk
+
+Everything sits under `librarian_config.llmclient_userdata_dir` — `~/.config/raven/llmclient/` by default. The *directory* is config; the two filenames are not, and are built independently by `app.py` (≈ line 246) and `minichat.py` (≈ line 70). They match, which is why the GUI and the CLI share one datastore:
+
+| Path | What |
+|---|---|
+| `data.json` | the chat node datastore (`chattree.PersistentForest`) |
+| `data.images/` | attachment sidecars for that datastore — content-addressed `<sha256>.<ext>` plus `<file>.meta.json` descriptions. Derived from the datastore filename via `with_suffix(".images")`, so it tracks whatever the datastore is called. The name is historical; it holds documents too |
+| `state.json` | app state — HEAD, the system-prompt/greeting node IDs, toggle states |
+| `documents/` | the docs-DB drop folder (`llm_docs_dir`); files landing here are ingested into RAG |
+| `rag_index/` | the built RAG index (`llm_database_dir`) |
+| `api_key.txt` | optional; used if present |
+
+**`data.json`'s on-disk shape is a flat mapping of node ID → node, with no wrapper key.** Not `{"nodes": {...}}` — the top level *is* the node dict, even though the in-memory attribute is `PersistentForest.nodes`. Node IDs look like `gensym#forest-node:<uuid>`. Within a node, `node["data"]` maps revision → payload, so a script that wants "the message" has to pick a revision (or iterate all of them, which is what the sidecar GC mark phase does). Worth knowing before writing any ad-hoc script against the file: assuming a `"nodes"` key silently yields zero nodes rather than an error.
+
 ## Hybrid RAG
 - Semantic: ChromaDB embeddings
 - Keyword: bm25s (BM25 algorithm)

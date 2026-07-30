@@ -349,7 +349,11 @@ class DPGChatMessage:
             node_payload = self.parent_view.chat_controller.datastore.get_payload(node_id)  # auto-selects active revision  TODO: later (chat editing), we need to set the revision to load
             payload_datetime = node_payload["general_metadata"]["datetime"]  # of the active payload revision!
             node_active_revision = self.parent_view.chat_controller.datastore.get_revision(node_id)
-            dpg.add_text(f"{payload_datetime} R{node_active_revision}", color=(120, 120, 120), parent=text_vertical_layout_group)
+            # Tagged so a navigation jump can flash it: it is the one widget every stored message has, at a
+            # fixed place at its top, which makes it the natural "here is the message you asked for" marker.
+            dpg.add_text(f"{payload_datetime} R{node_active_revision}", color=(120, 120, 120),
+                         tag=f"chat_message_timestamp_{self.gui_uuid}",  # tag
+                         parent=text_vertical_layout_group)
 
         # render the actual text
         self.gui_text_group = dpg.add_group(tag=f"chat_message_text_container_group_{self.gui_uuid}",
@@ -533,7 +537,8 @@ class DPGChatMessage:
                     dpg.set_item_alias(widget, f"chat_message_text_{role}_paragraph_{idx}_{self.gui_uuid}")  # tag
                 paragraph["rendered"] = True
 
-    def add_tool_call_invocation(self, index: int, name: str, arguments: str) -> None:
+    def add_tool_call_invocation(self, index: int, name: str, arguments: str,
+                                 tool_call_id: Optional[str] = None) -> None:
         """Render one tool-call invocation as a visible sub-element: a meshing-cogs icon + the call signature.
 
         Raven's what-you-see-is-what-you-get design surfaces what the model did, so a tool-calling turn is not
@@ -548,6 +553,10 @@ class DPGChatMessage:
         `index`: position among this message's tool calls (for unique widget tags).
         `name`: the function name.
         `arguments`: the call arguments as a JSON string (OAI convention).
+        `tool_call_id`: the call's canonical id, which the answering tool-role message carries as its
+                        `tool_call_id`. When given, the row gains a button that jumps to that response.
+                        `None` while streaming (the id is not known until the call is complete), and for
+                        pre-migration data.
         """
         tool_color = role_to_colors["tool"]["front"]
         try:
@@ -568,6 +577,73 @@ class DPGChatMessage:
                          color=tool_color,
                          wrap=max(0, self.get_chat_text_width() - 40),  # leave room for the leading icon
                          parent=row)
+            if tool_call_id is not None:
+                self._add_action_button(parent=row,
+                                        icon=fa.ICON_ARROW_DOWN,  # plain directional arrow = "go to the related item", as in Visualizer's info panel
+                                        tooltip_text="Go to this call's result",
+                                        ok_message="Jumped to the result!",
+                                        fail_message="No result recorded for this call",
+                                        action=self._make_jump_to_tool_response(tool_call_id))
+
+    def _make_jump_to_tool_call(self, tool_call_id: str) -> Callable[[], None]:
+        """Build the callback that scrolls to, and flashes, the tool-call sub-element with id `tool_call_id`."""
+        def jump_to_tool_call() -> None:
+            found = self.parent_view.chat_controller.find_tool_call_origin(tool_call_id)
+            if found is None:  # the assistant message is on another branch, or predates the id migration
+                raise LookupError(f"no originating call for id '{tool_call_id}' in the current branch")
+            origin, index = found
+            self.parent_view.scroll_view(scroll_target_node_id=origin.node_id)
+            # Flash the specific call, not the whole message: an assistant turn may have made several, and
+            # "which one produced this result" is the entire question the jump was asked to answer.
+            gui_animation.highlight_widget(widget=f"chat_message_toolcall_icon_{index}_{origin.gui_uuid}",  # tag
+                                           duration=gui_config.acknowledgment_duration)
+        return jump_to_tool_call
+
+    def _make_jump_to_tool_response(self, tool_call_id: str) -> Callable[[], None]:
+        """Build the callback that scrolls to, and flashes, the tool result answering `tool_call_id`."""
+        def jump_to_tool_response() -> None:
+            target = self.parent_view.chat_controller.find_tool_response(tool_call_id)
+            if target is None:  # in flight, on another branch, or never recorded
+                raise LookupError(f"no tool response for call id '{tool_call_id}' in the current branch")
+            self.parent_view.scroll_view(scroll_target_node_id=target.node_id)
+            gui_animation.highlight_widget(widget=f"chat_message_timestamp_{target.gui_uuid}",  # tag
+                                           duration=gui_config.acknowledgment_duration)
+        return jump_to_tool_response
+
+    def _add_action_button(self, *, parent: Union[str, int], icon: str, tooltip_text: str, ok_message: str,
+                           action: Callable[[], None], enabled: bool = True,
+                           fail_message: str = "Couldn't open — it may have moved or been deleted") -> None:
+        """Add one small icon-plus-tooltip action button, wired to run `action`.
+
+        The shared shape for the secondary actions that hang off a message's content rather than off its main
+        button row — the provenance cluster under an inline attachment, and the tool-call navigation links.
+
+        On click `action` runs; success flashes the button green with `ok_message`, any failure flashes it red
+        with `fail_message` (and logs) — a non-intrusive acknowledgment in place of a modal dialog, matching
+        the global toolbar buttons. A disabled button (`enabled=False`) still shows its explanatory
+        `tooltip_text` but does nothing, so a predictably-unavailable action (no recorded source, an inline
+        `data:` image) is discoverable before the click rather than failing after it.
+
+        Raising from `action` is therefore a supported way to report "this cannot be done right now" — which
+        is what the navigation links use for a call whose response is not in the current branch, since whether
+        one exists can change after the button is built."""
+        button_id = dpg.add_button(label=icon, width=gui_config.toolbutton_w, parent=parent, enabled=enabled)
+        dpg.bind_item_font(button_id, self.parent_view.themes_and_fonts.icon_font_solid)
+        dpg.bind_item_theme(button_id, "disablable_widget_theme")  # tag
+        tooltip_id = dpg.add_tooltip(button_id)
+        text_id = dpg.add_text(tooltip_text, parent=tooltip_id)
+        if not enabled:
+            return
+        def callback() -> None:
+            try:
+                action()
+                ok, message = True, ok_message
+            except Exception as exc:  # noqa: BLE001 -- a secondary action must never crash the chat view
+                logger.error(f"DPGChatMessage._add_action_button: action failed: {type(exc)}: {exc}")
+                ok, message = False, fail_message
+            gui_animation.flash_button(button=button_id, tooltip=tooltip_id, text=text_id,
+                                       ok=ok, message=message, duration=gui_config.acknowledgment_duration)
+        dpg.set_item_callback(button_id, callback)
 
     def demolish(self) -> None:
         """The opposite of `build`: delete all GUI widgets belonging to this instance.
@@ -885,6 +961,15 @@ class DPGChatMessage:
         if role == "tool" and node_id is not None:
             denied_node_payload = self.parent_view.chat_controller.datastore.get_payload(node_id)
             maybe_denied_host = denied_node_payload.get("generation_metadata", {}).get("webfetch_denied_host")
+
+            # The other half of the tool-call navigation pair: jump back to the call this result answers.
+            if (answered_call_id := denied_node_payload["message"].get("tool_call_id")) is not None:
+                self._add_action_button(parent=g,
+                                        icon=fa.ICON_ARROW_UP,
+                                        tooltip_text="Go to the call this result answers",
+                                        ok_message="Jumped to the call!",
+                                        fail_message="The originating call isn't in this branch",
+                                        action=self._make_jump_to_tool_call(answered_call_id))
         if maybe_denied_host is not None:
             def approve_and_retry_callback():
                 chat_controller = self.parent_view.chat_controller
@@ -1119,7 +1204,8 @@ class DPGCompleteChatMessage(DPGChatMessage):
             function = tool_call.get("function") or {}
             self.add_tool_call_invocation(index=index,
                                           name=function.get("name", "?"),
-                                          arguments=function.get("arguments", ""))
+                                          arguments=function.get("arguments", ""),
+                                          tool_call_id=tool_call.get("id"))
 
     def _render_text_paragraphs(self, text: str) -> None:
         """Render one text content-part: split into paragraphs and add them.
@@ -1207,7 +1293,7 @@ class DPGCompleteChatMessage(DPGChatMessage):
             source_openable = bool(source_url) and not source_url.startswith("data:")
             actions = dpg.add_group(horizontal=True, parent=cluster)
 
-            self._add_provenance_button(parent=actions,
+            self._add_action_button(parent=actions,
                                         icon=fa.ICON_IMAGE,
                                         tooltip_text="Show full-size image\n(the saved copy, in the chat data folder)",
                                         ok_message="Opened image",
@@ -1218,13 +1304,13 @@ class DPGCompleteChatMessage(DPGChatMessage):
                 source_tooltip = "Open original source — unavailable\n(the image was embedded inline; no external source)"
             else:
                 source_tooltip = "Open original source — unavailable\n(no source location was recorded)"
-            self._add_provenance_button(parent=actions,
+            self._add_action_button(parent=actions,
                                         icon=fa.ICON_LINK,
                                         tooltip_text=source_tooltip,
                                         ok_message="Opened source",
                                         enabled=source_openable,
                                         action=lambda: _open_source_url(source_url))
-            self._add_provenance_button(parent=actions,
+            self._add_action_button(parent=actions,
                                         icon=fa.ICON_FOLDER_OPEN,
                                         tooltip_text="Open the image folder\n(where attached images are stored)",
                                         ok_message="Opened folder",
@@ -1262,7 +1348,7 @@ class DPGCompleteChatMessage(DPGChatMessage):
             source_openable = bool(source_url) and not source_url.startswith("data:")
             actions = dpg.add_group(horizontal=True, parent=cluster)
 
-            self._add_provenance_button(parent=actions,
+            self._add_action_button(parent=actions,
                                         icon=fa.ICON_FILE_LINES,
                                         tooltip_text="Show the attached document\n(the saved copy, in the chat data folder)",
                                         ok_message="Opened document",
@@ -1271,44 +1357,18 @@ class DPGCompleteChatMessage(DPGChatMessage):
                 source_tooltip = f"Open original source\n{urllib.parse.unquote(source_url)}"
             else:
                 source_tooltip = "Open original source — unavailable\n(no source location was recorded)"
-            self._add_provenance_button(parent=actions,
+            self._add_action_button(parent=actions,
                                         icon=fa.ICON_LINK,
                                         tooltip_text=source_tooltip,
                                         ok_message="Opened source",
                                         enabled=source_openable,
                                         action=lambda: _open_source_url(source_url))
-            self._add_provenance_button(parent=actions,
+            self._add_action_button(parent=actions,
                                         icon=fa.ICON_FOLDER_OPEN,
                                         tooltip_text="Open the attachments folder\n(where attached files are stored)",
                                         ok_message="Opened folder",
                                         action=lambda: common_utils.open_in_file_manager(datastore.sidecar_dir))
 
-    def _add_provenance_button(self, *, parent: Union[str, int], icon: str, tooltip_text: str, ok_message: str,
-                               action: Callable[[], None], enabled: bool = True) -> None:
-        """Add one small provenance-action button (icon + tooltip) under an inline image, wired to run `action`.
-
-        On click `action` runs; success flashes the button green with `ok_message`, any failure flashes it red
-        (and logs) — a non-intrusive acknowledgment in place of a modal dialog, matching the global toolbar
-        buttons. A disabled button (`enabled=False`) still shows its explanatory `tooltip_text` but does
-        nothing, so a predictably-unavailable action (no recorded source, an inline `data:` image) is
-        discoverable before the click rather than failing after it."""
-        button_id = dpg.add_button(label=icon, width=gui_config.toolbutton_w, parent=parent, enabled=enabled)
-        dpg.bind_item_font(button_id, self.parent_view.themes_and_fonts.icon_font_solid)
-        dpg.bind_item_theme(button_id, "disablable_widget_theme")  # tag
-        tooltip_id = dpg.add_tooltip(button_id)
-        text_id = dpg.add_text(tooltip_text, parent=tooltip_id)
-        if not enabled:
-            return
-        def callback() -> None:
-            try:
-                action()
-                ok, message = True, ok_message
-            except Exception as exc:  # noqa: BLE001 -- opening an external target must never crash the chat view
-                logger.error(f"DPGCompleteChatMessage._add_provenance_button: action failed: {type(exc)}: {exc}")
-                ok, message = False, "Couldn't open — it may have moved or been deleted"
-            gui_animation.flash_button(button=button_id, tooltip=tooltip_id, text=text_id,
-                                       ok=ok, message=message, duration=gui_config.acknowledgment_duration)
-        dpg.set_item_callback(button_id, callback)
 
 
 class DPGStreamingChatMessage(DPGChatMessage):
@@ -1742,6 +1802,46 @@ class DPGChatController:
                                                            entrypoint=self._context_prefill_entrypoint,
                                                            running_poll_interval=0.25,
                                                            pending_wait_duration=librarian_config.context_prefill_idle_delay)
+
+    def find_tool_call_origin(self, tool_call_id: str) -> tuple[DPGChatMessage, int] | None:
+        """Find the assistant message that made the tool call `tool_call_id`.
+
+        Returns `(dpg_chat_message, index_among_that_message's_tool_calls)`, or `None` if the current branch
+        holds no such call. The index is what distinguishes one call from another when an assistant turn made
+        several, which is exactly when a navigation link is worth having.
+
+        Searches `current_chat_history`, which *is* the HEAD lineage by construction — so a branched alternate's
+        calls are correctly invisible here, without any filtering. Resolved per lookup rather than from a map
+        built at render time: the answer depends on what is in the branch *now*, and a message's own render
+        happens before the rest of the turn exists.
+        """
+        with self.current_chat_history_lock:
+            for dpg_chat_message in self.current_chat_history:
+                if dpg_chat_message.node_id is None:  # a live streaming message is not in the datastore yet
+                    continue
+                message = self.datastore.get_payload(dpg_chat_message.node_id)["message"]
+                if message.get("role") != "assistant":
+                    continue
+                for index, tool_call in enumerate(message.get("tool_calls") or []):
+                    if tool_call.get("id") == tool_call_id:
+                        return dpg_chat_message, index
+        return None
+
+    def find_tool_response(self, tool_call_id: str) -> DPGChatMessage | None:
+        """Find the tool-role message answering the tool call `tool_call_id`, or `None` if there is none.
+
+        The reverse of `find_tool_call_origin`, with the same branch scoping. `None` is an ordinary outcome
+        rather than an error: the call may still be in flight, its result may live on a branch other than the
+        one being viewed, or an interrupted turn may have left it genuinely unanswered.
+        """
+        with self.current_chat_history_lock:
+            for dpg_chat_message in self.current_chat_history:
+                if dpg_chat_message.node_id is None:
+                    continue
+                message = self.datastore.get_payload(dpg_chat_message.node_id)["message"]
+                if message.get("role") == "tool" and message.get("tool_call_id") == tool_call_id:
+                    return dpg_chat_message
+        return None
 
     def disable_gui_updates(self) -> None:
         """Stop the controller from firing GUI events.

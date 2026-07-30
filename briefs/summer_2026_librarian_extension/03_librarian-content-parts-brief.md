@@ -963,8 +963,7 @@ became a typed-parts list everywhere; tool results as parts; per-part renderer; 
   No behavior change; `sidecarstore` has its own tests.
 - *(Env interlude, not brief-03 scope: the torch trio is pinned at `2.11.0` / `0.26.0` / `2.11.0` `+cu128` as of
   `af3a19b`, validated on the live server — NVRTC OK. See `pyproject.toml` / README for the pinning scheme.)*
-- **D — GC UX & navigation** (manual "Clean up & save" **DONE**; bidirectional tool-call↔response nav links
-  remain — that is the last of brief 03). Open question resolved: `prune_unreachable_nodes` ran only in
+- **D — GC UX & navigation** (**DONE** — both halves; this closes brief 03). Open question resolved: `prune_unreachable_nodes` ran only in
   `minichat`, not the GUI exit path. **Decided 2026-07-29: manual-only, at least for now.** A sweep on exit is
   work the user did not ask for at the moment they are least able to see it, and the leak it prevents is slow.
   The bulk of this checkpoint was DPG work rather than GC logic.
@@ -1035,6 +1034,31 @@ became a typed-parts list everywhere; tool results as parts; per-part renderer; 
     just the glyph means tagging the row first (`add_tool_call_invocation`, ≈ line 563).
   - The remaining unknown is cosmetic, not structural: whether flashing the icon alone reads as "this one", or
     whether the row needs it. Decide by looking at it.
+
+  **Built 2026-07-30.** `WidgetFlash` (the widened `ButtonFlash`) landed first, as planned; the links are its
+  first caller. Two deliberate departures from the § above, both forced by *when* things exist:
+
+  - **Resolved per click, not from maps built at render time.** `DPGChatController.find_tool_call_origin` /
+    `find_tool_response` walk `current_chat_history` under its lock on each click. That list *is* the HEAD
+    lineage, so the "not the whole forest" scoping the § asks for comes free — but more importantly, a map
+    built while a message renders would be built too early: an assistant message renders *before* the tool
+    responses of its own turn exist. A per-click walk over a few dozen messages is not a cost worth
+    engineering around.
+  - **No disabled button for "no response yet".** The § wanted the call→response button disabled with an
+    explanatory tooltip when nothing answers the call. That decision cannot be made when the button is
+    built — at that moment the response legitimately does not exist yet, so every call would render disabled
+    and stay that way. Instead the action raises, and `_add_action_button` turns that into the red flash it
+    already gives any failed action ("No result recorded for this call"). Same information, at the only time
+    it can be correct.
+
+  Also: `_add_provenance_button` moved up to `DPGChatMessage` as `_add_action_button` (it now serves
+  navigation as well as provenance, and the tool-call rows are rendered by the base class), gaining a
+  `fail_message` parameter. Icons are `ICON_ARROW_UP` / `ICON_ARROW_DOWN` rather than the §'s suggested
+  bracket pair — `arrow-down-to-bracket` is not in the vendored FontAwesome, and a plain directional arrow
+  matches what Visualizer's info panel already uses for "go to the related item". The highlight targets are
+  the specific tool-call gear icon (call side; an assistant turn may make several, and *which one* is the
+  whole question) and the message timestamp (response side; the one widget every stored message has, at a
+  fixed place).
 
   **Settled with Juha 2026-07-29, at the start of implementation:**
   - **Placement — a second row under the existing separator**, labelled `Maintenance:`, below the `Open folder:`

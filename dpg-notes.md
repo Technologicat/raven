@@ -504,7 +504,12 @@ Guard with `importorskip` — Raven's CI installs no GUI toolkit deliberately, s
 
 **Animations need no wall-clock waiting.** `animator.render_frame()` is what Raven's render loop calls; a test can call it directly and step the animation as fast as the CPU allows, with a wall-clock deadline so a bug fails the test instead of hanging the suite.
 
-Wait on a condition specific to the animation under test, *not* on `animator.active_count` reaching zero. `animator` is a process-wide singleton, so an empty-animator condition also waits on anything else running — and if something ambient never ends (a cyclic `PulsatingColor`, say), the test times out blaming the wrong animation. `WidgetFlash` deregisters itself from `WidgetFlash.instances` as it finishes, which is the exact event; other animation types need their own equivalent.
+Wait on a condition specific to the animation under test, *not* on `animator.active_count` reaching zero. `animator` is a process-wide singleton, so an empty-animator condition also waits on anything else running — and if something ambient never ends (a cyclic `PulsatingColor`, say), the test times out blaming the wrong animation.
+
+Two different registrations are in play, and only the first is universal:
+
+- **Every** animation deregisters from the *animator* by returning `action_finish` / `action_cancel` from `render_frame`. `Animator.add` returns the animation, so a test can keep that reference and wait on it — this works for any animation type.
+- `WidgetFlash` *additionally* keeps `WidgetFlash.instances`, a per-widget registry for its own de-duplication (at most one flash per widget). That is specific to this animation, and it happens to give a test a convenient public per-widget signal: the widget's key disappears exactly when its flash finishes.
 
 **What this is good for, and what it isn't.** Worth testing: state machines, "restore what you borrowed" contracts, teardown ordering, de-duplication logic, anything holding a lock — behavior that is invisible to the eye and breaks silently. Not worth testing: whether it *looks* right. Layout, spacing and color are a screenshot's job (see "Live GUI testing on a shared desktop" in `CLAUDE.md`), not an assertion's.
 
