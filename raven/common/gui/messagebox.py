@@ -32,12 +32,13 @@ def _init():
     _modal_dialog_initialized = True
 
 def modal_dialog_window_exists():
-    # Sanity check. Just try to call *some* DPG function with the modal dialog window to check that the handle is valid (it isn't before `_init` has been called).
-    try:
-        dpg.get_item_alias("modal_dialog_window")
-    except Exception:
-        return False
-    return True
+    """Return whether the modal dialog window has been created yet (it has not, before `_init` runs)."""
+    # `dpg.does_item_exist` is the direct question. The previous implementation called `get_item_alias` inside
+    # a try/except, on the theory that any DPG call would raise for an invalid handle — but that call *returns
+    # `None`* for an unknown tag instead of raising, so the except never fired and this always answered `True`.
+    # Callers then went on to `dpg.is_item_visible("modal_dialog_window")`, where the tag resolves to `0` and
+    # `get_item_state(0)` does raise, once per call.
+    return dpg.does_item_exist("modal_dialog_window")  # tag
 
 def modal_dialog_hotkeys_callback(sender, app_data):
     if not modal_dialog_window_exists():
