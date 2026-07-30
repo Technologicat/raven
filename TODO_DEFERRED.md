@@ -2477,13 +2477,24 @@ That splits the raster half by image kind rather than giving it one answer:
   means either a VLM transcription pass, or one of the newer document-understanding models that emit structure
   rather than a flat string.
 
-Both of those are large neural models, which erodes the "works without the big model" motivation — though a
-document-layout model is plausibly much smaller than a general VLM, and might run where a VLM will not. Worth
-checking rather than assuming; if it holds, that is the interesting middle option.
+**"It needs a big model" is a weak objection now**, and that reshapes the choice (Juha, 2026-07-30). Current
+VLMs are small — the 4B we run for chat handles images, and ~9B covers semi-serious use on a laptop. So a
+specialized document-layout model is *not* obviously the economical middle option: if a VLM is already loaded
+for chat attachments, adding a second specialized model **increases** total footprint rather than saving it.
+The middle option only pays off where no VLM would otherwise be resident at all.
 
-*Unverified pointer:* IBM released document-understanding work in this space recently (Docling, and a
-Granite-family vision model for document conversion). Name, capabilities and model size all need checking
-before anything is built on it — recorded as a lead, not a recommendation.
+Which shifts the justification, for the better. The strongest reason for this feature is not "so a text-only
+model can cope" — that was the weakest of the three, and it is the one small VLMs erode. It is **RAG
+indexing**: retrieval needs text *in the index*, and no chat-side model capability substitutes for that,
+however good it gets. The economics are favourable too, because extraction runs once per image at ingest
+rather than per query, so a VLM pass is affordable exactly where it is needed.
+
+So the likely shape is: transcribe with the VLM at ingest, store the result as searchable text alongside the
+image, and let the chat path keep sending pixels to whatever model is loaded.
+
+*Unverified pointer, kept in case no VLM is resident:* IBM released document-understanding work in this space
+recently (Docling, and a Granite-family vision model for document conversion). Name, capabilities and model
+size all need checking before anything is built on it — a lead, not a recommendation.
 
 If any of this lands it is ML-bearing and belongs in the three-layer `common` / `server.modules` /
 `mayberemote` shape like the other inference subsystems.
