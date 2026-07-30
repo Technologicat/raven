@@ -1045,11 +1045,18 @@ became a typed-parts list everywhere; tool results as parts; per-part renderer; 
     responses of its own turn exist. A per-click walk over a few dozen messages is not a cost worth
     engineering around.
   - **No disabled button for "no response yet".** The § wanted the call→response button disabled with an
-    explanatory tooltip when nothing answers the call. That decision cannot be made when the button is
-    built — at that moment the response legitimately does not exist yet, so every call would render disabled
-    and stay that way. Instead the action raises, and `_add_action_button` turns that into the red flash it
-    already gives any failed action ("No result recorded for this call"). Same information, at the only time
-    it can be correct.
+    explanatory tooltip when nothing answers the call. That decision cannot be made *at build time* — the
+    response legitimately does not exist yet — so the button would render disabled and stay that way. Instead
+    the action raises, and `_add_action_button` turns that into the red flash it already gives any failed
+    action ("No result recorded for this call").
+
+    A later fix-up pass *is* possible, and there is precedent: `DPGLinearizedChatView.add_complete_message`
+    already walks the older messages after an append to disable their continue / show-continuation buttons
+    (≈ line 1528). Doing the same here is deferred rather than ruled out, and it is not free — the nav buttons
+    would need tags to be found by, both the incremental-append and the full-`build` paths would need the
+    pass, and a disabled DPG button fires no callback, so the "response is on another branch" case would need
+    handling of its own instead of falling out of the same code. **Try the flash first and see how it
+    feels** (Juha, 2026-07-30); revisit if the after-the-fact report turns out to be the wrong shape.
 
   Also: `_add_provenance_button` moved up to `DPGChatMessage` as `_add_action_button` (it now serves
   navigation as well as provenance, and the tool-call rows are rendered by the base class), gaining a
