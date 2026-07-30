@@ -3,6 +3,34 @@
 New items go at the **top**. (Both ends were in use up to 2026-07-27, which is how the two halves of the same
 Librarian session ended up ~1000 lines apart.)
 
+## `replace_last_paragraph`'s `dpg.mutex()` is disabled because it hangs the app
+
+`chat_controller.DPGChatMessage.replace_last_paragraph` swaps the in-progress paragraph by deleting its widget
+and re-rendering. The `with dpg.mutex():` that would confine both halves to a single frame is commented out,
+with an in-place TODO: *"Grabbing the mutex here causes the app to randomly hang during `on_llm_progress`.
+Debug why. Just disabling this for now."* The comment cites DearPyGui discussion #1002 for what the mutex is
+*for*.
+
+**Consequence, and why it is not urgent.** Without the mutex the swap is non-atomic, so the render loop can
+observe the interval where the paragraph is gone and the content is shorter. That window is real and reachable,
+and it is worked around where it was found to matter: `DPGLinearizedChatView.scroll_view` re-issues its scroll
+each round, so a command clamped to a momentarily smaller content height is corrected. The remaining exposure
+is anything *else* that reads panel geometry while a paragraph is mid-swap, which is why this is worth keeping
+on the list rather than closing.
+
+**A lead for the investigation, explicitly not an explanation** (2026-07-30): DearPyGui issue #2366,
+*"Deadlock when holding dpg.mutex() a long time in a frame callback"*, concerns the same primitive held across
+slow work — and `_render_text()` inside the mutex is Markdown rendering, which is exactly a long hold. So it is
+worth reading first. But the contexts differ: #2366 documents the hang inside a **frame callback**, and its
+reporter states the same operation did *not* deadlock from keyboard or mouse handlers, whereas
+`on_llm_progress` runs on the LLM task thread. So #2366 is where to start, not the answer. Do not write it into
+the code comment as the cause without reproducing it.
+
+(Distinct from the misattribution corrected the same day, where #2366 had been cited for `dpg.get_frame_count()`
+needing the render thread mutex — a claim about a different function entirely, and simply wrong.)
+
+Noticed while auditing `split_frame` hazards (2026-07-30); flagged for tracking by Juha.
+
 ## The subtitle translator silently drops `=` (and probably other symbols)
 
 The AI answered "2 + 2 = 4." and the subtitle read "2 + 2  4." — two spaces where the `=` had been

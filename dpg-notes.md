@@ -139,6 +139,30 @@ Circular wait: callback -> task -> main -> callback.
 holding locks that the main loop needs. Defer heavy work (image loading, task
 cancellation) to the main loop body via a pending flag.
 
+## `dpg.mutex()` — the atomicity tool that Raven cannot currently use
+
+`with dpg.mutex():` is what makes a multi-call sequence land in one frame, so that
+the render loop never observes an intermediate state — the documented use is
+exactly a delete-then-add widget swap (DearPyGui discussion #1002).
+
+In Raven it is **disabled where it is most wanted.**
+`chat_controller.replace_last_paragraph` has it commented out with a TODO: holding
+it there hangs the app at random during `on_llm_progress`. The live consequence is
+that a streaming paragraph swap is *not* atomic, so a reader of panel geometry can
+catch the content while the old paragraph is gone and the new one is not yet
+rendered. Anything that measures the panel during streaming has to tolerate that;
+`DPGLinearizedChatView.scroll_view` does, by re-issuing its scroll.
+
+Only one live use remains in the tree (vendored `file_dialog/fdialog.py`).
+
+**When investigating, start at issue #2366** ("Deadlock when holding dpg.mutex() a
+long time in a frame callback") — same primitive held across slow work, and the
+Markdown render inside that mutex is precisely a long hold. Treat it as a lead
+rather than the cause: #2366 is reported from a *frame callback*, and its reporter
+found keyboard and mouse handlers unaffected, while `on_llm_progress` runs on a
+background task thread. Not the same dispatch context, so the match is
+suggestive and unconfirmed.
+
 ## Texture upload ordering
 
 `set_value` on a dynamic texture and `add_dynamic_texture` are both deferred —
