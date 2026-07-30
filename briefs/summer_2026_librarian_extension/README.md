@@ -29,6 +29,18 @@ follow-up to 10 rather than a brief of its own.
 **Decided 2026-07-29.** The release goes out once 03 §D and 09 are done, and no feature lands between
 09 and the tag.
 
+**Amended 2026-07-30: one feature does land** — large `webfetch` results become attachments rather than
+being dumped inline (`TODO_DEFERRED.md`). Admitted under the same argument the rule was written to serve
+rather than against it: 0.2.8's headline is attachments, and a release that stores a user's PDF as a tidy
+chip while the AI's own fetches bury the chat log under dozens of screens ships the feature half-applied.
+That is the "user-visible half-feature" the freeze exists to prevent, so excluding it would honour the
+letter and lose the point. The chat-view scrolling work (keys, smooth scrolling, end-of-scroll feedback,
+and the streaming autoscroll fix) is the sibling of this and is a *defect* set rather than a feature, so it
+was never covered by the freeze.
+
+The rule still holds for everything else: nothing further is admitted without an argument of the same
+shape, made explicitly here.
+
 The reason to wait rather than ship at 07: both remaining items leave a user-visible half-feature.
 Sidecar attachments have no way to remove strays until §D wires the sweep — `prune_unreferenced_sidecars`
 still has no non-test caller, so a released 0.2.8 would grow attachment files with no way to reclaim

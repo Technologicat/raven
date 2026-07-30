@@ -124,6 +124,9 @@ Raised by Juha (2026-07-30), while scrolling through a chat with several full-pa
 
 ## Store large tool results as attachments instead of dumping them into the chat log
 
+**Scoped into 0.2.8** (Juha, 2026-07-30): feature completeness now that attachments exist. See the note in
+the sprint README about what this changes.
+
 A `webfetch` result is currently rendered inline as the tool message's text, so fetching a paper drops its
 entire body into the chat log — dozens of screens to scroll past, and the same bytes into the datastore JSON
 (the 1.1 MB test datastore is mostly fetched article text). It is unreadable as a log and it is the reason
@@ -1557,9 +1560,31 @@ it fires on every single turn, unlike the Markdown cases which need particular c
 also removes the natural thing to do while the model thinks, which is to scroll back and talk about
 what it said last.
 
-Presumably the follow-the-tail autoscroll is unconditional, where it should engage only when the
-view is already at (or near) the bottom — the standard "stick to bottom unless the user has scrolled
-away" rule. Not investigated, so that is a hypothesis about the cause, not a diagnosis.
+**Confirmed 2026-07-30**, upgrading the earlier hypothesis to a diagnosis: the follow-the-tail autoscroll is
+unconditional. `chat_controller.py` calls `self.view.scroll_view()` with no target — which scrolls to the end
+— at four points during a streaming turn (≈ lines 2267, 2335, 2356, 2365). The fix is the standard rule:
+stick to the bottom only while the view *was* at (or near) the bottom, and stop following the moment the user
+scrolls away.
+
+**"Was", not "is", and that is the whole trick.** The test has to be sampled *before* the new content is
+added, and acted on after. Appending text grows the container, so `max_y_scroll` increases and a view that
+was pinned to the bottom is no longer at the bottom the instant the chunk lands. Testing after the append
+therefore reports "the user has scrolled away" every single time, autoscroll never engages, and the view
+freezes wherever the stream began — a fix that fails in exactly the opposite direction from the bug, and
+one that would look correct in the code.
+
+The same hazard reaches `ScrollEndFlasher`, so the predicate is shared in *form* but not in timing. A
+user-initiated scroll is not a quiet moment — the user can scroll *while* the model streams — so a chunk can
+land between the flasher's sample and its act, and "you are at the end" becomes false as it is drawn. What
+differs is the consequence, not the exposure: the flasher's failure is one wrong flash, the autoscroll's is a
+view that never follows again. Do not fold them into a single "am I at the bottom" helper on the assumption
+that one of them is safe; either pass the sampled state in, or take the size change into account explicitly.
+
+**Belongs with the chat-view scrolling item above, and probably first within it.** Smooth scrolling makes
+this defect *worse* if built first: today the view is yanked down instantly, which is at least over quickly;
+animated, the same unconditional call becomes a visible fight for the scrollbar every time a chunk arrives.
+The "am I at the bottom?" test is also the same predicate `ScrollEndFlasher` needs, so the three pieces share
+machinery rather than merely sharing a subsystem.
 
 Discussed in an earlier session and believed to be recorded here; it was not. Written down
 2026-07-28 after failing to find it (reported by Juha).
