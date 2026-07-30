@@ -2445,6 +2445,49 @@ three more lines in the extractor's dispatch.
 
 Raised while scoping office-format support (2026-07-29, Juha).
 
+## Vector figures in the docs DB and attachments (`.svg`)
+
+Hand-authored figures — problem setups, schematics, diagrams — are commonly SVG, because that is what you get
+when you draw them yourself for a manuscript rather than exporting them from a plotting library. So this is not
+an exotic format for this audience; it is the native form of exactly the figures an author would most want to
+discuss with the assistant.
+
+**Rasterize, and route it through the image path rather than `docextract`** (Juha's instinct, 2026-07-30, and
+it is the right one). Unlike the office and spreadsheet formats, an SVG's *content is a picture*: what the user
+wants the model to see is the rendered figure, not the markup. So it belongs with `imagestore` and needs a
+vision model, in the same way an attached PNG does.
+
+The shape already exists. Today's `.qoi` support does transcode-at-ingest — decode a format the pipeline does
+not speak, re-encode to one it does — and SVG is the same move with one extra decision:
+
+- **Resolution is ours to choose**, since the source is resolution-independent. The image-storage megapixel cap
+  is the natural target: rasterize to fill it rather than picking a DPI. A figure rendered too small is
+  illegible to the model in exactly the cases (dense schematics, small annotations) where it matters most.
+- **Keep the original SVG as the archival sidecar.** `imagestore` already preserves the original bytes when a
+  raster is downscaled, and the same reasoning applies with more force here: the vector source is the
+  higher-fidelity artifact, and re-rasterizing later at a different size is only possible if it was kept.
+
+**The `<text>` elements are a free bonus worth taking eventually.** An SVG carries its labels as machine-readable
+text, so axis labels, annotations and captions can be extracted without OCR — which would let a *non-vision*
+model use the figure's content, and give retrieval something to index. Not a blocker for the rasterize path;
+worth noting because raster figures cannot offer this and it is the one respect in which SVG is easier than PNG
+rather than harder.
+
+**Security constraint, and it is not boilerplate here.** SVG is XML: it can reference external entities and
+remote resources, and a rasterizer that resolves them will fetch them. In an application whose headline promise
+is that it runs entirely locally, attaching a figure must not cause a network request. Whatever backend is
+chosen has to have external entity resolution and remote fetching disabled, and that should be tested rather
+than assumed.
+
+Backend options, none evaluated: `cairosvg` (needs the cairo library), `svglib` + `reportlab` (pure Python),
+`rsvg-convert` or the Inkscape CLI (external binaries — fine on a dev box, not acceptable as a runtime
+dependency for a distributable app). Prefer an importable library over a subprocess for the usual reasons.
+
+Related: [Same file formats in the docs DB and in chat attachments], and the spreadsheet item above — three
+formats, three genuinely different problem classes behind one file picker.
+
+Raised by Juha (2026-07-30).
+
 ## Read documents as page images, for figure- and math-heavy sources
 
 Current extraction is **text-layer only**, for PDFs and (as of 0.2.8) office formats alike. That loses exactly
