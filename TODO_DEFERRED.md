@@ -1719,9 +1719,11 @@ it fires on every single turn, unlike the Markdown cases which need particular c
 also removes the natural thing to do while the model thinks, which is to scroll back and talk about
 what it said last.
 
-**Built 2026-07-30; two faults found and fixed, the second one live-measured. Awaiting confirmation.**
-Honouring a scrolled-away reader worked from the start, including across tool calls. Making the view *follow*
-did not.
+**Done 2026-07-30 — confirmed live.** Three faults, each found by a live test and fixed. Final run over a long
+reply with a thinking block and a multi-screenful `webfetch` answer: **zero near-miss refusals**, following
+correct throughout, with the position-wait firing 115 times and needing more than one extra frame only once.
+Honouring a scrolled-away reader worked from the start, including across tool calls; making the view *follow*
+took all three.
 
 **Fault 1 — `dpg.get_y_scroll_max` lags a content change by more than one frame.** `scroll_view` read the
 maximum before the newly added message had been laid out, so "scroll to the end" landed where the *previous*
@@ -1739,23 +1741,41 @@ The mechanism: `is_pinned_to_bottom` compared the position against `max_y_scroll
 independently — the user moves the position, arriving content moves the maximum — so both causes produced the
 same gap, and the view read its own content arriving as a reason to stop following. Because the verdict is
 sampled once per chunk *before* that chunk renders, one false answer guarantees the next sample is taken from a
-view one chunk further behind: monotonically worse, no recovery. A 52 px displacement (measured before the
-first chunk, source not identified — the settle-wait had already reported the maximum stable at 481 px) was
-enough to disable following for the whole turn.
+view one chunk further behind: monotonically worse, no recovery. A displacement of two lines was enough to
+disable following for a whole turn.
 
 Fixed by comparing against **the position we last commanded**, not the maximum. Content arrival cannot change
 that relationship; a user scroll is exactly a change to the position we did not ask for. All of the view's own
-scrolling now goes through one private setter that records the commanded value and whether it was a
-scroll-to-end, so the two causes separate with one remembered integer and no scroll events. Renamed to
-`should_follow_tail`, because "is it at the bottom" is no longer the question it answers — it deliberately
-returns `True` for a view that is *not* at the bottom but is still following. A refusal is sticky (so one
-ambiguous frame cannot resume dragging a reader back), and recovers when the reader returns to the bottom
-themselves, which the at-the-end branch still catches.
+scrolling goes through one private setter that records the commanded value and whether it was a scroll-to-end,
+so the two causes separate with one remembered integer and no scroll events. Renamed to `should_follow_tail`,
+because "is it at the bottom" is no longer the question it answers — it deliberately returns `True` for a view
+that is *not* at the bottom but is still following.
 
-Diagnostics: `should_follow_tail` logs both comparisons and the deciding branch at DEBUG, and a near-miss
-refusal at INFO. **Confirmed when the near-miss line goes silent** on a turn the reader expected to be
-followed. The number to read is now the *drift* — a nonzero drift with no user scrolling means something moved
-the position behind our back, which is a different bug than a tolerance being too small.
+**Fault 3 — `dpg.get_y_scroll` does not reflect a `dpg.set_y_scroll` for more than one frame,** so the
+comparison introduced by fault 2's fix was reading our own in-flight command as a discrepancy. That is what
+produced the one remaining dropout (mid chain-of-thought): `gap=52.0px ... drifted 52.0px from the 533.0 we
+last commanded` — the panel was simply still at the previous position. Fixed by waiting in `scroll_view` for
+the panel to report the position asked for, bounded by a round count and re-issuing the recomputed target each
+round. Measured after the fix: one extra frame sufficed 114 times out of 115, two once, three never.
+
+An earlier hypothesis — that DPG had clamped the command to a content height momentarily shortened by
+`replace_last_paragraph`'s delete-then-add — **did not survive the log**: the first wait of the session read a
+position of `0.0` against a maximum of `692.0`, where nothing had shrunk. That clamp window is real (the
+`dpg.mutex()` that would make the swap atomic is disabled because holding it hangs the app) and recomputing the
+target each round covers it for free, but it was not the cause of any measured case. Recorded because the wrong
+mechanism was briefly written into the code comments and `dpg-notes.md`.
+
+Also dropped in the same pass: the refusal was initially made *sticky*, which looked careful and was the
+opposite. A reader who genuinely scrolls away keeps failing the drift test unaided, because they stay put and
+we issue no further commands — so stickiness added no protection, only amplification, turning one wrong refusal
+into a dead view for the rest of the reply. The log showed exactly that: every later refusal in the affected
+turn reported `drift 0.0` with the flag already cleared. Each sample now decides on current evidence and stores
+no verdict, so a wrong answer costs one chunk.
+
+Diagnostics kept in place: `should_follow_tail` logs both comparisons and the deciding branch at DEBUG, a
+near-miss refusal at INFO, and `scroll_view` logs each wait round. For a future regression, the number to read
+is the *drift* — a nonzero drift with no user scrolling means something moved the position behind our back,
+which is a different bug from a tolerance being too small.
 
 **Earlier, and already fixed:** the follow-the-tail autoscroll was unconditional. `chat_controller.py` calls `self.view.scroll_view()` with no target — which scrolls to the end
 — at four points during a streaming turn (≈ lines 2267, 2335, 2356, 2365). The fix is the standard rule:

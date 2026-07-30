@@ -1469,9 +1469,9 @@ class DPGLinearizedChatView:
         of the three ways this panel moves — scrollbar drag, mouse wheel, navigation keys — the drag is
         handled inside ImGui and raises nothing we could hook.
 
-        The comparison is only as good as the record it compares against, which is why `scroll_view` verifies
-        that its command was applied rather than assuming it. A command DPG silently clamped would leave the
-        position disagreeing with the record, which is indistinguishable here from the user having scrolled.
+        The comparison is only as good as the record it compares against, which is why `scroll_view` waits for
+        its command to actually land rather than assuming it did. A command still in flight leaves the position
+        disagreeing with the record, which is indistinguishable here from the user having scrolled.
 
         Each call decides on current evidence and stores no verdict. A wrong answer therefore costs one chunk
         rather than the remainder of the reply.
@@ -1680,33 +1680,38 @@ class DPGLinearizedChatView:
         logger.info(f"DPGLinearizedChatView.scroll_view:{frames_str}{waited_str}: max_y_scroll = {max_y_scroll}, scrolling to y = {y_scroll}")
         self._set_y_scroll(y_scroll, to_end=to_end)
 
-        # Verify that the command actually took, and re-issue it if not.
+        # Wait until the panel actually reports the position we asked for, rather than assuming it does.
         #
-        # A streaming paragraph is replaced by delete-then-add, and the `dpg.mutex()` that would make the pair
-        # atomic within one frame is disabled in `replace_last_paragraph` (it hangs the app). So the render
-        # loop can apply our value during the interval when the old paragraph is gone: the content is briefly
-        # shorter, DPG clamps us to that smaller maximum, and the content then grows back — leaving the view
-        # short of the end by the height of that paragraph, with no error anywhere. The model decides where
-        # its newlines go, so a "paragraph" can be a line or a screenful, and the shortfall is unbounded.
+        # `dpg.get_y_scroll` does not reflect a `dpg.set_y_scroll` for more than one frame: a single
+        # `split_frame` afterwards still reads the *previous* position. Measured over a session of streaming
+        # replies, one extra frame sufficed 114 times out of 115 and two were needed once — which is the same
+        # lag `SmoothScrolling` conservatively budgets four frames for.
         #
-        # Left unhandled, that is not a cosmetic miss. `should_follow_tail` compares the position against what
-        # we commanded, so a clamped command makes the position disagree with the command, which is exactly
-        # the signature of the user having scrolled away, and the view stops following for the rest of the
-        # reply. Verifying here is what keeps that comparison meaningful.
+        # Left unhandled, this is not a cosmetic miss, because `should_follow_tail` compares the position
+        # against what we commanded. A command that has not landed yet makes the position disagree with the
+        # record, which is exactly the signature of the user having scrolled away — so the view stops following
+        # for the rest of the reply. Waiting here is what keeps that comparison meaningful.
+        #
+        # The target is recomputed each round and re-issued, which also covers the target having genuinely
+        # moved while we waited (content keeps arriving during a stream), and any case where DPG clamped the
+        # command to a content height that was momentarily smaller — `replace_last_paragraph` swaps a paragraph
+        # by delete-then-add, with the `dpg.mutex()` that would make the pair atomic disabled because holding
+        # it hangs the app, so that window does exist. Bounded by an attempt count rather than a pixel
+        # threshold: a shortfall can be as large as whatever was swapped out, and since the model decides where
+        # its newlines go, a "paragraph" can be a screenful.
         for attempt in range(1, _SCROLL_VERIFY_ATTEMPTS + 1):
             if max_wait_frames <= 0:  # cannot wait, so cannot verify; see the render-thread note above
                 break
-            guiutils.split_frame(operation="scroll_view: verify the scroll position was applied")
+            guiutils.split_frame(operation="scroll_view: wait for the scroll position to be applied")
             actual_y_scroll = dpg.get_y_scroll(self.gui_parent)
             if actual_y_scroll >= y_scroll:  # reached it (or content moved on and we are past it) — done
                 break
             max_y_scroll = dpg.get_y_scroll_max(self.gui_parent)
             y_scroll = max_y_scroll if to_end else min(y_scroll, max_y_scroll)
-            if actual_y_scroll >= y_scroll:  # the shortfall was the content's, not a clamp: nothing to re-issue
+            if actual_y_scroll >= y_scroll:  # the target itself moved down to meet us: nothing to re-issue
                 break
             logger.info(f"DPGLinearizedChatView.scroll_view: attempt {attempt}: position is {actual_y_scroll}, "
-                        f"short of the requested {y_scroll} (max_y_scroll = {max_y_scroll}); the content was "
-                        "briefly shorter when DPG applied it. Re-issuing.")
+                        f"not yet the requested {y_scroll} (max_y_scroll = {max_y_scroll}). Re-issuing.")
             self._set_y_scroll(y_scroll, to_end=to_end)
 
     def get_chatlog_as_markdown(self, include_metadata: bool) -> Optional[str]:
