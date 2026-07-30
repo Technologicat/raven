@@ -300,6 +300,28 @@ reference implementation, so they are one job rather than three:
   flash is *wanted* — it confirms arrival. What distinguishes the cases is provenance, not destination, so the
   scroll path needs to carry "who asked for this" separately from "where is it going".
 
+  **`flasher=None` on follow scrolls is not sufficient, because retargeting keeps the *first* instance's
+  provenance.** Verified in `SmoothScrolling.start` (2026-07-30): when an instance already exists for a window,
+  the new one becomes a ghost after copying across only `target_y_scroll` and `_sv.target`. `flasher`, `smooth`,
+  `smooth_step` and `finish_callback` all remain as the first constructor set them.
+
+  The failure that follows is the strobe we were trying to avoid, reached by another route: one user-initiated
+  scroll creates an instance carrying the flasher, and every subsequent streamed chunk retargets *that* live
+  instance, so the flasher stays attached for the rest of the reply. The mirror case is milder but also wrong —
+  a follow instance in flight when the user clicks jump-to-latest swallows the confirming flash.
+
+  So the retarget path should adopt the new request's presentation and provenance, not only its destination.
+  This is a case where editing our own class is the cleaner design rather than working around it: `flasher`,
+  `smooth` and `smooth_step` are properties of *this* scroll request, and the surviving instance is only a
+  vehicle. (`smooth_step` needs `other._sv.rate` updated alongside the field, the same way `target_y_scroll`
+  already pairs with `other._sv.target`.)
+
+  **`finish_callback` is the exception, and needs deciding rather than sweeping in.** It belongs to the caller
+  that created the instance and may be load-bearing for *that* caller's teardown — Visualizer passes
+  `_clear_scroll_animation_reference`, which clears a module-level reference. Blindly overwriting it means the
+  first caller's teardown never runs. Either keep it, or run the outgoing one at handover; do not fold it in
+  with the presentation fields on the assumption that "latest wins" is uniformly right.
+
 All three knobs these want — `smooth_scrolling`, `smooth_scrolling_step_parameter`,
 `scroll_ends_here_duration` — are already present in `raven/librarian/config.py`, commented out with their
 Visualizer values, so enabling them is an uncomment rather than a design decision. (That file carries local
