@@ -15,6 +15,8 @@ for value alone.
    GUI work: manual "Clean up & save" with dry-run preview, and bidirectional tool-call↔response
    navigation links. Closing it finishes the 01–06 run — the first half of the marathon — and wires the
    sidecar sweep, which currently has no non-test caller, so attachments accumulate on disk.
+   **Done 2026-07-30** (archived to `done/`). The sidecar sweep now has its caller, so the release blocker
+   below is cleared; 09 is what 0.2.8 is still waiting on.
 3. **09 — retrieval query side** (`09_retrieval-query-side-brief.md`). Deliberately after 10 rather than
    before it: 10 built the infrastructure that makes retrieval quality visible and actionable, and 09's
    lever 1 plus the confidence signal are what the grounding marker has been blocked on since it shipped.
