@@ -94,6 +94,29 @@ reference implementation, so they are one job rather than three:
 Doing the keys without the other two would be the wrong order: page-down onto an instant jump with no
 end-of-content signal is worse than the mouse wheel it replaces.
 
+**A "jump to latest" pill, decided 2026-07-30.** Once the view stops following the tail for a reader who has
+scrolled away, that reader needs to know the reply finished — otherwise the fix trades one annoyance for a
+worse one, silence.
+
+- **A pill at the bottom edge of the chat panel, just above the composer.** Shown while the view is unpinned
+  and content has arrived below; **clears itself on reaching the bottom**. No timeout to tune and no dismiss
+  button, because the condition that raises it is the condition that clears it.
+- **It is also the control**: clicking it jumps to the end. The "jump to latest" pill of every chat
+  application, so it explains itself.
+- **The label carries the state** — "AI writing ↓" while streaming, "AI finished ↓" once done — so it informs
+  during the turn, not only at the end.
+
+Explicitly *not* a toast, and not a flash in the indicator group, though both were considered. Those encode an
+**event**: a reader who is mid-paragraph when it fires misses it, and the information is gone with no way to
+recover it. What is actually true is a **state** — "you are not looking at the end, and there is content down
+there you have not seen" — and a state-shaped affordance can simply persist until it stops being true. The
+indicator group is also the wrong home on its own terms: INDEXING / DOCS / SYSTEM / WEB all mean "the system
+is busy and you can only wait", whereas this one is actionable, and it sits far from both where the eye is and
+where the click would take you.
+
+Cheap because the parts exist: the predicate is `is_pinned_to_bottom`, and the click is `scroll_view()`, which
+becomes smooth for free once smooth scrolling lands.
+
 **Deliberately not doing: next/previous-message jump buttons.** They were considered and set aside (Juha,
 2026-07-30) because they treat a symptom. The reason a reader wants to skip a whole message is that one
 message is dozens of screens long, and that is the webfetch-bloat item below — fix the cause and a message

@@ -486,6 +486,8 @@ Cost is one frame (~16 ms) of latency on the deferred action — imperceptible, 
 
 A child window's scroll position can be changed by **dragging the scrollbar**, by the **mouse wheel**, or by **hotkeys** you implement yourself. These are not equivalent from the code's point of view: the scrollbar drag is handled inside ImGui, so there is no DPG-level event for it in the way there is for a key press. (Cost real time while building Visualizer's smooth scrolling.)
 
+Background-thread GUI updates interact with this. Raven updates the GUI from worker threads deliberately — DPG permits it, which is one of its real advantages: the GUI behaves like any other data structure instead of a special place you have to marshal into, and that removes a whole category of plumbing. The price is the ordinary price of concurrency, and it shows up here. A sequence that looks atomic in the source — delete a widget, add its replacement — is not, because the render loop is on the main thread and can lay out the container between the two. So a swap briefly shrinks the content, DPG clamps the scroll position to the smaller maximum, and a reader who was below that point is moved. Appending has no such window; only replacing does.
+
 The consequence is a design rule: **decide "has the user scrolled away?" from the scroll position, never from scroll events.** Position is where all three paths end up, so `dpg.get_y_scroll` needs no per-path handling and cannot silently miss one. Watching for the *act* of scrolling means enumerating the paths, and the one that is hardest to hook is the one users reach for most on a long document.
 
 ## `max_y_scroll` moves when content is added
