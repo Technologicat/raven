@@ -13,6 +13,9 @@ this module is the bridge between three lower layers — the image codec / Lancz
 (`raven.librarian.config`). It knows the image content-part and provenance-metadata shapes, so the storage
 layer beneath it doesn't have to.
 
+`supported_extensions` / `is_supported` declare which image formats the composer accepts — the image sibling
+of `docextract`'s pair, so a caller offering both kinds of attachment can ask both the same question.
+
 Three public operations:
 
   - `store_image_as_sidecar`: decode an attached image, downsample it if it exceeds the megapixel cap, write
@@ -26,7 +29,9 @@ Three public operations:
     `sidecars`-metadata schema knowledge, which chattree deliberately doesn't have.
 """
 
-__all__ = ["downsample_dims",
+__all__ = ["supported_extensions", "is_supported",
+
+           "downsample_dims",
            "store_image_as_sidecar",
            "sidecar_url_to_data_url",
            "sidecar_refs_in_payload"]
@@ -48,6 +53,33 @@ from . import sidecarstore
 
 # One megapixel, in pixels. The downsample target is expressed in megapixels (config `image_store_max_megapixels`).
 _ONE_MEGAPIXEL = 2 ** 20
+
+# The image formats offered for attachment. Unlike `docextract.supported_extensions`, this cannot be derived
+# from a dispatch table: Pillow decodes far more than this, so the list is a deliberate choice of what to
+# *offer* rather than a report of what the decoder would manage. It lives here, beside the rest of the
+# image-attach knowledge, so that the picker, the routing check and anything that has to describe the feature
+# to a human all read the same list instead of each keeping its own.
+#
+# `.qoi` is here because Raven's own avatar recorder writes it, and a constellation that emits a format but
+# refuses to read it back is missing a piece of itself. Pillow has no QOI codec, so it is transcoded to PNG on
+# ingest (see `store_image_as_sidecar`) rather than handled all the way down.
+_SUPPORTED_EXTENSIONS = (".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif", ".tiff", ".qoi")
+
+
+def supported_extensions() -> tuple[str, ...]:
+    """Return the image file extensions that can be attached (lowercase, with the leading dot).
+
+    Deliberately mirrors `raven.common.docextract.supported_extensions`, so that a caller offering both kinds
+    of attachment — the attach picker, the composer's tooltip — can treat images and documents alike.
+    """
+    return _SUPPORTED_EXTENSIONS
+
+def is_supported(path: str | pathlib.Path) -> bool:
+    """Return whether `path`'s file extension names an attachable image format.
+
+    The image sibling of `docextract.is_supported`, which see.
+    """
+    return pathlib.Path(path).suffix.lower() in _SUPPORTED_EXTENSIONS
 
 
 def _mime_for_ext(ext: str) -> str:
@@ -114,7 +146,17 @@ def store_image_as_sidecar(datastore: chattree.PersistentForest,
     from PIL import Image  # deferred: Pillow is heavy and only needed on an actual attach
 
     raw = sidecarstore.read_source_bytes(image_source)
-    original_size_bytes = len(raw)
+    original_size_bytes = len(raw)  # of the bytes the user actually attached, before any transcode below
+
+    # QOI is transcoded to PNG on the way in, and everything downstream sees a PNG. Two independent reasons,
+    # either of which alone would force it: Pillow has no QOI codec (so the probe and decode below would fail),
+    # and no VLM accepts `image/qoi` on the wire (so a verbatim-stored QOI would reach the model unreadable).
+    # Nothing is lost by transcoding: both formats are lossless, and QOI carries no EXIF/ICC payload to strip —
+    # only a colorspace flag. The provenance still records what was attached.
+    if raw[:4] == b"qoif":  # the QOI magic; see https://qoiformat.org/qoi-specification.pdf
+        from ..common.image import codec  # deferred: pulls turbojpeg / Pillow
+        content_type = content_type or "image/qoi"
+        raw = codec.encode(codec.decode(raw), "PNG")
 
     # Probe format + dimensions without decoding pixels (PIL is lazy; `.format` / `.size` need no full load).
     with Image.open(io.BytesIO(raw)) as probe:

@@ -38,6 +38,104 @@ visible, but untangling it is a separate (and API-breaking) question.
 
 Raised by Juha (2026-07-29).
 
+## Web status panel: check on a long job without being at the machine
+
+The motivating case is concrete: a ~12k-abstract hydrogen indexing run, and no way to see how it is doing
+except the Librarian window and the terminal that launched it. From a phone, from another room, there is
+nothing. "Is it still going, and should I wait?" is the question, and it currently has no remote answer.
+
+**The server half is nearly built.** `raven.server.app` already serves `/` (rendered HTML, from Markdown),
+`/health`, and `/api/modules` (which modules are enabled). So "which modules are up" is already there, and
+mostly wants a nicer presentation.
+
+**VRAM is the part that is not already solved.** `raven.common.deviceinfo` records what each *load step*
+consumes, which is load-time accounting, not live usage — and the two diverge badly for exactly the module
+one would most want to watch: the avatar allocates most of its memory when it *starts*, not when it loads.
+So a panel built on the load figures would confidently under-report. Live usage wants
+`torch.cuda.memory_allocated` (and `mem_get_info` for the whole-device picture) sampled at request time,
+plus a decision about attribution — torch reports per *device*, not per module, so per-module numbers are
+inference from load-order bookkeeping rather than measurement. Worth deciding whether the panel promises
+per-module attribution at all, or just shows the device total plus which modules are resident.
+
+**The Librarian half is the real problem, and it is a process problem, not a data problem.**
+`hybridir.get_indexing_progress_text()` already produces the string the GUI mirrors. It just lives in a
+desktop GUI process with no listening socket, while the panel needs to be somewhere a phone can reach.
+
+**Note this is the same missing piece that Librarian↔Visualizer talk needs**, which raises the value a lot:
+the panel is one customer of an inter-app channel, not a one-off. Solve it once and "show me on the map what
+you found" / "discuss *these* items" become wiring rather than architecture. Three shapes, and the middle one
+looks best:
+
+- *Librarian opens its own HTTP port.* A listening socket and a firewall hole per desktop app, plus a second
+  web stack to maintain. Scales badly the moment Visualizer wants in.
+- *Librarian pushes status up to raven-server, which serves the panel.* It is **already** a client of that
+  server, so this rides a connection that exists, needs no new socket on the desktop side, and gives one
+  address to point a phone at and one auth story to get right. Generalizes to any long-running job in any
+  Raven app.
+- *The panel queries both.* Requires the desktop app to be reachable, i.e. the first option wearing a hat.
+
+**Push downward is possible, and the machinery is already in the building.** The worry with "the desktop app
+has no listening socket" is that it can then only poll. It can do better: the app opens a long-lived GET to
+the server and holds it, and the server writes events down that pipe as they happen. The connection is
+client-initiated (so no inbound port, no firewall hole, NAT-friendly) while the *data* flows server→client,
+which is exactly the shape selection-syncing wants. Both halves are proven here already — `raven.server.app`
+serves a long-lived streaming response today (`/api/avatar/result_feed`, `multipart/x-mixed-replace`), and
+`llmclient` already consumes SSE from the LLM backend, so neither end needs a new skill. Server-Sent Events
+is the natural fit for the panel and for app-to-app events alike: text, one direction, auto-reconnecting.
+
+Two constraints that will decide the design, though:
+
+- **Each held connection costs a waitress thread.** The server runs `serve(app, ...)` at its default thread
+  count, and the avatar feed already holds one of them. Three desktop apps plus a phone is fine; this is not
+  a design that scales past a handful of subscribers, so bound it deliberately rather than discovering the
+  ceiling.
+- **It makes raven-server the broker for app-to-app talk**, which cuts against the documented server-optional
+  story (Visualizer is deployable standalone by design, via `MaybeRemote`). Acceptable if inter-app sync is
+  explicitly a server-present feature that degrades to "apps don't see each other" — but that is a decision to
+  make on purpose, not to back into.
+
+Polling is still the right first step for the *status panel alone*: a phone refreshing a page every few
+seconds needs nothing built. The push channel earns its keep when selection-syncing arrives, where a
+round-trip delay is felt directly.
+
+**This does not have to wait for database unification.** Unification decides whether there is one importer or
+several; a generic "job reports its progress" channel does not care either way, and Visualizer's importer can
+push through the same channel whenever it is convenient. Worth decoupling so neither blocks the other.
+
+**Status and control are not the same feature, and the difference is the threat model.** Raven-server is
+documented as trusted-network-only, unencrypted and unauthenticated. A *read-only* status page on that
+footing exposes nothing new. A *control* panel that loads and unloads modules is an unauthenticated "make
+this machine allocate 20 GB of VRAM" button — and the phone use case means it is by definition no longer
+LAN-only. So:
+
+- **Decided (Juha, 2026-07-30): read-only for now.** Ship status; leave control out entirely.
+- Control needs the auth and transport story decided *before* it exists, not patched on after. That is the
+  honest answer to whether dynamic load/unload is YAGNI: not that it is too niche to want, but that it is the
+  half that carries the whole cost.
+- Note the overlap with the existing "Uniform load-on-demand for Raven-server modules" item. If that lands,
+  loading and unloading become automatic and a manual control surface is mostly redundant — which is a good
+  reason not to build the manual one first.
+
+**Worth showing, beyond "is it indexing":**
+
+- **An ETA and a progress bar, not just a progress string.** `get_indexing_progress_text` is prose for a GUI
+  label. On a 12k-item job the question is not "is it running" but "should I wait", and that needs counts —
+  which the string is *built from*, so they exist and are merely being formatted away before anyone outside
+  can use them. Report the numbers and let the panel render the bar.
+  `unpythonic.timeutil.ETAEstimator` is already a dependency.
+- **Whether it died.** A page that says "still indexing" is useful; one that can say "stopped 40 minutes ago,
+  here is the error" is what actually saves the trip to the machine.
+- **The docs-DB pending-edit queue depth** (`hybridir._pending_edits`) — how much is still waiting, as
+  distinct from what is being chewed now.
+- **Datastore and sidecar directory sizes.** The attachment-browser item below already computes exactly this.
+
+**Design constraints that fall out of "on a phone":** plain server-rendered HTML that reflows, no DPG, and no
+dependence on a live socket to show anything — a meta-refresh or a small poll beats a JS app that renders
+blank until a websocket connects, over a link that may be poor. And no CDN assets: Raven is local-first and
+must work with no internet at all, so whatever CSS/JS there is ships in the repo.
+
+Raised by Juha (2026-07-30), from wanting to check the hydrogen indexing run from a phone.
+
 ## Browse *all* attachments in the datastore, not just the orphaned ones
 
 The cleanup dialog (`raven/librarian/cleanup_dialog.py`) turned out to be a decent attachment browser that
@@ -291,12 +389,45 @@ clusters, as of 2026-07-27:
 
 ## Attachment + docs-DB: support office document formats (MS Office / LibreOffice)
 
-`raven.common.docextract` handles plain text and PDF. For real-world use, people attach (and drop into the docs
-DB) office files too: word-processor documents (`.docx`, `.odt`), presentations (`.pptx`, `.odp`), and
-spreadsheets (`.xlsx`, `.ods`) — MS Office and LibreOffice both. Add extraction for these to `docextract` (one
-backend, so both the attach path and the docs-DB ingester get them at once) — a per-format library like
-`python-docx` / `python-pptx` / `openpyxl`, or a general converter. Then add the new extensions to the attach
-picker (`app._ATTACH_IMAGE_EXTS`'s document sibling) and to `librarian_config.llm_docs_exts`.
+**Mostly landed 2026-07-29** (`093c400`): `docextract` now reads word-processor documents (`.docx`, `.odt`),
+presentations (`.pptx`, `.odp`) and saved web pages (`.html`, `.htm`) alongside plain text and PDF, for both
+the attach path and the docs-DB ingester.
+
+**Spreadsheets (`.xlsx`, `.ods`) remain**, and they are the awkward ones — which is why they were left. A
+sheet is not a linear document, so "the text of a spreadsheet" is a design decision before it is an
+`openpyxl` call.
+
+The agreed first approximation (Juha, 2026-07-30): **emit Markdown tables.** One table per detected table
+region, regions delimited by at least one fully blank row or column, taken in Western reading order (left to
+right, then top to bottom). Markdown is the right target — the models are steeped in it, and `docextract`'s
+other formats already produce prose that the chat view renders as Markdown, so it needs no new convention.
+
+One substitution worth making on the sketch: **separate sheets with a heading carrying the sheet name**
+(`## Sheet: Q3 Budget`) rather than a bare `-----`. A horizontal rule says "something else starts here" and
+throws away the name, which is often the single most informative string in the file — "Assumptions" versus
+"Raw data" tells a reader, and a model, what it is looking at. Same cost, strictly more information.
+
+Then the details that decide whether the output is useful or merely plausible:
+
+- **Values, not formulas.** `openpyxl`'s `data_only=True` yields the *cached* result, which is present only if
+  a real spreadsheet application last saved the file — a generated or programmatically-written workbook has
+  none, and the cells come back `None`. So the extractor needs a fallback (emit the formula text rather than a
+  blank) and must not silently produce an empty table. Confirm the exact behaviour against a file written by
+  `openpyxl` itself before designing around it.
+- **Merged cells.** Markdown cannot express a merge. `openpyxl` reports the value in the top-left cell and
+  `None` for the rest of the range; repeating the value across the merged span usually retrieves better than
+  leaving blanks, since a row then still reads as a complete record.
+- **The used range lies.** One stray cell far out to the right makes a sheet nominally enormous. Bound the
+  emitted region by actual content, and cap total output — a 50k-row sheet rendered in full is a wall of text
+  that crowds out the question being asked about it.
+- **Charts, images and pivot caches: skip.** No text to extract, and a placeholder line invites the model to
+  comment on something it cannot see.
+- **`.ods` may be nearly free.** `odfpy` is already a dependency (it backs `_extract_odf` for `.odt`/`.odp`)
+  and handles spreadsheets too, so the second format is likely a different reader over the same
+  region-detection and Markdown-emission logic. Worth structuring the code that way from the start.
+
+The legacy binary formats (`.doc`, `.ppt`) are deliberately out of scope: reading them means shelling out to
+a separate converter.
 
 Discovered during the document-attach test-drive (2026-07-18, Juha — "the software category that spends its time
 disproving the claim on the tin").
@@ -392,6 +523,37 @@ prompt-craft: modern models don't need the pep-talk hand-holding, and some of it
 keep the genuinely load-bearing behavioral constraints (cite only provided sources, metric units, admit
 uncertainty), drop the motivational filler, and reconsider how much identity the frontend should assert at a
 modern model at all. Noticed during brief-03 Half-2 image-attach testing (2026-07-17, Juha).
+
+**While rewriting it, add the supported attachment formats.** A user with a file in hand and a doubt about it
+should be able to just ask, and get an answer instead of a guess — which matters for the digital-colleague
+track, where asking the colleague is the natural move and hunting for a file-type list in the docs is not.
+Four things make this less obvious than it looks:
+
+- **Generate the list; never write it down.** `docextract.supported_extensions()` derives from
+  `_PLAINTEXT_EXTS + _EXTRACTORS` specifically so the advertised formats cannot drift from the dispatch
+  table. A hand-typed list in the prompt reintroduces exactly that drift, and in its worst form: a stale
+  prompt does not fail, it makes the model *confidently* tell the user the wrong thing. This is not a
+  hypothetical: the attach tooltip drifted this way within days of the office formats landing, by spelling
+  the list out instead of asking for it (fixed 2026-07-30 — `_ATTACH_DOC_EXTS_TEXT`, which is the shape the
+  prompt should copy).
+- **The image list has no `docextract` equivalent, and lives in the wrong place.** `_ATTACH_IMAGE_EXTS` is a
+  hardcoded private tuple in `raven/librarian/app.py` — no derived source, and unreachable from anywhere
+  `minichat` could share. Assembling the prompt from a single source therefore needs it moved somewhere
+  common first (`imagestore` is the natural home, beside the rest of the image-attach knowledge). Its two
+  current read sites are both inside `app.py`, which argues for nothing; what forces the move is that the
+  next reader is *outside* it.
+- **It is model-dependent, so it cannot be one static string.** Documents work on any model; images need a
+  VLM. The prompt has to be assembled against the same capability check `app._attach_callback` already
+  performs, or a text-only backend will cheerfully promise image support.
+- **The system block, not a per-turn inject.** Brief 08 §4 settled the general rule by measurement — what is
+  stable for the session lives in the leading system message and stays in the cached prefix; only what
+  actually changes per turn is injected. A format list changes only when the model does. (This does not
+  contradict that brief's §5 "no capability check in `_perform_injects`": the check above happens once, at
+  system-block build time, not per turn.)
+- **Say how to attach, not just what.** "Yes, `.docx` works" is a dead end if the model cannot then point at
+  the paperclip. The prompt should name the affordance alongside the formats.
+
+Extension raised by Juha (2026-07-30).
 
 ## RAG: rerank retrieved chunks and inject only the best few
 

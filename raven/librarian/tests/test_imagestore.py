@@ -130,6 +130,41 @@ def test_store_palette_image_does_not_crash(datastore):
     assert _decode_mp(datastore.read_sidecar(result.filename)) <= 1.02
 
 
+def test_store_qoi_is_transcoded_to_png(datastore):
+    """A QOI attachment is stored as PNG: Pillow cannot read QOI, and no VLM accepts it on the wire."""
+    qoi = pytest.importorskip("qoi")
+    pixels = np.zeros((48, 64, 3), dtype=np.uint8)
+    pixels[:, :, 0] = 200  # a flat red, so an exact pixel comparison after the round trip is meaningful
+    raw = qoi.encode(pixels)
+    assert raw[:4] == b"qoif"
+
+    result = imagestore.store_image_as_sidecar(datastore, raw,
+                                               provenance_url="file:///rec.qoi",
+                                               provenance_source="user_attachment")
+
+    stored = datastore.read_sidecar(result.filename)
+    assert result.filename.endswith(".png")
+    assert stored[:8] == b"\x89PNG\r\n\x1a\n"  # what a VLM will actually be handed
+    assert np.array_equal(np.asarray(Image.open(io.BytesIO(stored)).convert("RGB")), pixels)  # lossless both ways
+    # The provenance documents what was attached, not what was stored.
+    assert result.sidecar_metadata["content_type"] == "image/qoi"
+    assert result.sidecar_metadata["stored_dimensions"] == [48, 64]
+
+
+def test_store_qoi_with_alpha_keeps_the_alpha_channel(datastore):
+    """The transcode must not flatten RGBA — the avatar recorder's output is alpha-bearing."""
+    qoi = pytest.importorskip("qoi")
+    pixels = np.zeros((32, 32, 4), dtype=np.uint8)
+    pixels[:, :, 1] = 180
+    pixels[:, :, 3] = 128  # semi-transparent throughout
+    result = imagestore.store_image_as_sidecar(datastore, qoi.encode(pixels),
+                                               provenance_url="file:///rec.qoi",
+                                               provenance_source="user_attachment")
+    restored = np.asarray(Image.open(io.BytesIO(datastore.read_sidecar(result.filename))))
+    assert restored.shape[2] == 4
+    assert np.array_equal(restored, pixels)
+
+
 # ---------------------------------------------------------------------------
 # sidecar_url_to_data_url — wire substitution
 # ---------------------------------------------------------------------------

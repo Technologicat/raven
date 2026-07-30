@@ -76,6 +76,7 @@ with timer() as tim:
     from . import config as librarian_config
     # from . import chattree
     from . import hybridir
+    from . import imagestore
     from . import llmclient
 
     gui_config = librarian_config.gui_config  # shorthand, this is used a lot
@@ -383,10 +384,12 @@ def _add_staged_image(path: str) -> None:
     staged_images.append(staged)
     _refresh_attachments_strip()
 
-# Image extensions the composer's attach dialog offers, distinct from the document types
-# (`docextract.supported_extensions()`). Used both to build the picker's filter list and to route a picked file
-# to image vs. document staging.
-_ATTACH_IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif", ".tiff")
+# What the attach tooltip names as accepted, asked for rather than typed out. Each kind declares its own
+# formats (`imagestore` and `docextract`), so spelling them out again here would put the tooltip at the mercy
+# of whoever remembers to update prose. The user reading it is holding a file and deciding whether to bother,
+# so a list that lags the backend is the expensive kind of wrong.
+_ATTACH_DOC_EXTS_TEXT = " ".join(docextract.supported_extensions())
+_ATTACH_IMAGE_EXTS_TEXT = " ".join(imagestore.supported_extensions())
 
 
 def _remove_staged_file(staged: env) -> None:
@@ -463,7 +466,7 @@ def _add_staged_file(path: str) -> None:
 def _attach_callback(selected_files) -> None:
     """FileDialog callback: route each selected file to image or document staging by its extension.
 
-    Documents (plain text / PDF) attach on any model. Images need a vision model; on a *confirmed* text-only
+    Documents attach on any model (whatever `docextract` can read). Images need a vision model; on a *confirmed* text-only
     model (`model_is_vlm is False`) a picked image is rejected with a dialog, since the model could not use it.
     This routing-time image gate is interim: once FileDialog can offer multiple extension groups as one labelled
     filter, the picker can simply not offer image types on a text-only model (see TODO_DEFERRED), so wrong types
@@ -472,8 +475,7 @@ def _attach_callback(selected_files) -> None:
     logger.debug(f"_attach_callback: {len(selected_files)} file(s) selected.")
     rejected_images = []
     for selected_file in selected_files:
-        ext = pathlib.Path(selected_file).suffix.lower()
-        if ext in _ATTACH_IMAGE_EXTS:
+        if imagestore.is_supported(selected_file):
             if llm_settings.model_is_vlm is False:  # confirmed text-only: the model can't see an image
                 rejected_images.append(pathlib.Path(selected_file).name)
             else:
@@ -513,7 +515,7 @@ _filedialog_attach = FileDialog(title="Attach file(s) [Ctrl+click to multi-selec
                                 tag="attach_file_dialog",
                                 callback=_attach_callback,
                                 modal=True,
-                                filter_list=[".*", *_ATTACH_IMAGE_EXTS, *docextract.supported_extensions()],
+                                filter_list=[".*", *imagestore.supported_extensions(), *docextract.supported_extensions()],
                                 file_filter=".*",
                                 multi_selection=True,
                                 allow_drag=False,
@@ -690,7 +692,7 @@ with timer() as tim:
                             pass
 
                         with dpg.group(horizontal=True):  # composer toolbar
-                            # Attach button — documents (text / PDF) and images. Always enabled: a document works
+                            # Attach button — documents and images. Always enabled: a document works
                             # on any model (its text is folded into the prompt), so only images depend on vision
                             # capability, and that is enforced at routing time (`_attach_callback`) rather than by
                             # disabling the button. The tooltip's image note tracks the model_is_vlm tri-state:
@@ -707,18 +709,24 @@ with timer() as tim:
                                 # One text widget under one tag (only one branch runs), so the click-flash can
                                 # briefly swap in an "opening…" acknowledgment and restore the help text after.
                                 if model_is_vlm is True:
-                                    dpg.add_text("Attach file(s) to your message.\n\nDocuments (text, PDF) and images are both accepted.",
+                                    dpg.add_text("Attach file(s) to your message.\n\n"
+                                                 "Documents and images are both accepted.\n"
+                                                 f"    Documents: {_ATTACH_DOC_EXTS_TEXT}\n"
+                                                 f"    Images: {_ATTACH_IMAGE_EXTS_TEXT}",
                                                  tag="chat_attach_tooltip_text")
                                 elif model_is_vlm is None:
                                     dpg.add_text("Attach file(s) to your message.\n\n"
-                                                 "Documents (text, PDF) work with any model. Images require a vision model —\n"
+                                                 f"    Documents: {_ATTACH_DOC_EXTS_TEXT}\n"
+                                                 f"    Images: {_ATTACH_IMAGE_EXTS_TEXT}\n\n"
+                                                 "Documents work with any model. Images require a vision model —\n"
                                                  "your LLM backend didn't report whether the loaded model can see images, so an\n"
                                                  "image is allowed on faith and the backend will error on send if it can't. LM\n"
                                                  "Studio reports the flag, so it can confirm capability up front.",
                                                  tag="chat_attach_tooltip_text")
-                                else:  # False — confirmed text-only
+                                else:  # False — confirmed text-only; listing image formats would only offer what is refused
                                     dpg.add_text("Attach file(s) to your message.\n\n"
-                                                 "Documents (text, PDF) work with any model. The loaded model is text-only, so\n"
+                                                 f"    Documents: {_ATTACH_DOC_EXTS_TEXT}\n\n"
+                                                 "Documents work with any model. The loaded model is text-only, so\n"
                                                  "images can't be attached — load a vision model (VLM) at your LLM backend for those.",
                                                  tag="chat_attach_tooltip_text")
 
