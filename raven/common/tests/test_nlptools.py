@@ -16,6 +16,8 @@ pytest.importorskip("flair")
 pytest.importorskip("dehyphen")
 pytest.importorskip("sentence_transformers")
 pytest.importorskip("transformers")
+# ...and the module itself, so the skip does not depend on which of its deps is missing first.
+pytest.importorskip("raven.common.nlptools")
 
 pytestmark = pytest.mark.ml
 

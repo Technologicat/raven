@@ -7,6 +7,8 @@ import pytest
 
 # Skip on CI (no `av` there): the codec module has `import av` at top.
 pytest.importorskip("av")
+# ...and the module itself, so the skip does not depend on which of its deps is missing first.
+pytest.importorskip("raven.common.audio.codec")
 
 from raven.common.audio import codec  # noqa: E402
 

@@ -14,6 +14,10 @@ import pytest
 
 chromadb = pytest.importorskip("chromadb", reason="chromadb not installed (needs full dependency stack)")
 bm25s = pytest.importorskip("bm25s", reason="bm25s not installed (needs full dependency stack)")
+# The two above are named because the tests use them directly. This one guards the import below: `hybridir`
+# pulls more than those two (spaCy among them), so guarding only on named packages leaves the skip depending
+# on which dependency happens to be missing first, rather than on whether the module can be imported at all.
+pytest.importorskip("raven.librarian.hybridir", reason="full dependency stack not installed")
 
 from raven.librarian import hybridir
 

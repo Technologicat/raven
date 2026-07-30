@@ -3,6 +3,8 @@
 import pytest
 
 pytest.importorskip("torchaudio")
+# ...and the module itself, so the skip does not depend on which of its deps is missing first.
+pytest.importorskip("raven.common.audio.resample")
 
 import numpy as np  # noqa: E402 -- after importorskip
 import torch  # noqa: E402

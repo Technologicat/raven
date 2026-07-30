@@ -6,8 +6,12 @@ sample text data. Fixtures are small and cheap; scope is session-level for
 plain data, module-level for the API-initialization side effect.
 
 The `importorskip` guard at module level means that if the full client
-dependency stack is missing (e.g. `qoi`), every test in this directory skips
-cleanly rather than each file needing its own guard.
+dependency stack is missing, every test in this directory skips cleanly rather
+than each file needing its own guard. It names `raven.client.api` — the thing
+actually needed — rather than any single third-party package: whichever piece of
+the stack is absent, the import fails and the directory skips. Guarding on one
+package instead makes the skip a coincidence, live for exactly as long as that
+package happens to be the first one missing.
 """
 
 import os
@@ -16,7 +20,7 @@ import textwrap
 
 import pytest
 
-pytest.importorskip("qoi", reason="qoi not installed (needs full dependency stack)")
+pytest.importorskip("raven.client.api", reason="full client dependency stack not installed")
 
 from raven.client import api
 from raven.client import config as client_config

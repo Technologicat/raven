@@ -9,6 +9,8 @@ import pytest
 
 pytest.importorskip("kokoro")
 pytest.importorskip("torch")
+# ...and the module itself, so the skip does not depend on which of its deps is missing first.
+pytest.importorskip("raven.common.audio.speech.tts")
 
 pytestmark = pytest.mark.ml
 

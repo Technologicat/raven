@@ -13,6 +13,10 @@ pytest.importorskip("kokoro")
 pytest.importorskip("transformers")
 pytest.importorskip("torchaudio")
 pytest.importorskip("torch")
+# ...and the modules themselves, so the skip does not depend on which of their deps is missing first.
+pytest.importorskip("raven.common.audio.speech.tts")
+pytest.importorskip("raven.common.audio.speech.stt")
+pytest.importorskip("raven.common.audio.resample")
 
 pytestmark = pytest.mark.ml
 
