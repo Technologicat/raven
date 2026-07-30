@@ -2626,8 +2626,13 @@ What that shape requires, none of it free:
   is not discarding that when the message is built.
 - **Deciding which page number is meant.** A paper's printed page 32 is rarely the PDF's 32nd page. The user
   means whichever their reader shows them; the model will parrot whichever the text is labelled with. Pick one
-  as canonical, and have the tool say which it used when it answers — a silently off-by-front-matter page is a
-  confusing failure, because the model will confidently discuss the wrong figure.
+  as canonical — a silently off-by-front-matter page is a confusing failure, because the model will confidently
+  discuss the wrong figure.
+
+  Researchers have already solved this socially, so borrow the convention rather than inventing one: say
+  *"p. 32 (PDF 5)"*. Have the page-anchored text carry both numbers where the printed one is detectable, and
+  have the tool echo both when it answers. Then a mismatch is visible in the transcript instead of silent, the
+  model can accept either from the user, and its replies are quotable back to a colleague unchanged.
 - **A per-call budget guard.** A model that asks for pages 1–50 must be refused or clamped, not obeyed; one
   call would otherwise consume the context it was meant to conserve.
 - **A retention policy, and this is the sharp one.** An injected page image becomes a content part of a chat
