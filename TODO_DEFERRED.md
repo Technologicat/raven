@@ -30,6 +30,11 @@ whether other symbols go the same way (`<`, `>`, `%`, `→` are the obvious ones
 has the `=`. Only the written line loses it, which is the reverse of the usual concern and worth remembering —
 subtitles are the accessibility path, so a maths answer degrading only there is the bad direction.
 
+**Why it hid for so long, which also says what to test with:** a symbol-heavy sentence is often identical in
+both languages — "2 + 2 = 4." is all digits and operators, so the subtitle carries no evidence that a
+translator was involved, and the damage looks like a rendering glitch instead. Exactly the sentences where
+symbol loss matters are the ones where the translation is invisible, so they are the test cases.
+
 Fix directions, none tried: mask symbols with placeholders around the translation call and restore them
 afterwards; or verify that non-alphabetic tokens survive and fall back to the untranslated sentence when they
 do not; or (cheapest, weakest) special-case the handful of symbols that matter. The masking approach is the
