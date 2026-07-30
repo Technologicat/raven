@@ -3,6 +3,55 @@
 New items go at the **top**. (Both ends were in use up to 2026-07-27, which is how the two halves of the same
 Librarian session ended up ~1000 lines apart.)
 
+## A skill for `dpg-notes.md`, so it fires when it is needed
+
+`dpg-notes.md` is 644 lines of hard-won DPG lore, and CLAUDE.md points at it with "before editing any DPG code,
+read `dpg-notes.md` first". That instruction competes for attention with everything else in CLAUDE.md, and the
+failure mode is silent: an agent that edits a render-loop callback without having read the notes does not
+notice it skipped anything, and the pitfall lands later as a hang or a segfault. A project-local skill in
+`.claude/skills/` would load on task match instead of on instruction compliance, which is the difference
+between advisory and reliable. Raised by Juha, 2026-07-31.
+
+Points to settle when writing it:
+
+- **The trigger.** "DPG code" is already defined in CLAUDE.md — anything importing `dearpygui`, the render
+  loop, key/mouse handlers, texture or `split_frame` work. 36 files in `raven/` import `dearpygui`, so the
+  match is broad enough to be worth automating and narrow enough not to fire on everything.
+- **What lives in the skill vs. what stays in the notes.** The notes are a reference, and a skill that inlines
+  them wholesale gains nothing over the current pointer. The likely split is that the skill carries the
+  pitfalls and the decision rules (the parts that must be in mind *before* writing a line) and refers to the
+  notes for the mechanics; but that is a guess to test, not a conclusion.
+- **Whether the CLAUDE.md pitfall index survives.** If the skill fires reliably, the seven-item index in
+  CLAUDE.md is duplicated attention-cost. If it does not, the index is the safety net. Decide after seeing the
+  skill work, not before.
+- The `~/.claude/skills/` fleet skills are the model for format; this one is project-local, so it belongs in
+  the repo and travels with it.
+
+## The 8/3 pass: bare DPG margins should name themselves
+
+`raven.common.gui.utils` now carries `DPG_WINDOW_PADDING = 8` and `DPG_FRAME_PADDING_Y = 3`, named after the
+style variable each mirrors. The constants exist; the sweep that puts them everywhere they belong does not.
+Any bare `8` or `3` in layout arithmetic that is *actually* one of these should say so — the number alone is
+unreadable, and worse, unfixable, since a future theme change has no way to find it. 22 use sites currently
+reference the named constants; the audit is to find the ones that do not. Raised by Juha, 2026-07-31.
+
+Two things to keep straight while sweeping:
+
+- **Not every 8 is a padding.** The constants' own comment makes the point in the other direction — several
+  DPG style values coincide in the default theme (`WindowPadding.x` and `ItemSpacing.x` are both 8), so
+  replacing a coincidental 8 asserts an identity that is not there. The test is what the number *means* at
+  that site, not what it equals. A literal that is genuinely a chosen gap stays a literal.
+- **Two per-app copies predate the shared home.** `raven/xdot_viewer/config.py` defines
+  `DPG_WINDOW_PADDING_Y`, `DPG_FRAME_PADDING_Y`, `DPG_ITEM_SPACING_Y` and `DPG_SCROLLBAR_SIZE`;
+  `raven/conference_timer/config.py` defines `DPG_WINDOW_PADDING`. These named theirs first and the guiutils
+  block credits them, but the argument in that block — these are facts about DPG, not choices an app made —
+  now applies to them too. Folding them into guiutils would also promote the two metrics guiutils lacks
+  (`ItemSpacing`, `ScrollbarSize`), which is probably the more valuable half of the job.
+
+Note that xdot_viewer's derived sizes carry empirical fudge terms (`-13`, "+2 empirical (ImGui internal
+leading/rounding)"). Those are not margins misnamed, they are unexplained residue — worth a separate look at
+whether the model behind them is wrong, but not part of this pass.
+
 ## Smooth scrolling in Cherrypick too, once Librarian has it
 
 Once Librarian's chat panel gets `SmoothScrolling` (sibling item, "Chat view scrolling: keys, smoothness, and
