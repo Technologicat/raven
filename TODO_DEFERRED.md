@@ -122,10 +122,29 @@ reference implementation, so they are one job rather than three:
 - **No smooth scrolling.** `scroll_view` sets `dpg.set_y_scroll` directly, so every jump is instantaneous and
   the reader loses their place — including the new tool-call navigation links, where "where did it take me?"
   is the whole question. `raven.common.gui.animation.SmoothScrolling` already exists and is what Visualizer's
-  `scroll_to_position` uses.
+  `scroll_to_position` uses. Two things to get right when porting it, both discovered while reading the code
+  rather than by tripping over them:
+  - **The pin predicate must consult the animation's target, not only the current position.** While a scroll
+    animation is in flight the panel is mid-travel, so `is_pinned_to_bottom` reads a position hundreds of
+    pixels short of the end and answers "the reader scrolled away". `follow_tail` then declines to retarget,
+    the in-flight animation finishes at its now-stale target, and the view stops short of the end and stays
+    there — the same failure the settle-wait just fixed, arriving by a different route. Retargeting is
+    otherwise free: creating a `SmoothScrolling` for a window that already has one *updates the existing
+    instance's* `target_y_scroll` rather than starting a second animation, so streaming chunks chase a moving
+    end smoothly instead of fighting for the scrollbar.
+  - **The two halves sit on opposite sides of the `split_frame` boundary.** `scroll_view`'s settle-wait uses
+    `split_frame` and therefore may only run off the render loop; `SmoothScrolling.render_frame` runs *in* the
+    render loop and must never wait, which is why it counts `update_pending_frames` instead. So the animation
+    cannot absorb the settle-wait, and the wait cannot move into the animator. Keep them separate rather than
+    unifying them into one "scroll to here" helper.
 - **No scroll-past-end feedback.** Visualizer has `ScrollEndFlasher` (an animated overlay, arrows at top and
   bottom) so that hitting the end of the content is visibly the end rather than an unresponsive view.
   Librarian has nothing.
+
+All three knobs these want — `smooth_scrolling`, `smooth_scrolling_step_parameter`,
+`scroll_ends_here_duration` — are already present in `raven/librarian/config.py`, commented out with their
+Visualizer values, so enabling them is an uncomment rather than a design decision. (That file carries local
+per-machine overrides on dev machines, so stage the hunk selectively.)
 
 Doing the keys without the other two would be the wrong order: page-down onto an instant jump with no
 end-of-content signal is worse than the mouse wheel it replaces.
