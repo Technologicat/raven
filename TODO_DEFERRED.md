@@ -3,6 +3,53 @@
 New items go at the **top**. (Both ends were in use up to 2026-07-27, which is how the two halves of the same
 Librarian session ended up ~1000 lines apart.)
 
+## Smooth scrolling in Cherrypick too, once Librarian has it
+
+Once Librarian's chat panel gets `SmoothScrolling` (sibling item, "Chat view scrolling: keys, smoothness, and
+end-of-scroll feedback"), Cherrypick's image grid wants it as well. Not because it is broken, but because the
+constellation would then have three apps whose views glide and one that teleports, and the odd one out reads as
+unfinished rather than as a decision. Raised by Juha, 2026-07-30. (Cherrypick's *image view* looks like it
+belongs in the same breath and turns out not to; see below.)
+
+**Where things actually stand**, checked 2026-07-30 rather than recalled:
+
+- **Visualizer's info panel** — `raven.common.gui.animation.SmoothScrolling`, and currently its only user.
+- **XDot viewer** — smooth already, but by a different mechanism, so nobody should go looking for
+  `SmoothScrolling` in it and conclude it is missing. Pan and zoom are `raven.common.smoothvalue.SmoothValue`
+  instances on `xdotwidget.viewport.Viewport`, and the `animate=True` parameter threaded through `zoom_to_fit`
+  / `zoom_to_bbox` / `pan_to_point` chooses `.target` over `.set_immediate`. The two mechanisms are the same
+  idea at different layers: `SmoothScrolling` is a `SmoothInt` accumulator driving `dpg.set_y_scroll`.
+- **Cherrypick's grid** — `grid._scroll_to_current` calls `dpg.set_y_scroll` outright. It does already carry a
+  deferred-scroll countdown (`_scroll_countdown = 3`) for the `get_y_scroll_max` settle lag, i.e. it met the
+  same DPG behaviour the chat view did and worked around it independently.
+- **Cherrypick's image view** — `imageview.pan_by` and the zoom methods assign `_pan_cx` / `_pan_cy` / `_zoom`
+  directly.
+
+**The grid is the item. The image view is a separate decision, on cost rather than on principle.**
+
+The grid is a small port of the Visualizer shape, and the consistency argument applies to it directly: same
+mechanism, same widget kind, `dpg.set_y_scroll` on a child window.
+
+The image view is pan and zoom over a texture, so it would be the *XDot* shape — `SmoothValue` targets — which
+is a rework of its view-state model rather than a port of anything. Done right that would deliver the same
+feel; XDot's pan and zoom are proof that the shape works. So this is not an argument that the motive fails to
+carry. It is that the price is much higher here than for the grid, and the payoff is genuinely uncertain:
+
+- **Cherrypick is a triage tool, where the point is speed.** An animation the user routinely outruns is a tax
+  rather than a polish. The grid has no such tension because scrolling there follows selection; the image view
+  is where the rapid keying actually happens, so it is precisely where a smoothed transition could make the app
+  feel worse rather than better.
+- **Nothing about that is decidable on paper.** It depends on the step parameter, the size of the pan steps,
+  and how it sits under sustained keying — i.e. on trying it.
+
+So: do the grid on the strength of the consistency argument alone. Take the image view as a separate call,
+prototyped and felt in the actual triage workflow before committing, and be willing to throw the prototype away
+— the rework is large enough that "it turned out to feel worse" is a real outcome worth being ready for.
+
+Consistency includes the knob, not just the behavior: Visualizer exposes `smooth_scrolling` and
+`smooth_scrolling_step_parameter` in its `config.py`, Librarian has them commented out awaiting the same work,
+and Cherrypick has neither yet.
+
 ## `replace_last_paragraph`'s `dpg.mutex()` is disabled because it hangs the app
 
 `chat_controller.DPGChatMessage.replace_last_paragraph` swaps the in-progress paragraph by deleting its widget
