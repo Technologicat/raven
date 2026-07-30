@@ -25,11 +25,19 @@ anything in one as settled.
 
 - **[`constellation-architecture-sketch.md`](constellation-architecture-sketch.md)** — how Raven's parts talk
   to each other, and where the division-of-concerns lines fall. Opened because phone uploads and the
-  Visualizer↔Librarian handoff turned out to need the same missing thing. The other two are blocked on it in
+  Visualizer↔Librarian handoff turned out to need the same missing thing. The first two are blocked on it in
   places.
 
-They are not independent: the first two converge (the interrogation flow *is* a view-control problem, and the
-avatar's HCI is how you address a view), and both need the third before parts of them can be built.
+- **[`product-identity-sketch.md`](product-identity-sketch.md)** — what kind of product Raven is: something
+  that feels like it fell on the desk from the future, built free and local because a working artifact argues
+  for that future better than a description of it does. Carries the test for whether a feature belongs (form,
+  not category — a crowded field is not a closed one), the aesthetic influences, and the rule that decides the
+  hard cases: when the register and usefulness conflict, usefulness wins.
+
+The first three are not independent: two of them converge (the interrogation flow *is* a view-control problem,
+and the avatar's HCI is how you address a view), and both need the architecture sketch before parts of them can
+be built. The fourth sits across all of them — it describes no mechanism, and is what the others are designed
+*in*.
 
 ## Related, elsewhere
 
