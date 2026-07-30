@@ -2445,6 +2445,35 @@ three more lines in the extractor's dispatch.
 
 Raised while scoping office-format support (2026-07-29, Juha).
 
+## Text out of images, so figures work without a vision model (OCR, and SVG `<text>`)
+
+The image → text cell of the 2×2 in the SVG item below: given an image, produce its plain text. Wanted for
+three distinct reasons, which is what makes it worth building rather than a nice-to-have:
+
+- **A non-vision model can then use an attached figure at all.** Today an image attachment requires a VLM; on a
+  text-only model it is dead weight. Text extraction degrades that to "the labels and captions, at least",
+  which for a schematic or a plot is often most of the information.
+- **RAG can index image attachments.** They are currently opaque to retrieval — a figure in the datastore
+  cannot be found by searching for what it says.
+- **It makes "where was that figure?" answerable**, which is the same use case as the attachment-browser item.
+
+**Do the SVG half first, and separately.** An SVG carries its labels as `<text>` elements, so extracting them
+is XML parsing: no OCR engine, no model, no GPU, deterministic output. That is a small self-contained piece of
+work with immediate value, and it is not blocked on any of the decisions the raster half needs.
+
+**The raster half needs a choice that is not obvious.** Classic OCR (Tesseract and friends) versus asking a VLM
+to transcribe the image. The VLM route is tempting because Raven already has one and it handles diagrams far
+better than OCR does — but it needs a vision model, which is precisely what reason one above exists to avoid.
+So the VLM route cannot serve the main motivation, and classic OCR keeps a real niche despite being the weaker
+reader. Possibly both, chosen by what the session has available. If OCR lands, it is ML-bearing and belongs in
+the three-layer `common` / `server.modules` / `mayberemote` shape like the other inference subsystems.
+
+Per the naming discussion in the SVG item: grow this as "give me the text of this file" alongside `docextract`,
+rather than as an `imageextract` module that would cement a document-versus-image split the page-images work
+breaks anyway.
+
+Raised by Juha (2026-07-30), from the `imageextract` question.
+
 ## Vector figures in the docs DB and attachments (`.svg`)
 
 Hand-authored figures — problem setups, schematics, diagrams — are commonly SVG, because that is what you get
@@ -2498,11 +2527,36 @@ all, while every other consumer of `codec` gains SVG for free.
   to the model. SVG needs the same, so that branch generalizes from "QOI → PNG" to "anything the wire cannot
   carry → PNG", which is a small cleanup worth doing at the same time.
 
-**`imageextract` *is* a real module — for the other job.** The true parallel to `docextract` is bytes → plain
-text: OCR for raster images, and the `<text>` elements for SVG. That is a separate concern from decoding
-pixels, it feeds RAG rather than the VLM wire, and it is what would let a non-vision model use a figure at all.
-Worth building when that need arrives; not needed for rasterization, and folding the two jobs under one name
-would be the mistake to avoid.
+**On `imageextract` as a name — split by output, not by source** (revised 2026-07-30, after Juha pointed at the
+page-images case). The first answer here was that `imageextract` should be the image-side parallel of
+`docextract`, doing bytes → plain text via OCR and SVG `<text>`. That is a real job, but naming it that way
+splits along the wrong axis, and the format work already on this list is what breaks it: once PDF and docx
+pages are rendered as images, one file feeds both paths at once.
+
+|              | → text                   | → pixels                          |
+|--------------|--------------------------|-----------------------------------|
+| **document** | `docextract` (exists)    | PDF/docx page images (wanted)     |
+| **image**    | OCR; SVG `<text>`        | `image.codec` (exists)            |
+
+`docextract` / `imageextract` names the **rows**, but the two cells in a row have nothing in common — one
+parses, the other renders — while the two cells in a *column* are the same job over different inputs, and the
+column is what callers actually ask for: RAG wants text regardless of what the file was, the VLM wants pixels
+regardless of what the file was. SVG makes the point in miniature, being a document that is a picture and
+populating both of its cells; PDF makes it at scale.
+
+The failure to expect, if the row split is kept, is not that some file is awkward — it is that the *bins* stop
+being answerable. A PDF rendered to page images has to go in both, so every caller ends up asking "is this a
+document or an image?", which is a question about our module names rather than about the file, and which has no
+right answer. Sorting by what the caller wants out keeps the question answerable for every input.
+
+So the modules to grow toward are **"give me the text of this file"** (dispatching to pypdf, plain-text, or OCR)
+and **"give me pixels for this file"** (dispatching to `codec`, an SVG rasterizer, or a PDF page renderer) —
+which is what `docextract` already is for its half of the first column, and what `codec` already is for its half
+of the second. Neither needs renaming today; the point is to grow them along the column rather than to add an
+`imageextract` that cements the row split.
+
+Cross-reference: [Read documents as page images, for figure- and math-heavy sources] is the item that fills the
+top-right cell, and is therefore the one that would force this decision.
 
 Related: [Same file formats in the docs DB and in chat attachments], and the spreadsheet item above — three
 formats, three genuinely different problem classes behind one file picker.
