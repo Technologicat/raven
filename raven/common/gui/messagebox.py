@@ -100,7 +100,14 @@ def modal_dialog(window_title: str,
     for label in buttons:
         dpg.add_button(label=label, width=75, callback=modal_dialog_callback, user_data=label, parent="modal_dialog_button_group")
 
-    dpg.split_frame()  # We might be called when another modal (e.g. `FileDialog`) closes. Give it a chance to close first, to make DPG happy. (Otherwise this modal won't always show.)
+    # We might be called when another modal (e.g. `FileDialog`) closes. Give it a chance to close first,
+    # to make DPG happy. (Otherwise this modal won't always show.)
+    #
+    # Not required: this is often the app's *error reporting* path, so raising here would replace the
+    # error being reported with one about the reporting. A dialog that fails to appear is the lesser
+    # evil, and the warning says which call site to defer to a frame callback.
+    guiutils.split_frame(operation="modal_dialog: let a previously open modal close first",
+                         required=False)
     if centering_reference_window:
         guiutils.recenter_window("modal_dialog_window", reference_window=centering_reference_window)
     else:

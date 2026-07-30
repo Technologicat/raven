@@ -3,6 +3,31 @@
 New items go at the **top**. (Both ends were in use up to 2026-07-27, which is how the two halves of the same
 Librarian session ended up ~1000 lines apart.)
 
+## Migrate the remaining `dpg.split_frame()` sites to the guarded `guiutils.split_frame`
+
+`raven.common.gui.utils.split_frame` now converts a render-loop-thread wait from a silent hang into either a
+`RuntimeError` or a warning-and-degrade, and the reusable library functions (`wait_for_resize`,
+`recenter_window`, `messagebox.modal_dialog`) plus Librarian's `scroll_view` go through it. The remaining ~40
+bare `dpg.split_frame()` calls in app-level code do not:
+
+    8  raven/cherrypick/imageview.py        3  raven/visualizer/annotation.py
+    5  raven/librarian/chat_controller.py   3  raven/librarian/cleanup_dialog.py
+    4  raven/visualizer/info_panel.py       3  raven/librarian/app.py
+    2  raven/visualizer/app.py              2  raven/client/avatar_renderer.py
+    2  raven/vendor/file_dialog/fdialog.py  2  raven/client/avatar_controller.py
+    2  raven/vendor/DearPyGui_Markdown/     1  each: cherrypick/{grid,app}.py,
+                                              common/gui/messagebox.py (one left),
+                                              avatar/pose_editor/app.py
+
+Each needs one judgment call — is this wait load-bearing (`required=True`) or merely an improvement
+(`required=False`)? — so it is a real review pass, not a find-replace. Expect `required=True` to be the answer
+almost everywhere: most of these are double-buffered content swaps and texture uploads, which produce visibly
+wrong output without the frame.
+
+Worth doing because these are exactly the sites a future refactor moves between threads. The library functions
+were done first because an unknown future caller is the live risk there; app code has a known call graph today,
+and the classification is the slow part.
+
 ## The avatar upscaler offers bilinear and bicubic, but not Lanczos
 
 `raven.common.video.upscaler.Upscaler`'s `quality` parameter takes `"low"` / `"high"` (Anime4K model sizes)

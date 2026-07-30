@@ -1524,26 +1524,21 @@ class DPGLinearizedChatView:
         `target_y`: y coordinate to scroll to, in coordinate system of `self.gui_parent`.
                     If not provided (default), scroll to end.
 
-        NOTE: When called from the main thread, `max_wait_frames` must be 0, as any
-              attempt to wait would hang the main thread's explicit render loop.
-              Enforced below rather than merely asked for, because the penalty is a hang
-              with no traceback — the one DPG failure mode that tells you nothing.
+        NOTE: When called from the render loop thread, `max_wait_frames` must be 0, as any attempt to
+              wait would hang that loop. Enforced below rather than merely asked for, because the
+              penalty is a hang with no traceback — the one DPG failure mode that tells you nothing.
 
-              Setting `max_wait_frames=0` also has the effect of not logging the current
-              frame number, because `dpg.get_frame_count()` would need the render thread mutex:
-                  https://github.com/hoffstadt/DearPyGui/issues/2366
-
-              When called from any other thread (also event handlers), waiting is fine.
-              All current callers qualify: the LLM task thread, `bgtask` workers, DPG event
-              callbacks, and frame callbacks are all dispatched off the render loop.
+              When called from any other thread (also event handlers), waiting is fine. All current
+              callers qualify: the LLM task thread, `bgtask` workers, DPG event callbacks and frame
+              callbacks are all dispatched off the render loop.
         """
-        # The waiting below calls `split_frame`, which deadlocks if it runs synchronously in the render loop
-        # (the animator's per-frame updates do, for instance). Degrade to not waiting instead of hanging: the
-        # scroll then lands on a possibly stale maximum, which is a visible imperfection rather than a dead app.
-        if max_wait_frames > 0 and threading.current_thread() is threading.main_thread():
-            logger.warning("DPGLinearizedChatView.scroll_view: called from the main thread with "
-                           f"max_wait_frames={max_wait_frames}; waiting would deadlock the render loop, so "
-                           "proceeding without waiting. Pass max_wait_frames=0 explicitly at this call site.")
+        # Waiting below goes through `guiutils.split_frame`, which would deadlock in the render loop.
+        # Degrade rather than raise: the scroll then lands on a possibly stale maximum, which is a visible
+        # imperfection rather than a dead app.
+        if max_wait_frames > 0 and guiutils.is_render_thread():
+            logger.warning("DPGLinearizedChatView.scroll_view: called from the render loop thread with "
+                           f"max_wait_frames={max_wait_frames}; waiting would deadlock it, so proceeding "
+                           "without waiting. Pass max_wait_frames=0 explicitly at this call site.")
             max_wait_frames = 0
 
         # Settling takes at least one frame by construction: a single sample cannot tell a settled value from
@@ -1552,12 +1547,19 @@ class DPGLinearizedChatView:
         elapsed_frames = 0
         max_y_scroll = dpg.get_y_scroll_max(self.gui_parent)
         for elapsed_frames in range(1, max_wait_frames + 1):
-            dpg.split_frame()
+            guiutils.split_frame(operation="scroll_view: settle the chat panel's scroll maximum")
             previous_max_y_scroll, max_y_scroll = max_y_scroll, dpg.get_y_scroll_max(self.gui_parent)
             if max_y_scroll > 0 and max_y_scroll == previous_max_y_scroll:  # TODO: The nonzero requirement fails when the content is less than one screenful in length: a legitimately zero maximum is indistinguishable from a panel that has not laid out yet, so we wait out `max_wait_frames`. Think of a better way.
                 break
         plural_s = "s" if elapsed_frames != 1 else ""
         waited_str = f" (after waiting for {elapsed_frames} frame{plural_s})" if elapsed_frames > 0 else " (no waiting was needed)"
+        # Logging the frame number only when we waited is deliberate but no longer explained. It used to cite
+        # `dpg.get_frame_count()` needing the render thread mutex (DearPyGui#2366) — which is wrong twice over:
+        # that issue is about holding `dpg.mutex()` for a long time inside a frame callback, and every Raven app
+        # calls `get_frame_count()` from the animator on the render thread, every frame, without trouble. Some
+        # real problem was being named here and its actual cause is unidentified, so the condition stays as
+        # written rather than being "simplified" on the strength of not being able to reproduce it. If a hang
+        # or a stall ever surfaces at this line, this is the note to start from — and to replace.
         frames_str = f" frame {dpg.get_frame_count()}" if max_wait_frames > 0 else ""
 
         if scroll_target_node_id is not None:

@@ -12,6 +12,7 @@ __all__ = ["bootup", "load_extra_font",  # high-level bootup API, you usually wa
            "get_mouse_relative_pos", "is_mouse_inside_widget",
            "screen_to_content", "content_to_screen", "zoom_keep_point",  # re-exported from layout_math
            "compute_zoom_to_fit",  # re-exported from layout_math
+           "is_render_thread", "split_frame",  # frame waiting, guarded against deadlock
            "wait_for_resize",
            "recenter_window",
            "compute_tooltip_position_scalar",  # re-exported from layout_math
@@ -24,6 +25,7 @@ logger = logging.getLogger(__name__)
 
 import os
 import pathlib
+import threading
 from typing import Optional, Tuple, Union
 
 from unpythonic.env import env
@@ -464,19 +466,77 @@ def is_mouse_inside_widget(widget: Union[str, int]) -> bool:
 # ---------------------------------------------------------------------------
 # Layout helpers
 # ---------------------------------------------------------------------------
+# Waiting for frames, without deadlocking
+# ---------------------------------------------------------------------------
+
+def is_render_thread() -> bool:
+    """Whether the calling thread is the one that runs the DPG render loop.
+
+    Waiting for a frame from that thread can never succeed, because the thread that would have to
+    produce the frame is the one blocking. Every Raven app drives the loop explicitly from the main
+    thread (`while dpg.is_dearpygui_running(): ... dpg.render_dearpygui_frame()`), so "the render
+    thread" and "the main thread" are the same thread, and asking about the latter answers for both.
+
+    Everything DPG dispatches for us answers `False` and may wait freely: event callbacks, frame
+    callbacks, and `bgtask` workers all run on other threads.
+
+    The main thread also runs app *startup*, before the loop begins — where a wait would block
+    forever waiting for a loop that this thread has not started yet. So one predicate covers both
+    hazards, which are otherwise documented separately.
+    """
+    return threading.current_thread() is threading.main_thread()
+
+def split_frame(*, operation: str, required: bool = True) -> bool:
+    """Wait for the render loop to complete one frame — `dpg.split_frame`, but reporting the cases it cannot.
+
+    This does **not** make waiting possible on the render loop thread; nothing can, since the thread
+    that must render the frame is the one that would be blocked. What it changes is the *failure*: the
+    situation is detected and named instead of hanging the app.
+
+    `operation`: What the caller is waiting for. Named in the message, so make it specific enough to
+                 find the call site from a log line.
+    `required`: Whether the caller's job is *impossible* without the wait.
+                `True` (default): raise `RuntimeError` rather than hang. Fail fast, and loudly.
+                `False`: log a warning and return, letting the caller carry on with whatever
+                         (possibly stale) geometry it already has.
+
+    Returns whether the wait actually happened, so a `required=False` caller can adapt.
+
+    Prefer this to a bare `dpg.split_frame()` anywhere the calling thread is not obvious from two
+    lines of context. The failure it converts is the worst kind DPG offers: a hang with no traceback,
+    no log line, and nothing to bisect — indistinguishable from a slow model or a wedged GPU. A
+    `RuntimeError` naming the operation is strictly more useful, and `required=False` degrades to a
+    cosmetic imperfection instead.
+    """
+    if is_render_thread():
+        message = (f"split_frame: {operation}: waiting for a frame from the render loop thread cannot "
+                   "succeed — the thread that would render it is the one waiting. (App startup counts: "
+                   "it runs on this thread too, before the loop begins.) Move this work to a background "
+                   "thread or a DPG event callback. A frame callback also works, but `dpg.set_frame_callback` "
+                   "holds only one callback per frame number and a later registration for the same frame "
+                   "silently replaces the earlier one, so combine them into one callback or pick a free frame.")
+        if required:
+            raise RuntimeError(message)
+        logger.warning(f"{message} Proceeding without waiting.")
+        return False
+    dpg.split_frame()
+    return True
 
 def wait_for_resize(widget: Union[str, int],
                     wait_frames_max: int = 10) -> bool:
-    """Wait (calling `dpg.split_frame()`) until the on-screen size of `widget` (DPG tag or ID) changes.
+    """Wait until the on-screen size of `widget` (DPG tag or ID) changes.
 
     If `wait_frames_max` frames have elapsed without the size changing, return.
 
     Return `True` if the size changed, `False` otherwise.
+
+    Waiting *is* the operation here, so calling this from the render loop thread raises
+    `RuntimeError` instead of hanging. See `split_frame`.
     """
     waited = 0
     old_size = get_widget_size(widget)
     while waited < wait_frames_max:
-        dpg.split_frame()  # let the autosize happen
+        split_frame(operation=f"wait_for_resize: autosize of widget {widget}")  # let the autosize happen
         waited += 1
 
         new_size = get_widget_size(widget)
@@ -491,6 +551,10 @@ def recenter_window(thewindow: Union[str, int], *, reference_window: Union[str, 
     """Reposition `thewindow` (DPG ID or tag), so that it is centered on `reference_window`.
 
     To center on viewport, pass your maximized main window as `reference_window`.
+
+    `update_window_size` renders the window offscreen for one frame first, to read its final autosized
+    size. That wait is skipped (with a warning) when called from the render loop thread, since an
+    off-center window is a much better outcome than a hung app. See `split_frame`.
     """
     if reference_window is None:
         return
@@ -514,7 +578,10 @@ def recenter_window(thewindow: Union[str, int], *, reference_window: Union[str, 
                           reference_window_h))
         dpg.show_item(thewindow)
         logger.debug(f"recenter_window: After show command: Window is visible? {dpg.is_item_visible(thewindow)}.")
-        dpg.split_frame()
+        # Not required: without the frame we center on the pre-autosize size, so the window lands
+        # off-center. Visibly imperfect, and worth a warning, but not worth hanging over.
+        split_frame(operation=f"recenter_window: offscreen render for the final size of window {thewindow}",
+                    required=False)
         logger.debug(f"recenter_window: After wait for render: Window is visible? {dpg.is_item_visible(thewindow)}.")
 
     w, h = get_widget_size(thewindow)

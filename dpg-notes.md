@@ -52,6 +52,62 @@ end of each frame. This is why:
 - **Deadlocks** from the main thread — it's the thread that needs to signal
   the event, so it can't also wait for it.
 
+### Use `guiutils.split_frame`, not `dpg.split_frame`
+
+The hazard above used to be documented and hoped for. It is now enforced —
+enforced, not solved. `raven.common.gui.utils.split_frame(operation=...,
+required=...)` cannot wait on the render loop thread any more than the bare DPG
+call can; the constraint is in the mechanism, not the wrapper. What it adds is
+detection: it checks the calling thread and converts the hang into something you
+can read.
+
+- `required=True` (default) raises `RuntimeError` naming the operation. For code
+  where waiting *is* the job — `wait_for_resize`, a double-buffer swap, settling
+  a scroll maximum — there is nothing to degrade to, so fail fast and loudly.
+- `required=False` logs a warning and returns `False`, letting the caller
+  continue on whatever geometry it has. For waits that only *improve* a result:
+  `recenter_window`'s offscreen measure (an off-center window beats a dead app),
+  and `messagebox.modal_dialog` (which is often the error-reporting path itself,
+  so raising there would replace the reported error with one about reporting).
+
+**One check covers two separately documented hazards.** Startup code runs on the
+main thread as well, so `is_render_thread()` also catches "called before the
+render loop exists" — the pitfall behind the "defer startup work that may show
+an error dialog to a frame callback" rule. There is no second predicate to
+remember.
+
+Why bother, when a docstring already said so: a deadlock is the only DPG failure
+that produces *nothing* — no traceback, no log line, no exit code. It is
+indistinguishable from a slow model, a wedged GPU, or a hung network call, so it
+costs an hour before you even suspect the right subsystem. Any named error beats
+it.
+
+When the guard sends you to a frame callback, read the next section first —
+`set_frame_callback` has a footgun of its own.
+
+## `set_frame_callback` holds one callback per frame number
+
+A second `dpg.set_frame_callback(N, ...)` for the same `N` **silently replaces**
+the first. No error, no warning; the earlier callback simply never runs. Learned
+the hard way, and easy to reintroduce, because the two registrations are usually
+written months apart in different parts of a startup sequence and neither looks
+wrong on its own.
+
+Combine the actions into a single callback, or give each a frame number nothing
+else uses. Frame 10 is the de facto Raven convention for "the GUI has settled",
+so it is the number most likely to already be taken in a given app.
+
+Audited 2026-07-30 across the constellation: no app registers a frame number
+twice. `conference_timer` registers 10 and 12 in each of two branches, but the
+branches are mutually exclusive (`if font_size <= reference_size: ... else: ...`),
+so only one set is ever installed. No library-level code registers a frame
+callback at all, so an app cannot collide with a shared helper — worth preserving,
+since such a collision would be invisible from the app's own source.
+
+Related: for order-sensitive *input* handling, defer in the main loop rather than
+via `set_frame_callback` — rapid input would overwrite the pending callback. See
+"Mitigation: defer the order-sensitive action" under Keyboard input.
+
 ## The two internal queues
 
 - **`calls`** (thread-safe queue): Python user callbacks. Consumed by the
