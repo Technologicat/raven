@@ -480,6 +480,22 @@ Cost is one frame (~16 ms) of latency on the deferred action — imperceptible, 
 
 - 2026-06-06: Traced a raven-cherrypick mis-tag (fast `C`+`Right` tagging the next image instead of the current one) to same-frame keycode-order dispatch; confirmed empirically that every triage letter outranks every arrow, so navigation always fires first. Fixed by deferring keyboard navigation one frame (`_request_nav`). Resolved the long-standing "mysterious 517/518" in the same pass — the `mvKey_Prior`/`mvKey_Next` constants are stale DPG-1.x values; the live codes are 517/518.
 
+# Scrolling
+
+## Three input paths move a scroll position, and DPG surfaces them differently
+
+A child window's scroll position can be changed by **dragging the scrollbar**, by the **mouse wheel**, or by **hotkeys** you implement yourself. These are not equivalent from the code's point of view: the scrollbar drag is handled inside ImGui, so there is no DPG-level event for it in the way there is for a key press. (Cost real time while building Visualizer's smooth scrolling.)
+
+The consequence is a design rule: **decide "has the user scrolled away?" from the scroll position, never from scroll events.** Position is where all three paths end up, so `dpg.get_y_scroll` needs no per-path handling and cannot silently miss one. Watching for the *act* of scrolling means enumerating the paths, and the one that is hardest to hook is the one users reach for most on a long document.
+
+## `max_y_scroll` moves when content is added
+
+`dpg.get_y_scroll_max` is a function of the current content height, so appending to a container changes it immediately. Anything that asks "is the view at the bottom?" in order to decide whether to *keep* it at the bottom must sample that **before** adding the content, and act **after**. Sampling afterwards reports "not at the bottom" every time — the content grew, the position did not — so follow-the-tail logic written that way never engages, and the view sticks wherever the stream started.
+
+Raven's chat view carries this as an explicit split: `DPGLinearizedChatView.is_pinned_to_bottom()` samples, and `follow_tail(was_pinned)` takes the sampled answer as an argument rather than asking for itself, precisely so the ordering cannot be lost at a call site.
+
+Note the hazard is not confined to streaming: a user can scroll *while* content is arriving, so a "user-initiated" scroll is not automatically a quiet moment either. What differs is the consequence — a scroll-end flasher that guesses wrong shows one wrong flash, while follow-the-tail that guesses wrong stops working for the rest of the turn.
+
 # Testing DPG code
 
 ## DPG runs without a mapped window, so GUI code is unit-testable

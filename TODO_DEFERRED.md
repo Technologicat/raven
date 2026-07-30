@@ -38,26 +38,6 @@ visible, but untangling it is a separate (and API-breaking) question.
 
 Raised by Juha (2026-07-29).
 
-## `app.py` and `minichat.py` each name the datastore paths separately
-
-Both frontends independently build the same two paths:
-
-```python
-datastore_file = librarian_config.llmclient_userdata_dir / "data.json"  # chat node datastore
-state_file = librarian_config.llmclient_userdata_dir / "state.json"     # important node IDs for the chat client state
-```
-
-(`app.py` ≈ line 246, `minichat.py` ≈ line 70.) They agree today, which is load-bearing — the GUI and the CLI
-are supposed to share one datastore, and that only holds because two separate literals happen to match.
-Nothing enforces it, and nothing would notice if one drifted; the symptom would be a CLI that quietly cannot
-see the chats the GUI made.
-
-The directory is already config (`llmclient_userdata_dir`), so the fix is to move the two filenames there
-too and have both frontends read them. Small, but it converts an invariant maintained by coincidence into one
-maintained by construction.
-
-Noticed while documenting the on-disk layout (2026-07-30, Juha — "which is silly").
-
 ## Updating the vendored FontAwesome means both files, not just the header
 
 `CLAUDE.md` notes the vendored `IconsFontAwesome6.py` is an outdated version. Measured 2026-07-30, the
