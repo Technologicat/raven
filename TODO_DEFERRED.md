@@ -3,6 +3,33 @@
 New items go at the **top**. (Both ends were in use up to 2026-07-27, which is how the two halves of the same
 Librarian session ended up ~1000 lines apart.)
 
+## Revisit `recenter_window`'s degrade-instead-of-raise policy
+
+`guiutils.recenter_window` passes `required=False` for its offscreen-measure wait, so calling it from the
+render loop thread warns and centers using whatever size the window reports pre-autosize. Provisional, kept
+2026-07-30 pending evidence rather than settled.
+
+The doubt (Juha): a window placed from a too-small size read lands too far right and down, and a
+quarter-visible help window is a *critical* UX bug, not a cosmetic one — arguably worse than a crash, since a
+crash gets fixed and a mispositioned window gets shipped.
+
+**Two questions that look like one and are not**, which is the reason this is worth revisiting rather than
+just flipping:
+
+- Is off-center output acceptable? Probably not, at the extreme.
+- Is *crashing the app* the right way to tell the developer? That is what `required=True` actually buys, and
+  it is a separate call — the cost lands on users if the bad thread is only reached on some platform or
+  timing.
+
+A third option neither of us named: clamp the computed position so the window's top-left stays inside the
+reference window, using the reference size we already have. That bounds the damage without a crash, and is
+independent of whether the size read was stale. It does not *guarantee* full visibility (a window genuinely
+larger than the reference still overflows), and it is untested — but it dominates the current unclamped
+degrade, so it is the first thing to try if this bites.
+
+Cheap to settle empirically: the warning names the call site, so if it never fires in practice the question is
+moot.
+
 ## Migrate the remaining `dpg.split_frame()` sites to the guarded `guiutils.split_frame`
 
 `raven.common.gui.utils.split_frame` now converts a render-loop-thread wait from a silent hang into either a
