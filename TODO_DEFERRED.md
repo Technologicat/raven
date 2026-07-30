@@ -231,6 +231,31 @@ reference implementation, so they are one job rather than three:
     `SmoothScrolling` for a window that already has one *updates the existing instance's* `target_y_scroll`
     instead of starting a second animation, so streaming chunks chase a moving end smoothly rather than
     fighting for the scrollbar.
+
+    **Compare against the last written value, not the target.** These come apart precisely while an animation
+    runs, which is the whole case in question: the position is *supposed* to differ from the target then, so a
+    target comparison reads every animation as a user scroll. The position tracks the last written value (one
+    frame behind it), and only user input breaks that. Intent — "are we heading for the end?" — is carried
+    separately by the `to_end` flag, which is what the target would otherwise have been consulted for.
+  - **The user grabbing the scrollbar handle mid-follow, and dragging up.** Checked against Visualizer
+    (2026-07-30): its info panel does *not* handle this, and does not need to — every caller of
+    `scroll_to_position` there is a one-shot user action (navigation keys, search-match jumps, cluster jumps,
+    top/bottom), so nothing ever retargets repeatedly and there is no fight to lose. The case is new to
+    Librarian rather than something to port, so expect to design it rather than copy it.
+
+    It half falls out of the design, and the half that does not is the one that matters:
+
+    - **Falls out:** `SmoothScrolling` stops advancing by itself, because its guard requires
+      `current_y_scroll == prev_frame_new_y_scroll` and a drag breaks that. After `update_pending_threshold`
+      frames it finishes.
+    - **Does not fall out:** `follow_tail` runs once per streamed chunk, so if `should_follow_tail` still says
+      yes it retargets and the fight resumes — the animation's give-up never sticks. The drag has to be caught
+      by the predicate, which is exactly what the last-written comparison above gives, so the two fixes are
+      one fix.
+    - **Also needs handling, and is easy to miss:** the give-up path is the *timeout* branch, which calls
+      `flasher.show(where="bottom")` and logs "target position past end of scrollbar?". So a user drag would
+      misreport as having hit the end of the content, with a spurious flash, once the flasher is wired up.
+      Distinguish "the user took the scrollbar" from "we ran out of scrollable" before trusting that branch.
   - **The two halves sit on opposite sides of the `split_frame` boundary.** `scroll_view`'s settle-wait uses
     `split_frame` and therefore may only run off the render loop; `SmoothScrolling.render_frame` runs *in* the
     render loop and must never wait, which is why it counts `update_pending_frames` instead. So the animation
