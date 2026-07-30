@@ -410,10 +410,20 @@ throws away the name, which is often the single most informative string in the f
 Then the details that decide whether the output is useful or merely plausible:
 
 - **Values, not formulas.** `openpyxl`'s `data_only=True` yields the *cached* result, which is present only if
-  a real spreadsheet application last saved the file — a generated or programmatically-written workbook has
-  none, and the cells come back `None`. So the extractor needs a fallback (emit the formula text rather than a
-  blank) and must not silently produce an empty table. Confirm the exact behaviour against a file written by
-  `openpyxl` itself before designing around it.
+  a real spreadsheet application last saved the file.
+
+  The empty-cell case needs **two** things true together: the file contains formulas *and* was never saved by
+  an application that computes them. Most inputs fail one of those, which is why the expected sources look
+  safe — a report downloaded from a web dashboard is usually pure values with no formulas at all (so
+  `data_only` is moot), and a human-authored workbook has been through Excel or LibreOffice (so the cache is
+  populated). The gap is narrow: a formula-bearing file written by a library (`openpyxl`, `xlsxwriter`,
+  `pandas`) and never opened.
+
+  What makes it worth handling anyway is that the failure is **silent** — blank cells, not an exception — so
+  it surfaces as a confidently empty table rather than an error. Cheap insurance for a narrow case, not a
+  workaround for a common one: fall back to the formula text, and never emit a table that is entirely blank
+  without saying why. Confirm the behaviour against a file written by `openpyxl` itself before relying on any
+  of this.
 - **Merged cells.** Markdown cannot express a merge. `openpyxl` reports the value in the top-left cell and
   `None` for the rest of the range; repeating the value across the merged span usually retrieves better than
   leaving blanks, since a row then still reads as a complete record.
