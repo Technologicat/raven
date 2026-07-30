@@ -2608,6 +2608,40 @@ the token cost (a page image is expensive next to a page of text — interacts w
 or both), and how a page image participates in RAG retrieval at all (this is the same wall the images item
 hits — it wants the Nomic aligned space, or captioning).
 
+**Answering "when": never eagerly — give the model a tool to ask for the pages it wants** (Juha, 2026-07-30).
+Even conservatively, a page image runs a few thousand tokens; at 3k, a 20-page paper is 60k, about half of a
+128k context, for one document. So rendering every page is not a strategy, and neither is a heuristic that
+guesses which pages matter before anything has read them. Text extraction stays the default, and a tool —
+`read_pdf_page(document, pages)` in the shape of the existing built-ins — lets the model request a page or
+range *after* it has read the text and knows where the figure it needs actually is. Raven need not guess the
+cost either: `llmclient.image_token_cost` already prices an image per model family, so the budget check can be
+exact.
+
+It also makes the capability user-addressable with no new UI: "look at page 32" becomes a tool call.
+
+What that shape requires, none of it free:
+
+- **Page-anchored text.** The model can only ask for page 32 if it knows what is on page 32, so extraction has
+  to keep page boundaries rather than concatenating to one blob. `pypdf` already yields text per page; the work
+  is not discarding that when the message is built.
+- **Deciding which page number is meant.** A paper's printed page 32 is rarely the PDF's 32nd page. The user
+  means whichever their reader shows them; the model will parrot whichever the text is labelled with. Pick one
+  as canonical, and have the tool say which it used when it answers — a silently off-by-front-matter page is a
+  confusing failure, because the model will confidently discuss the wrong figure.
+- **A per-call budget guard.** A model that asks for pages 1–50 must be refused or clamped, not obeyed; one
+  call would otherwise consume the context it was meant to conserve.
+- **A retention policy, and this is the sharp one.** An injected page image becomes a content part of a chat
+  message, so it persists in the linearized history and costs its tokens on *every subsequent turn*, not once.
+  That is unlike a tool result, which can later be summarized away. Without a policy, three page requests over
+  a long conversation quietly become a permanent 9k tax. Interacts directly with
+  [Context-window budgeting and conversation compaction (Librarian)].
+- **Caching, which is nearly free given what exists.** A rendered page is a pure function of (document, page,
+  render size), so it can live in the content-addressed sidecar store like any other image and be rendered once
+  across all chats.
+
+Same shape as [Store large tool results as attachments instead of dumping them into the chat log]: the fix for
+"too much material" is to make it *fetchable* rather than to make it smaller.
+
 Distinct from OCR for scanned documents (`TODO.md`, "RAG PDF ingestion — polish"): OCR recovers text that was
 always meant to be text. This is about content that is *not* text and never was.
 
