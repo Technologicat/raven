@@ -120,6 +120,8 @@
 - RAG: adding a new document to the database no longer logs a spurious `KeyError` traceback, and the indexing progress no longer counts a single new file as two changes. A new file's filesystem create+modify events could queue a *delete* for a document that was never indexed (more likely with larger files such as PDFs, which emit several write events while being copied in); the delete half of an update is now emitted only when the document actually exists.
 - RAG: the documents directory is now auto-created at startup if missing. Previously, a fresh install or moved-aside docs dir crashed the app with `FileNotFoundError` from `inotify_add_watch` before the GUI came up.
 - RAG: rapid sequences of file adds and updates no longer crash the indexing pipeline with `TypeError: string indices must be integers`. The pending-edits queue now stores delete entries in the same shape as add/update entries, so the dedup pass can run uniformly.
+- the chat view no longer drags you back to the bottom while the AI is writing. Scrolling up to re-read something during generation now stays where you put it, across tool calls too — which on a thinking model is the difference between waiting and reading. The view follows new content only when you were already at the end when it arrived, and a reply finalizing or a tool result landing is treated the same way.
+- the chat view now actually reaches the message you just sent. "Scroll to the end" read the panel's scroll maximum before the new message had been laid out, so it stopped where the *previous* message ended — on Send, the view typically stayed on the greeting. The same stale reading then made the AI's reply look unfollowed, the view being one message-height short of the bottom.
 
 *Raven-visualizer*
 

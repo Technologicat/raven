@@ -1499,38 +1499,63 @@ class DPGLinearizedChatView:
         """
         if not was_pinned:
             return
-        dpg.split_frame()  # let DPG lay out the new content, so scrolling to the end reaches the *new* end
-        self.scroll_view()
+        self.scroll_view()  # waits for the new content to lay out, so this reaches the *new* end
 
     def scroll_view(self,
                     max_wait_frames: int = 10,
                     scroll_target_node_id: Optional[str] = None) -> None:
         """Scroll this linearized chat view to the end.
 
-        `max_wait_frames`: If `max_wait_frames > 0`, wait at most for that may frames
-                           for the chat panel (`self.gui_parent`) to get a nonzero `max_y_scroll`.
+        `max_wait_frames`: If `max_wait_frames > 0`, wait at most for that many frames for the chat panel
+                           (`self.gui_parent`) to report a `max_y_scroll` that has *settled*: nonzero, and
+                           unchanged from the previous frame.
 
-                           Some waiting is usually needed at least at app startup
-                           before the GUI settles.
+                           Some waiting is usually needed at least at app startup before the GUI settles.
+
+                           Settling, rather than merely waiting for nonzero, because `get_y_scroll_max` lags
+                           a content change by more than one frame — the same lag `SmoothScrolling` budgets
+                           four frames for. Reading it too early returns the maximum from *before* the
+                           content was added, and then "scroll to the end" lands where the previous message
+                           ended. That misses in two ways at once: the view visibly fails to reach the
+                           message the user just sent, and a `is_pinned_to_bottom` sampled afterwards
+                           compares a position against a maximum that has since grown, so it reports the
+                           reader as having scrolled away and the reply is never followed.
 
         `target_y`: y coordinate to scroll to, in coordinate system of `self.gui_parent`.
                     If not provided (default), scroll to end.
 
         NOTE: When called from the main thread, `max_wait_frames` must be 0, as any
               attempt to wait would hang the main thread's explicit render loop.
+              Enforced below rather than merely asked for, because the penalty is a hang
+              with no traceback — the one DPG failure mode that tells you nothing.
 
               Setting `max_wait_frames=0` also has the effect of not logging the current
               frame number, because `dpg.get_frame_count()` would need the render thread mutex:
                   https://github.com/hoffstadt/DearPyGui/issues/2366
 
               When called from any other thread (also event handlers), waiting is fine.
+              All current callers qualify: the LLM task thread, `bgtask` workers, DPG event
+              callbacks, and frame callbacks are all dispatched off the render loop.
         """
+        # The waiting below calls `split_frame`, which deadlocks if it runs synchronously in the render loop
+        # (the animator's per-frame updates do, for instance). Degrade to not waiting instead of hanging: the
+        # scroll then lands on a possibly stale maximum, which is a visible imperfection rather than a dead app.
+        if max_wait_frames > 0 and threading.current_thread() is threading.main_thread():
+            logger.warning("DPGLinearizedChatView.scroll_view: called from the main thread with "
+                           f"max_wait_frames={max_wait_frames}; waiting would deadlock the render loop, so "
+                           "proceeding without waiting. Pass max_wait_frames=0 explicitly at this call site.")
+            max_wait_frames = 0
+
+        # Settling takes at least one frame by construction: a single sample cannot tell a settled value from
+        # a stale one, so there is always a second sample to compare against. One frame on a background thread
+        # is a cheap price for the scroll landing where it was asked to.
+        elapsed_frames = 0
         max_y_scroll = dpg.get_y_scroll_max(self.gui_parent)
-        for elapsed_frames in range(max_wait_frames):
-            if max_y_scroll > 0:  # TODO: This approach fails when the content is less than one screenful in length. Think of a better way; currently we just use a small `max_wait_frames`.
-                break
+        for elapsed_frames in range(1, max_wait_frames + 1):
             dpg.split_frame()
-            max_y_scroll = dpg.get_y_scroll_max(self.gui_parent)
+            previous_max_y_scroll, max_y_scroll = max_y_scroll, dpg.get_y_scroll_max(self.gui_parent)
+            if max_y_scroll > 0 and max_y_scroll == previous_max_y_scroll:  # TODO: The nonzero requirement fails when the content is less than one screenful in length: a legitimately zero maximum is indistinguishable from a panel that has not laid out yet, so we wait out `max_wait_frames`. Think of a better way.
+                break
         plural_s = "s" if elapsed_frames != 1 else ""
         waited_str = f" (after waiting for {elapsed_frames} frame{plural_s})" if elapsed_frames > 0 else " (no waiting was needed)"
         frames_str = f" frame {dpg.get_frame_count()}" if max_wait_frames > 0 else ""
@@ -1612,8 +1637,8 @@ class DPGLinearizedChatView:
                              scroll_view: bool = True) -> DPGCompleteChatMessage:
         """Append the chat node with `node_id` to the end of the linearized chat view in the GUI.
 
-        `scroll_view`: If `True`, then once the message has been added, wait for one frame
-                       for the message to render, and scroll the chat view to the end.
+        `scroll_view`: If `True`, then once the message has been added, wait for it to render and scroll the
+                       chat view to the end.
 
                        This is *unconditional*, so pass it only where jumping to the new message is the
                        expected answer to something the user just did. For a message that appears on its
@@ -1635,7 +1660,6 @@ class DPGLinearizedChatView:
                 dpg.disable_item(f"message_show_chat_continuation_button_{dpg_old_message.gui_uuid}")
 
         if scroll_view:
-            dpg.split_frame()
             self.scroll_view()
         return dpg_chat_message
 

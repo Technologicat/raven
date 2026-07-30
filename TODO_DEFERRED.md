@@ -1620,11 +1620,15 @@ This is the same lag `raven.common.gui.animation.SmoothScrolling` already docume
 for (`update_pending_threshold = 4`, "Only proceed if DPG has actually applied our previous update").
 
 **The fix is therefore not a bigger pin tolerance** — that would have masked the second symptom while leaving
-the view parked at the wrong place. `scroll_view`'s existing wait loop only waits while `max_y_scroll <= 0`;
-it needs to wait until the value has *settled* (stops growing), bounded by `max_wait_frames`. Then a
-scroll-to-end reaches the real end, and the pin sample afterwards is correct by construction. Diagnostics are
-already in place: `is_pinned_to_bottom` logs every verdict at DEBUG and a near miss at INFO, so the fix is
-confirmed when the near-miss line goes silent.
+the view parked at the wrong place. It is a settle-wait, **written 2026-07-30, awaiting live confirmation**:
+`scroll_view`'s wait loop used to stop as soon as `max_y_scroll > 0`, and now stops only once that value is
+also *unchanged from the previous frame*, still bounded by `max_wait_frames`. A scroll-to-end then reaches the
+real end, and the pin sample afterwards is correct by construction. The wait now lives in `scroll_view` alone
+— `add_complete_message` and `follow_tail` no longer do a `split_frame` of their own, since one owner of the
+timing is the point.
+
+Diagnostics are already in place: `is_pinned_to_bottom` logs every verdict at DEBUG and a near miss at INFO,
+so **the fix is confirmed when the near-miss line goes silent** on a turn the reader expected to be followed.
 
 **Earlier, and already fixed:** the follow-the-tail autoscroll was unconditional. `chat_controller.py` calls `self.view.scroll_view()` with no target — which scrolls to the end
 — at four points during a streaming turn (≈ lines 2267, 2335, 2356, 2365). The fix is the standard rule:
