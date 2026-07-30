@@ -1558,11 +1558,10 @@ class DPGLinearizedChatView:
     def _set_y_scroll(self, y_scroll: int, *, to_end: bool) -> None:
         """Move the scroll position, remembering what we asked for.
 
-        `y_scroll`: An actual position, in content coordinates. Must be non-negative: the remembered value is
-                    compared against the panel's reported position later, so a sentinel that DPG resolves on
-                    its own would be compared against whatever it resolved to and read as a user scroll.
-                    "Go to the end" is expressed by `to_end` plus the concrete maximum, which the caller has
-                    already had to compute in order to clamp.
+        `y_scroll`: The target position in content coordinates — a non-negative offset from the top. It is
+                    recorded here and compared later against the position the panel reports, so it has to be
+                    the same number that ends up applied. "Go to the end" is therefore expressed as `to_end`
+                    plus the concrete maximum, which the caller has already computed in order to clamp.
         `to_end`: Whether this scroll was a scroll to the end of the content, i.e. whether the view should
                   keep following the tail as more content arrives.
 
