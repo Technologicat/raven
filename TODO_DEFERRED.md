@@ -2495,9 +2495,17 @@ because the loose version of this claim does not survive the embedder upgrade):
   retrievable by meaning with no text anywhere in the pipeline. Any argument of the form "RAG needs text" is
   wrong once that lands.
 - **BM25 still will.** Keyword search is over tokens; an image contributes none, so a figure stays invisible to
-  the keyword half however good the embedder gets. Extracting its text and running it through the existing
-  tokenizer (lowercase, lemmatize, stopword removal) puts it back in — no new machinery, just a new source of
-  text feeding the same path.
+  the keyword half however good the embedder gets. Extracting its text and feeding it to the existing
+  tokenization path puts it back in — no new machinery, just a new source of text.
+
+  **But it must be the *fixed* tokenizer, or this actively backfires.** Today's path lowercases and lemmatizes
+  indiscriminately, which mangles proper nouns — brief 09 records "Elsevier" being tagged `ADJ` and lemmatized
+  to `elsevi` (spaCy 3.8.14 / en_core_web_sm 3.8.0), and its fix is to keep `PROPN` tokens, and tokens with
+  internal capitals or digits, verbatim. Figure text is *disproportionately* made of exactly those: instrument
+  names, software names, gene and material symbols, axis labels with units and digits. So running OCR output
+  through the current tokenizer would destroy precisely the tokens that motivated extracting it, and the
+  feature would look implemented while delivering little. **Depends on brief 09's tokenization fix**; do not
+  build it before that lands.
 
 That division is not a consolation prize; the halves are complementary here in a principled way. A figure's
 text is largely rare, specific tokens — variable names, symbols, proper nouns, instrument labels — which is
