@@ -53,6 +53,20 @@ from . import sidecarstore
 
 gui_config = librarian_config.gui_config  # shorthand, this is used a lot
 
+# How close to the end of the chat still counts as "pinned to the bottom", in pixels — the tolerance used by
+# `DPGLinearizedChatView.is_pinned_to_bottom` to decide whether the view should keep following new content.
+#
+# Not a config knob yet, because the right value is still being measured; see the diagnostics in that method.
+# It is squeezed from both sides. Too small, and the view stops following immediately after the user sends a
+# message: `dpg.set_y_scroll` is applied by the render loop, so a position sampled before the next frame can
+# still report the pre-scroll value, leaving a gap the size of whatever was just added. Too large, and
+# scrolling up a line or two from the end still counts as pinned, so the arrow keys look broken.
+_PIN_TOLERANCE_PX = 2 * gui_config.font_size  # two lines of text
+
+# A "not pinned" verdict within this many tolerances of the end is reported at INFO as a near miss: that is
+# the signature of a tolerance set too low, and the logged gap says how much it would have to grow.
+_PIN_NEAR_MISS_FACTOR = 20
+
 # --------------------------------------------------------------------------------
 
 role_to_colors = {"assistant": {"front": gui_config.chat_color_ai_front, "back": gui_config.chat_color_ai_back},
@@ -1431,13 +1445,28 @@ class DPGLinearizedChatView:
         ImGui and may raise nothing we could hook at all. Position is where all three end up, so reading it
         needs no per-path handling and cannot miss one.
 
-        The one-line tolerance keeps "pinned" true through the sub-pixel drift of a smooth-scroll animation
-        that has effectively, but not exactly, arrived.
+        The tolerance (`_PIN_TOLERANCE_PX`) absorbs the drift of a scroll that has effectively, but not
+        exactly, arrived — and it is a genuine trade-off in both directions, which is why it is instrumented
+        rather than guessed. Too small and the view stops following right after the user sends a message; too
+        large and a deliberate scroll of one or two lines away from the end still counts as pinned, so the
+        arrow keys appear not to work.
+
+        Diagnostics: every call logs the numbers at DEBUG. A *near miss* — not pinned, but within a few
+        tolerances of the end — additionally logs at INFO, since that is precisely the case where the
+        tolerance is too small, and the reported gap is how much it would need to grow. Run with
+        `logsetup.init(level=logging.DEBUG)` for the full trace, or just watch INFO for the near misses.
         """
         max_y_scroll = dpg.get_y_scroll_max(self.gui_parent)
-        if max_y_scroll <= 0:  # less than one screenful: there is nowhere to scroll, so the tail is always in view
-            return True
-        return dpg.get_y_scroll(self.gui_parent) >= max_y_scroll - gui_config.font_size
+        y_scroll = dpg.get_y_scroll(self.gui_parent)
+        gap = max_y_scroll - y_scroll  # how far above the end we are, in pixels
+        pinned = (max_y_scroll <= 0) or (gap <= _PIN_TOLERANCE_PX)  # no scrollbar: the tail is always in view
+        logger.debug(f"DPGLinearizedChatView.is_pinned_to_bottom: y_scroll={y_scroll}, max_y_scroll={max_y_scroll}, "
+                     f"gap={gap}, tolerance={_PIN_TOLERANCE_PX} -> pinned={pinned}")
+        if not pinned and 0 < gap <= _PIN_NEAR_MISS_FACTOR * _PIN_TOLERANCE_PX:
+            logger.info(f"DPGLinearizedChatView.is_pinned_to_bottom: NEAR MISS — gap={gap}px exceeds "
+                        f"tolerance={_PIN_TOLERANCE_PX}px, so the view will not follow. If this fires when you "
+                        f"expected it to follow, the tolerance needs to be at least {gap}px.")
+        return pinned
 
     def restore_scroll_after_swap(self, was_pinned: bool, y_scroll: int) -> None:
         """Put the view back after content was *replaced* — deleted and re-added — rather than appended.
