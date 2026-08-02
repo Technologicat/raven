@@ -548,7 +548,7 @@ Also trapped (constant kept its 1.x value, real code is the gap): LWin 343→530
 
 A keyless key-press handler is dispatched once per key pressed *that frame*, in **ascending keycode order** — ImGui's per-frame edge detection discards the sub-frame order in which keys were physically struck. So when a lower-keycode handler mutates state that a higher-keycode handler reads, two keys struck within the same frame interact as if the lower-keycode one came first, regardless of the real press order. (In raven-cherrypick: triage letters all sort after the arrows — `C`=548 vs `Right`=514 — so a fast two-handed `C`+`Right` is dispatched `Right`+`C`; navigation moves the current image synchronously, so the triage key then tags the *next* image.) If correctness depends on the order of two near-simultaneous keys, you cannot rely on dispatch order; see *Mitigation* below.
 
-**Full code↔name table, the trap details, and the reproduction script:** `briefs/dpg-keycodes.md`.
+**Full code↔name table, the trap details, and the reproduction script:** `briefs/reference/dpg-keycodes.md`.
 
 ## Mitigation: defer the order-sensitive action
 

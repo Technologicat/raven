@@ -1,7 +1,7 @@
 # Speech extraction — implementation overview
 
 **Status**: steps 1–5 complete + review-pass polish, step 6 (manual smoke) pending.
-**Reading companion to**: `briefs/speech-extract-to-common.md` (the design brief).
+**Reading companion to**: `briefs/done/speech-extract-to-common.md` (the design brief).
 **Purpose**: a guided tour of what actually landed in the code, so the diffs can be read with context.
 
 This document is the reading guide, not the authoritative record — git log is. Use this to decide which diffs to read carefully and which to skim.

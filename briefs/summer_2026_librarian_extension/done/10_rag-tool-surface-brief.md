@@ -22,7 +22,7 @@ Raven runs on the user's behalf. Keep both — they buy different things.
 **Why now:** measured. Asked something the auto-injected matches do not answer, Qwen3.6-27B reaches for a
 second, better-aimed search — a query that only exists *after* reading pass 1. Having no such tool, it
 writes the call out as literal `<tool_call>` text and the user gets that instead of an answer, roughly one
-turn in three (Q11 in `briefs/context-inject-shape-measurements.md`). Talking it out of asking was tried
+turn in three (Q11 in `briefs/reference/context-inject-shape-measurements.md`). Talking it out of asking was tried
 and made things much worse. The model's instinct is right; the fix is to let it have the tool.
 
 ## Why both, and not just the tool

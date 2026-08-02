@@ -18,7 +18,7 @@ Either way, the 65 modules across `raven/` that historically called
 `logging.basicConfig(level=logging.INFO)` at import time should do only
 ``logger = logging.getLogger(__name__)`` — they don't own root configuration.
 
-See `briefs/logsetup-fleet-wide.md` for the design rationale (allowlist vs
+See `briefs/done/logsetup-fleet-wide.md` for the design rationale (allowlist vs
 denylist, why filtering is per-handler not per-logger, dual-use module split,
 and the self-healing logfile trick that survives `flair`-class third-party
 clobbering).

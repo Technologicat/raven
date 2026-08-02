@@ -368,7 +368,7 @@ Add to `raven/common/video/tests/` alongside the existing postprocessor tests.
 ## Performance budget
 
 Current postproc stage is ~11 ms of the frame budget (see
-`briefs/avatar-render-pipeline.md`). Target **≤ 1.5 ms at 1024²** for this
+`briefs/done/avatar-render-pipeline.md`). Target **≤ 1.5 ms at 1024²** for this
 filter with default `count`. If it exceeds that, the first lever is `count`,
 the second is the radius-binning fallback. Measure with the existing
 `maybe_sync_cuda()` timing in the render loop.

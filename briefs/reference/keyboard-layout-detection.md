@@ -23,7 +23,7 @@ There are two ways a toolkit can report a key press:
 Dear ImGui's GLFW and SDL backends submit **translated** keys: `ImGuiKey_W` is delivered for the key
 the user must press to type a 'W' (ImGui issues [#2959](https://github.com/ocornut/imgui/issues/2959),
 [#3141](https://github.com/ocornut/imgui/pull/3141)). DearPyGui sits on ImGui, and its own
-`briefs/dpg-keycodes.md` describes incoming codes as "Windows virtual-key-style" — and Windows VK
+`briefs/reference/dpg-keycodes.md` describes incoming codes as "Windows virtual-key-style" — and Windows VK
 codes for letter keys are themselves layout-translated. So **`dpg.mvKey_W` is layout-dependent**, and
 a grep of the installed `dearpygui` Python package finds **no scancode and no `glfwGetKeyName`** —
 DPG's Python API does not expose the physical layer at all. (High confidence from the above; see

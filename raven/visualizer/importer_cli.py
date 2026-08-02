@@ -8,7 +8,7 @@ import-time records reach the configured handlers (and the optional
 argparse and `logsetup.configure` — the visualizer GUI imports it as a
 library and configures logging on its own.
 
-See `briefs/logsetup-fleet-wide.md` for the dual-use split rationale.
+See `briefs/done/logsetup-fleet-wide.md` for the dual-use split rationale.
 """
 
 __all__ = ["main"]

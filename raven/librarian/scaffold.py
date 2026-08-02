@@ -372,7 +372,7 @@ def _perform_injects(llm_settings: env,
     the whole conversation ahead of the injects byte-identical from turn to turn, so the backend reprocesses
     only the tail. (The front of the history, where the retrieval results used to go, is the worst of both:
     a fresh prompt prefix every turn.) The rationale, and the measurements behind every choice here, are in
-    `briefs/context-inject-shape-measurements.md`.
+    `briefs/reference/context-inject-shape-measurements.md`.
 
     The position is also why this needs no `continue_` flag: when continuing the AI's interrupted message,
     the history must look as it did at the moment of interruption, and everything we add sits ahead of the

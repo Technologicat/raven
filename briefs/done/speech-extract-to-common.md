@@ -288,7 +288,7 @@ The existing `raven/client/tests/test_api.py::TestStt::test_tts_stt_roundtrip` s
 
 ## Sequencing
 
-1. `briefs/speech-extract-to-common.md` lands (this document).
+1. `briefs/done/speech-extract-to-common.md` lands (this document).
 2. Add `raven/common/audio/resample.py` + tests + `torchaudio` dependency.  Commit.  (Needed before the round-trip test in step 3 can run.)
 3. Extract STT first: `raven/common/audio/speech/stt.py` + server wrapper update + test.  Commit.
 4. Extract TTS: `raven/common/audio/speech/tts.py` + server wrapper update + test.  Commit.

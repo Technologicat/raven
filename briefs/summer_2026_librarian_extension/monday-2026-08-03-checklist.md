@@ -30,13 +30,18 @@ session, revised after his corrections. Goal for Monday: thin the brief pile and
 - [x] **[D] Add a top-level `briefs/done/`.** *Done 2026-08-03*, created by the `ai-act-article-50-summary.md`
       move below. Only `summer_2026_librarian_extension/` had one, which is how the SLOC drift above survived
       unnoticed.
-  - **Follow-up, not done: the rest of the archival sweep.** The top level still holds a lot of finished work —
-        the whole `xdot-viewer-*` set, `speech-extract-to-common-implementation.md`, `cherrypick-spec.md`, the
-        two performance audits, and notably **`visualizer-refactoring.md`**, which is the brief for the refactor
-        that just landed and is the direct cause of the drift fixed above. Each needs a done/not-done judgement,
-        so it is a sit-down rather than a sweep.
-  - **One dependency to check first**: `raven/visualizer/CLAUDE.md` points at `briefs/visualizer-refactoring.md`
-        for the `app.py` section map. Archiving it moves that path.
+  - **Follow-up: the rest of the archival sweep.** *Done 2026-08-03* — the top level is now empty of `.md`
+        except the new `README.md`. Twenty briefs went to `done/` and nine to `reference/`. The done/not-done
+        calls rest on the tree rather than on self-declared status where the two could differ: `logsetup`
+        (`raven/common/logsetup.py`), `cherrypick-compare-mode` (`raven/cherrypick/compare.py`), the two VHS
+        briefs (`vhs_headswitching_noise` and `vhs_noise(ntsc_chroma=…)` in the postprocessor),
+        `avatar-render-pipeline` (`avatarutil.py` + `imagefx.py`).
+  - **The moves broke references, as expected, and one was already broken.** Paths repointed across `CLAUDE.md`,
+        `dpg-notes.md`, `raven-style-guide.md`, `TODO.md`, `TODO_DEFERRED.md`, `raven/visualizer/CLAUDE.md` and
+        five source files. Two pre-existing dead references surfaced in the same sweep: `TODO.md` cited
+        `briefs/corpus-interrogation-sketch.md` when it has been in `design/` all along, and `TODO_DEFERRED.md`
+        cited brief 07 outside the sprint's `done/`. A third, in `dpg-keycodes.md`, told the reader to run a
+        `.py` file that never existed — the script is inline in the document.
 - [ ] **[P] While in there: check whether other "current state" claims in `CLAUDE.md` have drifted.** The three
       above were all one refactor. Test-coverage and known-issues lists are the likely next candidates.
   - *Partly done 2026-08-03*: the Visualizer "no tests" claim is **still true** (verified — no test files under
@@ -45,7 +50,13 @@ session, revised after his corrections. Goal for Monday: thin the brief pile and
 
 ## 2. Brief reorganization
 
-- [x] **[D] `briefs/ai-act-article-50-summary.md` → `briefs/done/`.** *Done 2026-08-03.*
+- [x] **[D] `briefs/ai-act-article-50-summary.md` → ~~`briefs/done/`~~ `briefs/reference/`.** *Done
+      2026-08-03, to a different destination than the one written here.* Juha's objection, accepted: it is not
+      a brief, it is a description of the EU AI Act's transparency requirements, and "done" applied to a
+      regulation is a category error — regulations do not get finished. So a third category was added
+      alongside `design/` and `done/`, and the same argument pulled in the performance audits, the
+      context-inject measurements, the DPG keycode table, the cherrypick spec and the archived unpythonic
+      style extract. `briefs/README.md` now states what belongs where.
 - [x] **[D] `briefs/atmospheric-dust.md` and `briefs/crt-display.md` → the summer sprint folder.** *Done
       2026-08-03.* Moved to the sprint folder, **not** to `done/` — both are queued for Researchers' Night.
       (Juha's original note was unclear on this; corrected 2026-08-01.)

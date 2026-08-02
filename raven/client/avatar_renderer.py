@@ -54,7 +54,7 @@ if platform.system().upper() == "LINUX":
     os.environ["__GLVND_DISALLOW_PATCHING"] = "1"
 
 # The "no crop" default bbox, in [0, 1]² unit coordinates. Shared contract with the server
-# (see `raven/server/config.py`, `raven/server/modules/avatar.py`, and `briefs/avatar-client-crop.md`):
+# (see `raven/server/config.py`, `raven/server/modules/avatar.py`, and `briefs/done/avatar-client-crop.md`):
 # `enabled: bool` is the master switch; when False, edges are kept as-is but the server skips the
 # crop tensor slice. The four edges are bbox extents of the kept region.
 NO_CROP = frozendict({"enabled": False, "left": 0.0, "top": 0.0, "right": 1.0, "bottom": 1.0})

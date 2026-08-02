@@ -25,11 +25,20 @@ The tension, and why this is a real decision rather than an obvious pin-everythi
   also mean "someone else released something", the signal degrades, and the cost lands on whoever pushes
   next rather than on whoever is equipped to deal with it.
 
-Options, roughly in increasing order of effort: pin the CI install list to known-good versions and let
-Dependabot bump it; commit `pdm.lock` and install from it (Raven is an app, and fleet policy already says
-apps commit their lockfile — worth checking why this one does not); or keep it unpinned and add a scheduled
-run so upstream drift surfaces on its own schedule instead of on the next unrelated push. The last is the
-cheapest and keeps the early-warning property, at the cost of not fixing the ambiguity.
+**Decided 2026-08-03 (Juha): pin the CI install list, and let Dependabot bump it.** This is the same shape
+already used fleet-wide for GitHub Actions — pin, and delegate the bumping to a bot that raises a reviewable
+PR rather than changing the environment silently. It keeps the early-warning property (a breaking release
+still arrives, as a PR whose CI is red) while restoring the property that red CI on `main` means *your*
+commit broke something.
+
+To do: pin each name in both `ci.yml` and `coverage.yml` to its current known-good version, and extend
+`.github/dependabot.yml` to watch the workflows' pip requirements. Note Dependabot does not natively track
+package versions written inline in a `run:` step — so this likely wants the list moved into a requirements
+file that both workflows install from, which also fixes the duplication between them.
+
+Rejected: committing `pdm.lock` (heavier, and the CI install is a deliberately minimal subset rather than the
+full dependency set — see the Python-3.12-cap note in `CLAUDE.md`), and a scheduled unpinned run (cheapest,
+but leaves the ambiguity in place).
 
 Note the CI dep list is also hand-maintained and can drift from `pyproject.toml` independently — the
 `ci-setup` skill flags this for exactly the projects that install by hand, Raven among them.
@@ -941,12 +950,12 @@ Discovered while closing brief 10 and finding a stale item next to an accurate o
 
 ## EU AI Act Article 50 (transparency) compliance
 
-`briefs/done/ai-act-article-50-summary.md` has the analysis; Commission guidelines were adopted 20 July 2026 and the
+`briefs/reference/ai-act-article-50-summary.md` has the analysis; Commission guidelines were adopted 20 July 2026 and the
 Article applies from **2 August 2026**. Raven has been available since 2024, so it is a system already on the
 market before that date, which means the **2 December 2026** grace period applies — but only to the 50(2)
 machine-readable marking of generated content. The rest applies from August with no grace period.
 
-The implementation is briefed: `briefs/summer_2026_librarian_extension/07_export-provenance-brief.md`, which
+The implementation is briefed: `briefs/summer_2026_librarian_extension/done/07_export-provenance-brief.md`, which
 scopes it to attaching system-level provenance to exported chatlogs and messages, and explicitly rules out
 building text watermarking — the robust 50(2) mark acts on the logits during sampling, and Librarian samples
 un-watermarked third-party weights through an OpenAI-compatible backend, so there is nothing post-hoc to add.
@@ -1028,7 +1037,7 @@ clusters, as of 2026-07-27:
 - **Temporary context injects** — how much goes on the wire each turn, in which role, at which position.
   **Built 2026-07-28**, closing "RAG injects: sent in the user role as a workaround", "Fold the temporary
   context injects…" (measured, and rejected in favour of the system block plus a tool result) and "Revisit
-  the 'answer from context only' reminder". Measurements in `briefs/context-inject-shape-measurements.md`,
+  the 'answer from context only' reminder". Measurements in `briefs/reference/context-inject-shape-measurements.md`,
   the plan they argued for in `briefs/summer_2026_librarian_extension/done/08_context-injects-brief.md`. Still
   open in this cluster: "RAG: rerank retrieved chunks…" and "Modernize the Librarian system prompt /
   character card", plus the new "RAG access via tool-call" motivation recorded under Q11 of the
@@ -1483,7 +1492,7 @@ Discovered during scaffold/appstate test work (2026-04-17).
 
 `torch.compile()` on THA3 was investigated (2026-04-09) and yields only ~6% speedup (20.3ms → 19.0ms on 3070 Ti) at the cost of 37s compilation startup. Not worth it for THA3 — the model is already lean with separable convolutions + FP16. Also hangs in the server (works in standalone; cause unresolved — possibly Triton subprocess interaction with waitress/threads).
 
-The postprocessor (`raven.common.video.postprocessor`) might benefit more from compilation (20–60 kernel launches per frame, more fusible elementwise ops). Worth investigating separately. See `briefs/tha3-performance-audit.md`.
+The postprocessor (`raven.common.video.postprocessor`) might benefit more from compilation (20–60 kernel launches per frame, more fusible elementwise ops). Worth investigating separately. See `briefs/reference/tha3-performance-audit.md`.
 
 Discovered during THA3 performance optimization work (2026-04-09).
 
@@ -2407,7 +2416,7 @@ Offer a `config.py` option to remap the positional cluster per keyboard layout (
 
 When implementing, sweep the fleet for *every* positional binding, not just cherrypick's WASD. Until then, positional keys stay as aliases beside the layout-independent originals (see `raven-style-guide.md`, "Hotkey discoverability").
 
-Detection mechanics for all three OS families are researched in `briefs/keyboard-layout-detection.md` — including the key finding that DPG reports *layout-translated* keys and hides scancodes (so physical binding isn't reachable, since Raven won't vendor/patch DPG), the two recommended strategies (config override, then OS position→char query for an auto-default), and the Wayland gap. Start there.
+Detection mechanics for all three OS families are researched in `briefs/reference/keyboard-layout-detection.md` — including the key finding that DPG reports *layout-translated* keys and hides scancodes (so physical binding isn't reachable, since Raven won't vendor/patch DPG), the two recommended strategies (config override, then OS position→char query for an auto-default), and the Wayland gap. Start there.
 
 Discovered during cherrypick WASD navigation work (2026-06-07).
 

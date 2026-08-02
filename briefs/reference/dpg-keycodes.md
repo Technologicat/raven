@@ -113,7 +113,7 @@ No display/context needed — the constants are plain module attributes:
 """Dump DPG's mvKey_* constants as a code -> name(s) table, and flag the
 constants whose value does not match the ImGuiKey code delivered at runtime.
 
-Run:  python briefs/dpg-keycodes.py    (or paste into a REPL)
+Run:  save this block to a file and run it    (or paste into a REPL)
 """
 import importlib.metadata as _md
 from collections import defaultdict

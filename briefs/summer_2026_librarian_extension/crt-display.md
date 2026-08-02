@@ -437,7 +437,7 @@ elsewhere in this module these are contract tests, not aesthetic ones.
 ### Performance budget
 
 Postproc currently runs ~11 ms of the frame budget
-(`briefs/avatar-render-pipeline.md`). Target **≤ 2 ms at 1024²**: with warp at
+(`briefs/done/avatar-render-pipeline.md`). Target **≤ 2 ms at 1024²**: with warp at
 its default there is no `grid_sample` at all, leaving a couple of elementwise
 multiplies against cached weight tensors plus an optional 3-tap convolution.
 Cache the mask weight tensor and the compensation constant, keyed on
