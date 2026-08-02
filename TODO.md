@@ -163,9 +163,13 @@ every tier, chosen on measurements rather than reputation.
 
 ### Refactor (do first)
 
-- **[High]** `raven.visualizer.app` refactor: currently a god object (~4k SLOC). Extracting the info panel (~2k SLOC) is the main candidate. The info tooltip is another good candidate and shares many data sources with the info panel. Prerequisite for most further Visualizer feature work.
+- **[Low]** `raven.visualizer.app` refactor: largely done. `app.py` is 1912 lines, with `info_panel`, `selection`, `plotter`, `annotation`, `word_cloud`, `entry_renderer` and `app_state` extracted. What remains is optional rather than blocking: `info_panel.py` is 1518 lines and could split further, and the info tooltip still shares many data sources with the info panel.
 
-- **[Medium]** FP refactor: keep app state in top-level containers, pass in/out explicitly. More FP-idiomatic and facilitates adding unit tests. Do after the `app.py` refactor.
+- **[Medium — but first decide whether it still applies]** FP refactor: keep app state in top-level containers, pass in/out explicitly. More FP-idiomatic and facilitates adding unit tests.
+
+  The `app.py` refactor it was waiting on has landed, and `app_state.py` arrived with it — but it answers only half of this. `app_state` is a single shared `env()` namespace, so state now lives in a top-level container and every cross-module access is named (`app_state.foo`), which kills the circular imports and the ambiguous bare names. What it does not do is *pass state in and out explicitly*: reads and writes still go to shared mutable module state, so the stated payoff — easier unit tests — is largely unrealized, since a test must still populate and tear down a global namespace.
+
+  So the question is whether the explicit-passing version is still wanted for a DPG app whose event callbacks are inherently global-shaped, or whether `app_state` is the acceptable long-term answer and this item can go. Note `app_state`'s docstring already marks `info_panel_content_lock` and `info_panel_entry_title_widgets` as belonging in `info_panel` — that migration is worth doing either way.
 
 
 ### Search and data access
@@ -635,11 +639,11 @@ every tier, chosen on measurements rather than reputation.
 
 ## Avatar
 
-- **[High]** Prerequisite for both avatar-effect briefs below: **give `_priority` a stated meaning** (`briefs/crt-display.md` §0). The existing numbers already almost form a scheme — Scene (< 0), Capture (0–5), Signal (5–10), Display (≥ 10), with `0.0` as the moment of capture — so codifying it renumbers nothing. Documentation plus a convention, no code motion; the brief asks for it as its own commit, and both new filters need the Scene band to place themselves in.
+- **[High]** Prerequisite for both avatar-effect briefs below: **give `_priority` a stated meaning** (`briefs/summer_2026_librarian_extension/crt-display.md` §0). The existing numbers already almost form a scheme — Scene (< 0), Capture (0–5), Signal (5–10), Display (≥ 10), with `0.0` as the moment of capture — so codifying it renumbers nothing. Documentation plus a convention, no code motion; the brief asks for it as its own commit, and both new filters need the Scene band to place themselves in.
 
-- **[High]** `crt` — raster projection simulation (`briefs/crt-display.md`). Wanted for the Researchers' Night demo (2026-09-26). **Adds** a filter at priority −3.0, in the Scene band: the hologram's own raster is diegetically *in the world*, so it composites early and rides through the capture-stage optics like the character does. It replaces nothing — `scanlines` (13.0) stays as the *viewer's* monitor, a different diegetic layer, and the brief is explicit that this filter must not be described as superseding it. The capture-band effects (`bloom`, `chromatic_aberration`, `vignetting`) are untouched and in fact load-bearing: downstream `bloom` glows the scanlines for free, which is why `glow_strength` defaults to 0.0. `banding` isn't involved.
+- **[High]** `crt` — raster projection simulation (`briefs/summer_2026_librarian_extension/crt-display.md`). Wanted for the Researchers' Night demo (2026-09-26). **Adds** a filter at priority −3.0, in the Scene band: the hologram's own raster is diegetically *in the world*, so it composites early and rides through the capture-stage optics like the character does. It replaces nothing — `scanlines` (13.0) stays as the *viewer's* monitor, a different diegetic layer, and the brief is explicit that this filter must not be described as superseding it. The capture-band effects (`bloom`, `chromatic_aberration`, `vignetting`) are untouched and in fact load-bearing: downstream `bloom` glows the scanlines for free, which is why `glow_strength` defaults to 0.0. `banding` isn't involved.
 
-- **[High]** `atmospheric_dust` — drifting in-air particles (`briefs/atmospheric-dust.md`). Wanted for the Researchers' Night demo (2026-09-26). Light-catching motes in the avatar's air, priority −2.0, Scene band, for the same diegetic reason. Register is anime-atmospheric (dust in a sunbeam), not game-HUD sparkle. Budget: ≤ 1.5 ms at 1024² against the postprocessor's current ~11 ms stage.
+- **[High]** `atmospheric_dust` — drifting in-air particles (`briefs/summer_2026_librarian_extension/atmospheric-dust.md`). Wanted for the Researchers' Night demo (2026-09-26). Light-catching motes in the avatar's air, priority −2.0, Scene band, for the same diegetic reason. Register is anime-atmospheric (dust in a sunbeam), not game-HUD sparkle. Budget: ≤ 1.5 ms at 1024² against the postprocessor's current ~11 ms stage.
 
 - **[High]** Add help cards for: Avatar settings editor, Avatar pose editor.
 

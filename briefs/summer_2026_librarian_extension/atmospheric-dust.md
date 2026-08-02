@@ -1,6 +1,6 @@
 # Brief: `atmospheric_dust` — drifting in-air particles
 
-Target file: `briefs/atmospheric-dust.md`
+Target file: `briefs/summer_2026_librarian_extension/atmospheric-dust.md`
 
 ## Goal
 
@@ -28,7 +28,7 @@ optics (`bloom`, `chromatic_aberration`, `vignetting`) exactly like the
 character does. A late overlay would be the HUD case and would read wrong.
 
 Concretely: priority **−2.0**, in the **Scene** band. See §0 of
-`briefs/crt-display.md` for the band scheme this assumes — briefly, `0.0` is
+`crt-display.md` (same folder) for the band scheme this assumes — briefly, `0.0` is
 the moment of capture, negative priorities are things that exist in front of
 the lens, positive ones are signal. Dust is air in the room, so it is Scene by
 definition. That brief's §0 is a prerequisite for this one; if the two are

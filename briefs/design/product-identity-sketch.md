@@ -65,7 +65,7 @@ properties bound it without circularity, and none of them is about the technolog
   initiative.
 
 None of this bounds how many steps it may take unattended, so the scriptable agent layer on the list
-(`TODO_DEFERRED.md`, headless agent-harness mode for `ai_turn`) sits inside it rather than against it.
+(`TODO_DEFERRED.md`, headless scaffold mode for `ai_turn`) sits inside it rather than against it.
 
 ## Form, not category
 

@@ -908,7 +908,7 @@ Discovered while closing brief 10 and finding a stale item next to an accurate o
 
 ## EU AI Act Article 50 (transparency) compliance
 
-`briefs/ai-act-article-50-summary.md` has the analysis; Commission guidelines were adopted 20 July 2026 and the
+`briefs/done/ai-act-article-50-summary.md` has the analysis; Commission guidelines were adopted 20 July 2026 and the
 Article applies from **2 August 2026**. Raven has been available since 2024, so it is a system already on the
 market before that date, which means the **2 December 2026** grace period applies — but only to the 50(2)
 machine-readable marking of generated content. The rest applies from August with no grace period.
@@ -1641,7 +1641,7 @@ Discovered during tooltip feature session (2026-04-03).
 
 ## Avatar settings editor: custom postprocessor chain ordering
 
-**This is a GUI limitation only** — `briefs/crt-display.md` §0 establishes that the backend has always
+**This is a GUI limitation only** — `briefs/summer_2026_librarian_extension/crt-display.md` §0 establishes that the backend has always
 supported multiple instances at arbitrary positions: `render_into` applies the chain *positionally*, and
 `_priority` is consumed only by `get_filters` to sort the settings-editor panels. The `name` parameter on every
 caching filter exists precisely so multiple instances key their caches apart. So this item is "build the
@@ -1776,7 +1776,7 @@ mechanical (one bundle type, update each producer/consumer), not entangled with 
 
 Discovered during the brief-01 GUI override session (2026-06-04).
 
-## Headless agent-harness mode for `ai_turn` (scriptable agent layer)
+## Headless scaffold mode for `ai_turn` (scriptable agent layer)
 
 `llmclient` already acts as an LLM *scripting* layer — a non-interactive way to drive the model
 for one-shot tasks (used by `raven-pdf2bib` and friends). What's missing is the equivalent one
@@ -1786,7 +1786,7 @@ branching chat tree, RAG — programmatically, with **no UI of any kind**.
 Note the distinction from the existing frontends: Librarian (`app.py`) is the GUI client and
 `minichat` is a TUI client, but *both* are interactive UIs. `scaffold` is already
 *frontend*-agnostic (its ~15 callbacks are the seam — `minichat` proves the same backend drives
-a terminal as well as the GUI), so the building blocks exist. The harness is not a third
+a terminal as well as the GUI), so the building blocks exist. The headless mode is not a third
 frontend; it's the *no-frontend*, non-interactive, programmatic caller. What's wanted is a small,
 ergonomic layer: feed it a backend (real or scripted), a datastore, and an initial message; let
 it run `user_turn` + `ai_turn` to completion with tools enabled; return the resulting nodes /
@@ -1795,14 +1795,16 @@ tool transcript. Think "`llmclient` for agents".
 Value:
 - **Testing**: exercise agentic flows end-to-end without a live, nondeterministic LLM — e.g. the
   websearch -> webfetch chain, canonical-phrase copying, multi-step tool loops. Today the
-  structural tests mock `invoke` / `perform_tool_calls`; a harness with a *scripted* backend
-  could drive the real `ai_turn` against canned model turns deterministically.
+  structural tests mock `invoke` / `perform_tool_calls`; a headless driver with a *scripted*
+  backend could drive the real `ai_turn` against canned model turns deterministically.
 - **Automation**: headless agent runs for batch/offline tasks, cron-style jobs, evaluation
   harnesses — the same way `raven-pdf2bib` scripts the plain LLM today.
 
 Natural to build somewhere in the summer 2026 librarian six-part sprint; it would make every
 later brief's agent behavior far easier to verify. Likely lands near `scaffold` / `minichat`
-(a programmatic sibling of the CLI client) or as a thin `raven.librarian.agentharness`.
+(a programmatic sibling of the CLI client) or as a thin headless driver module beside `scaffold`.
+(Deliberately unnamed here: `raven.librarian.scaffold` already owns the concept, so the name
+should be picked against what the module ends up doing rather than fixed in advance.)
 
 Discovered during webfetch implementation (2026-06-03), when validating the agent loop required
 a live Qwen backend that wasn't available.

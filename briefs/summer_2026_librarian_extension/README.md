@@ -3,6 +3,10 @@
 Implementation briefs for the Librarian work of summer 2026. Completed briefs move to `done/`; live
 probes shared across briefs live in `manual_tests/`.
 
+**Closed so far**, in `done/`: 01 (webfetch), 02 (LM Studio compat), 03 (content parts, including §D),
+07 (export provenance), 08 (context injects), 10 (RAG tool surface). **09 is the one in progress**, and the
+last thing v0.2.8 is waiting on.
+
 ## Order of work, decided 2026-07-29
 
 The aim is to close briefs faster than new ones open, so the order is chosen for *closure* rather than
@@ -115,3 +119,27 @@ orderings and both are legitimate.
 **05 goes first of the three** (decided 2026-07-29), on size: it is likely smaller than either 04 or 06,
 and the point of this whole ordering is to close briefs faster than new ones open. 04 and 06 remain
 unordered against each other.
+
+## Also in this folder
+
+11 and 12 are in the same numbered sequence as the rest; what they sit outside is the *ordering* decided for
+04/05/06 above, which was a ranking of the Librarian run against itself. The last two carry no number at all.
+Listed so the folder's contents are legible from its README rather than from `ls`.
+
+- **11 — Visualizer importer rework** (`11_visualizer-importer-rework-brief.md`). Nomic migration, PCA
+  preprocessing, cosine-to-medoid outlier assignment, Procrustes alignment. Predates the sprint and had been
+  forgotten at the top level; moved in and numbered 2026-08-03. Its item 1 carries a **fork that needs
+  deciding** — `nomic-embed-text-v1.5` buys a shared image-text space, `v2-moe` buys multilingual, and no
+  v2-aligned vision encoder appears to exist. That decision reaches brief 12.
+- **12 — derived artifact store** (`12_derived-artifact-store-brief.md`). One keying and regeneration
+  mechanism for everything computed *from* a source artifact — extracted text, OCR, thumbnails, burst `.bib`
+  records, embeddings — with separate stores for the chat and document-DB lifecycles. **v0.2.9 work; it does
+  not gate v0.2.8**, and the webfetch attachment work deliberately lands ahead of it rather than waiting.
+- **`atmospheric-dust.md`** and **`crt-display.md`**. Avatar postprocessor work, queued for Researchers'
+  Night. Moved in 2026-08-03; neither is done.
+
+**The folder name still mostly holds.** The avatar subsystem exists for Librarian — it is Librarian's UX — so
+the two avatar briefs are Librarian work under a wider reading rather than strays. 12 is cross-cutting, and
+touches Librarian at the chat-sidecar end. Only **11 sits genuinely outside**, being Visualizer. Not enough to
+force a rename; noted so that a later reader wondering why an importer brief lives here finds the answer
+instead of re-deriving the question.

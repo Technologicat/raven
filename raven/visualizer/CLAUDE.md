@@ -1,14 +1,22 @@
 # Visualizer — CLAUDE.md
 
-~6134 lines across 3 modules. Monolithic `app.py` needs splitting.
+~6631 lines across 11 modules. The `app.py` split has landed.
 
 ```
-app.py       (4427 lines) — GUI app: plotter, info panel, tooltip, selection, search, word cloud, events
-importer.py  (1286 lines) — BibTeX import pipeline: parse, embed, cluster, reduce, keywords, LLM summarize
-config.py    (421 lines)  — Configuration-as-code (devices, import settings, stopwords, GUI settings)
+app.py            (1912 lines) — GUI app: window layout, event wiring, search, the main render loop
+info_panel.py     (1518 lines) — the info panel: content build, scrolling, navigation, anchors
+importer.py       (1260 lines) — BibTeX import pipeline: parse, embed, cluster, reduce, keywords, LLM summarize
+annotation.py      (439 lines) — datapoint annotations and their tooltips
+config.py          (422 lines) — Configuration-as-code (devices, import settings, stopwords, GUI settings)
+plotter.py         (283 lines) — the scatter plot itself
+selection.py       (261 lines) — selection state and the lasso/wand tools
+word_cloud.py      (257 lines) — word cloud rendering
+entry_renderer.py  (153 lines) — per-entry rendering shared by panel and tooltip
+importer_cli.py     (75 lines) — `raven-importer` entry point
+app_state.py        (51 lines) — top-level app state containers
 ```
 
-No tests. Writing unit tests for extractable logic is a priority — both to catch regressions during refactoring and to define the API boundaries of the new modules. `importer.py` also serves as a standalone CLI app (`raven-importer`).
+No tests, and still the priority. The original rationale was to catch regressions *during* the refactor; that refactor has since landed without them, so what remains is the other half — pinning down the API boundaries the split created, before feature work starts leaning on them. The extracted modules are the tractable targets, being smaller and having real seams; `app.py` was never the place to start. `importer.py` also serves as a standalone CLI app (`raven-importer`).
 
 ## How app.py Is Organized
 
@@ -42,7 +50,7 @@ Uses `unpythonic.dyn` for injecting status update callbacks. Progress tracked vi
 
 ## Importer Rework
 
-Planned changes to the import pipeline (Nomic-embed migration, PCA preprocessing, outlier assignment, Procrustes alignment). See `briefs/visualizer-importer-rework.md` (project root) for details.
+Planned changes to the import pipeline (Nomic-embed migration, PCA preprocessing, outlier assignment, Procrustes alignment). See `briefs/summer_2026_librarian_extension/11_visualizer-importer-rework-brief.md` for details — note its item 1 now carries an undecided fork between `nomic-embed-text-v1.5` (shared image-text space) and `v2-moe` (multilingual).
 
 ## Refactoring
 

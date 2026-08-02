@@ -1,0 +1,35 @@
+# Importer Rework Plan
+
+Bundled changes to the import pipeline (`importer.py` / `raven-importer`):
+
+1. **Nomic-embed migration**: Replace snowflake-arctic + mpnet with Nomic-embed-text (unified text embeddings) and, for future image search, a vision encoder. VRAM savings + a unified embedding space.
+
+   **Amended 2026-08-03: the model choice is a fork, not a version bump.** Checked against Nomic's published
+   lineup rather than assumed:
+
+   - **`nomic-embed-vision-v1.5` is aligned to `nomic-embed-text-v1.5`**, and that alignment is the whole
+     reason to want it: text and image embeddings land in one space, so a text query ranks figures directly,
+     and one collection holds both.
+   - **`nomic-embed-text-v2-moe` is the multilingual model** — MoE, 475M total / 305M active, ~100 languages,
+     trained on 1.6B pairs, Matryoshka-truncatable 768→256. It is a different model, not a newer v1.5.
+   - **No v2-aligned vision encoder turned up.** Two searches found the vision encoder consistently paired
+     with v1.5 and nothing pairing it with v2; Nomic's separate `nomic-embed-multimodal-3b` is a standalone
+     visual-document-retrieval model with its own latent space, not a v2 companion. This is absence of
+     evidence from a search rather than a checked changelog, so re-verify before committing — but plan for
+     the fork standing.
+
+   So the two branches, and they are mutually exclusive as long as that holds:
+
+   - **v1.5** — figures rank against text natively in one collection. English-centric.
+   - **v2-moe** — Finnish, Japanese and other non-English material works, which matters because JAMK's own
+     context is Finnish and multilingual scientific literature is a corpus property rather than a niche.
+     Images lose the direct route and reach text queries through the description pivot instead — which exists
+     anyway, since images carry OCR and description channels regardless (see brief 12).
+
+   **Related, and it interacts with item 2:** v2-moe's Matryoshka training truncates vectors 768→256 with
+   claimed minimal degradation, i.e. 3× less embedding storage. It does **not** subsume item 2's PCA step,
+   though: Matryoshka truncation is fixed at training time, while PCA is *corpus-adaptive* and item 2's stated
+   purpose is measuring this corpus's effective dimensionality. They may still compose.
+2. **PCA preprocessing**: Reduce embedding dimensionality (e.g. 768 → 50) before UMAP/t-SNE. Measure effective dimensionality of the corpus — if first 50 components capture >95% variance, downstream quality should be nearly identical but faster.
+3. **Cosine-to-medoid outlier assignment**: HDBSCAN noise points assigned to the cluster whose medoid has highest cosine similarity, instead of leaving them unassigned.
+4. **Procrustes alignment**: When adding new papers to an existing dataset, re-embed the full combined corpus, then use SVD on correspondence points (papers present in both old and new embeddings) to find the optimal rotation matrix R. Apply R to align the new embedding with the old one. Preserves spatial memory while allowing new clusters to appear. Side benefit: novelty detection (new papers far from existing clusters may indicate field-expanding work).

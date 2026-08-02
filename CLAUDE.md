@@ -220,8 +220,12 @@ This coupling limits TTS engine choices (most don't expose timestamped phoneme d
 - `raven/librarian/` - Clean module separation (~8000 lines across 10 modules)
 
 ### Needs refactoring
-- `raven/visualizer/app.py` - 4427 lines, monolithic, needs splitting into modules with clear responsibilities (see `raven/visualizer/CLAUDE.md`). Target ~700 lines per module as a guideline, not a hard limit — some modules can be longer when appropriate (e.g. lots of simple related code).
-- `raven/visualizer/importer.py` - 1286 lines, pipeline architecture, lower priority but could benefit from stage separation
+
+Target ~700 lines per module as a guideline, not a hard limit — some modules can be longer when appropriate (e.g. lots of simple related code).
+
+- `raven/visualizer/app.py` - 1912 lines. The split into `info_panel`, `selection`, `plotter`, `annotation`, `word_cloud`, `entry_renderer` and `app_state` has landed; what remains is ordinary size rather than a god object. See `raven/visualizer/CLAUDE.md` for the module map.
+- `raven/visualizer/info_panel.py` - 1518 lines, the largest of the extracted modules; a candidate for further splitting, but not urgent.
+- `raven/visualizer/importer.py` - 1260 lines, pipeline architecture, lower priority but could benefit from stage separation
 
 ### Test coverage
 - Library/utility code is reasonably covered: `common/` (numutils, smoothvalue, utils, image/lanczos, image/utils, video/{colorspace,compositor,postprocessor,upscaler}), `common/gui/{viewport_math,xdotwidget/*}`, `client/api`, `papers/*`, `cherrypick/*`, `xdot_viewer/dot_utils`, librarian (`chattree`, `chatutil`, `hybridir`, `appstate`, `scaffold`).

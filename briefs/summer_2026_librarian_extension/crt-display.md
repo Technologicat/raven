@@ -1,6 +1,6 @@
 # Brief: `crt` — raster projection simulation
 
-Target file: `briefs/crt-display.md`
+Target file: `briefs/summer_2026_librarian_extension/crt-display.md`
 
 ## 0. Prerequisite: give `_priority` a meaning
 

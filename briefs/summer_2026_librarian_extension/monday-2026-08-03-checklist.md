@@ -14,7 +14,12 @@ session, revised after his corrections. Goal for Monday: thin the brief pile and
 
 ## 1. Repair the maps (do first — cheap, and everything else reads them)
 
-- [ ] **[D] Fix the stale Visualizer SLOC claims.** The `app.py` refactor landed (measured in a fresh clone:
+- [x] **[D] Fix the stale Visualizer SLOC claims.** *Done 2026-08-03.* All three updated, plus two things
+      found alongside: the `~700 lines per module` guideline had been stranded on the `app.py` bullet (lifted
+      to the section, where it applies to all of them), and `raven/visualizer/CLAUDE.md`'s "no tests" rationale
+      was half-expired — the refactor it was meant to protect has landed, so what remains is pinning the new
+      module boundaries. Still zero test files under `raven/visualizer/`, verified. The `app.py` refactor
+      landed (measured in a fresh clone:
       `app.py` 1912, `info_panel.py` 1518, plus `selection`, `plotter`, `annotation`, `word_cloud`,
       `entry_renderer`, `app_state` split out). Three places still describe a 4427-line god object, and CC will
       keep reading whichever it hits first:
@@ -22,19 +27,39 @@ session, revised after his corrections. Goal for Monday: thin the brief pile and
   - `raven/visualizer/CLAUDE.md:6` — same number in the module map
   - `TODO.md:166` — "currently a god object (~4k SLOC)", still **[High]**; largely done. The "extract the info
         panel" sub-item is closed (it is now its own module at 1518). Reduce to whatever genuinely remains.
-- [ ] **[D] Add a top-level `briefs/done/`.** Only `summer_2026_librarian_extension/` has one, which is how the
-      SLOC drift above survived unnoticed.
+- [x] **[D] Add a top-level `briefs/done/`.** *Done 2026-08-03*, created by the `ai-act-article-50-summary.md`
+      move below. Only `summer_2026_librarian_extension/` had one, which is how the SLOC drift above survived
+      unnoticed.
+  - **Follow-up, not done: the rest of the archival sweep.** The top level still holds a lot of finished work —
+        the whole `xdot-viewer-*` set, `speech-extract-to-common-implementation.md`, `cherrypick-spec.md`, the
+        two performance audits, and notably **`visualizer-refactoring.md`**, which is the brief for the refactor
+        that just landed and is the direct cause of the drift fixed above. Each needs a done/not-done judgement,
+        so it is a sit-down rather than a sweep.
+  - **One dependency to check first**: `raven/visualizer/CLAUDE.md` points at `briefs/visualizer-refactoring.md`
+        for the `app.py` section map. Archiving it moves that path.
 - [ ] **[P] While in there: check whether other "current state" claims in `CLAUDE.md` have drifted.** The three
       above were all one refactor. Test-coverage and known-issues lists are the likely next candidates.
+  - *Partly done 2026-08-03*: the Visualizer "no tests" claim is **still true** (verified — no test files under
+        `raven/visualizer/`), but its rationale was half-expired and has been rewritten. The project-level
+        test-coverage and known-issues lists have **not** been audited.
 
 ## 2. Brief reorganization
 
-- [ ] **[D] `briefs/ai-act-article-50-summary.md` → `briefs/done/`.**
-- [ ] **[D] `briefs/atmospheric-dust.md` and `briefs/crt-display.md` → the summer sprint folder.** *Not* done —
-      both are queued for Researchers' Night. (Juha's original note was unclear on this; corrected 2026-08-01.)
-- [ ] **[D] `briefs/visualizer-importer-rework.md` → the sprint, probably as `11_`.** Had been forgotten; it
-      carries Nomic, PCA preprocessing, cosine-to-medoid outlier assignment, and Procrustes.
-- [ ] **[D] While renumbering 11, amend its item 1 — the Nomic choice is a fork, not a version bump.** Item 1
+- [x] **[D] `briefs/ai-act-article-50-summary.md` → `briefs/done/`.** *Done 2026-08-03.*
+- [x] **[D] `briefs/atmospheric-dust.md` and `briefs/crt-display.md` → the summer sprint folder.** *Done
+      2026-08-03.* Moved to the sprint folder, **not** to `done/` — both are queued for Researchers' Night.
+      (Juha's original note was unclear on this; corrected 2026-08-01.)
+- [x] **[D] `briefs/visualizer-importer-rework.md` → the sprint, probably as `11_`.** *Done 2026-08-03* as
+      `11_visualizer-importer-rework-brief.md`. Had been forgotten; it carries Nomic, PCA preprocessing,
+      cosine-to-medoid outlier assignment, and Procrustes.
+- [x] **[D] While renumbering 11, amend its item 1 — the Nomic choice is a fork, not a version bump.**
+      *Done 2026-08-03, and the fork stands.* Searched rather than assumed: **no v2-aligned vision encoder
+      turned up** — the vision encoder is consistently paired with v1.5, and Nomic's `nomic-embed-multimodal-3b`
+      is a standalone visual-document-retrieval model with its own latent space rather than a v2 companion.
+      Recorded in the brief as absence-of-evidence from a search, not a checked changelog, so it wants
+      re-verifying before the choice is committed. **The decision itself is still open** — this only removed
+      the escape hatch. Item 1
+
       currently names `nomic-embed-text-v1.5` + `nomic-embed-vision-v1.5`, justified by *"unified text+image
       embedding space"*. But **`nomic-embed-vision` is aligned to text-v1.5, not to v2**, and v2-moe is the
       multilingual one (~100 languages, 1.6B pairs, explicitly cross-lingual; Apache 2.0; 475M total / 305M
@@ -56,10 +81,29 @@ session, revised after his corrections. Goal for Monday: thin the brief pile and
         briefs and an importer brief. Either rename it or accept it as a sprint-by-date rather than by
         component — but decide, rather than letting the name quietly stop being true.
 - [ ] **[D] `model-lineup-autumn-2026.md`**: Gemma 12B, not Qwen.
+  - *Not done 2026-08-03 — the note is too terse to act on without guessing.* The doc's open questions include
+        *"Whether **Qwen3.6-12B** is worth installing"*, so the likely reading is that the 12B model actually
+        worth considering is **Gemma**, and Qwen has no 12B — but that is inference from one adjacent line, not
+        something checked. The body is otherwise "Qwen across the board" with Gemma 4 as the multilingual
+        backup, so the correction could instead be about the *recommendation*. Needs one sentence from Juha
+        before editing, since the two readings change different paragraphs.
 - [ ] **[D] `context-inject-shape-measurements.md`**: "what Raven ships today" is out of date; Qwen 9B is not
       the weakest; not reported in all tables; Raven's document search is now a tool the model can call.
+  - *Not done 2026-08-03 — deliberately, because this one is a measurements record and the obvious edit would
+        corrupt it.* What changed is the **product**, not the data: the runs happened, and "Raven ships one
+        user-role message per inject" and "document search is not a tool the model can call" were both true
+        when measured. Overwriting them in place would silently restate history. The right shape is a dated
+        "what has changed since" preamble that leaves the body intact, plus in-place *markers* where a claim
+        would otherwise mislead a reader mid-table.
+  - **One of the four is a genuine erratum rather than drift, and needs checking**: "Qwen3.5-9B is the weakest
+        model in the set" is stated absolutely, but Gemma4-E4B appears in some tables and not others. So the
+        claim is true for the tables where E4B is absent and wrong where it is present — which is exactly the
+        "not reported in all tables" item, and the two should be fixed together.
 
 ### Turn / round terminology
+
+*Not started 2026-08-03: this is a code sweep gated on an unagreed [P], so it is not a doc quick win. The
+naming decision has to land first, and it renames things across the codebase, not just in prose.*
 
 - [ ] **[D] Make usage consistent everywhere.** Current split:
   - *Briefs*: a **turn** may consist of several **rounds** when the model calls tools.
@@ -72,16 +116,24 @@ session, revised after his corrections. Goal for Monday: thin the brief pile and
   - **round** = one iteration of the agent loop within a turn (model call → tool calls → results).
   - **exchange** = user turn + assistant turn, if the pairing needs a name (this is today's code "round").
   - Check `ai_turn` against the result — under this convention the name is already correct if it runs the loop.
-- [ ] **[D] House term is "scaffold", not "harness"**, for Raven's own agent loop (Seth Herd influence). Three
-      places lost it, and `raven.librarian.scaffold` already exists, so the inconsistency is internal:
-  - `TODO_DEFERRED.md:1779` — "Headless agent-harness mode for `ai_turn`"
-  - `TODO_DEFERRED.md:1805` — proposes `raven.librarian.agentharness`
-  - `briefs/design/product-identity-sketch.md:68` — inherits the name from the above
+- [x] **[D] House term is "scaffold", not "harness"**, for Raven's own agent loop (Seth Herd influence).
+      *Done 2026-08-03.* Three places had lost it, and `raven.librarian.scaffold` already exists, so the
+      inconsistency was internal:
+  - `TODO_DEFERRED.md` — heading is now "Headless scaffold mode for `ai_turn`"; the body's "the harness is
+        not a third frontend" and "a harness with a scripted backend" became "the headless mode" and "a
+        headless driver".
+  - `TODO_DEFERRED.md` — the proposed `raven.librarian.agentharness` is now "a thin headless driver module
+        beside `scaffold`", left **deliberately unnamed**: `scaffold` already owns the concept, so the name
+        should follow what the module turns out to do.
+  - `briefs/design/product-identity-sketch.md` — citation updated to match the new heading.
   - **Leave alone**: `TODO.md:423` and `product-identity-sketch.md:53` use "generic agent harness" for *other
         people's* products, which is the right word there. `evaluation/retrieval/README.md` and
         `TODO_DEFERRED.md:3121` mean *test* harness — different sense.
 
 ### `raven.papers.bibtex` — consolidate the readers
+
+*Not started 2026-08-03: code, not documentation. Small and well-scoped, but it changes two call sites and
+wants `ruff` plus the suite, so it belongs in the morning rather than in a doc pass.*
 
 - [ ] **[D] The module has a writer and no reader**, so reader code is duplicated against raw `bibtexparser`.
       Verified in a fresh clone:
