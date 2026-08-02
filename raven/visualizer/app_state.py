@@ -12,14 +12,16 @@ when their state finds a more natural home elsewhere.
 Module-local state (state only one submodule needs to read or write) stays in
 that submodule as module-level variables — not here.
 
-## Expected fields (populated by `app.py` during startup)
+## Expected fields
 
-The fields below are the currently-known shared state. They are assigned in
-`app.py` at the point where the corresponding resource becomes available, so
-readers need to be aware of initialization ordering — reading a field before
-the owning section of `app.py` has run raises `AttributeError`. (This mirrors
-the behaviour of the original module-level globals, which were also `None`
-or undefined until initialized.)
+The fields below are the currently-known shared state. Most are assigned by
+`app.py` at the point where the corresponding resource becomes available;
+the rest are published or maintained by the submodule that owns them, named
+per row. Either way, readers need to be aware of initialization ordering —
+reading a field before its owner has assigned it raises `AttributeError`.
+
+The `Populated by` column is therefore where to look when a field turns up
+empty or missing: it names the code that has to have run first.
 
 | Field                            | Type                        | Populated by                          | Purpose                                                        |
 |----------------------------------|-----------------------------|---------------------------------------|----------------------------------------------------------------|
@@ -34,9 +36,11 @@ or undefined until initialized.)
 | `mouse_inside_plot_widget`       | callable → bool             | `app.py` event-handlers section       | Whether the mouse cursor is over the plotter.                  |
 | `search_string_box`              | `box(str)`                  | `app.py` search section               | Boxed current search string (empty when no search active).     |
 | `search_result_data_idxs_box`    | `box(np.ndarray)`           | `app.py` search section               | Boxed indices (into `sorted_*`) of items matching the search.  |
-| `info_panel_content_lock`        | `threading.RLock`           | `app.py` info-panel section           | Guards the info-panel content swap (will move into info_panel).|
-| `info_panel_entry_title_widgets` | `dict[int, int]`            | `app.py` info-panel section           | `data_idx` → DPG entry-title group (will move into info_panel).|
+| `selection_changed`              | `bool`                      | `raven.visualizer.selection`          | Set when the selection changes; cleared by the info panel once it has finalized an update. Used for scroll anchoring. |
+| `selection_anchor_data_idxs_set` | `set[int]`                  | `raven.visualizer.selection`          | Items common to the previous and current selection, so they can serve as scroll anchors. Indices into `sorted_*`. |
 | `update_mouse_hover`             | callable                    | `raven.visualizer.annotation.update`  | Submit a plotter-tooltip refresh. Published by `annotation`.   |
+| `update_info_panel`              | callable                    | `app.py` info-panel section           | `info_panel.update`, published so cross-module callers reach it without importing `app`. |
+| `update_search`                  | callable                    | `app.py` search section               | Re-run the current search. Published for the same reason.      |
 
 Subsystems that own their own task managers or per-subsystem state keep those
 private (e.g. `word_cloud._task_manager`, `word_cloud._image_box`,

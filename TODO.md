@@ -169,7 +169,7 @@ every tier, chosen on measurements rather than reputation.
 
   The `app.py` refactor it was waiting on has landed, and `app_state.py` arrived with it — but it answers only half of this. `app_state` is a single shared `env()` namespace, so state now lives in a top-level container and every cross-module access is named (`app_state.foo`), which kills the circular imports and the ambiguous bare names. What it does not do is *pass state in and out explicitly*: reads and writes still go to shared mutable module state, so the stated payoff — easier unit tests — is largely unrealized, since a test must still populate and tear down a global namespace.
 
-  So the question is whether the explicit-passing version is still wanted for a DPG app whose event callbacks are inherently global-shaped, or whether `app_state` is the acceptable long-term answer and this item can go. Note `app_state`'s docstring already marks `info_panel_content_lock` and `info_panel_entry_title_widgets` as belonging in `info_panel` — that migration is worth doing either way.
+  So the question is whether the explicit-passing version is still wanted for a DPG app whose event callbacks are inherently global-shaped, or whether `app_state` is the acceptable long-term answer and this item can go.
 
 
 ### Search and data access
