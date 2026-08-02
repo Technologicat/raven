@@ -48,6 +48,57 @@ session, revised after his corrections. Goal for Monday: thin the brief pile and
         `raven/visualizer/`), but its rationale was half-expired and has been rewritten. The project-level
         test-coverage and known-issues lists have **not** been audited.
 
+## 1b. Reorganize by investigation into `investigations/` (decided 2026-08-03, not yet built)
+
+The `briefs/` sort into `done/` / `reference/` landed (see §1), and immediately exposed a second problem it
+does not solve. **A measurement write-up, the scripts that produced it, and the data they emitted are one
+artifact, and ours are currently split three ways** — write-up in `briefs/reference/`, probes in
+`briefs/summer_2026_librarian_extension/manual_tests/`, transcripts in `evaluation/`. Scientific practice
+keeps a replication package with its paper, and that is the aim here: **one directory per investigation,
+holding whatever that investigation consists of — prose, code, data, in whatever mix it has.**
+
+`evaluation/retrieval/` is already exactly this shape (README + `evaluate.py` + `make_questions.py` +
+`questions.json` + `results.json`) and is the template. The rest should be made to match.
+
+**Name: `investigations/`, replacing `evaluation/`.** `studies/` was the first pick and reads better, but
+this repo has `raven/papers/` and its whole domain is a corpus of academic literature — so "studies" is a
+*domain* noun there, naming the objects the tool works on rather than our examination of our own system.
+A name needing a README to prevent a misreading inside its own subject matter costs more than the extra
+syllables. `investigations/` also covers the contents more honestly: the bundles include a bug reproduction
+and two performance audits, which are investigations but not studies. `evaluation/` was rejected as too
+narrow — it implies benchmarking against a baseline, and most of this is not that.
+
+### The bundle map, and why it needed two signals
+
+**Do not rebuild this from textual mentions alone.** Whether a write-up names its probe was never recorded
+consistently, so "does the doc name the script" under-reports. The check that works is the union of two:
+the doc's own mentions, **and what landed in the same commit as the script** (`git log --diff-filter=A` on
+the script, then look at the `.md` files in that commit). The two disagree in both directions —
+`assembled_shape.py` is named by no write-up but landed with `context-inject-shape-measurements.md`
+(`ef0ce0c`), while `backend_capabilities.py` is named by that write-up but landed with `TODO.md`, so it was
+adopted by the study later. Where they disagree, read the file.
+
+| Bundle | Members |
+|---|---|
+| `context-injects` | the write-up, now in `briefs/reference/`, + `absent_fact`, `assembled_shape`, `datetime_inject`, `rag_placement`, `inject_shapes`, `backend_capabilities` + the `evaluation/tool_budget/` transcripts |
+| `retrieval` | already assembled; relates to brief 09 |
+| `vram` | `avatar_footprint.py`. No write-up — its numbers are quoted elsewhere, notably the VRAM ledger |
+| `dpg-markdown-bullet` | the write-up in `briefs/done/` + `dpg_markdown_bullet_verify.py`, co-committed at `602d23a` |
+
+**Not bundles, and staying put:** the brief-scoped probes — `rag_tool_rescue` (brief 10), `rag_live_corpus`
+(the corpus-interrogation sketch), `webfetch_live_extractors`, `webfetch_tier2_escalation`, `vision_check`,
+`gemma4_reasoning_roundtrip`. These answer a brief's question rather than producing a write-up, so they
+belong with their briefs.
+
+**Orphans needing a call:** `tools_bench_pipeline_overlap.py` and `tools_debug_torch_compile.py` (THA3
+performance work, no write-up names them — candidates to join a `tha3` bundle with the audit), and
+`tools_visualizer_rewrite_to_app_state.py`, a one-shot AST rewriter that has already done its job and may
+simply be deleted.
+
+**When building it:** each bundle's `README.md` should list its own scripts and what each answers. That is
+the durable fix for the recording gap above — the link stops depending on anyone remembering to mention it.
+Also check `.gitignore` covers `__pycache__` under the new locations; the existing `manual_tests/` has one.
+
 ## 2. Brief reorganization
 
 - [x] **[D] `briefs/ai-act-article-50-summary.md` → ~~`briefs/done/`~~ `briefs/reference/`.** *Done

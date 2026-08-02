@@ -28,11 +28,16 @@ measurement write-ups, which is why they moved together.
 
 ## Related, elsewhere — and deliberately not here
 
-- **`evaluation/`** (repo root) is the *apparatus* for the measurements that `reference/` writes up:
-  `evaluate.py`, `make_questions.py`, `avatar_footprint.py`, and the captured transcripts, results and logs.
-  It stays at the root because it is runnable code with data, meant to be re-run against new models and new
-  retrieval work — live tooling rather than a record. The pairing is worth knowing: `reference/` holds the
-  conclusions, `evaluation/` holds what produced them and can produce more.
+- **`evaluation/`** (repo root) holds measurement apparatus and captured data: `evaluate.py`,
+  `make_questions.py`, `avatar_footprint.py`, transcripts, results and logs.
+
+  **This is mid-reorganization** (decided 2026-08-03). It becomes **`investigations/`**, with one directory
+  per investigation holding *everything* about it — write-up, scripts and data together, the way
+  `evaluation/retrieval/` already does. Several measurement write-ups currently in `reference/` move into
+  their bundle, because a write-up separated from the scripts that produced it is the thing this is fixing.
+  The bundle map and the method for rebuilding it are in the Monday checklist,
+  `summer_2026_librarian_extension/monday-2026-08-03-checklist.md` §1b. Until that lands, expect
+  measurement write-ups here and their apparatus there.
 - **`TODO.md`** for planned work and **`TODO_DEFERRED.md`** for things noticed mid-task and set aside. Where
   a brief depends on one, it names it.
 - **`dpg-notes.md`** (repo root) is the DearPyGui reference, kept at the root because it is consulted
