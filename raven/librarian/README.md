@@ -680,7 +680,7 @@ In practice, with flash-attention and a 4-bit quant:
 
 How much 64k tokens is in pages, depends on the type of text. Some people on the internet claim that it can fit a 300-page novel, but in my own tests, one scientific paper with about 40 A4 pages already takes over 50k tokens.
 
-Be aware that LLM accuracy tends to suffer (the model becomes inattentive) for long contexts. As of H2/2025, models are commonly trained on short-context data, and then extrapolation techniques are used to enable support for longer contexts. Even if the model can find a [needle in a haystack](https://labelbox.com/guides/unlocking-precision-the-needle-in-a-haystack-test-for-llm-evaluation/) in a very long context, that test doesn't really say anything else about the model's abilities. The ability to answer questions accurately as well as to keep up a high-quality chat conversation usually suffer as the context fills up.
+Be aware that LLM accuracy tends to suffer (the model becomes inattentive) for long contexts. As of H2/2025, models are commonly trained on short-context data, and then extrapolation techniques are used to enable support for longer contexts. Even if the model can find a [needle in a haystack](https://labelbox.com/guides/unlocking-precision-the-needle-in-a-haystack-test-for-llm-investigations/) in a very long context, that test doesn't really say anything else about the model's abilities. The ability to answer questions accurately as well as to keep up a high-quality chat conversation usually suffer as the context fills up.
 
 Recommendations:
 

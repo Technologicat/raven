@@ -66,10 +66,10 @@ papers. Changing the seed changes the set, and scores across different sets are 
 
 ```bash
 # Generate (needs an LLM backend; ~30 calls)
-python evaluation/retrieval/make_questions.py <llm_base_url> <model> [n_focused] [n_rambling]
+python investigations/retrieval/make_questions.py <llm_base_url> <model> [n_focused] [n_rambling]
 
 # Score (needs raven-server for spaCy + embeddings, and the local document index)
-python evaluation/retrieval/evaluate.py [k]
+python investigations/retrieval/evaluate.py [k]
 ```
 
 `evaluate.py` reads the index and does not write to it, so it is safe to run against a live Librarian

@@ -238,7 +238,7 @@ def webfetch_wrapper(url: str) -> str | tuple[str, dict]:
 # so the model reports the situation in consistent words instead of improvising an explanation of Raven's
 # internals - and deliberately phrased as *statements of fact*, never as prohibitions. A tool result that
 # tells the model what it may not do is the shape that measured 29000 characters of deliberation without
-# producing a reply; see `briefs/reference/context-inject-shape-measurements.md`.
+# producing a reply; see `investigations/context-injects/context-inject-shape-measurements.md`.
 CANONICAL_NO_DOCUMENT_DATABASE = ("The document database is not available in this conversation, so it cannot "
                                   "be searched.")
 CANONICAL_NO_DOCUMENT_MATCHES = ("The document database contains no matches for that query. A differently "
@@ -954,7 +954,7 @@ def count_branch_tokens(settings: env,
 # Canonical refusal for a fetch that cannot fit, in the manner of `CANONICAL_NOT_ON_ALLOWLIST`. Phrased as a
 # statement of the situation with the remedy attached, never as a prohibition: a tool result that tells the
 # model what it may not do is the shape that measured 29000 characters of deliberation without producing a
-# reply. See `briefs/reference/context-inject-shape-measurements.md`.
+# reply. See `investigations/context-injects/context-inject-shape-measurements.md`.
 CANONICAL_NO_ROOM_TO_FETCH = ("There is not enough room left in this conversation to read that document. "
                               "Suggest starting a new chat if the user wants to work through it.")
 

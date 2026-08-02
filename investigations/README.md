@@ -1,0 +1,35 @@
+# Investigations
+
+Things we measured, profiled or reproduced, each as one self-contained directory: the write-up, the scripts
+that produced it, and the data they emitted, together.
+
+The reason for the layout is that a measurement whose apparatus lives elsewhere is not reproducible in
+practice, however carefully it was written. Splitting a write-up from its scripts also loses the link both
+ways — several of ours were only recoverable by asking git what landed in the same commit, because nobody
+had written down which probe produced which table.
+
+**So each bundle carries a `README.md` naming its own scripts and what each one answers.** That is the part
+that stops the link decaying again, and it is worth keeping up even when the connection feels obvious today.
+
+## What's here
+
+| Directory | What it investigated |
+|---|---|
+| `context-injects/` | What shape Librarian's temporary context injects should take, measured across four local models |
+| `retrieval/` | Retrieval quality against a known corpus — the evaluation set behind brief 09 |
+| `tool_budget/` | Whether the tool-call round cap causes empty replies, and whether telling the model its budget is spent prevents them |
+| `vram/` | The avatar's VRAM footprint, module by module |
+| `tha3-performance/` | Where THA3 inference time goes, and whether the pipeline halves can overlap on the GPU |
+| `anime4k-performance/` | Where the Anime4K upscaler's time goes |
+
+## Shared instruments are pointed at, not copied
+
+Some probes serve several investigations, or belong to a brief rather than to a study. Those stay where they
+are — currently `briefs/summer_2026_librarian_extension/manual_tests/` — and the investigation names the path.
+`tool_budget/README.md` does this with `rag_live_corpus.py`, whose phase F produced its samples. Copying a
+shared instrument into every bundle that used it would trade one kind of drift for a worse one.
+
+## Not investigations
+
+Reference material we consult but did not produce — external requirements, keycode tables, specs of shipped
+tools — lives in `briefs/reference/`. The distinction is whether we ran something to find out.

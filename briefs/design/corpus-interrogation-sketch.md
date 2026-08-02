@@ -166,7 +166,7 @@ are real, and they have different economics:
    time-to-competence.
 2. **A corpus the reader already knows.** Less interesting as a workflow — and the most valuable thing
    available for *evaluation*, because only a reader who knows the field can say whether the right papers
-   came back. See `evaluation/retrieval/README.md`.
+   came back. See `investigations/retrieval/README.md`.
 3. **Co-analysis of a document against a background.** In a fast-moving literature — AI methods produce
    something worth attention every week or so — the bottleneck is not finding candidates but reading them.
    When a paper warrants more than its abstract, the useful thing is a collaborator to work through it

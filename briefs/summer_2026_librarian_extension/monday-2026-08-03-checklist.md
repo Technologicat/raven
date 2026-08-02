@@ -48,56 +48,65 @@ session, revised after his corrections. Goal for Monday: thin the brief pile and
         `raven/visualizer/`), but its rationale was half-expired and has been rewritten. The project-level
         test-coverage and known-issues lists have **not** been audited.
 
-## 1b. Reorganize by investigation into `investigations/` (decided 2026-08-03, not yet built)
+## 1b. Reorganize by investigation into `investigations/` — **done 2026-08-03**
 
-The `briefs/` sort into `done/` / `reference/` landed (see §1), and immediately exposed a second problem it
+The `briefs/` sort into `done/` / `reference/` landed (see §1) and immediately exposed a second problem it
 does not solve. **A measurement write-up, the scripts that produced it, and the data they emitted are one
-artifact, and ours are currently split three ways** — write-up in `briefs/reference/`, probes in
-`briefs/summer_2026_librarian_extension/manual_tests/`, transcripts in `evaluation/`. Scientific practice
-keeps a replication package with its paper, and that is the aim here: **one directory per investigation,
-holding whatever that investigation consists of — prose, code, data, in whatever mix it has.**
+artifact**, and ours were split three ways — write-up in `briefs/reference/`, probes in the sprint's
+`manual_tests/`, transcripts in the old `evaluation/`. Scientific practice keeps a replication package with
+its paper, and that is the shape now built: **one directory per investigation, holding whatever that
+investigation consists of — prose, code, data, in whatever mix it has.**
 
-`evaluation/retrieval/` is already exactly this shape (README + `evaluate.py` + `make_questions.py` +
-`questions.json` + `results.json`) and is the template. The rest should be made to match.
+`evaluation/retrieval/` was already exactly this (README + `evaluate.py` + `make_questions.py` +
+`questions.json` + `results.json`) and served as the template.
 
-**Name: `investigations/`, replacing `evaluation/`.** `studies/` was the first pick and reads better, but
-this repo has `raven/papers/` and its whole domain is a corpus of academic literature — so "studies" is a
-*domain* noun there, naming the objects the tool works on rather than our examination of our own system.
+**Name: `investigations/`, replacing `evaluation/`.** `studies/` was the first pick and reads better in the
+abstract, but this repo has `raven/papers/` and a corpus of academic literature as its subject — so "studies"
+is a *domain* noun here, naming the objects the tool works on rather than our examination of our own system.
 A name needing a README to prevent a misreading inside its own subject matter costs more than the extra
-syllables. `investigations/` also covers the contents more honestly: the bundles include a bug reproduction
-and two performance audits, which are investigations but not studies. `evaluation/` was rejected as too
-narrow — it implies benchmarking against a baseline, and most of this is not that.
+syllables. `investigations/` also covers the contents more honestly: they include a bug reproduction and two
+performance audits, which are investigations but not studies. `evaluation/` was rejected as too narrow — it
+implies benchmarking against a baseline, and most of this is not that.
 
 ### The bundle map, and why it needed two signals
 
-**Do not rebuild this from textual mentions alone.** Whether a write-up names its probe was never recorded
-consistently, so "does the doc name the script" under-reports. The check that works is the union of two:
-the doc's own mentions, **and what landed in the same commit as the script** (`git log --diff-filter=A` on
-the script, then look at the `.md` files in that commit). The two disagree in both directions —
-`assembled_shape.py` is named by no write-up but landed with `context-inject-shape-measurements.md`
-(`ef0ce0c`), while `backend_capabilities.py` is named by that write-up but landed with `TODO.md`, so it was
-adopted by the study later. Where they disagree, read the file.
+Kept because it will be needed again the next time a bundle is assembled. **Do not rebuild it from textual
+mentions alone.** Whether a write-up names its probe was never recorded consistently, so "does the doc name
+the script" under-reports. The check that works is the union of two: the doc's own mentions, **and what landed
+in the same commit as the script** (`git log --diff-filter=A` on the script, then look at the `.md` files in
+that commit). The two disagreed in both directions — `assembled_shape.py` is named by no write-up but landed
+with `context-inject-shape-measurements.md` (`ef0ce0c`), while `backend_capabilities.py` is named by that
+write-up but landed with `TODO.md`, so it was adopted later. Where they disagree, read the file.
 
 | Bundle | Members |
 |---|---|
-| `context-injects` | the write-up, now in `briefs/reference/`, + `absent_fact`, `assembled_shape`, `datetime_inject`, `rag_placement`, `inject_shapes`, `backend_capabilities` + the `evaluation/tool_budget/` transcripts |
-| `retrieval` | already assembled; relates to brief 09 |
-| `vram` | `avatar_footprint.py`. No write-up — its numbers are quoted elsewhere, notably the VRAM ledger |
-| `dpg-markdown-bullet` | the write-up in `briefs/done/` + `dpg_markdown_bullet_verify.py`, co-committed at `602d23a` |
+| `investigations/context-injects/` | the write-up + `absent_fact`, `assembled_shape`, `datetime_inject`, `rag_placement`, `inject_shapes`, `backend_capabilities`, and a README naming what each answers |
+| `investigations/retrieval/` | already assembled; relates to brief 09 |
+| `investigations/tool_budget/` | its own study, not context-injects' data — produced by `rag_live_corpus.py` phase F, which its README already cites |
+| `investigations/vram/` | `avatar_footprint.py`. No write-up; its numbers are quoted elsewhere, notably the VRAM ledger |
+| `investigations/tha3-performance/` | the audit + `bench_pipeline_overlap.py` + `debug_torch_compile.py` |
+| `investigations/anime4k-performance/` | the audit; no apparatus, but kept beside its sibling rather than split off into `reference/` |
+| `briefs/done/dpg-markdown-bullet/` | the write-up + `verify.py`, co-committed at `602d23a` |
+| `briefs/done/visualizer-refactoring/` | the notes + `rewrite_to_app_state.py`, the one-shot rewriter that did part of the job |
 
-**Not bundles, and staying put:** the brief-scoped probes — `rag_tool_rescue` (brief 10), `rag_live_corpus`
-(the corpus-interrogation sketch), `webfetch_live_extractors`, `webfetch_tier2_escalation`, `vision_check`,
-`gemma4_reasoning_roundtrip`. These answer a brief's question rather than producing a write-up, so they
-belong with their briefs.
+The last two show the principle is not `investigations/`-specific: **keep an artifact with what produced it,
+wherever the artifact lives.** A completed brief with apparatus becomes a directory too.
 
-**Orphans needing a call:** `tools_bench_pipeline_overlap.py` and `tools_debug_torch_compile.py` (THA3
-performance work, no write-up names them — candidates to join a `tha3` bundle with the audit), and
-`tools_visualizer_rewrite_to_app_state.py`, a one-shot AST rewriter that has already done its job and may
-simply be deleted.
+**Not bundles, and staying put** in the sprint's `manual_tests/`: `rag_tool_rescue` (brief 10),
+`rag_live_corpus` (the corpus-interrogation sketch, and `tool_budget`), `webfetch_live_extractors`,
+`webfetch_tier2_escalation`, `vision_check`, `gemma4_reasoning_roundtrip`. These answer a brief's question
+rather than producing a write-up. **A shared instrument is pointed at, not copied** — `rag_live_corpus.py`
+serves two investigations and a sketch, so duplicating it into each would trade one drift for a worse one.
 
-**When building it:** each bundle's `README.md` should list its own scripts and what each answers. That is
-the durable fix for the recording gap above — the link stops depending on anyone remembering to mention it.
-Also check `.gitignore` covers `__pycache__` under the new locations; the existing `manual_tests/` has one.
+### What this cost, worth knowing before the next sweep
+
+The mechanical `evaluation/` → `investigations/` substitution **corrupted the two documents that discussed
+the rename**, turning this section into "`investigations/`, replacing `investigations/`". The invariant used
+to check the sweep — every referenced path resolves — cannot catch that, because the mangled prose still
+contains valid paths. Rule for next time: a find-replace is unsafe over text that talks *about* the thing
+being renamed, so exclude those files and edit them by hand.
+
+`.gitignore` already covers `__pycache__`, and none was tracked.
 
 ## 2. Brief reorganization
 
@@ -198,7 +207,7 @@ naming decision has to land first, and it renames things across the codebase, no
         should follow what the module turns out to do.
   - `briefs/design/product-identity-sketch.md` — citation updated to match the new heading.
   - **Leave alone**: `TODO.md:423` and `product-identity-sketch.md:53` use "generic agent harness" for *other
-        people's* products, which is the right word there. `evaluation/retrieval/README.md` and
+        people's* products, which is the right word there. `investigations/retrieval/README.md` and
         `TODO_DEFERRED.md:3121` mean *test* harness — different sense.
 
 ### `raven.papers.bibtex` — consolidate the readers
@@ -285,7 +294,7 @@ wants `ruff` plus the suite, so it belongs in the morning rather than in a doc p
         k=100: ~40k tokens of abstracts → ~10k of summaries.
 - [ ] **[N] MiniLM reranker** (`cross-encoder/ms-marco-MiniLM-L6-v2`, 23M, CPU).
   - **[P]** Good for the VRAM story — CPU keeps the card for the LLM. But MS MARCO-trained on web queries, so
-        domain shift to scientific abstracts is real. Measure against `evaluation/retrieval`, which is mode 2
+        domain shift to scientific abstracts is real. Measure against `investigations/retrieval`, which is mode 2
         in the interrogation sketch ("a corpus the reader already knows") doing its intended job.
 - [ ] **[D] Autosearch vs. tool-call: undecided.** The two cover different moments (autosearch = the user asked
       something the corpus obviously bears on; tool = the model realises mid-reasoning it should check). That

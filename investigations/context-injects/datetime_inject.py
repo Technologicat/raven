@@ -125,7 +125,7 @@ def build(shape: str, question: str) -> list[dict]:
 
     # The inject goes *before* the user's question: measured as the safe placement for tool-role
     # material, since a trailing tool result invites the model to emit another tool call instead
-    # of an answer. See briefs/reference/context-inject-shape-measurements.md.
+    # of an answer. See investigations/context-injects/context-inject-shape-measurements.md.
     return [{"role": "system", "content": system_text}, *extra, {"role": "user", "content": question}]
 
 

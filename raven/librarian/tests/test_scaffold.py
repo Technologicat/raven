@@ -839,7 +839,7 @@ class TestPerformInjects:
     models — invisible while developing against a permissive one.
 
     The second is the shape and placement of the injected material, each item of which was chosen by
-    measurement rather than by taste (`briefs/reference/context-inject-shape-measurements.md`). Nothing about
+    measurement rather than by taste (`investigations/context-injects/context-inject-shape-measurements.md`). Nothing about
     these shapes is self-evidently right, so they are worth holding still: a plausible-looking
     simplification here costs an hour of live probing to catch.
     """

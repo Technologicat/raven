@@ -30,7 +30,7 @@ create cycles with `app.py` at the top) we stash them as attributes on
 
 Pass the path to rewrite, followed by the bare identifiers to migrate::
 
-    python briefs/tools_visualizer_rewrite_to_app_state.py raven/visualizer/app.py \
+    python briefs/done/visualizer-refactoring/rewrite_to_app_state.py raven/visualizer/app.py \
         dataset bg themes_and_fonts selection_data_idxs_box filedialog_save \
         enter_modal_mode exit_modal_mode
 

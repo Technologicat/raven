@@ -14,7 +14,7 @@ The implementation these numbers argue for is written up separately, as
 `summer_2026_librarian_extension/done/08_context-injects-brief.md`. That brief has been archived now that
 the work has landed; this document has not, and does not.
 
-Harness: `briefs/summer_2026_librarian_extension/manual_tests/inject_shapes.py`. It imports the inject
+Harness: `investigations/context-injects/inject_shapes.py`. It imports the inject
 strings from `raven.librarian.chatutil` rather than copying them, so it always measures what Raven
 actually sends.
 

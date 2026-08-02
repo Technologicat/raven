@@ -30,7 +30,7 @@ it at `temperature=0` with a large budget and that wording spends 29000 characte
 producing a reply, where sending nothing extra answers cleanly in 3000: it reads as a prohibition, and
 prohibitions are what the whole inject rework exists to stop handing the model. Sampling at one
 temperature was enough to make a bad shape look like a fix. So: run both temperatures, and read the
-reasoning length, not only the verdict. See `briefs/reference/context-inject-shape-measurements.md`.
+reasoning length, not only the verdict. See `investigations/context-injects/context-inject-shape-measurements.md`.
 
 Usage:
     python absent_fact.py [base_url] [model] [samples_per_variant]

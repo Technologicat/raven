@@ -1037,7 +1037,7 @@ clusters, as of 2026-07-27:
 - **Temporary context injects** — how much goes on the wire each turn, in which role, at which position.
   **Built 2026-07-28**, closing "RAG injects: sent in the user role as a workaround", "Fold the temporary
   context injects…" (measured, and rejected in favour of the system block plus a tool result) and "Revisit
-  the 'answer from context only' reminder". Measurements in `briefs/reference/context-inject-shape-measurements.md`,
+  the 'answer from context only' reminder". Measurements in `investigations/context-injects/context-inject-shape-measurements.md`,
   the plan they argued for in `briefs/summer_2026_librarian_extension/done/08_context-injects-brief.md`. Still
   open in this cluster: "RAG: rerank retrieved chunks…" and "Modernize the Librarian system prompt /
   character card", plus the new "RAG access via tool-call" motivation recorded under Q11 of the
@@ -1492,7 +1492,7 @@ Discovered during scaffold/appstate test work (2026-04-17).
 
 `torch.compile()` on THA3 was investigated (2026-04-09) and yields only ~6% speedup (20.3ms → 19.0ms on 3070 Ti) at the cost of 37s compilation startup. Not worth it for THA3 — the model is already lean with separable convolutions + FP16. Also hangs in the server (works in standalone; cause unresolved — possibly Triton subprocess interaction with waitress/threads).
 
-The postprocessor (`raven.common.video.postprocessor`) might benefit more from compilation (20–60 kernel launches per frame, more fusible elementwise ops). Worth investigating separately. See `briefs/reference/tha3-performance-audit.md`.
+The postprocessor (`raven.common.video.postprocessor`) might benefit more from compilation (20–60 kernel launches per frame, more fusible elementwise ops). Worth investigating separately. See `investigations/tha3-performance/tha3-performance-audit.md`.
 
 Discovered during THA3 performance optimization work (2026-04-09).
 

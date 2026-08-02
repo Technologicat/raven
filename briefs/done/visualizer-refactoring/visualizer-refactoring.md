@@ -89,7 +89,7 @@ The tooltip's content group is created once at startup, then replaced on every h
 
 ### Tokenizer-based name migration tool
 
-`briefs/tools_visualizer_rewrite_to_app_state.py` takes `(path, name1 name2 …)` and rewrites every bare-name occurrence of each `name` into `app_state.name`, using Python's `tokenize` module so occurrences inside string literals, comments, and f-string text parts are correctly left alone. Handles `global` declaration removal and skips `def NAME(…)` / `class NAME(…)` / kwarg-name positions (`foo(name=name)`).
+`briefs/done/visualizer-refactoring/rewrite_to_app_state.py` takes `(path, name1 name2 …)` and rewrites every bare-name occurrence of each `name` into `app_state.name`, using Python's `tokenize` module so occurrences inside string literals, comments, and f-string text parts are correctly left alone. Handles `global` declaration removal and skips `def NAME(…)` / `class NAME(…)` / kwarg-name positions (`foo(name=name)`).
 
 **Gotcha**: does not track function-parameter shadowing (a `def f(dataset): …` whose body legitimately uses the parameter gets its parameter renamed too, breaking the function). Rename the parameter to something else before running the tool. Encountered once so far (`load_data_into_plotter(dataset)` → `(ds)`).
 

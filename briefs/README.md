@@ -23,21 +23,23 @@ what stops "done" from being applied to something that was never going to be fin
   keycode mismatch), specs of shipped tools, and archived snapshots. Consulted, not completed.
 
 The `reference/` split exists because filing the AI Act summary under `done/` was a category error: it is a
-description of a regulation, and regulations do not get finished. The same argument covers the audits and the
-measurement write-ups, which is why they moved together.
+description of a regulation, and regulations do not get finished.
+
+A folder here may be a **bundle** rather than a single file, when a document has apparatus: `done/` holds
+`dpg-markdown-bullet/` (the write-up plus the script that reproduces the bug) and `visualizer-refactoring/`
+(the notes plus the one-shot rewriter that performed part of it). Same principle as `investigations/` below —
+keep an artifact with what produced it — applied wherever the artifact happens to live.
 
 ## Related, elsewhere — and deliberately not here
 
-- **`evaluation/`** (repo root) holds measurement apparatus and captured data: `evaluate.py`,
-  `make_questions.py`, `avatar_footprint.py`, transcripts, results and logs.
+- **`investigations/`** (repo root) holds things we measured, profiled or reproduced — **one directory per
+  investigation, with its write-up, its scripts and its data together.** A measurement write-up does not live
+  in `briefs/`, because separating it from the apparatus that produced it makes it unreproducible in practice
+  however carefully it was written. See `investigations/README.md`.
 
-  **This is mid-reorganization** (decided 2026-08-03). It becomes **`investigations/`**, with one directory
-  per investigation holding *everything* about it — write-up, scripts and data together, the way
-  `evaluation/retrieval/` already does. Several measurement write-ups currently in `reference/` move into
-  their bundle, because a write-up separated from the scripts that produced it is the thing this is fixing.
-  The bundle map and the method for rebuilding it are in the Monday checklist,
-  `summer_2026_librarian_extension/monday-2026-08-03-checklist.md` §1b. Until that lands, expect
-  measurement write-ups here and their apparatus there.
+  This is why `reference/` holds no measurements of ours: the audits and the context-inject sweep moved out to
+  their bundles on 2026-08-03. What stays in `reference/` is material we *consult* rather than produced — the
+  test is whether we ran something to find out.
 - **`TODO.md`** for planned work and **`TODO_DEFERRED.md`** for things noticed mid-task and set aside. Where
   a brief depends on one, it names it.
 - **`dpg-notes.md`** (repo root) is the DearPyGui reference, kept at the root because it is consulted

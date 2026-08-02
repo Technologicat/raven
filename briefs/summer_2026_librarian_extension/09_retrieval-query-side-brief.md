@@ -68,7 +68,7 @@ stage wants its own retrieve-wide parameter, with `alpha` still doing its merge 
 
 ## Measured baseline (2026-07-28)
 
-An evaluation set now exists — `evaluation/retrieval/`, 99 known-item questions against the 11974-record
+An evaluation set now exists — `investigations/retrieval/`, 99 known-item questions against the 11974-record
 corpus — and it reorders what follows. Numbers and method are in that directory's README.
 
 **What it establishes:**
@@ -195,7 +195,7 @@ identically to a query that nailed one paper and a query that found mush. Let th
 head means take the head — three, five — and a flat list means take few or none. This is the *fewer,
 better passages* outcome the reranking item wants, reached with no reranker, no VRAM, and no prompt
 change, and it pays in exactly the currency the reranking item is denominated in (context, KV cache,
-attention). It is also **evaluable offline against `evaluation/retrieval/`** — "does adaptive `k` cost
+attention). It is also **evaluable offline against `investigations/retrieval/`** — "does adaptive `k` cost
 recall?" needs no LLM in the loop and runs in seconds per configuration, so it can be settled before it is
 shipped.
 
@@ -339,7 +339,7 @@ of the vocabulary a field uses — PRF re-queries with the field's own words, ha
 first query did find. That is exactly the gap between "the papers whose abstracts happen to match how the
 user phrased it" and "the papers about the thing".
 
-**Warning for whoever evaluates it: `evaluation/retrieval/` cannot score this lever.** The set is
+**Warning for whoever evaluates it: `investigations/retrieval/` cannot score this lever.** The set is
 known-item — one gold document per question — so a mechanism that surfaces *more* relevant papers around
 an already-found one scores exactly zero improvement, and may score worse if the extra results displace
 the gold document. A null result there is not evidence against PRF; it is the metric being blind to the
@@ -374,7 +374,7 @@ one gold document per question, so it can say nothing about how well positions 2
 #### Build it to measure it, not to ship it
 
 The expansion is a pure function of a query and a result set, so it can be prototyped inside
-`evaluation/retrieval/` and scored offline, with no change to Librarian at all. Do that first. Promotion
+`investigations/retrieval/` and scored offline, with no change to Librarian at all. Do that first. Promotion
 into the live retrieval path is a separate decision that should follow an **in-conversation** measurement
 taken *after* the RAG tool surface lands — because the tool changes what a weak pass 1 costs, and
 therefore changes what automatic expansion is worth. The standalone number cannot see that interaction.
