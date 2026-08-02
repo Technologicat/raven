@@ -13,6 +13,31 @@ Local research assistant constellation. Privacy-first, 100% local.
 - **Papers** (`raven/papers/`): Academic paper tools — arXiv search/download, bibliography converters (WoS, CSV, PDF, BibTeX burst).
 - **Tools** (`raven/tools/`): Miscellaneous CLI utilities (CUDA check, audio device listing, image format conversion, dehyphenation).
 
+## Where the non-source material lives
+
+Four trees, sorted by what a document *is* rather than what it is about. Each has its own README; this is the
+index.
+
+- **`briefs/`** — prose. `design/` for sketches (direction clear, mechanism not), `summer_2026_librarian_extension/`
+  for the current sprint's numbered implementation briefs, `done/` for closed ones, `reference/` for material we
+  consult but did not produce (the EU AI Act summary, the DPG keycode table, an archived style snapshot).
+- **`investigations/`** — things we measured, profiled or reproduced. **One directory per investigation, holding
+  its write-up, its scripts and its data together**, because a measurement whose apparatus lives in another tree
+  is not reproducible in practice however carefully it was written. Currently `context-injects`, `retrieval`,
+  `tool_budget`, `vram`, `tha3-performance`, `anime4k-performance`.
+- **`TODO.md`** for planned work, **`TODO_DEFERRED.md`** for things noticed mid-task and set aside.
+- **`dpg-notes.md`**, **`raven-style-guide.md`** — at the root because they are consulted constantly.
+
+Two conventions worth knowing before adding to any of them:
+
+- **Keep an artifact with what produced it.** This is why `investigations/` exists, and it applies wherever the
+  artifact lives — a completed brief with apparatus becomes a directory too (`briefs/done/dpg-markdown-bullet/`
+  is a write-up plus its reproduction script). A **shared** instrument is pointed at by path, not copied into
+  every bundle that used it.
+- **Record the link in the bundle's README**, naming each script and what it answers. The doc↔script connection
+  was not recorded consistently in the past, and recovering it meant asking git what landed in the same commit
+  as each script. Writing it down is what stops that recurring.
+
 ## Build and Development
 
 Uses PDM with `pdm-backend`. **Python 3.11–3.12** (see `pyproject.toml`: `requires-python = "<3.13,>=3.11"`). Optional CUDA extras via `pdm install -G cuda`.

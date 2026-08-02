@@ -19,8 +19,12 @@ what stops "done" from being applied to something that was never going to be fin
 
 - **`reference/`** — **durable knowledge.** Documents that were never going to be "finished", because they
   describe how something *is* rather than what to build: external requirements (the EU AI Act summary),
-  measured behaviour (the performance audits, the context-inject measurements), reference tables (the DPG
-  keycode mismatch), specs of shipped tools, and archived snapshots. Consulted, not completed.
+  lookup tables (the DPG keycode mismatch), research notes on OS APIs, a decision record naming which models
+  we develop against, and an archived style snapshot. Consulted, not completed.
+
+  Note what is *not* here. Our own measurements went to `investigations/`, with the scripts that produced
+  them. And a document that reads as a spec may still be a brief: `cherrypick-spec.md` is in `done/`, because
+  it is the thing that produced the app.
 
 The `reference/` split exists because filing the AI Act summary under `done/` was a category error: it is a
 description of a regulation, and regulations do not get finished.

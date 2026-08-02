@@ -31,5 +31,10 @@ shared instrument into every bundle that used it would trade one kind of drift f
 
 ## Not investigations
 
-Reference material we consult but did not produce — external requirements, keycode tables, specs of shipped
-tools — lives in `briefs/reference/`. The distinction is whether we ran something to find out.
+Reference material — external requirements, lookup tables, archived snapshots — lives in `briefs/reference/`.
+The first test is whether we ran something to find out.
+
+Where a document is genuinely both, **file it by how it is read.** `briefs/reference/dpg-keycodes.md` was
+produced by probing DPG and carries its own reproduction script, so the first test calls it an investigation;
+but it is consulted as a lookup table several times a month and cited that way from `CLAUDE.md`, so it is
+shelved where a reader will reach for it.
