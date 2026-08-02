@@ -3,6 +3,39 @@
 New items go at the **top**. (Both ends were in use up to 2026-07-27, which is how the two halves of the same
 Librarian session ended up ~1000 lines apart.)
 
+## CI installs its dependencies unpinned, so an upstream release can turn main red
+
+Both workflows install the test dependencies as a bare name list — `pip install pytest numpy
+"bibtexparser>=2.0.0b8" unpythonic Pillow tqdm requests feedparser wosfile pypdf pyyaml python-docx
+python-pptx odfpy trafilatura qoi` in `ci.yml`, near-identically in `coverage.yml` — followed by
+`pip install -e . --no-deps`. Only `bibtexparser` carries a constraint. Every other package resolves to
+whatever PyPI serves that morning, so the tested environment drifts without any commit saying so.
+
+This is not hypothetical: it fired on 2026-08-02. `trafilatura` 2.2.0 shipped, CI picked it up, and
+`test_html_title_not_duplicated_when_body_already_opens_with_it` began failing on all three platforms while
+passing locally on 2.1.0. The underlying assumption in `docextract` was genuinely too narrow and has been
+fixed, so the test earned its keep — but the *diagnosis* cost a round of "what did I just break?", and it
+attached itself to an unrelated docstring commit that happened to be the next push.
+
+The tension, and why this is a real decision rather than an obvious pin-everything:
+
+- **Unpinned catches upstream breakage early**, which is worth something for a project that vendors little
+  and tracks a fast-moving ML stack. A pinned CI would have found this at the next manual bump instead.
+- **Unpinned makes every failure ambiguous.** Red CI should mean "your commit broke something". When it can
+  also mean "someone else released something", the signal degrades, and the cost lands on whoever pushes
+  next rather than on whoever is equipped to deal with it.
+
+Options, roughly in increasing order of effort: pin the CI install list to known-good versions and let
+Dependabot bump it; commit `pdm.lock` and install from it (Raven is an app, and fleet policy already says
+apps commit their lockfile — worth checking why this one does not); or keep it unpinned and add a scheduled
+run so upstream drift surfaces on its own schedule instead of on the next unrelated push. The last is the
+cheapest and keeps the early-warning property, at the cost of not fixing the ambiguity.
+
+Note the CI dep list is also hand-maintained and can drift from `pyproject.toml` independently — the
+`ci-setup` skill flags this for exactly the projects that install by hand, Raven among them.
+
+Discovered 2026-08-02, diagnosing the trafilatura failure.
+
 ## A skill for `dpg-notes.md`, so it fires when it is needed
 
 `dpg-notes.md` is 644 lines of hard-won DPG lore, and CLAUDE.md points at it with "before editing any DPG code,

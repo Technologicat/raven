@@ -81,12 +81,13 @@ session, revised after his corrections. Goal for Monday: thin the brief pile and
         briefs and an importer brief. Either rename it or accept it as a sprint-by-date rather than by
         component — but decide, rather than letting the name quietly stop being true.
 - [ ] **[D] `model-lineup-autumn-2026.md`**: Gemma 12B, not Qwen.
-  - *Not done 2026-08-03 — the note is too terse to act on without guessing.* The doc's open questions include
-        *"Whether **Qwen3.6-12B** is worth installing"*, so the likely reading is that the 12B model actually
-        worth considering is **Gemma**, and Qwen has no 12B — but that is inference from one adjacent line, not
-        something checked. The body is otherwise "Qwen across the board" with Gemma 4 as the multilingual
-        backup, so the correction could instead be about the *recommendation*. Needs one sentence from Juha
-        before editing, since the two readings change different paragraphs.
+  - **Confirmed by Juha 2026-08-03, so this is now actionable.** As of mid-2026 **Qwen 3.6 ships only in 27B
+        and 35B-A3B**; the 4B and 9B options are **Qwen 3.5**, and both remain valid on-the-road choices.
+        **There is no Qwen at 12B — that size is Gemma's alone.** So the open question currently phrased as
+        *"whether Qwen3.6-12B is worth installing"* names a model that does not exist, and should be rewritten
+        as a question about **Gemma 12B** filling the gap between the mobile and eGPU tiers.
+  - Check the tier table for the same confusion while in there: it lists Qwen3.5 at 4B/9B and Qwen3.6 at
+        27B/35B-A3B, which matches the above and is probably already right.
 - [ ] **[D] `context-inject-shape-measurements.md`**: "what Raven ships today" is out of date; Qwen 9B is not
       the weakest; not reported in all tables; Raven's document search is now a tool the model can call.
   - *Not done 2026-08-03 — deliberately, because this one is a measurements record and the obvious edit would
@@ -95,10 +96,18 @@ session, revised after his corrections. Goal for Monday: thin the brief pile and
         when measured. Overwriting them in place would silently restate history. The right shape is a dated
         "what has changed since" preamble that leaves the body intact, plus in-place *markers* where a claim
         would otherwise mislead a reader mid-table.
-  - **One of the four is a genuine erratum rather than drift, and needs checking**: "Qwen3.5-9B is the weakest
-        model in the set" is stated absolutely, but Gemma4-E4B appears in some tables and not others. So the
-        claim is true for the tables where E4B is absent and wrong where it is present — which is exactly the
-        "not reported in all tables" item, and the two should be fixed together.
+  - **One of the four is a genuine erratum rather than drift** — *confirmed by Juha 2026-08-03*: "Qwen3.5-9B
+        is the weakest model in the set" is simply wrong. **Gemma4-E4B measured weaker, consistently, across
+        the runs it was included in.** It appears in some tables and not others, which is the same defect as
+        the "not reported in all tables" item, so fix the two together: correct the claim, and say plainly
+        which tables E4B was run in. Any argument resting on "even the weakest model coped" has to be re-read
+        once the weakest model is a different one.
+  - **"What Raven ships today" needs a version, not a deictic** — *Juha 2026-08-03*: the wording is ambiguous
+        at best and misleading at worst, because the inject shape changed **right after these measurements
+        were taken**, and the new shape ships in v0.2.8. A tagged release is a durable artifact, so the doc
+        should name the version a statement is about rather than say "today", which silently re-points every
+        time someone reads it. This is the fix for the drift item above, and it generalizes: prefer a version
+        or a date to "current" anywhere in a measurements record.
 
 ### Turn / round terminology
 
