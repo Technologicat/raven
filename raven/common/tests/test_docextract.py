@@ -283,6 +283,22 @@ being discarded as page chrome or navigation.</p></article></body></html>""")
     assert docextract.extract_text(p).count("On Alignment") == 1
 
 
+# The dedup decision is tested directly as well as through `extract_text`, because which of the two body
+# shapes below the extractor returns for a given page depends on the installed trafilatura version. Going
+# through the library alone would leave whichever shape it does not currently produce untested — which is how
+# the equality-based version of this check passed locally while failing CI.
+@pytest.mark.parametrize("body, expected", [
+    ("# On Alignment\n\nA paragraph.", True),                 # Markdown heading on its own line
+    ("On Alignment A paragraph continues here.", True),       # flat text, title runs into the first paragraph
+    ("  \n\n# On Alignment\n\nA paragraph.", True),           # leading blank lines
+    ("## On Alignment\n\nA paragraph.", True),                # deeper heading level
+    ("A paragraph that does not name the page.", False),      # nothing to dedup: title must be prepended
+    ("", False),
+])
+def test_html_body_opens_with_title(body, expected):
+    assert docextract._body_opens_with(body, "On Alignment") is expected
+
+
 def test_html_declared_encoding_is_honored(tmp_path):
     # The file is handed to the extractor as bytes precisely so its own declaration decides the encoding. Were
     # it decoded as UTF-8 here, this well-formed page would raise instead of reading.

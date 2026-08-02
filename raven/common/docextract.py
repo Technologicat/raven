@@ -222,9 +222,23 @@ def _extract_html(path: pathlib.Path) -> str:
     # Readability extraction keeps the article's own headings but drops `<title>`, which on a saved page is
     # often the only thing that names it — the filename frequently does not. Skipped when the body already
     # opens with that same heading, which is the common case for a page whose `<h1>` restates its title.
-    if title and body.lstrip().split("\n", 1)[0].lstrip("#").strip() != title:
+    if title and not _body_opens_with(body, title):
         return f"# {title}\n\n{body}" if body else f"# {title}"
     return body
+
+
+def _body_opens_with(body: str, title: str) -> bool:
+    """Whether `body` already starts with `title`, so prepending it as a heading would state it twice.
+
+    Compares against the start of the first line rather than the whole of it, because the extractor does not
+    always give the title a line of its own. A short page can come back as one flat run of text whose first
+    line opens with the title and continues into the first paragraph; asking for equality then answers "no"
+    on a body that visibly does begin with the title. Prefix matching covers both shapes.
+
+    The asymmetry is deliberate. A false "yes" costs a missing heading on a page that names itself in its
+    opening words anyway; a false "no" prints the title twice, which is the defect this guards.
+    """
+    return body.lstrip().split("\n", 1)[0].lstrip("#").strip().startswith(title)
 
 
 def _html_title(trafilatura: Any, raw: bytes) -> str | None:
