@@ -93,7 +93,12 @@ def test_focus_item_moves_focus_between_ordinary_items(mapped_viewport):
 
 
 def test_focus_item_does_not_focus_a_child_window(mapped_viewport):
-    """A child window cannot be given keyboard focus, however plainly one asks."""
+    """`focus_item` cannot give a child window keyboard focus, however plainly one asks.
+
+    Scoped to the API on purpose: a child window is not unfocusable in general. Clicking one — including
+    grabbing its scrollbar — does focus it, which is measurable but needs synthetic input, so it lives in
+    `investigations/dpg-focus/` rather than here. What has no working spelling is *asking*.
+    """
     render()
     dpg.focus_item("button")  # tag  # somewhere definite first, so the result cannot be the initial state
     render()

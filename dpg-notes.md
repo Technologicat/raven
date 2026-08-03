@@ -575,7 +575,9 @@ Corollary: `dpg.get_focused_item()` is not a cross-check — it kept naming the 
 
 `dpg.focus_item` works on ordinary items (measured on a button: focus moves on the *next* frame, not the same one). On a **child window** it does not merely fail: focus lands on the first navigable item of the enclosing window and is **activated** — so if that item is a text field, the call *hands it the caret*.
 
-This makes "park focus on the scroll panel so the navigation keys are live" — the natural thing to write for a reading-first app — the one instruction that reliably does the opposite. There is no way to focus a child window; there is also no need, since ImGui's default leaves the auto-focused item *inactive*, which is exactly the state a caret-gated handler wants. To move focus out of a text field deliberately, focus a real widget (a button works).
+This makes "park focus on the scroll panel so the navigation keys are live" — the natural thing to write for a reading-first app — the one instruction that reliably does the opposite. There is also no need for it, since ImGui's default leaves the auto-focused item *inactive*, which is exactly the state a caret-gated handler wants. To move focus out of a text field deliberately, focus a real widget (a button works).
+
+**A child window is not unfocusable, though — only unaskable.** Clicking one focuses it, scrollbar included: `is_item_focused` on the panel goes true on mouse-down and stays true after release. What has no working spelling is *requesting* it.
 
 **A focused button is a safe parking spot:** DPG does not enable ImGui's keyboard-nav activation, so a focused button ignores Space and Enter and cannot fire its callback. Verified, because parking focus on a *send* button is not something to assume about.
 
