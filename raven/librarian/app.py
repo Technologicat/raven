@@ -627,15 +627,21 @@ with timer() as tim:
                             # (Send button / key handler), never the render loop (where `split_frame` would
                             # deadlock).
                             #
-                            # Focus then parks on the chat panel rather than returning to the composer. Sending is
-                            # a departure from the field, and what follows a send is reading a reply — so the
-                            # navigation keys should be live while it streams, which they are not while the
-                            # composer holds focus. `Ctrl+Space` comes back for the next message. The field keeps
-                            # its cleared value and reloads it whenever it is next activated.
+                            # Focus is then left on the send button rather than returned to the composer.
+                            # Sending is a departure from the field, and what follows a send is reading a reply
+                            # — so the navigation keys should be live while it streams, which they are not while
+                            # the composer is being edited. `Ctrl+Space` comes back for the next message. The
+                            # field keeps its cleared value and reloads it whenever it is next activated.
+                            #
+                            # The button is a safe place to leave it: DPG does not enable ImGui's keyboard-nav
+                            # activation, so a focused button ignores Space and Enter and cannot re-send.
+                            # (Measured, because resting focus on a *send* button is the kind of thing that
+                            # wants checking rather than assuming.) The chat panel is not an alternative —
+                            # `dpg.focus_item` cannot focus a child window, and returns the caret to the
+                            # composer when asked to; see `_build_initial_chat_view`.
                             dpg.focus_item("chat_send_button")  # tag  # deactivate the input's ImGui edit buffer
                             dpg.split_frame()
                             dpg.set_value("chat_field", "")  # tag  # field inactive now, so the clear sticks
-                            dpg.focus_item("chat_panel")  # tag
 
                         def record_audio_message_callback() -> None:
                             if not audio_recorder.require().is_recording():
@@ -1167,8 +1173,8 @@ def update_animations():
 # Built-in help window
 
 hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focus text entry field", notes=""),
-               env(key_indent=1, key="Enter", action_indent=0, action="Send message to AI", notes="When text entry field focused"),
-               env(key_indent=1, key="Esc", action_indent=0, action="Clear text and cancel", notes="When text entry field focused"),
+               env(key_indent=1, key="Enter", action_indent=0, action="Send message to AI", notes="When editing the text entry field"),
+               env(key_indent=1, key="Esc", action_indent=0, action="Clear text and cancel", notes="When editing the text entry field"),
                env(key_indent=0, key="Ctrl+Shift+Enter", action_indent=0, action="Speak to AI using your mic", notes=f"Device: {audio_recorder.require().device_name}"),
                helpcard.hotkey_blank_entry,
                env(key_indent=0, key="Ctrl+G", action_indent=0, action="Stop AI text generation", notes="While the AI is writing"),
@@ -1508,17 +1514,23 @@ def librarian_hotkeys_callback(sender, app_data):
         elif key in (518, dpg.mvKey_Next):  # Page Down
             chat_controller.view.page_down()
 
-        elif dpg.is_item_focused("chat_field"):
+        # *Active*, not *focused*, and the distinction is the whole reason the navigation keys work at all.
+        # ImGui hands nav focus to the first navigable item of a newly focused window on its own, so the
+        # composer reports focused from the first frame with no user having gone near it — a gate on
+        # `is_item_focused` therefore swallows Up/Down/Home/End until something else is clicked. *Active* is
+        # the state that actually means "this field owns the caret": measured False when merely auto-focused
+        # and after Escape, True from the click that enters the field until it is left. That is exactly the
+        # condition under which these keys belong to the widget rather than to the log.
+        elif dpg.is_item_active("chat_field"):  # tag
             # Enter sends; Shift+Enter inserts a newline. The multiline field owns its own keyboard, so on
             # Shift+Enter we do nothing here and let the widget insert the newline itself.
             if key == dpg.mvKey_Return and not shift_pressed:
-                send_message_to_ai_callback()  # parks focus on the chat panel; see the clearing dance it performs
-            elif key == dpg.mvKey_Escape:
-                # ImGui's own `InputText` handles the cancel — it reverts the field and deactivates it — but
-                # leaves keyboard focus nowhere in particular, so park it. Same division of labour as the
-                # Visualizer's search field, whose Escape handler exists for exactly this reason.
-                dpg.focus_item("chat_panel")  # tag
-            # Up/Down/Home/End are deliberately absent here, and belong to the widget: in a multiline field
+                send_message_to_ai_callback()  # leaves the field inactive; see the clearing dance it performs
+            # Escape is deliberately absent: ImGui's own `InputText` handles the cancel, reverting the field
+            # and deactivating it, which is the entire job. Nothing needs parking afterwards — an inactive
+            # field is what this branch tests for, so the navigation keys are live again on the next press.
+            #
+            # Up/Down/Home/End are likewise absent, and belong to the widget: in a multiline field
             # they move the caret between lines and to the ends of one, which is what a typist expects and
             # what the field already does. Claiming them would break ordinary text editing to add scrolling
             # that Page Up/Down already provides from inside the composer.
@@ -1775,16 +1787,19 @@ def _build_initial_chat_view(sender, app_data) -> None:
         return
     chat_controller.view.build()
 
-    # Park keyboard focus on the chat panel, so the app starts in a state we chose rather than whichever one
-    # DPG happens to leave it in. Observed before this: the composer reported as focused while showing no
-    # caret — ImGui distinguishes *focused* (nav focus, what `is_item_focused` reports) from *active* (being
-    # edited), and an inherited half-state is exactly what makes startup behaviour hard to reason about.
+    # Keyboard focus is deliberately left alone here, and the reason is worth recording because the obvious
+    # thing to write instead — park focus on the chat panel, so the app starts ready to read — is not
+    # available and does harm when attempted.
     #
-    # The panel rather than the composer, following the Visualizer, which parks focus on
-    # `item_information_panel` whenever the user leaves its search field. The scrollable content is the
-    # resting place and the text field is an excursion — which is also what makes the navigation keys work
-    # on arrival, since they are gated on the composer not having focus. `Ctrl+Space` enters the composer.
-    dpg.focus_item("chat_panel")  # tag
+    # `dpg.focus_item` cannot focus a child window. Asked to, it does not merely fail: focus lands on the
+    # first navigable item of the enclosing window and is *activated*, which for a text field means it takes
+    # the caret. So the instruction meant to send focus away from the composer is one of the few that can
+    # reliably put it there.
+    #
+    # Nothing needs to replace it. ImGui gives the first navigable item nav focus of its own accord, but
+    # leaves it *inactive* — no caret — and inactive is what the navigation keys are gated on, so the log is
+    # scrollable from the first frame without anyone having been sent anywhere. `Ctrl+Space` activates the
+    # composer when the reader wants it.
 dpg.set_frame_callback(3, _build_initial_chat_view)
 
 logger.info("App render loop starting.")
