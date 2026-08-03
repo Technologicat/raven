@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 import collections
 import concurrent.futures
+import dataclasses
 import io
 import json
 import pathlib
@@ -1412,6 +1413,30 @@ class DPGStreamingChatMessage(DPGChatMessage):
                       node_id=None)
 
 
+@dataclasses.dataclass(frozen=True)
+class TailFollowSample:
+    """What the view looked like just before some content was added or replaced.
+
+    Produced by `DPGLinearizedChatView.sample_tail_follow` and handed straight back to `follow_tail` or
+    `restore_scroll_after_swap` once the content has landed. One object rather than three loose values,
+    because the three have to be read at the same instant to mean anything together, and because the act
+    methods need all of them to notice that the instant has passed.
+
+    `follow`: What `should_follow_tail` said. Sampled *before* the content arrived, since adding content moves
+              the end and a view sitting at it is no longer at it a moment later.
+    `y_scroll`: Where the panel was, for the swap case, which has to put a reader who was not following back
+                where they were.
+    `user_scroll_generation`: How many reader-initiated scrolls had happened when this was taken. Compared
+                              again at act time: the gap between sample and act spans markdown rendering and
+                              at least one `split_frame`, which is long enough for a keypress to land in, and
+                              acting on the earlier answer would then undo a scroll the reader asked for after
+                              it was given.
+    """
+    follow: bool
+    y_scroll: int
+    user_scroll_generation: int
+
+
 class DPGLinearizedChatView:
     def __init__(self,
                  themes_and_fonts: env,
@@ -1446,6 +1471,12 @@ class DPGLinearizedChatView:
         # screen. One writer at a time either way, so the value cannot drift.
         self._commanded_y_scroll: box = box(None)  # Optional[int] inside
         self._commanded_scroll_was_to_end = False
+
+        # Bumped by every reader-initiated scroll, so that a decision taken before one can be recognized as
+        # stale afterwards. See `TailFollowSample`. A plain int is enough: reader-initiated scrolls all
+        # originate from DPG's callback thread — key handlers and button callbacks alike — so there is one
+        # writer, while the readers are the LLM task thread comparing a value it captured earlier.
+        self._user_scroll_generation = 0
 
     def should_follow_tail(self) -> bool:
         """Whether new content should pull the view along with it.
@@ -1583,10 +1614,37 @@ class DPGLinearizedChatView:
         # that way, so the state stays where it is and each sample decides on current evidence.
         return follow
 
-    def restore_scroll_after_swap(self, was_following: bool, y_scroll: int) -> None:
+    def sample_tail_follow(self) -> TailFollowSample:
+        """Read everything `follow_tail` / `restore_scroll_after_swap` will need, as of right now.
+
+        Call this *before* adding or replacing content, and hand the result back to whichever of the two
+        applies once the content has landed. Sampling the pieces separately at the call site is what this
+        exists to prevent: they are only meaningful as a set taken at one instant.
+        """
+        return TailFollowSample(follow=self.should_follow_tail(),
+                                y_scroll=dpg.get_y_scroll(self.gui_parent),
+                                user_scroll_generation=self._user_scroll_generation)
+
+    def _reader_scrolled_since(self, sample: TailFollowSample) -> bool:
+        """Whether a reader-initiated scroll has landed since `sample` was taken.
+
+        When it has, the sample describes a view the reader has since moved on from, and acting on it would
+        take back a scroll they asked for. Both act methods therefore do nothing at all in that case, rather
+        than falling back to their non-following branch: the reader's own scroll is already in flight and
+        will carry the view where they wanted it.
+        """
+        if sample.user_scroll_generation == self._user_scroll_generation:
+            return False
+        logger.info(f"DPGLinearizedChatView._reader_scrolled_since: the reader scrolled while this content was "
+                    f"being laid out (generation {sample.user_scroll_generation} -> "
+                    f"{self._user_scroll_generation}), so the follow decision taken before it "
+                    f"(follow={sample.follow}) is stale and will not be acted on.")
+        return True
+
+    def restore_scroll_after_swap(self, sample: TailFollowSample) -> None:
         """Put the view back after content was *replaced* — deleted and re-added — rather than appended.
 
-        `was_following`, `y_scroll`: what `should_follow_tail` and `dpg.get_y_scroll` reported **before** the swap.
+        `sample`: what `sample_tail_follow` reported **before** the swap.
 
         Appending only ever grows the container, so a reader below the fold keeps their offset for free and
         `follow_tail` is enough. A swap briefly *shrinks* it, and DPG clamps the scroll position to the
@@ -1596,23 +1654,31 @@ class DPGLinearizedChatView:
         their offset is restored explicitly.
         """
         guiutils.split_frame(operation="restore_scroll_after_swap: lay out the replacement content")
-        if was_following:
+        if self._reader_scrolled_since(sample):
+            return
+        if sample.follow:
             self.scroll_view()
         else:
-            self._set_y_scroll(y_scroll, to_end=False)
+            self._set_y_scroll(sample.y_scroll, to_end=False)
 
-    def follow_tail(self, was_following: bool) -> None:
-        """Scroll the view to the end of the chat, but only if it `was_following` *before* the content grew.
+    def follow_tail(self, sample: TailFollowSample) -> None:
+        """Scroll the view to the end of the chat, but only if it was following *before* the content grew.
 
-        `was_following`: what `should_follow_tail` reported **before** whatever just added content.
+        `sample`: what `sample_tail_follow` reported **before** whatever just added content.
 
         That ordering is the whole point, and is why this takes the answer instead of asking for itself.
         Appending text grows the container, so `max_y_scroll` rises and a view that was at the bottom is no
         longer at the bottom the instant the new content lands. A version that sampled here would read "the
         user has scrolled away" on every chunk, never follow, and leave the view frozen where the stream
         began — failing in the opposite direction from the bug it fixes, while looking entirely reasonable.
+
+        The same ordering opens the window this then has to close. Between the sample and this call sit the
+        markdown render and at least one `split_frame` — around a tenth of a second, and the reader's keyboard
+        is live throughout. An arrow key landing in there was previously erased: `scroll_view` would retarget
+        the reader's in-flight upward scroll back to the end and re-assert tail-following, so roughly one
+        press in fifteen simply vanished. The generation check catches exactly that.
         """
-        if not was_following:
+        if not sample.follow or self._reader_scrolled_since(sample):
             return
         self.scroll_view()  # waits for the new content to lay out, so this reaches the *new* end
 
@@ -1658,6 +1724,12 @@ class DPGLinearizedChatView:
         if y_scroll < 0:
             raise ValueError(f"_set_y_scroll: expected a non-negative position, got {y_scroll}")
         self._commanded_scroll_was_to_end = to_end
+
+        # Announce a reader-initiated scroll to any follow decision that was taken before it and has not been
+        # acted on yet. `user_initiated` is already the right discriminator: it marks the scrolls that express
+        # someone's intent — keys, and the jump-to-message buttons — as against the view chasing a stream.
+        if user_initiated:
+            self._user_scroll_generation += 1
 
         # TODO (chat view scrolling): pass the `ScrollEndFlasher` here once it is wired up, gated on
         # `user_initiated`. The parameter is plumbed already so that the gate lands in one place.
@@ -2652,10 +2724,10 @@ class DPGChatController:
                             old_dpg_chat_message.demolish()
 
                         # Sampled before the new message widget exists — creating it is itself a content change.
-                        was_following = self.view.should_follow_tail()
+                        follow_sample = self.view.sample_tail_follow()
                         streaming_chat_message = DPGStreamingChatMessage(gui_parent=self.view.chat_messages_container_group_widget,
                                                                          parent_view=self.view)
-                        self.view.follow_tail(was_following)
+                        self.view.follow_tail(follow_sample)
 
                         if self.indicator_glow_animation is not None:
                             self.indicator_glow_animation.reset()  # start new pulsation cycle
@@ -2705,7 +2777,7 @@ class DPGChatController:
                     # reply only for a reader who is already at the end of it. Someone who scrolled up to
                     # re-read an earlier message stays where they put themselves, instead of being dragged
                     # back down by every chunk — which, on a thinking model, meant waiting out the whole turn.
-                    was_following = self.view.should_follow_tail()
+                    follow_sample = self.view.sample_tail_follow()
 
                     if self.gui_updates_safe and chunk_text:  # avoid triggering on an empty event
                         dpg.hide_item(self.llm_indicator_widget)  # hide prompt processing indicator
@@ -2728,7 +2800,7 @@ class DPGChatController:
                         task_env.text = io.StringIO()
                         task_env.t0 = time.monotonic()
                         task_env.n_chunks0 = n_chunks
-                        self.view.follow_tail(was_following)
+                        self.view.follow_tail(follow_sample)
                     task_env.current_is_thought = is_thought
 
                     # Accumulate the chunk, then render. Write *before* reading the paragraph so the chunk is
@@ -2748,7 +2820,7 @@ class DPGChatController:
                         streaming_chat_message.add_paragraph("",
                                                              is_thought=is_thought)
                         task_env.text = io.StringIO()
-                        self.view.follow_tail(was_following)
+                        self.view.follow_tail(follow_sample)
                     # - update at least every 0.5 sec, even if the LLM is slow
                     # - update after every 10 chunks, but with a rate limit
                     elif dt >= 0.5 or (dt >= 0.25 and dchunks >= 10):  # commit changes to in-progress last paragraph
@@ -2756,7 +2828,7 @@ class DPGChatController:
                         task_env.n_chunks0 = n_chunks
                         streaming_chat_message.replace_last_paragraph(paragraph_text,
                                                                       is_thought=is_thought)  # at first paragraph, will auto-create the paragraph if not created yet
-                        self.view.follow_tail(was_following)
+                        self.view.follow_tail(follow_sample)
 
                     # Let the LLM keep generating (if it wants to).
                     return llmclient.action_ack
@@ -2794,11 +2866,10 @@ class DPGChatController:
                         # The streaming message finalizing is an automatic step, not something the user asked
                         # for, so it must not move a reader who has scrolled away any more than the chunks did.
                         # This one replaces rather than appends, so the offset is restored too, not just the pin.
-                        was_following = self.view.should_follow_tail()
-                        y_scroll = dpg.get_y_scroll(self.view.gui_parent)
+                        follow_sample = self.view.sample_tail_follow()
                         delete_streaming_chat_message()  # no-ops when there is no in-progress message in the GUI
                         self.view.add_complete_message(node_id, scroll_view=False)
-                        self.view.restore_scroll_after_swap(was_following, y_scroll)
+                        self.view.restore_scroll_after_swap(follow_sample)
                         self.update_context_fill_indicator()  # AI message completed -> context grew
 
                         logger.info("ai_turn.ai_turn_task.on_done: all done.")
@@ -2844,11 +2915,10 @@ class DPGChatController:
                     self.app_state["HEAD"] = node_id  # update just in case of Ctrl+C or crash during tool calls
                     task_env.text = io.StringIO()  # for next AI message (in case of tool calls)
                     if self.gui_updates_safe:
-                        was_following = self.view.should_follow_tail()  # a tool result also arrives on its own
-                        y_scroll = dpg.get_y_scroll(self.view.gui_parent)
+                        follow_sample = self.view.sample_tail_follow()  # a tool result also arrives on its own
                         delete_streaming_chat_message()  # it shouldn't exist when this triggers, but robustness.
                         self.view.add_complete_message(node_id, scroll_view=False)
-                        self.view.restore_scroll_after_swap(was_following, y_scroll)
+                        self.view.restore_scroll_after_swap(follow_sample)
                         self.update_context_fill_indicator()  # tool result added -> context grew
 
                 def on_tools_done() -> None:
