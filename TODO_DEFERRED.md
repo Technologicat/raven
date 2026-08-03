@@ -1115,7 +1115,7 @@ PEP 639 covers this directly, and the `license` field is already in its string f
 a compound SPDX *expression*:
 
 ```toml
-license = "BSD-2-Clause AND AGPL-3.0-or-later AND MIT"
+license = "BSD-2-Clause AND AGPL-3.0-only AND MIT"
 license-files = ["LICENSE.md",
                  "raven/server/LICENSE",
                  "raven/avatar/pose_editor/LICENSE",
@@ -1130,11 +1130,25 @@ PEP 639 deprecates those, and this project is already clean on that axis.
 
 **Two elections that are the copyright holder's, not a packaging detail:**
 
-- **`AGPL-3.0-only` versus `AGPL-3.0-or-later`.** The AGPL source notices say only "licensed under the GNU
-  AGPL, see `LICENSE`", with no version elected. Do not read the election off `raven/server/LICENSE:637`
-  ("either version 3 of the License, or (at your option) any later version") — that is the licence's own
-  how-to-apply appendix, present verbatim in every copy of the AGPL, and says nothing about what Raven chose.
-  SPDX forces a choice, so one has to be made before the expression above can be written.
+- **`AGPL-3.0-only` versus `AGPL-3.0-or-later` — resolved 2026-08-03 to `-only`, and it is a constraint
+  rather than a preference.** Do not read the election off `raven/server/LICENSE:637` ("either version 3 of
+  the License, or (at your option) any later version"): that is the licence's own how-to-apply appendix,
+  present verbatim in every copy of the AGPL, and says nothing about what anyone chose. It looks like an
+  answer, which is why it is called out here.
+
+  The election has to come from upstream, because the AGPL parts derive from *SillyTavern-extras* and the
+  avatar has never been clean-roomed — so Raven is not the sole copyright holder, and some holders may no
+  longer be contactable (Juha, 2026-08-03). Checked upstream, and **it never elected either**: the extras
+  README says only "relicensed as AGPLv3", `LICENSE` is the plain text with no per-file notices, `server.py`
+  carries no header, and the one explicit machine-readable declaration in the organization — main
+  SillyTavern's `package.json` — reads `"license": "AGPL-3.0"`, the *deprecated* SPDX identifier, deprecated
+  precisely for this ambiguity.
+
+  With no grant anywhere, `-only` follows: "or any later version" is a permission that copyright holders must
+  extend explicitly, and absent that only the named version applies. Raven could not grant it in any case,
+  having no standing to relicense other people's contributions. Not legal advice, and with AGPL and an
+  institution involved it is worth one confirmation at JAMK — but the reasoning is checkable and the sources
+  are named above.
 - **Whether the vendored licences belong in the top-level expression at all.** Strictly, a distribution's
   effective terms include everything it ships — `tha3`, `anime4k`, `file_dialog`, `kokoro_fastapi`,
   `xdotwidget` and its colorbrewer schemes. Common practice is to ship their texts through `license-files`
