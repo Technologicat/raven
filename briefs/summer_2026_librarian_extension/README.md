@@ -111,9 +111,10 @@ loop within a turn, *exchange* = user turn + assistant turn — and it is the co
   component with zero tests, so they will find things. They go to `TODO_DEFERRED.md`. 0.2.8 is a Librarian
   release, and a Visualizer bug is not an argument for delaying it.
 - **Brief 11** (importer rework) and **brief 12** (derived artifact store) are 0.2.9 work.
-- **The corpus / scopes / unified-DB design**, and the corpus TOC that is blocked on it. Both live in
-  `monday-2026-08-03-checklist.md` §5–§6 until the design session gives them a brief — that file is closed
-  as a checklist but is still the record for those two, and says so at the top. Realistically after
+- **Brief 13** — corpus scopes and the unified DB, plus the corpus TOC that is blocked on them. Drafted
+  2026-08-03 as a rough draft rather than a design: it carries the decisions already made, the proposals not
+  yet agreed, and the retractions with their reasons, so the design session starts from an agenda instead of
+  a pile. The design comes back from a claude.ai session as a filled-in version of it. Realistically after
   Researchers' Night (26 September 2026).
 
 The reason to wait rather than ship at 07: both remaining items leave a user-visible half-feature.
@@ -173,6 +174,10 @@ Listed so the folder's contents are legible from its README rather than from `ls
   mechanism for everything computed *from* a source artifact — extracted text, OCR, thumbnails, burst `.bib`
   records, embeddings — with separate stores for the chat and document-DB lifecycles. **v0.2.9 work; it does
   not gate v0.2.8**, and the webfetch attachment work deliberately lands ahead of it rather than waiting.
+- **13 — corpus scopes and unified DB** (`13_corpus-scopes-and-unified-db-brief.md`). A **draft**, unlike the
+  rest: it holds the 2026-08-01 design-session material with its `[D]`/`[N]`/`[P]`/`[X]` provenance markers
+  intact, so a later reader can tell settled from proposed. Prerequisite for the corpus TOC and for most of
+  what the corpus-interrogation sketch wants. Brief 12 deliberately does not depend on it.
 - **`atmospheric-dust.md`** and **`crt-display.md`**. Avatar postprocessor work, queued for Researchers'
   Night. Moved in 2026-08-03; neither is done.
 
