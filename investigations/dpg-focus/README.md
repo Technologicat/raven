@@ -31,6 +31,39 @@ a reliable way to hand a text field the caret. Both apps contained that call.
 To move focus out of a text field, focus a real widget. **A button is safe**: DPG leaves ImGui's
 keyboard-nav activation off, so a focused button ignores Space and Enter and cannot fire its callback.
 
+**A child window is unaskable, not unfocusable.** `focus_item` has no working spelling for it, but a click
+does focus one — grabbing its scrollbar included — and the focus persists after release.
+
+## Holding the scrollbar does not hold your place
+
+Found separately, testing whether a reader can hold a position by dragging the scrollbar while a reply
+streams. They cannot, for long: it works over a quick drag and creeps over a long hold.
+
+ImGui derives the scroll position from where the thumb sits in its track, which is a **fraction** of the
+content. So holding the thumb still holds the *fraction*, and as `scroll_max` grows with each generated line
+the absolute position slides down by (fraction × new content).
+
+Measured from a Librarian session log, 288 consecutive samples over 2.7 s while the reader held the
+scrollbar (2026-08-03):
+
+| | y_scroll | max_y_scroll | y/max |
+|---|---|---|---|
+| start | 2375 | 3555 | 0.6681 |
+| end | 2640 | 3971 | 0.6648 |
+
+The ratio is flat to 0.5 % while both endpoints grow by hundreds of pixels — the fraction is what is being
+preserved. Per step, `max += 52` and `y += 33`, and 33/52 = 0.63 ≈ the held fraction.
+
+**Raven is not a party to this.** Over those 288 samples the app issued no scroll command of any kind — no
+`scroll_view`, no `_set_y_scroll`, no animation frames — and `should_follow_tail` correctly returned `False`
+throughout. The movement is entirely ImGui's.
+
+A fix is available but not taken: `scrollbar_drag_probe.py` establishes that the drag is detectable, so a
+per-frame compensator could hold the absolute offset across a change in `max_y_scroll` instead of letting
+the fraction stand. The cost is that the thumb then drifts away from the cursor, which wants looking at
+rather than reasoning about. Tracked in `TODO_DEFERRED.md`, alongside the `SmoothScrolling` refactor,
+because both land in `raven/common/gui/animation.py` and are better done together.
+
 ## Files
 
 - `focus_states_probe.py` — the four-state table. Clicks into a field, types, presses Escape, clicks away,
@@ -38,8 +71,13 @@ keyboard-nav activation off, so a focused button ignores Space and Enter and can
   about ten seconds.
 - `button_activation_probe.py` — whether a focused button fires on Space or Enter. The answer is what makes
   a button a usable parking spot. Same requirements, about nine seconds.
+- `scrollbar_drag_probe.py` — whether a scrollbar drag is detectable at all, which decides whether the creep
+  above can be compensated. Also where the click-focuses-a-child-window result comes from. About eight
+  seconds. It deliberately does **not** reproduce the creep: its press lands on the scrollbar track rather
+  than the thumb, so ImGui answers with auto-repeat paging instead of a drag, and the creep is better
+  established from the session log above than from any synthetic drag.
 
-Both are self-driving: run them and read the table. Re-run after a DPG upgrade that might have touched focus
+All three are self-driving: run them and read the table. Re-run after a DPG upgrade that might have touched focus
 handling — the send path in `raven/librarian/app.py` and the search-accept path in `raven/visualizer/app.py`
 both rest on the button result.
 

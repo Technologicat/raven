@@ -3,6 +3,35 @@
 New items go at the **top**. (Both ends were in use up to 2026-07-27, which is how the two halves of the same
 Librarian session ended up ~1000 lines apart.)
 
+## Holding the chat view's scrollbar does not hold your place while a reply streams
+
+`raven/librarian/chat_controller.py` plus a new per-frame hook, probably in
+`raven/common/gui/animation.py`. Grab the scrollbar mid-reply and hold it: the view creeps downward, roughly
+two-thirds of a line per generated line. A quick drag is fine; a long hold is not.
+
+**Not Raven's doing, and worth knowing that before reaching for the follow-tail logic.** ImGui derives the
+scroll position from where the thumb sits in its track, which is a *fraction* of the content, so holding the
+thumb holds the fraction while `scroll_max` grows underneath it. Measured over 288 consecutive samples of a
+real session: `y/max` flat at 0.668 → 0.665 while both endpoints grew by hundreds of pixels, with the app
+issuing **no** scroll command of any kind and `should_follow_tail` correctly answering `False` throughout.
+Full numbers in `investigations/dpg-focus/README.md`.
+
+A fix is available. `investigations/dpg-focus/scrollbar_drag_probe.py` establishes the detector:
+`is_mouse_button_down(mvMouseButton_Left) and is_item_focused(<panel>)` is true for exactly the duration of
+the press, while `is_item_active` on the panel — the obvious candidate — is False throughout. A per-frame
+compensator keyed on that could hold the *absolute* offset across a change in `max_y_scroll` rather than
+letting the fraction stand.
+
+Two reasons it is deferred rather than done. It means writing scroll positions every frame in opposition to
+ImGui, which owns the drag, and the visible cost is the thumb drifting from the cursor — small in thumb
+pixels, but it wants looking at rather than reasoning about. And it needs a per-frame render-thread hook
+that does not exist yet, which would be a new component in `animation.py` — the same file the entry below
+wants to restructure. **Do these two together**, and the new component then gets built on the shape we want
+rather than the one we have.
+
+Severity is low: it creeps rather than latching, and releasing the mouse ends it. Discovered by Juha during
+the chat-view scrolling live test (2026-08-03).
+
 ## `SmoothScrolling` commits during construction, so it cannot be built without being fired
 
 `raven/common/gui/animation.py`. `SmoothScrolling.__init__` ends by calling `self.start()`, which is not a
