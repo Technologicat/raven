@@ -556,9 +556,33 @@ You can't reorder DPG's same-frame dispatch, so make correctness independent of 
 
 Cost is one frame (~16 ms) of latency on the deferred action — imperceptible, and held-key repeat just gains a constant one-frame offset (no cumulative lag). Apply the deferral in the main loop, **not** via `set_frame_callback`: only one callback can be registered per frame number, so rapid input would silently overwrite it.
 
+## Focus is not the same as the caret: gate hotkeys on `is_item_active`
+
+When a global key handler needs to know "should this key go to the text field instead of the app", **ask `dpg.is_item_active`, not `dpg.is_item_focused`.**
+
+ImGui gives nav focus to the first navigable item of a newly focused window all by itself. So a text field reports **focused within the first few frames with no user having touched it**, and a handler gated on `is_item_focused` silently swallows every key it hands to the field — from app start until something else is clicked. *Active* is the state that means the field owns the caret. Measured on a multiline `add_input_text`:
+
+| composer state | `is_item_focused` | `is_item_active` |
+|---|---|---|
+| startup, no interaction | **True** | False |
+| clicked in / typing | True | **True** |
+| after Escape (InputText's own cancel) | True | False |
+| after clicking another widget | False | False |
+
+Corollary: `dpg.get_focused_item()` is not a cross-check — it kept naming the field even in the last row, where `is_item_focused` on that same field was `False`.
+
+## `focus_item` cannot focus a child window — and does harm when asked to
+
+`dpg.focus_item` works on ordinary items (measured on a button: focus moves on the *next* frame, not the same one). On a **child window** it does not merely fail: focus lands on the first navigable item of the enclosing window and is **activated** — so if that item is a text field, the call *hands it the caret*.
+
+This makes "park focus on the scroll panel so the navigation keys are live" — the natural thing to write for a reading-first app — the one instruction that reliably does the opposite. There is no way to focus a child window; there is also no need, since ImGui's default leaves the auto-focused item *inactive*, which is exactly the state a caret-gated handler wants. To move focus out of a text field deliberately, focus a real widget (a button works).
+
+**A focused button is a safe parking spot:** DPG does not enable ImGui's keyboard-nav activation, so a focused button ignores Space and Enter and cannot fire its callback. Verified, because parking focus on a *send* button is not something to assume about.
+
 ## Investigation history
 
 - 2026-06-06: Traced a raven-cherrypick mis-tag (fast `C`+`Right` tagging the next image instead of the current one) to same-frame keycode-order dispatch; confirmed empirically that every triage letter outranks every arrow, so navigation always fires first. Fixed by deferring keyboard navigation one frame (`_request_nav`). Resolved the long-standing "mysterious 517/518" in the same pass — the `mvKey_Prior`/`mvKey_Next` constants are stale DPG-1.x values; the live codes are 517/518.
+- 2026-08-03: Librarian's arrow keys were dead at app start until the chat log was clicked. Four standalone DPG probes (auto-focus baseline; `focus_item` on a child window vs. a button; a self-driving `xdotool` run that clicks, types and presses Escape; and a Space/Enter test on a focused button) produced the two sections above. Both apply beyond Librarian: **`raven/visualizer/app.py` gates on `is_item_focused("search_field")` and calls `focus_item("item_information_panel")`, which is a child window** — same shape, not yet re-tested there.
 
 # Scrolling
 
