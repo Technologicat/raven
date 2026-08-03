@@ -100,7 +100,13 @@ def build_window():
                     no_collapse=True,
                     no_scrollbar=True,
                     no_focus_on_appearing=True,
-                    autosize=True):
+                    autosize=True,
+                    # Without this the tooltip is at least 100x100 whatever it holds — `min_size` defaults to
+                    # about that and autosize will not shrink past it. A short annotation therefore carried a
+                    # skirt of empty window, and a DPG window swallows the mouse across its whole rect, so
+                    # that skirt was a dead zone over the plot. Same fix as the XDot viewer's tooltip, which
+                    # met this first.
+                    min_size=[1, 1]):
         with dpg.group() as _current_group:
             dpg.add_text("[no data]", wrap=0, color=(180, 180, 180))
         dpg.set_item_alias(_current_group, "annotation_group")  # tag  # Debug-registry name only — the hot path uses `_current_group` (the widget ID) directly.

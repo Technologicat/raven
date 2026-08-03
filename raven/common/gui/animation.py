@@ -237,6 +237,7 @@ class Dimmer(Overlay):
                 with dpg.window(show=False, modal=False, no_title_bar=True, tag=self.tag,
                                 pos=pos,
                                 width=w, height=h,
+                                min_size=[1, 1],  # DPG's ~[100, 100] floor clamps explicit sizes too, and would overflow a small target
                                 no_collapse=True,
                                 no_focus_on_appearing=True,
                                 # no_bring_to_front_on_focus=True,  # for some reason, prevents displaying the window at all
@@ -1123,6 +1124,7 @@ class ScrollEndFlasher(Overlay, Animation):
                 with dpg.window(show=False, modal=False, no_title_bar=True, tag=f"{self.tag}_window_top",
                                 pos=pos,
                                 width=w, height=48,
+                                min_size=[1, 1],  # or DPG silently makes this 100 tall; see note below
                                 no_collapse=True,
                                 no_focus_on_appearing=True,
                                 no_resize=True,
@@ -1133,9 +1135,17 @@ class ScrollEndFlasher(Overlay, Animation):
                     self.drawlist_top = dpg.add_drawlist(width=w, height=48)
             if self.window_bottom is None:
                 logger.debug(f"ScrollEndFlasher.build: frame {dpg.get_frame_count()}: instance '{self.tag}' creating overlay (bottom)")
+                # `min_size` matters more here than it looks. It defaults to about [100, 100] and clamps an
+                # *explicit* size, not only an autosize one — so these 48 px bands were really 100 px, and a
+                # DPG window swallows the mouse across its whole rect whether or not it draws a background.
+                # The surplus was therefore an invisible dead zone for the wheel: 52 px over the panel from
+                # the top band, and 52 px past its bottom edge from this one, for as long as a flash lasted.
+                # Which is the very thing splitting this overlay into two windows was meant to avoid.
+                # Measured 2026-08-03; see `investigations/dpg-overlays/`.
                 with dpg.window(show=False, modal=False, no_title_bar=True, tag=f"{self.tag}_window_bottom",
                                 pos=[pos[0], pos[1] + h - 48],
                                 width=w, height=48,
+                                min_size=[1, 1],
                                 no_collapse=True,
                                 no_focus_on_appearing=True,
                                 no_resize=True,

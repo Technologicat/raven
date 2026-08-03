@@ -232,12 +232,20 @@ Meta-pattern: a single fast user gesture (e.g. cherrypick's `C`+`Right`) exercis
 
 `dpg.add_window()` has an explicit `min_size` parameter (default ~`[100, 100]`).
 The theme style `mvStyleVar_WindowMinSize` does **not** override it — the
-window parameter takes precedence. This means an autosize window won't shrink
-below its `min_size` even when the content is smaller.
+window parameter takes precedence.
 
-**Symptom**: autosize window appears to have phantom blank space below the
-content. Looks like padding or an extra text line, but is actually the window
-being clamped to its minimum height.
+**It clamps an explicitly sized window, not only an autosize one** (measured
+2026-08-03): a window created with `width=400, height=48` and no `min_size`
+reports a rect of `400x100`. So "I set the size myself" is not an escape.
+
+**Symptom**: the window appears to have phantom blank space below the content.
+Looks like padding or an extra text line, but is actually the window being
+clamped to its minimum height.
+
+**Why it is not merely cosmetic**: a DPG window swallows the mouse across its
+whole rect, background or not (see `investigations/dpg-overlays/`), so the
+phantom area is a dead zone over whatever it covers. Every floating overlay in
+Raven passes `min_size=[1, 1]` for this reason.
 
 **Fix**: set `min_size=[1, 1]` explicitly on the window:
 

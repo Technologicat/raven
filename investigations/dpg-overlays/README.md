@@ -22,15 +22,33 @@ the panel with one; its comment asserts the behaviour, and this is the check.
 
 ## …and an autosize window is silently ~100 px tall unless told otherwise
 
-`dpg.add_window`'s `min_size` defaults to about `[100, 100]`, and `autosize=True` will not shrink past it;
-the theme style `mvStyleVar_WindowMinSize` does not override it. Recorded in `dpg-notes.md`, "Window
-sizing", where it was first met as phantom blank space under a tooltip's content.
+`dpg.add_window`'s `min_size` defaults to about `[100, 100]`, and the theme style
+`mvStyleVar_WindowMinSize` does not override it. Recorded in `dpg-notes.md`, "Window sizing", where it was
+first met as phantom blank space under a tooltip's content.
 
-Combined with the result above, the two turn a cosmetic-looking default into a functional bug: Librarian's
-jump-to-latest pill holds one small button, so without `min_size=[1, 1]` its window ran ~100 px tall, hung
-past the chat panel's bottom edge, and made a dead zone over the composer. The pill's placement arithmetic
-also has to measure from the *button* rather than from the window, since the window adds a padding ring
-around it.
+**And it clamps an explicit size, not only an autosize one** — which is the part that had gone unnoticed,
+and the reason this bundle exists. Measured 2026-08-03:
+
+| window | asked for | actual rect |
+|---|---|---|
+| explicit, no `min_size` | 400×48 | **400×100** |
+| explicit, `min_size=[1, 1]` | 400×48 | 400×48 |
+| autosize, no `min_size` | autosize, one small button | **100×100** |
+
+Combined with the capture result above, the two turn a cosmetic-looking default into a functional bug, and
+it had shipped in three places:
+
+- **`ScrollEndFlasher`'s two bands** are created `width=w, height=48`. They were really 100 px tall, so the
+  top band laid 52 px of dead zone over the panel and the bottom band 52 px past its lower edge, for as long
+  as a flash lasted — defeating the very split into two windows that was meant to avoid capturing the wheel.
+  Found because Juha asked whether the flasher had the same problem as the pill. It did.
+- **The Visualizer's annotation tooltip** is autosize, so any annotation shorter than 100 px carried a skirt
+  of empty window over the plot.
+- **Librarian's jump-to-latest pill** holds one small button; its window ran ~100 px tall and hung past the
+  chat panel's bottom edge over the composer. Its placement arithmetic also has to measure from the
+  *button* rather than the window, since the window adds a padding ring around it.
+
+The XDot viewer's tooltip already passed `min_size=[1, 1]`, having met this first.
 
 **The rule both give: size a floating overlay to its content, and where the content cannot fill the rect,
 use several windows rather than one large one.**
