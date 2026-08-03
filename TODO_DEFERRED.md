@@ -157,15 +157,31 @@ Two things to keep straight while sweeping:
   DPG style values coincide in the default theme (`WindowPadding.x` and `ItemSpacing.x` are both 8), so
   replacing a coincidental 8 asserts an identity that is not there. The test is what the number *means* at
   that site, not what it equals. A literal that is genuinely a chosen gap stays a literal.
-- **Two per-app copies predate the shared home, and go away in this pass** (decided with Juha, 2026-07-31 —
-  the guiutils definitions are the ones that stay). `raven/xdot_viewer/config.py` defines
-  `DPG_WINDOW_PADDING_Y`, `DPG_FRAME_PADDING_Y`, `DPG_ITEM_SPACING_Y` and `DPG_SCROLLBAR_SIZE`;
-  `raven/conference_timer/config.py` defines `DPG_WINDOW_PADDING`. These named theirs first and the guiutils
-  block credits them, but the argument in that block — these are facts about DPG, not choices an app made —
-  now applies to them too. Folding them in also promotes the two metrics guiutils lacks (`ItemSpacing`,
-  `ScrollbarSize`), which is probably the more valuable half of the job. Watch the name change while moving
-  xdot_viewer's: its `DPG_WINDOW_PADDING_Y` is guiutils' `DPG_WINDOW_PADDING` (both components are 8, so
-  guiutils dropped the axis suffix).
+- **Three per-app copies predate the shared home, and go away in this pass** (decided with Juha, 2026-07-31 —
+  the shared definitions are the ones that stay). `raven/xdot_viewer/config.py` and
+  `raven/cherrypick/config.py` each define `DPG_WINDOW_PADDING_Y`, `DPG_FRAME_PADDING_Y`,
+  `DPG_ITEM_SPACING_Y` and `DPG_SCROLLBAR_SIZE`; `raven/conference_timer/config.py` defines
+  `DPG_WINDOW_PADDING` and `DPG_SCROLLBAR_SIZE`. (Cherrypick's set was missed when this item was written —
+  found 2026-08-03. All three agree on 8/3/4/14, so the fold is a redirect, not a reconciliation.) These
+  named theirs first and the shared block credits them, but the argument in that block — these are facts
+  about DPG, not choices an app made — applies to them too. Watch the name change while moving
+  xdot_viewer's and cherrypick's: their `DPG_WINDOW_PADDING_Y` is the shared `DPG_WINDOW_PADDING` (both
+  components are 8, so the shared copy dropped the axis suffix, and *that* is the `_Y`-on-a-symmetric-value
+  wart, not the one in guiutils).
+
+- **`guiutils` is the wrong destination, and finding that out is what stalled the fold** (2026-08-03).
+  `raven.common.gui.utils` imports `dearpygui` at module level, so pointing an app's `config.py` at it hands
+  that config a hard GUI-toolkit dependency. `raven/cherrypick/config.py` has none today, and CI installs no
+  toolkit — the same trap `librarian/cleanup.py` is split in half to avoid, where a stray `dpg` import made
+  a whole module uncollectable.
+
+  So the pass needs a **DPG-free home** first: these are four integers and a citation each, with no reason
+  to sit behind an import of the toolkit they describe. Somewhere like `raven/common/gui/dpgstyle.py`,
+  importing nothing, with `guiutils` re-exporting for its existing 22 use sites. Only then redirect the app
+  configs. Doing it in the other order is what would break CI.
+
+  Note that `guiutils.DPG_SCROLLBAR_SIZE` was added 2026-08-03 (the jump-to-latest pill needed it), so the
+  shared block now has three of the four; `ItemSpacing` is the one still missing.
 
 Note that xdot_viewer's derived sizes carry empirical fudge terms (`-13`, "+2 empirical (ImGui internal
 leading/rounding)"). Those are not margins misnamed, they are unexplained residue — worth a separate look at

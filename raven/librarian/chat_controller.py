@@ -1563,6 +1563,15 @@ class DPGLinearizedChatView:
                         show=False,
                         no_title_bar=True,
                         autosize=True,
+                        # Without this the window is silently 100 px tall whatever it holds: `min_size`
+                        # defaults to ~[100, 100] and autosize will not shrink past it (`mvStyleVar_
+                        # WindowMinSize` does not override it — see `dpg-notes.md`, "Window sizing"). That
+                        # is not merely cosmetic here. A DPG window captures mouse input across its whole
+                        # rect, background or no background, so the surplus would sit over the chat log as
+                        # an invisible patch that swallows the wheel — which is exactly the reason
+                        # `ScrollEndFlasher` splits its overlay into two windows rather than covering the
+                        # panel with one.
+                        min_size=[1, 1],
                         no_collapse=True,
                         no_focus_on_appearing=True,  # a pill appearing must not take the keyboard from the reader
                         no_resize=True,
@@ -2105,10 +2114,10 @@ class DPGLinearizedChatView:
         # The corner is out of the way, and it is also where the eye already is, since reaching this state
         # means having just worked the scrollbar. Hence the extra clearance on the right — landing under the
         # scrollbar would put the pill exactly where the pointer is.
-        # Measured from the *button*, not from the window holding it. The window's reported rect is larger
-        # than the pill you can see — enough that placing by it left the pill floating well clear of the
-        # bottom edge — so the arithmetic works in terms of the widget being positioned and then backs out
-        # the window's own content origin, which is one window padding in from its corner.
+        # Measured from the *button*, not from the window holding it, because the button is the pill a
+        # reader sees: the window adds a padding ring around it, and measuring the gap to the window's edge
+        # would quietly make the visible gap twice what it says. So the arithmetic places the button and
+        # then backs out the window's content origin, one window padding in from its corner.
         panel_x, panel_y = dpg.get_item_pos(self.gui_parent)  # child windows report `pos`, not `rect_min`
         panel_w, panel_h = dpg.get_item_rect_size(self.gui_parent)
         button_w, button_h = dpg.get_item_rect_size(self._jump_to_latest_button)
