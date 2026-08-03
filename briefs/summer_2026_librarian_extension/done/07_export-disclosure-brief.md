@@ -1,4 +1,11 @@
-# Brief: export provenance metadata (Article 50(2) good-faith marking)
+# Brief: export disclosure metadata (Article 50(2) good-faith marking)
+
+*Renamed 2026-08-03, from "provenance" to "disclosure".* Raven uses **provenance** in the research
+sense — which source material a claim came from — and that is the sense the sidecar stores carry
+(`sidecarstore.base_provenance`, the `provenance_url` / `provenance_source` attachment fields).
+Article 50 is about something else: whether a machine wrote this. Both words stay; they name
+different things. The C2PA paragraph below keeps "provenance" because that is the external
+standard's own vocabulary.
 
 **Why this exists:** the EU AI Act's Article 50(2) transparency obligation (guidelines adopted
 2026-07-20, marking obligation biting 2026-12-02 for systems already on the market) asks
@@ -8,7 +15,7 @@ currently carries no origin information a downstream reader — human or parser 
 
 Two things to be clear about up front, because they set the scope and stop us from overbuilding:
 
-1. **This is provenance metadata, not the robust 50(2) mark.** The robust mark for text is a
+1. **This is disclosure metadata, not the robust 50(2) mark.** The robust mark for text is a
    *generation-time watermark* (green-list / SynthID-Text): it acts on the logits, inside the
    sampling loop, and only whoever controls generation can apply it. Librarian samples
    un-watermarked third-party weights through an OpenAI-compat backend — there is no watermarker
@@ -17,7 +24,7 @@ Two things to be clear about up front, because they set the scope and stop us fr
    downstream-system-provider status is what covers the gap. **Do not build text watermarking.**
 2. **What a downstream system provider *can* do is exactly three things**: don't strip any marks
    the model does emit (N/A today — none arrive — but a one-line constraint below keeps us honest
-   if that changes); attach system-level provenance to outputs; document the limitation. This
+   if that changes); attach system-level disclosure metadata to outputs; document the limitation. This
    brief is the middle one. It also lowers the bar for any *deployer* who publishes Librarian
    output and falls under 50(4), which is their obligation, not ours — sane defaults help them.
 
@@ -31,7 +38,7 @@ whose shape 03/compat fix. No downstream brief depends on this one. It can land 
 
 ## 1. The core decision
 
-**Surface provenance that already exists in the payload, in a machine-readable schema, at the two
+**Surface the origin information that already exists in the payload, in a machine-readable schema, at the two
 export surfaces we already have.** Nothing about origin needs to be *computed* — every node
 payload already records it:
 
@@ -44,7 +51,7 @@ payload already records it:
 
 The gap is not data, it's *form* and *coverage*: today's exported metadata is prose bullets
 (`- *Node ID*: ...`) aimed at debugging (node IDs, revision numbers), it's gated behind a
-Shift/`include_metadata` toggle, and it never includes the model name. Provenance wants the
+Shift/`include_metadata` toggle, and it never includes the model name. Disclosure wants the
 opposite defaults: machine-readable, origin-focused, on by default.
 
 **Machine-readable means a documented, consistent, parseable schema — not a prose sentence.** A
@@ -83,12 +90,12 @@ messages:
 The existing prose `- *HEAD node ID*` / `- *Log generated*` header can stay as human-facing text
 under the H1, or fold into the manifest — implementer's call; the manifest is the load-bearing
 part. Keep the debug metadata (node IDs, revision numbers) exactly where it is, behind
-`include_metadata` — it's orthogonal to provenance and serves a different reader.
+`include_metadata` — it's orthogonal to disclosure and serves a different reader.
 
 **(b) Single-message copy — `DPGCompleteChatMessage.copy_message_to_clipboard_callback`.** The
 document manifest doesn't travel when someone lifts one message out — and single-message copy is
 *the* fragment-lift case (it exists because the DPG Markdown renderer isn't selectable). So the
-copied fragment needs its own provenance.
+copied fragment needs its own disclosure.
 
 **Use the same front-matter format here, not a second ad-hoc marker.** An earlier draft used a
 one-line blockquote for this case; that was a mistake — a lone copied message is just a tiny
@@ -98,7 +105,7 @@ consumer has to special-case for no gain. So a single assistant/tool copy gets a
 block carrying the one message's `messages: [ {n, origin, model, generated_at} ]`; the
 `ai_generated` and `generator` keys carry over unchanged. (The only thing the blockquote had going
 for it — surviving a copy-of-a-copy — is a vanishing case, and front matter degrades the same way
-any partially-deleted provenance does: worst case the origin line just isn't there.)
+any partially-deleted disclosure block does: worst case the origin line just isn't there.)
 
 
 ## 3. Mark AI content, leave user messages clean

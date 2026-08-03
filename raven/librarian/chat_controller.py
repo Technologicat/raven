@@ -727,7 +727,7 @@ class DPGChatMessage:
             # parsers. Human turns get none: there is no AI generation to disclose, and a YAML block on a copied
             # question would just be something to delete before pasting it back into the chat field.
             if role != "user":
-                manifest = f"{chatutil.format_provenance_manifest([node_payload])}\n"
+                manifest = f"{chatutil.format_disclosure_manifest([node_payload])}\n"
             else:
                 manifest = ""
 
@@ -1722,14 +1722,14 @@ class DPGLinearizedChatView:
             if not self.chat_controller.current_chat_history:
                 return None
 
-            # Read the payloads up front: the provenance manifest describes the whole export, so it has to be
+            # Read the payloads up front: the disclosure manifest describes the whole export, so it has to be
             # built before any message text is written, and it must land first in the output for a front-matter
             # parser to see it at all.
             node_payloads = [self.chat_controller.datastore.get_payload(dpg_chat_message.node_id)  # auto-selects active revision  TODO: later (chat editing), we need to set the revision to load
                              for dpg_chat_message in self.chat_controller.current_chat_history]
 
             output_text = io.StringIO()
-            output_text.write(chatutil.format_provenance_manifest(node_payloads))
+            output_text.write(chatutil.format_disclosure_manifest(node_payloads))
             output_text.write(f"\n# Raven-librarian chatlog\n\n- *HEAD node ID*: `{self.chat_controller.current_chat_history[-1].node_id}`\n- *Log generated*: {chatutil.format_chatlog_datetime_now()}\n\n{'-' * 80}\n\n")
             for message_number, (dpg_chat_message, node_payload) in enumerate(zip(self.chat_controller.current_chat_history, node_payloads)):
                 message = node_payload["message"]

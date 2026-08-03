@@ -58,7 +58,7 @@
 - **AI content is now disclosed as such**, on screen and in anything you copy out (EU AI Act Article 50).
   - The notice below the chat states outright that you are interacting with an AI system, ahead of the existing note that its answers need checking. The old wording only implied it. Always visible and not dismissable.
   - Exported chat text carries **origin metadata**, as a YAML front-matter block that names the generator, the export time, which messages came from a human, which from the AI, and which model produced each AI message. Both export routes emit it: the whole-chatlog copy (F8) gets one manifest for the document, and a single copied AI or tool message gets a one-message manifest of its own, since a lifted fragment travels without the document's. Copying one of your *own* messages is unchanged — there is no AI generation to disclose, and it keeps the copy clean for editing and resending.
-  - This is what a system on this side of the model boundary can honestly attest to. The robust mark for AI-generated text is a watermark applied while the model samples; *Raven-librarian* runs third-party models through an OpenAI-compatible backend and never sees the sampler, so it records the provenance it does know rather than claiming a mark it cannot make.
+  - This is what a system on this side of the model boundary can honestly attest to. The robust mark for AI-generated text is a watermark applied while the model samples; *Raven-librarian* runs third-party models through an OpenAI-compatible backend and never sees the sampler, so it records the origin metadata it does know rather than claiming a mark it cannot make.
 
 *Raven-visualizer*
 

@@ -4,7 +4,7 @@ Implementation briefs for the Librarian work of summer 2026. Completed briefs mo
 probes shared across briefs live in `manual_tests/`.
 
 **Closed so far**, in `done/`: 01 (webfetch), 02 (LM Studio compat), 03 (content parts, including §D),
-07 (export provenance), 08 (context injects), 10 (RAG tool surface). **09 is the one in progress**, and the
+07 (export disclosure), 08 (context injects), 10 (RAG tool surface). **09 is the one in progress**, and the
 last thing v0.2.8 is waiting on.
 
 ## Order of work, decided 2026-07-29
@@ -12,7 +12,7 @@ last thing v0.2.8 is waiting on.
 The aim is to close briefs faster than new ones open, so the order is chosen for *closure* rather than
 for value alone.
 
-1. **07 — export provenance** (`07_export-provenance-brief.md`). Small, self-contained, and on a clock:
+1. **07 — export disclosure** (`07_export-disclosure-brief.md`). Small, self-contained, and on a clock:
    the EU AI Act Article 50(2) marking obligation bites 2026-12-02 for systems already on the market.
    **Done 2026-07-29** (archived to `done/`).
 2. **03 §D — GC UX & navigation** (`03_librarian-content-parts-brief.md`, the one remaining checkpoint).

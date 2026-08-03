@@ -580,8 +580,10 @@ designing before images land in the DB rather than discovered afterwards.**
         applies per message.
   - **Provenance** — the research sense: which source material did this claim come from? This is the one
         researchers care about, it is the standard term in research data management, and it should keep the word.
-  - **[P]** Note the collision already in the tree: `07_export-provenance-brief.md` is the *disclosure* one.
-        Worth renaming, or at least a line in it saying which sense it means.
+  - **[D]** Note the collision already in the tree: `07_export-provenance-brief.md` is the *disclosure* one.
+        Worth renaming, or at least a line in it saying which sense it means. **Done 2026-08-03**: renamed to
+        `07_export-disclosure-brief.md`, body swept, and a note added under its title recording the rename and
+        why both words survive.
   - **[P]** In the vision doc, the **provenance** sense is the one that deserves to be a named pillar — for
         screening it is the value proposition rather than compliance overhead, since a first-pass reviewer whose
         output cannot be traced to specific documents is useless for a review you have to defend to a referee.
