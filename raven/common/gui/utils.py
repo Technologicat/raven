@@ -406,6 +406,7 @@ def has_child_items(widget: Union[str, int]) -> bool:
 # named theirs first.
 DPG_WINDOW_PADDING = 8  # mvStyleVar_WindowPadding; both components are 8 in the default theme
 DPG_FRAME_PADDING_Y = 3  # mvStyleVar_FramePadding[1] (the x component is 4, and is not needed so far)
+DPG_SCROLLBAR_SIZE = 14  # mvStyleVar_ScrollbarSize; the width a vertical scrollbar takes off a scrollable region
 
 
 def get_widget_pos(widget: Union[str, int]) -> Tuple[int, int]:

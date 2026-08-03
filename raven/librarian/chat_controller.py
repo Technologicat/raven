@@ -89,9 +89,18 @@ _JUMP_TO_LATEST_FINISHED_LABEL = "AI finished ↓"
 _JUMP_TO_LATEST_FONT_BASENAME = "InterTight"
 _JUMP_TO_LATEST_FONT_VARIANT = "Regular"
 
-# How far the pill floats above the bottom edge of the chat panel, in pixels. Clear of the edge so it reads
-# as hovering over the log rather than as part of the composer below it.
-_JUMP_TO_LATEST_BOTTOM_MARGIN = 12
+# How far the pill sits from the bottom-right corner of the chat panel, in pixels. Clear of the edges so it
+# reads as hovering over the log rather than as part of the composer below it.
+_JUMP_TO_LATEST_MARGIN = 12
+
+# One pulsation cycle for the pill while the AI is writing, in seconds. Matches the indicator glows, so the
+# app breathes at one rate rather than several.
+_JUMP_TO_LATEST_PULSE_SECONDS = 2.0
+
+# The same gray the LLM / DOCS / WEB indicators use, rather than a pure white. White would be the brightest
+# thing on the panel and would read as an alert; this is one more quiet status light, and it belongs to that
+# family both in what it means and in how it looks.
+_JUMP_TO_LATEST_COLOR = (180, 180, 180)
 
 # --------------------------------------------------------------------------------
 
@@ -1529,6 +1538,27 @@ class DPGLinearizedChatView:
         # takes an arrival to raise it, which is also what makes the "AI finished" label always truthful.
         self._content_arrived_while_unpinned = False
 
+        # Two themes, swapped by state, rather than one theme whose animation is started and stopped: a
+        # `PulsatingColor` runs continuously once registered, and the steady variant is how the rest of the
+        # app expresses "this is on, but not asking for attention" (cf. the DOCS indicator's steady/pulsating
+        # pair). Pulsating while the AI writes, steady once it has finished, so the pill reports the state by
+        # how it behaves as well as by what it says.
+        with dpg.theme(tag=f"chat_jump_to_latest_pulsating_theme_{self.gui_uuid}") as self._jump_to_latest_pulsating_theme:  # tag
+            with dpg.theme_component(dpg.mvAll):
+                pulsating_color_widget = dpg.add_theme_color(dpg.mvThemeCol_Text, _JUMP_TO_LATEST_COLOR)
+        self._jump_to_latest_glow = gui_animation.PulsatingColor(cycle_duration=_JUMP_TO_LATEST_PULSE_SECONDS,
+                                                                 theme_color_widget=pulsating_color_widget)
+        gui_animation.animator.add(self._jump_to_latest_glow)
+
+        with dpg.theme(tag=f"chat_jump_to_latest_steady_theme_{self.gui_uuid}") as self._jump_to_latest_steady_theme:  # tag
+            with dpg.theme_component(dpg.mvAll):
+                dpg.add_theme_color(dpg.mvThemeCol_Text, _JUMP_TO_LATEST_COLOR)
+
+        # Which of the two is currently bound. Tracked so the per-frame update can rebind only on a
+        # transition — and so that entering the writing state can restart the pulsation from full alpha,
+        # the way an appearing indicator does.
+        self._jump_to_latest_is_pulsating: Optional[bool] = None
+
         with dpg.window(tag=f"chat_jump_to_latest_window_{self.gui_uuid}",  # tag
                         show=False,
                         no_title_bar=True,
@@ -2053,19 +2083,34 @@ class DPGLinearizedChatView:
                 dpg.hide_item(self._jump_to_latest_window)
             return
 
-        label = _JUMP_TO_LATEST_WRITING_LABEL if self.chat_controller.is_generating() else _JUMP_TO_LATEST_FINISHED_LABEL
+        is_writing = self.chat_controller.is_generating()
+
+        label = _JUMP_TO_LATEST_WRITING_LABEL if is_writing else _JUMP_TO_LATEST_FINISHED_LABEL
         if dpg.get_item_label(self._jump_to_latest_button) != label:
             dpg.set_item_label(self._jump_to_latest_button, label)
+
+        if is_writing != self._jump_to_latest_is_pulsating:
+            self._jump_to_latest_is_pulsating = is_writing
+            if is_writing:
+                self._jump_to_latest_glow.reset()  # start the cycle at full alpha, as an appearing indicator does
+                dpg.bind_item_theme(self._jump_to_latest_button, self._jump_to_latest_pulsating_theme)
+            else:
+                dpg.bind_item_theme(self._jump_to_latest_button, self._jump_to_latest_steady_theme)
 
         # Position it against the panel every frame, so it follows a window resize without a resize hook —
         # same approach `ScrollEndFlasher` takes, and for the same reason: the geometry is cheap to read and
         # a hook is one more thing to remember to call.
+        #
+        # Bottom-right rather than bottom-centre: centred, it sat over the text a reader is in the middle of.
+        # The corner is out of the way, and it is also where the eye already is, since reaching this state
+        # means having just worked the scrollbar. Hence the extra clearance on the right — landing under the
+        # scrollbar would put the pill exactly where the pointer is.
         panel_x, panel_y = dpg.get_item_pos(self.gui_parent)  # child windows report `pos`, not `rect_min`
-        panel_config = dpg.get_item_configuration(self.gui_parent)
+        panel_w, panel_h = dpg.get_item_rect_size(self.gui_parent)
         pill_w, pill_h = dpg.get_item_rect_size(self._jump_to_latest_window)
         dpg.set_item_pos(self._jump_to_latest_window,
-                         [panel_x + (panel_config["width"] - pill_w) / 2,
-                          panel_y + panel_config["height"] - pill_h - _JUMP_TO_LATEST_BOTTOM_MARGIN])
+                         [panel_x + panel_w - pill_w - guiutils.DPG_SCROLLBAR_SIZE - _JUMP_TO_LATEST_MARGIN,
+                          panel_y + panel_h - pill_h - _JUMP_TO_LATEST_MARGIN])
 
         if not dpg.is_item_shown(self._jump_to_latest_window):
             dpg.show_item(self._jump_to_latest_window)
