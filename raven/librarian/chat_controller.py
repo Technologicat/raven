@@ -38,6 +38,7 @@ from ..client import api  # Raven-server support
 from ..client.avatar_controller import DPGAvatarController
 
 from ..common import bgtask
+from ..common import numutils
 from ..common import utils as common_utils
 
 from ..common.gui import animation as gui_animation
@@ -1760,6 +1761,59 @@ class DPGLinearizedChatView:
         # The consequence to protect: `follow_tail`'s retarget is now load-bearing for *correctness*, not only
         # for smoothness. Rate-limiting it, or gating it on the view having visibly moved, would silently bring
         # back the last two failures.
+
+    # ------------------------------------------------------------
+    # Reader-driven scrolling (hotkeys, and later the on-screen controls)
+
+    def scroll_to_position(self, target_y_scroll: Optional[int]) -> None:
+        """Scroll to an absolute position, clamped into range.
+
+        `target_y_scroll`: Offset from the top, in content coordinates. `None` means the end of the content —
+                           spelled as a distinct value rather than as a large number, because "the end" has
+                           to keep meaning the end as the content grows, and because only that case should
+                           re-engage tail-following.
+
+        For reader-initiated scrolling. `scroll_view` remains the entry point for the program's own scrolls
+        (following a stream, landing on a message after a rebuild), and does the content-settling wait those
+        need; a reader pressing a key is not waiting for anything to lay out.
+        """
+        max_y_scroll = dpg.get_y_scroll_max(self.gui_parent)
+        to_end = (target_y_scroll is None)
+        y_scroll = max_y_scroll if to_end else int(numutils.clamp(target_y_scroll, 0, max_y_scroll))
+        logger.debug(f"DPGLinearizedChatView.scroll_to_position: to y = {y_scroll} (max = {max_y_scroll}, to_end = {to_end})")
+        self._set_y_scroll(y_scroll, to_end=to_end, user_initiated=True)
+
+    def go_to_top(self) -> None:
+        """Scroll to the start of the chat."""
+        self.scroll_to_position(0)
+
+    def go_to_bottom(self) -> None:
+        """Scroll to the end of the chat, and resume following the tail."""
+        self.scroll_to_position(None)
+
+    def _page_extent(self) -> float:
+        """How far one page-up/page-down moves, in pixels.
+
+        Less than a full panel height on purpose: the overlap leaves a couple of lines of the previous view
+        on screen, which is what lets a reader stitch the pages together instead of having to re-find their
+        place. Same fraction the Visualizer's info panel uses, so the two apps page alike.
+        """
+        _, panel_h = dpg.get_item_rect_size(self.gui_parent)
+        return 0.7 * panel_h
+
+    def page_up(self) -> None:
+        """Scroll up by one page."""
+        self.scroll_to_position(dpg.get_y_scroll(self.gui_parent) - self._page_extent())
+
+    def page_down(self) -> None:
+        """Scroll down by one page.
+
+        Deliberately does *not* pass "to the end" even when the page lands there. Reaching the end by paging
+        is the reader arriving, not the reader asking to be pinned — and if they did land exactly at the end,
+        `should_follow_tail` says yes on position alone, so following resumes anyway without being asserted
+        here.
+        """
+        self.scroll_to_position(dpg.get_y_scroll(self.gui_parent) + self._page_extent())
 
     def get_chatlog_as_markdown(self, include_metadata: bool) -> Optional[str]:
         """Format this linearized chat as Markdown, for e.g. copying to the clipboard or saving to a file.

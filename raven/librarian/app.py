@@ -1169,6 +1169,11 @@ hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focu
                env(key_indent=1, key="Ctrl+Shift+Left", action_indent=1, action="Same, but jump 10", notes=""),
                env(key_indent=0, key="Ctrl+Down", action_indent=0, action="Show chat continuation", notes="If any exists in chat datastore"),
                helpcard.hotkey_new_column,
+               env(key_indent=0, key="Page Up", action_indent=0, action="Scroll chat up one page", notes="Also while typing"),
+               env(key_indent=0, key="Page Down", action_indent=0, action="Scroll chat down one page", notes="Also while typing"),
+               env(key_indent=0, key="Home", action_indent=0, action="Jump to start of chat", notes="Unless text entry field focused"),
+               env(key_indent=0, key="End", action_indent=0, action="Jump to latest message", notes="Unless text entry field focused"),
+               helpcard.hotkey_blank_entry,
                env(key_indent=0, key="Ctrl+N", action_indent=0, action="Start new chat", notes=""),
                helpcard.hotkey_blank_entry,
                env(key_indent=0, key="F8", action_indent=0, action="Copy chatlog to clipboard", notes="As-is"),
@@ -1470,12 +1475,38 @@ def librarian_hotkeys_callback(sender, app_data):
     #
     # NOTE: These are global across the whole app (when no modal window is open) - be very careful here!
     else:
-        if dpg.is_item_focused("chat_field"):
+        # Chat log scrolling. Page Up/Down page the log wherever focus is: the composer is a few lines tall,
+        # so paging *within* it means nothing, and reaching for these keys while typing is how a reader looks
+        # back at what they are replying to.
+        #
+        # The literal 517/518 are not magic numbers to be tidied into constants — they ARE the constants.
+        # `dpg.mvKey_Prior` and `dpg.mvKey_Next` still carry their pre-2.0 Windows virtual-key values (266,
+        # 267), which no longer match anything DPG delivers, so comparing against them silently never fires:
+        # no error, just a dead key. See `dpg-notes.md`, "Keyboard input", and `briefs/reference/dpg-keycodes.md`.
+        # The named constants are kept alongside the literals rather than dropped: they cost nothing, they say
+        # which key this is meant to be, and if DPG ever regenerates them the binding starts matching on the
+        # name too, with no edit here.
+        if key in (517, dpg.mvKey_Prior):  # Page Up
+            chat_controller.view.page_up()
+        elif key in (518, dpg.mvKey_Next):  # Page Down
+            chat_controller.view.page_down()
+
+        elif dpg.is_item_focused("chat_field"):
             # Enter sends; Shift+Enter inserts a newline. The multiline field owns its own keyboard, so on
             # Shift+Enter we do nothing here and let the widget insert the newline itself.
             if key == dpg.mvKey_Return and not shift_pressed:
                 send_message_to_ai_callback()
                 dpg.focus_item("chat_field")  # tag
+            # Home/End are deliberately absent here: inside a text field they mean start/end of line, which is
+            # what the user expects and what the widget already does. Claiming them globally would break
+            # ordinary text editing to add a scroll shortcut that Page Up/Down already covers.
+
+        else:
+            # Home/End scroll the log, but only when the composer does not have focus (see above).
+            if key == dpg.mvKey_Home:
+                chat_controller.view.go_to_top()
+            elif key == dpg.mvKey_End:
+                chat_controller.view.go_to_bottom()
         # else:
         #     # {widget_tag_or_id: list_of_choices}
         #     global combobox_choice_map
