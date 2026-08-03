@@ -21,6 +21,7 @@ that stops the link decaying again, and it is worth keeping up even when the con
 | `vram/` | The avatar's VRAM footprint, module by module |
 | `tha3-performance/` | Where THA3 inference time goes, and whether the pipeline halves can overlap on the GPU |
 | `anime4k-performance/` | Where the Anime4K upscaler's time goes |
+| `dpg-focus/` | Which DPG predicate means "this text field holds the caret", and what `focus_item` does to a child window |
 
 ## Shared instruments are pointed at, not copied
 
