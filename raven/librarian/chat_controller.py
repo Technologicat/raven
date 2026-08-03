@@ -1657,7 +1657,7 @@ class DPGLinearizedChatView:
         if self._reader_scrolled_since(sample):
             return
         if sample.follow:
-            self.scroll_view()
+            self.scroll_view(abort_if_reader_scrolled_since=sample)
         else:
             self._set_y_scroll(sample.y_scroll, to_end=False)
 
@@ -1672,15 +1672,21 @@ class DPGLinearizedChatView:
         user has scrolled away" on every chunk, never follow, and leave the view frozen where the stream
         began — failing in the opposite direction from the bug it fixes, while looking entirely reasonable.
 
-        The same ordering opens the window this then has to close. Between the sample and this call sit the
-        markdown render and at least one `split_frame` — around a tenth of a second, and the reader's keyboard
-        is live throughout. An arrow key landing in there was previously erased: `scroll_view` would retarget
-        the reader's in-flight upward scroll back to the end and re-assert tail-following, so roughly one
-        press in fifteen simply vanished. The generation check catches exactly that.
+        The same ordering opens the window this then has to close. Between the sample and the write sit the
+        markdown render and two `split_frame` waits — around a tenth of a second, with the reader's keyboard
+        live throughout. An arrow key landing in there was erased rather than outvoted: `scroll_view`
+        retargeted the reader's in-flight upward scroll back to the end and re-asserted tail-following, so
+        roughly one press in fifteen vanished.
+
+        The window closes at the write, not here. Testing the sample at this end of it catches only presses
+        that arrived before the call, which is why `scroll_view` re-checks after its own settle wait — that
+        wait turned out to be where the surviving losses were landing.
         """
         if not sample.follow or self._reader_scrolled_since(sample):
             return
-        self.scroll_view()  # waits for the new content to lay out, so this reaches the *new* end
+        # Re-checked inside, after the settle wait: this early test only saves the trip, it does not close
+        # the window — the wait is where a keypress actually lands.
+        self.scroll_view(abort_if_reader_scrolled_since=sample)  # waits for the new content to lay out, so this reaches the *new* end
 
     def _set_y_scroll(self, y_scroll: int, *, to_end: bool, user_initiated: bool = False) -> None:
         """Move the scroll position, remembering what we asked for.
@@ -1744,8 +1750,23 @@ class DPGLinearizedChatView:
     def scroll_view(self,
                     max_wait_frames: int = 10,
                     scroll_target_node_id: Optional[str] = None,
-                    user_initiated: bool = False) -> None:
+                    user_initiated: bool = False,
+                    abort_if_reader_scrolled_since: Optional[TailFollowSample] = None) -> None:
         """Scroll this linearized chat view to the end.
+
+        `abort_if_reader_scrolled_since`: A sample whose currency is re-checked at the last moment, just
+                                          before the scroll is committed, and which cancels the scroll if a
+                                          reader-initiated one has landed meanwhile. For the automatic paths
+                                          (`follow_tail`, `restore_scroll_after_swap`), which must not
+                                          override a reader.
+
+                                          Checking once at the caller is not enough, and the reason is in
+                                          this method: the settle wait below is itself part of the window.
+                                          Observed with the callers already guarded — the sample was current
+                                          when `follow_tail` tested it, an arrow key landed during the two
+                                          frames spent waiting for the maximum to settle, and the scroll to
+                                          the end was committed on top of it. The guard has to sit next to
+                                          the write, not next to the decision to write.
 
         `user_initiated`: Whether a human asked for this scroll, rather than the view following a growing
                           reply on its own. Only affects presentation — see `_start_scroll_animation`, where
@@ -1839,6 +1860,11 @@ class DPGLinearizedChatView:
             y_scroll = max_y_scroll
             to_end = True
         logger.info(f"DPGLinearizedChatView.scroll_view:{frames_str}{waited_str}: max_y_scroll = {max_y_scroll}, scrolling to y = {y_scroll}")
+
+        # Last check before the write, with no wait left between the two. Everything above this line — the
+        # settle wait especially — is time in which a keypress can arrive.
+        if abort_if_reader_scrolled_since is not None and self._reader_scrolled_since(abort_if_reader_scrolled_since):
+            return
 
         self._set_y_scroll(y_scroll, to_end=to_end, user_initiated=user_initiated)
 
