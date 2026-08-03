@@ -59,8 +59,17 @@ Its shape, measured rather than assumed, because two of these change what it can
 - **Only 2 records carry an abstract**, and this is structural rather than an oversight: the database was
   **typed by hand between 2007 and 2016**, partly predating routine online abstracts, and many sources were
   dead-tree. So the abstracts are not sitting somewhere waiting to be re-exported — for most of these
-  records they were never in machine-readable form at all. **Do not plan on enriching it.** Take the
-  title-only regime as the thing under test: `importer.get_highdim_semantic_vectors` embeds
+  records they were never in machine-readable form at all.
+  - **Enrichment via Crossref was considered and measured, 2026-08-03. It does not pay.** Only 17% of the
+    records (93 of 541) carry a DOI at all, and of 20 sampled DOIs exactly **one** has an abstract in
+    Crossref. The reason is publisher policy rather than corpus age: the corpus is ~75% Elsevier, which
+    deposits no abstracts (0/15 sampled), Springer 0/3, and the single hit was Wiley. Resolving DOIs for
+    the remaining 83% via bibliographic query would raise the denominator, not the ~5% yield. Expect a
+    dozen abstracts for an afternoon's work, against 541 records — it would not move the corpus out of the
+    title-only regime, so it would not even change what the corpus tests. Written down because it is a
+    reasonable idea that looks better than it measures.
+
+  Take the title-only regime as the thing under test: `importer.get_highdim_semantic_vectors` embeds
   `title + abstract` when it can and falls back to the bare title otherwise, and that fallback is the path
   this corpus exercises end to end. It is a real and common regime — plenty of hand-built bibliographies
   look like this — but it is *not* the abstract-rich one a Web of Science export gives you. A change that
