@@ -218,8 +218,10 @@ includes = ["raven"]
 # The THA3 weights are downloaded at first use into a gitignored directory, and the sdist build does not
 # consult `.gitignore` — so without this exclusion `includes = ["raven"]` swept in 860 MB of `.pt` files and
 # a HuggingFace download cache, producing an sdist PyPI would reject on its per-file size limit alone.
-# Unnoticed because Raven is unpublished. Measured 2026-08-03: 903 MB across 582 files before, 107 MB across
-# 537 after.
+# It never reached anyone, which is why it went unnoticed: Raven is unpublished *on PyPI*, and its GitHub
+# releases are tag-only — those source tarballs are `git archive`, which contains tracked files only, so the
+# gitignored weights were never in them. Building an sdist by hand was the first time it showed.
+# Measured 2026-08-03: 903 MB across 582 files before, 107 MB across 537 after.
 excludes = ["**/tests", "**/__pycache__", "raven/vendor/tha3/models"]
 
 [[tool.pdm.source]]
