@@ -459,6 +459,29 @@ reference implementation, so they are one job rather than three:
     render loop and must never wait, which is why it counts `update_pending_frames` instead. So the animation
     cannot absorb the settle-wait, and the wait cannot move into the animator. Keep them separate rather than
     unifying them into one "scroll to here" helper.
+  - **Decided 2026-08-03: the post-scroll *verify loop* does not run in smooth mode, and this is safe because
+    all three of its jobs have another home.** The loop re-issues until `get_y_scroll()` reports the target;
+    under an animation the position lags the target *by design* for the whole scroll, so the loop would burn
+    its full attempt budget on `split_frame` waits every time and re-issue mid-flight. Taking it out is only
+    legitimate if its semantics survive, so they were enumerated rather than assumed:
+    - **Make the record true** — `should_follow_tail` compares the reported position against what we
+      commanded, and an unlanded command reads as a user scroll and latches the view. *Subsumed, and done
+      better:* `SmoothScrolling`'s per-frame guard (`current_y_scroll == prev_frame_new_y_scroll`) is the
+      same device, and with the commanded-position box written in the same breath as every `set_y_scroll`
+      the record is never more than one frame stale — which `_PIN_TOLERANCE_PX` already absorbs. The verify
+      loop is a coarser hand-rolled version of the animation's own guard, run from another thread.
+    - **Chase a target that moved while we waited** — *subsumed by retargeting.* The target moves when
+      content arrives, and content arriving is exactly when `follow_tail` fires, which recomputes the end and
+      retargets. Event-driven instead of polled against an attempt budget.
+    - **Recover from a DPG clamp** — *same event.* Verified: all three `replace_last_paragraph` call sites
+      (the only clamp source) are inside the streaming chunk handler, so a clamp can only happen while
+      streaming, which is precisely when `follow_tail` retargets per chunk.
+
+    **Consequence to protect: `follow_tail`'s retarget is now load-bearing for correctness, not just for
+    smoothness.** Rate-limiting it, or making it conditional on the view having visibly moved, would silently
+    reintroduce the clamp and moved-target failures the verify loop used to cover. It is safe today because
+    every `follow_tail` call is paired with a `should_follow_tail` sample at the same GUI-update point, so
+    the re-aim is co-located with the mutation that makes it necessary.
 - **No scroll-past-end feedback.** Visualizer has `ScrollEndFlasher` (an animated overlay, arrows at top and
   bottom) so that hitting the end of the content is visibly the end rather than an unresponsive view.
   Librarian has nothing. Scouted 2026-07-30, and the expected difficulty is misplaced rather than absent:
