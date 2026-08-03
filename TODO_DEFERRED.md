@@ -1207,11 +1207,12 @@ PEP 639 deprecates those, and this project is already clean on that axis.
   `xdot.py`, so the LGPL is probably not shakeable. Worth confirming, since if it *were* relicensable the
   expression gets simpler.
 
-### Two adopted directories ship without their licence text
+## Two adopted directories ship without their licence text
 
-Found during the enumeration above, and worth fixing independently of anything to do with `pyproject.toml`,
-because shipping someone's code without their licence is a plain compliance failure rather than a metadata
-inaccuracy:
+Found while enumerating the adopted licences for the sibling item on Raven's own licensing docs, and filed
+separately because it is a different kind of problem with a different urgency: shipping someone else's code
+without their licence is a plain compliance failure, where that item is about metadata and documentation
+being incomplete. This one wants fixing on its own, ahead of and independently of the `pyproject.toml` work.
 
 - **`raven/vendor/DearPyGui_Markdown/`** — no `LICENSE` file, and no copyright or licence notice in any of
   its modules. Upstream (`IvanNazaruk/DearPyGui-Markdown`) is **MIT**, confirmed via the GitHub API. MIT
