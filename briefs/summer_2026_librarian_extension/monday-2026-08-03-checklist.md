@@ -1,5 +1,27 @@
 # Monday 2026-08-03 — pick-up checklist
 
+> **Half-closed 2026-08-03**, and the halves are different in kind, which is why this is not simply archived.
+>
+> **§1, §1b, §2 are done** — see the ticks and their notes, kept because several record *how* a call was made
+> rather than only that it was. **§3, §4 and §7 have moved out** to homes that get visited:
+>
+> | Where it went | What |
+> |---|---|
+> | `README.md`, "What is left" | the 0.2.8 runway, now carrying the tool-budget fix (§3) with the freeze argument stated, and the turn/round sweep queued immediately after 09 |
+> | Brief 09 | the rest of §3 and all of §4 — inject offsets, the consulted-docs list, the "no sources" marker, the Speculation-toggle question, and the retrieval-mode work. These are 09's implementation decisions, so they are scoped into it rather than tracked apart |
+> | claude.ai, parallel track | §7, the vision documents |
+> | `TODO_DEFERRED.md` | the 8/3 margin audit and the `dpg-notes.md` skill |
+>
+> **§5 and §6 stay here, deliberately, and this file is their record until they get a brief.** The obvious
+> destinations do not fit and were checked rather than assumed: brief 12 states outright that it covers
+> "keying, storage, regeneration and GC" and *not* scopes, so only §5's derived-artifact subsection went
+> there; and §6's corpus TOC is blocked on scopes, so it has nowhere to be but beside them. Both are waiting
+> on the corpus design session, which §5 itself dates to after Researchers' Night. Filing them somewhere
+> tidier would mean inventing a home, and a decision in the wrong file is lost about as thoroughly as one in
+> no file.
+>
+> **So: to know what to do next, read `README.md`. To pick up the corpus design work, read §5–§6 below.**
+
 From the 2026-08-01 evening design session (Juha + Claude, claude.ai), plus Juha's own notes dumped in that
 session, revised after his corrections. Goal for Monday: thin the brief pile and repair the maps of the work.
 

@@ -59,7 +59,10 @@ ride a later release — 0.2.9 or beyond.
 The rule still holds for everything else: nothing further is admitted without an argument of the same
 shape, made explicitly here.
 
-### What is left, as of end of 2026-07-30
+### What is left, as of 2026-08-03
+
+**This section is the runway to the tag.** If something has to be done before 0.2.8 ships, it is listed here,
+including the items that arrived without a brief of their own. Anything not listed does not gate the release.
 
 Done and confirmed: **03 §D** (archived), and the **streaming autoscroll** half of the scrolling set — the view
 now follows a reply for a reader at the end and leaves a scrolled-away reader alone, verified live over a
@@ -71,12 +74,47 @@ Still open, in the order they are expected to be done:
 1. **Chat view scrolling, the rest** — smooth scrolling, the end-of-scroll flasher, Home/End/PageUp/PageDown,
    and the jump-to-latest pill. Traps already scouted; see `TODO_DEFERRED.md`, "Chat view scrolling: keys,
    smoothness, and end-of-scroll feedback".
+   - **Start with the `SmoothScrolling.start()` retarget fix.** Constructing a second instance for a window
+     that already has one copies only the target into the existing instance and becomes a ghost — `flasher`,
+     `smooth`, `smooth_step` and `finish_callback` all stay as the *first* constructor set them. Every item
+     above retargets an in-flight scroll, so this stopped being polish and became a prerequisite.
 2. **The two log-noise fixes** — the context-prefill strict-template warning, and `setup_font_ranges`'
    DeprecationWarnings.
 3. **Large `webfetch` results become attachments** — the one feature admitted past the freeze.
-4. **Brief 09** — the retrieval query side, and the last blocker.
+4. **Tool budget: error out informatively instead of withdrawing the tools.** Admitted 2026-08-03, and the
+   freeze rule wants the argument stated rather than assumed. It is *defect-shaped*: withdrawing a tool
+   mid-turn burns the KV cache, and a history referencing a tool no longer in the schema is off-distribution
+   for the model, whereas tool *errors* are well represented in training. It is also a fix to a feature this
+   very release ships (brief 10's round cap), so shipping the v1 shape would mean revisiting it in 0.2.9
+   immediately. Measured basis in `investigations/tool_budget/`. A further measurement — whether it actually
+   stops Qwen going into unasked deep research — is worth doing but does not gate the fix, because the
+   cache-burn argument carries it alone.
+5. **Brief 09** — the retrieval query side, and the last blocker. Absorbs the inject-shape decisions that were
+   filed separately: document-inject offset/length, the consulted-docs list gaining offsets and a
+   "previously consulted" marker, the "no sources consulted" marker, and whether the Speculation toggle still
+   carries information once Docs-ON implies marking. These are all §4-shaped — 09's implementation has to
+   settle them anyway, so they are scoped into it rather than tracked apart.
 
 Then the release-prep checklist below.
+
+**Queued immediately after 09, before anything else starts:** the turn/round terminology sweep. Deferred only
+because it renames things 09 is about to edit, and doing it first would mean rewriting the brief. Confused
+terminology makes for confused developers, so it does not wait longer than that. The decision is settled —
+*turn* = one participant's contribution including the whole tool loop, *round* = one iteration of the agent
+loop within a turn, *exchange* = user turn + assistant turn — and it is the code that moves, not the briefs.
+
+**Not gating this release, recorded so they are not mistaken for gates:**
+
+- The **8/3 DPG margin audit** and the **`dpg-notes.md` skill**. Both in `TODO_DEFERRED.md`; both small; both
+  fair game whenever there is a gap, but neither is user-visible.
+- **Visualizer defects surfaced by the two studies now using it.** Those studies are live dogfooding of a
+  component with zero tests, so they will find things. They go to `TODO_DEFERRED.md`. 0.2.8 is a Librarian
+  release, and a Visualizer bug is not an argument for delaying it.
+- **Brief 11** (importer rework) and **brief 12** (derived artifact store) are 0.2.9 work.
+- **The corpus / scopes / unified-DB design**, and the corpus TOC that is blocked on it. Both live in
+  `monday-2026-08-03-checklist.md` §5–§6 until the design session gives them a brief — that file is closed
+  as a checklist but is still the record for those two, and says so at the top. Realistically after
+  Researchers' Night (26 September 2026).
 
 The reason to wait rather than ship at 07: both remaining items leave a user-visible half-feature.
 Sidecar attachments have no way to remove strays until §D wires the sweep — `prune_unreferenced_sidecars`
