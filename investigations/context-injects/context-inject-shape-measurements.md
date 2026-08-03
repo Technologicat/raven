@@ -18,6 +18,37 @@ Harness: `investigations/context-injects/inject_shapes.py`. It imports the injec
 strings from `raven.librarian.chatutil` rather than copying them, so it always measures what Raven
 actually sends.
 
+## What has changed since (added 2026-08-03)
+
+**The body below is left as measured on 2026-07-28 and is not being rewritten.** The runs happened, and
+the statements they rest on were true when made; overwriting them in place would silently restate
+history and destroy the baseline this document exists to be. What follows is the delta, in one place.
+
+- **The inject shape itself changed, because of these measurements.** Where the body says Raven ships
+  one user-role message per inject, that describes **v0.2.7**, the release current when the sweep ran.
+  The `tool`+synthetic-call shape these numbers argue for lands in **v0.2.8**. Read every present-tense
+  "Raven ships" below as "v0.2.7 ships" — and prefer a version number to a deictic in any future
+  measurements record, because "today" silently re-points every time someone reads it while a tagged
+  release stays put.
+- **Document search is now a tool the model can call**, which it was not when this was measured. Brief 10
+  (RAG tool surface) landed afterwards. Anything below that reasons about retrieval as something done
+  *to* the model rather than *by* it is describing the earlier architecture. The measurements are
+  unaffected — they are about how injected material is read, which is still how autosearch results
+  arrive — but the surrounding argument is narrower than it was.
+
+**One erratum, which is a genuine error rather than drift** (Juha, 2026-08-03). Q8's long-context probe
+argues from "Qwen3.5-9B is the weakest model in the set". It is not: **Gemma4-E4B measured weaker,
+consistently, everywhere it was run** — it is the only model where the tool role costs accuracy (Q10),
+and the only one to drop below 3/3 on message packaging (1/3 · 2/3 in Q3, against 3/3 · 3/3 for
+everything else). The correction is marked at the claim itself.
+
+**The reason it survived is the other defect on the same list: E4B is not in every table.** It appears in
+Q3's packaging comparison, Q9 and Q10; the main sweep (Q1, Q2, Q3's four-model tables, Q4, Q5, Q7) covers
+four models without it, and the Q8 probe in question ran Qwen3.5-9B *alone*. So "weakest in the set"
+read as true against whichever table was in view. **Any argument of the form "even the weakest model
+coped" has to be re-read** — check which models a given table actually ran before leaning on it, because
+the model set varies probe by probe and the document does not announce that anywhere else.
+
 ```
 python inject_shapes.py http://localhost:1234 <model>           # all probes
 python inject_shapes.py http://localhost:1234 <model> 3,5,6     # a subset
@@ -83,7 +114,7 @@ Two properties of the harness worth knowing before reading any number below:
 
 | shape | what it is |
 |---|---|
-| `user` | what Raven ships today: one user-role message per inject, appended after the user's turn |
+| `user` | what Raven ships in v0.2.7: one user-role message per inject, appended after the user's turn |
 | `tool` | same position, `role="tool"` |
 | `tool+call` | as `tool`, preceded by an assistant message carrying the `tool_calls` entry it answers |
 | `folded` | inject text appended into the user's own message; no extra turns at all |
@@ -300,9 +331,15 @@ No position effect, no depth effect, no role effect, and no control invented the
 a lucky guess. **On this model the front placement buys nothing**, and it costs a full KV-cache prefix
 rebuild every turn.
 
-Qwen3.5-9B is the weakest model in the set, so this is not a "the small one coped, the big ones surely
-will" argument — it is the model whose attention over 32k tokens should be least trustworthy, which is
-what makes a clean sweep informative.
+Qwen3.5-9B is the weakest model *in this probe*, so this is not a "the small one coped, the big ones
+surely will" argument — of the models run here it is the one whose attention over 32k tokens should be
+least trustworthy, which is what makes a clean sweep informative.
+
+> **Erratum (2026-08-03).** This originally read "the weakest model in the set", which is wrong:
+> **Gemma4-E4B is weaker**, consistently, everywhere it was run (Q3's packaging table, Q9, Q10). This
+> probe ran Qwen3.5-9B alone, so "the weakest model" was never true of the document's model set — only
+> of the one row in this table. The conclusion stands and its reach does not: this is evidence that a
+> 9B copes with 32k, not that the smallest model Raven targets does. Nothing here tests E4B at 32k.
 
 **This doubles as the cross-version control.** The 9B was run on both machines, on two different LM
 Studio builds, and produced identical verdicts (12/12 at k=20 on each, same conditions). Q1 also
@@ -453,7 +490,7 @@ cannot sit in a stable prefix. **But the *date* does not change every turn — o
 Put the date in the leading system block and deliver the time as tool output, and the prefix is stable
 for a whole day. The cost is that Librarian must watch for midnight and patch the system message when
 it rolls over; that is a cheap watcher against invalidating the KV cache on every single turn, which is
-what the combined inject costs today. (Juha's proposal, 2026-07-28.)
+what the combined inject costs in v0.2.7. (Juha's proposal, 2026-07-28.)
 
 Measured as the `split` shape — correct on every model tried, and consistently *cheaper* than
 `system_front` on the question that requires actually using the date:

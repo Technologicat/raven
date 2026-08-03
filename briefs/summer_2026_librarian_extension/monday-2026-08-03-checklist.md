@@ -169,7 +169,10 @@ being renamed, so exclude those files and edit them by hand.
   - **[P]** Worth noting the folder is named `summer_2026_librarian_extension` but is about to hold two avatar
         briefs and an importer brief. Either rename it or accept it as a sprint-by-date rather than by
         component — but decide, rather than letting the name quietly stop being true.
-- [ ] **[D] `model-lineup-autumn-2026.md`**: Gemma 12B, not Qwen.
+- [x] **[D] `model-lineup-autumn-2026.md`**: Gemma 12B, not Qwen. *Done 2026-08-03.* The open question now
+      names Gemma 12B and says why the substitution changes it rather than just the name: Gemma is the
+      multilingual backup rather than the first choice at its tier, so a 12B has to earn the slot on quality
+      instead of inheriting it on family. Tier table checked and was already right.
   - **Confirmed by Juha 2026-08-03, so this is now actionable.** As of mid-2026 **Qwen 3.6 ships only in 27B
         and 35B-A3B**; the 4B and 9B options are **Qwen 3.5**, and both remain valid on-the-road choices.
         **There is no Qwen at 12B — that size is Gemma's alone.** So the open question currently phrased as
@@ -177,8 +180,20 @@ being renamed, so exclude those files and edit them by hand.
         as a question about **Gemma 12B** filling the gap between the mobile and eGPU tiers.
   - Check the tier table for the same confusion while in there: it lists Qwen3.5 at 4B/9B and Qwen3.6 at
         27B/35B-A3B, which matches the above and is probably already right.
-- [ ] **[D] `context-inject-shape-measurements.md`**: "what Raven ships today" is out of date; Qwen 9B is not
+- [x] **[D] `context-inject-shape-measurements.md`**: "what Raven ships today" is out of date; Qwen 9B is not
       the weakest; not reported in all tables; Raven's document search is now a tool the model can call.
+      *Done 2026-08-03*, in the shape argued for below: a dated "What has changed since" section carrying all
+      four items, body left as measured, plus an inline erratum blockquote where a reader would otherwise be
+      misled mid-table. Deictics versioned in two places (`v0.2.7`); the two remaining "today"s are inside
+      quoted model output and are data, so they stay.
+  - **The two errata turned out to be one defect**, which is why the checklist was right to pair them. E4B is
+        not in every table — it appears in Q3's packaging comparison, Q9 and Q10, while the main sweep covers
+        four models without it — so "weakest model in the set" read as true against whichever table was in
+        view. Recorded as a standing caution to check a table's model set before leaning on it.
+  - **Two corrections to my own first pass**, both caught by grepping rather than by reading: the claim sits
+        in **Q8**, not Q3, and in a sub-probe that ran Qwen3.5-9B *alone*; and E4B *is* in Q3, contrary to the
+        first draft of the erratum. Worth noting because the same trap is what produced the original error —
+        a section-spanning claim checked against one nearby table.
   - *Not done 2026-08-03 — deliberately, because this one is a measurements record and the obvious edit would
         corrupt it.* What changed is the **product**, not the data: the runs happened, and "Raven ships one
         user-role message per inject" and "document search is not a tool the model can call" were both true

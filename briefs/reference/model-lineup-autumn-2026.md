@@ -42,8 +42,11 @@ Not decided, and deliberately left open:
 - **What 3.6 actually improves over 3.5.** Nothing measured here distinguished them, which is a statement about
   the retrieval and date-handling tasks probed, not about the models. Worth reading the changelogs on a day when
   it matters.
-- **Whether Qwen3.6-12B is worth installing.** Not on either machine yet; it would sit between the mobile and
-  eGPU tiers.
+- **Whether a ~12B model is worth installing** to fill the gap between the mobile and eGPU tiers. As of
+  mid-2026 that size is **Gemma's alone** — Qwen 3.6 ships only at 27B and 35B-A3B, and the 4B/9B options in
+  the table above are Qwen 3.5. So the candidate is **Gemma 12B**, not a Qwen, which changes the question:
+  Gemma is already the multilingual backup rather than the first choice at its tier, so a 12B would have to
+  earn the slot on quality rather than inherit it on family. Neither machine has one installed.
 - **Anything above the single-workstation class.** Out of scope by construction.
 
 One behavioural note that shaped the inject design and is worth remembering when picking prompts for these
