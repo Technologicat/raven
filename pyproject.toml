@@ -8,8 +8,46 @@ requires-python = "<3.13,>=3.11"  # kokoro (TTS) and misaki cap at <3.13; mcpyra
 
 readme = "README.md"
 
-license = "BSD-2-Clause"
-license-files = ["LICENSE.md"]
+# Raven is 2-clause BSD by default, but not uniformly, and the metadata has to say so — this is what
+# packagers and tooling read. `AND` is the SPDX operator for "a consumer must satisfy all of these", which is
+# what a distribution containing all of them requires.
+#
+#   AGPL-3.0-only        all of `raven.server`, and `raven.avatar.pose_editor`. From SillyTavern-extras,
+#                        whose licence they preserve. `-only` because "or any later version" is a permission
+#                        holders must grant explicitly and none of them did — not upstream, not here — and
+#                        Raven could not grant it anyway, not being the sole copyright holder.
+#   LGPL-3.0-or-later    `raven.common.gui.xdotwidget`, derived from xdottir and through it from Jose
+#                        Fonseca's `xdot.py`, whose header grants the "or later" outright. Same method as
+#                        the AGPL above, opposite answer, because the upstream grants differ.
+#   MIT                  `raven.common.video.upscaler`, matching the Anime4K engine it ports.
+#   Apache-2.0           `raven.vendor.kokoro_fastapi`.
+#
+# Vendored code's licences are shipped rather than folded into the expression above, following `pip` — the
+# canonical heavy-vendoring project, which declares its own MIT and globs the rest. The wrinkle is that
+# Raven's `vendor/` is *adopted* rather than pristine, so Raven-authored code lives under those licences too;
+# Apache-2.0 is in the expression for that reason. See `raven/vendor/README.md`.
+license = "BSD-2-Clause AND AGPL-3.0-only AND MIT AND Apache-2.0 AND LGPL-3.0-or-later"
+
+# Listed rather than globbed, because a glob cannot express the one exclusion needed: the THA3 weights
+# directory is downloaded, gitignored and excluded from the build below, but it contains a `LICENSE.txt` at
+# the same depth as the vendored packages' own, so `raven/**/LICENSE*` resolved it into the metadata while
+# the build left the file out — PKG-INFO then pointed at something the sdist did not contain.
+#
+# The cost is that this list goes stale when something new is vendored. That is close to a feature: adding a
+# vendored dependency is exactly the moment to think about its licence, and a missing entry here is a
+# cheaper reminder than the alternative.
+license-files = ["LICENSE.md",
+                 "raven/fonts/LICENSE.md",
+                 "raven/fonts/OFL.txt",
+                 "raven/server/LICENSE",
+                 "raven/avatar/pose_editor/LICENSE",
+                 "raven/common/gui/xdotwidget/LICENSE",
+                 "raven/common/gui/xdotwidget/LICENSE_colorbrewer_color_schemes",
+                 "raven/vendor/anime4k/LICENSE",
+                 "raven/vendor/DearPyGui_Markdown/LICENSE",
+                 "raven/vendor/file_dialog/LICENSE",
+                 "raven/vendor/kokoro_fastapi/LICENSE",
+                 "raven/vendor/tha3/LICENSE.txt"]
 
 # Tell whichever build backend is in use (pdm in our case) to run its own mechanism
 # to find the version of the project and plug it into the metadata.
@@ -177,7 +215,12 @@ path = "raven/__init__.py"
 
 [tool.pdm.build]
 includes = ["raven"]
-excludes = ["**/tests", "**/__pycache__"]
+# The THA3 weights are downloaded at first use into a gitignored directory, and the sdist build does not
+# consult `.gitignore` — so without this exclusion `includes = ["raven"]` swept in 860 MB of `.pt` files and
+# a HuggingFace download cache, producing an sdist PyPI would reject on its per-file size limit alone.
+# Unnoticed because Raven is unpublished. Measured 2026-08-03: 903 MB across 582 files before, 107 MB across
+# 537 after.
+excludes = ["**/tests", "**/__pycache__", "raven/vendor/tha3/models"]
 
 [[tool.pdm.source]]
 name = "nvidia"
