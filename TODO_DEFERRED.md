@@ -45,29 +45,43 @@ Note the CI dep list is also hand-maintained and can drift from `pyproject.toml`
 
 Discovered 2026-08-02, diagnosing the trafilatura failure.
 
-## A skill for `dpg-notes.md`, so it fires when it is needed
+## Make the DPG reference a skill, so it fires when it is needed
 
-`dpg-notes.md` is 644 lines of hard-won DPG lore, and CLAUDE.md points at it with "before editing any DPG code,
-read `dpg-notes.md` first". That instruction competes for attention with everything else in CLAUDE.md, and the
-failure mode is silent: an agent that edits a render-loop callback without having read the notes does not
-notice it skipped anything, and the pitfall lands later as a hang or a segfault. A project-local skill in
-`.claude/skills/` would load on task match instead of on instruction compliance, which is the difference
-between advisory and reliable. Raised by Juha, 2026-07-31.
+`CLAUDE.md` says "**Before editing any DPG code, read `dpg-notes.md` first**" and defines what counts as DPG
+code. That is about as strong as prose gets, and it still depends on the agent noticing and obeying a line —
+a weak trigger for 644 lines of hard-won lore that matter on exactly the tasks where getting it wrong is
+expensive. The failure mode is silent: an agent that edits a render-loop callback without having read the
+notes does not notice it skipped anything, and the pitfall lands later as a hang or a segfault.
 
-Points to settle when writing it:
+A **project-scoped skill** in `raven/.claude/skills/` fixes the trigger mechanically: skills are surfaced by
+description match, so "editing DPG code" pulls it in without anyone remembering to. Project-scoped rather
+than fleet-wide (`~/.claude/skills/`) because the notes cite Raven modules throughout, and a repo-local skill
+is version-controlled with the code it documents — so it travels between machines and cannot drift from the
+tree it describes. If `raven.common` is ever extracted as `corvid`, promoting it is a move, not a rewrite.
 
-- **The trigger.** "DPG code" is already defined in CLAUDE.md — anything importing `dearpygui`, the render
+**The skill body must be a router, not a copy.** A short index saying which section of `dpg-notes.md` answers
+which question, and nothing else. Duplicating the content is how one of the two copies goes stale, and the
+human-facing file has to stay authoritative — that is what a person reads in an IDE, where no skill exists.
+
+Explicitly *not* an `@include` of `dpg-notes.md` in `CLAUDE.md`: that loads all 644 lines into every
+conversation, including the ones about BibTeX parsing. See the sibling item "Audit and slim down project
+CLAUDE.md" — Raven's has not been through an optimization pass yet (the global one has, and has nothing left
+to trim), so adding to it is the wrong direction.
+
+Points still to settle when writing it:
+
+- **The trigger.** "DPG code" is already defined in `CLAUDE.md` — anything importing `dearpygui`, the render
   loop, key/mouse handlers, texture or `split_frame` work. 36 files in `raven/` import `dearpygui`, so the
   match is broad enough to be worth automating and narrow enough not to fire on everything.
-- **What lives in the skill vs. what stays in the notes.** The notes are a reference, and a skill that inlines
-  them wholesale gains nothing over the current pointer. The likely split is that the skill carries the
-  pitfalls and the decision rules (the parts that must be in mind *before* writing a line) and refers to the
-  notes for the mechanics; but that is a guess to test, not a conclusion.
-- **Whether the CLAUDE.md pitfall index survives.** If the skill fires reliably, the seven-item index in
-  CLAUDE.md is duplicated attention-cost. If it does not, the index is the safety net. Decide after seeing the
-  skill work, not before.
-- The `~/.claude/skills/` fleet skills are the model for format; this one is project-local, so it belongs in
-  the repo and travels with it.
+- **Where the routing boundary falls.** Likely the skill carries the pitfalls and the decision rules (the
+  parts that must be in mind *before* writing a line) and routes to the notes for the mechanics — but that is
+  a guess to test against the router principle above, not a conclusion.
+- **Whether the `CLAUDE.md` pitfall index survives.** If the skill fires reliably, the seven-item index is
+  duplicated attention-cost. If it does not, the index is the safety net. Decide after seeing the skill work,
+  not before.
+
+Raised by Juha twice — 2026-07-30, after noticing `dpg-notes.md` is not auto-loaded and so is unlikely to be
+seen at the moment it is needed, and again 2026-07-31. Filed as two separate items and merged 2026-08-03.
 
 ## The 8/3 pass: bare DPG margins should name themselves
 
@@ -590,31 +604,6 @@ Design questions to settle first:
 
 Raised by Juha (2026-07-30).
 
-## Make the DPG reference a skill, so it loads when it is needed
-
-`CLAUDE.md` says "**Before editing any DPG code, read `dpg-notes.md` first**" and defines what counts as DPG
-code. That is about as strong as prose gets, and it still depends on the agent noticing and obeying a line —
-which is a weak trigger for a 519-line reference that matters on exactly the tasks where getting it wrong is
-expensive.
-
-A **project-scoped skill** in `raven/.claude/skills/` fixes the trigger mechanically: skills are surfaced by
-description match, so "editing DPG code" pulls it in without anyone remembering to. Project-scoped rather
-than fleet-wide (`~/.claude/skills/`) because the notes cite Raven modules throughout, and a repo-local skill
-is version-controlled with the code it documents — so it travels between machines and cannot drift from the
-tree it describes. If `raven.common` is ever extracted as `corvid`, promoting it is a move, not a rewrite.
-
-**The skill body must be a router, not a copy.** A short index saying which section of `dpg-notes.md` answers
-which question, and nothing else. Duplicating the content is how one of the two copies goes stale, and the
-human-facing file has to stay authoritative — that is what a person reads in an IDE, where no skill exists.
-
-Explicitly *not* an `@include` of `dpg-notes.md` in `CLAUDE.md`: that loads all 519 lines into every
-conversation, including the ones about BibTeX parsing. See the sibling item "Audit and slim down project
-CLAUDE.md" — Raven's has not been through an optimization pass yet (the global one has, and has nothing left
-to trim), so adding to it is the wrong direction.
-
-Raised by Juha (2026-07-30), after noticing `dpg-notes.md` is not auto-loaded and so is unlikely to be seen
-at the moment it is needed.
-
 ## GUI: hardcoded stand-ins for values DPG has no getter for
 
 DPG exposes very few getters for theme state — there is no way to ask a theme for its colors or spacings —
@@ -955,7 +944,7 @@ Article applies from **2 August 2026**. Raven has been available since 2024, so 
 market before that date, which means the **2 December 2026** grace period applies — but only to the 50(2)
 machine-readable marking of generated content. The rest applies from August with no grace period.
 
-The implementation is briefed: `briefs/summer_2026_librarian_extension/done/07_export-provenance-brief.md`, which
+The implementation is briefed: `briefs/summer_2026_librarian_extension/done/07_export-disclosure-brief.md`, which
 scopes it to attaching system-level provenance to exported chatlogs and messages, and explicitly rules out
 building text watermarking — the robust 50(2) mark acts on the logits during sampling, and Librarian samples
 un-watermarked third-party weights through an OpenAI-compatible backend, so there is nothing post-hoc to add.
