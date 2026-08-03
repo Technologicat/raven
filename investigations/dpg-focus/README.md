@@ -113,3 +113,15 @@ both rest on the button result.
   `raven/visualizer/app.py` (bare keys on `is_item_active`, but Enter on `is_item_focused`, its search field
   being single-line; Enter parks on `clear_search_button`; the Escape branch deleted, since `InputText`
   deactivates itself).
+
+**The two apps wore the same bug differently, which is worth knowing before hunting for it elsewhere.** In
+Librarian it showed at startup: the composer auto-focuses, the chat log has content immediately, so the
+scrolling keys were dead from the first frame. The Visualizer cannot fail that way — its info panel is empty
+until something is selected, so there is nothing to scroll before the user has clicked, and by then focus has
+moved off the search field of its own accord. Its symptom was the *other* half: after `Ctrl+F` and Enter,
+`focus_item("item_information_panel")` bounced focus back into the search field and activated it, so the
+navigation keys went dead after every search. Same two defects, opposite halves visible.
+
+Consequently the Visualizer's startup case is not testable by hand — an empty panel scrolls the same whether
+the keys reach it or not — and the fix is validated instead by `Ctrl+F` → type → Enter → arrows, and
+`Ctrl+F` → Esc → arrows, both confirmed working 2026-08-03.
