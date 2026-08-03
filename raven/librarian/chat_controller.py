@@ -72,15 +72,22 @@ _PIN_NEAR_MISS_FACTOR = 20
 
 # Labels for the jump-to-latest pill. Each carries the state as well as the action, so that it informs
 # during the turn rather than only announcing its end: a reader who has scrolled away wants to know whether
-# there is any point waiting.
+# there is any point waiting. The arrow says which way the button will take them.
+_JUMP_TO_LATEST_WRITING_LABEL = "AI writing ↓"
+_JUMP_TO_LATEST_FINISHED_LABEL = "AI finished ↓"
+
+# The pill is the one widget in Librarian not drawn in the app font, and the arrow above is why. The UI font
+# is OpenSans (`guiutils.bootup`'s default, chosen for scientific text — see the note there), whose cmap has
+# no arrow or triangle glyphs at all: U+2193, U+25BC and U+25BE are all absent, so any of them renders as a
+# blank box. InterTight, shipped alongside it, has them.
 #
-# Spelled out in words rather than with a downward arrow, which is what this wanted. The UI font is OpenSans
-# (`guiutils.bootup`'s default, chosen for scientific text — see the note there), and it has no arrow or
-# triangle glyphs: U+2193, U+25BC and U+25BE are all absent from its cmap, so any of them would render as a
-# blank box. FontAwesome is no help either, because a DPG button draws its whole label in one font and the
-# icon font has no letters to spell the state with.
-_JUMP_TO_LATEST_WRITING_LABEL = "AI writing — jump to latest"
-_JUMP_TO_LATEST_FINISHED_LABEL = "AI finished — jump to latest"
+# Binding a second face to one small control is the cheaper of the two compromises available. The others
+# were: spell the direction in words, which makes a pill into a sentence; or put the arrow in a separate
+# icon-font widget beside the button, which splits one affordance into a clickable half and a decorative
+# half. A DPG item draws its whole label in a single font, so mixing within the label is not on the menu —
+# which is also why FontAwesome cannot supply the arrow here, having no letters to spell the state with.
+_JUMP_TO_LATEST_FONT_BASENAME = "InterTight"
+_JUMP_TO_LATEST_FONT_VARIANT = "Regular"
 
 # How far the pill floats above the bottom edge of the chat panel, in pixels. Clear of the edge so it reads
 # as hovering over the log rather than as part of the composer below it.
@@ -1538,6 +1545,12 @@ class DPGLinearizedChatView:
                 self.go_to_bottom()
             self._jump_to_latest_button = dpg.add_button(label=_JUMP_TO_LATEST_FINISHED_LABEL,
                                                          callback=jump_to_latest_callback)
+            # Cached and shared by key, so asking for the same face at the same size twice costs nothing.
+            _, jump_to_latest_font = guiutils.load_extra_font(themes_and_fonts=themes_and_fonts,
+                                                             font_size=gui_config.font_size,
+                                                             font_basename=_JUMP_TO_LATEST_FONT_BASENAME,
+                                                             variant=_JUMP_TO_LATEST_FONT_VARIANT)
+            dpg.bind_item_font(self._jump_to_latest_button, jump_to_latest_font)
 
         self._scroll_end_flasher = gui_animation.ScrollEndFlasher(target=gui_parent,
                                                                   tag=f"chat_scroll_end_flasher_{self.gui_uuid}",  # tag
