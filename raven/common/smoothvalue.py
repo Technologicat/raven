@@ -214,10 +214,13 @@ class SmoothValue:
 
         `value`: Initial value.
         `rate`: Animation rate, in (0, 1]. Higher = faster. Default 0.3.
+                Stays a plain public attribute, so an in-flight animation can be re-rated without being
+                restarted - restarting would discard the current position and visibly jump. Read fresh on
+                every `update`, so a change takes effect on the next frame.
         """
         self._current = value
         self._target = value
-        self._rate = rate
+        self.rate = rate
         self._last_time = time.monotonic()
 
     @property
@@ -265,7 +268,7 @@ class SmoothValue:
             dt = now - self._last_time
         self._last_time = now
 
-        step = fps_corrected_step(self._rate, dt)
+        step = fps_corrected_step(self.rate, dt)
         remaining = self._target - self._current
         new_value = self._current + step * remaining
 
@@ -294,10 +297,13 @@ class SmoothInt:
 
         `value`: Initial value.
         `rate`: Animation rate, in (0, 1]. Higher = faster. Default 0.8.
+                Stays a plain public attribute, so an in-flight animation can be re-rated without being
+                restarted - restarting would discard the subpixel position and visibly jump. Read fresh on
+                every `update`, so a change takes effect on the next frame.
         """
         self._current_float = float(value)
         self._target = value
-        self._rate = rate
+        self.rate = rate
         self._last_time = time.monotonic()
 
     @property
@@ -347,7 +353,7 @@ class SmoothInt:
             dt = now - self._last_time
         self._last_time = now
 
-        step = fps_corrected_step(self._rate, dt)
+        step = fps_corrected_step(self.rate, dt)
         remaining = self._target - self._current_float
         new_value = self._current_float + step * remaining
 

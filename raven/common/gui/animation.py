@@ -17,7 +17,7 @@ import threading
 import time
 from typing import Callable, Optional, Tuple, Union
 
-from unpythonic import sym
+from unpythonic import box, sym
 
 from ..smoothvalue import SmoothInt
 
@@ -606,12 +606,14 @@ class SmoothScrolling(Animation):
                  smooth: bool = True,
                  smooth_step: float = 0.8,
                  flasher: Optional["ScrollEndFlasher"] = None,
-                 finish_callback: Optional[Callable] = None):
+                 finish_callback: Optional[Callable] = None,
+                 commanded_y_scroll: Optional[box] = None):
         """Scroll a child window, optionally smoothly.
 
         Each GUI element (determined by `target_child_window`) can only have one `SmoothScrolling`
-        animation running at a time. If an instance already exists, trying to create the animation
-        will update the existing animation's `target_y_scroll` instead.
+        animation running at a time. If an instance already exists, constructing another one **retargets
+        it** rather than starting a second animation, and the new instance becomes an inert ghost.
+        Retargeting adopts the new request *whole* - see `start` for exactly what that means and why.
 
         `target_child_window`: DPG tag or ID, the child window to scroll.
         `target_y_scroll`: int, target scroll position in scrollbar coordinates.
@@ -622,10 +624,41 @@ class SmoothScrolling(Animation):
                        Independent of the render FPS.
         `flasher`: `ScrollEndFlasher` instance, optional.
                    Automatically activated when the top/bottom is reached.
+
+                   Pass `None` for scrolls the *program* initiates, such as following a streaming reply's
+                   tail. The flasher asserts "you tried to go further and could not", which is a statement
+                   about a user's thwarted intent; automatic tail-following has no thwarted intent, since
+                   reaching the end is the whole point. Passing one anyway strobes the overlay once per
+                   arriving chunk.
         `finish_callback`: 0-argument callable. Run some custom code when the animation finishes normally.
                            Keep it minimal; trying to instantiate a new scroll animation will block while
                            the callback is running (because a new instance might target the same GUI element,
                            and we guarantee the teardown to be atomic).
+
+                           It says "the animation object has ended", not "my scroll request completed" -
+                           those differ, because a retarget re-aims the running instance rather than
+                           replacing it. So a caller holding a reference to the instance still holds a live
+                           one after someone else retargets it, and this fires only when the object really
+                           goes away. Retargeting *chains* callbacks rather than replacing them; see `start`.
+
+                           A callback that raises is logged and skipped, and does not stop the others or
+                           the deregistration.
+        `commanded_y_scroll`: `unpythonic.box`, optional. Receives every scroll position this animation
+                              writes, in the same breath as the `dpg.set_y_scroll` that writes it.
+
+                              For callers that need to distinguish "the view moved because we moved it"
+                              from "the user scrolled". That test compares the panel's reported position
+                              against the last value *written*, and an animation writes a new one every
+                              frame - so a caller holding only its own pre-animation value would read the
+                              entire scroll as a user scroll.
+
+                              The caller owns the box because the animation does not outlive its own scroll:
+                              `finish` pops the instance, and the check is needed precisely in the gaps when
+                              no animation exists. There is still exactly one writer at a time, so the value
+                              cannot drift.
+
+                              Compare against the last written value, **not** the target: those come apart
+                              exactly while an animation runs, which is the case in question.
 
         Note that mouse wheel and scrollbar dragging do not invoke the scroll animation; for those,
         the scroll position is handled internally by DPG. Hence those don't cause a flash here.
@@ -645,7 +678,11 @@ class SmoothScrolling(Animation):
         self.smooth = smooth
         self.smooth_step = smooth_step
         self.flasher = flasher
-        self.finish_callback = finish_callback
+        self.commanded_y_scroll = commanded_y_scroll
+
+        # A list rather than one callable, because retargeting an existing animation chains the new
+        # request's callback onto the surviving instance instead of replacing it - see `start`.
+        self.finish_callbacks = [finish_callback] if finish_callback is not None else []
 
         self.prev_frame_new_y_scroll = None  # target position of last frame, for monitoring of stuck animation
         self.update_pending_frames = 0
@@ -653,6 +690,23 @@ class SmoothScrolling(Animation):
         self.reified = False  # `True`: running; `False`: ghost mode, update other instance and exit.
 
         self.start()
+
+    def _set_y_scroll(self, new_y_scroll: int) -> None:
+        """Move the scrollbar, and record where we put it.
+
+        The pair belongs in one place. `commanded_y_scroll` exists so a caller can tell our writes from the
+        user's, and a bare `dpg.set_y_scroll` anywhere else in this class would be invisible to that caller
+        and therefore read as a user scroll.
+
+        The box is written *before* DPG, deliberately. Either order leaves a brief window for a reader on
+        another thread, but they are not equally bad: box-first means the caller may see a position DPG has
+        not applied yet, which is the ordinary lagging-by-a-frame state the comparison already tolerates,
+        whereas DPG-first means it may see a movement it has no record of commanding - which is exactly the
+        signature of a user scroll, and the one reading we must never produce by accident.
+        """
+        if self.commanded_y_scroll is not None:
+            self.commanded_y_scroll << new_y_scroll
+        dpg.set_y_scroll(self.target_child_window, new_y_scroll)
 
     def render_frame(self, t: int) -> sym:
         if not self.reified:  # ghost mode
@@ -673,7 +727,7 @@ class SmoothScrolling(Animation):
                 elif self.prev_frame_new_y_scroll is None:
                     new_y_scroll = self.target_y_scroll
                     self.prev_frame_new_y_scroll = new_y_scroll  # No longer first frame (in non-smooth mode, doesn't matter what value we store here as long as it's not `None`).
-                    dpg.set_y_scroll(self.target_child_window, new_y_scroll)
+                    self._set_y_scroll(new_y_scroll)
                 # Waited for a short timeout? -> time to check for end of scrollbar (but this shouldn't happen now that `scroll_info_panel_to_position` clamps the value to the max allowed by the scrollbar)
                 elif self.update_pending_frames >= update_pending_threshold:
                     action = action_finish
@@ -716,7 +770,7 @@ class SmoothScrolling(Animation):
                     if action is action_continue:
                         self.prev_frame_new_y_scroll = new_y_scroll
 
-                    dpg.set_y_scroll(self.target_child_window, new_y_scroll)
+                    self._set_y_scroll(new_y_scroll)
 
                 # Timeout waiting for DPG to update the position? -> probably end of scrollbar (but shouldn't happen now that `scroll_info_panel_to_position` clamps the value to the max allowed by the scrollbar)
                 elif self.update_pending_frames >= update_pending_threshold:
@@ -735,29 +789,83 @@ class SmoothScrolling(Animation):
         """Internal method, called automatically by constructor.
 
         Manages de-duplication (when added to the same GUI element as an existing animation of this type).
+
+        When an animation is already running on this GUI element, the running instance **adopts this
+        request whole** and this instance becomes an inert ghost. Adopting the destination alone is not
+        enough: the surviving instance is only a vehicle, whereas `smooth`, `smooth_step`, `flasher` and
+        `commanded_y_scroll` are properties of *this* scroll request and describe how it should look and
+        who asked for it.
+
+        Getting that wrong is not subtle in practice. One user-initiated scroll creates an instance
+        carrying a flasher; if every subsequent tail-follow merely retargets it, the flasher stays attached
+        and the overlay strobes once per streamed chunk for the length of the reply. The mirror case loses
+        a wanted flash instead: a follow instance in flight when the user clicks jump-to-latest would
+        swallow the confirmation. "Latest wins, wholesale" is also simply an easier rule to hold than one
+        with a carve-out in it.
+
+        `finish_callback` is the exception: it **chains** rather than being replaced. The reason is that it
+        does not describe a request at all - it means "this animation object has ended", and a retarget
+        ends nothing. The running instance persists and is merely re-aimed, so a caller holding a reference
+        to it still holds a live one. Visualizer depends on exactly that: it keeps `_scroll_animation`
+        pointing at the reified instance in order to stop *that* animation before swapping the info panel's
+        content, and its callback exists to null the reference once the object dies. Firing it at handover
+        would null a reference that is still live, and the stop would then silently stop nothing.
+
+        Replacing it is equally wrong in the mirror direction: the outgoing caller would never be told, and
+        Visualizer's reference would dangle at a finished instance - whose `finish` pops from `instances`
+        without a default, so the next stop attempt raises `KeyError`.
+
+        So every caller that asked to be notified is notified, once, when the instance actually finishes.
+        Callbacks are deduplicated by identity, which bounds the chain by the number of *distinct* callers
+        rather than by the number of retargets - the difference matters because a streaming reply retargets
+        once per arriving chunk. That dedup is not merely a guard: a callback meaning "it ended" should fire
+        once even if its caller retargeted ten times.
         """
         with self.instance_lock:
             if self.reified:  # already running (avoid double resource allocation and registration)
                 return
 
             with type(self).class_lock:
-                # If an instance is already running on this GUI element, just update its target scroll position.
-                # This allows a seamless transition to the new scroll animation, retaining the subpixel position.
+                # If an instance is already running on this GUI element, retarget it rather than starting a
+                # second animation. The seamless transition is the point: the surviving instance keeps its
+                # subpixel position, so the movement bends toward the new target instead of jumping.
                 if self.target_child_window in type(self).instances:
                     other = type(self).instances[self.target_child_window]
                     with other.instance_lock:
                         other.target_y_scroll = self.target_y_scroll
                         other._sv.target = self.target_y_scroll
+
+                        other.smooth = self.smooth
+                        other.smooth_step = self.smooth_step
+                        other._sv.rate = self.smooth_step  # the field and the interpolator's copy move together
+                        other.flasher = self.flasher
+                        other.commanded_y_scroll = self.commanded_y_scroll
+
+                        for callback in self.finish_callbacks:
+                            if callback not in other.finish_callbacks:
+                                other.finish_callbacks.append(callback)
                     return
 
                 type(self).instances[self.target_child_window] = self
                 self.reified = True  # This is the instance that animates `self.target_child_window`.
 
     def finish(self) -> None:
-        """Call the optional finish callback if present, and clean up resources upon the end of the animation."""
+        """Call any registered finish callbacks, and clean up resources upon the end of the animation.
+
+        There may be several: retargeting chains each new request's callback onto the surviving instance
+        rather than replacing it, so everyone who asked to be told is told here, in registration order.
+
+        A callback that raises does not take the others with it, and does not prevent deregistration. This
+        is teardown, and the failure it guards against is the one that cannot be recovered from: leaving the
+        instance in `instances` would make this GUI element permanently unanimatable, since every later
+        request would retarget a dead object instead of starting a new animation.
+        """
         with type(self).class_lock:
-            if self.finish_callback is not None:
-                self.finish_callback()
+            for callback in self.finish_callbacks:
+                try:
+                    callback()
+                except Exception as exc:
+                    logger.warning(f"SmoothScrolling.finish: instance for '{self.target_child_window}': finish callback {callback} raised, continuing teardown: {type(exc)}: {exc}")
             type(self).instances.pop(self.target_child_window)
 
 # The FPS-corrected exponential decay math is now in `raven.common.smoothvalue` (which see).
