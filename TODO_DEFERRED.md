@@ -3,13 +3,49 @@
 New items go at the **top**. (Both ends were in use up to 2026-07-27, which is how the two halves of the same
 Librarian session ended up ~1000 lines apart.)
 
-## The 18 DPG tests we have never run in CI
+## `SmoothScrolling` commits during construction, so it cannot be built without being fired
 
-`raven/common/gui/tests/` — `test_messagebox` (3), `test_animation` (8), `test_utils` (7) — drive a real DPG
-context with an unmapped viewport, and pass locally. But `dearpygui` is not in
+`raven/common/gui/animation.py`. `SmoothScrolling.__init__` ends by calling `self.start()`, which is not a
+start at all — it is the deduplication step: under `class_lock`, it either retargets the instance already
+animating that window (this one becoming an inert ghost) or registers this one as the live one. Three
+consequences, all verified 2026-08-03 rather than reasoned from the shape:
+
+- **Constructing one has global side effects.** The live scroll is retargeted during construction, before
+  `animator.add` is reached. There is no way to build an instance in order to inspect it, hand it somewhere,
+  or decide whether to use it — building it has committed it.
+- **The caller cannot tell a live instance from a ghost**, and registers whichever it got. Correctness then
+  rests on `finish` no-op'ing for ghosts, which it does deliberately (`Animator.clear` finalizes everything
+  registered) but which is a subtlety propping up the API from underneath.
+- **The locking contract is invisible at the signature and load-bearing.** `class_lock` is an `RLock`, and
+  that choice is what makes current usage work: both call sites wrap construct-and-add in `class_lock` while
+  `start` acquires the same lock internally, so a plain `Lock` would deadlock. Meanwhile the natural
+  spelling, `animator.add(SmoothScrolling(...))` — which the class's own prose suggests — is racy: another
+  thread can interleave between the retarget-or-register decision and the registration.
+
+Nothing is broken today: the only two construction sites (`raven/librarian/chat_controller.py`,
+`raven/visualizer/info_panel.py`) both hold the lock. The hazard is that the API is easy to use wrongly and
+silent when you do, and a third caller is the likely trigger.
+
+The shape to move to is a classmethod — `SmoothScrolling.scroll(target_child_window=..., target_y_scroll=...,
+...)` — taking the class lock once and either retargeting the running instance or constructing, registering
+and adding a new one. Callers never see a ghost, construction becomes inert, the lock stops being the
+caller's problem, and the ghost concept may leave the public surface entirely.
+
+Deferred rather than done because it is a pure refactor of code both GUI apps' scrolling runs through, with
+no user-visible change, raised while the chat-view scrolling was still under live test. Do it once that work
+is confirmed stable. Raised by Juha, who asked whether the design was dangerous; agreed worth fixing
+(2026-08-03).
+
+## The DPG tests we have never run in CI
+
+`raven/common/gui/tests/` — `test_messagebox`, `test_animation`, `test_utils`, `test_viewport_math`, 50 tests
+in all — drive a real DPG context with an unmapped viewport, and pass locally. But `dearpygui` is not in
 `.github/workflows/requirements-ci.txt`, so each module's `pytest.importorskip("dearpygui.dearpygui")` fires
-on every CI run and all 18 execute only on a dev machine. Nothing reports this: a skip looks like a pass in
-the summary line, and the tests were presumably written on a machine where they ran.
+on every CI run and all of them execute only on a dev machine. Nothing reports this: a skip looks like a pass
+in the summary line, and the tests were presumably written on a machine where they ran.
+
+(A fifth module, `test_focus_semantics`, is a separate case and *should* stay out of CI: it is marked `gui`
+because it maps a real window, and is skipped unless `pytest --run-gui` is passed. See `conftest.py`.)
 
 The open question is whether DPG can initialize at all on a headless GitHub runner. The tests never *show* a
 window — `create_viewport` then `setup_dearpygui` with nothing mapped — but that still goes through GLFW and
