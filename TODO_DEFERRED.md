@@ -174,13 +174,15 @@ whether the model behind them is wrong, but not part of this pass.
 ## Smooth scrolling in Cherrypick too, now that Librarian has it
 
 **The precondition is met** (2026-08-03): Librarian's chat panel has `SmoothScrolling`, the reader-driven
-keys, and the `ScrollEndFlasher`, all live-tested. So the constellation now has three apps whose views glide
-and one that teleports, and the odd one out reads as unfinished rather than as a decision. Raised by Juha,
-2026-07-30, and again on seeing the flasher land. (Cherrypick's *image view* looks like it belongs in the
-same breath and turns out not to; see below.)
+keys, and the `ScrollEndFlasher`, all live-tested. So three apps now glide — Visualizer, Librarian, and the
+XDot viewer, the last by a different mechanism (see the survey below, and do not go looking for
+`SmoothScrolling` in it) — and Cherrypick's grid is the one that teleports. The odd one out reads as
+unfinished rather than as a decision. Raised by Juha, 2026-07-30, and again on seeing the flasher land.
+(Cherrypick's *image view* looks like it belongs in the same breath and turns out not to; see below.)
 
-The flasher is part of the ask now, not just the glide — it is what made the two existing apps feel like one
-product, so the grid wants both.
+The flasher is part of the ask now, not just the glide. It is what made the Visualizer and Librarian feel
+like one product rather than two apps that scroll smoothly, so the grid wants both. (The XDot viewer has no
+counterpart and needs none: it pans and zooms a graph, where there is no "end of the content" to arrive at.)
 
 **Where things actually stand**, checked 2026-08-03 rather than recalled:
 
