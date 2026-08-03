@@ -56,11 +56,15 @@ Its shape, measured rather than assumed, because two of these change what it can
 
 - **541 records, spanning 1766–2013.** The long tail matters: an embedding trained on modern text meeting
   18th- and 19th-century mechanics titles is itself worth watching.
-- **Only 2 records carry an abstract.** So this corpus exercises the **title-only** regime —
-  `importer.get_highdim_semantic_vectors` embeds `title + abstract` when it can and falls back to the bare
-  title otherwise. That is a real and common regime (plenty of bibliographies look like this), but it is
-  *not* the abstract-rich one a Web of Science export gives you, and a change that helps one may not help
-  the other. Test both, and say which.
+- **Only 2 records carry an abstract**, and this is structural rather than an oversight: the database was
+  **typed by hand between 2007 and 2016**, partly predating routine online abstracts, and many sources were
+  dead-tree. So the abstracts are not sitting somewhere waiting to be re-exported — for most of these
+  records they were never in machine-readable form at all. **Do not plan on enriching it.** Take the
+  title-only regime as the thing under test: `importer.get_highdim_semantic_vectors` embeds
+  `title + abstract` when it can and falls back to the bare title otherwise, and that fallback is the path
+  this corpus exercises end to end. It is a real and common regime — plenty of hand-built bibliographies
+  look like this — but it is *not* the abstract-rich one a Web of Science export gives you. A change that
+  helps one may not help the other, so test both and label which is which.
 - **Mixed-language author names**, ~4% carrying LaTeX diacritics, concentrated in Nordic, German and Polish
   authors — which is why it also surfaced the author-name decoding bug fixed on 2026-08-03.
 
