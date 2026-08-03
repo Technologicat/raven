@@ -1109,6 +1109,41 @@ contributor will meet it before writing the import, not after.
 Headline wording is fine as *"Everything in Raven is open source"*, but it has to be followed by the
 breakdown rather than standing alone (Juha, 2026-08-03).
 
+### Proposed shape for the `pyproject.toml` fix
+
+PEP 639 covers this directly, and the `license` field is already in its string form, so the backend accepts
+a compound SPDX *expression*:
+
+```toml
+license = "BSD-2-Clause AND AGPL-3.0-or-later AND MIT"
+license-files = ["LICENSE.md",
+                 "raven/server/LICENSE",
+                 "raven/avatar/pose_editor/LICENSE",
+                 "raven/vendor/*/LICENSE*",
+                 "raven/common/gui/xdotwidget/LICENSE*"]
+```
+
+`AND` is the correct operator: it asserts that a consumer must satisfy all of the listed licences, which is
+what a distribution containing all three requires. Globs are permitted in `license-files`, and the vendored
+texts have to ship regardless. The classifiers carry no `License ::` entry, so nothing needs removing there —
+PEP 639 deprecates those, and this project is already clean on that axis.
+
+**Two elections that are the copyright holder's, not a packaging detail:**
+
+- **`AGPL-3.0-only` versus `AGPL-3.0-or-later`.** The AGPL source notices say only "licensed under the GNU
+  AGPL, see `LICENSE`", with no version elected. Do not read the election off `raven/server/LICENSE:637`
+  ("either version 3 of the License, or (at your option) any later version") — that is the licence's own
+  how-to-apply appendix, present verbatim in every copy of the AGPL, and says nothing about what Raven chose.
+  SPDX forces a choice, so one has to be made before the expression above can be written.
+- **Whether the vendored licences belong in the top-level expression at all.** Strictly, a distribution's
+  effective terms include everything it ships — `tha3`, `anime4k`, `file_dialog`, `kokoro_fastapi`,
+  `xdotwidget` and its colorbrewer schemes. Common practice is to ship their texts through `license-files`
+  and keep the `license` expression to the project's own code. That is convention rather than rule, and with
+  AGPL involved it is worth one check with someone at JAMK rather than settling it here.
+
+`LICENSE.md` and `README.md` should carry the same breakdown as the table above, since those are what a human
+reads before deciding anything.
+
 Raised during the vision-document discussion with claude.ai, 2026-08-03. Note the claim as relayed was that
 "the server and parts of the avatar are AGPL" — accurate, but checking the tree also turned up the MIT
 component, which nobody had mentioned, and cleared `raven/common/video/postprocessor.py`, which mentions AGPL
