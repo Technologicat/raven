@@ -1180,10 +1180,10 @@ hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focu
                helpcard.hotkey_new_column,
                env(key_indent=0, key="Page Up", action_indent=0, action="Scroll chat up one page", notes="Also while typing"),
                env(key_indent=0, key="Page Down", action_indent=0, action="Scroll chat down one page", notes="Also while typing"),
-               env(key_indent=1, key="Up", action_indent=1, action="Same, but five lines", notes="Also while typing"),
-               env(key_indent=1, key="Down", action_indent=1, action="Same, but five lines", notes="Also while typing"),
-               env(key_indent=0, key="Home", action_indent=0, action="Jump to start of chat", notes="Unless text entry field focused"),
-               env(key_indent=0, key="End", action_indent=0, action="Jump to latest message", notes="Unless text entry field focused"),
+               env(key_indent=1, key="Up", action_indent=1, action="Same, but five lines", notes="Not while typing"),
+               env(key_indent=1, key="Down", action_indent=1, action="Same, but five lines", notes="Not while typing"),
+               env(key_indent=0, key="Home", action_indent=0, action="Jump to start of chat", notes="Not while typing"),
+               env(key_indent=0, key="End", action_indent=0, action="Jump to latest message", notes="Not while typing"),
                helpcard.hotkey_blank_entry,
                env(key_indent=0, key="Ctrl+N", action_indent=0, action="Start new chat", notes=""),
                helpcard.hotkey_blank_entry,
@@ -1502,27 +1502,26 @@ def librarian_hotkeys_callback(sender, app_data):
         elif key in (518, dpg.mvKey_Next):  # Page Down
             chat_controller.view.page_down()
 
-        # Bare arrows are the fine adjustment, several lines at a time — see `_SCROLL_LINES_PER_ARROW` for
-        # the sizing. Unmodified Up/Down were unbound; the modified forms are sibling navigation
-        # (`Ctrl` +/- `Shift`) and keep their meaning.
-        elif key == dpg.mvKey_Up:
-            chat_controller.view.scroll_lines(-_SCROLL_LINES_PER_ARROW)
-        elif key == dpg.mvKey_Down:
-            chat_controller.view.scroll_lines(_SCROLL_LINES_PER_ARROW)
-
         elif dpg.is_item_focused("chat_field"):
             # Enter sends; Shift+Enter inserts a newline. The multiline field owns its own keyboard, so on
             # Shift+Enter we do nothing here and let the widget insert the newline itself.
             if key == dpg.mvKey_Return and not shift_pressed:
                 send_message_to_ai_callback()
                 dpg.focus_item("chat_field")  # tag
-            # Home/End are deliberately absent here: inside a text field they mean start/end of line, which is
-            # what the user expects and what the widget already does. Claiming them globally would break
-            # ordinary text editing to add a scroll shortcut that Page Up/Down already covers.
+            # Up/Down/Home/End are deliberately absent here, and belong to the widget: in a multiline field
+            # they move the caret between lines and to the ends of one, which is what a typist expects and
+            # what the field already does. Claiming them would break ordinary text editing to add scrolling
+            # that Page Up/Down already provides from inside the composer.
 
         else:
-            # Home/End scroll the log, but only when the composer does not have focus (see above).
-            if key == dpg.mvKey_Home:
+            # With the composer out of the way, the remaining navigation keys scroll the log. Bare Up/Down
+            # were previously unbound; the modified arrows are sibling navigation (`Ctrl` +/- `Shift`) and
+            # keep their meaning. See `_SCROLL_LINES_PER_ARROW` for why an arrow moves several lines.
+            if key == dpg.mvKey_Up:
+                chat_controller.view.scroll_lines(-_SCROLL_LINES_PER_ARROW)
+            elif key == dpg.mvKey_Down:
+                chat_controller.view.scroll_lines(_SCROLL_LINES_PER_ARROW)
+            elif key == dpg.mvKey_Home:
                 chat_controller.view.go_to_top()
             elif key == dpg.mvKey_End:
                 chat_controller.view.go_to_bottom()
