@@ -53,6 +53,8 @@
 
 The vision is to help you absorb information from large volumes of text.
 
+This README describes what ships today; for what Raven is for and where it is going, see [VISION.md](VISION.md).
+
 *Raven* is 100% local, 100% privacy-first, 100% open source.
 
 Recent changes are explained in the [CHANGELOG](CHANGELOG.md).
