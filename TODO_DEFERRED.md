@@ -3218,10 +3218,20 @@ Juha (2026-08-04): recent trouble with some ML libraries on macOS makes the midd
 check first.
 
 So this is a **measurement**, not a judgement call: generate the lock here, then try `pdm install` against
-it on a non-CUDA target (macOS, or a CPU-only Linux box, or CI, which already installs a hand-picked
-subset and would be the cheapest place to try). Commit the lock if it resolves; if it doesn't, the
-outcome is a decided-and-written-down exception in the `.gitignore` and in `project-setup`'s fleet
-classification, which is worth as much as the lock would have been.
+it on a non-CUDA target. **CI is the only such target available** (Juha, 2026-08-04 — no non-CUDA machine
+on hand; a coworker's Mac is possible but not soon). The matrix already runs `macos-latest` and
+`windows-latest`, so the runners exist — but they install a hand-picked subset with `--no-deps` precisely
+to avoid resolving the full tree, so **they do not exercise the lock at all** and none of them would go
+red today no matter what the lock said.
+
+Checking it therefore means a separate throwaway job that really does `pdm install` on macOS, whose whole
+point is to be slow — and that cost is part of what is being deferred, not a detail of carrying it out.
+Cheapest honest version: run it once by hand via `workflow_dispatch`, read the result, delete the job.
+There is no need for a standing check; the question is asked once and answered once.
+
+Commit the lock if it resolves; if it doesn't, the outcome is a decided-and-written-down exception in the
+`.gitignore` and in `project-setup`'s fleet classification, which is worth as much as the lock would have
+been.
 
 Do it for 0.2.8 if the check is quick, otherwise 0.2.9 — it is a packaging defect with no user-visible
 symptom today, so it does not gate a release.
