@@ -78,8 +78,11 @@ Still open, in the order they are expected to be done:
      that already has one copies only the target into the existing instance and becomes a ghost — `flasher`,
      `smooth`, `smooth_step` and `finish_callback` all stay as the *first* constructor set them. Every item
      above retargets an in-flight scroll, so this stopped being polish and became a prerequisite.
-2. **The two log-noise fixes** — the context-prefill strict-template warning, and `setup_font_ranges`'
-   DeprecationWarnings.
+2. **The three log-noise fixes** — the context-prefill strict-template warning, `setup_font_ranges`'
+   DeprecationWarnings, and the avatar's emotion autoreset, which logs at INFO every three seconds forever
+   and reports a change to neutral when the emotion is already neutral. The third was added 2026-08-03, on
+   noticing it while reading a debug log during the chat-scrolling live test; all three are the same defect
+   in different costumes, so they are one job.
 3. **Large `webfetch` results become attachments** — the one feature admitted past the freeze.
 4. **Tool budget: error out informatively instead of withdrawing the tools.** Admitted 2026-08-03, and the
    freeze rule wants the argument stated rather than assumed. It is *defect-shaped*: withdrawing a tool
