@@ -684,6 +684,14 @@ class SmoothScrolling(Animation):
         # request's callback onto the surviving instance instead of replacing it - see `start`.
         self.finish_callbacks = [finish_callback] if finish_callback is not None else []
 
+        # How far the most recent frame moved the view, in pixels. Published because a caller comparing the
+        # panel's reported position against what it commanded needs to know how much of any difference this
+        # animation could have caused: the report lags the last written value by one frame, so a legitimate
+        # gap of exactly one step appears while a scroll is in flight. Early in an exponential decay one step
+        # is large - hundreds of pixels - so a fixed tolerance sized for a human's small scroll will read a
+        # fast animation as user input.
+        self.last_step = 0.0
+
         self.prev_frame_new_y_scroll = None  # target position of last frame, for monitoring of stuck animation
         self.update_pending_frames = 0
         self._sv = SmoothInt(value=0, rate=smooth_step)
@@ -755,6 +763,7 @@ class SmoothScrolling(Animation):
                     dt = 1.0 / fps if fps > 0 else 1.0 / SmoothInt.CALIBRATION_FPS
                     still_animating = self._sv.update(dt=dt)
                     new_y_scroll = self._sv.current
+                    self.last_step = abs(new_y_scroll - current_y_scroll)  # how far this frame moved the view; see the attribute's note in `__init__`
 
                     logger.debug(f"SmoothScrolling.render_frame: frame {dpg.get_frame_count()}: instance for '{self.target_child_window}': old raw = {current_y_scroll}, subpixel = {self._sv.current_exact}, new int = {new_y_scroll}, target = {self.target_y_scroll}")
 

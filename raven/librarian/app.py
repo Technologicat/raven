@@ -85,6 +85,15 @@ logger.info(f"Libraries loaded in {tim.dt:0.6g}s.")
 # ----------------------------------------
 # Module bootup
 
+# How far one Up/Down keypress scrolls the chat log, in lines of text. Sized as a comfortable reading nudge
+# — enough to bring the next couple of lines in without losing your place, and well short of the ~27 lines a
+# page moves.
+#
+# It also has to clear a floor: `should_follow_tail` counts anything within two lines of the end as still at
+# the end, so a smaller movement during a streaming reply would be undone by the next arriving chunk. Both
+# quantities are expressed in lines, so the margin holds at any font size rather than only at this one.
+_SCROLL_LINES_PER_ARROW = 5
+
 bg = concurrent.futures.ThreadPoolExecutor()
 gui_resize_task_manager = bgtask.TaskManager(name="librarian_gui_resize",  # de-spammer for expensive parts of GUI resizing
                                              mode="sequential",
@@ -1171,6 +1180,8 @@ hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focu
                helpcard.hotkey_new_column,
                env(key_indent=0, key="Page Up", action_indent=0, action="Scroll chat up one page", notes="Also while typing"),
                env(key_indent=0, key="Page Down", action_indent=0, action="Scroll chat down one page", notes="Also while typing"),
+               env(key_indent=1, key="Up", action_indent=1, action="Same, but five lines", notes="Also while typing"),
+               env(key_indent=1, key="Down", action_indent=1, action="Same, but five lines", notes="Also while typing"),
                env(key_indent=0, key="Home", action_indent=0, action="Jump to start of chat", notes="Unless text entry field focused"),
                env(key_indent=0, key="End", action_indent=0, action="Jump to latest message", notes="Unless text entry field focused"),
                helpcard.hotkey_blank_entry,
@@ -1490,6 +1501,14 @@ def librarian_hotkeys_callback(sender, app_data):
             chat_controller.view.page_up()
         elif key in (518, dpg.mvKey_Next):  # Page Down
             chat_controller.view.page_down()
+
+        # Bare arrows are the fine adjustment, several lines at a time — see `_SCROLL_LINES_PER_ARROW` for
+        # the sizing. Unmodified Up/Down were unbound; the modified forms are sibling navigation
+        # (`Ctrl` +/- `Shift`) and keep their meaning.
+        elif key == dpg.mvKey_Up:
+            chat_controller.view.scroll_lines(-_SCROLL_LINES_PER_ARROW)
+        elif key == dpg.mvKey_Down:
+            chat_controller.view.scroll_lines(_SCROLL_LINES_PER_ARROW)
 
         elif dpg.is_item_focused("chat_field"):
             # Enter sends; Shift+Enter inserts a newline. The multiline field owns its own keyboard, so on

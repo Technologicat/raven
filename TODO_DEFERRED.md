@@ -369,6 +369,64 @@ Noticed by Juha (2026-07-30) in a live-test log.
 
 ## Chat view scrolling: keys, smoothness, and end-of-scroll feedback
 
+**Live-tested 2026-08-03, and the happy paths pass.** Smooth interpolation confirmed from the per-frame log
+(steps halving: 1177, 615, 329, 165, 86, 44), retargeting confirmed to preserve subpixel position mid-flight
+(a second `scroll_view` continued from 2417 rather than restarting), Page Up/Down move a consistent 546 px,
+Home lands at 0 with `to_end=False`, End at the maximum with `to_end=True`. Tail-following held for 814 of
+857 decisions across a streamed reply, and recovered from every excursion.
+
+**Edge cases still untested, for Juha to run by hand** (driving these with `xdotool` is unreliable — the
+scrollbar drag especially, and the timing during streaming is fiddly). Run with
+`raven-librarian --log-level DEBUG --log <path>`; the line to watch in each case is
+`DPGLinearizedChatView.should_follow_tail`, whose `drift=` and `-> follow=` fields say what was decided and
+why:
+
+- **Page Up while the model is writing.** Expect `follow=False` from the first sample after the key, and for
+  it to *stay* False while the reply continues — the reader has left the tail deliberately. The failure to
+  watch for is the opposite of latching: the view dragging itself back down on the next chunk.
+- **Up-Arrow while the model is writing.** Establish first what the key even does: **bare arrows are not
+  bound at all** (checked 2026-08-03 — `Ctrl+Left/Right` are prev/next sibling, `Ctrl+Shift+Left/Right` jump
+  10, `Ctrl+Down` shows the continuation; nothing binds an unmodified arrow). So any movement seen here comes
+  from ImGui's own navigation of the focused child window, not from Librarian.
+
+  **Which exposes a real gap: there is no line-by-line scrolling.** Page Up/Down move ~546 px and nothing
+  moves less. `should_follow_tail`'s docstring already argues the tolerance trade-off in terms of "a
+  deliberate scroll of one or two lines away from the end", concluding that too large a value makes "the
+  arrow keys appear not to work" — written as though arrows scroll, when nothing binds them.
+
+  **The real question underneath is not about arrows, and it is live today.** A reader who nudges up a
+  little from the end — by *any* means, including the mouse wheel — is pulled back on the next chunk,
+  because `follow = at_end or ...` and `at_end` is `gap <= 40 px`. One text line is about 26 px, so a
+  one-line nudge never leaves the pinned zone. The non-stickiness argument recorded in `should_follow_tail`
+  does not cover this case: it reasons that "a reader who really has scrolled away keeps failing the drift
+  test all by itself, because they stay where they put themselves and we issue no further commands" — but
+  for a *small* scroll we do issue a further command, and it puts them back.
+
+  So decide this first: **should a small, deliberate, reader-initiated scroll near the end unpin the view?**
+  Provenance is already plumbed (`user_initiated`, added for the flasher), so the mechanism exists. Answering
+  it settles the arrow question as a side effect.
+
+  **On whether line scrolling needs to exist at all: probably not as its own feature.** The mouse wheel
+  already covers fine adjustment and is the natural gesture in a GUI; a chat is read in messages and
+  paragraphs, so the page is the granularity that matches the content; and in this app's vocabulary a bare
+  arrow reads as "navigate" rather than "scroll", since `Ctrl`+arrows are sibling navigation. If they are
+  bound anyway, make the unit about three lines — because a paragraph is the reading unit, not because 78 px
+  happens to clear a 40 px bound. Tuning one constant to escape another is how both become load-bearing.
+- **Dragging the scrollbar while the model is writing.** The case the reference implementation never had to
+  handle (the Visualizer's info panel only ever does one-shot scrolls, so nothing retargets repeatedly and
+  there is no fight to lose). Expect the drag to win. Two specific things to look for: the animation
+  giving up via its *timeout* branch, which is the same branch that reports "target position past end of
+  scrollbar" and will fire the flasher once that is wired — a user drag must not be misreported as hitting
+  the end of the content; and `follow_tail` re-engaging on the next chunk and resuming the fight, since the
+  animation's give-up does not stick by itself.
+
+  **Run this test before wiring the flasher, not after** (decided 2026-08-03). The failure is already
+  observable without one: the timeout branch emits `"did not reach target position (target position past end
+  of scrollbar?)"` at DEBUG whether or not a flasher is attached. So the test answers the question that
+  decides *how* to wire it — whether a drag and a genuine end-of-content are distinguishable in the data, and
+  therefore whether the flasher needs a real guard or just a `custom_finish_pred`. Wiring first means
+  guessing at that and probably rewiring.
+
 Verified 2026-07-30: Librarian's key handler (`app._on_key`) covers F1, F8, F11, Return, the arrows (sibling
 navigation), a handful of letters and Escape — and nothing for scrolling the chat log. The only way through a
 long chat is the mouse wheel, which is painful when a single tool result runs to dozens of screens (see the
@@ -1014,6 +1072,26 @@ without touching the surrounding structure. Prefer that over shortening in place
 reader wants in full and a listener does not want at all.
 
 Discovered while fixing the zero-segment TTS crash (2026-07-28, reported by Juha).
+
+## The avatar's emotion autoreset announces itself every 3 seconds, forever
+
+`raven.client.avatar_controller.emotion_autoreset_task` logs at INFO once per idle tick, indefinitely:
+
+```
+avatar idle for at least 3.0 seconds; updating emotion to 'neutral' (default idle state)
+```
+
+It says it is updating the emotion when the emotion is already neutral, so after the first reset every later
+line reports a change that does not happen. On a quiet session that is twenty lines a minute burying anything
+real, which is the same "crying wolf" defect as the two log-noise items it joins: output that looks
+meaningful, means nothing, and fires every run, teaching a reader to skim past logs that will one day matter.
+
+**Fix: do not report when the emotion is already neutral** (Juha, 2026-08-03). The reset itself can stay
+idempotent; it is the announcement that should be conditional on an actual change. That also makes the
+remaining lines informative — a logged reset would then mean the avatar really did return from an expression.
+
+Noticed 2026-08-03 while reading a debug log during the chat-scrolling live test. Annoying for a while, but
+always just under the threshold to act on (Juha).
 
 ## DPG now sets up font ranges itself; `setup_font_ranges` is a no-op that logs loudly
 

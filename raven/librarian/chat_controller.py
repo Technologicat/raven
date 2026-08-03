@@ -1482,6 +1482,12 @@ class DPGLinearizedChatView:
         and a deliberate scroll of one or two lines away from the end still counts as following, so the arrow
         keys appear not to work.
 
+        While one of our own scroll animations is running, the tolerance widens to cover a single frame of it.
+        The panel's report lags the last written value by exactly one step, so a gap that size is ours; and
+        early in an exponential decay a step is hundreds of pixels, which a bound sized for a human's nudge
+        would read as user input. With nothing animating the tight bound applies, which is the case where
+        catching a real user scroll matters most.
+
         Diagnostics: every call logs the numbers and which branch decided, at DEBUG. Run with
         `logsetup.init(level=logging.DEBUG)` for the full trace. A refusal that is *near* the end additionally
         logs at INFO, because that is the shape a wrong answer takes: if it fires on a turn you expected to be
@@ -1505,11 +1511,26 @@ class DPGLinearizedChatView:
         # precisely while a scroll is in flight, which is the case in question. The position tracks the last
         # written value one frame behind, and only user input breaks that. Intent ("are we heading for the
         # end?") is carried separately, by `_commanded_scroll_was_to_end`.
+        #
+        # The tolerance grows to cover one frame of our own animation while one is running. The report lags
+        # the last written value by exactly one step, so that much of a gap is ours rather than the reader's
+        # — and early in an exponential decay a step is hundreds of pixels, far past a tolerance sized for a
+        # human nudging the wheel. Measured on a live reply before this: 43 samples in 857 read as user
+        # scrolls at drift 51–78 px against a 40 px tolerance. They recovered every time, so the view only
+        # skipped a chunk rather than latching, but the excursions were ours to begin with.
+        #
+        # It widens only while the animation could account for it. With nothing running `last_step` is not
+        # consulted, so the sitting-still case — where a real user scroll must be caught — keeps the tight
+        # bound.
+        scroll_animation = gui_animation.SmoothScrolling.instances.get(self.gui_parent)
+        animation_slack = scroll_animation.last_step if scroll_animation is not None else 0.0
+        tolerance = max(_PIN_TOLERANCE_PX, animation_slack)
+
         commanded_y_scroll = unbox(self._commanded_y_scroll)
         if commanded_y_scroll is not None:
             expected_y_scroll = min(commanded_y_scroll, max_y_scroll)
             drift = abs(y_scroll - expected_y_scroll)
-            undisturbed = (drift <= _PIN_TOLERANCE_PX)
+            undisturbed = (drift <= tolerance)
         else:
             expected_y_scroll = None
             drift = None
@@ -1522,16 +1543,18 @@ class DPGLinearizedChatView:
 
         logger.debug(f"DPGLinearizedChatView.should_follow_tail: y_scroll={y_scroll}, max_y_scroll={max_y_scroll}, "
                      f"gap={gap} (tolerance={_PIN_TOLERANCE_PX}) -> at_end={at_end}; "
+                     f"drift tolerance={tolerance} (animation slack={animation_slack}); "
                      f"commanded={commanded_y_scroll} (to_end={self._commanded_scroll_was_to_end}), "
                      f"expected={expected_y_scroll}, drift={drift} -> undisturbed={undisturbed}; "
                      f"-> follow={follow}")
         if not follow and 0 < gap <= _PIN_NEAR_MISS_FACTOR * _PIN_TOLERANCE_PX:
             logger.info(f"DPGLinearizedChatView.should_follow_tail: NEAR MISS — gap={gap}px exceeds "
                         f"tolerance={_PIN_TOLERANCE_PX}px and the position has drifted {drift}px from the "
-                        f"{commanded_y_scroll} we last commanded (to_end={self._commanded_scroll_was_to_end}), "
+                        f"{commanded_y_scroll} we last commanded (to_end={self._commanded_scroll_was_to_end}, "
+                        f"drift tolerance={tolerance}px including {animation_slack}px of animation slack), "
                         "so the view will not follow. If you expected it to follow, the drift is the number to "
-                        "look at: a nonzero drift with no user scrolling means something moved the position "
-                        "behind our back.")
+                        "look at: a drift above the tolerance with no user scrolling and no animation running "
+                        "means something moved the position behind our back.")
 
         # Deliberately *not* recording this refusal anywhere. Making it sticky looks like the careful choice —
         # it would stop one ambiguous frame from resuming the drag — but it is both unnecessary and harmful. A
@@ -1800,6 +1823,21 @@ class DPGLinearizedChatView:
         """
         _, panel_h = dpg.get_item_rect_size(self.gui_parent)
         return 0.7 * panel_h
+
+    def scroll_lines(self, delta_lines: int) -> None:
+        """Scroll by `delta_lines` lines of text; negative is up.
+
+        The fine-adjustment gesture, for a reader whose hands are on the keyboard — which in a chat app is
+        the default posture, since typing is the primary activity. (The Visualizer reaches for the mouse
+        instead, because there the map *is* the interaction.)
+
+        A line is taken as `font_size`, matching `_PIN_TOLERANCE_PX`'s own "two lines of text". That the two
+        are expressed in the same unit is what keeps the arrow keys working: `should_follow_tail` treats
+        anything within the tolerance of the end as still at the end, so a scroll smaller than that is undone
+        by the next arriving chunk. Three lines clears two comfortably, and stays clear at any font size
+        because both quantities scale with it.
+        """
+        self.scroll_to_position(dpg.get_y_scroll(self.gui_parent) + delta_lines * gui_config.font_size)
 
     def page_up(self) -> None:
         """Scroll up by one page."""
