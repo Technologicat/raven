@@ -139,6 +139,51 @@ class TestParseString:
         assert name.jr == ["IV"]
         assert name.first == ["Zaphod"]
 
+    # The shapes below are the ones that actually occur in the axially-moving-materials bibliography
+    # (538 author fields, 794 distinct names). Names are invented, formats are not — real corpora produce
+    # these and invented test data tends not to.
+
+    def test_a_particle_in_comma_form_is_still_a_particle(self):
+        # "van Rijn, Charles F." reaches a different code path than "Ludwig van Beethoven": the comma
+        # already marks the surname, so the particle has to be recognized inside it rather than before it.
+        library = parse_string("@article{k, author={van Rijn, Rembrandt H.}, year={2024}}")
+        name = library.entries[0]["author"][0]
+        assert name.von == ["van"]
+        assert name.last == ["Rijn"]
+        assert name.first == ["Rembrandt", "H."]
+
+    def test_a_brace_protected_suffix_is_read_as_a_suffix(self):
+        # `{III}` — braces are BibTeX's "do not touch this" marker, and the suffix slot still has to see it.
+        library = parse_string("@article{k, author={Aldrin, {III}, Edwin E.}, year={2024}}")
+        name = library.entries[0]["author"][0]
+        assert name.last == ["Aldrin"]
+        assert name.jr == ["{III}"]
+
+    def test_a_suffix_carrying_a_period_is_read_as_a_suffix(self):
+        library = parse_string("@article{k, author={Fripp, Jr., R. A.}, year={2024}}")
+        name = library.entries[0]["author"][0]
+        assert name.last == ["Fripp"]
+        assert name.jr == ["Jr."]
+        assert name.first == ["R.", "A."]
+
+    def test_hyphens_survive_in_both_initials_and_given_names(self):
+        library = parse_string("@article{k, author={Zhou, X.-Y. and Liisa-Maria Koskinen}, year={2024}}")
+        zhou, koskinen = library.entries[0]["author"]
+        assert zhou.first == ["X.-Y."]      # a hyphenated initial pair is one token, not two
+        assert koskinen.first == ["Liisa-Maria"]
+
+    def test_tex_accent_escapes_are_preserved_verbatim_not_decoded(self):
+        """The contract a display layer needs to know about: what comes out is still TeX, not Unicode.
+
+        Both spellings of an umlaut survive as written, and neither becomes "ä". A consumer that renders
+        author names is responsible for the conversion; nothing in this layer does it. Pinned because the
+        alternative is discovering it in a UI, where it shows up as literal braces on screen.
+        """
+        library = parse_string(r'@article{k, author={H{\"a}kkinen, M. and H\"akkinen, T.}, year={2024}}')
+        braced, bare = library.entries[0]["author"]
+        assert braced.last == [r'H{\"a}kkinen']
+        assert bare.last == [r'H\"akkinen']
+
     def test_an_unreadable_record_lands_in_failed_blocks_rather_than_raising(self):
         # The documented contract: a successful return is not a promise that every record was understood.
         # Librarian's paste sniffer relies on partial success, and the importer reports the failures.
