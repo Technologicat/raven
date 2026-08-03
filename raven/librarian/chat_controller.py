@@ -28,7 +28,7 @@ import numpy as np
 
 import dearpygui.dearpygui as dpg
 
-from unpythonic import flatten, memoize, sym
+from unpythonic import box, flatten, memoize, sym, unbox
 from unpythonic.env import env
 
 from ..vendor.IconsFontAwesome6 import IconsFontAwesome6 as fa  # https://github.com/juliettef/IconFontCppHeaders
@@ -67,11 +67,6 @@ _PIN_TOLERANCE_PX = 2 * gui_config.font_size  # two lines of text
 # A refusal to follow, within this many tolerances of the end, is reported at INFO as a near miss: that is the
 # shape a wrong refusal takes, and the logged numbers say which comparison let it through.
 _PIN_NEAR_MISS_FACTOR = 20
-
-# How many times `scroll_view` re-issues a scroll that DPG clamped to a momentarily smaller content height.
-# A count rather than a pixel threshold, deliberately: the shortfall is the height of whatever was swapped out
-# of the view, which is unbounded, so there is no tolerance that could cover it.
-_SCROLL_VERIFY_ATTEMPTS = 3
 
 # --------------------------------------------------------------------------------
 
@@ -616,7 +611,7 @@ class DPGChatMessage:
             if found is None:  # the assistant message is on another branch, or predates the id migration
                 raise LookupError(f"no originating call for id '{tool_call_id}' in the current branch")
             origin, index = found
-            self.parent_view.scroll_view(scroll_target_node_id=origin.node_id)
+            self.parent_view.scroll_view(scroll_target_node_id=origin.node_id, user_initiated=True)
             # Flash the specific call, not the whole message: an assistant turn may have made several, and
             # "which one produced this result" is the entire question the jump was asked to answer.
             gui_animation.highlight_widget(widget=f"chat_message_toolcall_icon_{index}_{origin.gui_uuid}",  # tag
@@ -629,7 +624,7 @@ class DPGChatMessage:
             target = self.parent_view.chat_controller.find_tool_response(tool_call_id)
             if target is None:  # in flight, on another branch, or never recorded
                 raise LookupError(f"no tool response for call id '{tool_call_id}' in the current branch")
-            self.parent_view.scroll_view(scroll_target_node_id=target.node_id)
+            self.parent_view.scroll_view(scroll_target_node_id=target.node_id, user_initiated=True)
             gui_animation.highlight_widget(widget=f"chat_message_timestamp_{target.gui_uuid}",  # tag
                                            duration=gui_config.acknowledgment_duration)
         return jump_to_tool_response
@@ -1441,7 +1436,14 @@ class DPGLinearizedChatView:
 
         # Where we last put the scroll position ourselves, and whether that was a scroll to the end. Needed to
         # tell our own scrolling apart from the user's; see `should_follow_tail`.
-        self._commanded_y_scroll: Optional[int] = None
+        #
+        # A box rather than a plain attribute, because in smooth mode the writer is `SmoothScrolling`: it
+        # writes a new position every frame, in the same breath as each `dpg.set_y_scroll`. This view owns
+        # the storage because the animation does not outlive its own scroll — it deregisters itself on
+        # finishing — and the comparison is needed precisely in the gaps when no animation exists: sitting
+        # still after a reply has finished, or deciding whether the jump-to-latest affordance belongs on
+        # screen. One writer at a time either way, so the value cannot drift.
+        self._commanded_y_scroll: box = box(None)  # Optional[int] inside
         self._commanded_scroll_was_to_end = False
 
     def should_follow_tail(self) -> bool:
@@ -1497,8 +1499,14 @@ class DPGLinearizedChatView:
         # `max_y_scroll` and leaves `y_scroll` alone — so a mismatch means the user moved it. Compare against
         # the *clamped* command, since DPG pulls the position down by itself when content shrinks, and that is
         # our doing rather than the user's.
-        if self._commanded_y_scroll is not None:
-            expected_y_scroll = min(self._commanded_y_scroll, max_y_scroll)
+        #
+        # In smooth mode this is the animation's *last written position*, not its target — those come apart
+        # precisely while a scroll is in flight, which is the case in question. The position tracks the last
+        # written value one frame behind, and only user input breaks that. Intent ("are we heading for the
+        # end?") is carried separately, by `_commanded_scroll_was_to_end`.
+        commanded_y_scroll = unbox(self._commanded_y_scroll)
+        if commanded_y_scroll is not None:
+            expected_y_scroll = min(commanded_y_scroll, max_y_scroll)
             drift = abs(y_scroll - expected_y_scroll)
             undisturbed = (drift <= _PIN_TOLERANCE_PX)
         else:
@@ -1513,13 +1521,13 @@ class DPGLinearizedChatView:
 
         logger.debug(f"DPGLinearizedChatView.should_follow_tail: y_scroll={y_scroll}, max_y_scroll={max_y_scroll}, "
                      f"gap={gap} (tolerance={_PIN_TOLERANCE_PX}) -> at_end={at_end}; "
-                     f"commanded={self._commanded_y_scroll} (to_end={self._commanded_scroll_was_to_end}), "
+                     f"commanded={commanded_y_scroll} (to_end={self._commanded_scroll_was_to_end}), "
                      f"expected={expected_y_scroll}, drift={drift} -> undisturbed={undisturbed}; "
                      f"-> follow={follow}")
         if not follow and 0 < gap <= _PIN_NEAR_MISS_FACTOR * _PIN_TOLERANCE_PX:
             logger.info(f"DPGLinearizedChatView.should_follow_tail: NEAR MISS — gap={gap}px exceeds "
                         f"tolerance={_PIN_TOLERANCE_PX}px and the position has drifted {drift}px from the "
-                        f"{self._commanded_y_scroll} we last commanded (to_end={self._commanded_scroll_was_to_end}), "
+                        f"{commanded_y_scroll} we last commanded (to_end={self._commanded_scroll_was_to_end}), "
                         "so the view will not follow. If you expected it to follow, the drift is the number to "
                         "look at: a nonzero drift with no user scrolling means something moved the position "
                         "behind our back.")
@@ -1565,30 +1573,71 @@ class DPGLinearizedChatView:
             return
         self.scroll_view()  # waits for the new content to lay out, so this reaches the *new* end
 
-    def _set_y_scroll(self, y_scroll: int, *, to_end: bool) -> None:
+    def _set_y_scroll(self, y_scroll: int, *, to_end: bool, user_initiated: bool = False) -> None:
         """Move the scroll position, remembering what we asked for.
 
         `y_scroll`: The target position in content coordinates — a non-negative offset from the top. It is
-                    recorded here and compared later against the position the panel reports, so it has to be
-                    the same number that ends up applied. "Go to the end" is therefore expressed as `to_end`
+                    recorded and compared later against the position the panel reports, so it has to be the
+                    same number that ends up applied. "Go to the end" is therefore expressed as `to_end`
                     plus the concrete maximum, which the caller has already computed in order to clamp.
         `to_end`: Whether this scroll was a scroll to the end of the content, i.e. whether the view should
                   keep following the tail as more content arrives.
+        `user_initiated`: Whether a human asked for this scroll, as opposed to the view following a growing
+                          reply on its own. Decides whether reaching an end is worth signalling: the
+                          scroll-end flasher asserts *"you tried to go further and could not"*, which is a
+                          statement about a thwarted intent. Tail-following has none — arriving at the end
+                          is its whole purpose — so a flasher on that path would strobe once per streamed
+                          chunk for the length of a reply.
+
+                          It cannot be derived from `to_end`: clicking jump-to-latest is also a scroll to
+                          the end, and there the flash is *wanted*, because it confirms arrival. What
+                          separates the two is provenance, not destination.
 
         Every scroll this class performs goes through here, so that `should_follow_tail` can tell our own
         scrolling from the user's. A bare `dpg.set_y_scroll` elsewhere would look exactly like a user scroll
         and silently stop the view following.
+
+        Animated or instant is `SmoothScrolling`'s own `smooth` flag rather than two code paths here: that
+        class jumps straight to the target when told not to animate, explicitly so that both behaviours wear
+        one API. Routing the instant case through it too is what keeps the commanded-position bookkeeping,
+        the retargeting and the end-of-content signalling identical in both modes, instead of one of them
+        quietly growing a second set of rules.
+
+        If a scroll is already in flight on this panel it is *retargeted* rather than replaced, keeping its
+        subpixel position so the movement bends toward the new target instead of restarting. The retarget
+        adopts this request wholesale, so a follow scroll correctly takes the flasher back off a scroll the
+        user had started.
+
+        The commanded position is handed over as a box because the animation writes a new value every frame,
+        in the same breath as each `dpg.set_y_scroll` — which is what keeps `should_follow_tail`'s
+        comparison meaningful while a scroll is in flight.
         """
         if y_scroll < 0:
             raise ValueError(f"_set_y_scroll: expected a non-negative position, got {y_scroll}")
-        self._commanded_y_scroll = y_scroll
         self._commanded_scroll_was_to_end = to_end
-        dpg.set_y_scroll(self.gui_parent, y_scroll)
+
+        # TODO (chat view scrolling): pass the `ScrollEndFlasher` here once it is wired up, gated on
+        # `user_initiated`. The parameter is plumbed already so that the gate lands in one place.
+        with gui_animation.SmoothScrolling.class_lock:
+            gui_animation.animator.add(gui_animation.SmoothScrolling(target_child_window=self.gui_parent,
+                                                                     target_y_scroll=y_scroll,
+                                                                     smooth=gui_config.smooth_scrolling,
+                                                                     smooth_step=gui_config.smooth_scrolling_step_parameter,
+                                                                     flasher=None,
+                                                                     commanded_y_scroll=self._commanded_y_scroll))
 
     def scroll_view(self,
                     max_wait_frames: int = 10,
-                    scroll_target_node_id: Optional[str] = None) -> None:
+                    scroll_target_node_id: Optional[str] = None,
+                    user_initiated: bool = False) -> None:
         """Scroll this linearized chat view to the end.
+
+        `user_initiated`: Whether a human asked for this scroll, rather than the view following a growing
+                          reply on its own. Only affects presentation — see `_start_scroll_animation`, where
+                          it decides whether hitting an end is worth signalling. Defaults to `False` because
+                          the automatic path is the frequent one, and because a wrong `True` is the noisy
+                          failure (a flash per streamed chunk) while a wrong `False` merely omits a
+                          confirmation.
 
         `max_wait_frames`: If `max_wait_frames > 0`, wait at most for that many frames for the chat panel
                            (`self.gui_parent`) to report a `max_y_scroll` that has *settled*: nonzero, and
@@ -1675,41 +1724,42 @@ class DPGLinearizedChatView:
             y_scroll = max_y_scroll
             to_end = True
         logger.info(f"DPGLinearizedChatView.scroll_view:{frames_str}{waited_str}: max_y_scroll = {max_y_scroll}, scrolling to y = {y_scroll}")
-        self._set_y_scroll(y_scroll, to_end=to_end)
 
-        # Wait until the panel actually reports the position we asked for, rather than assuming it does.
+        self._set_y_scroll(y_scroll, to_end=to_end, user_initiated=user_initiated)
+
+        # There used to be a verification loop here, waiting for the panel to report the position we asked
+        # for and re-issuing until it did. It is gone because `SmoothScrolling` now owns the whole job, and
+        # the reasoning is worth keeping because deleting a careful mechanism deserves an argument.
         #
         # `dpg.get_y_scroll` does not reflect a `dpg.set_y_scroll` for more than one frame: a single
         # `split_frame` afterwards still reads the *previous* position. Measured over a session of streaming
-        # replies, one extra frame sufficed 114 times out of 115 and two were needed once — which is the same
-        # lag `SmoothScrolling` conservatively budgets four frames for.
+        # replies, one extra frame sufficed 114 times out of 115, and two were needed once. Waiting mattered
+        # because `should_follow_tail` compares the position against what we commanded, so a command that has
+        # not landed yet is indistinguishable from the user having scrolled away — and that latches, freezing
+        # the view for the rest of the reply.
         #
-        # Left unhandled, this is not a cosmetic miss, because `should_follow_tail` compares the position
-        # against what we commanded. A command that has not landed yet makes the position disagree with the
-        # record, which is exactly the signature of the user having scrolled away — so the view stops following
-        # for the rest of the reply. Waiting here is what keeps that comparison meaningful.
+        # Three jobs were tangled in that loop, and each has a better home now:
         #
-        # The target is recomputed each round and re-issued, which also covers the target having genuinely
-        # moved while we waited (content keeps arriving during a stream), and any case where DPG clamped the
-        # command to a content height that was momentarily smaller — `replace_last_paragraph` swaps a paragraph
-        # by delete-then-add, with the `dpg.mutex()` that would make the pair atomic disabled because holding
-        # it hangs the app, so that window does exist. Bounded by an attempt count rather than a pixel
-        # threshold: a shortfall can be as large as whatever was swapped out, and since the model decides where
-        # its newlines go, a "paragraph" can be a screenful.
-        for attempt in range(1, _SCROLL_VERIFY_ATTEMPTS + 1):
-            if max_wait_frames <= 0:  # cannot wait, so cannot verify; see the render-thread note above
-                break
-            guiutils.split_frame(operation="scroll_view: wait for the scroll position to be applied")
-            actual_y_scroll = dpg.get_y_scroll(self.gui_parent)
-            if actual_y_scroll >= y_scroll:  # reached it (or content moved on and we are past it) — done
-                break
-            max_y_scroll = dpg.get_y_scroll_max(self.gui_parent)
-            y_scroll = max_y_scroll if to_end else min(y_scroll, max_y_scroll)
-            if actual_y_scroll >= y_scroll:  # the target itself moved down to meet us: nothing to re-issue
-                break
-            logger.info(f"DPGLinearizedChatView.scroll_view: attempt {attempt}: position is {actual_y_scroll}, "
-                        f"not yet the requested {y_scroll} (max_y_scroll = {max_y_scroll}). Re-issuing.")
-            self._set_y_scroll(y_scroll, to_end=to_end)
+        #   - *Making the record true.* `SmoothScrolling`'s per-frame guard is the same device — it refuses to
+        #     advance until DPG reports back the value it last wrote — and it writes the commanded-position box
+        #     in the same breath, so the record is never more than one frame stale. `_PIN_TOLERANCE_PX` already
+        #     absorbs a frame. The loop was a coarser hand-rolled version of that guard, run from another
+        #     thread.
+        #   - *Chasing a target that moved while we waited.* Retargeting covers it, on a better trigger: the
+        #     target moves when content arrives, and content arriving is exactly when `follow_tail` fires. Event
+        #     driven, rather than polled against a fixed attempt budget.
+        #   - *Recovering from a DPG clamp.* Same event. `replace_last_paragraph` is the only clamp source (it
+        #     swaps a paragraph by delete-then-add, and the `dpg.mutex()` that would make the pair atomic is
+        #     disabled because holding it hangs the app), and every one of its call sites is inside the
+        #     streaming chunk handler — so a clamp can only happen while streaming, which is precisely when
+        #     `follow_tail` retargets per chunk.
+        #
+        # None of that depends on the scroll being *animated*: it depends on retargeting, which works the same
+        # when `smooth` is off. That is why there is one path here rather than two.
+        #
+        # The consequence to protect: `follow_tail`'s retarget is now load-bearing for *correctness*, not only
+        # for smoothness. Rate-limiting it, or gating it on the view having visibly moved, would silently bring
+        # back the last two failures.
 
     def get_chatlog_as_markdown(self, include_metadata: bool) -> Optional[str]:
         """Format this linearized chat as Markdown, for e.g. copying to the clipboard or saving to a file.
