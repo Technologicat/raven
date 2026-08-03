@@ -171,17 +171,25 @@ Note that xdot_viewer's derived sizes carry empirical fudge terms (`-13`, "+2 em
 leading/rounding)"). Those are not margins misnamed, they are unexplained residue — worth a separate look at
 whether the model behind them is wrong, but not part of this pass.
 
-## Smooth scrolling in Cherrypick too, once Librarian has it
+## Smooth scrolling in Cherrypick too, now that Librarian has it
 
-Once Librarian's chat panel gets `SmoothScrolling` (sibling item, "Chat view scrolling: keys, smoothness, and
-end-of-scroll feedback"), Cherrypick's image grid wants it as well. Not because it is broken, but because the
-constellation would then have three apps whose views glide and one that teleports, and the odd one out reads as
-unfinished rather than as a decision. Raised by Juha, 2026-07-30. (Cherrypick's *image view* looks like it
-belongs in the same breath and turns out not to; see below.)
+**The precondition is met** (2026-08-03): Librarian's chat panel has `SmoothScrolling`, the reader-driven
+keys, and the `ScrollEndFlasher`, all live-tested. So the constellation now has three apps whose views glide
+and one that teleports, and the odd one out reads as unfinished rather than as a decision. Raised by Juha,
+2026-07-30, and again on seeing the flasher land. (Cherrypick's *image view* looks like it belongs in the
+same breath and turns out not to; see below.)
 
-**Where things actually stand**, checked 2026-07-30 rather than recalled:
+The flasher is part of the ask now, not just the glide — it is what made the two existing apps feel like one
+product, so the grid wants both.
 
-- **Visualizer's info panel** — `raven.common.gui.animation.SmoothScrolling`, and currently its only user.
+**Where things actually stand**, checked 2026-08-03 rather than recalled:
+
+- **Visualizer's info panel** — `raven.common.gui.animation.SmoothScrolling` plus `ScrollEndFlasher`; the
+  original, and the shape to port.
+- **Librarian's chat panel** — the same two, as of 2026-08-03, with one addition the grid will not need: the
+  flasher is gated on `user_initiated`, because Librarian has content arriving on its own and an ungated
+  flasher strobes once per streamed chunk. Cherrypick's grid scrolls only in response to the user, so it can
+  pass the flasher unconditionally, as the Visualizer does.
 - **XDot viewer** — smooth already, but by a different mechanism, so nobody should go looking for
   `SmoothScrolling` in it and conclude it is missing. Pan and zoom are `raven.common.smoothvalue.SmoothValue`
   instances on `xdotwidget.viewport.Viewport`, and the `animate=True` parameter threaded through `zoom_to_fit`
@@ -214,9 +222,9 @@ So: do the grid on the strength of the consistency argument alone. Take the imag
 prototyped and felt in the actual triage workflow before committing, and be willing to throw the prototype away
 — the rework is large enough that "it turned out to feel worse" is a real outcome worth being ready for.
 
-Consistency includes the knob, not just the behavior: Visualizer exposes `smooth_scrolling` and
-`smooth_scrolling_step_parameter` in its `config.py`, Librarian has them commented out awaiting the same work,
-and Cherrypick has neither yet.
+Consistency includes the knobs, not just the behavior. Visualizer and Librarian both now expose
+`smooth_scrolling`, `smooth_scrolling_step_parameter` and `scroll_ends_here_duration` in their `config.py`;
+Cherrypick has none of the three.
 
 ## `replace_last_paragraph`'s `dpg.mutex()` is disabled because it hangs the app
 

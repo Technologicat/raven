@@ -580,6 +580,8 @@ Corollary: `dpg.get_focused_item()` is not a cross-check — it kept naming the 
 
 So an app whose text field is single-line must gate its Enter handler on `is_item_focused` while still gating its *bare-key* branch on `is_item_active` — two different questions about the same widget, each chosen for the state the key actually arrives in. Both Raven GUI apps do this, and they differ from each other because their fields differ in kind: `raven-visualizer`'s search field is single-line, `raven-librarian`'s composer is multiline. Learned by regression — switching the Visualizer's Enter gate to `is_item_active` silently killed its search.
 
+**Escape is not a second exception.** It deactivates either kind, so a bare-key branch gated on `is_item_active` is live again on the next press and needs no handler of its own to "restore" focus. Measured on a multiline field; confirmed behaviourally on a single-line one (the Visualizer's navigation keys reach the info panel after `Ctrl+F`, `Esc`).
+
 ## `focus_item` cannot focus a child window — and does harm when asked to
 
 `dpg.focus_item` works on ordinary items (measured on a button: focus moves on the *next* frame, not the same one). On a **child window** it does not merely fail: focus lands on the first navigable item of the enclosing window and is **activated** — so if that item is a text field, the call *hands it the caret*.
