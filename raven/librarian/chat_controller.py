@@ -1476,6 +1476,12 @@ class DPGLinearizedChatView:
         Each call decides on current evidence and stores no verdict. A wrong answer therefore costs one chunk
         rather than the remainder of the reply.
 
+        Both questions are asked of where our own scrolling is *heading*, not of where it has got to. A scroll
+        in flight has a reported position somewhere along the way, which answers for the movement's past
+        rather than for the request that started it — so a scroll away from the end reads as still-at-the-end
+        until enough of it has been carried out, and whether that has happened by the time the next chunk
+        samples this is a matter of timing rather than of intent.
+
         The tolerance (`_PIN_TOLERANCE_PX`) absorbs the drift of a scroll that has effectively, but not
         exactly, arrived. It is a genuine trade-off in both directions, which is why it is instrumented rather
         than guessed: too small and the view stops following right after the user sends a message; too large
@@ -1499,8 +1505,21 @@ class DPGLinearizedChatView:
             return True
 
         y_scroll = dpg.get_y_scroll(self.gui_parent)
-        gap = max_y_scroll - y_scroll  # how far above the end we are, in pixels
-        at_end = (gap <= _PIN_TOLERANCE_PX)
+        gap = max_y_scroll - y_scroll  # how far above the end the panel *reports* being, in pixels
+
+        # "At the end" has to be asked of where our own scrolling is *going*, not of where the panel has got
+        # to so far. While a scroll of ours is in flight the reported position is somewhere along the way, so
+        # a scroll the reader just asked for still reads as at-the-end until the animation has carried it
+        # clear of the tolerance — and whether that has happened when the next streamed chunk samples this is
+        # a matter of timing. That makes the arrow keys behave as if they had a threshold: during a reply a
+        # single Up is usually undone, while holding Up eventually sticks, because repeats move the target
+        # faster than the chunks arrive. Consulting the animation's target instead decides on the reader's
+        # request rather than on how far it has been carried out, so one press is enough and the answer does
+        # not depend on when it was asked.
+        scroll_animation = gui_animation.SmoothScrolling.instances.get(self.gui_parent)
+        settled_y_scroll = scroll_animation.target_y_scroll if scroll_animation is not None else y_scroll
+        settled_gap = max_y_scroll - settled_y_scroll
+        at_end = (settled_gap <= _PIN_TOLERANCE_PX)
 
         # Has the position moved since we last set it? Content arriving cannot do that — it moves
         # `max_y_scroll` and leaves `y_scroll` alone — so a mismatch means the user moved it. Compare against
@@ -1522,7 +1541,6 @@ class DPGLinearizedChatView:
         # It widens only while the animation could account for it. With nothing running `last_step` is not
         # consulted, so the sitting-still case — where a real user scroll must be caught — keeps the tight
         # bound.
-        scroll_animation = gui_animation.SmoothScrolling.instances.get(self.gui_parent)
         animation_slack = scroll_animation.last_step if scroll_animation is not None else 0.0
         tolerance = max(_PIN_TOLERANCE_PX, animation_slack)
 
@@ -1542,14 +1560,15 @@ class DPGLinearizedChatView:
         follow = at_end or (self._commanded_scroll_was_to_end and undisturbed)
 
         logger.debug(f"DPGLinearizedChatView.should_follow_tail: y_scroll={y_scroll}, max_y_scroll={max_y_scroll}, "
-                     f"gap={gap} (tolerance={_PIN_TOLERANCE_PX}) -> at_end={at_end}; "
+                     f"gap={gap}, settled_gap={settled_gap} to y={settled_y_scroll} "
+                     f"(tolerance={_PIN_TOLERANCE_PX}) -> at_end={at_end}; "
                      f"drift tolerance={tolerance} (animation slack={animation_slack}); "
                      f"commanded={commanded_y_scroll} (to_end={self._commanded_scroll_was_to_end}), "
                      f"expected={expected_y_scroll}, drift={drift} -> undisturbed={undisturbed}; "
                      f"-> follow={follow}")
-        if not follow and 0 < gap <= _PIN_NEAR_MISS_FACTOR * _PIN_TOLERANCE_PX:
-            logger.info(f"DPGLinearizedChatView.should_follow_tail: NEAR MISS — gap={gap}px exceeds "
-                        f"tolerance={_PIN_TOLERANCE_PX}px and the position has drifted {drift}px from the "
+        if not follow and 0 < settled_gap <= _PIN_NEAR_MISS_FACTOR * _PIN_TOLERANCE_PX:
+            logger.info(f"DPGLinearizedChatView.should_follow_tail: NEAR MISS — settled_gap={settled_gap}px "
+                        f"exceeds tolerance={_PIN_TOLERANCE_PX}px and the position has drifted {drift}px from the "
                         f"{commanded_y_scroll} we last commanded (to_end={self._commanded_scroll_was_to_end}, "
                         f"drift tolerance={tolerance}px including {animation_slack}px of animation slack), "
                         "so the view will not follow. If you expected it to follow, the drift is the number to "
@@ -1834,8 +1853,8 @@ class DPGLinearizedChatView:
         A line is taken as `font_size`, matching `_PIN_TOLERANCE_PX`'s own "two lines of text". That the two
         are expressed in the same unit is what keeps the arrow keys working: `should_follow_tail` treats
         anything within the tolerance of the end as still at the end, so a scroll smaller than that is undone
-        by the next arriving chunk. Three lines clears two comfortably, and stays clear at any font size
-        because both quantities scale with it.
+        by the next arriving chunk. The caller's per-keypress step therefore has to clear two lines, and
+        stays clear at any font size because both quantities scale with it.
         """
         self.scroll_to_position(dpg.get_y_scroll(self.gui_parent) + delta_lines * gui_config.font_size)
 
