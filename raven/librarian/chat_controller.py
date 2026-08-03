@@ -980,7 +980,7 @@ class DPGChatMessage:
                                                                      target=delete_subtree_button,
                                                                      target_tooltip=delete_subtree_tooltip,
                                                                      target_text=delete_subtree_tooltip_text,
-                                                                     flash_color=(255, 32, 32),  # orange for warning
+                                                                     flash_color=(255, 32, 32),  # red: this one destroys data
                                                                      text_color=(255, 255, 255),
                                                                      duration=self.confirm_duration))
         delete_subtree_button = dpg.add_button(label=fa.ICON_TRASH_CAN,
