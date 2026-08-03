@@ -257,9 +257,14 @@ def format_bibtex_authors(authors):
         - Three or more: "Author et al."
 
     The authors are kept in the same order as in the original list.
+
+    The result is for reading, so LaTeX markup is converted to Unicode the same way titles and
+    abstracts are - "H{\\"a}m{\\"a}l{\\"a}inen" is a spelling of "Hämäläinen", not a name. Callers
+    wanting the name as written should keep the raw BibTeX field alongside; the Visualizer importer
+    stores it as `bibtex_author` for exactly this reason, so export stays lossless.
     """
     try:
-        authors_list = [format_bibtex_author(author) for author in authors]
+        authors_list = [unicodize_basic_markup(format_bibtex_author(author)) for author in authors]
     except ValueError:
         logger.warning("format_bibtex_authors: failed, caught exception", exc_info=True)
         return ""
@@ -385,6 +390,16 @@ def unicodize_basic_markup(s):
     # after the ligature pass above has turned `\i` into dotless-i (U+0131).
     s = re.sub(r"""\\(["'`^~=.cvuHkr])\{(\w)\}""", _apply_latex_accent, s)
 
+    # The same letter-named accents, space-terminated instead of braced (`\c e`, `\k a`, `\v s`).
+    # A LaTeX control word ends at the first non-letter, so the space *is* the terminator and this
+    # is exactly equivalent to the braced form. In `.bib` files it is if anything the commoner
+    # spelling, because the idiom is to wrap the whole thing in a case-protecting group:
+    # `Tr{\c e}bicki`, not `Tr\c{e}bicki`. Must run before brace stripping for the same reason the
+    # braced pass does — afterwards `\c e` has lost the group that told us where it ended.
+    # Only the letter-named accents: for `\"a` and friends the command name is punctuation, which
+    # self-terminates, so a space there would be a literal space rather than a separator.
+    s = re.sub(r"""\\([cvuHkr])\s+(\w)""", _apply_latex_accent, s)
+
     # Strip BibTeX case-preservation grouping braces (`{Word}`, `{ACRONYM}`, and nested
     # forms like `{{AutoPBL}}`). `bibtexparser` is a pure parser: it hands us the raw
     # field value with the grouping braces still in. biblatex/bibtex would strip these
@@ -399,8 +414,8 @@ def unicodize_basic_markup(s):
     s = s.replace("", "{").replace("", "}")
 
     # LaTeX accent commands of the form `\Xc` (no braces). Only the non-letter accents:
-    # the letter-based accents (`\c`, `\v`, `\u`, `\H`, `\k`, `\r`) require a brace
-    # argument in LaTeX, and were already handled above.
+    # the letter-named ones (`\c`, `\v`, `\u`, `\H`, `\k`, `\r`) need *some* separator from their
+    # argument, brace or space, and both spellings were handled above.
     s = re.sub(r"""\\(["'`^~=.])(\w)""", _apply_latex_accent, s)
 
     # Remove LaTeX escapes (including those produced by `raven.papers.utils.bibtex_escape`).

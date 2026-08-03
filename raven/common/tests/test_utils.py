@@ -232,6 +232,23 @@ class TestFormatBibtexAuthors:
         authors = [_make_name_parts(last=[])]
         assert utils.format_bibtex_authors(authors) == ""
 
+    def test_latex_accents_are_decoded_like_titles_and_abstracts(self):
+        """A citation string is for reading, so it gets the same treatment the title already got.
+
+        `H{\\"a}m{\\"a}l{\\"a}inen` is a spelling of a name, not a name. Titles and abstracts have always
+        run through `unicodize_basic_markup`; authors did not, which is how a citation could read
+        `H{"a}m{"a}l{"a}inen` on screen while the title beside it rendered correctly.
+        """
+        authors = [_make_name_parts(last=[r'H{\"a}m{\"a}l{\"a}inen']),
+                   _make_name_parts(last=[r'Erkkil{\"a}'])]
+        assert utils.format_bibtex_authors(authors) == "Hämäläinen and Erkkilä"
+
+    def test_the_raw_field_is_not_this_function_s_concern(self):
+        # Lossless export is served by keeping the BibTeX field alongside (the Visualizer importer
+        # stores `bibtex_author`), not by refusing to decode here.
+        authors = [_make_name_parts(last=[r'Bj{\"o}rklund'])]
+        assert utils.format_bibtex_authors(authors) == "Björklund"
+
 
 # ---------------------------------------------------------------------------
 # String normalization
@@ -313,6 +330,29 @@ class TestUnicodizeBasicMarkup:
     # BibTeX case-preservation grouping braces: `bibtexparser` hands us the raw
     # field value, and `{Word}` / `{ACRONYM}` grouping braces must be stripped
     # before the text is shown to the user.
+
+    # Letter-named accent commands (`\c`, `\v`, `\u`, `\H`, `\k`, `\r`) accept their argument either
+    # braced or space-separated: a LaTeX control word ends at the first non-letter, so the space *is*
+    # the terminator. Real `.bib` files use the space form heavily, because the idiom wraps the whole
+    # accent in a case-protecting group — `Tr{\c e}bicki` rather than `Tr\c{e}bicki`.
+
+    def test_letter_accent_with_braced_argument(self):
+        assert utils.unicodize_basic_markup(r"Tr\c{e}bicki") == "Trȩbicki"
+
+    def test_letter_accent_with_space_separated_argument(self):
+        assert utils.unicodize_basic_markup(r"Tr{\c e}bicki") == "Trȩbicki"
+
+    def test_both_spellings_of_a_letter_accent_agree(self):
+        for braced, spaced in ((r"\k{a}", r"{\k a}"),
+                               (r"\v{s}", r"{\v s}"),
+                               (r"\r{a}", r"{\r a}")):
+            assert utils.unicodize_basic_markup(braced) == utils.unicodize_basic_markup(spaced)
+
+    def test_punctuation_accents_do_not_take_a_space(self):
+        # `\"` self-terminates, so a space after it is a literal space, not a separator. Decoding
+        # `\" a` as "ä" would silently eat a word boundary.
+        assert utils.unicodize_basic_markup(r'H\"am\"al\"ainen') == "Hämäläinen"
+        assert "ä" not in utils.unicodize_basic_markup(r'x \" a y')
 
     def test_bibtex_case_group_single_word(self):
         assert utils.unicodize_basic_markup("{AutoPBL}") == "AutoPBL"
