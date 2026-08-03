@@ -242,7 +242,7 @@ This coupling limits TTS engine choices (most don't expose timestamped phoneme d
 ## Current State
 
 ### Well-structured (target style)
-- `raven/librarian/` - Clean module separation (~8000 lines across 10 modules)
+- `raven/librarian/` - Clean module separation (~14,600 lines across 15 modules, measured 2026-08-03). Note it has outgrown the per-module guideline below in several places — `chat_controller.py` is 2769 lines and `llmclient.py` 2181 — without losing the layering, which is the property that made it the target style. Size is a smell here, not a verdict. See `raven/librarian/CLAUDE.md` for the layer map.
 
 ### Needs refactoring
 
@@ -253,10 +253,33 @@ Target ~700 lines per module as a guideline, not a hard limit — some modules c
 - `raven/visualizer/importer.py` - 1260 lines, pipeline architecture, lower priority but could benefit from stage separation
 
 ### Test coverage
-- Library/utility code is reasonably covered: `common/` (numutils, smoothvalue, utils, image/lanczos, image/utils, video/{colorspace,compositor,postprocessor,upscaler}), `common/gui/{viewport_math,xdotwidget/*}`, `client/api`, `papers/*`, `cherrypick/*`, `xdot_viewer/dot_utils`, librarian (`chattree`, `chatutil`, `hybridir`, `appstate`, `scaffold`).
-- Untested librarian layer: `llmclient` (HTTP/SSE-bound, awkward to fake).
-- Visualizer has **zero tests**.
-- **Priority: a first pass of tests on Visualizer** (especially before refactoring).
+
+68 test modules as of 2026-08-03, ~1600 tests. Library and utility code is broadly covered; what is
+untested is the GUI layer and the Visualizer.
+
+- **`common/`** — numutils, smoothvalue, utils, bgtask, deviceinfo, docextract, logsetup, netutil, nlptools, readcsv, running_average, stringmaps, text_normalize, text_speakable; `audio/` (codec, resample, utils) and `audio/speech/` (tts, stt, lipsync, and a TTS→STT round trip); `image/` (codec, lanczos, utils); `video/` (colorspace, compositor, postprocessor, upscaler); `gui/` (animation, messagebox, utils, viewport_math, and all of `xdotwidget/`).
+- **`librarian/`** — chattree, chatutil, hybridir, appstate, scaffold, llmclient, cleanup, imagestore, sidecarstore, textfilestore.
+- **Elsewhere** — `client/` (api, mayberemote), `papers/*`, `cherrypick/*`, `server/webfetch`, `xdot_viewer/dot_utils`.
+
+What is **not** covered:
+
+- **Visualizer has zero tests.** Still the biggest gap, and the refactor that motivated writing them
+  landed without them — so what they would pin now is the new module boundaries rather than a rewrite
+  in flight.
+- **The DPG frontends**: librarian `app`, `chat_controller`, `cleanup_dialog`, and every Visualizer GUI
+  module. **Not because DPG resists testing** — it runs without a mapped window, and
+  `common/gui/tests/` (messagebox, animation, utils — 18 tests) already drives a real context with an
+  unmapped viewport. See `dpg-notes.md`, "Testing DPG code". The barrier is that nobody has written them
+  for the large frontend modules, which is a different and more tractable problem than "untestable".
+  - **Caveat: those 18 tests never run in CI.** `dearpygui` is not in `requirements-ci.txt`, so their
+    module-level `importorskip` fires on every run and they execute only on a dev machine. Whether the
+    toolkit can initialize on a headless runner is untested — see `TODO_DEFERRED.md`.
+  - Splitting an operation from its dialog is what makes the operation testable at all; `cleanup.py` /
+    `cleanup_dialog.py` is the worked example, and its module docstring explains why.
+- **`librarian/minichat`** — the readline REPL, and the odd one out: no DPG anywhere in it, so none of the
+  above applies. It is a terminal app with the same backend as the GUI, which makes it the *cheapest*
+  frontend to test rather than the hardest. Untested because nobody has, not because anything is in the way.
+- `config.py` modules, which are configuration-as-code and carry local overrides anyway.
 
 ## Upstream warning noise in `pytest raven/`
 
@@ -277,8 +300,8 @@ Uses text-generation-webui with OpenAI-compatible API.
 Recommended model: Qwen3-VL-30B-A3B (24GB+ VRAM) or Qwen3-VL-4B (8GB VRAM).
 
 ## Known Issues / TODOs
-- Visualizer refactoring needed (see `raven/visualizer/CLAUDE.md` for plan)
-- Visualizer has zero tests; librarian `scaffold`/`appstate`/`llmclient` untested
+- Visualizer: the `app.py` split has landed (see `raven/visualizer/CLAUDE.md` for the module map). What remains is ordinary tidying — `info_panel.py` at 1518 lines is the next split candidate, and `importer.py` could use stage separation — not a god-object rescue
+- Visualizer has zero tests (the librarian gaps this used to list — `scaffold`, `appstate`, `llmclient` — are all covered now)
 - DearPyGui_Markdown URL highlight bug (threading-related, untracked)
 - FontAwesome version outdated
 - Hindsight integration pending (PDM dependency conflicts; likely separate container with optional backend, keeping BM25+vector backend as primary)
@@ -286,5 +309,5 @@ Recommended model: Qwen3-VL-30B-A3B (24GB+ VRAM) or Qwen3-VL-4B (8GB VRAM).
 - Many `# TODO: DRY duplicate definitions for labels` scattered through Visualizer `app.py`
 - Annotation tooltip help section rebuilt every time (could be static with show/hide)
 - `_update_info_panel` race condition: current item highlight sometimes doesn't update immediately after selection change
-- Search match scrolling race condition: hammering the button can error out (`app.py:2978`)
+- Search match scrolling race condition: hammering the button can error out (`info_panel.py:670`/`685` — the code moved there in the refactor; the old `app.py:2978` pointer was past EOF. Not re-verified since the move, so it may or may not survive)
 - XDot viewer: GraphViz `--concentrate` produces near-miss edge endpoints (0.02–0.09 graph units off) at edge split/merge points, visible as small gaps at high zoom. This is a GraphViz precision issue in the xdot data, not a rendering bug.

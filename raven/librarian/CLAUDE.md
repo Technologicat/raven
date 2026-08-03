@@ -1,16 +1,20 @@
 # Librarian — CLAUDE.md
 
-~11,800 lines total across 13 modules. Clean layered design, target style for the project.
+~14,600 lines across 15 modules. Clean layered design, target style for the project.
 
 ## Dependency Layers (bottom → top)
 
+Line counts are as of **2026-08-03** — they drift, and a stale exact number reads more authoritative
+than it is. Take them as magnitudes; re-measure before quoting one.
+
 ```
-Layer 5 - Applications:     app.py (1620 lines), minichat.py (672 lines, minimal reference client)
-Layer 4 - Controller:       chat_controller.py (2406 lines)
-Layer 3 - Orchestration:    scaffold.py (845 lines)
-Layer 2 - Backends:         llmclient.py (1600 lines), hybridir.py (1397 lines)
-Layer 1 - Utilities:        chatutil.py (990 lines), appstate.py (301 lines), imagestore.py (214 lines), textfilestore.py (129 lines)
-Layer 0 - Foundation:       config.py (561 lines), chattree.py (931 lines), sidecarstore.py (105 lines)
+Layer 5 - Applications:     app.py (1762 lines), minichat.py (677 lines, minimal reference client)
+Layer 4 - Controller/GUI:   chat_controller.py (2769 lines), cleanup_dialog.py (412 lines)
+Layer 3 - Orchestration:    scaffold.py (1135 lines)
+Layer 2 - Backends:         llmclient.py (2181 lines), hybridir.py (1416 lines)
+Layer 1 - Utilities:        chatutil.py (1337 lines), appstate.py (358 lines), cleanup.py (303 lines),
+                            imagestore.py (270 lines), textfilestore.py (140 lines)
+Layer 0 - Foundation:       config.py (633 lines), chattree.py (1070 lines), sidecarstore.py (150 lines)
 ```
 
 Each layer only imports from layers below it. No circular dependencies.

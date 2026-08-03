@@ -3,6 +3,29 @@
 New items go at the **top**. (Both ends were in use up to 2026-07-27, which is how the two halves of the same
 Librarian session ended up ~1000 lines apart.)
 
+## The 18 DPG tests we have never run in CI
+
+`raven/common/gui/tests/` — `test_messagebox` (3), `test_animation` (8), `test_utils` (7) — drive a real DPG
+context with an unmapped viewport, and pass locally. But `dearpygui` is not in
+`.github/workflows/requirements-ci.txt`, so each module's `pytest.importorskip("dearpygui.dearpygui")` fires
+on every CI run and all 18 execute only on a dev machine. Nothing reports this: a skip looks like a pass in
+the summary line, and the tests were presumably written on a machine where they ran.
+
+The open question is whether DPG can initialize at all on a headless GitHub runner. The tests never *show* a
+window — `create_viewport` then `setup_dearpygui` with nothing mapped — but that still goes through GLFW and
+an OpenGL context, and `ubuntu-latest` has no display server and may lack the GL libraries. So this is a
+measurement, not a one-line config change: add `dearpygui` to the requirements file, push, and see. If GLFW
+refuses, the options are a software GL stack (`xvfb-run`, or Mesa's llvmpipe via `libgl1-mesa-dri`) or
+accepting that these tests are dev-machine-only and saying so where someone will read it.
+
+Worth resolving because it changes what the untested-GUI gap actually costs. If DPG runs in CI, the frontend
+modules become ordinarily testable and the Visualizer test gap is a matter of writing them. If it does not,
+GUI tests are a local-only tier and the project should know that before investing in more of them.
+
+Discovered 2026-08-03, auditing `CLAUDE.md`'s test-coverage claims — the doc asserted CI "has no toolkit for"
+driving DPG, which turned out to be true by accident (the toolkit is simply not installed) rather than for
+the reason given.
+
 ## Make the DPG reference a skill, so it fires when it is needed
 
 `CLAUDE.md` says "**Before editing any DPG code, read `dpg-notes.md` first**" and defines what counts as DPG

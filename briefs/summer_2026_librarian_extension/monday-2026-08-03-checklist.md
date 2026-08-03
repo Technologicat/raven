@@ -42,11 +42,29 @@ session, revised after his corrections. Goal for Monday: thin the brief pile and
         `briefs/corpus-interrogation-sketch.md` when it has been in `design/` all along, and `TODO_DEFERRED.md`
         cited brief 07 outside the sprint's `done/`. A third, in `dpg-keycodes.md`, told the reader to run a
         `.py` file that never existed — the script is inline in the document.
-- [ ] **[P] While in there: check whether other "current state" claims in `CLAUDE.md` have drifted.** The three
+- [x] **[P] While in there: check whether other "current state" claims in `CLAUDE.md` have drifted.** The three
       above were all one refactor. Test-coverage and known-issues lists are the likely next candidates.
-  - *Partly done 2026-08-03*: the Visualizer "no tests" claim is **still true** (verified — no test files under
-        `raven/visualizer/`), but its rationale was half-expired and has been rewritten. The project-level
-        test-coverage and known-issues lists have **not** been audited.
+  - *Done 2026-08-03.* The guess was right — they had, and worse than the SLOC claims, because these were
+        wrong about *facts* rather than merely about numbers:
+  - **`llmclient` was listed as untested.** It has `test_llmclient.py`, and so do `scaffold`, `appstate`,
+        `cleanup`, `imagestore`, `sidecarstore` and `textfilestore` — the "untested librarian layer" line named
+        the one module the sentence's own parenthetical excused as awkward to fake, and it had been faked. The
+        covered-code list was also missing roughly half the suite (all of `common/audio`, most of
+        `common/tests`, `common/gui`, `client/mayberemote`, `server/webfetch`). Rewritten from the tree: 68 test
+        modules, ~1600 tests, with the real gap named as the DPG frontends plus the Visualizer.
+  - **A third stale SLOC claim**, missed by last night's pass because it was in a different section:
+        "`raven/librarian/` — ~8000 lines across 10 modules" against an actual 14,600 across 15. It also
+        contradicted `raven/librarian/CLAUDE.md`, which said ~11,800 across 13 and whose layer diagram omitted
+        `cleanup.py` and `cleanup_dialog.py` entirely. Both fixed, layers assigned by reading imports
+        (`cleanup` is Layer 1 — no DPG; `cleanup_dialog` is Layer 4, with the other GUI).
+  - **"Visualizer refactoring needed"** still described a pending rescue. The split has landed.
+  - **A dead line reference**: the search-match scroll race cited `app.py:2978`, which is past EOF now that
+        `app.py` is 1912 lines — the code moved to `info_panel.py:670`/`685` in the refactor. Repointed, and
+        marked as not re-verified since the move rather than silently presumed still live.
+  - **Numbers are now dated where they appear.** Three SLOC corrections in two days is the actual finding; a
+        stale exact figure reads more authoritative than it is, so the layer map says when it was measured and
+        tells the reader to re-measure before quoting.
+  - *Still true, verified again*: zero test files under `raven/visualizer/`.
 
 ## 1b. Reorganize by investigation into `investigations/` — **done 2026-08-03**
 
