@@ -1764,6 +1764,17 @@ def _build_initial_chat_view(sender, app_data) -> None:
     if _shutting_down:  # window closed during startup; building chat widgets now would race context teardown (segfault)
         return
     chat_controller.view.build()
+
+    # Park keyboard focus on the chat panel, so the app starts in a state we chose rather than whichever one
+    # DPG happens to leave it in. Observed before this: the composer reported as focused while showing no
+    # caret — ImGui distinguishes *focused* (nav focus, what `is_item_focused` reports) from *active* (being
+    # edited), and an inherited half-state is exactly what makes startup behaviour hard to reason about.
+    #
+    # The panel rather than the composer, following the Visualizer, which parks focus on
+    # `item_information_panel` whenever the user leaves its search field. The scrollable content is the
+    # resting place and the text field is an excursion — which is also what makes the navigation keys work
+    # on arrival, since they are gated on the composer not having focus. `Ctrl+Space` enters the composer.
+    dpg.focus_item("chat_panel")  # tag
 dpg.set_frame_callback(3, _build_initial_chat_view)
 
 logger.info("App render loop starting.")
