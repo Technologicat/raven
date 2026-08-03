@@ -71,13 +71,19 @@ thinking block and a multi-screenful `webfetch` answer. Details and the three fa
 
 Still open, in the order they are expected to be done:
 
-1. **Chat view scrolling, the rest** — smooth scrolling, the end-of-scroll flasher, Home/End/PageUp/PageDown,
-   and the jump-to-latest pill. Traps already scouted; see `TODO_DEFERRED.md`, "Chat view scrolling: keys,
-   smoothness, and end-of-scroll feedback".
-   - **Start with the `SmoothScrolling.start()` retarget fix.** Constructing a second instance for a window
-     that already has one copies only the target into the existing instance and becomes a ghost — `flasher`,
-     `smooth`, `smooth_step` and `finish_callback` all stay as the *first* constructor set them. Every item
-     above retargets an in-flight scroll, so this stopped being polish and became a prerequisite.
+1. ~~**Chat view scrolling, the rest**~~ — **done 2026-08-03**, live-tested. Smooth scrolling, the
+   reader-driven keys (Home/End/PageUp/PageDown, and arrows by five lines), the end-of-scroll flasher and
+   the jump-to-latest pill all landed, with the `SmoothScrolling.start()` retarget fix first as planned.
+   The CHANGELOG entry covers the feature as a whole.
+   - Three bugs surfaced *by* the live testing rather than by the suite, each needing its own diagnosis: the
+     follow-tail decision reading the animation's current position rather than its destination (an arrow key
+     "sometimes" worked); a sample-then-act race that discarded roughly one keypress in fifteen; and the
+     same race one level deeper, inside `scroll_view`'s settle wait, which the first fix moved rather than
+     closed. Worth knowing before touching this code again — the window between deciding and scrolling is
+     ~100 ms and the reader's keyboard is live throughout.
+   - Two loose ends, both filed in `TODO_DEFERRED.md` and to be **done together**, since they land in the
+     same file: the scrollbar-drag creep (ImGui holds a *fraction* of the content, so holding the thumb
+     while a reply streams slides you down), and `SmoothScrolling` committing during construction.
 2. **The three log-noise fixes** — the context-prefill strict-template warning, `setup_font_ranges`'
    DeprecationWarnings, and the avatar's emotion autoreset, which logs at INFO every three seconds forever
    and reports a change to neutral when the emotion is already neutral. The third was added 2026-08-03, on
