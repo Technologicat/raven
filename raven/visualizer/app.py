@@ -1726,11 +1726,22 @@ def hotkeys_callback(sender, app_data):
 
     # Hotkeys for main window, while no modal window is shown
     #
-    # *Active*, not *focused*. ImGui gives nav focus to the first navigable item of a newly focused window by
-    # itself, so a text field can report focused without anyone having typed in it, and a bare-key branch
-    # gated on `is_item_focused` then goes dead for no visible reason. *Active* means the field holds the
-    # caret, which is the condition under which a key belongs to it. See `dpg-notes.md`, "Keyboard input".
-    if dpg.is_item_active("search_field") and key == dpg.mvKey_Return:  # tag  # regardless of modifier state, to allow Shift+Enter and Ctrl+Enter.
+    # The two branches below deliberately ask *different* questions of the same field, because Enter and the
+    # navigation keys arrive in different states.
+    #
+    # **Enter must ask `is_item_focused`.** A *single-line* `InputText` deactivates itself on Enter — the key
+    # commits the edit — so by the time this handler runs, `is_item_active` is already `False` and a gate on
+    # it can never fire. (Measured: focused stays `True`, active goes `False`. A *multiline* field differs,
+    # since there Enter inserts a newline and the field stays active — which is why Librarian's composer,
+    # which is multiline, gates its own Enter on `is_item_active`. The predicate follows the field's kind.)
+    #
+    # **The bare-key branch further down must ask `is_item_active`.** ImGui gives nav focus to the first
+    # navigable item of a newly focused window by itself, so this field can report focused with nobody having
+    # typed in it, and a bare-key branch gated on `is_item_focused` goes dead from app start for no visible
+    # reason.
+    #
+    # See `dpg-notes.md`, "Keyboard input".
+    if dpg.is_item_focused("search_field") and key == dpg.mvKey_Return:  # tag  # regardless of modifier state, to allow Shift+Enter and Ctrl+Enter.
         select_search_results()
         # Take the caret out of the search field, so the navigation keys below reach the info panel — having
         # accepted a search, the reader is done typing and about to read.
@@ -1800,7 +1811,7 @@ def hotkeys_callback(sender, app_data):
     # Bare key
     #
     # NOTE: These are global across the whole app (when no modal window is open) - be very careful here!
-    elif not dpg.is_item_active("search_field"):  # tag  # *active*, not *focused* — see the note above
+    elif not dpg.is_item_active("search_field"):  # tag  # *active*, not *focused* — see the note above the Enter branch
         if key == dpg.mvKey_Home:
             info_panel.go_to_top()
         elif key == dpg.mvKey_End:
