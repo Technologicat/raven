@@ -855,18 +855,31 @@ class SmoothScrolling(Animation):
         There may be several: retargeting chains each new request's callback onto the surviving instance
         rather than replacing it, so everyone who asked to be told is told here, in registration order.
 
-        A callback that raises does not take the others with it, and does not prevent deregistration. This
-        is teardown, and the failure it guards against is the one that cannot be recovered from: leaving the
-        instance in `instances` would make this GUI element permanently unanimatable, since every later
-        request would retarget a dead object instead of starting a new animation.
+        **A ghost finishing is a no-op.** A ghost owns nothing - its request was handed to the running
+        instance and its own callbacks were chained there - so acting as though it owned something would
+        evict the instance that is actually animating, and run those callbacks a second time. This is
+        reachable: `Animator.clear` finalizes every registered animation, and a caller that writes
+        `animator.add(SmoothScrolling(...))` registers whichever of the two it got.
+
+        **Deregistration happens before the callbacks, not after.** A callback is explicitly allowed to
+        start a new scroll animation; if this instance were still registered at that moment, the new request
+        would retarget a corpse and then be discarded by the very `pop` that follows. Popping first means it
+        reifies properly instead. The atomicity the class promises is unaffected - `class_lock` is held
+        throughout, so another thread still blocks until teardown completes.
+
+        A callback that raises does not take the others with it. Teardown has already completed by then,
+        which is the ordering that makes this safe rather than merely tidy.
         """
         with type(self).class_lock:
+            if type(self).instances.get(self.target_child_window) is not self:  # ghost, or already finished
+                return
+            type(self).instances.pop(self.target_child_window)
+
             for callback in self.finish_callbacks:
                 try:
                     callback()
                 except Exception as exc:
                     logger.warning(f"SmoothScrolling.finish: instance for '{self.target_child_window}': finish callback {callback} raised, continuing teardown: {type(exc)}: {exc}")
-            type(self).instances.pop(self.target_child_window)
 
 # The FPS-corrected exponential decay math is now in `raven.common.smoothvalue` (which see).
 # For the full derivation, see `raven.server.modules.avatar.interpolate`.

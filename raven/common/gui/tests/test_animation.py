@@ -351,6 +351,67 @@ class TestSmoothScrollingFinishCallbacks:
         assert scroll_target not in animation.SmoothScrolling.instances
 
 
+class TestSmoothScrollingTeardown:
+    def test_a_ghost_finishing_leaves_the_running_instance_alone(self, scroll_target):
+        """Reachable via `Animator.clear`, which finalizes every registered animation.
+
+        A caller writing `animator.add(SmoothScrolling(...))` registers whichever of the two it got, so
+        ghosts do end up in the animator. A ghost owns nothing — its request was handed to the running
+        instance — so tearing down as though it did would evict the instance that is actually animating.
+        """
+        calls = []
+        first = _scroll(scroll_target, finish_callback=lambda: calls.append("first"))
+        ghost = _scroll(scroll_target, target_y_scroll=200)
+
+        ghost.finish()
+
+        assert animation.SmoothScrolling.instances[scroll_target] is first
+        assert calls == []  # nobody has been told anything ended, because nothing has
+
+    def test_a_ghost_does_not_run_the_chained_callbacks_a_second_time(self, scroll_target):
+        """The ghost still holds its own callback in its own list, having also chained it onto the
+        running instance. Only the instance that owns the registration may fire them."""
+        calls = []
+        first = _scroll(scroll_target, finish_callback=lambda: calls.append("first"))
+        ghost = _scroll(scroll_target, finish_callback=lambda: calls.append("second"))
+
+        ghost.finish()
+        assert calls == []
+
+        first.finish()
+        assert calls == ["first", "second"]  # exactly once each, from the instance that owned them
+
+    def test_finishing_twice_is_harmless(self, scroll_target):
+        """`instances.pop` has no default, so a second teardown used to raise `KeyError` — reachable
+        through a caller holding a stale reference (Visualizer keeps one to stop the scroll on demand)."""
+        calls = []
+        first = _scroll(scroll_target, finish_callback=lambda: calls.append(1))
+
+        first.finish()
+        first.finish()  # must not raise
+
+        assert calls == [1]
+
+    def test_deregistration_happens_before_the_callbacks_run(self, scroll_target):
+        """A callback may start a new scroll animation — the class docstring permits it.
+
+        With the pop afterwards, that new request would find this dying instance still registered,
+        retarget it, and then be thrown away by the pop. The scroll would silently never happen.
+        """
+        started = []
+
+        def start_another():
+            started.append(_scroll(scroll_target, target_y_scroll=999))
+
+        first = _scroll(scroll_target, finish_callback=start_another)
+        first.finish()
+
+        replacement = started[0]
+        assert replacement.reified is True, "the new scroll reified instead of retargeting a corpse"
+        assert animation.SmoothScrolling.instances[scroll_target] is replacement
+        assert replacement.target_y_scroll == 999
+
+
 class TestCommandedScrollBox:
     def test_every_written_position_reaches_the_box(self, scroll_target):
         """The box exists so a caller can tell our writes from the user's. A write we do not record

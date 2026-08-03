@@ -18,6 +18,20 @@ measurement, not a one-line config change: add `dearpygui` to the requirements f
 refuses, the options are a software GL stack (`xvfb-run`, or Mesa's llvmpipe via `libgl1-mesa-dri`) or
 accepting that these tests are dev-machine-only and saying so where someone will read it.
 
+**Know before deciding: "DPG runs headless" is narrower than it sounds** (measured 2026-08-03, on a dev
+machine with a display). Contexts, widgets, themes and item state all work with an unshown viewport. But
+`dpg.render_dearpygui_frame()` **aborts the process** — `SIGABRT` on the GLFW assertion `window != NULL` in
+`glfwWindowShouldClose`, not a catchable exception — so nothing that needs *layout* is reachable: no real
+scroll extents, no `get_y_scroll_max`, no hit-testing, no measured text sizes. That is why the existing tests
+step `animation.animator.render_frame()` (Raven's own animator, pure Python) rather than DPG's frame, and why
+`test_animation.py`'s `SmoothScrolling` tests assert against state transitions instead of against pixels.
+
+So even in the best case — GLFW initializes on the runner — the tier this buys is "widget and state logic",
+not "the GUI works". Worth saying out loud, because the cheap reading of "we can test DPG in CI" would set an
+expectation the mechanism cannot meet, and someone would then write a layout-dependent test and be puzzled by
+a core dump rather than a failure. Whether a software GL stack lifts the `render_dearpygui_frame` restriction
+too, or only the initialization, is a second unknown and worth measuring separately.
+
 Worth resolving because it changes what the untested-GUI gap actually costs. If DPG runs in CI, the frontend
 modules become ordinarily testable and the Visualizer test gap is a matter of writing them. If it does not,
 GUI tests are a local-only tier and the project should know that before investing in more of them.
