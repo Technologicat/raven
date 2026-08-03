@@ -2504,9 +2504,11 @@ Librarian stores *every* chat — all nodes, all payload revisions, across the w
 `data.json` (`chattree.PersistentForest`), and every attached image as a file in one flat `<datastore>.images/`
 sidecar directory. Both are fine now and for a long while, but neither scales to months/years of daily use:
 
-- **The JSON**: `PersistentForest.save` serializes and rewrites the *entire* file on every autosave. As the
+- **The JSON**: `PersistentForest.save` serializes and rewrites the *entire* file every time it runs. As the
   forest grows to thousands of nodes with revision history, load-at-startup and each save get linearly slower,
-  and a corrupted write risks the whole history at once.
+  and a corrupted write risks the whole history at once. (Note that "autosave" today means a single `atexit`
+  write per session, not a periodic one — so the rewrite cost is currently paid once at exit. Adding a real
+  autosave would multiply it by the save frequency, which is why that item and this one are coupled.)
 - **The sidecar dir**: a single flat directory of content-addressed images degrades on some filesystems once it
   holds many thousands of entries (directory-scan and lookup costs); `list_sidecar_files` (used by GC) reads the
   whole directory each time.
@@ -3257,3 +3259,37 @@ Do it for 0.2.8 if the check is quick, otherwise 0.2.9 — it is a packaging def
 symptom today, so it does not gate a release.
 
 Noticed 2026-08-04 while bumping the `dearpygui` floor and finding `pdm lock` produced no diff to review.
+
+## Librarian has no periodic autosave: an abnormal exit loses the whole session's chat
+
+`PersistentForest`'s `autosave=True` registers `self.save` with `atexit` and nothing else — verified in
+`chattree.py`, there is no timer and no save-on-mutation. So the datastore is written **once per session,
+at clean exit**. Any exit that skips `atexit` — a crash, a segfault, an OOM kill, a power loss — loses
+every message since the app started, and orphans the server-side avatar instance as well (see "Librarian
+leaks its server-side avatar instance when it doesn't exit normally", which shares the premise and whose
+SIGTERM behaviour is itself now in question).
+
+Raised by Juha (2026-08-04) as needing thought rather than a patch, and it does — the obvious fix has a
+sharp edge. **Naive autosave makes the failure worse, not better:** `save` serializes and rewrites the
+entire `data.json` in place, so a process dying *during* a write leaves a truncated file where the whole
+history used to be. Saving more often means more windows in which to lose everything rather than one
+session. Any autosave therefore has to be atomic first — write to a temp file in the same directory,
+`fsync`, then `os.replace` — and that is worth doing on its own merits even before deciding on a cadence.
+
+Axes to settle, roughly in order of how much they constrain the rest:
+
+- **Trigger.** Per completed node (each user message and each finished AI turn) is the natural unit —
+  it matches what a user would expect to survive, and there are only a handful per minute even in fast
+  conversation. A wall-clock timer is simpler but saves when nothing has changed and misses the moment
+  that matters. Debounced-after-mutation splits the difference.
+- **Cost, which couples this to the datastore-scaling item.** A whole-file rewrite per turn is nothing at
+  today's size and is exactly the thing "Datastore scaling: a single `data.json` … won't hold years of
+  chats" says gets linearly worse. If that item's incremental/SQLite direction is taken, autosave becomes
+  nearly free and this design question dissolves; if it is not taken for a long while, a per-turn rewrite
+  is the thing that will make it hurt first. **Decide these two together, or at least decide this one
+  knowing the other exists.**
+- **Scope.** `state.json` (HEAD, toggles) is small and separately saved; it probably wants the same
+  treatment, and losing it is much cheaper to recover from than losing the messages.
+
+Cheap and safe to do *now*, independent of the above: make `save` atomic. It reduces the blast radius of
+the current once-per-session write, and every later design needs it anyway.
