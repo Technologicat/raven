@@ -1119,9 +1119,14 @@ license = "BSD-2-Clause AND AGPL-3.0-only AND MIT"
 license-files = ["LICENSE.md",
                  "raven/server/LICENSE",
                  "raven/avatar/pose_editor/LICENSE",
-                 "raven/vendor/*/LICENSE*",
-                 "raven/common/gui/xdotwidget/LICENSE*"]
+                 "raven/**/LICENSE*",
+                 "raven/**/COPYING*"]
 ```
+
+(The last two globs follow `pip`'s pattern and pick up every vendored text — `tha3`, `anime4k`,
+`file_dialog`, `kokoro_fastapi`, `xdotwidget` and its colorbrewer schemes — without needing a list that goes
+stale the next time something is vendored. The explicit entries above them are redundant under the globs and
+are kept only because naming Raven's *own* non-default licences is worth doing where a reader will see it.)
 
 `AND` is the correct operator: it asserts that a consumer must satisfy all of the listed licences, which is
 what a distribution containing all three requires. Globs are permitted in `license-files`, and the vendored
@@ -1149,11 +1154,33 @@ PEP 639 deprecates those, and this project is already clean on that axis.
   having no standing to relicense other people's contributions. Not legal advice, and with AGPL and an
   institution involved it is worth one confirmation at JAMK — but the reasoning is checkable and the sources
   are named above.
-- **Whether the vendored licences belong in the top-level expression at all.** Strictly, a distribution's
-  effective terms include everything it ships — `tha3`, `anime4k`, `file_dialog`, `kokoro_fastapi`,
-  `xdotwidget` and its colorbrewer schemes. Common practice is to ship their texts through `license-files`
-  and keep the `license` expression to the project's own code. That is convention rather than rule, and with
-  AGPL involved it is worth one check with someone at JAMK rather than settling it here.
+- **Whether the vendored licences belong in the top-level expression — resolved 2026-08-03: no, ship their
+  texts and keep the expression to Raven's own code.** PEP 639 does not prescribe this; it names the
+  vendoring case in its Rationale ("it doesn't address projects that vendor dependencies (e.g. Setuptools)
+  … or contain fonts, images, examples, binaries or other assets under other licenses") and leaves the
+  handling to the maintainer. So the tiebreak is what a reader coming in cold expects, and that is settled by
+  precedent rather than preference — **`pip`**, the canonical heavy-vendoring Python project, declares
+  `license = "MIT"` for its own code and ships the rest by glob:
+
+  ```toml
+  license-files = ["AUTHORS.txt", "LICENSE.txt",
+                   "src/pip/_vendor/**/*COPYING*", "src/pip/_vendor/**/*LICENSE*"]
+  ```
+
+  which is directly adaptable. Note the `AND` in Raven's expression survives this for an unrelated reason:
+  BSD, AGPL and MIT all apply to *Raven's own modules*, not to anything vendored.
+
+  **One caveat on how far the `pip` precedent carries** (Juha, 2026-08-03). `pip`'s `_vendor` is *pristine* —
+  a script copies unmodified upstream — so "the expression is our code, `license-files` are theirs" is a
+  clean cut. Raven's `raven/vendor/` is **adopted rather than vendored**: every directory in it has diverged,
+  with Raven-specific robustifications and features, which is stated as policy in `CLAUDE.md`. So Raven
+  authored code that lives inside those directories and is therefore *under those upstream licences* — Raven
+  holds copyright in parts of files whose licence someone else chose.
+
+  This does not change the mechanism (the globs are right, and the upstream texts must ship regardless), but
+  it does blur the "own code only" line the expression rests on. Deciding it properly means enumerating what
+  the adopted directories are actually licensed under and asking whether any of them belongs in the
+  expression alongside BSD/AGPL/MIT. Left open deliberately, rather than assumed away by the analogy.
 
 `LICENSE.md` and `README.md` should carry the same breakdown as the table above, since those are what a human
 reads before deciding anything.
