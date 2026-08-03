@@ -3,7 +3,9 @@
 This module parses DOT graph files in xdot format (GraphViz output with
 xdot drawing attributes) and produces Graph objects for visualization.
 
-Adapted from xdottir (https://github.com/Technologicat/xdottir).
+Adapted from xdottir (https://github.com/Technologicat/xdottir), whose lexer this carries across
+substantially. Copyright 2008 Jose Fonseca, 2012-2019 Juha Jeronen, and the xdottir contributors.
+LGPL-3.0-or-later, not Raven's usual BSD - see the package docstring in `__init__.py` and `LICENSE`.
 """
 
 __all__ = ["parse_xdot", "XDotParser", "ParseError"]

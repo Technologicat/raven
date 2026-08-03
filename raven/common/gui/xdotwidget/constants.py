@@ -1,3 +1,13 @@
+"""Colour tables for the xdot widget: X11/CSS names, and the ColorBrewer palettes.
+
+The tables come from xdottir (https://github.com/Technologicat/xdottir). Copyright 2008 Jose Fonseca,
+2012-2019 Juha Jeronen, and the xdottir contributors. LGPL-3.0-or-later, not Raven's usual BSD - see the
+package docstring in `__init__.py` and `LICENSE`.
+
+The ColorBrewer palettes themselves are separately licensed by their authors; that text ships alongside as
+`LICENSE_colorbrewer_color_schemes`.
+"""
+
 from typing import Dict, List, Tuple
 
 # Type aliases

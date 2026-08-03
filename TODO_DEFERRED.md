@@ -1115,7 +1115,7 @@ PEP 639 covers this directly, and the `license` field is already in its string f
 a compound SPDX *expression*:
 
 ```toml
-license = "BSD-2-Clause AND AGPL-3.0-only AND MIT"
+license = "BSD-2-Clause AND AGPL-3.0-only AND MIT AND Apache-2.0 AND LGPL-3.0-or-later"
 license-files = ["LICENSE.md",
                  "raven/server/LICENSE",
                  "raven/avatar/pose_editor/LICENSE",
@@ -1195,33 +1195,39 @@ PEP 639 deprecates those, and this project is already clean on that axis.
   is already there for `common.video.upscaler`. The full expression becomes something like:
 
   ```toml
-  license = "BSD-2-Clause AND AGPL-3.0-only AND MIT AND Apache-2.0 AND LGPL-3.0-only"
+  license = "BSD-2-Clause AND AGPL-3.0-only AND MIT AND Apache-2.0 AND LGPL-3.0-or-later"
   ```
 
-  with the same `-only`/`-or-later` question outstanding for LGPL as for AGPL, to be answered the same way:
-  from the upstream grant, and `-only` absent one.
+  The LGPL variant is settled and differs from the AGPL one: `xdot.py`'s header grants "or any later
+  version" explicitly, so it is `-or-later` where the AGPL, lacking any grant, is `-only`. Same method, two
+  answers — which is why the method matters more than either result.
 
   **`xdotwidget` being LGPL-3.0 is the finding that matters here**, and it is this whole item repeating one
   level down: `CLAUDE.md` describes `raven/common/` as BSD-licensed, and LGPL is copyleft rather than
   permissive.
 
-  **But whether the LGPL applies at all is genuinely open, and it should be settled before the expression is
-  written.** What is actually in the tree: an LGPL-3.0 text, no licence notice in any of the widget's own
-  modules, a docstring saying *"Based on xdottir (https://github.com/Technologicat/xdottir), adapted for
-  DearPyGUI"*, and the ColorBrewer schemes with their Penn State notice intact. Note the `Copyright (C) 2007
-  Free Software Foundation` line in that `LICENSE` is the **FSF's copyright on the licence document itself**,
-  present in every copy of the LGPL — it is not a notice that anyone licensed `xdotwidget` under it. Same
-  trap as `raven/server/LICENSE:637`, and it reads like an answer for the same reason.
+  **Settled 2026-08-03 by cloning xdottir and comparing: the LGPL applies, at `-or-later`.** The
+  recollection was that the DPG XDot Viewer had been engineered from scratch with `xdottir` supplied only as
+  a reference for requirements, which would have made the docstring's "Based on" an over-claim. It is not an
+  over-claim. Measured overlap is **159 exact non-trivial lines, 9.1% of the widget**, concentrated in
+  `parser.py` (91 lines), `constants.py` (50) and `graph.py` (18) — and the `parser.py` matches are the lexer
+  scaffolding itself (`class ParseError(Exception)`, `mo = self.tokens_re.match(buf, pos)`,
+  `return self.symbols.get(c, None), c, pos + 1`), not incidental idiom. The ColorBrewer tables are copied
+  verbatim down to key names and tuple formatting. Given a reference implementation and the same format to
+  parse, close reproduction is what happens; intent does not decide derivation.
 
-  Against derivation (Juha, 2026-08-03): Raven's DPG XDot Viewer was **engineered from scratch**, with
-  `xdottir` supplied only as a reference so the requirements were clear. `xdottir` itself was a heavy
-  customization of the then-standard, unmaintained GUI xdot viewer.
+  **`-or-later`, unlike the AGPL case**, because `xdot.py`'s own header grants it in the source: "either
+  version 3 of the License, or (at your option) any later version". That is a real election, not the appendix
+  boilerplate. (The `Copyright (C) 2007 Free Software Foundation` line in `LICENSE` *is* boilerplate — the
+  FSF's copyright on the licence document, present in every copy. Same trap as `raven/server/LICENSE:637`.)
 
-  So the docstring's "Based on" may be over-claiming, and if it is, it is what put an LGPL text in a
-  permissive tree — an audit takes that sentence at face value. Settling it needs a comparison against
-  `xdottir` (not on `electra`; clone from Juha's GitHub) and a decision on what the ColorBrewer schemes are,
-  since copied *data* with its notice intact is fine but is still evidence about provenance. If it comes out
-  clean, the docstring wants correcting, the LGPL text removing, and the expression loses a copyleft term.
+  **And the copyright is not Juha's alone**: Jose Fonseca (2008), Juha Jeronen (2012-2019), plus the xdottir
+  AUTHORS — Marius Gedminas, Jaap Karssenberg, michael.hliao, Robert Meerman, lodatom. So it is not
+  relicensable from this end even in principle.
+
+  Attribution has been added to `__init__.py`, `parser.py`, `constants.py` and `graph.py`, and `CLAUDE.md`
+  corrected — it described `raven/common/` as BSD-licensed. What remains for this item is the `pyproject.toml`
+  expression, which needs `LGPL-3.0-or-later`.
 
 ## Two adopted directories ship without their licence text
 

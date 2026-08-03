@@ -6,6 +6,10 @@ This module defines the data structures for representing xdot graphs:
 - Element classes: Node, Edge (graph components)
 - Graph: Container for nodes, edges, and background shapes
 
+Adapted from xdottir (https://github.com/Technologicat/xdottir). Copyright 2008 Jose Fonseca, 2012-2019 Juha
+Jeronen, and the xdottir contributors. LGPL-3.0-or-later, not Raven's usual BSD - see the package docstring
+in `__init__.py` and `LICENSE`.
+
 Adapted from xdottir (https://github.com/Technologicat/xdottir),
 which in turn was adapted from XDot by José Fonseca.
 """

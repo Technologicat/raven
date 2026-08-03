@@ -9,7 +9,7 @@ Local research assistant constellation. Privacy-first, 100% local.
 - **Server** (`raven/server/`): Web API for GPU-bound ML models. Primary inference endpoint.
 - **Client** (`raven/client/`): Python bindings for Server API.
 - **Avatar** (`raven/avatar/`): AI-animated anime character (THA3 engine, lipsync, cel animations). Some avatar-related code (video postprocessor, colorspace) lives in Common for licensing reasons.
-- **Common** (`raven/common/`): Shared utilities (video processing, audio, GUI widgets, networking, document text extraction — `docextract`: plain text + PDF via pypdf, the single extraction backend for both RAG ingestion and chat attachments). BSD-licensed; Server and Avatar pose editor are AGPL.
+- **Common** (`raven/common/`): Shared utilities (video processing, audio, GUI widgets, networking, document text extraction — `docextract`: plain text + PDF via pypdf, the single extraction backend for both RAG ingestion and chat attachments). Mostly BSD, but **not uniformly** — `common/gui/xdotwidget` is LGPL-3.0-or-later (derived from xdottir, and through it from Jose Fonseca's `xdot.py`) and `common/video/upscaler` is MIT (matching Anime4K). Server and Avatar pose editor are AGPL-3.0. The full picture is in `TODO_DEFERRED.md`; `raven/vendor/README.md` covers the adopted tree.
 - **Papers** (`raven/papers/`): Academic paper tools — arXiv search/download, bibliography converters (WoS, CSV, PDF, BibTeX burst).
 - **Tools** (`raven/tools/`): Miscellaneous CLI utilities (CUDA check, audio device listing, image format conversion, dehyphenation).
 
