@@ -110,7 +110,8 @@ loop within a turn, *exchange* = user turn + assistant turn — and it is the co
 - **Visualizer defects surfaced by the two studies now using it.** Those studies are live dogfooding of a
   component with zero tests, so they will find things. They go to `TODO_DEFERRED.md`. 0.2.8 is a Librarian
   release, and a Visualizer bug is not an argument for delaying it.
-- **Brief 11** (importer rework) and **brief 12** (derived artifact store) are 0.2.9 work.
+- **Brief 11** (importer rework), **brief 12** (derived artifact store) and **brief 14** (chat search) are
+  0.2.9 work.
 - **Brief 13** — corpus scopes and the unified DB, plus the corpus TOC that is blocked on them. Drafted
   2026-08-03 as a rough draft rather than a design: it carries the decisions already made, the proposals not
   yet agreed, and the retractions with their reasons, so the design session starts from an agenda instead of
@@ -174,6 +175,12 @@ Listed so the folder's contents are legible from its README rather than from `ls
   mechanism for everything computed *from* a source artifact — extracted text, OCR, thumbnails, burst `.bib`
   records, embeddings — with separate stores for the chat and document-DB lifecycles. **v0.2.9 work; it does
   not gate v0.2.8**, and the webfetch attachment work deliberately lands ahead of it rather than waiting.
+- **14 — search within the chat log** (`14_chat-search-brief.md`). **v0.2.9**, and the freeze is why: it is a
+  feature, and unlike the webfetch attachment work it is not half of anything 0.2.8 already ships. The match
+  unit is the **message**, which is what keeps v1 cheap — it sidesteps in-text highlighting, whose Visualizer
+  implementation rebuilds the whole panel and therefore does not transfer to an incrementally-built chat log.
+  v1 reuses the scroll-and-flash the tool-call navigation links already do. v2 adds in-text highlighting in
+  completed messages only, with the message still the unit that next/previous jumps to.
 - **13 — corpus scopes and unified DB** (`13_corpus-scopes-and-unified-db-brief.md`). A **draft**, unlike the
   rest: it holds the 2026-08-01 design-session material with its `[D]`/`[N]`/`[P]`/`[X]` provenance markers
   intact, so a later reader can tell settled from proposed. Prerequisite for the corpus TOC and for most of
