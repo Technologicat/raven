@@ -422,42 +422,6 @@ happens, that icon choice is worth revisiting — it is a two-line change in `ad
 
 Discovered while picking icons for the tool-call navigation links (2026-07-30).
 
-## The context prefill trips the "no user message" template warning on every new chat
-
-Opening a new chat and leaving it idle logs:
-
-```
-WARNING raven.librarian.llmclient: _warn_about_strict_template_violations: history has no user message;
-roles are [system, assistant]. Strict chat templates reject this.
-```
-
-Confirmed from the log ordering (2026-07-30): the warning is immediately followed by
-`DPGChatController._context_prefill_entrypoint` reporting its token count for the *greeting* node, at about
-`context_prefill_idle_delay` seconds after the chat settles. So it is the prefill, whose whole job is to send
-the current branch — and on a new chat that branch is `[system prompt, greeting]`, with no user message in it
-yet, exactly as the warning says.
-
-The warning is doing its job; it is simply pointed at a caller it was not written for. It exists to tell a
-*user* that their conversation is malformed, and here nothing is wrong and there is nothing to act on. Fires
-on every new chat, so it also trains the reader to ignore a warning that would matter in a real turn.
-
-**Preferred fix (Juha, 2026-07-30): report it only if the backend actually rejects the request.** Keep the
-check, but hold its result instead of logging it, and emit it as part of the error path when the request
-fails. This is strictly better than the two obvious alternatives because it does not trade anything away:
-
-- The warning's whole purpose is to explain a rejection by a strict template. Attaching it to the rejection
-  that actually happened makes it *more* useful, not less — it becomes a diagnosis of a real failure rather
-  than a standing prediction about a hypothetical one.
-- No false positives, so the reader stops learning to ignore it, which is the real damage a
-  fires-every-time warning does.
-- Nothing is silenced: a backend that does reject `[system, greeting]` still gets its explanation.
-
-The alternatives, recorded because they were considered and are worse: *silencing it for the prefill* hides a
-real (if usually harmless) incompatibility, and *skipping the prefill when the branch has no user message*
-costs the context indicator its exact count on a fresh chat, downgrading `X%` to `~X%` until the first turn.
-
-Noticed by Juha (2026-07-30) in a live-test log.
-
 ## Store large tool results as attachments instead of dumping them into the chat log
 
 **Scoped into 0.2.8** (Juha, 2026-07-30): feature completeness now that attachments exist. See the note in
@@ -1090,49 +1054,6 @@ Raised during the vision-document discussion with claude.ai, 2026-08-03. Note th
 "the server and parts of the avatar are AGPL" — accurate, but checking the tree also turned up the MIT
 component, which nobody had mentioned, and cleared `raven/common/video/postprocessor.py`, which mentions AGPL
 only to record that its author relicensed it to BSD. A grep for "AGPL" therefore over-reports; read the file.
-
-## The avatar's emotion autoreset announces itself every 3 seconds, forever
-
-`raven.client.avatar_controller.emotion_autoreset_task` logs at INFO once per idle tick, indefinitely:
-
-```
-avatar idle for at least 3.0 seconds; updating emotion to 'neutral' (default idle state)
-```
-
-It says it is updating the emotion when the emotion is already neutral, so after the first reset every later
-line reports a change that does not happen. On a quiet session that is twenty lines a minute burying anything
-real, which is the same "crying wolf" defect as the two log-noise items it joins: output that looks
-meaningful, means nothing, and fires every run, teaching a reader to skim past logs that will one day matter.
-
-**Fix: do not report when the emotion is already neutral** (Juha, 2026-08-03). The reset itself can stay
-idempotent; it is the announcement that should be conditional on an actual change. That also makes the
-remaining lines informative — a logged reset would then mean the avatar really did return from an expression.
-
-Noticed 2026-08-03 while reading a debug log during the chat-scrolling live test. Annoying for a while, but
-always just under the threshold to act on (Juha).
-
-## DPG now sets up font ranges itself; `setup_font_ranges` is a no-op that logs loudly
-
-Recent DearPyGui configures font ranges automatically, which makes `dpg.add_font_range` redundant — so
-`raven.common.gui.fontsetup.setup_font_ranges` (which requests `0x100`–`0x2fff`) no longer does anything, and DPG
-logs about it on every Raven GUI app start. Cosmetically noisy now; misleading later, since the function reads as
-load-bearing and isn't.
-
-Called from four places: `raven/avatar/pose_editor/app.py`, `raven/common/gui/utils.py` (twice), and
-`fontsetup.markdown_add_font_callback`. Decide between version-gating the call (if we still support DPG versions
-that need it) and removing it outright, then update `dpg-notes.md`, whose "`setup_font_ranges` and extended
-Unicode" section documents the old behaviour as current.
-
-**Corrected 2026-07-30: both dev machines are on DPG 2.3.1**, so it reproduces on both, and the earlier note
-here — that they differed and it therefore showed on only one — is no longer true (the versions presumably
-converged on a bump nobody recorded). Verified with `python -c "import dearpygui; print(dearpygui.__version__)"`
-in the project venv; do that rather than trusting either this note or memory.
-
-**Scoped into 0.2.8** (Juha, 2026-07-30) alongside the context-prefill warning: both are the same defect in
-different clothes — output that looks alarming, means nothing, and fires on every run, which teaches the
-reader to skim past logs that will one day matter. Four DeprecationWarnings on every GUI app start.
-
-Discovered while reconciling the TODO lists (2026-07-27, reported by Juha).
 
 Several items are siblings under one root cause and are cheaper to fix as a package than one at a time. The
 clusters, as of 2026-07-27:
@@ -2071,12 +1992,11 @@ plain DPG text and the vendored markdown renderer (`markdown_add_font_callback` 
 `dpg_markdown`'s fonts), so the glyphs either exist in the atlas for everything or for nothing.
 Visualizer wants them in labels and tooltips, which never go through `dpg_markdown`.
 
-**The Unicode range is not the gap.** `setup_font_ranges` already requests `0x100`–`0x2fff`, which
-covers the subscript/superscript blocks outright — and on recent DPG the ranges are set up
-automatically, so that call is a no-op anyway (see the separate item on it). What's missing is a font
-that actually *carries* the glyphs. So the work is a survey of permissively-licensed fonts for
-coverage of U+2070–U+209F and friends, and picking one — not range configuration, and not the
-renderer.
+**The Unicode range is not the gap.** DPG builds font atlas ranges automatically, so a loaded font
+already offers whatever its TTF carries — the subscript/superscript blocks included, if the TTF has
+them. What's missing is a font that actually *carries* the glyphs. So the work is a survey of
+permissively-licensed fonts for coverage of U+2070–U+209F and friends, and picking one — not range
+configuration, and not the renderer.
 
 Raised during webfetch GUI smoke-testing (2026-06-03); flagged for a dedicated discussion. Split out
 from a combined emoji + super/subscript item on 2026-07-27 — the emoji half is a separate problem with

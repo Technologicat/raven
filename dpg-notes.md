@@ -293,16 +293,24 @@ into a single texture atlas. The atlas has a finite size, and exceeding it cause
 **silent glyph loss** — no error, no warning, just missing characters and wrong
 `get_item_rect_size` measurements.
 
-## `setup_font_ranges` and extended Unicode
+## Character ranges are automatic; don't declare them
 
-`raven.common.gui.fontsetup.setup_font_ranges()` adds `dpg.add_font_range(0x100, 0x2FFF)`
-— approximately 11,500 codepoints. This is fine at normal font sizes (20px), but at
-large sizes (600px+) the atlas overflows. Each glyph at 600px is roughly 350×600 pixels;
-11,500 of them need ~2.5 billion pixels of atlas space.
+From **DPG 2.3**, `dpg.add_font_range` and `dpg.add_font_range_hint` are no-ops that emit a
+`DeprecationWarning` — "character ranges are now automatic". Raven requires `dearpygui>=2.3` for
+exactly this reason and declares no ranges at all: `dpg.add_font(file, size)` is the whole of it, and
+a font carries every codepoint its TTF has glyphs for. A character that renders as a box means the
+*font* lacks the glyph, so the fix is a different TTF, never a range call.
 
-**Workaround**: for apps that only need digits/ASCII at large sizes, skip
-`setup_font_ranges()` — load fonts directly with `dpg.font()`, which includes
-the default Latin-1 range (~224 codepoints).
+The history matters only if you meet an older version: through DPG 2.2 a font loaded plain covered
+Latin-1 (~224 codepoints) and anything beyond it — Greek, the math symbols Raven's BibTeX importer
+emits — had to be requested explicitly. Raven asked for `0x100`–`0x2FFF`, ~11,500 codepoints, which
+was cheap at 20 px and ruinous at 600 px (each glyph ~350×600 px, so ~2.5 billion pixels of atlas),
+hence a standing workaround for apps wanting only digits at large sizes. Automatic ranging retires
+both the request and the workaround.
+
+Whether it also retires the *large-size* atlas hazard is not something we have measured on 2.3 — the
+overflow ceiling below was established on the old explicit-range behaviour. Treat it as still live
+until someone re-measures.
 
 ## Maximum font size
 

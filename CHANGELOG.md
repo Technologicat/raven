@@ -142,6 +142,7 @@
 *Raven-avatar*
 
 - an AI reply ending on a stray Markdown bullet (`...to the naked eye:` followed by a lone `*`) no longer aborts the whole spoken utterance. Such a fragment reached the speech synthesizer as a sentence of its own, with nothing pronounceable in it, and the resulting zero-length audio crashed the encoder; fragments with no speakable content are now dropped before synthesis, and empty audio encodes cleanly rather than failing.
+- the log no longer fills with the avatar announcing, every three seconds for as long as the session is idle, that it is returning to its neutral expression. It says so now only when it actually returns from one — so on a quiet session the line is silent, and when it appears it means something.
 
 *Raven-cherrypick*
 
@@ -163,6 +164,7 @@
 - All client HTTP calls to *Raven-server* and to the LLM backend now use connect/read timeouts, so a server or backend that becomes unreachable mid-connection fails fast instead of hanging indefinitely. Matters most when either is configured to run on another machine that is down. Timeouts are configurable in `raven.client.config` (`network_timeout`) and `raven.librarian.config` (`llm_network_timeout`); streaming endpoints bound only the connect, leaving long-lived streams unbounded.
 - `dpg_markdown` bullet lists and blockquotes now render correctly inside tooltips (and any other initially-hidden container). Previously every bullet glyph in a tooltip stacked at the top-left, because DPG reports `get_item_pos() == (0, 0)` for children of a hidden container; the bullet drawlists are now deferred until their row has been laid out.
 - `deviceinfo.validate`: `device_name` label now reflects the actual running backend. Previously a working MPS / XPU / Vulkan setup was logged as `'CPU'` in the startup "Compute device for ..." line because the labeling block was tied to a CUDA-prefix check it shouldn't have been. Cosmetic — the actual compute device was always correct.
+- every GUI app used to open with four `DeprecationWarning`s about `add_font_range`, a DearPyGui call that stopped doing anything in DPG 2.3, which builds font atlas character ranges by itself. Raven no longer declares ranges, and now requires `dearpygui>=2.3` (it was `>=2.0.0`) so that it doesn't have to. Text rendering is unchanged — a character that came out as a box before still does, and still means the font lacks that glyph.
 
 ---
 

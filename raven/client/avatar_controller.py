@@ -291,6 +291,7 @@ class DPGAvatarController:
         config.idle_timeout = idle_timeout
 
         config._emotion_autoreset_t0 = time.monotonic_ns()
+        config._current_emotion = "neutral"  # last emotion we sent; a fresh avatar instance starts neutral
         config._idle_detector_lock = threading.RLock()
         config._idle_detector_overrides = 0
         config._idle_detector_t0 = time.monotonic_ns()
@@ -306,7 +307,12 @@ class DPGAvatarController:
                     dt = (time_now - config._emotion_autoreset_t0) / 10**9
                     if not config._avatar_speaking and dt > config.emotion_autoreset_interval:
                         config._emotion_autoreset_t0 = time_now
-                        logger.info(f"emotion_autoreset_task: instance {task_env.task_name}: avatar idle for at least {config.emotion_autoreset_interval} seconds; updating emotion to 'neutral' (default idle state)")
+                        # The reset is idempotent, and runs once per interval for as long as the avatar sits idle —
+                        # so announce only when it actually returns the avatar from an expression. Reporting every
+                        # tick would bury a quiet session's real log lines under twenty a minute that mean nothing.
+                        if config._current_emotion != "neutral":
+                            logger.info(f"emotion_autoreset_task: instance {task_env.task_name}: avatar idle for at least {config.emotion_autoreset_interval} seconds; updating emotion from '{config._current_emotion}' to 'neutral' (default idle state)")
+                        config._current_emotion = "neutral"
                         try:
                             api.avatar_set_emotion(instance_id=config.avatar_instance_id,
                                                    emotion_name="neutral")
@@ -411,6 +417,7 @@ class DPGAvatarController:
             logger.info(f"update_emotion_from_text: updating emotion to '{emotion}'")
             api.avatar_set_emotion(instance_id=config.avatar_instance_id,
                                    emotion_name=emotion)
+            config._current_emotion = emotion  # so the autoreset knows whether it has anything to return from
             logger.info("update_emotion_from_text: emotion updated")
             return emotion
         finally:

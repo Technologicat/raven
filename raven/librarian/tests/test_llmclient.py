@@ -911,55 +911,58 @@ def _roles(*roles):
 
 
 class TestStrictTemplateWarnings:
-    """`_warn_about_strict_template_violations` makes a backend template rejection legible.
+    """`_describe_strict_template_violations` makes a backend template rejection legible.
 
     A strict template (Qwen3.5's) answers a bad message shape with a 400 that names its own parser,
-    not the conversation — so the log line here is what points at the real cause. These tests pin
-    that the warning fires for the two rejected shapes and stays quiet for good ones; a warning that
-    cried wolf would be worse than none, since it would train the reader to skip it.
+    not the conversation — so this description is what points at the real cause. These tests pin
+    that the two rejected shapes are described and good ones yield nothing; a describer that cried
+    wolf would be worse than none, since the caller logs what it returns on a refusal and a reader
+    who sees it beside every failure learns to skip it.
     """
 
-    def test_missing_user_message_warns(self, caplog):
-        with caplog.at_level(logging.WARNING):
-            llmclient._warn_about_strict_template_violations(_roles("system", "assistant"))
-        assert "no user message" in caplog.text
-        assert "system, assistant" in caplog.text  # the actual sequence, for diagnosis
+    def test_missing_user_message_is_described(self):
+        violations = llmclient._describe_strict_template_violations(_roles("system", "assistant"))
+        assert len(violations) == 1
+        assert "no user message" in violations[0]
+        assert "system, assistant" in violations[0]  # the actual sequence, for diagnosis
 
-    def test_late_system_message_warns(self, caplog):
+    def test_late_system_message_is_described(self):
         # The shape Raven itself sent before the injects moved to the user role.
-        with caplog.at_level(logging.WARNING):
-            llmclient._warn_about_strict_template_violations(_roles("system", "assistant", "user", "system", "system"))
-        assert "system message that is not the first message" in caplog.text
-        assert "system, assistant, user, system, system" in caplog.text
+        violations = llmclient._describe_strict_template_violations(_roles("system", "assistant", "user", "system", "system"))
+        assert len(violations) == 1
+        assert "system message that is not the first message" in violations[0]
+        assert "system, assistant, user, system, system" in violations[0]
 
-    def test_consecutive_leading_system_messages_warn(self, caplog):
+    def test_consecutive_leading_system_messages_are_described(self):
         # The RAG-inject shape: matches inserted at index 1, each as its own system message. Every
         # system message is ahead of the conversation, and Qwen3.5's template rejects it anyway —
         # its guard is `not loop.first`, so only the message at index 0 may carry the system role.
-        with caplog.at_level(logging.WARNING):
-            llmclient._warn_about_strict_template_violations(_roles("system", "system", "system", "assistant", "user"))
-        assert "system message that is not the first message" in caplog.text
+        violations = llmclient._describe_strict_template_violations(_roles("system", "system", "system", "assistant", "user"))
+        assert any("system message that is not the first message" in violation for violation in violations)
 
-    def test_both_violations_warn_separately(self, caplog):
-        with caplog.at_level(logging.WARNING):
-            llmclient._warn_about_strict_template_violations(_roles("system", "assistant", "system"))
-        assert "no user message" in caplog.text
-        assert "system message that is not the first message" in caplog.text
+    def test_both_violations_described_separately(self):
+        violations = llmclient._describe_strict_template_violations(_roles("system", "assistant", "system"))
+        assert len(violations) == 2
+        assert any("no user message" in violation for violation in violations)
+        assert any("system message that is not the first message" in violation for violation in violations)
 
     @pytest.mark.parametrize("roles", [("system", "user"),
                                        ("system", "assistant", "user"),
                                        ("system", "user", "assistant", "user"),
                                        ("system", "user", "assistant", "tool", "assistant", "user"),  # tool results mid-conversation
                                        ("user",)])  # no system prompt at all
-    def test_accepted_shapes_stay_quiet(self, caplog, roles):
-        with caplog.at_level(logging.WARNING):
-            llmclient._warn_about_strict_template_violations(_roles(*roles))
-        assert caplog.text == ""
+    def test_accepted_shapes_describe_nothing(self, roles):
+        assert llmclient._describe_strict_template_violations(_roles(*roles)) == []
 
-    def test_empty_history_stays_quiet(self, caplog):
+    def test_empty_history_describes_nothing(self):
         # A degenerate history is someone else's error to report; don't add noise to it.
-        with caplog.at_level(logging.WARNING):
-            llmclient._warn_about_strict_template_violations([])
+        assert llmclient._describe_strict_template_violations([]) == []
+
+    def test_nothing_is_logged_when_describing(self, caplog):
+        # The point of the change: a bad shape is *held*, not announced. Raven's own idle context
+        # prefill sends `[system, greeting]` on every new chat, and that must stay silent.
+        with caplog.at_level(logging.DEBUG):
+            llmclient._describe_strict_template_violations(_roles("system", "assistant"))
         assert caplog.text == ""
 
 

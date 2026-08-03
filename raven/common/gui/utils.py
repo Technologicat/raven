@@ -159,10 +159,9 @@ def load_extra_font(themes_and_fonts: env,
 
     if key not in themes_and_fonts:
         logger.info(f"load_extra_font: Loading and caching font {key}.")
-        with dpg.font(get_font_path(font_basename, variant=variant),
-                      font_size,
-                      parent=themes_and_fonts.font_registry) as new_font:
-            fontsetup.setup_font_ranges()
+        new_font = dpg.add_font(get_font_path(font_basename, variant=variant),
+                                font_size,
+                                parent=themes_and_fonts.font_registry)
         themes_and_fonts[key] = new_font
 
     return key, themes_and_fonts[key]
@@ -206,9 +205,8 @@ def setup_default_font(font_size: int,
     """
     # https://dearpygui.readthedocs.io/en/latest/documentation/fonts.html
     with dpg.font_registry() as font_registry:
-        with dpg.font(get_font_path(font_basename, variant="Regular"),
-                      font_size) as default_font:
-            fontsetup.setup_font_ranges()
+        default_font = dpg.add_font(get_font_path(font_basename, variant="Regular"),
+                                    font_size)
         dpg.bind_font(default_font)
     return font_registry
 
@@ -223,12 +221,10 @@ def setup_icon_fonts(font_registry: int,
         - `icon_font_regular` (DPG font ID)
         - `icon_font_solid` (DPG font ID)
     """
-    with dpg.font(get_font_path(fa.FONT_ICON_FILE_NAME_FAR, variant=None),
-                  font_size, parent=font_registry) as icon_font_regular:
-        dpg.add_font_range(fa.ICON_MIN, fa.ICON_MAX_16)
-    with dpg.font(get_font_path(fa.FONT_ICON_FILE_NAME_FAS, variant=None),
-                  font_size, parent=font_registry) as icon_font_solid:
-        dpg.add_font_range(fa.ICON_MIN, fa.ICON_MAX_16)
+    icon_font_regular = dpg.add_font(get_font_path(fa.FONT_ICON_FILE_NAME_FAR, variant=None),
+                                     font_size, parent=font_registry)
+    icon_font_solid = dpg.add_font(get_font_path(fa.FONT_ICON_FILE_NAME_FAS, variant=None),
+                                   font_size, parent=font_registry)
     return env(icon_font_regular=icon_font_regular,
                icon_font_solid=icon_font_solid)
 

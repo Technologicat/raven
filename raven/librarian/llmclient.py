@@ -1481,15 +1481,21 @@ def _serialize_history_for_wire(settings: env,
         message["content"] = new_content
     return history
 
-def _warn_about_strict_template_violations(history: List[Dict]) -> None:
-    """Log a warning if `history` has a message shape that strict chat templates reject.
+def _describe_strict_template_violations(history: List[Dict]) -> List[str]:
+    """Describe any message shapes in `history` that strict chat templates reject. Empty list if none.
 
     Some chat templates enforce their message-ordering contract with a hard `raise_exception` rather
     than by ignoring the offending message, so a violation fails the *whole* request. The backend
     reports that as a template-parser failure ("Unable to generate parser for this template.
     Automatic parser generation failed"), which reads as a backend bug — the conversation we sent is
-    nowhere in the message. Naming the offending shape here, at the point of send while we still know
-    what we built, is what turns that into a quick diagnosis instead of a hunt through the backend.
+    nowhere in the message. Naming the offending shape, while we still know what we built, is what
+    turns that into a quick diagnosis instead of a hunt through the backend.
+
+    Describe, don't log: the caller checks the shape at the point of send, holds the result, and
+    emits it only if the request is actually refused. Most backends are permissive, and a shape they
+    accept is nothing to report — a warning that fires on every request (Raven's own idle context
+    prefill sends `[system, greeting]`, which has no user message) teaches the reader to skip the
+    line that would one day matter.
 
     Qwen3.5's template is the strict reference. It requires at least one user message, and permits
     exactly **one** system message, which must be the very first message — the guard is
@@ -1501,19 +1507,20 @@ def _warn_about_strict_template_violations(history: List[Dict]) -> None:
     Qwen3.6's template dropped both guards, so a history that works on one model of a family can
     hard-fail on another.
 
-    Warn, don't raise: which shapes a template accepts is the template's business, and most backends
-    are permissive. A refused request surfaces on its own; this only makes the reason legible.
+    Describe, don't raise: which shapes a template accepts is the template's business. A refused
+    request surfaces on its own; these descriptions only make the reason legible.
     """
     roles = [message["role"] for message in history]
     if not roles:
-        return
+        return []
     role_sequence = ", ".join(roles)
 
+    violations = []
     if "user" not in roles:
-        logger.warning(f"_warn_about_strict_template_violations: history has no user message; roles are [{role_sequence}]. Strict chat templates reject this.")
-
+        violations.append(f"history has no user message; roles are [{role_sequence}]. Strict chat templates reject this.")
     if "system" in roles[1:]:
-        logger.warning(f"_warn_about_strict_template_violations: history has a system message that is not the first message; roles are [{role_sequence}]. Strict chat templates allow only one system message, as the very first one.")
+        violations.append(f"history has a system message that is not the first message; roles are [{role_sequence}]. Strict chat templates allow only one system message, as the very first one.")
+    return violations
 
 def invoke(settings: env,
            history: List[Dict],
@@ -1627,7 +1634,8 @@ def invoke(settings: env,
     # Normalize message content for resend (see `_serialize_history_for_wire`).
     history = _serialize_history_for_wire(settings, history, continue_=continue_, datastore=datastore)
 
-    _warn_about_strict_template_violations(history)
+    # Held, not logged: on a refusal this is the diagnosis (see `_describe_strict_template_violations`).
+    template_violations = _describe_strict_template_violations(history)
 
     # Not mentioned in the oobabooga docs, but see:
     #  `text-generation-webui/extensions/openai/script.py`, function `openai_chat_completions`
@@ -1670,6 +1678,8 @@ def invoke(settings: env,
     if stream_response.status_code != 200:  # not "200 OK"?
         logger.error(f"LLM server returned error: {stream_response.status_code} {stream_response.reason}. Content of error response follows.")
         logger.error(stream_response.text)
+        for violation in template_violations:  # a candidate cause, if the backend's template is a strict one
+            logger.error(f"llmclient.invoke: {violation}")
         raise RuntimeError(f"While calling LLM: HTTP {stream_response.status_code} {stream_response.reason}")
 
     client = sseclient.SSEClient(stream_response)

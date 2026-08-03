@@ -1633,10 +1633,9 @@ def main() -> int:
     # --- Triage mark icon font (2× default for readability) ---
     _triage_mark_font_key = f"fa6_solid_{config.TRIAGE_MARK_FONT_SIZE}"
     if _triage_mark_font_key not in themes_and_fonts:
-        with dpg.font(guiutils.get_font_path(fa.FONT_ICON_FILE_NAME_FAS, variant=None),
-                      config.TRIAGE_MARK_FONT_SIZE,
-                      parent=themes_and_fonts.font_registry) as _triage_mark_font:
-            dpg.add_font_range(fa.ICON_MIN, fa.ICON_MAX_16)
+        _triage_mark_font = dpg.add_font(guiutils.get_font_path(fa.FONT_ICON_FILE_NAME_FAS, variant=None),
+                                         config.TRIAGE_MARK_FONT_SIZE,
+                                         parent=themes_and_fonts.font_registry)
         themes_and_fonts[_triage_mark_font_key] = _triage_mark_font
     image_view.set_triage_mark_font(themes_and_fonts[_triage_mark_font_key])
 

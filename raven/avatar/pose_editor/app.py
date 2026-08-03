@@ -99,7 +99,6 @@ with timer() as tim:
 
     from ...common import utils as common_utils
     from ...common.gui import animation as gui_animation  # Raven's GUI animation system, nothing to do with the AI avatar.
-    from ...common.gui import fontsetup
     from ...common.gui import helpcard
     from ...common.gui import messagebox
     from ...common.gui import utils as guiutils
@@ -189,9 +188,8 @@ with dpg.font_registry() as the_font_registry:
     # Change the default font to something that looks clean and has good on-screen readability.
     # https://fonts.google.com/specimen/Open+Sans
     font_size = 20
-    with dpg.font(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "..", "fonts", "OpenSans-Regular.ttf")).expanduser().resolve(),  # load font from Raven's main assets
-                  font_size) as default_font:
-        fontsetup.setup_font_ranges()
+    default_font = dpg.add_font(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "..", "fonts", "OpenSans-Regular.ttf")).expanduser().resolve(),  # load font from Raven's main assets
+                                font_size)
     dpg.bind_font(default_font)
 
 # Set up the Markdown renderer — only used by the help card's extras section, but must be configured

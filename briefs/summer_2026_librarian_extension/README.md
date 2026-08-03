@@ -84,11 +84,16 @@ Still open, in the order they are expected to be done:
    - Two loose ends, both filed in `TODO_DEFERRED.md` and to be **done together**, since they land in the
      same file: the scrollbar-drag creep (ImGui holds a *fraction* of the content, so holding the thumb
      while a reply streams slides you down), and `SmoothScrolling` committing during construction.
-2. **The three log-noise fixes** — the context-prefill strict-template warning, `setup_font_ranges`'
-   DeprecationWarnings, and the avatar's emotion autoreset, which logs at INFO every three seconds forever
-   and reports a change to neutral when the emotion is already neutral. The third was added 2026-08-03, on
-   noticing it while reading a debug log during the chat-scrolling live test; all three are the same defect
-   in different costumes, so they are one job.
+2. ~~**The three log-noise fixes**~~ — **done 2026-08-04.** The context-prefill strict-template warning, and
+   the avatar's emotion autoreset, both became conditional on there being something to report: the template
+   check now *describes* rather than logs, and its result is emitted only if the backend actually refuses the
+   request; the autoreset speaks only when it returns the avatar from an expression. `setup_font_ranges` was
+   deleted outright rather than gated — probing the wheels showed `add_font_range` live through DPG 2.2 and a
+   no-op from 2.3, so the floor moved to `dearpygui>=2.3` and Raven declares no ranges anywhere. Two
+   surprises worth knowing: the deprecation also fired from the *icon* font paths in `guiutils` and
+   `cherrypick`, which the item had not counted, so "four call sites" was really seven; and the fix is
+   pinned by `raven/common/gui/tests/test_fontsetup.py`, which asserts the *absence* of warnings — the
+   failure mode here is silent, since an app that warns on every start still works.
 3. **Large `webfetch` results become attachments** — the one feature admitted past the freeze.
 4. **Tool budget: error out informatively instead of withdrawing the tools.** Admitted 2026-08-03, and the
    freeze rule wants the argument stated rather than assumed. It is *defect-shaped*: withdrawing a tool
