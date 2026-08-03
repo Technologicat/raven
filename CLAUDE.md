@@ -77,8 +77,25 @@ Entry points defined in `pyproject.toml` under `[project.scripts]` — main apps
 ### Running Tests
 
 ```bash
-pytest                   # runs all tests (currently minimal coverage)
+pytest                   # everything except the GUI group
+pytest --run-gui         # ...including the GUI group. Takes keyboard focus — warn the user first
+pytest -m "not ml"       # what CI runs; the ML stack isn't installed there
 ```
+
+Two markers divide the suite, and both defaults are chosen so that the command a person types by
+reflex is the safe one:
+
+- **`gui`** — maps a real window. Focus is a single-holder resource on a shared desktop, so these
+  **steal the keyboard** from whatever the user is typing into (see "Live GUI testing on a shared
+  desktop" below). Skipped unless `--run-gui` is passed, and **tell the user before passing it.**
+  Note that most tests touching DPG are *not* in this group: a DPG context with an unmapped viewport
+  takes no focus, so only tests that genuinely need rendered frames — focus semantics, layout
+  geometry — need the marker.
+- **`ml`** — needs the real ML stack (spaCy, Flair, torch model weights). Runs locally by default and
+  is skipped in CI, which installs a hand-picked dependency subset rather than the multi-gigabyte
+  tree (see the `ci-setup` skill).
+
+A test that needs neither takes no marker, which is the overwhelmingly common case.
 
 ### Linting
 
