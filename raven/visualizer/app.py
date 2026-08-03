@@ -1725,11 +1725,26 @@ def hotkeys_callback(sender, app_data):
                 return
 
     # Hotkeys for main window, while no modal window is shown
-    if dpg.is_item_focused("search_field") and key == dpg.mvKey_Return:  # tag  # regardless of modifier state, to allow Shift+Enter and Ctrl+Enter.
+    #
+    # *Active*, not *focused*. ImGui gives nav focus to the first navigable item of a newly focused window by
+    # itself, so a text field can report focused without anyone having typed in it, and a bare-key branch
+    # gated on `is_item_focused` then goes dead for no visible reason. *Active* means the field holds the
+    # caret, which is the condition under which a key belongs to it. See `dpg-notes.md`, "Keyboard input".
+    if dpg.is_item_active("search_field") and key == dpg.mvKey_Return:  # tag  # regardless of modifier state, to allow Shift+Enter and Ctrl+Enter.
         select_search_results()
-        dpg.focus_item("item_information_panel")  # tag
-    elif dpg.is_item_focused("search_field") and key == dpg.mvKey_Escape:  # tag  # cancel current search edit (handled by the text input internally, by sending a change event; but we need to handle the keyboard focus)
-        dpg.focus_item("item_information_panel")  # tag
+        # Take the caret out of the search field, so the navigation keys below reach the info panel — having
+        # accepted a search, the reader is done typing and about to read.
+        #
+        # The button, rather than `item_information_panel` as this did before: `dpg.focus_item` cannot focus a
+        # child window, and asked to, it puts focus on the enclosing window's first navigable item and
+        # *activates* it — so aiming at the panel was liable to hand the caret straight back to a text field.
+        # A focused button is inert here (DPG leaves ImGui's keyboard-nav activation off, so it ignores Space
+        # and Enter), which is what makes it a safe place to park.
+        dpg.focus_item("clear_search_button")  # tag
+    # Escape needs no branch of its own: ImGui's `InputText` cancels the edit *and* deactivates itself, and
+    # deactivated is exactly what the bare-key branch below tests for. The handler that used to be here
+    # existed only to repair the keyboard focus afterwards, which was both unnecessary and — aimed at a child
+    # window — the one call able to put the caret back where it had just left.
     elif key == dpg.mvKey_F1:  # de facto standard hotkey for help
         help_window.show()
     elif key == dpg.mvKey_F3:  # some old MS-DOS software in the 1990s used F3 for next/prev search match, I think?
@@ -1785,7 +1800,7 @@ def hotkeys_callback(sender, app_data):
     # Bare key
     #
     # NOTE: These are global across the whole app (when no modal window is open) - be very careful here!
-    elif not dpg.is_item_focused("search_field"):  # tag
+    elif not dpg.is_item_active("search_field"):  # tag  # *active*, not *focused* — see the note above
         if key == dpg.mvKey_Home:
             info_panel.go_to_top()
         elif key == dpg.mvKey_End:
