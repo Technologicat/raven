@@ -1168,6 +1168,10 @@ def update_animations():
     # Mirror the retriever's progress-text channels (indexing + search) into their DPG widgets.
     # Indicator visibility is push-driven via callbacks; only the progress text strings are polled.
     chat_controller.update_docs_indicator_progress_text()
+    # The jump-to-latest pill must be polled rather than pushed: the mouse wheel and the scrollbar move the
+    # chat panel from inside ImGui and raise nothing we could hook, so "the reader has left the end" is only
+    # observable by looking. See `DPGLinearizedChatView.update_jump_to_latest_pill`.
+    chat_controller.view.update_jump_to_latest_pill()
 
 # --------------------------------------------------------------------------------
 # Built-in help window

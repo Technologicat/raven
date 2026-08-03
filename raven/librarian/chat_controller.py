@@ -70,6 +70,22 @@ _PIN_TOLERANCE_PX = 2 * gui_config.font_size  # two lines of text
 # shape a wrong refusal takes, and the logged numbers say which comparison let it through.
 _PIN_NEAR_MISS_FACTOR = 20
 
+# Labels for the jump-to-latest pill. Each carries the state as well as the action, so that it informs
+# during the turn rather than only announcing its end: a reader who has scrolled away wants to know whether
+# there is any point waiting.
+#
+# Spelled out in words rather than with a downward arrow, which is what this wanted. The UI font is OpenSans
+# (`guiutils.bootup`'s default, chosen for scientific text — see the note there), and it has no arrow or
+# triangle glyphs: U+2193, U+25BC and U+25BE are all absent from its cmap, so any of them would render as a
+# blank box. FontAwesome is no help either, because a DPG button draws its whole label in one font and the
+# icon font has no letters to spell the state with.
+_JUMP_TO_LATEST_WRITING_LABEL = "AI writing — jump to latest"
+_JUMP_TO_LATEST_FINISHED_LABEL = "AI finished — jump to latest"
+
+# How far the pill floats above the bottom edge of the chat panel, in pixels. Clear of the edge so it reads
+# as hovering over the log rather than as part of the composer below it.
+_JUMP_TO_LATEST_BOTTOM_MARGIN = 12
+
 # --------------------------------------------------------------------------------
 
 role_to_colors = {"assistant": {"front": gui_config.chat_color_ai_front, "back": gui_config.chat_color_ai_back},
@@ -1492,6 +1508,37 @@ class DPGLinearizedChatView:
         # The tag carries this view's UUID: DPG frees deleted items lazily, so a rebuilt view creating the
         # same tag again could collide with one not yet collected, and a tag collision takes the process
         # down rather than raising.
+        # Jump-to-latest pill. Raised when content arrives while the reader is away from the end, and
+        # cleared by arriving there — the condition that raises it is the condition that clears it, so there
+        # is no timeout to tune and no dismiss button to add.
+        #
+        # Deliberately a *state* rather than an event. A toast or an indicator flash would announce "a reply
+        # finished" once, and a reader who is mid-paragraph when it fires has missed it with no way to get it
+        # back. What is actually true is "you are not looking at the end, and there is something down there
+        # you have not seen", which stays true until it doesn't, so the affordance can simply persist.
+        #
+        # Note the *and*: this is not "the reader is not at the bottom". Someone paging back through an old
+        # conversation is not waiting for anything, and a pill following them up the log would be noise. It
+        # takes an arrival to raise it, which is also what makes the "AI finished" label always truthful.
+        self._content_arrived_while_unpinned = False
+
+        with dpg.window(tag=f"chat_jump_to_latest_window_{self.gui_uuid}",  # tag
+                        show=False,
+                        no_title_bar=True,
+                        autosize=True,
+                        no_collapse=True,
+                        no_focus_on_appearing=True,  # a pill appearing must not take the keyboard from the reader
+                        no_resize=True,
+                        no_move=True,
+                        no_background=True,  # the button draws the pill; this window only positions it
+                        no_scrollbar=True,
+                        no_scroll_with_mouse=True) as self._jump_to_latest_window:
+            def jump_to_latest_callback(sender, app_data, user_data) -> None:
+                """Take the reader to the end of the chat, and resume following it."""
+                self.go_to_bottom()
+            self._jump_to_latest_button = dpg.add_button(label=_JUMP_TO_LATEST_FINISHED_LABEL,
+                                                         callback=jump_to_latest_callback)
+
         self._scroll_end_flasher = gui_animation.ScrollEndFlasher(target=gui_parent,
                                                                   tag=f"chat_scroll_end_flasher_{self.gui_uuid}",  # tag
                                                                   duration=gui_config.scroll_ends_here_duration,
@@ -1500,8 +1547,13 @@ class DPGLinearizedChatView:
                                                                   text_top=fa.ICON_ARROWS_UP_TO_LINE,
                                                                   text_bottom=fa.ICON_ARROWS_DOWN_TO_LINE)
 
-    def should_follow_tail(self) -> bool:
+    def should_follow_tail(self, verbose: bool = True) -> bool:
         """Whether new content should pull the view along with it.
+
+        `verbose`: Whether to log the decision and its numbers. Pass `False` from a per-frame caller — the
+                   jump-to-latest pill asks this sixty times a second, and at DEBUG that buries the
+                   once-per-chunk decisions this log exists to let you read. The answer is identical either
+                   way; this method stores no state and has no other side effect.
 
         Not the same question as "is the view at the bottom", and the difference is the whole bug this exists
         to avoid. Two endpoints move here: the user moves the scroll *position*, and arriving content moves the
@@ -1554,7 +1606,8 @@ class DPGLinearizedChatView:
         """
         max_y_scroll = dpg.get_y_scroll_max(self.gui_parent)
         if max_y_scroll <= 0:  # no scrollbar: the tail is always in view
-            logger.debug("DPGLinearizedChatView.should_follow_tail: no scrollbar -> True")
+            if verbose:
+                logger.debug("DPGLinearizedChatView.should_follow_tail: no scrollbar -> True")
             return True
 
         y_scroll = dpg.get_y_scroll(self.gui_parent)
@@ -1612,14 +1665,15 @@ class DPGLinearizedChatView:
         # is still where we left it.
         follow = at_end or (self._commanded_scroll_was_to_end and undisturbed)
 
-        logger.debug(f"DPGLinearizedChatView.should_follow_tail: y_scroll={y_scroll}, max_y_scroll={max_y_scroll}, "
-                     f"gap={gap}, settled_gap={settled_gap} to y={settled_y_scroll} "
-                     f"(tolerance={_PIN_TOLERANCE_PX}) -> at_end={at_end}; "
-                     f"drift tolerance={tolerance} (animation slack={animation_slack}); "
-                     f"commanded={commanded_y_scroll} (to_end={self._commanded_scroll_was_to_end}), "
-                     f"expected={expected_y_scroll}, drift={drift} -> undisturbed={undisturbed}; "
-                     f"-> follow={follow}")
-        if not follow and 0 < settled_gap <= _PIN_NEAR_MISS_FACTOR * _PIN_TOLERANCE_PX:
+        if verbose:
+            logger.debug(f"DPGLinearizedChatView.should_follow_tail: y_scroll={y_scroll}, max_y_scroll={max_y_scroll}, "
+                         f"gap={gap}, settled_gap={settled_gap} to y={settled_y_scroll} "
+                         f"(tolerance={_PIN_TOLERANCE_PX}) -> at_end={at_end}; "
+                         f"drift tolerance={tolerance} (animation slack={animation_slack}); "
+                         f"commanded={commanded_y_scroll} (to_end={self._commanded_scroll_was_to_end}), "
+                         f"expected={expected_y_scroll}, drift={drift} -> undisturbed={undisturbed}; "
+                         f"-> follow={follow}")
+        if verbose and not follow and 0 < settled_gap <= _PIN_NEAR_MISS_FACTOR * _PIN_TOLERANCE_PX:
             logger.info(f"DPGLinearizedChatView.should_follow_tail: NEAR MISS — settled_gap={settled_gap}px "
                         f"exceeds tolerance={_PIN_TOLERANCE_PX}px and the position has drifted {drift}px from the "
                         f"{commanded_y_scroll} we last commanded (to_end={self._commanded_scroll_was_to_end}, "
@@ -1675,6 +1729,8 @@ class DPGLinearizedChatView:
         from that on their own (the scroll to the new end happens afterwards); one who was not does not, so
         their offset is restored explicitly.
         """
+        if not sample.follow:
+            self._content_arrived_while_unpinned = True  # raises the jump-to-latest pill
         guiutils.split_frame(operation="restore_scroll_after_swap: lay out the replacement content")
         if self._reader_scrolled_since(sample):
             return
@@ -1704,7 +1760,10 @@ class DPGLinearizedChatView:
         that arrived before the call, which is why `scroll_view` re-checks after its own settle wait — that
         wait turned out to be where the surviving losses were landing.
         """
-        if not sample.follow or self._reader_scrolled_since(sample):
+        if not sample.follow:
+            self._content_arrived_while_unpinned = True  # raises the jump-to-latest pill
+            return
+        if self._reader_scrolled_since(sample):
             return
         # Re-checked inside, after the settle wait: this early test only saves the trip, it does not close
         # the window — the wait is where a keypress actually lands.
@@ -1958,6 +2017,45 @@ class DPGLinearizedChatView:
     def go_to_bottom(self) -> None:
         """Scroll to the end of the chat, and resume following the tail."""
         self.scroll_to_position(None)
+
+    def update_jump_to_latest_pill(self) -> None:
+        """Show, hide, label and position the jump-to-latest pill. Call once per frame, from the render loop.
+
+        Polled rather than event-driven, and it has to be: of the ways this panel moves, the mouse wheel and
+        the scrollbar are handled inside ImGui and raise nothing to hook. A reader who wheels away from the
+        end must see the pill appear, so the only reliable trigger is looking every frame.
+
+        Cheap enough for that: two scroll queries and a dict lookup, with the logging suppressed — see
+        `should_follow_tail`'s `verbose`.
+        """
+        # Arriving at the end is what takes the pill down, whether the reader got there by clicking it, by
+        # pressing End, or by scrolling back by hand. Asking `should_follow_tail` rather than comparing
+        # positions here keeps one definition of "at the end" for the whole view; a second one would drift
+        # from it and show a pill while the view was in fact following.
+        if self.should_follow_tail(verbose=False):
+            self._content_arrived_while_unpinned = False
+
+        if not self._content_arrived_while_unpinned:
+            if dpg.is_item_shown(self._jump_to_latest_window):
+                dpg.hide_item(self._jump_to_latest_window)
+            return
+
+        label = _JUMP_TO_LATEST_WRITING_LABEL if self.chat_controller.is_generating() else _JUMP_TO_LATEST_FINISHED_LABEL
+        if dpg.get_item_label(self._jump_to_latest_button) != label:
+            dpg.set_item_label(self._jump_to_latest_button, label)
+
+        # Position it against the panel every frame, so it follows a window resize without a resize hook —
+        # same approach `ScrollEndFlasher` takes, and for the same reason: the geometry is cheap to read and
+        # a hook is one more thing to remember to call.
+        panel_x, panel_y = dpg.get_item_pos(self.gui_parent)  # child windows report `pos`, not `rect_min`
+        panel_config = dpg.get_item_configuration(self.gui_parent)
+        pill_w, pill_h = dpg.get_item_rect_size(self._jump_to_latest_window)
+        dpg.set_item_pos(self._jump_to_latest_window,
+                         [panel_x + (panel_config["width"] - pill_w) / 2,
+                          panel_y + panel_config["height"] - pill_h - _JUMP_TO_LATEST_BOTTOM_MARGIN])
+
+        if not dpg.is_item_shown(self._jump_to_latest_window):
+            dpg.show_item(self._jump_to_latest_window)
 
     def _page_extent(self) -> float:
         """How far one page-up/page-down moves, in pixels.
