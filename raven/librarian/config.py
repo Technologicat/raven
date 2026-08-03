@@ -411,7 +411,7 @@ gui_config = env(  # ----------------------------------------
                  # ----------------------------------------
                  # Animations
                  acknowledgment_duration=1.0,  # seconds, for button flashes upon clicking/hotkey.
-                 # scroll_ends_here_duration=0.5,  # seconds, for scrolling-past-end animation fadeout.
+                 scroll_ends_here_duration=0.5,  # seconds, for scrolling-past-end animation fadeout.
                  smooth_scrolling=True,  # whether to animate scrolling (everything except the scrollbar and the mouse wheel, which DPG handles internally)
                  smooth_scrolling_step_parameter=0.8,  # Essentially, a nondimensional rate in the half-open interval (0, 1]; see the math comment after `raven.common.gui.animation.SmoothScrolling`.
                  # ----------------------------------------

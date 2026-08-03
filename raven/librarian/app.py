@@ -1627,6 +1627,7 @@ chat_controller = DPGChatController(llm_settings=llm_settings,
                                     docs_search_indicator_widget=docs_search_indicator_group,
                                     docs_search_progress_text_widget="docs_search_progress_text",
                                     web_indicator_widget=web_indicator_group,
+                                    is_any_modal_window_visible=is_any_modal_window_visible,
                                     executor=bg)
 
 def _cleanup_roots() -> Tuple[str]:

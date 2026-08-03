@@ -1441,7 +1441,8 @@ class DPGLinearizedChatView:
     def __init__(self,
                  themes_and_fonts: env,
                  gui_parent: Union[str, int],
-                 chat_controller: "DPGChatController"):
+                 chat_controller: "DPGChatController",
+                 is_any_modal_window_visible: Optional[Callable[[], bool]] = None):
         """A view of the current chat branch, displayed as a linear chat.
 
         `themes_and_fonts`: Obtain by calling `raven.common.gui.utils.bootup` at app start time.
@@ -1450,6 +1451,12 @@ class DPGLinearizedChatView:
 
         `chat_controller`: The controller this view belongs to. Managed internally;
                            the `DPGLinearizedChatView` is instantiated and owned by the `DPGChatController`.
+
+        `is_any_modal_window_visible`: Zero-argument predicate, or `None` to skip the check. Consulted while
+                                       the scroll-end flasher is fading, which it abandons if a modal opens
+                                       — the flasher is drawn in borderless always-on-top windows, so it
+                                       would otherwise sit over the dialog. Injected because the app layer
+                                       is what knows its own dialogs; this layer must not import it.
         """
         self.themes_and_fonts = themes_and_fonts
         self.gui_parent = gui_parent
@@ -1477,6 +1484,21 @@ class DPGLinearizedChatView:
         # originate from DPG's callback thread — key handlers and button callbacks alike — so there is one
         # writer, while the readers are the LLM task thread comparing a value it captured earlier.
         self._user_scroll_generation = 0
+
+        # Flashes an arrow band at whichever end a scroll came to rest against. Attached per scroll rather
+        # than owned by the animation, because whether an arrival is worth announcing depends on who asked
+        # for it — see `_set_y_scroll`.
+        #
+        # The tag carries this view's UUID: DPG frees deleted items lazily, so a rebuilt view creating the
+        # same tag again could collide with one not yet collected, and a tag collision takes the process
+        # down rather than raising.
+        self._scroll_end_flasher = gui_animation.ScrollEndFlasher(target=gui_parent,
+                                                                  tag=f"chat_scroll_end_flasher_{self.gui_uuid}",  # tag
+                                                                  duration=gui_config.scroll_ends_here_duration,
+                                                                  custom_finish_pred=(lambda _flasher: is_any_modal_window_visible()) if is_any_modal_window_visible is not None else None,
+                                                                  font=themes_and_fonts.icon_font_solid,
+                                                                  text_top=fa.ICON_ARROWS_UP_TO_LINE,
+                                                                  text_bottom=fa.ICON_ARROWS_DOWN_TO_LINE)
 
     def should_follow_tail(self) -> bool:
         """Whether new content should pull the view along with it.
@@ -1737,14 +1759,20 @@ class DPGLinearizedChatView:
         if user_initiated:
             self._user_scroll_generation += 1
 
-        # TODO (chat view scrolling): pass the `ScrollEndFlasher` here once it is wired up, gated on
-        # `user_initiated`. The parameter is plumbed already so that the gate lands in one place.
+        # The flasher rides on the scroll request, and only on a reader's. `user_initiated` is the whole
+        # gate: the flash asserts *"you asked to go further and there is no further"*, which is a statement
+        # about someone's intent, and tail-following has none — arriving at the end is what it is for, so a
+        # flasher on that path would strobe once per streamed chunk for the length of a reply.
+        #
+        # Retargeting keeps the gate honest without any help here, because a retarget adopts the incoming
+        # request wholesale: a follow scroll landing on a reader's in-flight one carries `None` and so takes
+        # the flasher back off, and a reader's scroll landing on a follow puts one on. Latest asker wins.
         with gui_animation.SmoothScrolling.class_lock:
             gui_animation.animator.add(gui_animation.SmoothScrolling(target_child_window=self.gui_parent,
                                                                      target_y_scroll=y_scroll,
                                                                      smooth=gui_config.smooth_scrolling,
                                                                      smooth_step=gui_config.smooth_scrolling_step_parameter,
-                                                                     flasher=None,
+                                                                     flasher=(self._scroll_end_flasher if user_initiated else None),
                                                                      commanded_y_scroll=self._commanded_y_scroll))
 
     def scroll_view(self,
@@ -2165,6 +2193,7 @@ class DPGChatController:
                  docs_search_indicator_widget: Union[str, int],
                  docs_search_progress_text_widget: Union[str, int],
                  web_indicator_widget: Union[str, int],
+                 is_any_modal_window_visible: Optional[Callable[[], bool]] = None,
                  executor: Optional[concurrent.futures.Executor] = None):
         """Controller for LLM scaffold to GUI integration.
 
@@ -2226,6 +2255,11 @@ class DPGChatController:
         `docs_search_progress_text_widget`: DPG tag or ID of a text widget inside the search indicator;
                                             mirrors `retriever.get_query_progress_text()`.
 
+        `is_any_modal_window_visible`: Zero-argument predicate, or `None` to skip the check. Passed to the
+                                       chat view, whose scroll-end flasher abandons its fade if a modal
+                                       opens. The app layer owns the list of its own dialogs, and this layer
+                                       must not import it, so it arrives as a callable.
+
         `web_indicator_widget`: DPG tag or ID of the widget to show while a "websearch" tool call is in progress.
 
         `executor`: A `ThreadPoolExecutor` or something duck-compatible with it. Used for background tasks.
@@ -2283,7 +2317,8 @@ class DPGChatController:
 
         self.view = DPGLinearizedChatView(themes_and_fonts=themes_and_fonts,
                                           gui_parent=chat_panel_widget,
-                                          chat_controller=self)
+                                          chat_controller=self,
+                                          is_any_modal_window_visible=is_any_modal_window_visible)
 
         if executor is None:
             executor = concurrent.futures.ThreadPoolExecutor()
