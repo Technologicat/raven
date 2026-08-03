@@ -57,8 +57,12 @@ use several windows rather than one large one.**
 
 - `mouse_capture_probe.py` — the wheel test above. Self-driving; needs `xdotool` and a real X session, and
   takes keyboard focus for about seven seconds.
+- `min_size_probe.py` — the size table above: explicit vs autosize, with and without `min_size`. Needs a
+  mapped window, since a rect means nothing before anything has rendered, but synthesizes no input, so it
+  is on screen for about a second.
 
-The `min_size` half needs no script: set it wrong and the blank space is visible immediately.
+Run either after a DPG upgrade. Both results are load-bearing for how Raven builds overlays, and neither
+would announce itself if it changed — a captured wheel and a phantom rect are both silent.
 
 ## Where this ended up
 
