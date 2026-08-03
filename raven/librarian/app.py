@@ -623,13 +623,19 @@ with timer() as tim:
                             # button click clears trivially, but only because the click already moved focus off the
                             # field; cf. the Visualizer search field, which likewise never clears while focused.)
                             # So move focus off the field to deactivate it, let that frame apply the deactivation,
-                            # then clear the now-inactive field and refocus for the next message. Safe: this runs on
-                            # a DPG event-callback thread (Send button / key handler), never the render loop (where
-                            # `split_frame` would deadlock).
+                            # then clear the now-inactive field. Safe: this runs on a DPG event-callback thread
+                            # (Send button / key handler), never the render loop (where `split_frame` would
+                            # deadlock).
+                            #
+                            # Focus then parks on the chat panel rather than returning to the composer. Sending is
+                            # a departure from the field, and what follows a send is reading a reply — so the
+                            # navigation keys should be live while it streams, which they are not while the
+                            # composer holds focus. `Ctrl+Space` comes back for the next message. The field keeps
+                            # its cleared value and reloads it whenever it is next activated.
                             dpg.focus_item("chat_send_button")  # tag  # deactivate the input's ImGui edit buffer
                             dpg.split_frame()
                             dpg.set_value("chat_field", "")  # tag  # field inactive now, so the clear sticks
-                            dpg.focus_item("chat_field")  # tag  # refocus; reactivation reloads the empty buffer
+                            dpg.focus_item("chat_panel")  # tag
 
                         def record_audio_message_callback() -> None:
                             if not audio_recorder.require().is_recording():
@@ -1506,8 +1512,12 @@ def librarian_hotkeys_callback(sender, app_data):
             # Enter sends; Shift+Enter inserts a newline. The multiline field owns its own keyboard, so on
             # Shift+Enter we do nothing here and let the widget insert the newline itself.
             if key == dpg.mvKey_Return and not shift_pressed:
-                send_message_to_ai_callback()
-                dpg.focus_item("chat_field")  # tag
+                send_message_to_ai_callback()  # parks focus on the chat panel; see the clearing dance it performs
+            elif key == dpg.mvKey_Escape:
+                # ImGui's own `InputText` handles the cancel — it reverts the field and deactivates it — but
+                # leaves keyboard focus nowhere in particular, so park it. Same division of labour as the
+                # Visualizer's search field, whose Escape handler exists for exactly this reason.
+                dpg.focus_item("chat_panel")  # tag
             # Up/Down/Home/End are deliberately absent here, and belong to the widget: in a multiline field
             # they move the caret between lines and to the ends of one, which is what a typist expects and
             # what the field already does. Claiming them would break ordinary text editing to add scrolling
