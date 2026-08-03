@@ -1,0 +1,54 @@
+# CI test dependencies for Raven — pinned, and shared by ci.yml and coverage.yml.
+#
+# Why this file exists at all, in two parts:
+#
+# 1. Why a hand-picked list rather than `pdm install`: raven's full dependency tree pulls in
+#    torch+torchvision (multi-GB) and the Python-version-pinned kokoro/misaki TTS stack, none of
+#    which the test suite needs, and a matrix would install it once per entry on every push. The
+#    workflows install this list, then `pip install -e . --no-deps` so the rest is never resolved.
+#
+# 2. Why pinned: unpinned, every name here resolved to whatever PyPI served that morning, so the
+#    tested environment drifted without any commit saying so. On 2026-08-02 trafilatura 2.2.0
+#    shipped and turned main red on all three platforms, and the cost was a round of "what did I
+#    just break?" attached to an unrelated commit. Red CI should mean *your* commit broke
+#    something. Dependabot bumps these (see .github/dependabot.yml), so a breaking release still
+#    arrives — as a reviewable PR whose CI is red, rather than silently on main.
+#
+# Why one file rather than a list in each workflow: they had already drifted. `qoi` was in ci.yml
+# but not coverage.yml, so the three qoi round-trip tests `importorskip`ed away in the coverage
+# job alone — 1606 tests in CI against 1603 in Coverage, with nothing reporting the gap.
+#
+# Scope, stated so the next reader knows it is deliberate: only *direct* dependencies are pinned.
+# The transitive closure still floats, so a broken release one level down can still surprise us.
+# Pinning the full closure would be a ~50-line lockfile for a deliberately minimal test subset,
+# and Dependabot churn to match. Revisit if a transitive break actually happens.
+#
+# torch and torchvision are NOT here: they install from PyTorch's own CPU wheel index, which needs
+# an --index-url that would apply to this whole file. They are pinned inline in both workflows
+# instead. Dependabot cannot track them there, so they need a manual bump now and then.
+#
+# Versions are the ones that passed on main at 1cc20a2 (CI run 30772151270).
+
+bibtexparser==2.0.0b9
+feedparser==6.0.14
+odfpy==1.4.1
+Pillow==12.3.0
+pypdf==6.14.2
+pytest==9.1.1
+pytest-cov==7.1.0
+python-docx==1.2.0
+python-pptx==1.0.2
+PyYAML==6.0.3
+qoi==0.7.2
+requests==2.34.2
+tqdm==4.70.0
+trafilatura==2.2.0
+unpythonic==2.2.0
+wosfile==0.7.0
+
+# numpy 2.5.0 raised its floor to Python 3.12 (2.4.6 is >=3.11), so the matrix legitimately
+# resolves two versions and pip is doing the right thing. Pinning one flat would break the 3.11
+# entry; these markers reproduce what each entry already installs. Worth keeping rather than
+# collapsing — it means the suite runs against both numpy majors.
+numpy==2.4.6 ; python_version < "3.12"
+numpy==2.5.1 ; python_version >= "3.12"

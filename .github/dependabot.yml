@@ -4,3 +4,12 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+
+  # The pinned CI test-dependency list. Scoped to the workflows directory on purpose: a "/" entry
+  # would also find the root pyproject.toml and start proposing bumps to raven's actual
+  # dependencies, which is not what we want auto-updated. This watches requirements-ci.txt only,
+  # so an upstream release arrives as a reviewable PR instead of silently on the next push.
+  - package-ecosystem: "pip"
+    directory: "/.github/workflows"
+    schedule:
+      interval: "weekly"

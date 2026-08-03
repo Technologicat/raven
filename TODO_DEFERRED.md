@@ -3,48 +3,6 @@
 New items go at the **top**. (Both ends were in use up to 2026-07-27, which is how the two halves of the same
 Librarian session ended up ~1000 lines apart.)
 
-## CI installs its dependencies unpinned, so an upstream release can turn main red
-
-Both workflows install the test dependencies as a bare name list — `pip install pytest numpy
-"bibtexparser>=2.0.0b8" unpythonic Pillow tqdm requests feedparser wosfile pypdf pyyaml python-docx
-python-pptx odfpy trafilatura qoi` in `ci.yml`, near-identically in `coverage.yml` — followed by
-`pip install -e . --no-deps`. Only `bibtexparser` carries a constraint. Every other package resolves to
-whatever PyPI serves that morning, so the tested environment drifts without any commit saying so.
-
-This is not hypothetical: it fired on 2026-08-02. `trafilatura` 2.2.0 shipped, CI picked it up, and
-`test_html_title_not_duplicated_when_body_already_opens_with_it` began failing on all three platforms while
-passing locally on 2.1.0. The underlying assumption in `docextract` was genuinely too narrow and has been
-fixed, so the test earned its keep — but the *diagnosis* cost a round of "what did I just break?", and it
-attached itself to an unrelated docstring commit that happened to be the next push.
-
-The tension, and why this is a real decision rather than an obvious pin-everything:
-
-- **Unpinned catches upstream breakage early**, which is worth something for a project that vendors little
-  and tracks a fast-moving ML stack. A pinned CI would have found this at the next manual bump instead.
-- **Unpinned makes every failure ambiguous.** Red CI should mean "your commit broke something". When it can
-  also mean "someone else released something", the signal degrades, and the cost lands on whoever pushes
-  next rather than on whoever is equipped to deal with it.
-
-**Decided 2026-08-03 (Juha): pin the CI install list, and let Dependabot bump it.** This is the same shape
-already used fleet-wide for GitHub Actions — pin, and delegate the bumping to a bot that raises a reviewable
-PR rather than changing the environment silently. It keeps the early-warning property (a breaking release
-still arrives, as a PR whose CI is red) while restoring the property that red CI on `main` means *your*
-commit broke something.
-
-To do: pin each name in both `ci.yml` and `coverage.yml` to its current known-good version, and extend
-`.github/dependabot.yml` to watch the workflows' pip requirements. Note Dependabot does not natively track
-package versions written inline in a `run:` step — so this likely wants the list moved into a requirements
-file that both workflows install from, which also fixes the duplication between them.
-
-Rejected: committing `pdm.lock` (heavier, and the CI install is a deliberately minimal subset rather than the
-full dependency set — see the Python-3.12-cap note in `CLAUDE.md`), and a scheduled unpinned run (cheapest,
-but leaves the ambiguity in place).
-
-Note the CI dep list is also hand-maintained and can drift from `pyproject.toml` independently — the
-`ci-setup` skill flags this for exactly the projects that install by hand, Raven among them.
-
-Discovered 2026-08-02, diagnosing the trafilatura failure.
-
 ## Make the DPG reference a skill, so it fires when it is needed
 
 `CLAUDE.md` says "**Before editing any DPG code, read `dpg-notes.md` first**" and defines what counts as DPG

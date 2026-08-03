@@ -117,7 +117,7 @@ class TestEncodeRoundTrip:
         assert np.array_equal(decoded, original)
 
     def test_qoi_round_trip(self):
-        pytest.importorskip("qoi")  # optional C extension; not installed in CI
+        pytest.importorskip("qoi")  # optional C extension; CI installs it, a bare checkout may not
 
         original = np.zeros((8, 16, 4), dtype=np.uint8)
         original[..., 1] = 128  # green channel
