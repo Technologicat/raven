@@ -3224,10 +3224,16 @@ on hand; a coworker's Mac is possible but not soon). The matrix already runs `ma
 to avoid resolving the full tree, so **they do not exercise the lock at all** and none of them would go
 red today no matter what the lock said.
 
-Checking it therefore means a separate throwaway job that really does `pdm install` on macOS, whose whole
-point is to be slow — and that cost is part of what is being deferred, not a detail of carrying it out.
-Cheapest honest version: run it once by hand via `workflow_dispatch`, read the result, delete the job.
-There is no need for a standing check; the question is asked once and answered once.
+Checking it therefore means a separate job that really does `pdm install` on macOS, whose whole point is
+to be slow — and that cost is part of what is being deferred, not a detail of carrying it out. Cheapest
+honest version: run it once by hand via `workflow_dispatch` and read the result. There is no need for a
+standing check; the question is asked once and answered once.
+
+**Keep the job rather than deleting it** (Juha, 2026-08-04): retire it from `.github/workflows/` once it
+has answered, but save the workflow file into an `investigations/` bundle with what it measured. The
+question recurs on its own schedule — every time the torch pin moves, or a dependency changes its
+platform markers — and a `workflow_dispatch`-only job that already works is most of the cost of asking
+again. This is the same reason the probes live there: the apparatus is the reproducible part.
 
 Commit the lock if it resolves; if it doesn't, the outcome is a decided-and-written-down exception in the
 `.gitignore` and in `project-setup`'s fleet classification, which is worth as much as the lock would have
