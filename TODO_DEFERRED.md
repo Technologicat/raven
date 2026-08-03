@@ -1073,6 +1073,47 @@ reader wants in full and a listener does not want at all.
 
 Discovered while fixing the zero-segment TTS crash (2026-07-28, reported by Juha).
 
+## The licensing story is accurate only in a subdirectory README
+
+Raven ships under **three** licences, and none of the three places a reader would look says so. Verified in
+the tree 2026-08-03:
+
+| Scope | Licence | Where that is stated |
+|---|---|---|
+| Everything by default | 2-clause BSD | `LICENSE.md`, `README.md`, `pyproject.toml` |
+| All of `raven.server`, incl. the avatar service | AGPL-3.0 | `raven/avatar/README.md:331`; full text at `raven/server/LICENSE` |
+| `raven.avatar.pose_editor` | AGPL-3.0 | same README; module docstring at `pose_editor/app.py:33` |
+| `raven.common.video.upscaler` | MIT | `raven/avatar/README.md:333` (matches the Anime4K engine) |
+
+The AGPL parts come from *SillyTavern-extras*, whose licence they preserve.
+
+**The gaps, in rising order of consequence:**
+
+- `LICENSE.md` is 20 lines of bare BSD with no indication that anything differs.
+- `README.md`'s licence section is one line: *"[2-clause BSD](LICENSE.md)."*
+- **`pyproject.toml` declares `license = "BSD-2-Clause"` and `license-files = ["LICENSE.md"]` for the whole
+  distribution** — so the package metadata, which is what tooling and downstream packagers read, states BSD
+  for an artifact that also contains AGPL and MIT code. This is the one with actual teeth.
+
+So the accurate statement exists in exactly one place, `raven/avatar/README.md`, which is the least likely
+file anyone checks before vendoring a piece. Someone deciding whether they may take a module would get it
+wrong from the top-level docs alone.
+
+**One further thing worth surfacing while fixing this, because it has engineering consequences rather than
+only legal ones.** `pose_editor/app.py:36` records the directional rule: *a BSD-licensed module must not
+import anything from an AGPL module; the reverse is allowed*, since the AGPL side then uses the BSD code
+under BSD. That constraint shapes the import graph — it is why some avatar-related code lives in
+`raven.common` — and it is currently documented in a single module comment. It belongs somewhere a
+contributor will meet it before writing the import, not after.
+
+Headline wording is fine as *"Everything in Raven is open source"*, but it has to be followed by the
+breakdown rather than standing alone (Juha, 2026-08-03).
+
+Raised during the vision-document discussion with claude.ai, 2026-08-03. Note the claim as relayed was that
+"the server and parts of the avatar are AGPL" — accurate, but checking the tree also turned up the MIT
+component, which nobody had mentioned, and cleared `raven/common/video/postprocessor.py`, which mentions AGPL
+only to record that its author relicensed it to BSD. A grep for "AGPL" therefore over-reports; read the file.
+
 ## The avatar's emotion autoreset announces itself every 3 seconds, forever
 
 `raven.client.avatar_controller.emotion_autoreset_task` logs at INFO once per idle tick, indefinitely:
