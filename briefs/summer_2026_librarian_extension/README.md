@@ -94,6 +94,14 @@ Still open, in the order they are expected to be done:
    `cherrypick`, which the item had not counted, so "four call sites" was really seven; and the fix is
    pinned by `raven/common/gui/tests/test_fontsetup.py`, which asserts the *absence* of warnings — the
    failure mode here is silent, since an app that warns on every start still works.
+   - **The template diagnosis was wired to the wrong refusal path**, and only a live test found it. It went
+     on the HTTP-error branch, which is the obvious one and the one a mocked test reaches for — but LM
+     Studio answers a template rejection with **HTTP 200 and an SSE error event mid-stream**, so the
+     diagnosis never fired in the single case it exists for. Verified against LM Studio serving Qwen3.5,
+     whose template raises `No user query found in messages.` on the `[system, greeting]` shape Raven's own
+     idle prefill builds. Both paths now report, and `TestRefusalCarriesTheTemplateDiagnosis` covers both —
+     the lesson being that "the backend refused" is not one code path, and a test that mocks only the
+     tidy one certifies nothing.
 3. **Large `webfetch` results become attachments** — the one feature admitted past the freeze.
 4. **Tool budget: error out informatively instead of withdrawing the tools.** Admitted 2026-08-03, and the
    freeze rule wants the argument stated rather than assumed. It is *defect-shaped*: withdrawing a tool

@@ -966,6 +966,43 @@ class TestStrictTemplateWarnings:
         assert caplog.text == ""
 
 
+class TestRefusalCarriesTheTemplateDiagnosis:
+    """Every path that reports a refused request must attach the held description — and there are two.
+
+    Backends disagree on how to refuse. An HTTP error status is the obvious one; LM Studio answers 200
+    and puts the error in an SSE event mid-stream, which is the one a template rejection actually takes
+    (verified against LM Studio serving Qwen3.5, whose template calls `raise_exception('No user query
+    found in messages.')`). Wiring the diagnosis to only the first path passes every test that mocks an
+    HTTP failure while never firing in the case it was written for.
+    """
+
+    def test_in_stream_error_carries_it(self, monkeypatch, invoke_settings, caplog):
+        _fake_stream(monkeypatch, [{"error": {"message": "template refused the conversation"}}])
+        with caplog.at_level(logging.ERROR):
+            with pytest.raises(RuntimeError, match="template refused"):
+                llmclient.invoke(invoke_settings, _roles("system", "assistant"))
+        assert "no user message" in caplog.text
+
+    def test_http_error_status_carries_it(self, monkeypatch, invoke_settings, caplog):
+        class _Refused:
+            status_code = 400
+            reason = "Bad Request"
+            text = "nope"
+        monkeypatch.setattr(llmclient.requests, "post", lambda *a, **k: _Refused())
+        with caplog.at_level(logging.ERROR):
+            with pytest.raises(RuntimeError, match="HTTP 400"):
+                llmclient.invoke(invoke_settings, _roles("system", "assistant"))
+        assert "no user message" in caplog.text
+
+    def test_a_good_shape_adds_nothing_to_an_unrelated_failure(self, monkeypatch, invoke_settings, caplog):
+        # A refusal with nothing wrong with the shape must not acquire a spurious explanation.
+        _fake_stream(monkeypatch, [{"error": {"message": "out of memory"}}])
+        with caplog.at_level(logging.ERROR):
+            with pytest.raises(RuntimeError, match="out of memory"):
+                llmclient.invoke(invoke_settings, _roles("system", "user"))
+        assert "Strict chat templates" not in caplog.text
+
+
 # ---------------------------------------------------------------------------
 # Budgeting text fetched into the context
 # ---------------------------------------------------------------------------

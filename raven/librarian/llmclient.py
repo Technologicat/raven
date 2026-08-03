@@ -1637,6 +1637,16 @@ def invoke(settings: env,
     # Held, not logged: on a refusal this is the diagnosis (see `_describe_strict_template_violations`).
     template_violations = _describe_strict_template_violations(history)
 
+    def report_template_violations() -> None:
+        """Emit the held diagnosis. Call from every path that reports a refused request, and only those.
+
+        There are two such paths, because backends disagree on how to refuse: an HTTP error status, and —
+        LM Studio's way, which is what a template rejection actually looks like here — HTTP 200 followed by
+        an SSE error event mid-stream.
+        """
+        for violation in template_violations:  # a candidate cause, if the backend's template is a strict one
+            logger.error(f"llmclient.invoke: {violation}")
+
     # Not mentioned in the oobabooga docs, but see:
     #  `text-generation-webui/extensions/openai/script.py`, function `openai_chat_completions`
     #  `text-generation-webui/extensions/openai/typing.py`, classes `ChatCompletionRequest` and `ChatCompletionRequestParams`
@@ -1678,8 +1688,7 @@ def invoke(settings: env,
     if stream_response.status_code != 200:  # not "200 OK"?
         logger.error(f"LLM server returned error: {stream_response.status_code} {stream_response.reason}. Content of error response follows.")
         logger.error(stream_response.text)
-        for violation in template_violations:  # a candidate cause, if the backend's template is a strict one
-            logger.error(f"llmclient.invoke: {violation}")
+        report_template_violations()
         raise RuntimeError(f"While calling LLM: HTTP {stream_response.status_code} {stream_response.reason}")
 
     client = sseclient.SSEClient(stream_response)
@@ -1738,6 +1747,7 @@ def invoke(settings: env,
                     if "error" in payload:
                         err = payload["error"]
                         error_text = err.get("message") if isinstance(err, dict) else str(err)
+                        report_template_violations()
                         raise RuntimeError(f"LLM backend error: {error_text}")
                     if payload.get("usage"):
                         usage = payload["usage"]

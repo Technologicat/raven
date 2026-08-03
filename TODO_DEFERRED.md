@@ -3200,3 +3200,30 @@ Worth keeping the unload best-effort in either case — the server may legitimat
 `app_shutdown` already handles by swallowing `ConnectionError`.
 
 Discovered during brief 07 GUI testing (2026-07-29, raised by Juha).
+
+## `pdm.lock` is gitignored, against the fleet policy for applications
+
+Fleet policy is that libraries don't commit `pdm.lock` and applications do — a lockfile is what makes a
+deployment reproducible, and Raven is an application. Raven's `.gitignore` has ignored it since early on
+and nobody decided to; it is an inconsistency, not a documented exception.
+
+**What blocks simply committing it: the CUDA wheels.** Raven resolves `torch`/`torchvision`/`torchaudio`
+from a dedicated `pytorch-cu128` index as a matched `+cu128` set, and it is not established what a lock
+generated on a CUDA machine does to an installer who is on macOS or CPU-only. The possibilities differ
+enough to matter — a cross-platform lock that resolves per-marker and is simply fine, versus one that
+pins a CUDA-only set nobody else can install, versus needing separate lock targets — and picking wrong
+turns "reproducible install" into "install is now broken for everyone unlike me".
+
+Juha (2026-08-04): recent trouble with some ML libraries on macOS makes the middle possibility the one to
+check first.
+
+So this is a **measurement**, not a judgement call: generate the lock here, then try `pdm install` against
+it on a non-CUDA target (macOS, or a CPU-only Linux box, or CI, which already installs a hand-picked
+subset and would be the cheapest place to try). Commit the lock if it resolves; if it doesn't, the
+outcome is a decided-and-written-down exception in the `.gitignore` and in `project-setup`'s fleet
+classification, which is worth as much as the lock would have been.
+
+Do it for 0.2.8 if the check is quick, otherwise 0.2.9 — it is a packaging defect with no user-visible
+symptom today, so it does not gate a release.
+
+Noticed 2026-08-04 while bumping the `dearpygui` floor and finding `pdm lock` produced no diff to review.
