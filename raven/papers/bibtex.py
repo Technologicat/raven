@@ -1,12 +1,18 @@
-"""Convert arXiv Atom feed entries to BibTeX.
+"""Read and write BibTeX.
 
-Used by `raven.papers.search` to format arXiv API search results.
+Writing: `entries_to_bibtex` converts arXiv Atom feed entries, used by `raven.papers.search` to format
+arXiv API search results.
+
+Reading: `parse_file` and `parse_string` wrap `bibtexparser` with the one middleware chain Raven reads
+BibTeX through, so every consumer gets the same normalization.
 """
 
 from __future__ import annotations
 
-__all__ = ["entries_to_bibtex"]
+__all__ = ["parse_file", "parse_string",
+           "entries_to_bibtex"]
 
+import pathlib
 import re
 
 import bibtexparser
@@ -14,6 +20,45 @@ from bibtexparser.model import Entry, Field
 from bibtexparser import Library
 
 from . import identifiers
+
+
+def _reader_middleware() -> list:
+    """The middleware chain Raven reads BibTeX through, as a fresh list per call.
+
+    Each link earns its place:
+
+      - `NormalizeFieldKeys` because the key case is not dependable - a Web of Science export writes
+        `Title = {...}`, the BibTeX literature writes `title = {...}`.
+      - `SeparateCoAuthors` then `SplitNameParts`, in that order, because the second raises without the
+        first. Between them they turn one `author` string into name parts that survive "Ludwig van
+        Beethoven", "Brinch Hansen, Per" and "Beeblebrox, IV, Zaphod".
+
+    Fresh instances rather than a shared module-level list, because a middleware is free to carry
+    per-parse state and sharing one across concurrent parses would be a bug that only shows up under
+    load.
+    """
+    return [bibtexparser.middlewares.NormalizeFieldKeys(),
+            bibtexparser.middlewares.SeparateCoAuthors(),
+            bibtexparser.middlewares.SplitNameParts()]
+
+
+def parse_file(filename: str | pathlib.Path) -> Library:
+    """Parse the BibTeX file `filename`, returning a `bibtexparser` `Library`.
+
+    Raises whatever `bibtexparser` raises; a caller that wants to treat unparseable input as a normal
+    outcome should catch it. Note a `Library` can also come back *partly* parsed - unreadable records
+    land in `library.failed_blocks` rather than raising, so a successful return is not a promise that
+    every record was understood.
+    """
+    return bibtexparser.parse_file(str(filename), append_middleware=_reader_middleware())
+
+
+def parse_string(text: str) -> Library:
+    """Parse `text` as BibTeX, returning a `bibtexparser` `Library`.
+
+    `parse_file`, which see, for the error behaviour - it is the same.
+    """
+    return bibtexparser.parse_string(text, append_middleware=_reader_middleware())
 
 
 def _make_key(entry) -> str:

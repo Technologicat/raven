@@ -38,7 +38,6 @@ import re
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
-import bibtexparser
 import yaml
 
 from mcpyrate import colorizer
@@ -50,6 +49,8 @@ from .. import __version__
 
 from ..common import netutil
 from ..common import utils as common_utils
+
+from ..papers import bibtex
 
 from . import chattree
 
@@ -472,21 +473,12 @@ def _shorten(text: str,
 def _bibtex_library(text: str) -> Optional[Any]:
     """Parse `text` as BibTeX, returning the `bibtexparser` library, or `None` if it will not parse at all.
 
-    The middleware chain is the one `visualizer.importer` uses, and each link earns its place:
-
-      - `NormalizeFieldKeys` because the key case is not dependable - a Web of Science export writes
-        `Title = {...}`, the BibTeX literature writes `title = {...}`.
-      - `SeparateCoAuthors` then `SplitNameParts`, in that order, because the second raises without the
-        first. Between them they turn one `author` string into name parts that survive "Ludwig van
-        Beethoven", "Brinch Hansen, Per" and "Beeblebrox, IV, Zaphod".
-
-    (`raven.papers.bibtex` is the wrong tool here despite the name - it writes BibTeX, it does not read it.)
+    Returning `None` rather than raising is the point of this wrapper: the caller is sniffing arbitrary
+    pasted text to see whether it happens to be BibTeX, so failure to parse is an expected answer and not
+    an error. `raven.papers.bibtex.parse_string` supplies the middleware chain and the rationale for it.
     """
     try:
-        library = bibtexparser.parse_string(text,
-                                            append_middleware=[bibtexparser.middlewares.NormalizeFieldKeys(),
-                                                               bibtexparser.middlewares.SeparateCoAuthors(),
-                                                               bibtexparser.middlewares.SplitNameParts()])
+        library = bibtex.parse_string(text)
     except Exception as exc:
         logger.debug(f"_bibtex_library: not readable as BibTeX ({type(exc)}: {exc}).")
         return None

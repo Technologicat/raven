@@ -245,10 +245,22 @@ naming decision has to land first, and it renames things across the codebase, no
 
 ### `raven.papers.bibtex` — consolidate the readers
 
-*Not started 2026-08-03: code, not documentation. Small and well-scoped, but it changes two call sites and
-wants `ruff` plus the suite, so it belongs in the morning rather than in a doc pass.*
+**Done 2026-08-03.** `parse_file` / `parse_string` added, carrying `_reader_middleware()`, and both call
+sites point at them. Fresh middleware instances per call rather than a shared module-level list, because a
+middleware may carry per-parse state and sharing one across concurrent parses is the kind of bug that only
+appears under load. `bibtexparser` is no longer imported by either `importer.py` or `chatutil.py`.
 
-- [ ] **[D] The module has a writer and no reader**, so reader code is duplicated against raw `bibtexparser`.
+The *why* for each middleware link moved with the code — it was documented at the Librarian call site, which
+was the wrong home once a canonical one existed. `chatutil._bibtex_library` keeps only what is genuinely
+local to it: why it returns `None` instead of raising (it is sniffing arbitrary pasted text, so "not BibTeX"
+is an expected answer, not an error).
+
+Ten tests added, pinning the chain rather than `bibtexparser` itself — normalization, co-author separation,
+and the three name shapes the docstring names (`van` particle, compound surname, `IV` suffix), plus the
+documented partial-success contract (a duplicate key lands in `failed_blocks` rather than raising) and that
+`parse_file` accepts both `str` and `Path`. Suite green at 1898 passed.
+
+- [x] **[D] The module has a writer and no reader**, so reader code is duplicated against raw `bibtexparser`.
       Verified in a fresh clone:
   - `raven/papers/bibtex.py` — `__all__ = ["entries_to_bibtex"]`. Writer only.
   - `raven/visualizer/importer.py:169` — `bibtexparser.parse_file(...)` with middleware

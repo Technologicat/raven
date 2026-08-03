@@ -27,8 +27,6 @@ import sys
 import threading
 from typing import Optional
 
-import bibtexparser
-
 from unpythonic.env import env
 from unpythonic import box, dyn, ETAEstimator, islice, make_dynvar, sym, timer, uniqify
 
@@ -44,6 +42,8 @@ from ..common import bgtask
 from ..common import deviceinfo
 from ..common import nlptools
 from ..common import utils as common_utils
+
+from ..papers import bibtex
 
 from . import config as visualizer_config
 
@@ -166,10 +166,7 @@ def parse_input_files(*filenames):
         for j, filename in enumerate(resolved_filenames, start=1):
             update_status_and_log(f"[{j} out of {len(resolved_filenames)}] Reading {filename}...", log_indent=1)
             filename = str(pathlib.Path(filename).expanduser().resolve())
-            library = bibtexparser.parse_file(filename,
-                                              append_middleware=[bibtexparser.middlewares.NormalizeFieldKeys(),
-                                                                 bibtexparser.middlewares.SeparateCoAuthors(),
-                                                                 bibtexparser.middlewares.SplitNameParts()])
+            library = bibtex.parse_file(filename)
             _report_unparseable_records(filename, library)
             bibtex_entries_by_filename[filename] = library.entries
     logger.info(f"    Done in {tim.dt:0.6g}s.")
