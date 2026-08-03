@@ -89,9 +89,9 @@ _JUMP_TO_LATEST_FINISHED_LABEL = "AI finished ↓"
 _JUMP_TO_LATEST_FONT_BASENAME = "InterTight"
 _JUMP_TO_LATEST_FONT_VARIANT = "Regular"
 
-# How far the pill sits from the bottom-right corner of the chat panel, in pixels. Clear of the edges so it
-# reads as hovering over the log rather than as part of the composer below it.
-_JUMP_TO_LATEST_MARGIN = 12
+# The gap the pill keeps from the panel's inner bottom-right corner, in pixels — the same on both axes, so
+# the corner reads as a corner. Small: this is a thing tucked against the edge, not a floating card.
+_JUMP_TO_LATEST_MARGIN = 8
 
 # One pulsation cycle for the pill while the AI is writing, in seconds. Matches the indicator glows, so the
 # app breathes at one rate rather than several.
@@ -2105,12 +2105,18 @@ class DPGLinearizedChatView:
         # The corner is out of the way, and it is also where the eye already is, since reaching this state
         # means having just worked the scrollbar. Hence the extra clearance on the right — landing under the
         # scrollbar would put the pill exactly where the pointer is.
+        # Measured from the *button*, not from the window holding it. The window's reported rect is larger
+        # than the pill you can see — enough that placing by it left the pill floating well clear of the
+        # bottom edge — so the arithmetic works in terms of the widget being positioned and then backs out
+        # the window's own content origin, which is one window padding in from its corner.
         panel_x, panel_y = dpg.get_item_pos(self.gui_parent)  # child windows report `pos`, not `rect_min`
         panel_w, panel_h = dpg.get_item_rect_size(self.gui_parent)
-        pill_w, pill_h = dpg.get_item_rect_size(self._jump_to_latest_window)
+        button_w, button_h = dpg.get_item_rect_size(self._jump_to_latest_button)
+        button_right = panel_x + panel_w - guiutils.DPG_SCROLLBAR_SIZE - _JUMP_TO_LATEST_MARGIN
+        button_bottom = panel_y + panel_h - _JUMP_TO_LATEST_MARGIN
         dpg.set_item_pos(self._jump_to_latest_window,
-                         [panel_x + panel_w - pill_w - guiutils.DPG_SCROLLBAR_SIZE - _JUMP_TO_LATEST_MARGIN,
-                          panel_y + panel_h - pill_h - _JUMP_TO_LATEST_MARGIN])
+                         [button_right - button_w - guiutils.DPG_WINDOW_PADDING,
+                          button_bottom - button_h - guiutils.DPG_WINDOW_PADDING])
 
         if not dpg.is_item_shown(self._jump_to_latest_window):
             dpg.show_item(self._jump_to_latest_window)
