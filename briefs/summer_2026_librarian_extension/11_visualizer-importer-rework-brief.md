@@ -45,6 +45,13 @@ already knows** — mode 2 in `briefs/design/corpus-interrogation-sketch.md`.
 by inspection whether a clustering came out right, which is the property that makes it an instrument rather
 than merely data. Recorded 2026-08-03, because it had only ever been mentioned in conversation.
 
+**What kind of verdict to expect from it**, stated so nobody over-reads the results. The bibliography
+accumulated over a working career and includes entries added by coauthors — Juha does not recall every
+record in it, and some he never chose. So the ground truth is **topical coherence, not per-paper recall**:
+the question it answers well is "is this cluster about one thing, and is it the thing the label says",
+which a domain reader can judge from titles alone. It cannot answer "is *this specific paper* in the right
+place" for the parts of the corpus he did not put there himself.
+
 Its shape, measured rather than assumed, because two of these change what it can test:
 
 - **541 records, spanning 1766–2013.** The long tail matters: an embedding trained on modern text meeting
