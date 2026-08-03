@@ -3186,7 +3186,21 @@ Two paths reach it, and the first is by far the common one:
 - **A signal kills the process.** Librarian installs no `signal` handlers at all, so `SIGTERM` (plain `kill`,
   a session manager logging out, a supervisor stopping the app) terminates it at the C level with no Python
   cleanup — `app_shutdown` never runs. This is what produced the seven instances: the test-harness `kill`s
-  during this session. A `signal.signal(SIGTERM, ...)` handler that calls `app_shutdown` and then re-raises
+  during this session.
+
+  **Contradicted 2026-08-04, and unexplained — check this before implementing the fix below.** A plain
+  `kill <pid>` on a running Librarian did *nothing*: no shutdown, no exit, no further log output, and the
+  process was still alive eight minutes later, ending only when the window was closed with `wmctrl -c`
+  (which ran `app_shutdown` normally and released the avatar instance). That is not what this paragraph
+  describes and not the platform default either — SIGTERM's default disposition is to terminate, and
+  CPython installs no handler for it, so an unhandled SIGTERM should kill the process outright. Something
+  is catching or blocking it; *what* is unknown, and guessing at the culprit is exactly what should not go
+  in this file. Worth knowing before designing around it, because the two behaviours want different fixes:
+  a signal that kills abruptly needs a handler that cleans up first, whereas a signal that is silently
+  swallowed means the handler may never be reached at all. Reproduce with `kill` on a live instance and
+  find out which it is.
+
+  A `signal.signal(SIGTERM, ...)` handler that calls `app_shutdown` and then re-raises
   fixes the whole class, and is the actual ask: *if the process is still alive enough to make an HTTP call,
   it should make this one.*
 - **`sys.exit` from a non-main thread.** `_load_initial_animator_settings` calls `sys.exit(255)` on two error
