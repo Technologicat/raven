@@ -241,16 +241,28 @@ def reload(instance_id: str, stream, cel_streams: Dict) -> None:
     animator.load_image(source_image_buffer, cel_buffers)
 
 def unload(instance_id: str) -> None:
-    """Unload the given instance.
+    """Unload the given instance. Succeeds, and does nothing, if that instance is not loaded.
 
     This will delete the corresponding animator and encoder instances, and cause the result feed (if any is running) to shut down.
+
+    **Idempotent by design, unlike the rest of this module's per-instance entry points.** Those act *on* an
+    instance, so a missing one means the request cannot be carried out and is an error. This one asserts a
+    *postcondition* — that the instance is not loaded — and an instance that was never there satisfies it
+    already. Reporting that as a failure gives the caller nothing it can act on: the only sensible response
+    to "cannot unload, it does not exist" is to carry on as if the unload had worked.
+
+    The case is ordinary rather than hypothetical. A client outlives a server restart — the server comes back
+    with an empty registry while the client still holds an instance id from the previous process — and then
+    every shutdown path that politely releases its avatar raises a 500 on the way out. Seen 2026-08-04 with a
+    `raven-librarian` session left running across a `raven-server` restart.
     """
     if not module_initialized:
         raise RuntimeError("unload: Module not initialized. Please call `init_module` before using the API.")
 
     if instance_id not in _avatar_instances:
-        logger.error(f"unload: no such avatar instance '{instance_id}'")
-        raise ValueError(f"unload: no such avatar instance '{instance_id}'")
+        # Info, not warning: a client releasing something already gone is tidy behaviour, not a symptom.
+        logger.info(f"unload: avatar instance '{instance_id}' is not loaded; nothing to do")
+        return
 
     try:
         encoder = _avatar_instances[instance_id]["encoder"]
@@ -406,7 +418,13 @@ def set_emotion(instance_id: str, emotion: str) -> str:
         logger.error(f"set_emotion: specified emotion '{emotion}' does not exist")
         raise ValueError(f"set_emotion: specified emotion '{emotion}' does not exist")
 
-    logger.info(f"set_emotion: applying emotion {emotion}")
+    # Announce only an actual change. Setting an emotion is idempotent and clients re-assert it on a timer —
+    # `raven.client.avatar_controller`'s autoreset sends "neutral" every few seconds for as long as the
+    # avatar sits idle — so logging every call buries a quiet session's real lines under twenty a minute
+    # that say nothing happened. Compared against `pending_emotion` rather than `emotion` because that is
+    # what this call would change; the two agree from the next rendered frame onward.
+    if emotion != animator.pending_emotion:
+        logger.info(f"set_emotion: instance '{instance_id}': applying emotion '{emotion}' (was '{animator.pending_emotion}')")
     animator.pending_emotion = emotion  # takes effect at next frame
 
 def set_overrides(instance_id: str, overrides: Dict[str, Any]) -> str:

@@ -151,7 +151,8 @@
 *Raven-avatar*
 
 - an AI reply ending on a stray Markdown bullet (`...to the naked eye:` followed by a lone `*`) no longer aborts the whole spoken utterance. Such a fragment reached the speech synthesizer as a sentence of its own, with nothing pronounceable in it, and the resulting zero-length audio crashed the encoder; fragments with no speakable content are now dropped before synthesis, and empty audio encodes cleanly rather than failing.
-- the log no longer fills with the avatar announcing, every three seconds for as long as the session is idle, that it is returning to its neutral expression. It says so now only when it actually returns from one — so on a quiet session the line is silent, and when it appears it means something.
+- the log no longer fills with the avatar announcing, every three seconds for as long as the session is idle, that it is returning to its neutral expression. It says so now only when it actually returns from one — so on a quiet session the line is silent, and when it appears it means something. *Raven-server*'s console had the matching half of this, dutifully reporting each of those re-assertions as it applied them; it too now speaks only on a change, and names what the emotion changed from.
+- releasing an avatar instance that the server does not have no longer fails. Leaving a client running across a *Raven-server* restart meant the client still held an instance ID from the previous server process, so closing it raised a 500 and a traceback on the server console on the way out. Unloading now succeeds whether or not the instance is there — the point of the call is that the instance is gone afterwards, and one that was never there satisfies that already.
 
 *Raven-cherrypick*
 

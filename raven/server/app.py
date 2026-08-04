@@ -289,6 +289,10 @@ def api_avatar_unload():
 
     Here the important string is the instance ID you got from `api_avatar_load`.
 
+    Succeeds whether or not that instance is currently loaded: the point of the call is that the instance is
+    gone afterwards, and one that was never here satisfies that already. So a client releasing its avatar
+    during shutdown does not have to know whether the server has been restarted underneath it.
+
     No outputs.
     """
     if not avatar.is_available():

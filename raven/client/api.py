@@ -225,7 +225,11 @@ def avatar_reload(instance_id: str, filename: Union[pathlib.Path, str]) -> None:
     util.yell_on_error(response)
 
 def avatar_unload(instance_id: str) -> None:
-    """Unload (delete) the given avatar instance."""
+    """Unload (delete) the given avatar instance. Succeeds also if that instance is not loaded.
+
+    Safe to call on a shutdown path without first checking that the server still knows the instance — which
+    it may not, if it was restarted while this client was running.
+    """
     util.require()
     headers = copy.copy(util.api_config.raven_default_headers)
     headers["Content-Type"] = "application/json"
