@@ -18,6 +18,7 @@ that stops the link decaying again, and it is worth keeping up even when the con
 | `context-injects/` | What shape Librarian's temporary context injects should take, measured across four local models |
 | `retrieval/` | Retrieval quality against a known corpus — the evaluation set behind brief 09 |
 | `tool_budget/` | Whether the tool-call round cap causes empty replies, and whether telling the model its budget is spent prevents them |
+| `tool_refusal/` | Past that cap, whether refusing a call ends the turn or whether it takes withdrawing the tools — a follow-on to `tool_budget/` |
 | `vram/` | The avatar's VRAM footprint, module by module |
 | `tha3-performance/` | Where THA3 inference time goes, and whether the pipeline halves can overlap on the GPU |
 | `anime4k-performance/` | Where the Anime4K upscaler's time goes |

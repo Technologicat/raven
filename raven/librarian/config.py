@@ -115,7 +115,14 @@ web_num_results = 10
 # budget is spent. That ordering is deliberate: stopping the loop the moment the cap is hit would leave the
 # history ending on a tool call with no result, which reads as a paused agent loop and prompts yet another
 # call rather than a reply.
-max_tool_call_rounds = 5
+#
+# The number is a resource decision — context window, latency, the user's patience — and not a correctness
+# one, because a runaway loop and a thorough one are the same algorithm. It is set well above where models
+# actually stop, so that it stays the backstop it is described as: measured against a corpus containing
+# literally nothing, qwen3.6-35b-a3b gave up on its own after 9-10 rounds of rephrasing, and a cap of 5 was
+# interrupting it less than halfway through what it considered due diligence. Raising this trades latency
+# for thoroughness, and the user can end a turn that has gone on too long with Ctrl+G.
+max_tool_call_rounds = 20
 
 # How many further rounds the tools stay on offer, answering "not now", before they are withdrawn outright.
 #

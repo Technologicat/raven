@@ -1,0 +1,42 @@
+Console output of `refusal_probe.py`, 2026-08-04, with the surrounding log noise filtered out.
+Backend: LM Studio serving qwen3.6-35b-a3b (IQ4_NL_XL, 128 Ki context). `max_tool_call_refusal_rounds = 1`.
+
+Run 1 — cap = 1 (deliberately tight: the model is pushed into the escalation almost immediately)
+
+    sample 0: {'refused_calls': 3, 'answered_on_the_refusal': False, 'reply_chars': 433}
+    sample 1: {'refused_calls': 1, 'answered_on_the_refusal': False, 'reply_chars': 373}
+    sample 2: {'refused_calls': 1, 'answered_on_the_refusal': False, 'reply_chars': 445}
+    sample 3: {'refused_calls': 3, 'answered_on_the_refusal': False, 'reply_chars': 585}
+    sample 4: {'refused_calls': 3, 'answered_on_the_refusal': False, 'reply_chars': 477}
+    sample 5: {'refused_calls': 1, 'answered_on_the_refusal': False, 'reply_chars': 508}
+
+    stopped when told (no call refused): 0/6
+    needed the withdrawal:               6/6
+    empty replies:                       0/6
+
+Run 2 — cap = 5 (the shipping default)
+
+    sample 0: {'refused_calls': 1, 'answered_on_the_refusal': False, 'reply_chars': 264}
+    sample 1: {'refused_calls': 1, 'answered_on_the_refusal': False, 'reply_chars': 500}
+    sample 2: {'refused_calls': 1, 'answered_on_the_refusal': False, 'reply_chars': 551}
+    sample 3: {'refused_calls': 1, 'answered_on_the_refusal': False, 'reply_chars': 453}
+    sample 4: {'refused_calls': 1, 'answered_on_the_refusal': False, 'reply_chars': 253}
+
+    stopped when told (no call refused): 0/5
+    needed the withdrawal:               5/5
+    empty replies:                       0/5
+
+One branch printed in full, from an earlier single-sample run at cap = 1 (`refused_calls: 2`), to show the
+shape the ladder produces. Note the two refusals in one round: the model asked for two searches in a single
+assistant message, and each got its own error result, as the protocol requires.
+
+    system                                  Note that User cannot see this introductory text; [...]
+    assistant                               Aria: How can I help you today?
+    user                                    User: What does the local document database say about [...]
+    assistant
+    tool/list_consulted_documents [success] This conversation has not looked at any documents [...]
+    tool/search_documents [success]         The document database contains no matches for that query. [...]
+    assistant
+    tool/search_documents [error]           The tool-call budget for this reply is spent, so this [...]
+    tool/search_documents [error]           The tool-call budget for this reply is spent, so this [...]
+    assistant                               Aria: I have thoroughly searched the local document [...]
