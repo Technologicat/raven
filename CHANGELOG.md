@@ -114,6 +114,7 @@
 
 *Raven-librarian*
 
+- the F1 help card now describes the app as it is. It named `websearch` as though it were the only tool (there are five), said the document database takes `.txt` files (it takes PDF, Word, PowerPoint, OpenDocument, HTML and the plain-text formats), and twice called Raven-librarian a tech demo. Attachments still are not covered — the card is a single fixed-size screen, and there is no room left until that changes.
 - with **Documents** on and **Speculation** off, a question your document database has nothing on is now **answered anyway**, with a `[no sources retrieved]` marker below the reply. Previously the language model was bypassed entirely and the reply was *"No matches in document database. Please try another query."* — which could not tell a question *about your documents* from a passing general question, so it refused the latter too, and the toggle had to be flipped every time the discussion wandered. The marker reports what was *retrieved*, not whether the answer used it.
 
 *Raven-pdf2bib*

@@ -1166,28 +1166,51 @@ a general capability the apps can opt into — image attach and `FileDialog` bot
 
 Discovered during brief-03 Half-2 multimodal work (2026-07-17, flagged by Juha as a constant pain point).
 
-## Librarian's help card prose has fallen behind the app
+## Librarian's help card has no room to describe attachments
 
-The `F1` card's hotkey table is maintained, but the explanatory sections under it describe an earlier
-Librarian. Noticed 2026-08-04 while rebalancing the table.
+The prose was brought up to date 2026-08-04 — five tools instead of one, the real ingested file types, and
+the two "this is a tech demo" claims gone. **Attachments are still not mentioned at all**, though they are
+0.2.8's headline feature, and that omission is not an oversight: there is nowhere to put them.
 
-- **Tool use** names only `websearch`. There are five tools now — `websearch`, `webfetch`,
-  `search_documents`, `fetch_document`, `list_consulted_documents` — and the last three are the ones a user
-  needs told about, since they change what the Documents checkbox means.
-- **Document database** says "put `.txt` documents". It takes PDF, `.docx`, `.pptx`, `.odt`, `.odp`, HTML,
-  Markdown, `.rst` and more (`docextract.supported_extensions`). A user with a PDF in hand reads that line
-  and concludes it will not work.
-- **Attachments are not mentioned at all**, though they are 0.2.8's headline feature.
-- **"This is a tech demo" appears twice** and no longer describes what this is. It was written when it was
-  one, a year ago; the app now has RAG, tool-calling, attachments, branching history and speech. One of the
-  two instances is still true in substance (old chats are stored but unreachable without the chat-tree view)
-  and should be reworded to say *that* rather than to disclaim the whole app.
+The card is a fixed-height window with `no_scrollbar=True`, so prose that grows is simply clipped, and the
+hotkey table can no longer be rebalanced to make room (already at the `ceil(total/2)` floor, 16 rows of 32).
+The update above had to buy each new sentence by cutting another, and it now sits one line under the
+ceiling: every remaining line was measured, and the widest is within ~50 px of the right edge. So the next
+addition of any size needs the shape decision first.
 
-Worth doing as one pass with a decision about the card's shape, since the two interact: the window is fixed
-height with `no_scrollbar=True`, so the prose is clipped when it grows, and the table can no longer be
-rebalanced to make room (it is already at the `ceil(total/2)` floor, 16 rows of 32). The single-screen card
-has always been an experiment (Juha); a scrollable layout is the obvious alternative, and would remove the
-constraint that currently makes every addition a subtraction somewhere else.
+The single-screen card has always been an experiment (Juha); a scrollable layout is the obvious
+alternative, and would remove the constraint that makes every addition a subtraction somewhere else.
+
+Two things learned while fitting the text, worth knowing before touching it again:
+
+- **`dpg_markdown` does not wrap.** One `add_text` call is one line, clipped at the window edge with no
+  ellipsis and no warning. Budget ~2300 px at the current font size, or measure with PIL against
+  `raven/fonts/OpenSans-*.ttf` — the check costs nothing and beats a relaunch.
+- **Long paths and identifiers should go in the highlight colour, not italics** (`self.c_hig`, as the
+  section already does for **Documents** / **Speculation**). They read better against the body text, and it
+  sidesteps the renderer fault below.
+
+## `dpg_markdown` intermittently drops a single letter from rendered text
+
+Observed 2026-08-04 in Librarian's `F1` card: the letter **m** was missing from every italic run in the
+render — `/home/jje/...` came out `/ho e/jje/...`, `search_documents` as `search_docu ents` — while
+non-italic text in the same paragraph kept its `m`s, and the gap left behind was about one character wide.
+It did not reproduce on the next launch. Screenshots of both renders were taken.
+
+**The cause is not diagnosed, and the obvious explanations were checked and eliminated**: the font files do
+carry the glyph (`fontTools`: `m` present in `OpenSans-Italic.ttf` and `OpenSans-BoldItalic.ttf`), and
+Raven's font callback is a bare `dpg.add_font` with no ranges, on DPG 2.3.1 where `add_font_range` is a
+no-op anyway. So it is neither missing coverage nor the font-range removal of the same day.
+
+Juha reports the same signature before, in a different place and on a different letter — a greeting once
+rendered as "ow can I help you today", losing the `H` from non-italic text. That the two cases disagree on
+both the letter and the emphasis is the strongest evidence available that this is the vendored renderer's
+known intermittent fault rather than anything to do with italics, and it is probably the same bug as the
+untracked "DearPyGui_Markdown URL highlight bug (threading-related)" in `CLAUDE.md`'s known-issues list.
+
+Hard to chase precisely because it is intermittent and cosmetic. A start would be rendering a page of known
+text in a loop and diffing the rasterized output against a reference, which at least turns "sometimes" into
+a rate.
 
 Related: the fleet-wide hotkey-discoverability audit above, which touches the same card.
 
