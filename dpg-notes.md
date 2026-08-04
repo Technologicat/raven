@@ -599,8 +599,13 @@ Corollary: `dpg.get_focused_item()` is not a cross-check — it kept naming the 
 |---|---|---|
 | single-line `add_input_text` | True | **False** |
 | multiline `add_input_text` | True | **True** |
+| multiline `add_input_text`, **Ctrl+Enter** | True | **False** |
 
 So an app whose text field is single-line must gate its Enter handler on `is_item_focused` while still gating its *bare-key* branch on `is_item_active` — two different questions about the same widget, each chosen for the state the key actually arrives in. Both Raven GUI apps do this, and they differ from each other because their fields differ in kind: `raven-visualizer`'s search field is single-line, `raven-librarian`'s composer is multiline. Learned by regression — switching the Visualizer's Enter gate to `is_item_active` silently killed its search.
+
+**The rule is really about the chord that *commits*, not about the kind of field** — the third row is what makes that visible. Ctrl+Enter commits and deactivates a **multiline** field too, so a send handler gated on `is_item_active` can never fire on it either, exactly as for single-line bare Enter. Found 2026-08-04 when `raven-librarian` made Ctrl+Enter its default send chord: the chord unfocused the composer and sent nothing, silently, because the branch guarding it tested a state the commit had already cleared.
+
+Stated generally, so it survives the next variation: **gate on `is_item_focused` any key that ends the edit, and on `is_item_active` any key that happens during it.** Ask which of the two a chord is before choosing the predicate; "it is a multiline field, so Enter keeps it active" is a fact about one chord, not about the widget.
 
 **Escape is not a second exception.** It deactivates either kind, so a bare-key branch gated on `is_item_active` is live again on the next press and needs no handler of its own to "restore" focus. Measured on a multiline field; confirmed behaviourally on a single-line one (the Visualizer's navigation keys reach the info panel after `Ctrl+F`, `Esc`).
 

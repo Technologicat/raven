@@ -1166,6 +1166,31 @@ a general capability the apps can opt into — image attach and `FileDialog` bot
 
 Discovered during brief-03 Half-2 multimodal work (2026-07-17, flagged by Juha as a constant pain point).
 
+## Librarian's help card prose has fallen behind the app
+
+The `F1` card's hotkey table is maintained, but the explanatory sections under it describe an earlier
+Librarian. Noticed 2026-08-04 while rebalancing the table.
+
+- **Tool use** names only `websearch`. There are five tools now — `websearch`, `webfetch`,
+  `search_documents`, `fetch_document`, `list_consulted_documents` — and the last three are the ones a user
+  needs told about, since they change what the Documents checkbox means.
+- **Document database** says "put `.txt` documents". It takes PDF, `.docx`, `.pptx`, `.odt`, `.odp`, HTML,
+  Markdown, `.rst` and more (`docextract.supported_extensions`). A user with a PDF in hand reads that line
+  and concludes it will not work.
+- **Attachments are not mentioned at all**, though they are 0.2.8's headline feature.
+- **"This is a tech demo" appears twice** and no longer describes what this is. It was written when it was
+  one, a year ago; the app now has RAG, tool-calling, attachments, branching history and speech. One of the
+  two instances is still true in substance (old chats are stored but unreachable without the chat-tree view)
+  and should be reworded to say *that* rather than to disclaim the whole app.
+
+Worth doing as one pass with a decision about the card's shape, since the two interact: the window is fixed
+height with `no_scrollbar=True`, so the prose is clipped when it grows, and the table can no longer be
+rebalanced to make room (it is already at the `ceil(total/2)` floor, 16 rows of 32). The single-screen card
+has always been an experiment (Juha); a scrollable layout is the obvious alternative, and would remove the
+constraint that currently makes every addition a subtraction somewhere else.
+
+Related: the fleet-wide hotkey-discoverability audit above, which touches the same card.
+
 ## Modernize the Librarian system prompt / character card
 
 The default system prompt (`raven.librarian.config`) reads as dated for current instruction-tuned models —
@@ -1859,6 +1884,97 @@ technical text cleanly. (Librarian's backend-error message wanted a code box for
 back to plain text for now.)
 
 Discovered during brief-03 Half-2 error-message work (2026-07-17, flagged by Juha).
+
+## The chat composer scrolls sideways instead of wrapping
+
+Typing past the composer's width pushes the line onwards and scrolls horizontally, so a long sentence
+disappears off the left edge as it is written. It should soft-wrap to the field's width, which is what every
+other multiline text box a user has met does.
+
+**`add_input_text` has no `wrap` parameter** — verified against the signature; `add_text` has one, the input
+does not. What it does have is `no_horizontal_scroll`, and that is not the fix: it suppresses the *scrolling*
+without introducing wrapping, so a long line would run off the edge and stay there, which is worse than the
+present behaviour. (That ImGui's multiline `InputText` has no word-wrap at all is upstream's long-standing
+position as I recall it — worth confirming against the current ImGui before designing around it, since a
+newer release may have added one and DPG may simply not expose it yet.)
+
+Directions, none free:
+
+- **Live with it**, and mitigate by making the field taller. Cheapest, and it does nothing for one long
+  paragraph, which is the actual case.
+- **Soft-wrap by inserting real newlines** as the user types. Rejected on sight unless someone has a much
+  better idea than it sounds: it changes the text the user is composing, breaks re-editing, and would send
+  hard line breaks to the model.
+- **Replace the widget.** A text area built on `add_input_text`'s single-line form plus manual layout, or a
+  custom widget over a drawlist. Real work, and it would have to reimplement selection, the caret and
+  clipboard — everything ImGui gives for free.
+- **Fix it upstream** in ImGui / DPG, which is the honest answer for a gap this basic and the one with the
+  longest lead time.
+
+Worth weighing against how the composer is actually used: most messages are a sentence or two, and the ones
+that are not tend to be pasted rather than typed. That does not make it right, but it does put it behind the
+things a user hits every turn.
+
+Noticed by Juha (2026-08-04) while testing the send-key change.
+
+## The automatic RAG search reads to the model as a mistake it made
+
+The pre-turn search `scaffold` runs on the user's behalf is injected such that the model takes it for **its
+own tool call**, with the user's whole message as the query. So when the user asks for something the local
+corpus obviously cannot answer, the model does not see "the harness looked and found nothing" — it sees
+itself having called `search_documents` with a nonsense query, and stops to apologise for it.
+
+Observed 2026-08-04, Qwen3.5's reasoning on a turn where the user asked for web news (`websearch(query='cosmology news 2026')` was the eventual call):
+
+> The user is asking for "cosmology news from 2026".
+> I need to search the web for this topic.
+> I have just used the search_documents tool, but that search query was "Please search the web on cosmology news from 2026." which I made a mistake in passing (I should have used the websearch tool for web news, or the search_documents if I meant local docs, but the user explicitly said "search the web").
+> Wait, I already used `search_documents` with the wrong query by mistake. Now I should correct this by using the `websearch` tool to find actual cosmology news from 2026.
+
+It recovers, and the answer was fine. The costs are that it spends thinking tokens recovering from a fault
+that is not there, and that it is being taught, every turn, that it makes clumsy tool calls — on a model
+whose whole value here is judgement about which tool to reach for.
+
+**The cause looks like deliberate silence resolving the wrong way.** The design is careful not to say who
+consulted a document — `chatutil.format_consulted_documents` says "'Consulted' is deliberately silent about
+*who* consulted" — and silence about the actor is exactly what a model fills in with *me*. Reasonable when
+the point was that a pointer costs one line either way; the failure mode is that the model does not merely
+fail to know who searched, it actively concludes it was itself, and then that it did so badly.
+
+Direction, not yet a design: make the automatic search *legible as the harness's*. State the actor plainly
+("Raven searched the knowledge base automatically, using the user's message as the query"), so the model
+reads it as material it was handed rather than as an action it took. Note the query text is itself part of
+the problem — a whole user message reads as a badly-chosen query no matter who is blamed for it, which ties
+this to brief 09's query-side work.
+
+Related: [Expose the docs-DB source files behind a reply's RAG citations], and the inject-shape measurements
+in `investigations/context-injects/`, which is where a fix should be measured rather than assumed.
+
+Found by Juha (2026-08-04), reading the reasoning trace on a websearch turn.
+
+## Markdown tables don't render in the chat view
+
+`dpg_markdown` (vendored) has no table support: a GFM pipe table shows its raw source, one line per row —
+`| Kingdom: | Animalia |`, `|---|---|` — as ordinary prose. The sibling of the ATX-heading and fenced-code
+gaps, and arguably the worst of the three for this project's subject matter, because a table is *structure*:
+prose that loses its heading is still readable, a table that loses its columns is not. Confirmed live
+2026-08-04 on a `webfetch` of a Wikipedia article, whose lead infobox is a table.
+
+Two audiences want it, and neither is optional here:
+
+- **LLM replies.** Asked to compare things — models, methods, measurements — a model reaches for a table
+  almost every time, and that is the shape the answer *wants*. Today it arrives as pipe soup.
+- **Fetched and attached documents.** A results table is often the part of a paper worth reading, and
+  `trafilatura` extracts them as pipe tables. The same goes for the docs DB once spreadsheets land (see the
+  `.xlsx` / `.ods` item), which produce tables by construction.
+
+Needs a GFM pipe-table parser plus a renderer with real column alignment — DPG has `add_table` with
+resizable/borders flags, so the widget exists; the work is the parse, the column-width policy, and deciding
+what happens when a table is wider than the chat panel (horizontal scroll within the message, or shrink).
+Related but distinct from [Rendering LaTeX equations in the chat log]: both are "structured content the
+renderer flattens", and if the renderer is opened up for one it is worth doing the other in the same pass.
+
+Noticed 2026-08-04 while checking a fetched Wikipedia page's excerpt (flagged by Juha).
 
 ## Reasoning traces with indented bullets mis-render (Markdown indented-code-block collision)
 
