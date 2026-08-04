@@ -174,6 +174,35 @@ class TestPerformToolCallsMetadata:
         assert records[0].tool_metadata == {"webfetch_denied_host": "example.com"}
 
 
+class TestMalformedToolCallRequests:
+    """A request the backend garbled becomes an error result the model can read, not an exception.
+
+    Each of these paths builds a report and hands it back; before, they raised `TypeError` on the way out,
+    so a single garbled `tool_calls` entry took down the whole turn.
+    """
+
+    @staticmethod
+    def _settings():
+        return env(personas={"tool": None, "assistant": "AI", "user": "U", "system": None},
+                   tool_entrypoints={"mytool": lambda: "x"})
+
+    @pytest.mark.parametrize("tool_call, expected", [
+        ({"id": "c", "function": {"name": "mytool", "arguments": "{}"}}, "missing the 'type' field"),
+        ({"id": "c", "type": "banana", "function": {"name": "mytool", "arguments": "{}"}}, "Unknown request type"),
+        ({"id": "c", "type": "function"}, "missing the 'function' field"),
+        ({"id": "c", "type": "function", "function": {"arguments": "{}"}}, "missing the 'name' field"),
+        ({"id": "c", "type": "function", "function": {"name": "nosuchtool", "arguments": "{}"}}, "Function not found"),
+        ({"id": "c", "type": "function", "function": {"name": "mytool", "arguments": "{oops"}}, "failed to parse"),
+    ])
+    def test_a_garbled_request_becomes_an_error_result(self, tool_call, expected):
+        records = llmclient.perform_tool_calls(self._settings(),
+                                               {"role": "assistant", "content": "", "tool_calls": [tool_call]},
+                                               on_call_start=None, on_call_done=None)
+        assert len(records) == 1
+        assert records[0].status == "error"
+        assert expected in chatutil.content_to_text(records[0].data["content"])
+
+
 class TestWebsearchWrapper:
     """brief 03 §4: websearch returns one text content-part per result, with each field normalized."""
 

@@ -2107,8 +2107,8 @@ def perform_tool_calls(settings: env,
     def add_tool_response_record(output: Union[str, List[Dict]], *,
                                  status: str,
                                  tool_call_id: Optional[str],
-                                 function_name: Optional[str],
-                                 dt: Optional[float],
+                                 function_name: Optional[str] = None,  # unknown when the request was too malformed to name a tool
+                                 dt: Optional[float] = None,  # absent when nothing was called, so nothing was timed
                                  tool_metadata: Optional[Dict] = None) -> None:
         """Add a tool response record to `tool_response_records`.
 

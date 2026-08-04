@@ -125,6 +125,7 @@
 
 *Raven-librarian*
 
+- a malformed tool-call request from the language model no longer kills the whole reply with a `TypeError`. Raven builds a report for the AI in each of these cases — a request missing its type, naming no tool, or carrying unparseable arguments — and then crashed on the way to delivering it, so none of them ever reached the AI. The report now arrives as an errored tool result, which the AI can read and act on.
 - the F8 hotkey (copy the chatlog to the clipboard) now works. It raised a `TypeError` and copied nothing; only the equivalent toolbar button worked, which is why the failure went unnoticed.
 - a language-model backend error mid-reply (e.g. a broken model prompt template) no longer fails silently — the AI turn used to vanish with no reply and no on-screen indication. The failure now appears as an assistant message naming the backend error and its reason; reroll it to retry.
 - a chat round whose AI turn finishes *instantly* — a backend error, or the "no relevant documents" RAG bypass — no longer renders the AI's message above your own message. The user turn and the AI turn ran as separate concurrent background tasks with no ordering guarantee between them; harmless while the AI took a second or more to produce its first output, but visibly out of order when it returned at once. The user turn now completes before the AI turn starts.
