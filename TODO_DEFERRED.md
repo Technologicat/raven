@@ -1178,17 +1178,21 @@ The update above had to buy each new sentence by cutting another, and it now sit
 ceiling: every remaining line was measured, and the widest is within ~50 px of the right edge. So the next
 addition of any size needs the shape decision first.
 
-The single-screen card has always been an experiment (Juha); a scrollable layout is the obvious
-alternative, and would remove the constraint that makes every addition a subtraction somewhere else.
+**The real question is not how to fit more into one screen — it is whether one screen is still the right
+format.** The single-glance reference card was chosen deliberately, and it suited a tech demo; the app has
+since grown into a tool with RAG, five tools, attachments, branching history and speech, and it is now too
+large to describe that way. So the shape decision is the item, and the fitting is only its symptom. A
+scrollable layout is the obvious alternative.
 
-Two things learned while fitting the text, worth knowing before touching it again:
+One thing learned while fitting the text, worth knowing before touching it again:
 
-- **`dpg_markdown` does not wrap.** One `add_text` call is one line, clipped at the window edge with no
-  ellipsis and no warning. Budget ~2300 px at the current font size, or measure with PIL against
-  `raven/fonts/OpenSans-*.ttf` — the check costs nothing and beats a relaunch.
 - **Long paths and identifiers should go in the highlight colour, not italics** (`self.c_hig`, as the
   section already does for **Documents** / **Speculation**). They read better against the body text, and it
   sidesteps the renderer fault below.
+
+Note that the clipping is *not* a `dpg_markdown` limitation: it wraps when passed `wrap=`, which is how the
+chatlog does it (`chat_controller.py`, `wrap=chat_text_w`). The help card simply never passes one, so each
+`add_text` is one unwrapped line. Whichever way the shape decision goes, wrapping is available.
 
 ## `dpg_markdown` intermittently drops a single letter from rendered text
 

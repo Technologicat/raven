@@ -77,6 +77,10 @@ tried and concludes "I should inform the user of this result."
   model's stopping point is the same for reading as for searching.
 - **One model, small n.** Four caps, 18 samples, no repetition across temperatures. The 2-of-3 at cap 10 is
   three samples; treat the ordering as the signal and the fractions as noise.
+  - Expect a **model-family effect** on top of that: the Qwen series is known for persistence (Juha), so
+    where the stopping point falls, and how hard the notice has to push to move it, are both likely to
+    differ on another family. Nothing here separates "how models behave" from "how Qwen behaves", and the
+    shipping cap is currently set from one family's number.
 - **The cache-burn premise is reasoned, not measured.** Withdrawing the tools is *believed* to invalidate
   the whole cached prefix, because the tool schema is serialized near the front of the prompt. Nothing here
   measured prompt-processing time on a withdrawal round against an ordinary one. If the refusal mechanism
