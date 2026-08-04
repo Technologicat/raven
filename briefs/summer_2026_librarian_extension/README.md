@@ -86,6 +86,11 @@ now follows a reply for a reader at the end and leaves a scrolled-away reader al
 thinking block and a multi-screenful `webfetch` answer. Details and the three faults it took are in
 `TODO_DEFERRED.md`, "Chat view scroll position jumps back down while the model is writing".
 
+**Next session starts here** (agreed 2026-08-04): settle whether item 3's two defect-shaped consequences are
+release blockers — the note under item 3 has the argument and the one non-obvious cost — then item 4, which
+is expected to be small, then straight into brief 09. The remaining runway is one short task and one long
+one rather than two mediums, so 09 is where the schedule risk actually lives.
+
 Still open, in the order they are expected to be done:
 
 1. ~~**Chat view scrolling, the rest**~~ — **done 2026-08-03**, live-tested. Smooth scrolling, the
@@ -136,10 +141,18 @@ Still open, in the order they are expected to be done:
      handler at all, because ImGui commits *and unfocuses* the field first. The second took three attempts,
      two of them confident and wrong, before reading `add_input_text`'s parameter list showed
      `ctrl_enter_for_new_line` sitting there — the toolkit had owned this the whole time.
-   - **Two consequences of shipping it are filed rather than fixed**, and neither gates the tag: a fetched
+   - **Two consequences of shipping it are filed rather than fixed, and both are defect-shaped** — a fetched
      page is now budgeted as a *user attachment* (no per-fetch ceiling) though the config says a speculative
      fetch should have one, and a long `fetch_document` result still fills the log, wanting a collapsible
      rendering rather than the attachment treatment.
+     - **Juha, 2026-08-04: these should probably be fixed before the tag**, on the same reasoning that
+       admitted item 3 itself — 0.2.8 creates both of them, so shipping as-is means a release whose headline
+       feature is visibly half-applied in the two places a user would next look. Not yet a firm decision;
+       revisit at the start of the next session, before starting item 4, since the answer changes what is
+       left on the runway. The budget one carries a cost worth weighing in that decision: it needs a `source`
+       field on the `text_file` content part, because the two readers of the budget can see different things
+       (`count_branch_tokens` walks payloads and can read provenance; `_serialize_history_for_wire` gets bare
+       messages and cannot), and they must agree exactly or the context-fill readout drifts from what is sent.
 4. **Tool budget: error out informatively instead of withdrawing the tools.** Admitted 2026-08-03, and the
    freeze rule wants the argument stated rather than assumed. It is *defect-shaped*: withdrawing a tool
    mid-turn burns the KV cache, and a history referencing a tool no longer in the schema is off-distribution
