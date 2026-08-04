@@ -119,7 +119,27 @@ Still open, in the order they are expected to be done:
      idle prefill builds. Both paths now report, and `TestRefusalCarriesTheTemplateDiagnosis` covers both —
      the lesson being that "the backend refused" is not one code path, and a test that mocks only the
      tidy one certifies nothing.
-3. **Large `webfetch` results become attachments** — the one feature admitted past the freeze.
+3. ~~**Large `webfetch` results become attachments**~~ — **done 2026-08-04**, live-tested. A tool result that
+   *declares itself a document* goes to a content-addressed sidecar and leaves an excerpt plus a chip;
+   declared rather than matched on the tool's name, which is what keeps `websearch` inline at any length.
+   Verified end to end against a running backend: 34079 characters stored, 800 shown, context readout
+   8% → 15% confirming the whole document is still counted and sent.
+   - **It pulled a polish cascade behind it, and that was the right call each time**, but it is why this was
+     a whole day. The chat log needed one *uniform* handle for "a document the AI fetched", so a
+     `fetch_document` result got the same two buttons (pointing at the user's own file, not a copy of it);
+     attachments became click-to-open; the controls moved into a left gutter, which is also where the
+     jump-back link belongs, since it is where the view scrolls to when its counterpart is clicked. Each was
+     small; together they were most of the day. Recorded because the *next* release will do this too.
+   - **Two bugs the suite could not have caught**, both from the same reasoning error — asking what a
+     category contains rather than looking. `websearch` emits one text part per result, and the gutter path
+     would have rendered the first and dropped the rest; and Ctrl+Enter cannot be caught by a global key
+     handler at all, because ImGui commits *and unfocuses* the field first. The second took three attempts,
+     two of them confident and wrong, before reading `add_input_text`'s parameter list showed
+     `ctrl_enter_for_new_line` sitting there — the toolkit had owned this the whole time.
+   - **Two consequences of shipping it are filed rather than fixed**, and neither gates the tag: a fetched
+     page is now budgeted as a *user attachment* (no per-fetch ceiling) though the config says a speculative
+     fetch should have one, and a long `fetch_document` result still fills the log, wanting a collapsible
+     rendering rather than the attachment treatment.
 4. **Tool budget: error out informatively instead of withdrawing the tools.** Admitted 2026-08-03, and the
    freeze rule wants the argument stated rather than assumed. It is *defect-shaped*: withdrawing a tool
    mid-turn burns the KV cache, and a history referencing a tool no longer in the schema is off-distribution
