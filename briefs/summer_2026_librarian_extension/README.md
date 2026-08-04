@@ -244,11 +244,48 @@ orderings and both are legitimate.
 and the point of this whole ordering is to close briefs faster than new ones open. 04 and 06 remain
 unordered against each other.
 
+**Amended 2026-08-05, and it bends the closure-first rule rather than fitting it.** A deferred-TODO triage
+session opened two more briefs (15 and 16) and moved one of them ahead of 05. Recorded here because the
+ordering above is the thing being changed, and because the argument is not the one this section was built on.
+
+**15 — scripting surface over the scaffold** (`15_headless-agent-driver-brief.md`) **goes ahead of 05.** The
+ordering above ranks by *closure* — smallest first, so briefs shut faster than they open. 15 does not win on
+that axis and does not claim to. It wins on **timing**: roughly seven weeks of investigation-heavy work sit
+ahead of it (the markdown renderer set, the turn-sequencing race, the auto-RAG-as-mistake bug, table layout,
+equation scoping), and every one of them wants a scriptable driver. Landing it first amortizes it across all
+of them, whereas landing it in October amortizes it across nothing. It also sits immediately before three
+consecutive agent-loop features — 05, 04, 06 — whose behaviour is what one would most want to script.
+
+That is a different quantity from closure rate, and both are legitimate; this is the case where they point
+opposite ways and timing wins. Noted rather than smoothed over, because the closure-first principle is
+otherwise still the rule.
+
+**15 supersedes three items in `TODO_DEFERRED.md`** — the headless-mode item, lazy `api.initialize`, and the
+`ai_turn` callback bundle — and consolidates the design already written under `TODO.md`'s Librarian → Core
+features. The callback bundle turns out **not** to be a prerequisite: the scripting surface takes no
+callbacks at all, so the bundle stays an independent GUI-side cleanup.
+
+**16 — chat graph view** (`16_chat-graph-view-brief.md`) **is added, for Researchers' Night, and takes
+precedence over `atmospheric-dust.md`** (decided 2026-08-05: the graph adds more value; dust lands only if
+time remains). The dependency runs dust → crt, so dropping dust leaves both `crt` and 16 intact.
+
+**Brief 17 is reserved but unwritten** — a per-document LLM pass with retry, cache, resume and progress, cut
+out of 15 because it has three users of its own (`raven-pdf2bib`, `rag_live_corpus`'s persistence layer, and
+the corpus-interrogation sketch's map stage) and is a batch-execution primitive rather than a scripting
+surface. If it stays unwritten, 17 may end up being something else and 15's reference to it will need
+chasing.
+
+**Honest accounting on the folder's own principle**: this session closed no briefs and opened two. The
+dehydration pass is not failing so much as being outvoted — "close briefs faster than new ones open" is a
+count target, and count targets lose to depth processes, since every brief closed at the quality actually
+wanted spawns the observations that become the next brief. The count was never the quantity under control.
+
 ## Also in this folder
 
 11 and 12 are in the same numbered sequence as the rest; what they sit outside is the *ordering* decided for
 04/05/06 above, which was a ranking of the Librarian run against itself. The last two carry no number at all.
-Listed so the folder's contents are legible from its README rather than from `ls`.
+**15 is the exception**: it is numbered *and* ranked into that ordering, ahead of 05, for the reasons in the
+amendment above. Listed so the folder's contents are legible from its README rather than from `ls`.
 
 - **11 — Visualizer importer rework** (`11_visualizer-importer-rework-brief.md`). Nomic migration, PCA
   preprocessing, cosine-to-medoid outlier assignment, Procrustes alignment. Predates the sprint and had been
@@ -269,8 +306,22 @@ Listed so the folder's contents are legible from its README rather than from `ls
   rest: it holds the 2026-08-01 design-session material with its `[D]`/`[N]`/`[P]`/`[X]` provenance markers
   intact, so a later reader can tell settled from proposed. Prerequisite for the corpus TOC and for most of
   what the corpus-interrogation sketch wants. Brief 12 deliberately does not depend on it.
+- **15 — scripting surface over the scaffold** (`15_headless-agent-driver-brief.md`). **v0.2.9, first in
+  that queue**, ahead of 05 — see the amendment above for why it ranks on timing rather than closure. Two
+  entry points, not one: build the turn's prompt and hand it back (no backend), and run the turn and report
+  what happened (a result record, not a node id). Part 0 is lazy `api.initialize`, which is what makes
+  `scaffold` importable without the full dep stack and removes `test_scaffold.py`'s `importorskip`. The
+  scripted backend and the per-document pass are both explicitly cut.
+- **16 — chat graph view** (`16_chat-graph-view-brief.md`). **Researchers' Night**, and ahead of
+  `atmospheric-dust.md`. Framed explanatory before navigational: the exhibit's job is making "an LLM is a
+  multiverse generator" visible, so rerolling from the graph and exploring existing branches are the two
+  carrying interactions. Built via `XDotWidget.set_graph` in memory rather than by emitting xdot — which
+  means step zero is that `set_graph` currently has **no callers and no tests**, a widget defect owed
+  regardless of this brief. Fragment search is v2, scoped with 14.
 - **`atmospheric-dust.md`** and **`crt-display.md`**. Avatar postprocessor work, queued for Researchers'
-  Night. Moved in 2026-08-03; neither is done.
+  Night. Moved in 2026-08-03; neither is done. **Dust is now behind brief 16** (2026-08-05) and lands only
+  if time remains — it is the schedule's slack, and safely so: `atmospheric-dust.md` takes its priority-band
+  scheme from `crt-display.md` §0, so nothing points back at dust and dropping it leaves `crt` intact.
 
 **The folder name still mostly holds.** The avatar subsystem exists for Librarian — it is Librarian's UX — so
 the two avatar briefs are Librarian work under a wider reading rather than strays. 12 is cross-cutting, and
