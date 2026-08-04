@@ -174,6 +174,53 @@ class TestPerformToolCallsMetadata:
         assert records[0].tool_metadata == {"webfetch_denied_host": "example.com"}
 
 
+class TestPerformToolCallsRefusal:
+    """`maybe_refusal_text` answers a whole round of calls without calling anything."""
+
+    @staticmethod
+    def _settings(entrypoint):
+        return env(personas={"tool": None, "assistant": "AI", "user": "U", "system": None},
+                   tool_entrypoints={"mytool": entrypoint})
+
+    @staticmethod
+    def _message(*call_ids):
+        return {"role": "assistant", "content": "",
+                "tool_calls": [{"type": "function", "function": {"name": "mytool", "arguments": "{}"},
+                                "id": call_id, "index": str(i)}
+                               for i, call_id in enumerate(call_ids)]}
+
+    def test_the_entrypoint_never_runs(self):
+        called = []
+        settings = self._settings(lambda: called.append(1) or "should not happen")
+        records = llmclient.perform_tool_calls(settings, self._message("call_1"),
+                                               on_call_start=None, on_call_done=None,
+                                               maybe_refusal_text="not now")
+        assert called == []
+        assert records[0].status == "error"
+        assert chatutil.content_to_text(records[0].data["content"]) == "not now"
+
+    def test_every_call_in_the_round_is_answered(self):
+        # The OAI protocol wants one tool result per requested call; a partial round leaves the model
+        # waiting on an ID that never comes back.
+        settings = self._settings(lambda: "x")
+        records = llmclient.perform_tool_calls(settings, self._message("call_1", "call_2", "call_3"),
+                                               on_call_start=None, on_call_done=None,
+                                               maybe_refusal_text="not now")
+        assert [record.tool_call_id for record in records] == ["call_1", "call_2", "call_3"]
+        assert all(record.function_name == "mytool" for record in records)
+
+    def test_no_call_is_reported_as_started(self):
+        # Nothing started, so the GUI's "this tool is running" indicators must not light up.
+        settings = self._settings(lambda: "x")
+        started, done = [], []
+        llmclient.perform_tool_calls(settings, self._message("call_1"),
+                                     on_call_start=lambda *a: started.append(a),
+                                     on_call_done=lambda *a: done.append(a),
+                                     maybe_refusal_text="not now")
+        assert started == []
+        assert [(a[1], a[2]) for a in done] == [("mytool", "error")]
+
+
 class TestMalformedToolCallRequests:
     """A request the backend garbled becomes an error result the model can read, not an exception.
 

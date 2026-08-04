@@ -604,6 +604,7 @@ def _perform_and_store_tool_calls(llm_settings: env,
                                   assistant_message: Dict,
                                   parent_node_id: str,
                                   tool_context: env,
+                                  maybe_refusal_text: Optional[str] = None,
                                   on_tools_start: Optional[Callable] = None,
                                   on_call_lowlevel_start: Optional[Callable] = None,
                                   on_call_lowlevel_done: Optional[Callable] = None,
@@ -628,25 +629,33 @@ def _perform_and_store_tool_calls(llm_settings: env,
                     recomputed from `parent_node_id`, so the walk sees this turn's user message and any
                     prior tool results on the branch — that is what lets a websearch in an earlier round
                     auto-allow the hosts a webfetch reaches for in this one.
+
+    `maybe_refusal_text`: If given, nothing is called: every requested call is answered with this text as
+                         an error result. The results are stored as ordinary `role="tool"` nodes, because
+                         from the model's side that is exactly what they are — see `ai_turn` for when the
+                         turn declines a round.
     """
     head_node_id = parent_node_id
     if on_tools_start is not None:
         on_tools_start(assistant_message["tool_calls"])
 
-    tool_context.webfetch_allowed_hosts = chatutil.compute_auto_allowed_hosts(
-        datastore, head_node_id,
-        trust_search_results=librarian_config.webfetch_trust_search_results)
-    # How full the context already is, for the tools that have to fit something into what is left. Volatile
-    # for a reason worth stating: by round three the model's own reasoning and the earlier rounds' results
-    # are in the branch, so a figure taken at turn start would claim room that has since been spent.
-    tool_context.used_tokens = llmclient.count_branch_tokens(llm_settings, datastore, head_node_id)[0]
+    if maybe_refusal_text is None:
+        tool_context.webfetch_allowed_hosts = chatutil.compute_auto_allowed_hosts(
+            datastore, head_node_id,
+            trust_search_results=librarian_config.webfetch_trust_search_results)
+        # How full the context already is, for the tools that have to fit something into what is left. Volatile
+        # for a reason worth stating: by round three the model's own reasoning and the earlier rounds' results
+        # are in the branch, so a figure taken at turn start would claim room that has since been spent.
+        # Skipped when refusing, because it walks the whole branch to serve entrypoints that will not run.
+        tool_context.used_tokens = llmclient.count_branch_tokens(llm_settings, datastore, head_node_id)[0]
 
     # Each tool call produces exactly one response. No-ops if the message contains no tool calls.
     with dyn.let(tool_context=tool_context):
         tool_response_records = llmclient.perform_tool_calls(llm_settings,
                                                              message=assistant_message,
                                                              on_call_start=on_call_lowlevel_start,
-                                                             on_call_done=on_call_lowlevel_done)
+                                                             on_call_done=on_call_lowlevel_done,
+                                                             maybe_refusal_text=maybe_refusal_text)
 
     for tool_response_record in tool_response_records:
         _record_grounding(tool_context, tool_response_record)
@@ -960,15 +969,26 @@ def ai_turn(llm_settings: env,
     maybe_tool_names = llmclient.maybe_tool_names_for_turn(llm_settings, documents_available=documents_available)
 
     continue_this_message = continue_  # we need to continue at most the first message in the agent loop
-    completed_tool_rounds = 0
+    completed_tool_rounds = 0  # rounds in which tools actually ran
+    refused_tool_rounds = 0  # rounds declined because the budget was already spent
     while True:  # LLM agent loop - interleave LLM responses, tool calls and tool call results, until the LLM is done (no more tool calls).
-        # Backstop against a model that keeps rephrasing a search that keeps finding nothing. Offering no
-        # tools is what ends the loop, rather than breaking out of it: a `break` here would leave the turn's
-        # last message a tool result, which reads as a paused agent loop and is answered with yet another
-        # tool call. Withdrawing the tools instead leaves the model no move except to reply.
-        tools_offered = tools_enabled and completed_tool_rounds < librarian_config.max_tool_call_rounds
+        # Backstop against a model that keeps rephrasing a search that keeps finding nothing. Past the cap
+        # the tools stay in the schema and any call is *refused* instead: changing the loadout mid-turn
+        # invalidates the backend's KV cache from that point on, and a history calling a tool the current
+        # request no longer declares is a shape models see little of in training, whereas a tool answering
+        # "not now" is one they see plenty of.
+        #
+        # Withdrawing them is the terminator of last resort, and it has to exist, because a refusal cannot
+        # by itself guarantee the loop ends. It is a `tools_enabled=False` invocation rather than a `break`:
+        # breaking would leave the turn's last message a tool result, which reads as a paused agent loop and
+        # is answered with yet another tool call, whereas offering no tools leaves the model no move except
+        # to reply.
+        budget_spent = completed_tool_rounds >= librarian_config.max_tool_call_rounds
+        tools_offered = tools_enabled and (not budget_spent or
+                                           refused_tool_rounds < librarian_config.max_tool_call_refusal_rounds)
         if tools_enabled and not tools_offered:
-            logger.info(f"ai_turn: tool-call round cap ({librarian_config.max_tool_call_rounds}) reached; "
+            logger.info(f"ai_turn: tool-call round cap ({librarian_config.max_tool_call_rounds}) reached and "
+                        f"{refused_tool_rounds} refusal round(s) did not end the turn; "
                         "requesting the final reply with no tools offered.")
         message_history = chatutil.linearize_chat(datastore=datastore,
                                                   node_id=head_node_id)
@@ -980,7 +1000,10 @@ def ai_turn(llm_settings: env,
                          docs_query=docs_query,
                          docs_matches=docs_matches,
                          tool_context=tool_context,
-                         tools_are_spent=(tools_enabled and not tools_offered))
+                         # Told the moment the budget runs out, not the moment the tools go away — the point
+                         # of the notice is to make the doomed call unnecessary, which is too late once the
+                         # model has already tried it.
+                         tools_are_spent=(tools_enabled and budget_spent))
 
         if on_llm_start is not None:
             on_llm_start()
@@ -1072,12 +1095,16 @@ def ai_turn(llm_settings: env,
                                                          assistant_message=out.data,
                                                          parent_node_id=head_node_id,
                                                          tool_context=tool_context,
+                                                         maybe_refusal_text=(chatutil.format_error_that_tools_are_spent() if budget_spent else None),
                                                          on_tools_start=on_tools_start,
                                                          on_call_lowlevel_start=on_call_lowlevel_start,
                                                          on_call_lowlevel_done=on_call_lowlevel_done,
                                                          on_tool_done=on_tool_done,
                                                          on_tools_done=on_tools_done)
-            completed_tool_rounds += 1
+            if budget_spent:
+                refused_tool_rounds += 1
+            else:
+                completed_tool_rounds += 1
         else:
             # When there are no more tool calls, the LLM is done replying.
             break

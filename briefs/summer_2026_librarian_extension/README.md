@@ -86,10 +86,10 @@ now follows a reply for a reader at the end and leaves a scrolled-away reader al
 thinking block and a multi-screenful `webfetch` answer. Details and the three faults it took are in
 `TODO_DEFERRED.md`, "Chat view scroll position jumps back down while the model is writing".
 
-**Next session starts here** (agreed 2026-08-04): settle whether item 3's two defect-shaped consequences are
-release blockers — the note under item 3 has the argument and the one non-obvious cost — then item 4, which
-is expected to be small, then straight into brief 09. The remaining runway is one short task and one long
-one rather than two mediums, so 09 is where the schedule risk actually lives.
+**Next session starts here** (agreed 2026-08-04, item 4 done that evening): settle whether item 3's two
+defect-shaped consequences are release blockers — the note under item 3 has the argument and the one
+non-obvious cost — then straight into brief 09, which is now the only long task left on the runway and
+therefore where the whole schedule risk sits.
 
 Still open, in the order they are expected to be done:
 
@@ -153,14 +153,26 @@ Still open, in the order they are expected to be done:
        field on the `text_file` content part, because the two readers of the budget can see different things
        (`count_branch_tokens` walks payloads and can read provenance; `_serialize_history_for_wire` gets bare
        messages and cannot), and they must agree exactly or the context-fill readout drifts from what is sent.
-4. **Tool budget: error out informatively instead of withdrawing the tools.** Admitted 2026-08-03, and the
-   freeze rule wants the argument stated rather than assumed. It is *defect-shaped*: withdrawing a tool
-   mid-turn burns the KV cache, and a history referencing a tool no longer in the schema is off-distribution
-   for the model, whereas tool *errors* are well represented in training. It is also a fix to a feature this
-   very release ships (brief 10's round cap), so shipping the v1 shape would mean revisiting it in 0.2.9
-   immediately. Measured basis in `investigations/tool_budget/`. A further measurement — whether it actually
-   stops Qwen going into unasked deep research — is worth doing but does not gate the fix, because the
-   cache-burn argument carries it alone.
+4. ~~**Tool budget: error out informatively instead of withdrawing the tools.**~~ — **done 2026-08-04**, as
+   scoped and without surprises. Past `max_tool_call_rounds` the tool schema stays put and a call is answered
+   with an error result saying the budget is spent; the "no more calls" system notice now fires on the same
+   round, one invocation *before* the doomed call rather than after it. Admitted on the argument that it is
+   *defect-shaped* — withdrawing a tool mid-turn burns the KV cache, a history referencing a tool no longer
+   in the schema is off-distribution for the model, and it is a fix to a feature this very release ships
+   (brief 10's round cap), so the v1 shape would have been revisited in 0.2.9 immediately.
+   - **Withdrawal did not go away; it demoted.** It is the terminator of last resort, after
+     `max_tool_call_refusal_rounds` (default 1). This is not a compromise but the shape of the problem: a
+     refusal cannot guarantee the model stops asking, and the alternative terminator — breaking out of the
+     loop — leaves the turn ending on a tool result, which reads as a paused agent loop and draws yet another
+     call. Setting the knob to 0 reproduces the v1 behavior exactly, which is what makes it a knob.
+   - **It does not address the empty replies, and must not be recorded as having done so.** The model still
+     runs out of budget at the same round; the measurement in `investigations/tool_budget/` stands, and the
+     larger-budget item in `TODO.md` is still the fix with the evidence behind it. Whether this stops Qwen
+     going into unasked deep research is unmeasured.
+   - Adjacent defect found and fixed on the way, in its own commit: every malformed-tool-call-request path in
+     `perform_tool_calls` built its error report and then raised `TypeError` delivering it, so none of the
+     five had ever reached a model. Shipped that way since 0.2.7 at least — the paths are reached only when a
+     backend garbles a `tool_calls` entry, which ours do not.
 5. **Brief 09** — the retrieval query side, and the last blocker. Absorbs the inject-shape decisions that were
    filed separately: document-inject offset/length, the consulted-docs list gaining offsets and a
    "previously consulted" marker, the "no sources consulted" marker, and whether the Speculation toggle still

@@ -73,13 +73,18 @@ def tool_call(name, call_id, index="0"):
             "index": index}
 
 
-def roles_up(forest, node_id):
-    """List of message roles walking from `node_id` up to the root (node first)."""
+def payloads_up(forest, node_id):
+    """List of node payloads walking from `node_id` up to the root (node first)."""
     out = []
     while node_id is not None:
-        out.append(forest.get_payload(node_id)["message"]["role"])
+        out.append(forest.get_payload(node_id))
         node_id = forest.get_parent(node_id)
     return out
+
+
+def roles_up(forest, node_id):
+    """List of message roles walking from `node_id` up to the root (node first)."""
+    return [payload["message"]["role"] for payload in payloads_up(forest, node_id)]
 
 
 class FakeRetriever:
@@ -587,7 +592,7 @@ class TestAITurnToolCalls:
         monkeypatch.setattr("raven.librarian.llmclient.invoke",
                             lambda **kw: next(responses))
         monkeypatch.setattr("raven.librarian.llmclient.perform_tool_calls",
-                            lambda settings, message, on_call_start, on_call_done:
+                            lambda settings, message, on_call_start, on_call_done, **kw:
                                 [make_tool_response(content="Search result: raven is a bird.")])
 
         counters = {"tools_start": 0, "tool_done": 0, "tools_done": 0, "llm_done": 0}
@@ -639,7 +644,7 @@ class TestAITurnToolCalls:
                             lambda **kw: next(responses))
 
         captured = {}
-        def capture_perform(settings, message, on_call_start, on_call_done):
+        def capture_perform(settings, message, on_call_start, on_call_done, **kw):
             # The binding under test is live here; read what an entrypoint would read.
             captured["hosts"] = getattr(dyn.tool_context, "webfetch_allowed_hosts", None)
             return [make_tool_response(content="fetched content")]
@@ -691,7 +696,7 @@ class TestRetryToolCalls:
                           make_invoke_result(content="Sorry, I could not reach that.")])
         monkeypatch.setattr("raven.librarian.llmclient.invoke", lambda **kw: next(responses))
         monkeypatch.setattr("raven.librarian.llmclient.perform_tool_calls",
-                            lambda settings, message, on_call_start, on_call_done: list(records))
+                            lambda settings, message, on_call_start, on_call_done, **kw: list(records))
         tool_done_nodes = []
         first_head = run_ai_turn(forest, llm_settings, user_head,
                                  on_tool_done=lambda nid: tool_done_nodes.append(nid))
@@ -708,7 +713,7 @@ class TestRetryToolCalls:
 
         # Approve + retry: the re-run now succeeds. Capture what perform_tool_calls is asked to run.
         rerun_messages = []
-        def capture_perform(settings, message, on_call_start, on_call_done):
+        def capture_perform(settings, message, on_call_start, on_call_done, **kw):
             rerun_messages.append(message)
             return [make_tool_response(content="FETCHED OK", tool_call_id="call_0", function_name="webfetch")]
         monkeypatch.setattr("raven.librarian.llmclient.perform_tool_calls", capture_perform)
@@ -746,7 +751,7 @@ class TestRetryToolCalls:
         assert forest.get_parent(denied_node) == websearch_node  # chained
 
         rerun_messages = []
-        def capture_perform(settings, message, on_call_start, on_call_done):
+        def capture_perform(settings, message, on_call_start, on_call_done, **kw):
             rerun_messages.append(message)
             return [make_tool_response(content="FETCHED OK", tool_call_id="call_1", function_name="webfetch")]
         monkeypatch.setattr("raven.librarian.llmclient.perform_tool_calls", capture_perform)
@@ -776,7 +781,7 @@ class TestRetryToolCalls:
         denied_node, websearch_node = tool_nodes  # creation order: denied webfetch, then websearch
 
         rerun_messages = []
-        def capture_perform(settings, message, on_call_start, on_call_done):
+        def capture_perform(settings, message, on_call_start, on_call_done, **kw):
             rerun_messages.append(message)
             return [make_tool_response(content="FETCHED OK", tool_call_id="call_0", function_name="webfetch")]
         monkeypatch.setattr("raven.librarian.llmclient.perform_tool_calls", capture_perform)
@@ -1168,12 +1173,17 @@ class TestDocumentToolGating:
 class TestToolCallRoundCap:
     """A model that keeps rephrasing a failing search must still end up answering.
 
-    The cap ends the loop by *withdrawing the tools*, not by breaking out of it. Breaking out would leave
-    the turn's last message a tool result, which reads as a paused agent loop and draws yet another call
-    instead of a reply.
+    Past the cap the tools stay in the schema and calls are refused, so the loadout does not change under
+    the model mid-turn. Withdrawing them is the terminator of last resort, and it is an invocation with no
+    tools rather than a `break`: breaking would leave the turn's last message a tool result, which reads as
+    a paused agent loop and draws yet another call instead of a reply.
     """
 
-    def _always_calls_tools(self, monkeypatch, counter):
+    def _always_calls_tools(self, monkeypatch, counter, refusals=None):
+        """A model that asks for a tool whenever it is offered one, and only answers when it is not.
+
+        `refusals` collects the `maybe_refusal_text` each round was dispatched with (`None` = really ran).
+        """
         def fake_invoke(**kw):
             counter.append(kw.get("tools_enabled"))
             if not kw.get("tools_enabled"):  # no tools on offer -> the model has to answer
@@ -1181,24 +1191,59 @@ class TestToolCallRoundCap:
             return make_invoke_result(content="",
                                       tool_calls=[tool_call("search_documents", f"call_{len(counter)}")])
 
-        monkeypatch.setattr("raven.librarian.llmclient.invoke", fake_invoke)
-        monkeypatch.setattr("raven.librarian.llmclient.perform_tool_calls",
-                            lambda *a, **kw: [make_tool_response(content="No matches.",
-                                                                 function_name="search_documents")])
+        def fake_perform_tool_calls(*a, **kw):
+            if refusals is not None:
+                refusals.append(kw.get("maybe_refusal_text"))
+            if kw.get("maybe_refusal_text") is not None:
+                return [make_tool_response(content=kw["maybe_refusal_text"],
+                                           function_name="search_documents", status="error")]
+            return [make_tool_response(content="No matches.", function_name="search_documents")]
 
-    def test_loop_terminates_at_the_cap(self, monkeypatch, llm_settings, populated_forest):
+        monkeypatch.setattr("raven.librarian.llmclient.invoke", fake_invoke)
+        monkeypatch.setattr("raven.librarian.llmclient.perform_tool_calls", fake_perform_tool_calls)
+
+    def test_the_cap_refuses_before_it_withdraws(self, monkeypatch, llm_settings, populated_forest):
         forest, head = populated_forest
         user_head = scaffold.user_turn(llm_settings=llm_settings, datastore=forest,
                                        head_node_id=head, user_message_text="Find X")
         monkeypatch.setattr("raven.librarian.config.max_tool_call_rounds", 3)
+        monkeypatch.setattr("raven.librarian.config.max_tool_call_refusal_rounds", 1)
         offered = []
-        self._always_calls_tools(monkeypatch, offered)
+        refusals = []
+        self._always_calls_tools(monkeypatch, offered, refusals)
 
         final_head = run_ai_turn(forest, llm_settings, user_head, retriever=FakeRetriever())
 
-        # 3 rounds with tools on offer, then one final invocation with none.
-        assert offered == [True, True, True, False]
+        # 3 rounds that run, 1 that is refused with the tools still on offer, then the withdrawal.
+        assert offered == [True, True, True, True, False]
+        assert [text is None for text in refusals] == [True, True, True, False]
         assert forest.get_payload(final_head)["message"]["role"] == "assistant"
+
+    def test_a_refusal_round_calls_no_tool(self, monkeypatch, llm_settings, populated_forest):
+        # The whole point: the round past the cap answers the model without doing any work.
+        forest, head = populated_forest
+        user_head = scaffold.user_turn(llm_settings=llm_settings, datastore=forest,
+                                       head_node_id=head, user_message_text="Find X")
+        monkeypatch.setattr("raven.librarian.config.max_tool_call_rounds", 1)
+        monkeypatch.setattr("raven.librarian.config.max_tool_call_refusal_rounds", 1)
+        refusals = []
+        self._always_calls_tools(monkeypatch, [], refusals)
+
+        run_ai_turn(forest, llm_settings, user_head, retriever=FakeRetriever())
+        assert refusals == [None, chatutil.format_error_that_tools_are_spent()]
+
+    def test_zero_refusal_rounds_withdraws_at_the_cap(self, monkeypatch, llm_settings, populated_forest):
+        # The escape hatch back to withdrawing outright, for a model the refusal does not reach.
+        forest, head = populated_forest
+        user_head = scaffold.user_turn(llm_settings=llm_settings, datastore=forest,
+                                       head_node_id=head, user_message_text="Find X")
+        monkeypatch.setattr("raven.librarian.config.max_tool_call_rounds", 2)
+        monkeypatch.setattr("raven.librarian.config.max_tool_call_refusal_rounds", 0)
+        offered = []
+        self._always_calls_tools(monkeypatch, offered)
+
+        run_ai_turn(forest, llm_settings, user_head, retriever=FakeRetriever())
+        assert offered == [True, True, False]
 
     def test_the_final_reply_is_an_answer_not_a_tool_result(self, monkeypatch, llm_settings, populated_forest):
         forest, head = populated_forest
@@ -1211,6 +1256,23 @@ class TestToolCallRoundCap:
         payload = forest.get_payload(final_head)
         assert payload["message"]["role"] == "assistant"
         assert not payload["message"]["tool_calls"]
+
+    def test_the_refusal_is_stored_as_a_failed_tool_result(self, monkeypatch, llm_settings, populated_forest):
+        # The model sees it through the tool channel, so it has to be a tool node like any other - and an
+        # errored one, so that nothing downstream mistakes it for material to ground an answer on.
+        forest, head = populated_forest
+        user_head = scaffold.user_turn(llm_settings=llm_settings, datastore=forest,
+                                       head_node_id=head, user_message_text="Find X")
+        monkeypatch.setattr("raven.librarian.config.max_tool_call_rounds", 1)
+        monkeypatch.setattr("raven.librarian.config.max_tool_call_refusal_rounds", 1)
+        self._always_calls_tools(monkeypatch, [])
+
+        final_head = run_ai_turn(forest, llm_settings, user_head, retriever=FakeRetriever())
+        # `payloads_up` walks from the leaf, so the newest tool node comes first.
+        refusal = next(payload for payload in payloads_up(forest, final_head)
+                       if payload["message"]["role"] == "tool")
+        assert refusal["generation_metadata"]["status"] == "error"
+        assert "budget for this reply is spent" in chatutil.content_to_text(refusal["message"]["content"])
 
     def test_an_ordinary_turn_never_reaches_the_cap(self, monkeypatch, llm_settings, populated_forest):
         # A model that gets what it needs stops on its own, well under the cap - the cap is a backstop,
@@ -1440,7 +1502,7 @@ class TestSpentToolsNotice:
 
         monkeypatch.setattr("raven.librarian.llmclient.invoke", fake_invoke)
         monkeypatch.setattr("raven.librarian.llmclient.perform_tool_calls",
-                            lambda settings, message, on_call_start, on_call_done: [
+                            lambda settings, message, on_call_start, on_call_done, **kw: [
                                 env(data=chatutil.create_chat_message(llm_settings=llm_settings, role="tool",
                                                                       text="(a result)"),
                                     status="success", function_name="websearch", tool_call_id="c1")])
@@ -1453,7 +1515,7 @@ class TestSpentToolsNotice:
         system_text = self._system_text_of(monkeypatch, llm_settings, forest, head, rounds_before_reply=1)
         assert "No further tool calls" not in system_text
 
-    def test_the_notice_arrives_when_the_cap_withdraws_the_tools(self, monkeypatch, llm_settings, populated_forest):
+    def test_the_notice_arrives_when_the_budget_is_spent(self, monkeypatch, llm_settings, populated_forest):
         forest, head = populated_forest
         monkeypatch.setattr("raven.librarian.config.max_tool_call_rounds", 2)
         system_text = self._system_text_of(monkeypatch, llm_settings, forest, head, rounds_before_reply=99)
@@ -1536,7 +1598,7 @@ class TestToolResultAttachments:
                           make_invoke_result(content="Here is what it says.")])
         monkeypatch.setattr("raven.librarian.llmclient.invoke", lambda **kw: next(responses))
         monkeypatch.setattr("raven.librarian.llmclient.perform_tool_calls",
-                            lambda settings, message, on_call_start, on_call_done: [record])
+                            lambda settings, message, on_call_start, on_call_done, **kw: [record])
         tool_nodes = []
         run_ai_turn(forest, llm_settings, user_head, on_tool_done=lambda nid: tool_nodes.append(nid))
         return forest.get_payload(tool_nodes[0])

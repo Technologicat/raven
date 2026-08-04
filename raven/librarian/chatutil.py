@@ -9,6 +9,7 @@ __all__ = ["format_message_number",
            "format_reminder_to_write_conversationally",
            "format_reminder_to_use_information_from_context_only",
            "format_notice_that_tools_are_spent",
+           "format_error_that_tools_are_spent",
            "format_docs_match", "format_docs_matches",
            "document_label", "excerpt", "format_consulted_documents",
            "make_timestamp",
@@ -387,13 +388,17 @@ def format_reminder_to_use_information_from_context_only() -> str:
 def format_notice_that_tools_are_spent() -> str:
     """Return the text of a system message telling the LLM that this reply gets no more tool calls.
 
-    Sent on the final invocation of an AI turn that hit the tool-call round cap, and only then.
+    Sent on every invocation of an AI turn after the tool-call round cap is reached, and only then. In the
+    common case that is exactly one invocation, since the model answers when told to.
 
-    It exists because withdrawing the tools is not by itself enough to end the turn. That was the design's
-    assumption - offer no tools, and the model has no move except to answer - and measurement says
-    otherwise. Given a list of documents to work through, the model spends its rounds fetching them one at
-    a time, and on the invocation where the tools are gone it announces the *next* fetch ("Now let's get the
-    ABR reactor document") and then stops, having written no reply at all.
+    It exists because the model is otherwise never *told* that the gathering is over - it finds out by
+    reaching for a tool and being refused. Given a list of documents to work through, the model spends its
+    rounds fetching them one at a time, and on the invocation after the last one it announces the *next*
+    fetch ("Now let's get the ABR reactor document") and then stops, having written no reply at all.
+
+    Paired with `format_error_that_tools_are_spent`, which says the same thing in the tool-result channel
+    for a model that reaches for a tool anyway. This one aims to make that call unnecessary; that one
+    handles it when it happens.
 
     **Reaching the cap is what produces the empty reply, and this notice does not measurably prevent it.**
     Measured over 24 paired samples (`investigations/tool_budget/`, qwen3.6-35b-a3b): turns that reached the cap
@@ -413,6 +418,27 @@ def format_notice_that_tools_are_spent() -> str:
     """
     return ("[System information: No further tool calls are available for this reply. Write the answer now, "
             "from the information gathered above. If something you wanted is missing, say so in the answer.]")
+
+def format_error_that_tools_are_spent() -> str:
+    """Return the text of the tool result given when a call is refused because the turn's budget is spent.
+
+    Sent in place of the tool's output, as an `status="error"` result, once the AI turn has used up
+    `max_tool_call_rounds`. The tool stays in the schema and the call is answered rather than made.
+
+    Why an error result and not an absent tool: a mid-turn change to the tool loadout invalidates the
+    backend's KV cache for everything after it, and a history whose earlier messages call a tool that the
+    current request does not declare is a shape the model saw little of in training. A tool that answers
+    "not now" is a shape it saw plenty of. Withdrawing the tools remains the terminator of last resort
+    (`max_tool_call_refusal_rounds`), because a refusal, however well formed, cannot by itself guarantee
+    that the loop ends.
+
+    Worded the same way as `format_notice_that_tools_are_spent`: the situation, plus the action that
+    follows from it, and permission to answer incompletely. Not a prohibition - "you may not call any more
+    tools" is the shape that measured 5-37x the deliberation elsewhere in this file, and it would land here
+    on a model that is already mid-task and looking for a way to continue.
+    """
+    return ("The tool-call budget for this reply is spent, so this call was not made. Write the answer now, "
+            "from the information gathered above. If something you wanted is missing, say so in the answer.")
 
 
 # --------------------------------------------------------------------------------

@@ -290,7 +290,8 @@ documented partial-success contract (a duplicate key lands in `failed_blocks` ra
 
 ## 3. Librarian behaviour changes decided
 
-- [ ] **[D] Tools should error out informatively when the budget is exhausted, not be withdrawn.** Replaces the
+- [x] **[D] Tools should error out informatively when the budget is exhausted, not be withdrawn.** Done
+      2026-08-04. Replaces the
       v1 "final round with no tools" approach for stopping a runaway agent loop (Qwen going into deep research
       unasked). Two reasons:
   - **Avoids KV-cache burn** from a mid-turn tool-loadout change — the measurable one, and the original motivation.
@@ -298,6 +299,9 @@ documented partial-success contract (a duplicate key lands in `failed_blocks` ra
         tool *errors* are well represented in training. Possibly related to the Q11 measurement (literal
         `<tool_call>` emission) — a hypothesis, not a finding.
   - Keep the "no more calls this turn" note in the error payload.
+  - **As built:** the withdrawal survives as the terminator of last resort, after `max_tool_call_refusal_rounds`
+        (default 1). It has to — a refusal, however well formed, cannot guarantee the model stops asking, and
+        nothing else in the loop can end the turn without leaving a tool result as its last message.
 - [ ] **[N] Document injects: expose offset/length** so the model can locate the truncated middle. Same for RAG
       results, so it can look around a hit.
   - **[P]** Also makes the consulted-docs list span-exact rather than document-level.

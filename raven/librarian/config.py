@@ -111,11 +111,25 @@ web_num_results = 10
 # plausible-looking. (The server-side memoization of websearch does not help here — it collapses identical
 # queries, and a rephrasing loop issues different ones.)
 #
-# When the cap is reached, the requested calls still run; only the invocation *after* them is made with no
-# tools offered, so the model has to produce an answer. That ordering is deliberate: stopping the loop the
-# moment the cap is hit would leave the history ending on a tool call with no result, which reads as a
-# paused agent loop and prompts yet another call rather than a reply.
+# When the cap is reached, the requested calls still run; only the invocation *after* them is told that the
+# budget is spent. That ordering is deliberate: stopping the loop the moment the cap is hit would leave the
+# history ending on a tool call with no result, which reads as a paused agent loop and prompts yet another
+# call rather than a reply.
 max_tool_call_rounds = 5
+
+# How many further rounds the tools stay on offer, answering "not now", before they are withdrawn outright.
+#
+# Past `max_tool_call_rounds` the tools remain in the schema and any call is refused with an error result
+# saying the budget is spent. Two reasons to prefer that to simply withdrawing them: changing the tool
+# loadout mid-turn invalidates the backend's KV cache from that point on, and a history calling a tool the
+# current request no longer declares is a shape models see little of in training, whereas a tool answering
+# "not now" is one they see plenty of.
+#
+# A refusal cannot guarantee the turn ends, though, so the withdrawal remains as the terminator of last
+# resort, and this is how long to try the gentler thing first. Each refusal round costs a full generation,
+# and there is no evidence that a second one helps a model the first did not reach — so, one. Set this to 0
+# to withdraw the tools immediately at the cap.
+max_tool_call_refusal_rounds = 1
 
 # How much of the context window one document fetched by the LLM may occupy, as a fraction.
 #

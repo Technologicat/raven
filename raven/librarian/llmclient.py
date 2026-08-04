@@ -2034,13 +2034,20 @@ def make_console_progress_handler(progress_symbol: str) -> Callable:
 def perform_tool_calls(settings: env,
                        message: Dict,
                        on_call_start: Optional[Callable],
-                       on_call_done: Optional[Callable]) -> List[env]:
+                       on_call_done: Optional[Callable],
+                       maybe_refusal_text: Optional[str] = None) -> List[env]:
     """Perform tool calls as requested in `message["tool_calls"]`.
 
     Returns a list of chat payloads (where each message's `role="tool"`) containing the tool outputs,
     one for each tool call.
 
     If the "tool_calls" field of `message` is missing or if it is empty, return the empty list.
+
+    `maybe_refusal_text`: If given, no tool is called at all. Every requested call is answered with this
+                          text as an `status="error"` result, and `on_call_start` never fires (nothing
+                          started). This is how the caller declines a whole round of calls while leaving
+                          the tools themselves on offer - see `raven.librarian.scaffold.ai_turn`, which
+                          uses it when the turn's tool-call budget is spent.
 
     `on_call_start`: 3-argument callable: `(tool_call_id: str, function_name: str, arguments: Dict[str, Any])`.
 
@@ -2157,6 +2164,18 @@ def perform_tool_calls(settings: env,
                 on_call_done(tool_call_id, function_name, status, chatutil.content_to_text(content))
             except Exception:
                 logger.warning(f"perform_tool_calls: {tool_call_id}: function '{function_name}': ignoring exception from event handler `on_call_done`", exc_info=True)
+
+    # Declining the whole round. Deliberately ahead of the per-request validation below: a malformed request
+    # is not worth reporting when nothing was going to run anyway, and the model's next move is to answer,
+    # not to fix its JSON.
+    if maybe_refusal_text is not None:
+        logger.info(f"perform_tool_calls: refusing {len(tool_calls)} tool call{plural_s} without calling anything: {maybe_refusal_text}")
+        for request_record in tool_calls:
+            add_tool_response_record(maybe_refusal_text,
+                                     status="error",
+                                     tool_call_id=request_record.get("id", None),
+                                     function_name=request_record.get("function", {}).get("name", None))
+        return tool_response_records
 
     for request_record in tool_calls:
         tool_call_id = request_record.get("id", None)
