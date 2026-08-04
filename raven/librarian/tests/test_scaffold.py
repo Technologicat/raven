@@ -1467,3 +1467,161 @@ class TestSpentToolsNotice:
         monkeypatch.setattr("raven.librarian.config.max_tool_call_rounds", 1)
         system_text = self._system_text_of(monkeypatch, llm_settings, forest, head, rounds_before_reply=99)
         assert "say so in the answer" in system_text
+
+
+# ---------------------------------------------------------------------------
+# Large tool results become attachments
+# ---------------------------------------------------------------------------
+
+def make_fetch_response(text, *, url="https://example.com/paper", title="A Paper", tool_call_id="call_0"):
+    """A faked successful `webfetch` record: declares `fetched_document`, as `llmclient.webfetch_wrapper` does."""
+    return env(data={"role": "tool",
+                     "content": chatutil.normalize_content(text),
+                     "tool_calls": None},
+               status="success",
+               tool_call_id=tool_call_id,
+               function_name="webfetch",
+               dt=0.01,
+               tool_metadata={"fetched_document": {"url": url, "name": title}})
+
+
+class TestDocumentDisplayName:
+    """The name a fetched document is filed under — for humans, not for uniqueness (the hash has that)."""
+
+    @staticmethod
+    def _name(url, title):
+        return scaffold._document_display_name({"url": url, "name": title})
+
+    def test_host_leads_the_title(self):
+        # The host is what still means something in a folder of rescued attachments months later.
+        assert self._name("https://arxiv.org/abs/1706.03762", "Attention Is All You Need") == "arxiv.org - Attention Is All You Need"
+
+    def test_a_titleless_page_is_named_by_its_host(self):
+        # `webfetch_wrapper` falls back to the URL as the title when a page has none; repeating the whole
+        # URL after the host would be noise.
+        url = "https://example.com/some/deep/path"
+        assert self._name(url, url) == "example.com"
+
+    def test_path_separators_are_not_left_in_the_name(self):
+        # A page title is arbitrary text from the open web, and this name reaches the filesystem via
+        # `cleanup.rescue_to_staging`.
+        assert self._name("https://example.com/x", "AC/DC: Back in Black") == "example.com - AC-DC- Back in Black"
+
+    def test_two_pages_sharing_a_title_are_told_apart_by_host(self):
+        assert self._name("https://a.example/x", "Overview") != self._name("https://b.example/y", "Overview")
+
+    def test_never_empty(self):
+        # Something has to go on the chip even when the fetch tells us nothing useful.
+        assert self._name("", "") == "fetched document"
+
+
+class TestToolResultAttachments:
+    """A long fetched document goes to a sidecar; the chat log keeps an excerpt and a chip."""
+
+    # Long enough to cross the default threshold, and shaped like a fetched page: a source header, then prose.
+    LONG_DOCUMENT = ("**Webfetch result from** [https://example.com/paper](https://example.com/paper):\n\n"
+                     "**A Paper**\n\n-----\n\n" + "The body of the paper. " * 500)
+
+    def _forest(self, tmp_path, llm_settings):
+        forest = chattree.PersistentForest(tmp_path / "chat.json", autosave=False,
+                                           sidecar_extractor=textfilestore.sidecar_refs_in_payload)
+        greeting = chatutil.factory_reset_datastore(forest, llm_settings)
+        return forest, greeting
+
+    def _run_one_fetch(self, monkeypatch, llm_settings, forest, head, record):
+        """Drive one `ai_turn` whose single tool call returns `record`. Returns the tool node's payload."""
+        user_head = scaffold.user_turn(llm_settings=llm_settings, datastore=forest,
+                                       head_node_id=head, user_message_text="read this page")
+        responses = iter([make_invoke_result(content="", tool_calls=[tool_call("webfetch", "call_0")]),
+                          make_invoke_result(content="Here is what it says.")])
+        monkeypatch.setattr("raven.librarian.llmclient.invoke", lambda **kw: next(responses))
+        monkeypatch.setattr("raven.librarian.llmclient.perform_tool_calls",
+                            lambda settings, message, on_call_start, on_call_done: [record])
+        tool_nodes = []
+        run_ai_turn(forest, llm_settings, user_head, on_tool_done=lambda nid: tool_nodes.append(nid))
+        return forest.get_payload(tool_nodes[0])
+
+    def test_long_fetch_becomes_an_excerpt_plus_a_chip(self, monkeypatch, tmp_path, llm_settings):
+        forest, head = self._forest(tmp_path, llm_settings)
+        payload = self._run_one_fetch(monkeypatch, llm_settings, forest, head,
+                                      make_fetch_response(self.LONG_DOCUMENT))
+        content = payload["message"]["content"]
+        assert [part["type"] for part in content] == ["text", "text_file"]
+
+        shown = chatutil.content_to_text(content)  # what the chat log renders as the message's own text
+        assert shown.startswith("**Webfetch result from**")  # the excerpt opens where the document does
+        assert len(shown) < len(self.LONG_DOCUMENT) / 10  # ...and is a small fraction of it
+
+    def test_the_full_document_is_stored_verbatim_as_a_sidecar(self, monkeypatch, tmp_path, llm_settings):
+        forest, head = self._forest(tmp_path, llm_settings)
+        payload = self._run_one_fetch(monkeypatch, llm_settings, forest, head,
+                                      make_fetch_response(self.LONG_DOCUMENT))
+        part = payload["message"]["content"][1]
+        url = part["text_file"]["url"]
+        assert url.startswith(sidecarstore.SIDECAR_SCHEME)
+        filename = url[len(sidecarstore.SIDECAR_SCHEME):]
+        assert forest.read_sidecar(filename).decode("utf-8") == self.LONG_DOCUMENT
+        assert filename.endswith(".md")  # so `docextract` reads it back as markdown, not as an unknown type
+
+    def test_provenance_records_the_fetch_url_and_the_pathway(self, monkeypatch, tmp_path, llm_settings):
+        forest, head = self._forest(tmp_path, llm_settings)
+        payload = self._run_one_fetch(monkeypatch, llm_settings, forest, head,
+                                      make_fetch_response(self.LONG_DOCUMENT,
+                                                          url="https://arxiv.org/abs/1706.03762",
+                                                          title="Attention Is All You Need"))
+        sidecars = payload["general_metadata"]["sidecars"]
+        assert len(sidecars) == 1
+        entry = next(iter(sidecars.values()))
+        assert entry["url"] == "https://arxiv.org/abs/1706.03762"  # what "Open source" opens
+        assert entry["source"] == "tool_result"
+        assert entry["name"] == "arxiv.org - Attention Is All You Need.md"
+
+    def test_the_document_declaration_is_consumed_not_stored(self, monkeypatch, tmp_path, llm_settings):
+        # `fetched_document` is an instruction to this code, not a fact about the tool call worth keeping.
+        forest, head = self._forest(tmp_path, llm_settings)
+        payload = self._run_one_fetch(monkeypatch, llm_settings, forest, head,
+                                      make_fetch_response(self.LONG_DOCUMENT))
+        assert "fetched_document" not in payload["generation_metadata"]
+        assert payload["generation_metadata"]["function_name"] == "webfetch"  # the rest still lands
+
+    def test_a_short_fetch_stays_inline(self, monkeypatch, tmp_path, llm_settings):
+        # Hiding three paragraphs behind a chip is worse than showing them.
+        forest, head = self._forest(tmp_path, llm_settings)
+        payload = self._run_one_fetch(monkeypatch, llm_settings, forest, head,
+                                      make_fetch_response("a short page"))
+        assert [part["type"] for part in payload["message"]["content"]] == ["text"]
+        assert chatutil.content_to_text(payload["message"]["content"]) == "a short page"
+        assert "sidecars" not in payload["general_metadata"]
+
+    def test_an_undeclared_tool_result_stays_inline_however_long(self, monkeypatch, tmp_path, llm_settings):
+        # `websearch` returns a list of links the user wants to click; a chip over them is a regression.
+        forest, head = self._forest(tmp_path, llm_settings)
+        payload = self._run_one_fetch(monkeypatch, llm_settings, forest, head,
+                                      make_tool_response(content="link. " * 2000, tool_call_id="call_0"))
+        assert [part["type"] for part in payload["message"]["content"]] == ["text"]
+        assert "sidecars" not in payload["general_metadata"]
+
+    def test_a_failed_store_leaves_the_result_inline(self, monkeypatch, tmp_path, llm_settings):
+        # Losing the tool result would be far worse than a long one in the log.
+        forest, head = self._forest(tmp_path, llm_settings)
+        def explode(**kwargs):
+            raise OSError("disk full")
+        monkeypatch.setattr("raven.librarian.textfilestore.store_file_as_sidecar", explode)
+        payload = self._run_one_fetch(monkeypatch, llm_settings, forest, head,
+                                      make_fetch_response(self.LONG_DOCUMENT))
+        assert [part["type"] for part in payload["message"]["content"]] == ["text"]
+        assert chatutil.content_to_text(payload["message"]["content"]) == self.LONG_DOCUMENT
+
+    def test_the_model_still_reads_the_whole_document(self, monkeypatch, tmp_path, llm_settings):
+        # The property that makes this safe to do behind the user's back: what changes is the chat log and
+        # the datastore JSON, not the conversation. The wire build folds the sidecar's text back in.
+        from raven.librarian import llmclient
+        forest, head = self._forest(tmp_path, llm_settings)
+        payload = self._run_one_fetch(monkeypatch, llm_settings, forest, head,
+                                      make_fetch_response(self.LONG_DOCUMENT))
+        wire = llmclient._serialize_history_for_wire(llm_settings, [payload["message"]],
+                                                     continue_=False, datastore=forest)
+        wire_text = chatutil.content_to_text(wire[0]["content"])
+        assert "[Attached file: example.com - A Paper.md]" in wire_text
+        body = self.LONG_DOCUMENT.split("-----\n\n")[1].strip()  # extraction strips trailing whitespace
+        assert body in wire_text  # the body, in full — nothing was lost by storing it out of line

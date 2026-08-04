@@ -422,51 +422,6 @@ happens, that icon choice is worth revisiting — it is a two-line change in `ad
 
 Discovered while picking icons for the tool-call navigation links (2026-07-30).
 
-## Store large tool results as attachments instead of dumping them into the chat log
-
-**Scoped into 0.2.8** (Juha, 2026-07-30): feature completeness now that attachments exist. See the note in
-the sprint README about what this changes.
-
-A `webfetch` result is currently rendered inline as the tool message's text, so fetching a paper drops its
-entire body into the chat log — dozens of screens to scroll past, and the same bytes into the datastore JSON
-(the 1.1 MB test datastore is mostly fetched article text). It is unreadable as a log and it is the reason
-the missing PageUp/PageDown above hurts.
-
-**The attachment machinery already does exactly what is wanted here.** A `text_file` content part stores the
-bytes as a content-addressed sidecar, the chat log shows a compact chip instead of the content, and
-`llmclient._serialize_history_for_wire` folds the extracted text back into the message at wire-build time —
-so *the model sees no difference*, which is the property that makes this safe. Store the fetched document as
-a sidecar and the tool message becomes a chip plus, say, the first paragraph.
-
-What falls out for free, beyond the readability:
-
-- **Content addressing, which buys archival value more than it buys dedup.** Sidecars are keyed by content,
-  not by URL, so two fetches of one URL collapse to a single file only when the bytes are identical. That is
-  the right behaviour rather than a limitation: a page can change between fetches, and each message then keeps
-  the version it actually saw instead of silently adopting a newer one. It also means a later 404 costs
-  nothing — the stored copy is still there, and is now the only copy. Storing fetched text is a hedge against
-  link rot as much as a space saving, which is the same argument that put attachments in the datastore in the
-  first place.
-- **Provenance.** The fetch URL is exactly what `sidecarstore.base_provenance` records, and the existing
-  "Open source" / "Show original" buttons then work on tool results too.
-- **The chip's name shortening**, and the rest of the attachment display logic.
-- **A smaller datastore**, since the JSON keeps a `sidecar:` reference rather than the text.
-
-Design questions to settle first:
-
-- **A size threshold.** A short websearch summary is *better* inline; only large results should become
-  attachments. Where the line sits is a judgment call, and the behaviour should not flip confusingly around it.
-- **What the message shows instead.** Nothing, a title, or the first paragraph — the last is probably right,
-  since a tool result the user cannot see at all is a step backwards from the current what-you-see-is-what-you-get
-  design.
-- **Not `websearch`** (decided by Juha, 2026-07-30). Its result is at most ~20 links and titles, and the links
-  are clickable — the user wants to *see* those, so hiding them behind a chip would be a regression. This
-  applies to `webfetch`, whose result is one long document.
-- **Interaction with the context-fill indicator**, which counts document tokens by appending `sidecar_to_text`
-  output — this path already exists, so it should just work, but confirm rather than assume.
-
-Raised by Juha (2026-07-30).
-
 ## GUI: hardcoded stand-ins for values DPG has no getter for
 
 DPG exposes very few getters for theme state — there is no way to ask a theme for its colors or spacings —
@@ -3293,3 +3248,97 @@ Axes to settle, roughly in order of how much they constrain the rest:
 
 Cheap and safe to do *now*, independent of the above: make `save` atomic. It reduces the blast radius of
 the current once-per-session write, and every later design needs it anyway.
+
+## A long `fetch_document` result still fills the chat log
+
+**For after 0.2.8.** The sibling of the `webfetch` case, which 0.2.8 solved by storing the fetched page as an
+attachment — but the same fix is the wrong one here, for three reasons worth writing down so the parallel is
+not drawn too quickly:
+
+- **The bytes are already on disk.** A docs-DB document is a file in the user's `documents/` folder, and it
+  cannot 404. The archival argument that carries `webfetch` — the stored copy is a hedge against link rot,
+  and after a 404 it is the only copy — has no counterpart here, so a sidecar would be a second copy of a
+  local file for nothing.
+- **`fetch_document` returns a span, not a document.** It takes `offset`/`length`, slices, and then
+  middle-truncates to `budget_for_fetched_text`. Storing that as an attachment would archive a mangled
+  fragment under a name claiming to be the whole thing.
+- **It is already bounded**, by `docs_fetch_max_fraction_of_context` (0.10). `webfetch` had no budget at all,
+  which is why it could bury the log without limit.
+
+What is left is still real: a tenth of a 128k window is several screens of text sitting in the conversation.
+Two directions, and they compose rather than compete — a *collapsible* rendering of the result (the passage is
+legitimately part of the conversation; it just does not need to be open), and a handle on the source document
+by ID, which is what [Expose the docs-DB source files behind a reply's RAG citations] is about. That item's
+"open file / open folder" machinery is the same one, so the two want doing together.
+
+Raised by Juha (2026-08-04), while attachment-ifying `webfetch` results.
+
+## The docs DB stores each document's full text *and* its chunks, both in the JSON
+
+`HybridIR`'s `fulldocs/data.json` holds, per document, a `"text"` field (`# copy of original text as-is`,
+`hybridir.py`) and a `"chunks"` list whose entries each carry their own `"text"`. The chunks are slices of the
+full text with overlap, so they alone come to more than 100% of it, and the full copy is stored beside them.
+Measured on this machine: **48 MB of source documents produce a 124 MB `data.json`**, about 2.6×. Load and save
+both pay for all of it, and the file is rewritten whole.
+
+Two separable reductions, and they are not equally safe:
+
+- **The chunk texts are derivable** from the full text plus each chunk's `offset` and length, which are already
+  stored. Dropping them is arithmetic, not a policy decision. (There is already a `# TODO` in `_commit` saying
+  the *vector* store does not need its copy either, for the same reason.)
+- **The full text is a cache of the original file**, and dropping *it* is the one that needs thought rather
+  than just work. Re-reading on demand means re-running extraction — cheap for `.txt`, not for a large PDF —
+  and it means a document whose source file has since been deleted or moved stops being readable at all,
+  where today the index still has it. Whether that is a loss or a correct behaviour is the actual question;
+  `document_text` (used by `fetch_document`) and result reconstruction are the readers to check.
+
+Raised by Juha (2026-08-04); the measurement was taken while filing it.
+
+## A fetched web page is budgeted as a user attachment, not as a speculative fetch
+
+0.2.8 stores a long `webfetch` result as an attachment sidecar, which put it under
+`fit_attachments_to_context` — the *user attachment* budget, bounded only by `context_reserve_fraction`
+and deliberately carrying **no** per-document ceiling, on the reasoning that an attachment is the user
+saying read this.
+
+A fetched page is the opposite case, and `docs_fetch_max_fraction_of_context`'s own comment says so:
+the ceiling is "for text the *model* reaches for on a hunch, having seen a search result". That is a
+webfetch exactly. So it should be ceilinged like `fetch_document` is, and currently is not.
+
+Not a regression — before 0.2.8 a webfetch result had no budget at all and could overflow the window
+outright — but the policy is now stated in one place and contradicted in another, which is the kind of
+thing that reads as a bug to whoever finds it next.
+
+The fix is more than a one-liner because **the two readers of the budget can see different things**, and
+they must agree exactly or the context-fill readout drifts away from what is actually sent:
+
+- `count_branch_tokens` walks stored *payloads*, so it can read `general_metadata["sidecars"][f]["source"]`
+  and tell a `"tool_result"` attachment from a `"user_attachment"` one.
+- `_serialize_history_for_wire` receives bare messages from `chatutil.linearize_chat`, which carry no
+  `general_metadata` at all — so it cannot.
+
+So the discriminator has to live in the `text_file` content part itself (a `source` field alongside `url`
+and `name`, absent meaning user attachment). Additive and backward-compatible, but it is a content-part
+schema change, which is why it was not done inline. With it in hand, the change to
+`fit_attachments_to_context` is small: pre-clamp a fetched attachment's *want* to the per-fetch ceiling
+before `_share_characters` does the fair split, and the existing water-filling handles the rest.
+
+Raised by Juha (2026-08-04), reviewing the webfetch attachment work.
+
+## A clickable chip in the chat log gives no hover cue
+
+0.2.8 made inline attachments and fetched documents click-to-open (`DPGChatMessage._make_clickable`, an item
+handler registry per cluster, owned by the message so `demolish` can delete it — a registry does not live
+under the container group and is not collected with the widgets).
+
+For a *thumbnail* that is enough: an image already looks like a clickable object. For a **text chip** — a
+document glyph plus a filename — it is not. Nothing about a line of text says it responds to a click, so the
+affordance is currently carried entirely by a tooltip, which only pays off for a reader who hovers and waits.
+
+What it wants is a hover highlight. DPG exposes no mouse-cursor change to lean on, so the cue has to be
+visual, and a plain `add_text` has no hovered state in a theme. Two routes: poll `is_item_hovered` and
+recolor (cheap, but a per-frame check per chip), or rebuild the chip on a widget that has a native hovered
+state — `add_selectable` is the idiomatic ImGui answer and comes with the highlight for free, at the cost of
+its default full-width span, which would have to be sized to the text.
+
+Raised by Juha (2026-08-04), asking whether the fetched-page chip should open on click.

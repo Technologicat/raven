@@ -10,7 +10,7 @@ __all__ = ["format_message_number",
            "format_reminder_to_use_information_from_context_only",
            "format_notice_that_tools_are_spent",
            "format_docs_match", "format_docs_matches",
-           "document_label", "format_consulted_documents",
+           "document_label", "excerpt", "format_consulted_documents",
            "make_timestamp",
            "text_content_part",
            "image_content_part",
@@ -560,6 +560,50 @@ def document_label(text: str) -> str:
             continue
         return _shorten(stripped, _MAXIMUM_LABEL_LENGTH)
     return ""
+
+# What marks an excerpt as having more behind it. On its own line, so it reads as an omission rather than
+# as the writer trailing off mid-thought - a stored document's opening often ends on a colon.
+_EXCERPT_CONTINUES_MARKER = "…"
+
+# How far into the budget a paragraph break must sit before `excerpt` will end on it instead of filling the
+# budget and cutting mid-paragraph. Ending on a paragraph reads better, but only when it costs little: a
+# fetched page opens with a source header, a title and often a licence notice, so the last break before a
+# few hundred characters tends to be the one right *before* the first real prose. Snapping to it spends the
+# whole budget on boilerplate and stops exactly where the document starts saying something.
+_EXCERPT_PARAGRAPH_SNAP_FRACTION = 0.5
+
+def excerpt(text: str, max_characters: int) -> str:
+    """Return the opening of `text`, at most about `max_characters` long, cut on a sensible boundary.
+
+    Unlike `document_label`, which distils a document down to one line to choose *between* documents, this
+    shows the reader the beginning of a document they already have: the head of a long tool result, with the
+    rest of it available as an attachment beside it.
+
+    The budget is *filled*, then the cut is backed off to a boundary — a paragraph break if one sits in the
+    later part of the budget, otherwise a word boundary, otherwise (a single unbroken token) the budget
+    itself. Filling first is what makes the result informative on a real document: pages open with headers,
+    titles and notices, so a rule that always ended on the last complete paragraph would reliably stop just
+    before the first sentence worth reading.
+
+    A cut is marked, so the reader can tell "this is the whole result" from "this is where it was cut". Text
+    that fits entirely is returned unchanged, with no marker.
+
+    `max_characters` is a budget rather than a hard limit: the marker is added on top of it. Callers wanting
+    an exact bound should cut the result themselves.
+    """
+    text = text.strip()
+    if len(text) <= max_characters:
+        return text
+
+    head = text[:max_characters]
+    paragraph_breaks = list(re.finditer(r"\n\s*\n", head))
+    if paragraph_breaks and paragraph_breaks[-1].start() >= max_characters * _EXCERPT_PARAGRAPH_SNAP_FRACTION:
+        cut_at = paragraph_breaks[-1].start()
+    else:
+        cut_at = head.rfind(" ")
+        if cut_at <= 0:  # a single unbroken token; a hard cut beats showing nothing
+            cut_at = max_characters
+    return f"{head[:cut_at].rstrip()}\n\n{_EXCERPT_CONTINUES_MARKER}"
 
 # The user's whole message is the auto-search query, so this can be an essay. It is shown to say *why* a
 # document is on the list, which the first line of it does.

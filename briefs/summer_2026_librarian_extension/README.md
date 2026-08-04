@@ -49,6 +49,23 @@ strict-template warning and `setup_font_ranges`' DeprecationWarnings. The last t
 costumes: output that looks alarming, means nothing, and fires every run, which teaches the reader to skim
 past logs that will one day matter.
 
+**Admitted 2026-08-04, riding on the webfetch item rather than on their own weight** — two small pieces of the
+same surface, each needing its own argument since neither is the half-feature the webfetch item was:
+
+- **Attachments open on click**, not only from the button below them. This one is *discoverability polish*,
+  and the weaker case of the two: the button already works, is labelled and has a tooltip. What carries it is
+  that a thumbnail plainly looks clickable, so clicking it and getting nothing is a papercut paid every time,
+  on the release's headline feature — and that it was verified in a GUI session the webfetch work required
+  anyway, so it cost no extra round of live testing. The hover cue a *text* chip needs is not in it; that is
+  filed.
+- **A `fetch_document` result gets the same two handles** (open the file, reveal the documents folder). The
+  argument is uniformity of a category the release itself creates: after the webfetch change, "a document the
+  AI fetched" becomes a thing the chat log shows with handles on it, and having that be true of web fetches
+  but not knowledge-base fetches invents a distinction the user has no reason to expect. It is *not* an
+  attachment and deliberately does not become one — the file is already the user's, in the documents folder,
+  and copying it into the sidecar store would archive a second copy of something that cannot go away. So the
+  affordance matches while the backing store does not, which is the whole design.
+
 **Considered and left out**, with reasons, so they are not re-litigated: the Markdown renderer set (four
 separate defects inside vendored code — a project, not a fix), the dropped-character render bug
 (unreproducible on demand, so there is nothing to test a fix against), TTS reading arXiv IDs digit by digit

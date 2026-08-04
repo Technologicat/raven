@@ -553,6 +553,58 @@ class TestScrub:
         assert result == "the answer"
 
 
+class TestExcerpt:
+    """`excerpt` — the opening of a long text, cut at a paragraph boundary."""
+
+    def test_short_text_is_returned_unchanged_and_unmarked(self):
+        # The marker means "there is more"; on a text that fits, there is not.
+        assert chatutil.excerpt("just a line", 100) == "just a line"
+
+    def test_surrounding_whitespace_is_stripped(self):
+        assert chatutil.excerpt("  \n padded \n ", 100) == "padded"
+
+    def test_cuts_at_a_paragraph_boundary(self):
+        text = "first para\n\nsecond para\n\nthird para that pushes us over the budget"
+        result = chatutil.excerpt(text, 30)
+        assert result.startswith("first para\n\nsecond para")
+        assert "third para" not in result  # the paragraph that did not fit is left out whole
+        assert result.endswith("…")
+
+    def test_an_early_paragraph_break_is_not_snapped_to(self):
+        # The failure this pins, seen on a real arXiv fetch: a page opens with a source header, a title and a
+        # licence notice, then the abstract. Ending on the last complete paragraph stopped dead at "Abstract"
+        # — 358 characters of an 800-character budget, none of it content.
+        text = "header\n\ntitle\n\nnotice\n\n" + "the actual prose of the document. " * 20
+        result = chatutil.excerpt(text, 200)
+        assert "the actual prose" in result  # the budget is spent on the document, not on its front matter
+        assert len(result) > 150  # ...and it is spent, not abandoned at the last tidy boundary
+
+    def test_a_paragraph_break_late_in_the_budget_is_snapped_to(self):
+        text = "a fairly long opening paragraph that runs on\n\nand then a second one that overflows the budget"
+        result = chatutil.excerpt(text, 50)
+        assert result == "a fairly long opening paragraph that runs on\n\n…"
+
+    def test_one_huge_paragraph_still_shows_something(self):
+        text = "word " * 100
+        result = chatutil.excerpt(text, 40)
+        assert result.startswith("word word")
+        assert len(result) < 60  # cut near the budget, not the whole 500 characters
+
+    def test_an_overlong_sole_paragraph_is_cut_on_a_word_boundary(self):
+        result = chatutil.excerpt("alpha beta gamma delta epsilon", 14)
+        assert result == "alpha beta\n\n…"  # not "alpha beta gam"
+
+    def test_a_single_unbroken_token_is_cut_at_the_budget(self):
+        # No word boundary to cut on; a hard cut beats returning the whole thing.
+        result = chatutil.excerpt("x" * 100, 10)
+        assert result == "x" * 10 + "\n\n…"
+
+    def test_a_padded_blank_line_counts_as_a_paragraph_break(self):
+        # Fetched markdown is not guaranteed to use exactly one empty line between paragraphs.
+        text = "a reasonably long first paragraph here\n   \nand a second one that will not fit"
+        assert chatutil.excerpt(text, 45) == "a reasonably long first paragraph here\n\n…"
+
+
 # ---------------------------------------------------------------------------
 # Chat message creation
 # ---------------------------------------------------------------------------

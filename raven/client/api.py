@@ -871,8 +871,9 @@ def webfetch_fetch(url: str, output_format: str = "markdown") -> Dict:
     two-tier fetch (requests + readability, then a headless browser for JS-rendered pages),
     SSRF / scheme blocking, URL rewriting, and content normalization.
 
-    Returns the server's result dict `{"content": str, "url": str, "spaSuspected": bool}`.
+    Returns the server's result dict `{"content": str, "url": str, "spaSuspected": bool, "title": str | None}`.
     `content` is the extracted text (or a canonical user-facing message for a refusal / limit).
+    `title` is the page title on a successful fetch, `None` for a refusal or a titleless page.
     """
     util.require()
     headers = copy.copy(util.api_config.raven_default_headers)

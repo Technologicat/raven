@@ -34,7 +34,7 @@ def fake_fetch(monkeypatch):
 
     def _fake(url, output_format="markdown"):
         fetched_urls.append(url)
-        return {"content": f"CONTENT of {url}", "url": url, "spaSuspected": False}
+        return {"content": f"CONTENT of {url}", "url": url, "spaSuspected": False, "title": f"TITLE of {url}"}
 
     monkeypatch.setattr(llmclient.api, "webfetch_fetch", _fake)
     return fetched_urls
@@ -47,15 +47,15 @@ def _set_allowlist(monkeypatch, allowlist):
 class TestWebfetchWrapperGating:
     def test_no_allowlist_fetches_anything(self, monkeypatch, fake_fetch):
         _set_allowlist(monkeypatch, None)
-        result = llmclient.webfetch_wrapper("https://random-site.com/x")
-        assert "CONTENT of" in result
+        text, metadata = llmclient.webfetch_wrapper("https://random-site.com/x")  # success returns (text, metadata)
+        assert "CONTENT of" in text
         assert fake_fetch == ["https://random-site.com/x"]
 
     def test_allowlisted_host_fetches(self, monkeypatch, fake_fetch):
         _set_allowlist(monkeypatch, ["*.arxiv.org"])
         with dyn.let(tool_context=env(webfetch_allowed_hosts=frozenset())):
-            result = llmclient.webfetch_wrapper("https://arxiv.org/html/2301.1")
-        assert "CONTENT of" in result
+            text, metadata = llmclient.webfetch_wrapper("https://arxiv.org/html/2301.1")
+        assert "CONTENT of" in text
         assert fake_fetch == ["https://arxiv.org/html/2301.1"]
 
     def test_non_allowlisted_host_refused(self, monkeypatch, fake_fetch):
@@ -70,8 +70,8 @@ class TestWebfetchWrapperGating:
         # Host not on the configured list, but auto-allowed this turn (user typed it).
         _set_allowlist(monkeypatch, ["*.arxiv.org"])
         with dyn.let(tool_context=env(webfetch_allowed_hosts=frozenset({"user-typed.com"}))):
-            result = llmclient.webfetch_wrapper("https://user-typed.com/x")
-        assert "CONTENT of" in result
+            text, metadata = llmclient.webfetch_wrapper("https://user-typed.com/x")
+        assert "CONTENT of" in text
         assert fake_fetch == ["https://user-typed.com/x"]
 
     def test_fail_closed_without_context(self, monkeypatch, fake_fetch):
@@ -109,20 +109,22 @@ class TestSessionApprovedHosts:
             assert fake_fetch == []  # denied before approval
 
             llmclient.approve_host_for_session("blog.example")
-            allowed = llmclient.webfetch_wrapper("https://blog.example/post")
-            assert "CONTENT of" in allowed
+            allowed_text, _ = llmclient.webfetch_wrapper("https://blog.example/post")
+            assert "CONTENT of" in allowed_text
             assert fake_fetch == ["https://blog.example/post"]  # goes through after approval
 
     def test_approve_is_case_insensitive(self, monkeypatch, fake_fetch, clean_session_approvals):
         _set_allowlist(monkeypatch, ["doi.org"])
         llmclient.approve_host_for_session("Example.COM")
         with dyn.let(tool_context=env(webfetch_allowed_hosts=frozenset())):
-            assert "CONTENT of" in llmclient.webfetch_wrapper("https://example.com/x")
+            text, _ = llmclient.webfetch_wrapper("https://example.com/x")
+        assert "CONTENT of" in text
 
     def test_approval_does_not_apply_when_allowlist_is_none(self, monkeypatch, fake_fetch, clean_session_approvals):
         # With no allowlist there is no gate anyway; approval is simply irrelevant (everything passes).
         _set_allowlist(monkeypatch, None)
-        assert "CONTENT of" in llmclient.webfetch_wrapper("https://anything.example/x")
+        text, _ = llmclient.webfetch_wrapper("https://anything.example/x")
+        assert "CONTENT of" in text
         assert fake_fetch == ["https://anything.example/x"]
 
 

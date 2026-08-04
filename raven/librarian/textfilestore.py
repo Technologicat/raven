@@ -1,10 +1,11 @@
 """Text/PDF document sidecar lifecycle for Librarian chat messages: store, resolve for the wire, and GC.
 
-The file sibling of `imagestore`. When the user attaches a document (plain text or PDF) to a message, its bytes
-are stored *verbatim* as a sidecar file next to the chat datastore JSON (in the same content-addressed sidecar
-store `chattree` manages for images), and referenced from the message by a `text_file` content part carrying a
-`sidecar:<filename>` URL and the original filename. No document text is written inline into the chat JSON, so
-the datastore stays small even for a large PDF, and a saved chat reloads offline.
+The file sibling of `imagestore`. When a document (plain text, PDF, markdown, ...) becomes part of a message —
+the user attached it, or a tool fetched one and `scaffold` stored it rather than dumping it into the chat log —
+its bytes are stored *verbatim* as a sidecar file next to the chat datastore JSON (in the same content-addressed
+sidecar store `chattree` manages for images), and referenced from the message by a `text_file` content part
+carrying a `sidecar:<filename>` URL and the original filename. No document text is written inline into the chat
+JSON, so the datastore stays small even for a large PDF, and a saved chat reloads offline.
 
 Unlike an image (which the model consumes natively as a `data:` URL), a document has no native wire form: its
 plaintext is extracted on demand (`raven.common.docextract`) and folded into the message's text at wire-build
@@ -75,9 +76,10 @@ def store_file_as_sidecar(datastore: chattree.PersistentForest,
     `file_source`: the document bytes, or a filesystem path (`str` / `pathlib.Path`) to read them from.
     `name`: the original filename (e.g. `"report.pdf"`), kept for display and for the wire header, and used to
             derive the sidecar's file extension so the extractor later dispatches by type.
-    `provenance_url`: the `url` recorded in provenance — for a user-attached local file, `"file:///<abspath>"`.
+    `provenance_url`: the `url` recorded in provenance — for a user-attached local file, `"file:///<abspath>"`;
+                      for a document a tool fetched, the URL it came from.
     `provenance_source`: the categorical pathway; see `sidecarstore.base_provenance` for the vocabulary.
-                         `"user_attachment"` is the only value anything currently emits.
+                         `"user_attachment"` and `"tool_result"` are what currently emit.
     `content_type`: original MIME type; derived from the extension if `None`.
     `fetched_at`: materialization timestamp string; current local time if `None`.
 

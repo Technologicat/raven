@@ -13,6 +13,8 @@ from typing import Any, Callable, Collection, Dict, List, Optional, Tuple, TYPE_
 from unpythonic import dyn
 from unpythonic.env import env
 
+from ..common import netutil
+
 from . import chattree
 from . import chatutil
 from . import config as librarian_config
@@ -503,6 +505,100 @@ def _record_grounding(tool_context: env,
     maybe_metadata = tool_response_record.tool_metadata if "tool_metadata" in tool_response_record else None
     tool_context.grounded = _grounding_was_declared(tool_response_record.data["content"], maybe_metadata)
 
+# Characters a filesystem (or a human reading a folder listing) would rather not meet in a filename. The
+# sidecar itself is content-addressed and so never carries this name, but `cleanup.rescue_to_staging` writes
+# the rescued copy out under it, and a page title is arbitrary text from the open web.
+_UNSAFE_IN_FILENAME = str.maketrans({c: "-" for c in '/\\:*?"<>|\n\r\t'})
+
+def _document_display_name(document: Dict[str, str]) -> str:
+    """A human-readable, filesystem-safe name for a fetched document: `"<host> - <title>"`.
+
+    Leads with the host because that is the discriminator that survives leaving the conversation — in a
+    folder of rescued attachments, "Attention Is All You Need" alone says nothing about where it came from,
+    and two sites can publish that title. Falls back to the host alone for a titleless page, and to the whole
+    URL when there is no host to extract (which should not happen for an `http(s)` fetch, but the name must
+    exist either way).
+
+    Deliberately *not* made unique. Uniqueness on disk is the content hash's job and it already has it;
+    what a name has to do is let a reader tell two things apart, and the remaining collision — same host,
+    same title, genuinely different bytes — is handled where it actually bites, by the ` (2)` suffix
+    `cleanup.rescue_to_staging` already applies.
+    """
+    url = document.get("url") or ""
+    title = (document.get("name") or "").strip()
+    host = netutil.url_host(url) or ""
+    if title and title != url:  # `webfetch_wrapper` falls back to the URL when a page has no title
+        name = f"{host} - {title}" if host else title
+    else:
+        name = host or url or "fetched document"
+    return name.translate(_UNSAFE_IN_FILENAME).strip()
+
+def _attachmentify_tool_result(datastore: chattree.Forest,
+                               tool_response_record: env) -> Dict[str, Dict]:
+    """Store an over-long fetched document as a sidecar, rewriting the tool result to an excerpt plus a chip.
+
+    Modifies `tool_response_record.data["content"]` in place, and removes the `fetched_document` key from
+    `tool_response_record.tool_metadata` (it is consumed here rather than recorded as generation metadata).
+    Returns `{sidecar filename: provenance}` for the caller to put under `general_metadata["sidecars"]`, or
+    `{}` when nothing was stored — no document was declared, the result is short enough to read inline, or
+    the store failed.
+
+    Eligibility is *declared by the tool*, via a `fetched_document` entry in its returned metadata naming
+    the document's URL and title (`llmclient.webfetch_wrapper` is the one that does). Declaring rather than
+    matching on the tool's name is what keeps `websearch` inline at any length: its result is a list of
+    links, and the links are the thing the user wants to click, so hiding them behind a chip would be a
+    regression rather than a tidying. It also means a tool that returns a document opts in by saying so.
+
+    The model reads the same bytes either way. A `text_file` part is folded back into the message text at
+    wire-build (`llmclient._serialize_history_for_wire`), so what changes is the chat log and the datastore
+    JSON, not the conversation — which is the property that makes this safe to do behind the user's back.
+    Two things do change for the better: the fetched text is now content-addressed on disk, so it survives
+    the page going away, and it is sized against the context window along with every other attachment
+    instead of being sent whole.
+
+    A failure to store is not allowed to lose the result: the log keeps the full text inline, which is what
+    it did before this existed.
+    """
+    if "tool_metadata" not in tool_response_record:
+        return {}
+    document = tool_response_record.tool_metadata.pop("fetched_document", None)
+    if document is None:
+        return {}
+
+    text = chatutil.content_to_text(tool_response_record.data["content"])
+    if len(text) <= librarian_config.tool_result_attachment_threshold:
+        return {}
+
+    from . import textfilestore  # deferred: only pulls docextract/pypdf when a document is actually stored
+    # The name is for humans, and it has one job the sidecar's own filename cannot do: tell two documents
+    # apart. On disk they are content-addressed, so nothing collides and nothing is ever overwritten — two
+    # fetches of one URL are one file when the bytes match and two when the page changed, which is what a
+    # message wanting the version it actually saw needs. But a *name* is what the chip shows and what
+    # `cleanup.rescue_to_staging` writes out, and two pages can share a title. Leading with the host is what
+    # keeps the name meaningful outside the conversation, months later, in a folder of rescued files.
+    name = _document_display_name(document)
+    try:
+        result = textfilestore.store_file_as_sidecar(datastore=datastore,
+                                                    file_source=text.encode("utf-8"),
+                                                    # The extension decides how the text is extracted back out
+                                                    # later; the server hands us markdown, which `docextract`
+                                                    # reads verbatim. The name carries no extension of its own
+                                                    # (a page title may contain anything at all).
+                                                    name=f"{name}.md",
+                                                    provenance_url=document["url"],
+                                                    provenance_source="tool_result",
+                                                    content_type="text/markdown")
+    except Exception as exc:  # noqa: BLE001 -- a failed store must not lose the tool result
+        logger.warning(f"_attachmentify_tool_result: could not store '{name}' as a sidecar, leaving it inline: {type(exc)}: {exc}")
+        return {}
+
+    # The chip carries the title, so the excerpt is free to be only the opening of the document. Both are
+    # kept: the chip alone would make the result invisible, the excerpt alone would lose the handle on it.
+    excerpt = chatutil.excerpt(text, librarian_config.tool_result_preview_characters)
+    tool_response_record.data["content"] = [chatutil.text_content_part(excerpt), result.part]
+    logger.info(f"_attachmentify_tool_result: stored '{name}' ({len(text)} characters) as sidecar '{result.filename}'.")
+    return {result.filename: result.sidecar_metadata}
+
 def _perform_and_store_tool_calls(llm_settings: env,
                                   datastore: chattree.Forest,
                                   assistant_message: Dict,
@@ -562,8 +658,15 @@ def _perform_and_store_tool_calls(llm_settings: env,
             if "tool_call_id" in tool_response_record:
                 tool_response_record.data["tool_call_id"] = tool_response_record.tool_call_id
 
+            # A long fetched document goes to a sidecar, leaving an excerpt and a chip in the log. This runs
+            # before the payload is built, because it rewrites the message content and produces the sidecar
+            # provenance that goes beside it.
+            sidecar_metadata_by_filename = _attachmentify_tool_result(datastore, tool_response_record)
+
             payload = chatutil.create_payload(llm_settings=llm_settings,
                                               message=tool_response_record.data)
+            if sidecar_metadata_by_filename:
+                payload["general_metadata"]["sidecars"] = sidecar_metadata_by_filename
 
             generation_metadata = {"status": tool_response_record.status}  # status is "success" or "error"
             if "function_name" in tool_response_record:

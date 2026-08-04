@@ -62,11 +62,12 @@ def base_provenance(*,
     `metadata[...] = ...` its extras onto it.
 
     `url`: where the attachment came from — for a user-attached local file, `"file:///<absolute_path>"`.
-    `source`: the categorical pathway that produced this attachment. `"user_attachment"` — a file the user
-              picked — is the only value anything currently emits. `"paste_url"` (materialized from a URL the
-              user supplied) and `"mcp:<server>"` name pathways that do not exist yet; they are listed because
-              this field is read back out of stored provenance, so a reader needs to know the vocabulary is
-              open rather than assume the one value is the whole of it.
+    `source`: the categorical pathway that produced this attachment. Two values are emitted:
+              `"user_attachment"` — a file the user picked — and `"tool_result"`, a document a tool returned
+              and `scaffold` stored instead of dumping into the chat log. `"paste_url"` (materialized from a
+              URL the user supplied) and `"mcp:<server>"` name pathways that do not exist yet; they are
+              listed because this field is read back out of stored provenance, so a reader needs to know the
+              vocabulary is open rather than assume the current values are the whole of it.
     `content_type`: original MIME type.
     `fetched_at`: materialization timestamp string; defaults to the current local time if `None`.
     """

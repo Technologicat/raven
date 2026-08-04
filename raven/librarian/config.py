@@ -142,6 +142,32 @@ docs_fetch_max_fraction_of_context = 0.10
 # only 60% full, so there is plenty of room" is the mistake it exists to prevent.
 context_reserve_fraction = 0.25
 
+# How long a fetched document has to be, in characters, before the chat log shows it as an attachment
+# chip plus an opening excerpt rather than in full.
+#
+# Only a tool result that declares itself a *document* is eligible (currently `webfetch`); a websearch's
+# list of links stays inline at any length, because the links are the result and the user wants to click
+# them. The model is unaffected either way: an attached document's text is folded back into the message
+# at wire-build, so it reads the same bytes it would have read inline.
+#
+# The threshold trades two costs against each other. Below it, the whole result sits in the log, which is
+# what a short page should do — hiding three paragraphs behind a chip is worse than showing them. Above
+# it, one fetch buries the conversation under dozens of screens *and* writes the same bytes into the
+# datastore JSON. 4000 characters is around two screenfuls, which is about as much as can be scrolled
+# past without losing the thread.
+tool_result_attachment_threshold = 4000
+
+# How much of an attachment-ified tool result to show inline as an excerpt, in characters.
+#
+# Cut at a paragraph boundary, so the excerpt ends where a paragraph does rather than mid-sentence; a
+# single paragraph longer than this is cut at a word boundary instead. A fetched page opens with a
+# source header and its title, so the first few hundred characters are mostly provenance — hence a
+# budget generous enough to reach actual prose underneath.
+#
+# Not zero, on purpose: a tool result the user cannot see at all is a step backwards from the
+# what-you-see-is-what-you-get design the chat log otherwise has.
+tool_result_preview_characters = 800
+
 # --------------------------------------------------------------------------------
 # webfetch tool — client-side access policy
 #

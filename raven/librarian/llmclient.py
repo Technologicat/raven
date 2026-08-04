@@ -226,10 +226,21 @@ def webfetch_wrapper(url: str) -> str | tuple[str, dict]:
             return (CANONICAL_NOT_ON_ALLOWLIST.format(host=(host or "(none)")),
                     {"webfetch_denied_host": host})
 
-    result = api.webfetch_fetch(url)  # server enforces SSRF/scheme, fetches, returns {"content", "url", "spaSuspected"}
+    result = api.webfetch_fetch(url)  # server enforces SSRF/scheme, fetches, returns {"content", "url", "spaSuspected", "title"}
     if result.get("spaSuspected"):
         logger.info(f"webfetch_wrapper: '{result.get('url', url)}' flagged spaSuspected (neither fetch tier extracted usable content).")
-    return result["content"]
+    # Declare the result a fetched document, so `scaffold` can store a long one as an attachment sidecar
+    # instead of dumping it into the chat log. Declared rather than inferred from the tool's name: the URL
+    # the server actually ended up at (after rewriting and redirects) and the page's title are known only
+    # here, and they are exactly what the sidecar's provenance and chip want.
+    #
+    # Declared on the refusal paths too — the network refusal, the HTTP error, the SPA notice. Those are
+    # canonical one-sentence strings and so never reach the size threshold that decides whether to store
+    # anything, which makes a special case for them machinery with no effect to have.
+    effective_url = result.get("url") or url
+    return (result["content"],
+            {"fetched_document": {"url": effective_url,
+                                  "name": result.get("title") or effective_url}})
 
 # --------------------------------------------------------------------------------
 # Document database integration (the local knowledge base; no server needed)
@@ -300,6 +311,24 @@ def document_text(retriever: "Optional[hybridir.HybridIR]",
     with retriever.datastore_lock:
         document = retriever.documents.get(document_id)
         return document["text"] if document is not None else None
+
+def document_path(retriever: "Optional[hybridir.HybridIR]",
+                  document_id: str) -> Optional[str]:
+    """Read one document's original file path out of the retriever, or `None` if it has no such document.
+
+    The sibling of `document_text`, with the same locking discipline and for the same reason: `documents` is
+    rewritten wholesale when the retriever commits a batch of filesystem changes, so a read that races one
+    sees a half-swapped mapping.
+
+    The path is what makes a docs-DB document *openable* — unlike a chat attachment, whose bytes Raven stores
+    itself, an indexed document is a file the user already has, and the index only points at it. It may of
+    course have moved or been deleted since indexing; the caller finds that out when it tries to open it.
+    """
+    if retriever is None:
+        return None
+    with retriever.datastore_lock:
+        document = retriever.documents.get(document_id)
+        return document["path"] if document is not None else None
 
 def label_documents(retriever: "Optional[hybridir.HybridIR]",
                     entries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

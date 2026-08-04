@@ -52,6 +52,7 @@ from . import hybridir
 from . import llmclient
 from . import scaffold
 from . import sidecarstore
+from . import textfilestore
 
 gui_config = librarian_config.gui_config  # shorthand, this is used a lot
 
@@ -259,6 +260,10 @@ class DPGChatMessage:
         self.node_id = None  # populated by `build`
         self.gui_text_group = None  # populated by `build`
         self.gui_button_callbacks = {}  # {name0: callable0, ...} - to trigger button features programmatically
+        # Item handler registries created by `_make_clickable`. They live in DPG's handler-registry tree, not
+        # under `gui_container_group`, so `demolish`'s children-only delete does not reach them - this is what
+        # it deletes them by. A rebuilt message would otherwise leak one per attachment, per rebuild.
+        self.owned_handler_registries = []
 
         # for "delete subtree" confirmation (cannot be undone)
         self.last_delete_click_time = None
@@ -698,6 +703,33 @@ class DPGChatMessage:
                                        ok=ok, message=message, duration=gui_config.acknowledgment_duration)
         dpg.set_item_callback(button_id, callback)
 
+    def _make_clickable(self, items: List[Union[str, int]], *, action: Callable[[], None]) -> None:
+        """Make `items` respond to a left click by running `action`, as a shortcut for a button below them.
+
+        Redundant with the action button it duplicates, and deliberately so: an inline thumbnail *looks*
+        clickable, so clicking it and getting nothing is a small papercut every time. The button row stays,
+        since it is what distinguishes "open the saved copy" from "open the original source" — this is the
+        shortcut for the one obvious action, not a replacement for the row.
+
+        Failure is swallowed with a log line rather than flashed. The button is the affordance that reports;
+        a click on the content itself has no natural place to put a red flash, and the same action one row
+        down does say so.
+
+        One registry serves all `items`, since they share the callback — the chip's glyph and its filename
+        are one target as far as the reader is concerned. The registry is owned by this message and deleted
+        in `demolish` (DPG will not collect it with the widgets: it lives in the handler-registry tree).
+        """
+        def callback() -> None:
+            try:
+                action()
+            except Exception as exc:  # noqa: BLE001 -- a secondary action must never crash the chat view
+                logger.error(f"DPGChatMessage._make_clickable: action failed: {type(exc)}: {exc}")
+        registry = dpg.add_item_handler_registry()
+        self.owned_handler_registries.append(registry)
+        dpg.add_item_clicked_handler(parent=registry, button=dpg.mvMouseButton_Left, callback=callback)
+        for item in items:
+            dpg.bind_item_handler_registry(item, registry)
+
     def demolish(self) -> None:
         """The opposite of `build`: delete all GUI widgets belonging to this instance.
 
@@ -716,6 +748,10 @@ class DPGChatMessage:
             self.paragraphs = []
             self.gui_text_group = None
             self.gui_button_callbacks = {}  # deleting all GUI widgets, so clear the stashed callbacks too.
+            for registry in self.owned_handler_registries:  # not under the container group; see `_make_clickable`
+                with guiutils.nonexistent_ok():
+                    dpg.delete_item(registry)
+            self.owned_handler_registries = []
             with guiutils.nonexistent_ok():
                 dpg.delete_item(self.gui_container_group, children_only=True)  # clear old GUI content (needed if rebuilding)
 
@@ -1208,6 +1244,10 @@ class DPGCompleteChatMessage(DPGChatMessage):
         super().__init__(gui_parent=gui_parent,
                          parent_view=parent_view)
         self.node_id = node_id  # reference to the chat node (to ORIGINAL node data, not a copy)
+        # Whether a long document result is showing in full. View state, not chat data: it belongs to this
+        # rendering of the node, not to the node, so it resets whenever the view is rebuilt. That is the
+        # right lifetime — an expansion is a thing you did to look at something, not a preference.
+        self.show_full_text = False
         self.build()
 
     def build(self) -> None:
@@ -1237,15 +1277,45 @@ class DPGCompleteChatMessage(DPGChatMessage):
         # paragraphs; multiple text parts (e.g. one per websearch result) stack into the message's vertical
         # layout, giving per-result visual separation. The persona prefix on the first line of assistant content
         # ("Aria: ...") is stripped per part — a no-op for tool/system messages, which carry no persona.
+        # A *document* result — a fetched page, or a document from the knowledge base — renders collapsed to
+        # an opening excerpt with a toggle, so that one fetch cannot bury the conversation it was meant to
+        # inform. `websearch` is excluded by construction rather than by a name check: its result is a list
+        # of links, which `_document_body` does not recognize as a document. See there.
+        document_body = self._document_body(node_payload)
+        collapsible = (document_body is not None and
+                       len(document_body) > librarian_config.tool_result_attachment_threshold)
+        body_rendered = False
+
         for part in message.get("content") or []:
             part_type = part.get("type")
             if part_type == "text":
-                self._render_text_paragraphs(chatutil.remove_persona_from_start_of_line(persona=persona, text=part["text"]))
+                if not collapsible:
+                    self._render_text_paragraphs(chatutil.remove_persona_from_start_of_line(persona=persona, text=part["text"]))
+                elif not body_rendered:
+                    # In place of the first text part, so the body still precedes the chip below it. A
+                    # document result has exactly one text part; any further ones would be its excerpt
+                    # duplicated, which is what `body_rendered` drops.
+                    self._render_document_body(document_body)
+                    body_rendered = True
             elif part_type == "image_url":
                 self._render_image_part(part, sidecars_meta)
             elif part_type == "text_file":
                 self._render_text_file_part(part, sidecars_meta)
             # else: unknown part type — skip (forward-compat)
+
+        # A document the AI fetched from the local knowledge base gets the same handles as an attached one.
+        # It is *not* an attachment — the file is already the user's, sitting in the documents folder, and
+        # copying it into the sidecar store would archive a second copy of something that cannot go away.
+        # So the affordance matches while the backing store does not: the reader gets a named handle on the
+        # document and a way to open it, pointing at the original rather than at a copy.
+        #
+        # Scoped to `fetch_document` rather than to anything naming documents: a *search* result names up to
+        # ten of them, and a row of ten handles is a different design problem — see the deferred item on
+        # exposing the source files behind a reply's RAG citations.
+        generation_metadata = node_payload.get("generation_metadata") or {}
+        if generation_metadata.get("function_name") == "fetch_document":
+            for document_id in generation_metadata.get("document_ids") or []:
+                self._render_document_reference(document_id)
 
         # Render any tool-call invocations this assistant message made, as visible sub-elements after the text.
         # Without this, a tool-calling turn — often with empty `content` — would show nothing
@@ -1256,6 +1326,96 @@ class DPGCompleteChatMessage(DPGChatMessage):
                                           name=function.get("name", "?"),
                                           arguments=function.get("arguments", ""),
                                           tool_call_id=tool_call.get("id"))
+
+    def _document_body(self, node_payload: Dict[str, Any]) -> Optional[str]:
+        """The full text of the document this message reports, or `None` if it does not report one.
+
+        "Document" is the category the chat log gives a handle to, and membership is *declared*, never guessed
+        from length. Two ways in, matching the two ways a document reaches a message:
+
+          - a `text_file` part, whose sidecar holds the text (a page `webfetch` stored, or a file the user
+            attached) — the stored text part is only an excerpt, so the body comes from the sidecar; and
+          - a `fetch_document` result, whose text *is* the body, sitting inline because a knowledge-base
+            document has no sidecar and should not get one (the file is already the user's).
+
+        Everything else answers `None` and renders unchanged — notably `websearch`, whose result can be long
+        but is a list of links the user wants to see and click, not a document to put behind a toggle.
+
+        **Tool messages only**, which is load-bearing rather than a narrowing for tidiness. A user message
+        carrying an attached document has a `text_file` part too, and its text part is the user's own words;
+        treating that as a document result would replace what they wrote with an excerpt of what they
+        attached. An attached document is not inlined into the chat log at all, by design — the chip is its
+        handle — and that stays true.
+
+        An unreadable sidecar also answers `None`, which degrades to rendering the stored excerpt as ordinary
+        text: less than we wanted, but never a message that shows nothing.
+        """
+        message = node_payload["message"]
+        if message.get("role") != "tool":
+            return None
+        datastore = self.parent_view.chat_controller.datastore
+        for part in message.get("content") or []:
+            if part.get("type") == "text_file":
+                url = (part.get("text_file") or {}).get("url", "")
+                if url.startswith(sidecarstore.SIDECAR_SCHEME):
+                    try:
+                        return textfilestore.sidecar_to_text(datastore, url)
+                    except Exception as exc:  # noqa: BLE001 -- rendering must not fail on one unreadable sidecar
+                        logger.warning(f"DPGCompleteChatMessage._document_body: could not read '{url}': {type(exc)}: {exc}")
+                        return None
+        if (node_payload.get("generation_metadata") or {}).get("function_name") == "fetch_document":
+            return chatutil.content_to_text(message.get("content"))
+        return None
+
+    def _render_document_body(self, body: str) -> None:
+        """Render a long document result: an excerpt or the whole thing, plus the toggle between them.
+
+        The toggle names the size it would expand to, because that is what decides between the two ways to
+        read this. In-place is convenient and keeps you in the conversation, but a large document pushes the
+        surrounding turns off the screen; opening the file gives you a separate window where the document and
+        the conversation are visible at once. Fifty thousand characters and five thousand want different
+        answers, and only the reader can pick — so the number goes where the choice is made.
+        """
+        expanded = self.show_full_text
+
+        def toggle() -> None:
+            self.show_full_text = not self.show_full_text
+            # Rebuild just this message, in place, so the view keeps its scroll position. The message's own
+            # widgets — including the button running this — go away here; that is the same thing the branch
+            # and delete buttons already do through `parent_view.build()`, one level wider.
+            self.demolish()
+            self.build()
+
+        with self.paragraphs_lock:
+            # Button first and to the *left* of the text, the same shape the thinking-trace toggle uses. It
+            # has to be somewhere that does not move when the text does: below the body, expanding a long
+            # document pushes the collapse button off the bottom of the screen, so the gesture that undoes
+            # the expansion is the one thing the expansion hides. Here it stays under the cursor, and a
+            # second click puts the message back.
+            row = dpg.add_group(horizontal=True, parent=self.gui_text_group)
+            # Deliberately *not* an `_add_action_button`: that one flashes the button green or red once the
+            # action returns, and this action deletes the button it is flashing. It is also not the kind of
+            # action that wants an acknowledgment — the whole message visibly changing is the feedback.
+            button_id = dpg.add_button(label=fa.ICON_CHEVRON_UP if expanded else fa.ICON_CHEVRON_DOWN,
+                                       width=gui_config.toolbutton_w, parent=row, callback=toggle)
+            dpg.bind_item_font(button_id, self.parent_view.themes_and_fonts.icon_font_solid)
+            with dpg.tooltip(button_id):
+                if expanded:
+                    dpg.add_text("Show less\n(collapse back to the opening)")
+                else:
+                    dpg.add_text(f"Show all {len(body):,} characters here\n"
+                                 "(a large document will fill the view — the button below opens it\n"
+                                 "in a separate window instead, so you keep the conversation in sight)")
+
+            # Render the body into a column beside the button. `add_paragraph` parents to `gui_text_group`,
+            # so retarget it for the duration rather than bypassing it — going straight to the renderer
+            # would leave the text out of `self.paragraphs`, and that is what "copy this message" reads.
+            body_column = dpg.add_group(parent=row)
+            outer_group, self.gui_text_group = self.gui_text_group, body_column
+            try:
+                self._render_text_paragraphs(body if expanded else chatutil.excerpt(body, librarian_config.tool_result_preview_characters))
+            finally:
+                self.gui_text_group = outer_group
 
     def _render_text_paragraphs(self, text: str) -> None:
         """Render one text content-part: split into paragraphs and add them.
@@ -1329,8 +1489,12 @@ class DPGCompleteChatMessage(DPGChatMessage):
                                      width=texture.w,
                                      height=texture.h,
                                      parent=cluster)
-            with dpg.tooltip(image_id):  # original filename only; the action buttons carry their own tooltips
-                dpg.add_text(sidecarstore.provenance_filename_from_url(meta.get("url")) or "attached image")
+            archival_filename = meta.get("original_sidecar") or filename
+            open_saved_copy = lambda: common_utils.open_file(datastore.sidecar_path(archival_filename))  # noqa: E731 -- shared by the click shortcut and the button below
+            with dpg.tooltip(image_id):  # original filename, and that the thumbnail itself opens it
+                dpg.add_text(f"{sidecarstore.provenance_filename_from_url(meta.get('url')) or 'attached image'}"
+                             "\n(click to open)")
+            self._make_clickable([image_id], action=open_saved_copy)
 
             # Per-image provenance actions. "Show original" resolves to the archival copy — the verbatim original
             # kept as a second sidecar (case 2 of the image store), or the primary itself when that is the
@@ -1338,7 +1502,6 @@ class DPGCompleteChatMessage(DPGChatMessage):
             # primary is the best copy stored. "Open source" targets the recorded provenance URL, which is
             # fragile (the file may have moved, the page may 404) and absent for some images — disabled up front
             # when there is nothing openable. "Open folder" reveals the datastore's image-sidecar directory.
-            archival_filename = meta.get("original_sidecar") or filename
             source_url = meta.get("url") or ""
             source_openable = bool(source_url) and not source_url.startswith("data:")
             actions = dpg.add_group(horizontal=True, parent=cluster)
@@ -1347,7 +1510,7 @@ class DPGCompleteChatMessage(DPGChatMessage):
                                         icon=fa.ICON_IMAGE,
                                         tooltip_text="Show full-size image\n(the saved copy, in the chat data folder)",
                                         ok_message="Opened image",
-                                        action=lambda: common_utils.open_file(datastore.sidecar_path(archival_filename)))
+                                        action=open_saved_copy)
             if source_openable:
                 source_tooltip = f"Open original source\n{urllib.parse.unquote(source_url)}"
             elif source_url.startswith("data:"):
@@ -1383,42 +1546,106 @@ class DPGCompleteChatMessage(DPGChatMessage):
         meta = sidecars_meta.get(filename) or {}
         name = (part.get("text_file") or {}).get("name") or meta.get("name") or "attached file"
         datastore = self.parent_view.chat_controller.datastore
+        open_saved_copy = lambda: common_utils.open_file(datastore.sidecar_path(filename))  # noqa: E731 -- shared by the click shortcut and the button below
+        source_url = meta.get("url") or ""
+        source_openable = bool(source_url) and not source_url.startswith("data:")
         with self.paragraphs_lock:
-            cluster = dpg.add_group(parent=self.gui_text_group)  # chip + its provenance action row, stacked
+            # One row: the actions, then the name they act on. The buttons come first because they are the
+            # fixed part — three glyphs in the same place on every attachment — while the name is arbitrary
+            # length, so leading with it would leave the buttons at a different x on every chip. The name
+            # carries no glyph of its own: the first button already shows the document icon, and repeating
+            # it a few pixels away reads as two separate things rather than one.
+            row = dpg.add_group(horizontal=True, parent=self.gui_text_group)
 
-            chip = dpg.add_group(horizontal=True, parent=cluster)  # a document glyph + the filename, on one line
-            icon_id = dpg.add_text(fa.ICON_FILE_LINES, parent=chip)
-            dpg.bind_item_font(icon_id, self.parent_view.themes_and_fonts.icon_font_solid)
-            dpg.add_text(name, parent=chip)
-
-            # Per-document provenance actions. "Show document" opens the stored sidecar (verbatim — documents are
-            # never transformed, so the sidecar IS the original) in the OS default app. "Open source" targets the
-            # recorded provenance URL, disabled when nothing is openable. "Open folder" reveals the sidecar dir.
-            source_url = meta.get("url") or ""
-            source_openable = bool(source_url) and not source_url.startswith("data:")
-            actions = dpg.add_group(horizontal=True, parent=cluster)
-
-            self._add_action_button(parent=actions,
+            # "Show document" opens the stored sidecar (verbatim — documents are never transformed, so the
+            # sidecar IS the original) in the OS default app. "Open source" targets the recorded provenance
+            # URL, disabled when nothing is openable. "Open folder" reveals the sidecar dir.
+            self._add_action_button(parent=row,
                                         icon=fa.ICON_FILE_LINES,
                                         tooltip_text="Show the attached document\n(the saved copy, in the chat data folder)",
                                         ok_message="Opened document",
-                                        action=lambda: common_utils.open_file(datastore.sidecar_path(filename)))
+                                        action=open_saved_copy)
             if source_openable:
                 source_tooltip = f"Open original source\n{urllib.parse.unquote(source_url)}"
             else:
                 source_tooltip = "Open original source — unavailable\n(no source location was recorded)"
-            self._add_action_button(parent=actions,
+            self._add_action_button(parent=row,
                                         icon=fa.ICON_LINK,
                                         tooltip_text=source_tooltip,
                                         ok_message="Opened source",
                                         enabled=source_openable,
                                         action=lambda: _open_source_url(source_url))
-            self._add_action_button(parent=actions,
+            self._add_action_button(parent=row,
                                         icon=fa.ICON_FOLDER_OPEN,
                                         tooltip_text="Open the attachments folder\n(where attached files are stored)",
                                         ok_message="Opened folder",
                                         action=lambda: common_utils.open_in_file_manager(datastore.sidecar_dir))
 
+            name_id = dpg.add_text(name, parent=row)
+            # A name is text, so unlike a thumbnail it does not advertise itself as clickable. The tooltip is
+            # what carries that here; a hover highlight would be better and is filed separately. It also
+            # names where the document came from and when, which is what tells two same-titled fetches apart.
+            with dpg.tooltip(name_id):
+                dpg.add_text("Click to open the attached document")
+                if source_url:
+                    dpg.add_text(urllib.parse.unquote(source_url), color=(180, 180, 180))
+                if meta.get("fetched_at"):
+                    dpg.add_text(f"saved {meta['fetched_at']}", color=(180, 180, 180))
+            self._make_clickable([name_id], action=open_saved_copy)
+
+
+
+    def _render_document_reference(self, document_id: str) -> None:
+        """Render a handle on one knowledge-base document the AI fetched: a chip plus its two actions.
+
+        The docs-DB counterpart of `_render_text_file_part`, and deliberately the same shape — a document
+        glyph, a name, and a small action row — because to the reader these are the same kind of thing. What
+        differs is where they point. An attachment has a saved copy and a recorded source; an indexed document
+        *is* its source, so "open the saved copy" and "open the original" collapse into one action, and the
+        folder to reveal is the documents folder rather than the sidecar directory.
+
+        The name is `chatutil.document_label` (the document's own title, per its content), falling back to the
+        ID, which is the handle `fetch_document` takes and so is worth showing when nothing better exists.
+
+        A document that is no longer in the index renders with its ID and a disabled open button: the
+        conversation did read it, and saying so with a dead handle is more honest than showing nothing.
+        """
+        retriever = self.parent_view.chat_controller.retriever
+        path = llmclient.document_path(retriever, document_id)
+        text = llmclient.document_text(retriever, document_id)
+        name = (chatutil.document_label(text) if text else "") or document_id
+        with self.paragraphs_lock:
+            # One row — actions, then the name they act on — matching `_render_text_file_part`. A
+            # knowledge-base document gets the book glyph rather than the attachment's document glyph, since
+            # the two point at different places (the user's documents folder, not the sidecar store).
+            row = dpg.add_group(horizontal=True, parent=self.gui_text_group)
+            if path is not None:
+                open_document = lambda: common_utils.open_file(path)  # noqa: E731 -- shared by the click shortcut and the button below
+                self._add_action_button(parent=row,
+                                        icon=fa.ICON_BOOK_OPEN,
+                                        tooltip_text=f"Open the document\n{path}",
+                                        ok_message="Opened document",
+                                        action=open_document)
+                self._add_action_button(parent=row,
+                                        icon=fa.ICON_FOLDER_OPEN,
+                                        tooltip_text="Open the documents folder\n(the knowledge base the AI searches)",
+                                        ok_message="Opened folder",
+                                        action=lambda: common_utils.open_in_file_manager(librarian_config.llm_docs_dir))
+                name_id = dpg.add_text(name, parent=row)
+                with dpg.tooltip(name_id):
+                    dpg.add_text("Click to open the document")
+                    dpg.add_text(str(path), color=(180, 180, 180))
+                self._make_clickable([name_id], action=open_document)
+            else:
+                self._add_action_button(parent=row,
+                                        icon=fa.ICON_BOOK_OPEN,
+                                        tooltip_text="Open the document — unavailable\n(no longer in the document database)",
+                                        ok_message="Opened document",
+                                        enabled=False,
+                                        action=lambda: None)
+                name_id = dpg.add_text(name, parent=row)
+                with dpg.tooltip(name_id):
+                    dpg.add_text(f"Document '{document_id}'")
 
 
 class DPGStreamingChatMessage(DPGChatMessage):
