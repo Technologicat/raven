@@ -97,6 +97,12 @@ Combine the actions into a single callback, or give each a frame number nothing
 else uses. Frame 10 is the de facto Raven convention for "the GUI has settled",
 so it is the number most likely to already be taken in a given app.
 
+When the actions are not known statically — one per widget in a list that is
+built at runtime, say — the combining has to happen at runtime too: accumulate
+them in a dict under a lock and register *one* master callback that drains it.
+Raven has no live instance of this, but it is the general form of "combine into
+a single callback", and it is what a per-widget deferred action needs.
+
 Audited 2026-07-30 across the constellation: no app registers a frame number
 twice. `conference_timer` registers 10 and 12 in each of two branches, but the
 branches are mutually exclusive (`if font_size <= reference_size: ... else: ...`),

@@ -228,17 +228,6 @@ def _get_all_greeting_node_ids(datastore: chattree.Forest) -> List[str]:
 # --------------------------------------------------------------------------------
 
 class DPGChatMessage:
-    class_lock = threading.RLock()
-    callbacks = {}
-
-    @classmethod
-    def run_callbacks(cls: type) -> None:
-        with cls.class_lock:
-            callbacks = list(cls.callbacks.items())
-            for tag, function in callbacks:
-                function()
-                cls.callbacks.pop(tag)
-
     def __init__(self,
                  gui_parent: Union[str, int],
                  parent_view: "DPGLinearizedChatView"):
