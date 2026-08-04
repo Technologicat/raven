@@ -249,6 +249,7 @@ class DPGChatMessage:
         self.node_id = None  # populated by `build`
         self.gui_text_group = None  # populated by `build`
         self.gui_button_callbacks = {}  # {name0: callable0, ...} - to trigger button features programmatically
+        self.text_indent_w = 0  # how far the text currently being rendered is inset from the message's left edge
         # Item handler registries created by `_make_clickable`. They live in DPG's handler-registry tree, not
         # under `gui_container_group`, so `demolish`'s children-only delete does not reach them - this is what
         # it deletes them by. A rebuilt message would otherwise leak one per attachment, per rebuild.
@@ -296,9 +297,15 @@ class DPGChatMessage:
             return siblings[0]
 
     def get_chat_text_width(self) -> int:
-        """Get the current text wrap width of the chat."""
+        """Get the current text wrap width of the chat.
+
+        Narrowed by `text_indent_w` while a block is being rendered indented (the document-body column sits
+        to the right of its toggle button). Wrapping is measured from the text's own left edge, so an
+        indented block given the full width would run past the right margin by exactly the indent — visible
+        only once the window is narrow enough for the margin to stop absorbing it.
+        """
         w, h = guiutils.get_widget_size(self.parent_view.gui_parent)  # The view's GUI parent is the actual panel (DPG child window), whose width changes in a window resize.
-        chat_text_w = w - gui_config.chat_text_right_margin_w
+        chat_text_w = w - gui_config.chat_text_right_margin_w - self.text_indent_w
         return chat_text_w
 
     def build(self,
@@ -719,6 +726,48 @@ class DPGChatMessage:
         for item in items:
             dpg.bind_item_handler_registry(item, registry)
 
+    def rebuild_in_place(self) -> None:
+        """Rebuild this message's widgets without the panel ever getting shorter.
+
+        `demolish` + `build` is the obvious spelling and it flickers, because `build` empties the container
+        and then repopulates it: for the several frames the markdown takes to lay out, the panel is missing
+        this message entirely. DPG clamps the scroll to that shorter content on the *first* of those frames,
+        so the reader watches the conversation jump and then be put back — and correcting afterwards cannot
+        help, because the wrong position was already displayed.
+
+        So the replacement is built *first*, into a fresh container inserted where the old one is, and the
+        old container is deleted only once the new one is standing. Content only ever grows during the
+        build, so there is nothing to clamp; the one shrink left happens after everything is laid out, where
+        `hold_scroll_across_rebuild`'s instant correction covers it in a single frame.
+
+        This is the same technique as the Visualizer's double-buffered info panel, applied per *message*
+        rather than per panel — and the difference in scope is the point rather than an inconsistency. There
+        the buffered thing is one panel whose whole content is replaced; here the chat log is arbitrarily
+        long and only one message is changing, so buffering the panel would mean laying out the entire
+        conversation twice to redraw a paragraph.
+
+        The instance takes a **new `gui_uuid`** as part of this. Every tag `build` creates embeds it, and for
+        a moment both copies exist — the old widgets keep the old namespace and the new ones get a fresh one,
+        so nothing collides. This is the version-counted-tag pattern Raven uses wherever widgets are
+        recreated dynamically, and it is not optional: a duplicate DPG tag terminates the process rather than
+        raising, and `delete_item` does not free the name synchronously.
+        """
+        with self.paragraphs_lock:
+            old_container = self.gui_container_group
+            old_registries, self.owned_handler_registries = self.owned_handler_registries, []
+            self.paragraphs = []
+            self.gui_button_callbacks = {}
+            self.gui_uuid = str(uuid.uuid4())
+            self.gui_container_group = dpg.add_group(tag=f"chat_item_container_group_{self.gui_uuid}",
+                                                     parent=self.gui_parent,
+                                                     before=old_container)  # exactly where the old one sits
+            self.build()
+            for registry in old_registries:  # not under the container group; see `_make_clickable`
+                with guiutils.nonexistent_ok():
+                    dpg.delete_item(registry)
+            with guiutils.nonexistent_ok():
+                dpg.delete_item(old_container)
+
     def demolish(self) -> None:
         """The opposite of `build`: delete all GUI widgets belonging to this instance.
 
@@ -1028,7 +1077,9 @@ class DPGChatMessage:
         # (bumping that would add left margin to EVERY message row for a button almost never shown). The cost:
         # the leading right-align spacer reserves space for the fixed button count, so the extra button pushes
         # the sibling counter ("1 / 2") further right and possibly off-view on a denied tool row. Acceptable
-        # for this provisional affordance; revisit if/when it gets a permanent home.
+        # for a button that appears only when a fetch was refused; the *unconditional* half of this problem —
+        # the jump-back link, which every tool result carried — now lives in the message's left gutter
+        # instead (`_render_gutter_and_body`), so an ordinary tool row no longer reads as misaligned.
         #
         # NOTE: provisional placement. Brief 03 (content-parts) moves tool-result rendering into the assistant
         # message body; when that lands, this affordance relocates there. See briefs/summer_2026_librarian_extension/.
@@ -1036,15 +1087,6 @@ class DPGChatMessage:
         if role == "tool" and node_id is not None:
             denied_node_payload = self.parent_view.chat_controller.datastore.get_payload(node_id)
             maybe_denied_host = denied_node_payload.get("generation_metadata", {}).get("webfetch_denied_host")
-
-            # The other half of the tool-call navigation pair: jump back to the call this result answers.
-            if (answered_call_id := denied_node_payload["message"].get("tool_call_id")) is not None:
-                self._add_action_button(parent=g,
-                                        icon=fa.ICON_ARROW_UP,
-                                        tooltip_text="Go to the call this result answers",
-                                        ok_message="Jumped to the call!",
-                                        fail_message="The originating call isn't in this branch",
-                                        action=self._make_jump_to_tool_call(answered_call_id))
         if maybe_denied_host is not None:
             def approve_and_retry_callback():
                 chat_controller = self.parent_view.chat_controller
@@ -1273,24 +1315,47 @@ class DPGCompleteChatMessage(DPGChatMessage):
         document_body = self._document_body(node_payload)
         collapsible = (document_body is not None and
                        len(document_body) > librarian_config.tool_result_attachment_threshold)
+        # The left gutter of a tool result: the buttons that act on the *whole* message, stacked beside its
+        # first line. Expand/collapse goes on top, because aligning a disclosure control with the top line of
+        # the content it discloses is a convention older than this app; the jump-back link sits under it.
+        #
+        # These live here rather than in the message's button row (`build_buttons`) on purpose. That row's
+        # placement philosophy is that a given button is always at the same x, with the ones that do not
+        # apply hidden — so an *extra* button on tool results alone shifts everything after it and makes the
+        # row read as misaligned without it being obvious why. The jump-back link also has a natural home
+        # here: it is where the view scrolls to when its counterpart ("go to result") is clicked.
+        answered_call_id = message.get("tool_call_id") if role == "tool" else None
+        gutter_wanted = collapsible or answered_call_id is not None
+        # *All* the text parts, because a message can have several and they all belong in the column beside
+        # the gutter — `websearch` emits one per result, which is what gives its results their separation.
+        # Rendering only the first would silently drop the other nineteen.
+        gutter_texts = [chatutil.remove_persona_from_start_of_line(persona=persona, text=part["text"])
+                        for part in (message.get("content") or [])
+                        if part.get("type") == "text"] if gutter_wanted else []
         body_rendered = False
 
         for part in message.get("content") or []:
             part_type = part.get("type")
             if part_type == "text":
-                if not collapsible:
+                if not gutter_wanted:
                     self._render_text_paragraphs(chatutil.remove_persona_from_start_of_line(persona=persona, text=part["text"]))
                 elif not body_rendered:
-                    # In place of the first text part, so the body still precedes the chip below it. A
-                    # document result has exactly one text part; any further ones would be its excerpt
-                    # duplicated, which is what `body_rendered` drops.
-                    self._render_document_body(document_body)
+                    # Rendered at the position of the *first* text part, so the body still precedes any chip
+                    # below it. The remaining text parts were folded in above, so later ones are skipped.
+                    self._render_gutter_and_body(texts=gutter_texts,
+                                                 document_body=document_body if collapsible else None,
+                                                 answered_call_id=answered_call_id)
                     body_rendered = True
             elif part_type == "image_url":
                 self._render_image_part(part, sidecars_meta)
             elif part_type == "text_file":
                 self._render_text_file_part(part, sidecars_meta)
             # else: unknown part type — skip (forward-compat)
+
+        if gutter_wanted and not body_rendered:
+            # No text part to hang the gutter beside — an empty tool result, which the backend can produce.
+            # The jump-back link still has to exist, or the navigation pair is one-way from this message.
+            self._render_gutter_and_body(texts=[], document_body=None, answered_call_id=answered_call_id)
 
         # A document the AI fetched from the local knowledge base gets the same handles as an attached one.
         # It is *not* an attachment — the file is already the user's, sitting in the documents folder, and
@@ -1356,55 +1421,90 @@ class DPGCompleteChatMessage(DPGChatMessage):
             return chatutil.content_to_text(message.get("content"))
         return None
 
-    def _render_document_body(self, body: str) -> None:
-        """Render a long document result: an excerpt or the whole thing, plus the toggle between them.
+    def _render_gutter_and_body(self, *,
+                                texts: List[str],
+                                document_body: Optional[str],
+                                answered_call_id: Optional[str]) -> None:
+        """Render a tool result's text with its whole-message buttons stacked in a gutter to the left.
 
-        The toggle names the size it would expand to, because that is what decides between the two ways to
-        read this. In-place is convenient and keeps you in the conversation, but a large document pushes the
-        surrounding turns off the screen; opening the file gives you a separate window where the document and
-        the conversation are visible at once. Fifty thousand characters and five thousand want different
-        answers, and only the reader can pick — so the number goes where the choice is made.
+        `texts`: the message's own text parts, in order, used when there is no document body to show
+                 instead. Several is normal — `websearch` emits one per result, and each renders as its own
+                 paragraph, which is what visually separates the results.
+        `document_body`: the full document this result reports, when it is long enough to be shown collapsed
+                         (`None` otherwise, in which case `text` renders in full and there is no toggle).
+        `answered_call_id`: the tool call this result answers, if any — adds the jump-back link.
+
+        The expand/collapse toggle names the size it would expand to, because that is what decides between
+        the two ways to read a long document. In-place is convenient and keeps you in the conversation, but a
+        large one pushes the surrounding turns off the screen; opening the file gives you a separate window
+        where the document and the conversation are visible at once. Fifty thousand characters and five
+        thousand want different answers, and only the reader can pick — so the number goes where the choice
+        is made.
         """
         expanded = self.show_full_text
+        body = document_body if document_body is not None else "\n".join(texts)
 
         def toggle() -> None:
+            # Sample *before* the rebuild: expanding grows the container and leaves the offset alone, but
+            # collapsing shrinks it, and DPG clamps the scroll to the smaller maximum at the next layout.
+            # Without putting it back, a collapse scrolls the conversation under the reader — the message
+            # they just collapsed jumps down the screen, which reads as a glitch rather than as an action.
+            y_scroll = dpg.get_y_scroll(self.parent_view.gui_parent)
             self.show_full_text = not self.show_full_text
-            # Rebuild just this message, in place, so the view keeps its scroll position. The message's own
-            # widgets — including the button running this — go away here; that is the same thing the branch
+            # Rebuild just this message rather than the whole view, and build the replacement before tearing
+            # the original down — see `rebuild_in_place` for why the obvious order flickers. The button
+            # running this callback is one of the widgets that goes away; that is the same thing the branch
             # and delete buttons already do through `parent_view.build()`, one level wider.
-            self.demolish()
-            self.build()
+            self.rebuild_in_place()
+            self.parent_view.hold_scroll_across_rebuild(y_scroll)
 
         with self.paragraphs_lock:
-            # Button first and to the *left* of the text, the same shape the thinking-trace toggle uses. It
+            # Gutter to the *left* of the text, the same shape the thinking-trace toggle uses. The toggle
             # has to be somewhere that does not move when the text does: below the body, expanding a long
             # document pushes the collapse button off the bottom of the screen, so the gesture that undoes
             # the expansion is the one thing the expansion hides. Here it stays under the cursor, and a
             # second click puts the message back.
             row = dpg.add_group(horizontal=True, parent=self.gui_text_group)
-            # Deliberately *not* an `_add_action_button`: that one flashes the button green or red once the
-            # action returns, and this action deletes the button it is flashing. It is also not the kind of
-            # action that wants an acknowledgment — the whole message visibly changing is the feedback.
-            button_id = dpg.add_button(label=fa.ICON_CHEVRON_UP if expanded else fa.ICON_CHEVRON_DOWN,
-                                       width=gui_config.toolbutton_w, parent=row, callback=toggle)
-            dpg.bind_item_font(button_id, self.parent_view.themes_and_fonts.icon_font_solid)
-            with dpg.tooltip(button_id):
-                if expanded:
-                    dpg.add_text("Show less\n(collapse back to the opening)")
-                else:
-                    dpg.add_text(f"Show all {len(body):,} characters here\n"
-                                 "(a large document will fill the view — the button below opens it\n"
-                                 "in a separate window instead, so you keep the conversation in sight)")
+            gutter = dpg.add_group(parent=row)
 
-            # Render the body into a column beside the button. `add_paragraph` parents to `gui_text_group`,
+            if document_body is not None:
+                # Deliberately *not* an `_add_action_button`: that one flashes the button green or red once
+                # the action returns, and this action deletes the button it is flashing. It is also not the
+                # kind of action that wants an acknowledgment — the message visibly changing is the feedback.
+                button_id = dpg.add_button(label=fa.ICON_CHEVRON_UP if expanded else fa.ICON_CHEVRON_DOWN,
+                                           width=gui_config.toolbutton_w, parent=gutter, callback=toggle)
+                dpg.bind_item_font(button_id, self.parent_view.themes_and_fonts.icon_font_solid)
+                with dpg.tooltip(button_id):
+                    if expanded:
+                        dpg.add_text("Show less\n(collapse back to the opening)")
+                    else:
+                        dpg.add_text(f"Show all {len(body):,} characters here\n"
+                                     "(a large document will fill the view — the button below opens it\n"
+                                     "in a separate window instead, so you keep the conversation in sight)")
+
+            if answered_call_id is not None:
+                self._add_action_button(parent=gutter,
+                                        icon=fa.ICON_ARROW_UP,
+                                        tooltip_text="Go to the call this result answers",
+                                        ok_message="Jumped to the call!",
+                                        fail_message="The originating call isn't in this branch",
+                                        action=self._make_jump_to_tool_call(answered_call_id))
+
+            # Render the body into a column beside the gutter. `add_paragraph` parents to `gui_text_group`,
             # so retarget it for the duration rather than bypassing it — going straight to the renderer
             # would leave the text out of `self.paragraphs`, and that is what "copy this message" reads.
             body_column = dpg.add_group(parent=row)
             outer_group, self.gui_text_group = self.gui_text_group, body_column
+            outer_indent, self.text_indent_w = self.text_indent_w, self.text_indent_w + gui_config.toolbutton_w
             try:
-                self._render_text_paragraphs(body if expanded else chatutil.excerpt(body, librarian_config.tool_result_preview_characters))
+                if document_body is None:
+                    for one_text in texts:  # one paragraph run per part, preserving the per-result separation
+                        self._render_text_paragraphs(one_text)
+                else:
+                    self._render_text_paragraphs(body if expanded else chatutil.excerpt(body, librarian_config.tool_result_preview_characters))
             finally:
                 self.gui_text_group = outer_group
+                self.text_indent_w = outer_indent
 
     def _render_text_paragraphs(self, text: str) -> None:
         """Render one text content-part: split into paragraphs and add them.
@@ -2007,6 +2107,45 @@ class DPGLinearizedChatView:
         else:
             self._set_y_scroll(sample.y_scroll, to_end=False)
 
+    def hold_scroll_across_rebuild(self, y_scroll: int) -> None:
+        """Put the view back at `y_scroll` after one message rebuilt itself in place.
+
+        `y_scroll`: what `dpg.get_y_scroll(self.gui_parent)` reported **before** the rebuild.
+
+        The narrow sibling of `restore_scroll_after_swap`, for a rebuild the *reader* asked for rather than
+        one that content arrival forced. Neither of that one's two behaviours is right here: no content
+        arrived, so raising the jump-to-latest pill would be a lie, and a reader who happened to be at the
+        end did not ask to be taken there — they asked to expand a message and expect to still be looking
+        at it.
+
+        Nothing above the rebuilt message changes, so its offset in content coordinates is the same before
+        and after; restoring the viewport offset therefore restores its *screen* position exactly. The wait
+        is not optional — DPG clamps the scroll to the smaller maximum at the next layout, so reading or
+        writing the position before the replacement has been laid out reads a number that is about to change.
+
+        The thinking-trace toggle needs none of this, and the difference is *rebuilding*, not the toggling:
+        it renders both states up front and flips `hide_item` / `show_item`, so DPG's layout engine reflows
+        around the change and the position stays consistent by construction. That trade is not available
+        here — it would mean laying out tens of thousands of characters of markdown on every chat-view
+        rebuild to keep a copy hidden — so this restores by hand what that gets for free.
+
+        One case cannot be honoured, and it is arithmetic rather than a bug: collapsing a document that was
+        most of the conversation can leave less content than `y_scroll` scrolls past, and the view then sits
+        at the new maximum with the message lower on screen than it was. There is nowhere else for it to be.
+
+        **Instant, not animated, and written twice.** This is a correction rather than a navigation: the
+        reader asked to expand a message, not to travel, so animating the fix shows them a wrong position and
+        then makes them watch it being undone — the jump reads as a glitch and the glide reads as the app
+        changing its mind. Writing it before the wait as well as after narrows how long the wrong position is
+        on screen: the rebuild lays out its markdown over several frames, and the clamp lands on the first of
+        them, so waiting for the whole layout before correcting means showing the clamped position for all of
+        them. The write before the wait is the one that usually holds; the one after is what catches the
+        clamp when the layout moved the maximum under it.
+        """
+        self._set_y_scroll(y_scroll, to_end=False, smooth=False)
+        guiutils.split_frame(operation="hold_scroll_across_rebuild: lay out the rebuilt message")
+        self._set_y_scroll(y_scroll, to_end=False, smooth=False)
+
     def follow_tail(self, sample: TailFollowSample) -> None:
         """Scroll the view to the end of the chat, but only if it was following *before* the content grew.
 
@@ -2037,7 +2176,8 @@ class DPGLinearizedChatView:
         # the window — the wait is where a keypress actually lands.
         self.scroll_view(abort_if_reader_scrolled_since=sample)  # waits for the new content to lay out, so this reaches the *new* end
 
-    def _set_y_scroll(self, y_scroll: int, *, to_end: bool, user_initiated: bool = False) -> None:
+    def _set_y_scroll(self, y_scroll: int, *, to_end: bool, user_initiated: bool = False,
+                      smooth: Optional[bool] = None) -> None:
         """Move the scroll position, remembering what we asked for.
 
         `y_scroll`: The target position in content coordinates — a non-negative offset from the top. It is
@@ -2066,6 +2206,13 @@ class DPGLinearizedChatView:
         one API. Routing the instant case through it too is what keeps the commanded-position bookkeeping,
         the retargeting and the end-of-content signalling identical in both modes, instead of one of them
         quietly growing a second set of rules.
+
+        `smooth`: `None` (the default) takes `config.smooth_scrolling`, which is what every *navigation*
+                  wants — a reader who pressed a key or a button is going somewhere, and the animation is
+                  what tells them where from. Pass `False` for a **correction**: a scroll that exists only to
+                  undo a position the layout engine imposed, where the reader asked to go nowhere at all.
+                  Animating one of those shows them the wrong position and then makes them watch it being
+                  fixed, which reads as the app changing its mind.
 
         If a scroll is already in flight on this panel it is *retargeted* rather than replaced, keeping its
         subpixel position so the movement bends toward the new target instead of restarting. The retarget
@@ -2097,7 +2244,7 @@ class DPGLinearizedChatView:
         with gui_animation.SmoothScrolling.class_lock:
             gui_animation.animator.add(gui_animation.SmoothScrolling(target_child_window=self.gui_parent,
                                                                      target_y_scroll=y_scroll,
-                                                                     smooth=gui_config.smooth_scrolling,
+                                                                     smooth=(gui_config.smooth_scrolling if smooth is None else smooth),
                                                                      smooth_step=gui_config.smooth_scrolling_step_parameter,
                                                                      flasher=(self._scroll_end_flasher if user_initiated else None),
                                                                      commanded_y_scroll=self._commanded_y_scroll))

@@ -142,6 +142,27 @@ docs_fetch_max_fraction_of_context = 0.10
 # only 60% full, so there is plenty of room" is the mistake it exists to prevent.
 context_reserve_fraction = 0.25
 
+# Which key sends a chat message: `"enter"` or `"ctrl+enter"`.
+#
+# The two chords simply trade places, because that is the whole of what the widget offers: ImGui's multiline
+# text field knows Enter and Ctrl+Enter, one of which commits the edit and the other of which inserts a
+# newline. (Shift+Enter is *not* a third option — it does nothing here, whatever other chat apps have taught
+# your fingers.)
+#
+#   - `"ctrl+enter"` — Ctrl+Enter sends, Enter inserts a newline.
+#   - `"enter"`      — Enter sends, Ctrl+Enter inserts a newline.
+#
+# `"ctrl+enter"` is the default, which is not what most chat frontends do — but it is what most *editors*
+# do, and this is a multiline field where Enter otherwise means newline everywhere else in the system. The
+# asymmetry in what going wrong costs settles it: under `"enter"`, a Return reached for mid-thought sends
+# the message half-written, and Librarian has no message editing yet, so getting back to what you were
+# typing means copying the sent message out with its copy button, pasting it back, deleting it, and
+# resuming. Under `"ctrl+enter"` the same slip inserts a newline, which is one backspace. Revisit this
+# default if message editing lands — the argument is about the cost of the mistake, not about the chord.
+#
+# Set it to `"enter"` if that is the muscle memory you arrive with; for short questions it is fewer keys.
+send_message_key = "ctrl+enter"
+
 # How long a fetched document has to be, in characters, before the chat log shows it as an attachment
 # chip plus an opening excerpt rather than in full.
 #

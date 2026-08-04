@@ -94,6 +94,22 @@ logger.info(f"Libraries loaded in {tim.dt:0.6g}s.")
 # quantities are expressed in lines, so the margin holds at any font size rather than only at this one.
 _SCROLL_LINES_PER_ARROW = 5
 
+def _send_key_label() -> str:
+    """How to name the send chord in a tooltip, per `config.send_message_key`."""
+    return "Enter" if librarian_config.send_message_key == "enter" else "Ctrl+Enter"
+
+def _newline_keys_label() -> str:
+    """How to name the newline chord in a tooltip, per `config.send_message_key`.
+
+    Always the *other* one of the pair: ImGui's multiline `InputText` knows exactly two chords, Enter and
+    Ctrl+Enter, and `ctrl_enter_for_new_line` decides which of them commits. The one that does not commit
+    inserts the newline, so naming either half names the other by elimination.
+
+    Shift+Enter is deliberately not mentioned, because it does nothing — the widget has no such binding, and
+    saying otherwise sent at least one reader looking for a key that was not there.
+    """
+    return "Ctrl+Enter" if librarian_config.send_message_key == "enter" else "Enter"
+
 bg = concurrent.futures.ThreadPoolExecutor()
 gui_resize_task_manager = bgtask.TaskManager(name="librarian_gui_resize",  # de-spammer for expensive parts of GUI resizing
                                              mode="sequential",
@@ -692,17 +708,39 @@ with timer() as tim:
                             logger.info("stop_recording_audio_message: Sending transcribed text to AI, as the user's message.")
                             chat_controller.chat_round(user_message_text)
 
+                        # Sending is the field's *own* commit action, not a global hotkey, because ImGui
+                        # already owns this chord and will not hand it over. A multiline `InputText`
+                        # natively validates on Ctrl+Enter and inserts a newline on Enter;
+                        # `ctrl_enter_for_new_line` swaps the two. Validating also deactivates and unfocuses
+                        # the field, so a global key handler sees the chord only after the state it would
+                        # have gated on is gone — which is exactly how the first attempt at a configurable
+                        # send key failed, silently, in both `is_item_active` and `is_item_focused` forms.
+                        #
+                        # Using the flag instead means the toolkit decides what "commit" is and `on_enter`
+                        # tells us when it happened. Note the widget offers exactly these two chords and no
+                        # third one — Shift+Enter does nothing, whatever other chat apps have trained into
+                        # the reader's fingers, so nothing user-facing should promise it.
+                        #
+                        # **`ctrl_enter_for_new_line` reads backwards**, so mind the mapping. It names what
+                        # *Ctrl+Enter* does, not what sends: `True` means Ctrl+Enter inserts a newline and
+                        # therefore **Enter sends**; `False` (ImGui's default) means Enter inserts the
+                        # newline and **Ctrl+Enter sends**. Hence the comparison against `"enter"` below,
+                        # which looks inverted and is not.
                         dpg.add_input_text(tag="chat_field",
                                            multiline=True,
                                            default_value="",
+                                           on_enter=True,  # fire the callback on whichever chord commits
+                                           # `True` <=> Enter sends; `False` (default) <=> Ctrl+Enter sends
+                                           ctrl_enter_for_new_line=(librarian_config.send_message_key == "enter"),
+                                           callback=lambda: send_message_to_ai_callback(),
                                            width=_get_chat_field_base_width(),
                                            height=gui_config.chat_field_h)
                         # ImGui renders `hint` (placeholder text) for single-line inputs only, so a multiline
                         # field can't show one — the discoverability hint lives in this tooltip instead.
                         with dpg.tooltip("chat_field"):  # tag
-                            dpg.add_text("Ask the AI questions here.\n"
-                                         "Send to the AI [Enter]\n"
-                                         "    with Shift: insert a new line\n"
+                            dpg.add_text("Compose messages to the AI here.\n"
+                                         f"    [{_newline_keys_label()}]: insert a new line\n"
+                                         f"    [{_send_key_label()}]: send to the AI\n"
                                          "Ctrl+Space to focus this field.")
 
                         # Staged-image thumbnail strip. Hidden until the user attaches an image; populated by the
@@ -757,7 +795,7 @@ with timer() as tim:
                             dpg.bind_item_font("chat_send_button", themes_and_fonts.icon_font_solid)  # tag
                             dpg.bind_item_theme("chat_send_button", "disablable_widget_theme")  # tag
                             with dpg.tooltip("chat_send_button"):  # tag
-                                dpg.add_text("Send to AI [Enter]")
+                                dpg.add_text(f"Send to AI [{_send_key_label()}]")
 
                             record_audio_message_button = dpg.add_button(label=fa.ICON_MICROPHONE,
                                                                          callback=record_audio_message_callback,
@@ -1176,14 +1214,11 @@ def update_animations():
 # --------------------------------------------------------------------------------
 # Built-in help window
 
-hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focus text entry field", notes=""),
-               env(key_indent=1, key="Enter", action_indent=0, action="Send message to AI", notes="When editing the text entry field"),
-               env(key_indent=1, key="Esc", action_indent=0, action="Clear text and cancel", notes="When editing the text entry field"),
+hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focus the message composer", notes=""),
+               env(key_indent=1, key=_send_key_label(), action_indent=0, action="Send message to AI", notes="While writing a message"),
+               env(key_indent=1, key=_newline_keys_label(), action_indent=0, action="Insert a new line", notes="While writing a message"),
+               env(key_indent=1, key="Esc", action_indent=0, action="Clear text and cancel", notes="While writing a message"),
                env(key_indent=0, key="Ctrl+Shift+Enter", action_indent=0, action="Speak to AI using your mic", notes=f"Device: {audio_recorder.require().device_name}"),
-               helpcard.hotkey_blank_entry,
-               env(key_indent=0, key="Ctrl+G", action_indent=0, action="Stop AI text generation", notes="While the AI is writing"),
-               env(key_indent=0, key="Ctrl+U", action_indent=0, action="Continue last AI message", notes="Creates new revision of same node"),
-               env(key_indent=0, key="Ctrl+R", action_indent=0, action="Reroll last AI message", notes="Creates new sibling"),
                helpcard.hotkey_blank_entry,
                env(key_indent=0, key="Ctrl+T", action_indent=0, action="Show/hide last thinking trace", notes="For thinking models"),
                env(key_indent=0, key="Ctrl+S", action_indent=0, action="Speak last AI message / stop speaking", notes=""),
@@ -1193,6 +1228,8 @@ hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focu
                env(key_indent=0, key="Ctrl+Left", action_indent=0, action="Previous sibling of last message", notes=""),
                env(key_indent=1, key="Ctrl+Shift+Left", action_indent=1, action="Same, but jump 10", notes=""),
                env(key_indent=0, key="Ctrl+Down", action_indent=0, action="Show chat continuation", notes="If any exists in chat datastore"),
+               helpcard.hotkey_blank_entry,
+               env(key_indent=0, key="Ctrl+N", action_indent=0, action="Start new chat", notes=""),
                helpcard.hotkey_new_column,
                env(key_indent=0, key="Page Up", action_indent=0, action="Scroll chat up one page", notes="Also while typing"),
                env(key_indent=0, key="Page Down", action_indent=0, action="Scroll chat down one page", notes="Also while typing"),
@@ -1201,7 +1238,9 @@ hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focu
                env(key_indent=0, key="Home", action_indent=0, action="Jump to start of chat", notes="Not while typing"),
                env(key_indent=0, key="End", action_indent=0, action="Jump to latest message", notes="Not while typing"),
                helpcard.hotkey_blank_entry,
-               env(key_indent=0, key="Ctrl+N", action_indent=0, action="Start new chat", notes=""),
+               env(key_indent=0, key="Ctrl+G", action_indent=0, action="Stop AI text generation", notes="While the AI is writing"),
+               env(key_indent=0, key="Ctrl+U", action_indent=0, action="Continue last AI message", notes="Creates new revision of same node"),
+               env(key_indent=0, key="Ctrl+R", action_indent=0, action="Reroll last AI message", notes="Creates new sibling"),
                helpcard.hotkey_blank_entry,
                env(key_indent=0, key="F8", action_indent=0, action="Copy chatlog to clipboard", notes="As-is"),
                env(key_indent=1, key="Shift+F8", action_indent=0, action="Copy chatlog to clipboard", notes="With chat node IDs"),
@@ -1518,6 +1557,12 @@ def librarian_hotkeys_callback(sender, app_data):
         elif key in (518, dpg.mvKey_Next):  # Page Down
             chat_controller.view.page_down()
 
+        # Sending has no branch here on purpose. It is the composer's own commit action, wired at the widget
+        # (`on_enter` + `ctrl_enter_for_new_line`, where the field is created) rather than as a global
+        # hotkey, because ImGui consumes the commit chord itself and deactivates *and* unfocuses the field
+        # before a handler at this level runs — so neither an `is_item_active` nor an `is_item_focused` gate
+        # can catch it. Both were tried and both failed silently.
+
         # *Active*, not *focused*, and the distinction is the whole reason the navigation keys work at all.
         # ImGui hands nav focus to the first navigable item of a newly focused window on its own, so the
         # composer reports focused from the first frame with no user having gone near it — a gate on
@@ -1526,10 +1571,9 @@ def librarian_hotkeys_callback(sender, app_data):
         # and after Escape, True from the click that enters the field until it is left. That is exactly the
         # condition under which these keys belong to the widget rather than to the log.
         elif dpg.is_item_active("chat_field"):  # tag
-            # Enter sends; Shift+Enter inserts a newline. The multiline field owns its own keyboard, so on
-            # Shift+Enter we do nothing here and let the widget insert the newline itself.
-            if key == dpg.mvKey_Return and not shift_pressed:
-                send_message_to_ai_callback()  # leaves the field inactive; see the clearing dance it performs
+            # Empty on purpose, and load-bearing: this branch exists to *withhold* the log-navigation keys
+            # below while someone is typing. Every key it would claim belongs to the widget instead.
+            #
             # Escape is deliberately absent: ImGui's own `InputText` handles the cancel, reverting the field
             # and deactivating it, which is the entire job. Nothing needs parking afterwards — an inactive
             # field is what this branch tests for, so the navigation keys are live again on the next press.
@@ -1538,6 +1582,7 @@ def librarian_hotkeys_callback(sender, app_data):
             # they move the caret between lines and to the ends of one, which is what a typist expects and
             # what the field already does. Claiming them would break ordinary text editing to add scrolling
             # that Page Up/Down already provides from inside the composer.
+            pass
 
         else:
             # With the composer out of the way, the remaining navigation keys scroll the log. Bare Up/Down
