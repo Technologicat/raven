@@ -3459,6 +3459,14 @@ v1 — bound what is *sent*, not what is *stored*:
   user attachment that was downloaded and `"mcp:<server>"` is a tool result from a non-builtin tool. Whether
   to split the field along those axes or keep it flat is open; flat is fine while the budget is the only
   reader.
+- **Why not unify the two walks instead?** Asked 2026-08-05, and it points at something real: the boundary
+  where a payload is flattened to a bare message is drawn one step too early. `chatutil.linearize_chat` drops
+  `general_metadata`, and `_serialize_history_for_wire` is the last place that could still have used it. But
+  unifying is not the v1 move — `perform_throwaway_task` builds a synthetic history with no datastore behind
+  it at all, so the wire builder must keep accepting bare messages, and a function taking either shape is
+  worse than the duplication. The part-level `source` is not a workaround for that refactor: a message's
+  wire form should not depend on out-of-band metadata anyway, so it is the right fix independently, and it
+  makes the refactor less urgent rather than more.
 - Fold the shared decision out of both readers while doing it: **one classifier** (part → budget kind), and
   `fit_attachments_to_context` takes `(text, kind)` pairs instead of bare texts. Then neither caller decides
   anything — they only collect and hand over — and "the two must agree exactly" stops being a property to
