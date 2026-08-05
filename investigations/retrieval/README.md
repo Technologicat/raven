@@ -93,6 +93,37 @@ a second question with it: a fulltext corpus of *IR papers about thresholds* is 
 is what we are measuring, so the hand-written probes for it can be written from genuine curiosity rather
 than generated — the first set where the reader would be asking real questions with a stake in the answer.
 
+**Better still, and it needs no download at all.** The `ai_papers` set was not gathered by searching arXiv;
+it was built the other way round — arXiv IDs parsed out of PDF *filenames* on disk, then queried for their
+metadata. So **the 1268 fulltext PDFs already exist**, on the personal machine rather than this one, which
+makes the transfer the only cost.
+
+That is the stronger experiment, because it is *controlled*. Indexing those PDFs gives the same 1268
+documents already indexed as abstracts — same topic, same corpus, same identities, same gold labels, and
+even the same generated question set applies unchanged. Document length is then the only variable that
+moved. Every corpus comparison up to now has confounded length with topic and genre; this one would not,
+and it is the only way to attribute anything measured to chunking rather than to subject matter.
+
+**Dedup is a prerequisite, and the obvious rule is the wrong one.** The PDFs on disk include several
+versions of some papers (arXiv IDs carry a `vN` suffix). The *abstract* corpus does not — checked, 1268
+files and 1268 distinct IDs — so nothing measured so far is affected by this; it is purely a constraint on
+building the fulltext set.
+
+The reflex would be "keep the highest version per paper". That silently destroys the experiment. The
+abstract corpus pinned *particular* versions (`2410.07866v5`, `0706.3639v1`, …) and the document ID is the
+filename, which is what every gold label keys on. Selecting by newest would produce a corpus whose IDs no
+longer match, so the question set would have to be regenerated and the comparison would stop being
+controlled — which was the entire reason to prefer this corpus. **Select the PDFs by exact filename match
+against the 1268 `.bib` files**, and treat any paper whose pinned version is missing from disk as an
+exclusion to report rather than a version to substitute.
+
+Two things to expect, worth writing down before it is run. On-corpus similarity should *rise*, since a
+question's answer is likely stated somewhere in a full paper and only gestured at in its abstract — which
+would put the fulltext case on the opposite side of the constant from the titles case, and a single
+threshold would then have to straddle both. And known-item scoring gets harder to interpret: with dozens
+of chunks per document, "found the right document" stops being the whole question, since a wrong passage
+from the right paper is a failure the current metric scores as a success.
+
 Full judgments can be layered on later by pooling the top-N of each configuration and judging the union.
 This set is the seed for that, not a competitor to it.
 
