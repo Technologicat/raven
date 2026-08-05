@@ -54,6 +54,7 @@ from ..common import utils as common_utils
 from ..papers import bibtex
 
 from . import chattree
+from . import sidecarstore
 
 # --------------------------------------------------------------------------------
 # Content parts (OpenAI multimodal content schema)
@@ -80,18 +81,26 @@ def image_content_part(url: str) -> Dict[str, Any]:
     """
     return {"type": "image_url", "image_url": {"url": url}}
 
-def text_file_content_part(url: str, name: str) -> Dict[str, Any]:
-    """Wrap an attached document as a text-file content-part: `{"type": "text_file", "text_file": {"url", "name"}}`.
+def text_file_content_part(url: str, name: str, source: str) -> Dict[str, Any]:
+    """Wrap an attached document as a text-file content-part: `{"type": "text_file", "text_file": {"url", "name", "source"}}`.
 
-    A Raven-internal part type for a document (plain text or PDF) the user attached to a message. As with
+    A Raven-internal part type for a document (plain text or PDF) attached to a message. As with
     `image_content_part`, in a *stored* message `url` is a `sidecar:<filename>` reference — the document bytes
     live in the datastore's sidecar directory, never inline in the chat JSON — and `name` is the original
     filename, kept for display and for the wire header. Unlike an image, this part has no native wire form:
     `llmclient.invoke` reads the sidecar, extracts its plaintext (`raven.common.docextract`), and folds it into
     the message's text part just before sending, so any model can use it (no vision capability required).
     `content_to_text` skips this part, so an attached document never leaks into the message's own displayed text.
+
+    `source` names how the document got here, in the vocabulary `sidecarstore.base_provenance` documents
+    (`"user_attachment"`, `"tool_result"`, ...). The same value is recorded in the sidecar provenance, and this
+    is a deliberate second copy rather than a redundancy: how much of the window a document may occupy depends
+    on who asked for it — a paper the user attached says *read this*, a page the model fetched on a hunch does
+    not — and `llmclient._serialize_history_for_wire` decides that from bare messages, which carry no
+    `general_metadata` and so cannot reach the provenance. Keeping it on the part is also the right shape on its
+    own: what a message means on the wire should not depend on metadata travelling separately.
     """
-    return {"type": "text_file", "text_file": {"url": url, "name": name}}
+    return {"type": "text_file", "text_file": {"url": url, "name": name, "source": source}}
 
 def normalize_content(content: Any) -> List[Dict[str, Any]]:
     """Return `content` as a content-parts list: a bare string becomes a single text part; a list passes through.
@@ -661,6 +670,13 @@ def format_consulted_documents(entries: List[Dict[str, Any]]) -> str:
         query = entry.get("query")
         if query:
             line += f" [surfaced by: {_shorten(query, _MAXIMUM_SHOWN_QUERY_LENGTH)}]"
+        # A document the user has since deleted stays listed - the conversation did read it - but says so,
+        # or the model spends a `fetch_document` round discovering it. A statement of the situation rather
+        # than a prohibition, in the manner of `CANONICAL_NO_ROOM_TO_FETCH`: a "you may not" in an inject
+        # measured badly (`investigations/context-injects/`). Absent `present` means present, so entries
+        # assembled without `llmclient.label_documents` read unchanged.
+        if entry.get("present") is False:
+            line += " [no longer in the database]"
         lines.append(line)
     header = ("[System information: Documents from the knowledge base that this conversation has already "
               "consulted. Any whose text is no longer written out above can be read again with "
@@ -1056,6 +1072,35 @@ def _migrate_content_to_parts(message: Dict[str, Any]) -> None:
     """
     message["content"] = normalize_content(message["content"])
 
+def _migrate_text_file_source(payload: Dict[str, Any]) -> None:
+    """Backfill the `source` field on `text_file` content-parts from the sidecar provenance. Mutates `payload`.
+
+    Attached documents predate the `source` field on the part (added 0.2.8 so that the wire builder can tell a
+    document the user handed over from a page the model fetched — see `text_file_content_part`). The value was
+    always recorded, just elsewhere: `general_metadata["sidecars"][<filename>]["source"]`, written when the
+    sidecar was stored.
+
+    So this recovers the *true* value rather than assuming one, which matters because both kinds already exist
+    in stored chats — any datastore that saw a long `webfetch` before this migration was written has
+    `"tool_result"` documents in it, and defaulting them to a user attachment would hand the model an
+    unceilinged page forever after. Takes the whole `payload` rather than the message, because provenance and
+    parts live on opposite sides of that boundary; that split is the reason the field has to be copied at all.
+
+    A part whose sidecar has no recorded provenance falls back to `"user_attachment"`, matching
+    `attachment_budget_kind`'s treatment of an unknown source: send it whole rather than silently truncate
+    something that may have been asked for. Idempotent - a part that already has a `source` is left alone.
+    """
+    sidecars = (payload.get("general_metadata") or {}).get("sidecars") or {}
+    for part in payload["message"].get("content") or []:
+        if not isinstance(part, dict) or part.get("type") != "text_file":
+            continue
+        text_file = part.setdefault("text_file", {})
+        if text_file.get("source"):
+            continue
+        url = text_file.get("url", "")
+        filename = url[len(sidecarstore.SIDECAR_SCHEME):] if url.startswith(sidecarstore.SIDECAR_SCHEME) else ""
+        text_file["source"] = (sidecars.get(filename) or {}).get("source") or "user_attachment"
+
 # v0.2.3+: data format change
 def upgrade_datastore(llm_settings: env,
                       datastore: chattree.Forest,
@@ -1172,6 +1217,7 @@ def upgrade_datastore(llm_settings: env,
                 _migrate_inline_tool_calls(message)
                 _migrate_tool_call_id(payload)
                 _migrate_content_to_parts(message)  # wrap legacy string content as parts (runs last, since it changes the shape)
+                _migrate_text_file_source(payload)  # needs the parts list, so it runs after the shape change
 
 def factory_reset_datastore(datastore: chattree.Forest, llm_settings: env) -> str:
     """Reset `datastore` to its "factory-default" state.

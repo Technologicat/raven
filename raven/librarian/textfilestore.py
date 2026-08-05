@@ -103,7 +103,10 @@ def store_file_as_sidecar(datastore: chattree.PersistentForest,
     # copy is what the chat log reads; the file-side copy is what remains once the referencing node is deleted,
     # which is exactly when a cleanup preview needs to say what the orphan was.
     filename = datastore.store_sidecar(raw, ext, metadata=metadata)
-    return env(part=chatutil.text_file_content_part(f"{sidecarstore.SIDECAR_SCHEME}{filename}", name),
+    # `provenance_source` is recorded twice on purpose — beside the file, and on the content-part. The
+    # part-side copy is the one the wire builder can reach; see `chatutil.text_file_content_part`.
+    return env(part=chatutil.text_file_content_part(f"{sidecarstore.SIDECAR_SCHEME}{filename}", name,
+                                                    provenance_source),
                filename=filename,
                sidecar_metadata=metadata)
 

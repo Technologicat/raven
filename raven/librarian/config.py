@@ -148,6 +148,12 @@ max_tool_call_refusal_rounds = 1
 # attached is governed by `context_reserve_fraction` alone, with no per-document ceiling: an attachment is
 # an instruction to read this, and capping it at a tenth of the window would answer that instruction with a
 # few pages. Attachments compete with each other for whatever the reserve leaves, share and share alike.
+#
+# The distinction is *who asked*, not which code path delivered the text — which is worth stating because a
+# long page from `webfetch` is stored as an attachment, and so travels the attachment machinery while still
+# being a speculative fetch. It is ceilinged here too. What decides is the `source` recorded on the stored
+# content-part (see `llmclient.attachment_budget_kind`), so moving a document between those pathways changes
+# its budget with it.
 docs_fetch_max_fraction_of_context = 0.10
 
 # How much of the context window to keep free for the discussion itself, as a fraction.

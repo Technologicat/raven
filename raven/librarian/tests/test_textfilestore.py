@@ -35,8 +35,11 @@ def test_store_text_file_roundtrip(datastore):
                                              name="notes.txt",
                                              provenance_url="file:///tmp/notes.txt",
                                              provenance_source="user_attachment")
+    # `provenance_source` lands on the part as well as in the sidecar metadata below: the wire builder sees
+    # bare messages, so the part is the only copy it can reach.
     assert result.part == {"type": "text_file",
-                           "text_file": {"url": f"sidecar:{result.filename}", "name": "notes.txt"}}
+                           "text_file": {"url": f"sidecar:{result.filename}", "name": "notes.txt",
+                                         "source": "user_attachment"}}
     assert datastore.read_sidecar(result.filename) == raw  # stored byte-for-byte
     assert result.filename.endswith(".txt")
     md = result.sidecar_metadata

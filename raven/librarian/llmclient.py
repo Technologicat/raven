@@ -332,16 +332,28 @@ def document_path(retriever: "Optional[hybridir.HybridIR]",
 
 def label_documents(retriever: "Optional[hybridir.HybridIR]",
                     entries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Fill in each entry's `label` from the document it names (`chatutil.document_label`).
+    """Fill in each entry's `label` from the document it names (`chatutil.document_label`), and whether it is `present`.
 
-    Returns new dicts; the input is not modified. An entry naming a document that is no longer in the
+    `entries`: one dict per knowledge-base document the conversation has consulted, as
+               `scaffold._collect_consulted_documents` assembles them by walking the branch. Each carries
+               `document_id` (required - the handle `fetch_document` takes) and, where the document came from
+               an automatic search, `query` (what surfaced it). `chatutil.format_consulted_documents` is what
+               renders the result for the model.
+
+    Returns new dicts, each the input entry plus `label` and `present`; the input is not modified. An entry naming a document that is no longer in the
     database keeps an empty label rather than being dropped - the conversation did consult it, and saying
     so with only an ID is more honest than pretending it was never there.
+
+    `present` says which of those two an entry is, because the label cannot: an empty label means *either* a
+    deleted document *or* one whose text yielded nothing to label it with, and those want opposite responses
+    from the model. Without the flag the list advertises a deleted document as readable, the model spends a
+    round on `fetch_document`, and gets a refusal - which a persistent model may answer by trying variations
+    of the same ID (see `investigations/tool_refusal/`).
     """
     labelled = []
     for entry in entries:
         text = document_text(retriever, entry["document_id"])
-        labelled.append({**entry, "label": chatutil.document_label(text) if text else ""})
+        labelled.append({**entry, "label": chatutil.document_label(text) if text else "", "present": text is not None})
     return labelled
 
 CANONICAL_NOTHING_CONSULTED = ("This conversation has not looked at any documents from the knowledge base yet. "
@@ -952,7 +964,7 @@ def count_branch_tokens(settings: env,
     about how full the context is.
     """
     text_segments = []
-    attachment_texts = []
+    attachments = []  # (extracted text, budget kind)
     image_tokens = 0
     for node_id in datastore.linearize_up(head_node_id):
         payload = datastore.get_payload(node_id)
@@ -970,10 +982,11 @@ def count_branch_tokens(settings: env,
             elif part_type == "text_file":
                 file_url = (part.get("text_file") or {}).get("url", "")
                 if file_url.startswith(sidecarstore.SIDECAR_SCHEME):
-                    attachment_texts.append(textfilestore.sidecar_to_text(datastore, file_url))
+                    attachments.append((textfilestore.sidecar_to_text(datastore, file_url),
+                                        attachment_budget_kind(part)))
 
     conversation_characters = sum(len(segment) for segment in text_segments)
-    fitted_attachments = fit_attachments_to_context(settings, conversation_characters, attachment_texts)
+    fitted_attachments = fit_attachments_to_context(settings, conversation_characters, attachments)
     count, is_exact = count_tokens(settings, "".join(text_segments + fitted_attachments))
     if image_tokens:
         count += image_tokens
@@ -1120,22 +1133,66 @@ def _share_characters(wanted: List[int],
         unsettled = [i for i in unsettled if wanted[i] > level]
     return allowances
 
+# The two ways a document can end up attached to a message, as far as the context budget is concerned. The
+# distinction is one of *intent*, which is why it cannot be read off the document itself: the same PDF is
+# governed differently depending on who put it there.
+ATTACHMENT_REQUESTED = "requested"  # the user handed it over: read this
+ATTACHMENT_SPECULATIVE = "speculative"  # the model reached for it, having seen a search result
+
+def attachment_budget_kind(part: Dict[str, Any]) -> str:
+    """Classify one `text_file` content-part as `ATTACHMENT_REQUESTED` or `ATTACHMENT_SPECULATIVE`.
+
+    The single place that maps a provenance `source` onto a budget policy, so that the two readers of the
+    attachment budget cannot disagree about it. `count_branch_tokens` (the GUI's context-fill readout) and
+    `_serialize_history_for_wire` (what is actually sent) walk the same attachments from opposite ends, and
+    a divergence here would show up as a readout that drifts away from the request it claims to describe.
+
+    A classification rather than an equality test, because the vocabulary is open: `sidecarstore.base_provenance`
+    reserves `"paste_url"` and `"mcp:<server>"` for pathways that do not exist yet, and both already have an
+    answer here - `"paste_url"` is a URL the user typed, so it is requested, and `"mcp:<server>"` is a tool
+    result whatever server produced it.
+
+    Two axes are visible in those values - *where the bytes came from* (a local file, the network) and *who
+    asked for them* (the user, a tool) - and only the second is a budget question. They stay **projections of
+    the one stored `source`** rather than becoming two stored fields. A pathway is a sum type whose cases are
+    the ones that actually occur, where two independent fields would also spell combinations that cannot happen;
+    `source` is written into the sidecar's `.meta.json` on disk as well as onto the part, so splitting it later
+    costs a migration of both; and `"mcp:<server>"` carries a third thing (which server) that neither axis
+    captures. If a second reader ever wants the other axis, give it a predicate over `source`, not a new field.
+
+    An unrecognized source is treated as requested. That is the conservative direction: it sends the document
+    whole, which risks a large prompt, rather than silently truncating something the user asked for.
+    """
+    source = (part.get("text_file") or {}).get("source", "")
+    if source == "tool_result" or source.startswith("mcp:"):
+        return ATTACHMENT_SPECULATIVE
+    return ATTACHMENT_REQUESTED
+
 def fit_attachments_to_context(settings: env,
                                conversation_characters: int,
-                               attachment_texts: List[str]) -> List[str]:
+                               attachments: List[Tuple[str, str]]) -> List[str]:
     """Cut attached-document texts down to what the context window can carry. Returns them in the same order.
 
-    Attachments are governed differently from a document the model fetches (`budget_for_fetched_text`), and
-    the difference is one of intent. A fetch is speculative - the model saw a search result and reached for
-    it - so it gets a per-document ceiling that keeps a hunch from crowding out the conversation. An
-    attachment is the user handing over a paper and saying read this; a ceiling of a tenth of the window
-    would answer that by showing four pages. So attachments have no per-document ceiling. They are bounded
-    only by `config.context_reserve_fraction`, the floor under the discussion itself, and they share what
-    that leaves among themselves.
+    `attachments`: `(text, kind)` pairs, `kind` being one of `ATTACHMENT_REQUESTED` / `ATTACHMENT_SPECULATIVE`
+                   (see `attachment_budget_kind`). Callers pass the classification rather than deciding
+                   anything themselves - that is what keeps the two of them agreeing.
+
+    Two limits, and which ones apply depends on how the document got here, because the difference is one of
+    intent rather than of content:
+
+      - **Both kinds** are bounded by `config.context_reserve_fraction`, the floor under the discussion
+        itself, and share whatever that leaves among themselves.
+      - **A speculative one additionally gets the per-document ceiling**
+        (`config.docs_fetch_max_fraction_of_context`, the same one `budget_for_fetched_text` applies to a
+        `fetch_document` call). The model saw a search result and reached for the page; a hunch should not be
+        able to crowd out the conversation it was meant to inform.
+
+    A requested attachment gets no per-document ceiling on purpose. It is the user handing over a paper and
+    saying read this, and a ceiling of a tenth of the window would answer that by showing four pages.
 
     Nothing is cut while everything fits, which is the overwhelmingly common case and returns the texts
     unchanged. The budget only binds where the alternative is not "a slightly shorter paper" but a request
-    that overflows the window outright - which is what the attachment path did before this existed.
+    that overflows the window outright.
 
     The budget is quantized (`_ATTACHMENT_BUDGET_QUANTUM`) once it binds, and that is worth a word because
     it looks like sloppiness. Folded attachment text is part of the prompt *prefix*, so a budget that
@@ -1149,18 +1206,27 @@ def fit_attachments_to_context(settings: env,
                               throughout: this runs on the hot path, once per request, and the truncation
                               it feeds is in characters anyway, so a token count would be converted back.
     """
-    if not attachment_texts:
+    if not attachments:
         return []
     tokens_per_character = settings.tokens_per_character or _DEFAULT_TOKENS_PER_CHARACTER
     reserve = _clamped_fraction(librarian_config.context_reserve_fraction, "context_reserve_fraction")
     window_characters = settings.context_length / tokens_per_character  # tokens / (tokens/character) = characters
     budget = int(window_characters * (1.0 - reserve)) - conversation_characters
-    wanted = [len(text) for text in attachment_texts]
+    # The per-document ceiling is applied to what a speculative attachment *asks for*, before the fair split
+    # rather than after it. Clamping the demand instead of the allowance means the characters a ceilinged
+    # document does not get are released to the others, which is what the water-filling is for - clamping
+    # afterwards would leave them unused.
+    ceiling = int(_clamped_fraction(librarian_config.docs_fetch_max_fraction_of_context,
+                                    "docs_fetch_max_fraction_of_context") * window_characters)
+    wanted = [min(len(text), ceiling) if kind == ATTACHMENT_SPECULATIVE else len(text)
+              for text, kind in attachments]
     if sum(wanted) <= budget:
-        return list(attachment_texts)
-    budget -= budget % _ATTACHMENT_BUDGET_QUANTUM
-    allowances = _share_characters(wanted, budget)
-    return [truncate_middle(text, allowance) for text, allowance in zip(attachment_texts, allowances)]
+        allowances = wanted  # everything fits; a ceilinged document is still cut to its ceiling
+    else:
+        budget -= budget % _ATTACHMENT_BUDGET_QUANTUM
+        allowances = _share_characters(wanted, budget)
+    # `truncate_middle` is a no-op when the text already fits its allowance, which is the ordinary case.
+    return [truncate_middle(text, allowance) for (text, _kind), allowance in zip(attachments, allowances)]
 
 # --------------------------------------------------------------------------------
 # Streaming tool-call accumulation (shared by `invoke`)
@@ -1471,7 +1537,7 @@ def _serialize_history_for_wire(settings: env,
     # any model can use an attached document, no vision capability required. Extraction needs `datastore`;
     # without it (throwaway tasks / prefill on attachment-free chats) there are no `text_file` parts anyway.
     scrubbed_texts = []
-    attachments = []  # (message index, display name, extracted text)
+    attachments = []  # (message index, display name, extracted text, budget kind)
     for message_index, message in enumerate(messages):
         scrubbed_texts.append(chatutil.scrub(persona=settings.personas.get(message["role"], None),
                                              text=chatutil.content_to_text(message["content"]),
@@ -1485,14 +1551,15 @@ def _serialize_history_for_wire(settings: env,
                 url = part.get("text_file", {}).get("url", "")
                 name = part.get("text_file", {}).get("name") or "attached file"
                 if url.startswith(sidecarstore.SIDECAR_SCHEME):
-                    attachments.append((message_index, name, textfilestore.sidecar_to_text(datastore, url)))
+                    attachments.append((message_index, name, textfilestore.sidecar_to_text(datastore, url),
+                                        attachment_budget_kind(part)))
 
     # Size all the attachments against one budget, then hand each message back its own share.
     fitted_texts = fit_attachments_to_context(settings,
                                               conversation_characters=sum(len(text) for text in scrubbed_texts),
-                                              attachment_texts=[text for _, _, text in attachments])
+                                              attachments=[(text, kind) for _, _, text, kind in attachments])
     file_blocks = collections.defaultdict(list)
-    for (message_index, name, _), fitted_text in zip(attachments, fitted_texts):
+    for (message_index, name, _, _kind), fitted_text in zip(attachments, fitted_texts):
         if fitted_text:
             file_blocks[message_index].append(f"[Attached file: {name}]\n{fitted_text}\n[End of attached file: {name}]")
         else:  # nothing left to give it - say so rather than let the document silently disappear

@@ -1111,15 +1111,70 @@ class TestUpgradeDatastoreReasoningAndToolCallId:
         assert f.get_payload(tool_id)["message"]["content"] == [{"type": "text", "text": "search result"}]
 
 
+class TestTextFileSourceMigration:
+    """Backfilling `source` onto `text_file` parts stored before the field existed.
+
+    The value was never missing, only in the wrong place for the wire builder to reach: the sidecar
+    provenance under `general_metadata`. So the migration must *recover* it rather than assume one — both
+    kinds already exist in stored chats, and a `"tool_result"` document defaulted to a user attachment would
+    be sent unceilinged for the rest of that chat's life.
+    """
+
+    def _payload_with_attachment(self, *, filename, part_source=None, provenance_source=None):
+        text_file = {"url": f"sidecar:{filename}", "name": "paper.pdf"}
+        if part_source is not None:
+            text_file["source"] = part_source
+        sidecars = {filename: {"source": provenance_source}} if provenance_source is not None else {}
+        return {"message": {"role": "user", "content": [{"type": "text", "text": "read this"},
+                                                        {"type": "text_file", "text_file": text_file}]},
+                "general_metadata": {"sidecars": sidecars}}
+
+    def _source_of(self, payload):
+        return payload["message"]["content"][1]["text_file"].get("source")
+
+    def test_a_tool_result_is_recovered_as_one(self):
+        # The case that makes a default unacceptable: a webfetch stored before the field existed.
+        payload = self._payload_with_attachment(filename="a.md", provenance_source="tool_result")
+        chatutil._migrate_text_file_source(payload)
+        assert self._source_of(payload) == "tool_result"
+
+    def test_a_user_attachment_is_recovered_as_one(self):
+        payload = self._payload_with_attachment(filename="b.pdf", provenance_source="user_attachment")
+        chatutil._migrate_text_file_source(payload)
+        assert self._source_of(payload) == "user_attachment"
+
+    def test_a_part_without_recorded_provenance_falls_back_to_user_attachment(self):
+        # Send it whole rather than silently truncate something that may have been asked for.
+        payload = self._payload_with_attachment(filename="c.txt")
+        chatutil._migrate_text_file_source(payload)
+        assert self._source_of(payload) == "user_attachment"
+
+    def test_an_already_migrated_part_is_left_alone(self):
+        # Idempotent: this runs on every load, over old and already-migrated data alike. A part that
+        # disagrees with the provenance keeps its own value rather than being rewritten.
+        payload = self._payload_with_attachment(filename="d.md", part_source="tool_result",
+                                                provenance_source="user_attachment")
+        chatutil._migrate_text_file_source(payload)
+        assert self._source_of(payload) == "tool_result"
+
+    def test_a_message_without_attachments_is_untouched(self):
+        payload = {"message": {"role": "user", "content": [{"type": "text", "text": "hi"}]},
+                   "general_metadata": {}}
+        before = copy.deepcopy(payload)
+        chatutil._migrate_text_file_source(payload)
+        assert payload == before
+
+
 class TestTextFileContentPart:
     """The `text_file` content part for attached documents, and its interaction with `content_to_text`."""
 
     def test_shape(self):
-        part = chatutil.text_file_content_part("sidecar:abc.txt", "notes.txt")
-        assert part == {"type": "text_file", "text_file": {"url": "sidecar:abc.txt", "name": "notes.txt"}}
+        part = chatutil.text_file_content_part("sidecar:abc.txt", "notes.txt", "user_attachment")
+        assert part == {"type": "text_file", "text_file": {"url": "sidecar:abc.txt", "name": "notes.txt",
+                                                           "source": "user_attachment"}}
 
     def test_content_to_text_skips_text_file_parts(self):
         # An attached document must not leak into the message's own displayed/counted text.
         content = [chatutil.text_content_part("my question"),
-                   chatutil.text_file_content_part("sidecar:abc.txt", "notes.txt")]
+                   chatutil.text_file_content_part("sidecar:abc.txt", "notes.txt", "user_attachment")]
         assert chatutil.content_to_text(content) == "my question"

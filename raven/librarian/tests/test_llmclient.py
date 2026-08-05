@@ -882,6 +882,57 @@ class TestSerializeHistoryForWire:
         llmclient._serialize_history_for_wire(self.settings, history, continue_=False)
         assert history[0]["content"] == [chatutil.text_content_part("hello")]  # deep-copied; original untouched
 
+    def test_a_fetched_page_is_ceilinged_where_an_attachment_is_not(self, tmp_path, monkeypatch):
+        # The whole point of putting `source` on the part: the wire builder gets bare messages, so without
+        # it these two documents are indistinguishable here and both go whole.
+        from raven.librarian import chattree, textfilestore
+        monkeypatch.setattr("raven.librarian.config.context_reserve_fraction", 0.25)
+        monkeypatch.setattr("raven.librarian.config.docs_fetch_max_fraction_of_context", 0.10)
+        ds = chattree.PersistentForest(tmp_path / "chat.json", autosave=False)
+        body = ("word " * 4000).encode("utf-8")  # 20000 characters, well over the 4000-character ceiling
+
+        fetched = textfilestore.store_file_as_sidecar(ds, body, name="page.md",
+                                                      provenance_url="https://example.com/page",
+                                                      provenance_source="tool_result")
+        attached = textfilestore.store_file_as_sidecar(ds, body, name="paper.txt",
+                                                      provenance_url="file:///tmp/paper.txt",
+                                                      provenance_source="user_attachment")
+        history = [{"role": "tool", "content": [chatutil.text_content_part("(excerpt)"), fetched.part]},
+                   {"role": "user", "content": [chatutil.text_content_part("and read this"), attached.part]}]
+        out = llmclient._serialize_history_for_wire(self.settings, history, continue_=False, datastore=ds)
+
+        fetched_block, attached_block = out[0]["content"][0]["text"], out[1]["content"][0]["text"]
+        assert "characters omitted" in fetched_block  # ceilinged: a hunch does not get the whole window
+        assert "characters omitted" not in attached_block  # the user said read this
+        assert len(fetched_block) < len(attached_block)
+
+    def test_the_wire_fold_and_the_context_readout_size_an_attachment_alike(self, tmp_path, monkeypatch):
+        # The invariant the `source` field exists to protect. These two walk the same attachments from
+        # opposite ends -- the readout up from the head, the fold down from the root -- and a disagreement
+        # shows up as a context-fill percentage that describes a request Raven did not send.
+        from raven.librarian import chattree, textfilestore
+        monkeypatch.setattr("raven.librarian.config.context_reserve_fraction", 0.25)
+        monkeypatch.setattr("raven.librarian.config.docs_fetch_max_fraction_of_context", 0.10)
+        ds = chattree.PersistentForest(tmp_path / "chat.json", autosave=False)
+        stored = textfilestore.store_file_as_sidecar(ds, ("word " * 4000).encode("utf-8"), name="page.md",
+                                                     provenance_url="https://example.com/page",
+                                                     provenance_source="tool_result")
+        message = {"role": "tool", "content": [chatutil.text_content_part("(excerpt)"), stored.part]}
+        node_id = ds.create_node(payload={"message": message,
+                                          "general_metadata": {"sidecars": {stored.filename: stored.sidecar_metadata}}},
+                                 parent_id=None)
+
+        # `count_branch_tokens` reaches `count_tokens`, which tiers through a local tokenizer and ooba's
+        # endpoint before the ratio; neither is available here, so pin it to the estimate path.
+        settings = env(**self.settings, tokenizer=None, backend_flavor="lmstudio")
+        counted, _is_exact = llmclient.count_branch_tokens(settings, ds, node_id)
+        wire = llmclient._serialize_history_for_wire(settings, [message], continue_=False, datastore=ds)
+        wire_characters = sum(len(part["text"]) for part in wire[0]["content"] if part["type"] == "text")
+
+        # The readout counts the same fitted attachment text the wire carries; the small residual is the
+        # persona prefix and the `[Attached file: ...]` framing the fold adds, not a budget disagreement.
+        assert counted == pytest.approx(wire_characters * self.settings.tokens_per_character, rel=0.05)
+
     def test_image_part_preserved_and_sidecar_resolved(self, tmp_path):
         import base64
         from raven.librarian import chattree
@@ -1187,16 +1238,20 @@ class TestFitAttachmentsToContext:
     def settings(self):
         return env(context_length=10000, tokens_per_character=0.25)
 
+    def requested(self, *texts):
+        """`(text, kind)` pairs for documents the user handed over — the no-ceiling case."""
+        return [(text, llmclient.ATTACHMENT_REQUESTED) for text in texts]
+
     def test_attachments_that_fit_are_returned_unchanged(self, monkeypatch):
         # The ordinary case, and it must be byte-identical to an unbudgeted fold: anything else would
         # rewrite the prompt prefix for no reason.
         monkeypatch.setattr("raven.librarian.config.context_reserve_fraction", 0.25)
         texts = ["a" * 1000, "b" * 2000]
-        assert llmclient.fit_attachments_to_context(self.settings(), 500, texts) == texts
+        assert llmclient.fit_attachments_to_context(self.settings(), 500, self.requested(*texts)) == texts
 
     def test_an_oversized_attachment_is_cut_to_the_budget(self, monkeypatch):
         monkeypatch.setattr("raven.librarian.config.context_reserve_fraction", 0.25)
-        out = llmclient.fit_attachments_to_context(self.settings(), 1000, ["a" * 200000])
+        out = llmclient.fit_attachments_to_context(self.settings(), 1000, self.requested("a" * 200000))
         assert len(out[0]) <= 29000  # 30000 minus the conversation, then quantized down
         assert "characters omitted" in out[0]
 
@@ -1205,30 +1260,100 @@ class TestFitAttachmentsToContext:
         # alongside it.
         monkeypatch.setattr("raven.librarian.config.context_reserve_fraction", 0.25)
         small = "the short note"
-        out = llmclient.fit_attachments_to_context(self.settings(), 0, [small, "a" * 200000])
+        out = llmclient.fit_attachments_to_context(self.settings(), 0, self.requested(small, "a" * 200000))
         assert out[0] == small
         assert len(out[1]) < 200000
 
-    def test_no_per_attachment_ceiling(self, monkeypatch):
-        # Unlike a document the model fetches on a hunch, an attachment is an instruction to read this --
-        # so a lone attachment may occupy everything the reserve leaves.
+    def test_no_per_attachment_ceiling_on_a_requested_document(self, monkeypatch):
+        # An attachment is an instruction to read this, so a lone one may occupy everything the reserve
+        # leaves. This is the half of the policy that must NOT change when the ceiling is applied to fetches.
         monkeypatch.setattr("raven.librarian.config.context_reserve_fraction", 0.25)
         monkeypatch.setattr("raven.librarian.config.docs_fetch_max_fraction_of_context", 0.10)
-        out = llmclient.fit_attachments_to_context(self.settings(), 0, ["a" * 200000])
+        out = llmclient.fit_attachments_to_context(self.settings(), 0, self.requested("a" * 200000))
         assert len(out[0]) > 4000  # 10% of the window would have been 4000 characters
+
+    def test_a_speculative_document_is_ceilinged_even_when_it_would_fit(self, monkeypatch):
+        # The page the model fetched on a hunch gets the per-document ceiling `fetch_document` already
+        # applies. "Even when it would fit" is the point: the reserve alone would have let this through,
+        # and before the ceiling was wired in here, it did.
+        monkeypatch.setattr("raven.librarian.config.context_reserve_fraction", 0.25)
+        monkeypatch.setattr("raven.librarian.config.docs_fetch_max_fraction_of_context", 0.10)
+        out = llmclient.fit_attachments_to_context(self.settings(), 0,
+                                                   [("a" * 20000, llmclient.ATTACHMENT_SPECULATIVE)])
+        assert len(out[0]) <= 4000  # 10% of the 40000-character window
+        assert "characters omitted" in out[0]
+
+    def test_a_ceilinged_fetch_releases_its_leftovers_to_the_others(self, monkeypatch):
+        # The ceiling clamps what a fetch *asks for*, before the fair split rather than after it, so the
+        # characters it does not get are available to the attachment beside it. Clamping the allowance
+        # instead would leave them unused.
+        monkeypatch.setattr("raven.librarian.config.context_reserve_fraction", 0.25)
+        monkeypatch.setattr("raven.librarian.config.docs_fetch_max_fraction_of_context", 0.10)
+        attachment = "u" * 40000
+        out = llmclient.fit_attachments_to_context(self.settings(), 0,
+                                                   [("f" * 40000, llmclient.ATTACHMENT_SPECULATIVE),
+                                                    (attachment, llmclient.ATTACHMENT_REQUESTED)])
+        assert len(out[0]) <= 4000
+        # 30000 of budget, of which the fetch takes at most 4000 -- the attachment gets the rest, which is
+        # far more than the even split it would have received had both wanted 40000.
+        assert len(out[1]) > 20000
+
+    def test_kinds_are_sized_together_against_one_budget(self, monkeypatch):
+        # A fetch and an attachment in the same conversation compete for the same room; the kinds change
+        # each one's ceiling, not whether they share.
+        monkeypatch.setattr("raven.librarian.config.context_reserve_fraction", 0.25)
+        monkeypatch.setattr("raven.librarian.config.docs_fetch_max_fraction_of_context", 0.10)
+        out = llmclient.fit_attachments_to_context(self.settings(), 0,
+                                                   [("f" * 200000, llmclient.ATTACHMENT_SPECULATIVE),
+                                                    ("u" * 200000, llmclient.ATTACHMENT_REQUESTED)])
+        assert sum(len(text) for text in out) <= 30000
 
     def test_a_full_conversation_leaves_nothing(self, monkeypatch):
         monkeypatch.setattr("raven.librarian.config.context_reserve_fraction", 0.25)
-        assert llmclient.fit_attachments_to_context(self.settings(), 40000, ["a" * 1000]) == [""]
+        assert llmclient.fit_attachments_to_context(self.settings(), 40000, self.requested("a" * 1000)) == [""]
 
     def test_the_budget_holds_still_as_the_conversation_grows(self, monkeypatch):
         # Folded attachment text is part of the prompt prefix, so a budget that drifted turn by turn would
         # force a full prompt reprocess every turn, exactly where the prompt is already enormous.
         monkeypatch.setattr("raven.librarian.config.context_reserve_fraction", 0.25)
         text = "a" * 200000
-        first = llmclient.fit_attachments_to_context(self.settings(), 1000, [text])
-        later = llmclient.fit_attachments_to_context(self.settings(), 1600, [text])
+        first = llmclient.fit_attachments_to_context(self.settings(), 1000, self.requested(text))
+        later = llmclient.fit_attachments_to_context(self.settings(), 1600, self.requested(text))
         assert first == later
+
+
+class TestAttachmentBudgetKind:
+    """Which budget a stored `text_file` part falls under. One classifier, so the two readers cannot diverge."""
+
+    def test_a_user_attachment_is_requested(self):
+        part = chatutil.text_file_content_part("sidecar:abc.txt", "paper.pdf", "user_attachment")
+        assert llmclient.attachment_budget_kind(part) == llmclient.ATTACHMENT_REQUESTED
+
+    def test_a_tool_result_is_speculative(self):
+        part = chatutil.text_file_content_part("sidecar:abc.md", "example.com - Title", "tool_result")
+        assert llmclient.attachment_budget_kind(part) == llmclient.ATTACHMENT_SPECULATIVE
+
+    def test_a_pasted_url_is_requested(self):
+        # Reserved vocabulary, not emitted yet. The user typed the URL, so it is an instruction to read this
+        # however the bytes arrived -- the budget axis is who asked, not where it came from.
+        part = chatutil.text_file_content_part("sidecar:abc.html", "a page", "paste_url")
+        assert llmclient.attachment_budget_kind(part) == llmclient.ATTACHMENT_REQUESTED
+
+    def test_an_mcp_tool_result_is_speculative_whatever_the_server(self):
+        part = chatutil.text_file_content_part("sidecar:abc.txt", "a doc", "mcp:some-server")
+        assert llmclient.attachment_budget_kind(part) == llmclient.ATTACHMENT_SPECULATIVE
+
+    def test_an_unknown_source_is_treated_as_requested(self):
+        # The conservative direction: send it whole rather than silently truncate something that may have
+        # been asked for.
+        part = chatutil.text_file_content_part("sidecar:abc.txt", "a doc", "something_new")
+        assert llmclient.attachment_budget_kind(part) == llmclient.ATTACHMENT_REQUESTED
+
+    def test_a_part_predating_the_field_is_treated_as_requested(self):
+        # Belt and braces: `upgrade_datastore` backfills `source` at load, so a part reaching the budget
+        # without one means the migration was skipped. Degrade to the safe kind rather than raising.
+        assert llmclient.attachment_budget_kind({"type": "text_file",
+                                                 "text_file": {"url": "sidecar:abc.txt", "name": "old"}}) == llmclient.ATTACHMENT_REQUESTED
 
 
 # ---------------------------------------------------------------------------
@@ -1293,6 +1418,22 @@ class TestFormatConsultedDocuments:
         # fetched, which is a stored node still written out where the window reaches.
         out = chatutil.format_consulted_documents([{"document_id": "a.txt"}])
         assert "no longer written out above" in out
+
+    def test_a_deleted_document_says_so(self):
+        # The user can delete a document mid-conversation. It stays listed - the conversation did read it -
+        # but the model must not have to spend a `fetch_document` round finding out it is gone.
+        out = chatutil.format_consulted_documents([{"document_id": "a.txt", "present": False}])
+        assert "[no longer in the database]" in out
+
+    def test_an_unlabelled_document_is_not_mistaken_for_a_deleted_one(self):
+        # The reason `present` exists rather than testing the label: an empty label means *either*, and the
+        # two want opposite responses from the model.
+        out = chatutil.format_consulted_documents([{"document_id": "a.txt", "label": "", "present": True}])
+        assert "no longer in the database" not in out
+
+    def test_an_entry_without_the_flag_reads_as_present(self):
+        # Entries assembled without `llmclient.label_documents` must render exactly as before.
+        assert "no longer in the database" not in chatutil.format_consulted_documents([{"document_id": "a.txt"}])
 
     def test_a_title_survives_a_record_that_will_not_parse(self):
         # Real corpora contain records that are not quite valid BibTeX: an abstract with unbalanced braces

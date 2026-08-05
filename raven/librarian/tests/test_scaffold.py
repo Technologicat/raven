@@ -960,7 +960,8 @@ class TestPerformInjects:
         # "Context" is broader than docs matches: an attached document or image is material to ground in,
         # even on a turn where the document database returned nothing.
         history = make_conversation(llm_settings)
-        history[-1]["content"].append(chatutil.text_file_content_part(url="sidecar:deadbeef.pdf", name="paper.pdf"))
+        history[-1]["content"].append(chatutil.text_file_content_part(url="sidecar:deadbeef.pdf", name="paper.pdf",
+                                                                      source="user_attachment"))
         scaffold._perform_injects(llm_settings=llm_settings, history=history,
                                   speculate=False, docs_query=None, docs_matches=[],
                                   tool_context=grounding_context())
