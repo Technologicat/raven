@@ -515,6 +515,22 @@ Model candidate and cost argument are in the reranking section further down. Sco
 rerank the existing k=20 candidate set, measure with `evaluate.py` across all four corpora, and ship it
 behind a config toggle.
 
+**Order of work, because the obvious order is wrong.** The three open threads are the fulltext experiment,
+the recall@k curve, and the reranker itself, and the temptation is to take them in that order since the
+fulltext corpus is the newest arrival. That puts the longest pole in front of the only ship-critical item:
+
+1. **Start the fulltext build first and walk away** — 243 downloads at arXiv's rate limit, then extraction
+   and indexing of ~60000 chunks against 4 minutes for the same papers' abstracts. It is hours of machine
+   time and minutes of human time, so it should be running in the background, not blocking.
+2. **Then the recall@k curve** (k = 20, 50, 100, 200, on hydrogen and arxiv-ai). No new code, four cheap
+   runs, and it is what sizes the reranker's candidate stage — so it gates the deliverable.
+3. **Then the reranker**, which is the deliverable.
+4. **Synthesis questions last.** They feed adaptive `k`, which this section defers, so they are genuinely
+   fourth unless the reranker lands early.
+
+The fulltext experiment answers a *science* question — which mechanism sets the similarity level — and
+nothing in the reranker depends on its answer. Worth having, not worth waiting on.
+
 #### The fourth corpus unseats the constant (2026-08-06): ship nothing yet
 
 A titles-only bibliography — 541 hand-typed records, 303 bytes median, the shape a working researcher's
