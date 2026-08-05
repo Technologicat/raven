@@ -47,6 +47,36 @@ far were checked. But it does say what the hand-written probes are for: they are
 instrument, not a scaling path, because human recall of a corpus runs out long before the question count
 does.
 
+**The same shape turned up twice on the same day**, which is what makes it a property of the work rather
+than a quip. The second: reading the IR literature would give us ideas for improving retrieval, and combing
+literature is what Raven is *for* — so the tool we would use to find out how to fix retrieval is the
+retrieval we are fixing. It breaks the same way, by the same move: retrieval surfaces candidates, reading
+decides. Recorded because the resolution is the useful part — a loop like this is only vicious if you let
+the tool's output stand as the verdict instead of as the shortlist.
+
+Acted on the same evening, entirely with tooling Raven already ships (`raven-arxiv-search` →
+`raven-burstbib` → `raven-indexer`). The query, kept so the sweep is reproducible:
+
+```
+("score normalization" OR "score calibration" OR "threshold")
+  AND ("information retrieval" OR "dense retrieval" OR "retrieval augmented generation")
+```
+
+157 entries, at `00_stuff/datasets/ir_literature/` (gitignored — arXiv metadata, not repo content).
+
+**And it comes with a coverage caveat worth stating before anyone treats it as a literature review.** The
+year distribution is 2012 at the earliest and 125 of 157 in 2024–2026. That is arXiv working as designed:
+IR's threshold-setting and score-normalization classics come from the TREC filtering track and the
+distributed-IR/collection-fusion line, which predate preprint culture in this field and live in SIGIR and
+TREC proceedings rather than on arXiv. So this set is a source of *ideas to test on our own stack*, which
+is what it was gathered for, and not evidence about what is already known. Anything from the older
+literature has to be reached another way.
+
+Three hits look directly relevant to the open levers, on titles alone and unread as yet: *DAT: Dynamic
+Alpha Tuning for Hybrid Retrieval in RAG* (per-query dense/BM25 weighting — levers 1 and 3 meet), *The
+Overlooked Role of Graded Relevance Thresholds in Multilingual Dense Retrieval* (both live questions at
+once), and *BalanceRAG: Joint Risk Calibration for Cascaded RAG*.
+
 Full judgments can be layered on later by pooling the top-N of each configuration and judging the union.
 This set is the seed for that, not a competitor to it.
 
