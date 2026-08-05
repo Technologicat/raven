@@ -1294,6 +1294,16 @@ class HybridIRFileSystemEventHandler(watchdog.events.FileSystemEventHandler):
 
         `exts`: File extensions of files to monitor.
 
+                The default is the set of plain-text formats, which is what the default reader can
+                handle — with no `callback`, files are read as UTF-8 text and nothing else. It is
+                deliberately narrower than what Raven can ingest: pass a `callback` that knows how to
+                extract text, and widen this to match it. Librarian pairs
+                `raven.common.docextract.extract_text` with `librarian_config.llm_docs_exts`, which
+                adds PDF, the office formats and saved web pages.
+
+                Anything listed here that the reader cannot actually read is ingested as garbage or
+                skipped, so the two belong together — keep them in step at the call site.
+
         `callback`: When new content arrives (a file is created or updated in the target directory),
                     this function is called.
 
@@ -1565,7 +1575,8 @@ def setup(docs_dir: Union[pathlib.Path, str],
 
     `db_dir`: The directory for storing search indices.
 
-    `exts`: Passed on to `HybridIRFileSystemEventHandler`, which see.
+    `exts`: Passed on to `HybridIRFileSystemEventHandler`, which see. Defaults to the plain-text
+            formats, matching the default reader; widen it together with `callback`, never alone.
     `callback`: Passed on to `HybridIRFileSystemEventHandler`, which see.
 
     `embedding_model_name`: passed on to `HybridIR`, which see.
