@@ -382,7 +382,8 @@ llm_docs_dir = llmclient_userdata_dir / "documents"
 # File types ingested into the document database. Plain-text formats are read verbatim; the rest have their text
 # layer extracted (born-digital PDFs; a scanned/image-only PDF has no text to extract and is skipped, as does an
 # office document whose content is all pictures). Handled by `raven.common.docextract`, which is the single
-# text-extraction backend — keep this list within the set it supports (`docextract.supported_extensions()`).
+# text-extraction backend. This list can only *narrow* what it supports: an entry there is no reader for is
+# dropped with a warning at startup (`docextract.Extractor.restricted_to`), never ingested as line noise.
 llm_docs_exts = [".txt", ".md", ".rst", ".org", ".bib", ".tex", ".pdf",
                  ".docx", ".pptx", ".odt", ".odp",
                  ".html", ".htm"]

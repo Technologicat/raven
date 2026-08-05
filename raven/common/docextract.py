@@ -40,11 +40,13 @@ means an external converter process, and PDF handling was deliberately moved off
 __all__ = ["DocumentExtractionError",
            "supported_extensions",
            "is_supported",
-           "extract_text"]
+           "extract_text",
+           "Extractor",
+           "PLAINTEXT", "ALL_FORMATS"]
 
 import logging
 import pathlib
-from typing import Any, Iterable, Iterator
+from typing import Any, Callable, Iterable, Iterator
 
 import docx
 import docx.table
@@ -357,3 +359,60 @@ def extract_text(path: str | pathlib.Path) -> str | None:
     extract = _EXTRACTORS.get(p.suffix.lower(), _extract_plaintext)
     text = extract(p).strip()
     return text or None
+
+
+class Extractor:
+    """A document reader together with the file formats it can read.
+
+    These are two halves of one fact, and a consumer that takes them as separate arguments lets them drift:
+    a reader handed a format it cannot parse yields mojibake or an exception, and a format list that outruns
+    its reader is how a PDF gets indexed as line noise. Neither mistake announces itself — the document is
+    in the index, findable, and wrong. Passing the pair as one object means a caller cannot widen one
+    without the other.
+
+    Instances are callable, so one can be used anywhere a bare read function was.
+
+    Two ready-made ones live in this module: `PLAINTEXT`, which admits only the formats readable without a
+    parser, and `ALL_FORMATS`, which admits everything `extract_text` handles. Narrow either with
+    `restricted_to`; there is deliberately no way to widen one, since widening is the direction that breaks.
+    """
+
+    def __init__(self, read: Callable[[str | pathlib.Path], str | None], extensions: Iterable[str]) -> None:
+        """`read`: Takes a path, returns its plaintext, or `None` if the file holds no extractable text.
+
+        `extensions`: The file extensions `read` can handle, lowercase, with the leading dot.
+        """
+        self.read = read
+        self.extensions = tuple(sorted({ext.lower() for ext in extensions}))
+
+    def handles(self, path: str | pathlib.Path) -> bool:
+        """Whether this extractor recognizes `path`'s file extension. Says nothing about the file's contents."""
+        return pathlib.Path(path).suffix.lower() in self.extensions
+
+    def restricted_to(self, extensions: Iterable[str]) -> "Extractor":
+        """Return a copy of this extractor admitting only `extensions`, same reader.
+
+        For a caller that reads fewer formats than it could — a user who would rather their document folder
+        ignored PDFs, say. Anything asked for that this extractor cannot read is dropped with a warning
+        rather than honored, which is the point: the result can only ever be a subset of what the reader
+        actually handles, so the pair cannot be made inconsistent from the outside.
+        """
+        wanted = {ext.lower() for ext in extensions}
+        unreadable = wanted - set(self.extensions)
+        if unreadable:
+            logger.warning(f"Extractor.restricted_to: ignoring {sorted(unreadable)}: no reader for "
+                           f"{'them' if len(unreadable) > 1 else 'it'} here. Readable formats are "
+                           f"{list(self.extensions)}.")
+        return Extractor(read=self.read, extensions=wanted & set(self.extensions))
+
+    def __call__(self, path: str | pathlib.Path) -> str | None:
+        return self.read(path)
+
+    def __repr__(self) -> str:
+        return f"<{type(self).__name__}: {' '.join(self.extensions)}>"
+
+
+# The reader is the same dispatcher in both; what differs is which formats each admits. So the plain-text one
+# is not a lesser reader, it is the same reader told to stay out of the formats that need a parser installed.
+PLAINTEXT = Extractor(read=extract_text, extensions=_PLAINTEXT_EXTS)
+ALL_FORMATS = Extractor(read=extract_text, extensions=supported_extensions())

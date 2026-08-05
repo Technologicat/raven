@@ -8,6 +8,8 @@ misunderstanding of the format would cancel out — so they are aimed at what Ra
 the library does: which blocks get collected, and in what order.
 """
 
+import logging
+
 import pytest
 
 from raven.common import docextract
@@ -429,3 +431,48 @@ def test_office_extraction_error_chains_cause(tmp_path):
     with pytest.raises(docextract.DocumentExtractionError) as excinfo:
         docextract.extract_text(p)
     assert excinfo.value.__cause__ is not None
+
+
+# ---------------------------------------------------------------------------
+# `Extractor` — the reader and its format list as one object
+# ---------------------------------------------------------------------------
+
+class TestExtractor:
+    """A reader and the formats it can read travel together, so neither can be widened alone."""
+
+    def test_the_ready_made_pair_differ_only_in_what_they_admit(self):
+        assert docextract.PLAINTEXT.read is docextract.ALL_FORMATS.read
+        assert set(docextract.PLAINTEXT.extensions) < set(docextract.ALL_FORMATS.extensions)
+
+    def test_all_formats_admits_everything_the_reader_handles(self):
+        assert set(docextract.ALL_FORMATS.extensions) == set(docextract.supported_extensions())
+
+    def test_plaintext_does_not_admit_the_formats_needing_a_parser(self):
+        assert not docextract.PLAINTEXT.handles("paper.pdf")
+        assert docextract.PLAINTEXT.handles("notes.txt")
+
+    def test_handles_is_case_insensitive(self):
+        assert docextract.ALL_FORMATS.handles("SCAN.PDF")
+
+    def test_an_extractor_is_callable_as_the_reader_was(self, tmp_path):
+        p = tmp_path / "notes.txt"
+        p.write_text("some indexable text", encoding="utf-8")
+        assert docextract.PLAINTEXT(p) == "some indexable text"
+
+    def test_restricting_narrows_and_keeps_the_reader(self):
+        narrowed = docextract.ALL_FORMATS.restricted_to([".pdf", ".txt"])
+        assert set(narrowed.extensions) == {".pdf", ".txt"}
+        assert narrowed.read is docextract.ALL_FORMATS.read
+
+    def test_restricting_cannot_widen_beyond_what_the_reader_handles(self, caplog):
+        # The whole point of the pairing: a caller asking for a format there is no reader for gets it
+        # dropped, not honored. Otherwise the file is ingested as line noise and sits in the index findable
+        # and wrong, which is the failure that is worse than not ingesting it at all.
+        with caplog.at_level(logging.WARNING):
+            narrowed = docextract.ALL_FORMATS.restricted_to([".txt", ".epub", ".doc"])
+        assert set(narrowed.extensions) == {".txt"}
+        assert ".epub" in caplog.text and ".doc" in caplog.text
+
+    def test_restricting_is_idempotent(self):
+        once = docextract.ALL_FORMATS.restricted_to([".pdf", ".txt"])
+        assert once.restricted_to(once.extensions).extensions == once.extensions

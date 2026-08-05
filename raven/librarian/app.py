@@ -283,8 +283,7 @@ with timer() as tim:
     retriever, scanner = hybridir.setup(docs_dir=docs_dir,
                                         recursive=librarian_config.llm_docs_dir_recursive,
                                         db_dir=db_dir,
-                                        exts=librarian_config.llm_docs_exts,
-                                        callback=docextract.extract_text,  # extract plaintext from PDFs (and read text files)
+                                        extractor=docextract.ALL_FORMATS.restricted_to(librarian_config.llm_docs_exts),
                                         embedding_model_name=librarian_config.qa_embedding_model,
                                         local_model_loader_fallback=False)  # Librarian requires Raven-server for other reasons, too
 

@@ -52,6 +52,7 @@ from ..client import mayberemote
 
 from ..common import bgtask
 from ..common import deviceinfo
+from ..common import docextract
 from ..common import nlptools
 from ..common import utils as common_utils
 
@@ -1273,8 +1274,7 @@ class HybridIRFileSystemEventHandler(watchdog.events.FileSystemEventHandler):
                  docs_dir: Union[str, pathlib.Path],
                  recursive: bool,
                  retriever: HybridIR,
-                 exts: List[str] = [".txt", ".md", ".rst", ".org", ".bib", ".tex"],
-                 callback: Callable = None) -> None:
+                 extractor: Optional[docextract.Extractor] = None) -> None:
         """Simple auto-updater that monitors a directory and auto-commits changes to a `HybridIR`.
 
         `docs_dir`: The path to monitor.
@@ -1292,35 +1292,24 @@ class HybridIRFileSystemEventHandler(watchdog.events.FileSystemEventHandler):
 
         `retriever`: The `HybridIR` instance to send changes to, to automatically keep it up to date.
 
-        `exts`: File extensions of files to monitor.
+        `extractor`: A `raven.common.docextract.Extractor`: which file formats to monitor, and how to
+                     read one. Files whose extension it does not claim are ignored; the text it returns
+                     for the rest is what goes into `retriever`'s search index.
 
-                The default is the set of plain-text formats, which is what the default reader can
-                handle — with no `callback`, files are read as UTF-8 text and nothing else. It is
-                deliberately narrower than what Raven can ingest: pass a `callback` that knows how to
-                extract text, and widen this to match it. Librarian pairs
-                `raven.common.docextract.extract_text` with `librarian_config.llm_docs_exts`, which
-                adds PDF, the office formats and saved web pages.
+                     Defaults to `docextract.PLAINTEXT`, the formats readable without a parser. Pass
+                     `docextract.ALL_FORMATS` for PDFs, the office formats and saved web pages —
+                     which is what Librarian does, narrowed by `librarian_config.llm_docs_exts`.
 
-                Anything listed here that the reader cannot actually read is ingested as garbage or
-                skipped, so the two belong together — keep them in step at the call site.
-
-        `callback`: When new content arrives (a file is created or updated in the target directory),
-                    this function is called.
-
-                    Its only argument is the path to the file, and it must return the plaintext
-                    content of the file. This plaintext content is then sent into `retriever`'s
-                    search index.
-
-                    If no callback is specified, the file is read as UTF-8 encoded text.
-                    (This is enough for simple plaintext files.)
+                     The reader and the format list travel together on purpose: a reader handed a
+                     format it cannot parse indexes line noise, and the document then sits in the
+                     index findable and wrong, which is worse than never ingesting it.
 
         Uses the `watchdog` library.
         """
         self.docs_dir = pathlib.Path(docs_dir) if not isinstance(docs_dir, pathlib.Path) else docs_dir
         self.recursive = recursive
         self.retriever = retriever
-        self.exts = exts
-        self.callback = callback
+        self.extractor = extractor if extractor is not None else docextract.PLAINTEXT
 
         self._docs_observer = None  # populated by `bootup`
         self._shutdown_lock = threading.RLock()
@@ -1388,28 +1377,24 @@ class HybridIRFileSystemEventHandler(watchdog.events.FileSystemEventHandler):
         p = pathlib.Path(path) if not isinstance(path, pathlib.Path) else path
         abspath = p.expanduser().resolve()
         abspath = str(abspath)
-        if not any(abspath.endswith(ext) for ext in self.exts):
-            logger.info(f"HybridIRFileSystemEventHandler._sanity_check: file '{abspath}': file extension not in monitored list {self.exts}, ignoring file.")
+        if not self.extractor.handles(abspath):
+            logger.info(f"HybridIRFileSystemEventHandler._sanity_check: file '{abspath}': file extension not in monitored list {list(self.extractor.extensions)}, ignoring file.")
             return False
         return True
 
     def _read(self, path: Union[pathlib.Path, str]) -> Optional[str]:
         p = pathlib.Path(path) if not isinstance(path, pathlib.Path) else path
         abspath = p.expanduser().resolve()
-        if self.callback:
-            # The callback (e.g. `raven.common.docextract.extract_text`) raises on an unreadable document — a
-            # corrupt/encrypted PDF, a non-UTF-8 text file, or a file that vanished between the event and this
-            # read. In a background batch ingest the right policy is to skip that one file and keep going, not to
-            # let the exception abort the ingest task, so we catch here and treat it as "no content" downstream.
-            try:
-                content = self.callback(abspath)
-            except Exception as exc:  # noqa: BLE001 -- one unreadable document must not abort the whole batch ingest
-                logger.warning(f"HybridIRFileSystemEventHandler._read: file '{abspath}': extraction failed, "
-                               f"skipping: {type(exc)}: {exc}")
-                return None
-        else:
-            with open(path, "r", encoding="utf-8") as document_file:
-                content = document_file.read()
+        # The extractor raises on an unreadable document — a corrupt/encrypted PDF, a non-UTF-8 text file, or a
+        # file that vanished between the event and this read. In a background batch ingest the right policy is to
+        # skip that one file and keep going, not to let the exception abort the ingest task, so we catch here and
+        # treat it as "no content" downstream.
+        try:
+            content = self.extractor(abspath)
+        except Exception as exc:  # noqa: BLE001 -- one unreadable document must not abort the whole batch ingest
+            logger.warning(f"HybridIRFileSystemEventHandler._read: file '{abspath}': extraction failed, "
+                           f"skipping: {type(exc)}: {exc}")
+            return None
         if not content:
             return None
         if not isinstance(content, str):
@@ -1552,8 +1537,7 @@ class HybridIRFileSystemEventHandler(watchdog.events.FileSystemEventHandler):
 def setup(docs_dir: Union[pathlib.Path, str],
           recursive: bool,
           db_dir: Union[pathlib.Path, str],
-          exts=[".txt", ".md", ".rst", ".org", ".bib", ".tex"],
-          callback: Optional[Callable] = None,
+          extractor: Optional[docextract.Extractor] = None,
           embedding_model_name: str = "sentence-transformers/multi-qa-mpnet-base-cos-v1",
           local_model_loader_fallback: bool = True,
           chunk_size: int = 1000,
@@ -1575,9 +1559,8 @@ def setup(docs_dir: Union[pathlib.Path, str],
 
     `db_dir`: The directory for storing search indices.
 
-    `exts`: Passed on to `HybridIRFileSystemEventHandler`, which see. Defaults to the plain-text
-            formats, matching the default reader; widen it together with `callback`, never alone.
-    `callback`: Passed on to `HybridIRFileSystemEventHandler`, which see.
+    `extractor`: Passed on to `HybridIRFileSystemEventHandler`, which see. Says both which formats to
+                 ingest and how to read them; defaults to plain text only.
 
     `embedding_model_name`: passed on to `HybridIR`, which see.
     `local_model_loader_fallback`: passed on to `HybridIR`, which see.
@@ -1616,7 +1599,6 @@ def setup(docs_dir: Union[pathlib.Path, str],
     scanner = HybridIRFileSystemEventHandler(docs_dir=docs_dir,
                                              recursive=recursive,
                                              retriever=retriever,
-                                             exts=exts,
-                                             callback=callback)
+                                             extractor=extractor)
 
     return retriever, scanner
