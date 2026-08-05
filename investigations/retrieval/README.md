@@ -125,11 +125,12 @@ python investigations/retrieval/make_questions.py <llm_base_url> <model> [n_focu
 
 # Score (needs raven-server for spaCy + embeddings, and the local document index)
 python investigations/retrieval/evaluate.py [k]
-python investigations/retrieval/sharpness.py [k]
+python investigations/retrieval/sharpness.py <hydrogen|fiction> [k]
+python investigations/retrieval/run_probes.py [k]
+python investigations/retrieval/calibrate.py [hydrogen|fiction]
 ```
 
-The two scoring scripts answer different questions, and the second one needs a set the first one cannot
-supply:
+The scoring scripts answer different questions, and each needs something the others cannot supply:
 
 - **`evaluate.py` compares retrieval configurations** — does this change to how a query is built or fused
   find the gold document more often? Output is recall@k / MRR per condition, plus per-question ranks in
@@ -145,8 +146,14 @@ supply:
   known-item questions, and once against 16 hand-written off-corpus probes carried in the script itself,
   because every generated question is answerable by construction and the interesting case is the one that
   is not. This is what settled lever 1.
+- **`calibrate.py` picks the operating point** for whichever collection is currently indexed, using only the
+  universal probes — so unlike everything above it needs **no labelled questions**, which is what makes it
+  the shape a shipping implementation could take. Output is the probe distribution and a recommended cut;
+  pass a corpus name and it also reports what that cut would have cost on the labelled set.
 
-Both read the index and do not write to it, so either is safe to run against a live Librarian installation.
+All of them read the index and do not write to it, so any is safe to run against a live Librarian
+installation. **None of them can check that the corpus you named is the one indexed** — pointing a run at
+the wrong index silently relabels every question rather than failing.
 
 ## Baseline, 2026-07-28
 
@@ -199,6 +206,51 @@ Worth keeping as a calibration on how much a 30-question known-item set can carr
 effect, not enough for a few points of R@5.
 
 ## What the set has decided so far
+
+- **2026-08-05 — "per collection" means calibrated at index time, not typed into a config file.** The
+  fiction run left the off-corpus cut as a per-collection setting without saying what such a number is made
+  of. A user-typed threshold is not an answer: the value cannot be derived from anything a user knows, and
+  the failure is silent in the direction that hurts — an answerable question marked ungrounded reads as a
+  confident refusal.
+
+  The way out is that **the two sides of the calibration are not equally available**. On-corpus questions do
+  not exist at index time (chunks can stand in, but a chunk is long and expository where a question is short
+  and oblique — the mismatch that makes the dramatized-text probes fail). Off-corpus queries, by contrast,
+  are corpus-*independent* by definition: a probe about sourdough is off-corpus for every collection anyone
+  would build. So run a fixed probe set against the new index and put the cut at the top of the resulting
+  distribution. `calibrate.py` does this and needs no labels.
+
+  Measured on both corpora, against the fixed 0.45 the hydrogen run proposed:
+
+  | estimator | hydrogen: on-corpus lost | fiction: on-corpus lost |
+  |---|---|---|
+  | fixed 0.45 | 0 / 99 (0.0%) | 24 / 88 (27.3%) |
+  | max of probes | 3 / 99 (3.0%) | 10 / 88 (11.4%) |
+  | **p75 of probes** | **0 / 99 (0.0%)** | **3 / 88 (3.4%)** |
+  | median + 2σ | 4 / 99 (4.0%) | 14 / 88 (15.9%) |
+
+  Far negatives are still caught at 112/117 and 99/99 respectively, so the gain is not bought by giving up
+  the detection the signal exists for. **Anchoring on the maximum is the trap**: the top probe is an outlier
+  ("What is the capital of Mongolia?" scores 0.479 against hydrogen abstracts, 0.074 clear of the next), so
+  any estimator resting on it inherits one query's bad luck.
+
+  Two things the table does not say. The probe set is **12 queries**, so a quantile of it is itself noisy —
+  widening it is the obvious next step if this ships. And the estimator was chosen on the same two corpora
+  it is scored on, which is how a tuned constant returns under a new name; a third collection is the test.
+
+  A side finding worth keeping: **pleasantries are the hard universal negative for a narrative corpus.**
+  Against fiction the three top-scoring probes are all conversational filler ("Could you say a bit more
+  about that?", 0.412) — dialogue looks like dialogue. Against hydrogen abstracts they sit mid-pack. A
+  calibration probe set built only from factual off-topic questions would therefore under-estimate the cut
+  on exactly the corpus type where the cut matters most.
+
+- **2026-08-05 — the cross-corpus direction that had not been run: hydrogen is also 1.000.** The fiction run
+  measured on-corpus against 99 hydrogen questions; the reverse — 99 hydrogen questions against 117 fiction
+  ones, on the hydrogen index — was never run, and was carried in the notes as "symmetric, mostly
+  confirmatory". **That was sloppy**: the two runs query *different indexes*, so every similarity value
+  differs and nothing forces the two AUROCs to agree. Run properly it comes out at 1.000, matching fiction.
+  The claim is now measured rather than assumed, and the assumption was the kind that is right until it
+  isn't.
 
 - **2026-08-05 — multi-query retrieval (brief 09, lever 3): rejected as specified.** Splitting a rambling
   message into sentences and fusing every result set alongside the whole message measured *worse* than not

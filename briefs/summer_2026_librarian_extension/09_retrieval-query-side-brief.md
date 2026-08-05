@@ -282,10 +282,38 @@ failure it was meant to fix. So this is a per-collection setting, and it belongs
 brief 13 rather than in a global default.
 
 **The signal detects the coarse case and little else.** Against negatives from a different field entirely it
-is essentially perfect (AUROC 1.000 both directions, each corpus's questions serving as the other's
-negatives). Against *adjacent* negatives — questions written from Optimalverse stories deliberately held out
+is essentially perfect, and this is now measured in both directions rather than assumed symmetric: 0.9998
+scoring 88 fiction questions against 99 hydrogen ones on the fiction index, 0.9997 the other way round on
+the hydrogen index. (The two runs query different indexes, so every similarity value differs and nothing
+forced them to agree — the reverse direction was run on 2026-08-05 for that reason.) Against *adjacent*
+negatives — questions written from Optimalverse stories deliberately held out
 of the index, same universe and site and generator — it is 0.742, and the distributions overlap so widely
 that no cut preserving the on-corpus questions rejects any of them.
+
+**"Per collection" means calibrated, not configured (2026-08-05).** The verdict above leaves open what a
+per-collection number is *made of*, and the obvious reading — a setting in `config.py` — is the wrong one.
+The value cannot be derived from anything a user knows, so a knob hands them a calibration problem dressed
+as a preference, and a wrong value fails silently in the direction that hurts: an answerable question marked
+ungrounded reads as a confident refusal.
+
+Calibrate it at index time instead. The asymmetry that makes this possible: on-corpus questions do not exist
+when a collection is indexed, but *off-corpus* queries are corpus-independent by definition — a probe about
+sourdough is off-corpus for every collection anyone would build. So run a fixed probe set against the new
+index and put the cut at the top of the resulting distribution. Measured on both corpora, against the fixed
+0.45 this section proposed:
+
+| estimator | hydrogen: on-corpus lost | fiction: on-corpus lost |
+|---|---|---|
+| fixed 0.45 | 0 / 99 (0.0%) | 24 / 88 (27.3%) |
+| **p75 of the probes** | **0 / 99 (0.0%)** | **3 / 88 (3.4%)** |
+
+Far negatives are still caught at 112/117 and 99/99, so the gain does not come out of the detection the
+signal exists for. Anchoring on the probe *maximum* is the trap — the top probe is an outlier, and any
+estimator resting on it inherits one query's bad luck. Prototype and full estimator comparison in
+`investigations/retrieval/calibrate.py`; it needs no labelled questions, which is what makes it a shape the
+implementation could actually take. Two caveats travel with it: the probe set is 12 queries, so a quantile
+of it is noisy, and the estimator was chosen on the same two corpora it is scored on — a third collection
+is what would test it.
 
 **That is still enough for the consumer this brief was blocked on.** Brief 10's grounding marker exists
 because "what is 2 + 2?" returned electrolysis documents and read as grounding. That is the far case. The
