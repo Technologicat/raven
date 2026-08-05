@@ -191,6 +191,36 @@ class TestResultStructure:
             assert "offset" in r
             assert "score" in r
 
+    def test_a_rambling_message_retrieves_through_the_multi_query_path(self, retriever):
+        # The short queries above never split, so they never exercise the per-query indexing that the
+        # multi-query fusion introduced (`raw_keyword_results[i, j]`, and Chroma's per-query result lists).
+        # This message does split, which is the point of it.
+        rambling = ("I have been reading around this area for a while now and there is a lot of it. "
+                    "My supervisor suggested I look into the practical side of things. "
+                    "What do these papers say about agents built on language models?")
+        assert hybridir.split_into_subqueries(rambling)  # guard: if this stops splitting, the test stops testing
+        results = retriever.query(rambling, k=5)
+        assert len(results) > 0
+        for r in results:
+            assert "document_id" in r and "text" in r and "score" in r
+
+    def test_the_multi_query_path_can_be_turned_off(self, retriever):
+        # The evaluation harness needs both sides of the comparison from one code path.
+        rambling = ("I have been reading around this area for a while now and there is a lot of it. "
+                    "What do these papers say about agents built on language models?")
+        assert len(retriever.query(rambling, k=5, multi_query=False)) > 0
+
+    def test_extra_info_shape_survives_a_split_query(self, retriever):
+        # The extra-info lists are the flat union across subqueries, so the per-entry pairing between a
+        # result and its score has to survive the flattening.
+        rambling = ("I have been reading around this area for a while now and there is a lot of it. "
+                    "What do these papers say about agents built on language models?")
+        results, (kw_results, kw_scores), (vec_results, vec_distances) = retriever.query(
+            rambling, k=5, return_extra_info=True)
+        assert len(kw_results) == len(kw_scores)
+        assert len(vec_results) == len(vec_distances)
+        assert len(results) > 0
+
     def test_extra_info_shape(self, retriever):
         results, (kw_results, kw_scores), (vec_results, vec_distances) = retriever.query(
             "ai agents", k=5, return_extra_info=True)

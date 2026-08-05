@@ -876,6 +876,7 @@ class HybridIR:
               keyword_score_threshold: float = 0.1,
               semantic_distance_threshold: float = 0.8,
               include_documents: Optional[List[str]] = None,
+              multi_query: bool = True,
               return_extra_info: bool = False) -> List[Dict]:
         """Hybrid BM25 + Vector search with RRF fusion.
 
@@ -897,6 +898,19 @@ class HybridIR:
                                        The default is for cosine distance using the default embedding model.
 
         `include_documents`: Optional list of document IDs. If provided, search only in the specified documents.
+
+        `multi_query`: If `True` (default), also query with each sentence of `query` that is worth asking
+                       separately (`split_into_subqueries`), and fuse all the result sets together. This is
+                       what makes a rambling chat message retrieve like a focused question instead of like
+                       its own centroid; see that function for the reasoning and the measured effect.
+
+                       Every backend here batches, so the extra queries cost extra rows rather than extra
+                       round trips: one `bm25s.retrieve` over all token lists, one `encode` over all texts,
+                       one Chroma query over all embeddings.
+
+                       Set to `False` to query with `query` verbatim — for an evaluation harness comparing
+                       the two, or for a caller whose query is already one focused question and who would
+                       rather not pay for the split.
 
         `return_extra_info`:
             If `True`: Return
@@ -920,6 +934,7 @@ class HybridIR:
                                     keyword_score_threshold=keyword_score_threshold,
                                     semantic_distance_threshold=semantic_distance_threshold,
                                     include_documents=include_documents,
+                                    multi_query=multi_query,
                                     return_extra_info=return_extra_info)
         finally:
             self._query_progress_text = ""
@@ -932,14 +947,25 @@ class HybridIR:
                     keyword_score_threshold: float,
                     semantic_distance_threshold: float,
                     include_documents: Optional[List[str]],
+                    multi_query: bool,
                     return_extra_info: bool):
-        # Prepare query for keyword search (slow — runs the spaCy NLP pipeline; no datastore access).
-        self._query_progress_text = "Tokenizing query…"
-        query_tokens = self._tokenize(query)
+        # The whole text is always queried; `split_into_subqueries` adds the sentences worth asking
+        # separately, and returns nothing when there are none. Beside the whole rather than instead of it —
+        # see that function for why splitting alone trades one failure for its mirror image.
+        query_texts = [query]
+        if multi_query:
+            query_texts.extend(split_into_subqueries(query))
+        if len(query_texts) > 1:
+            logger.info(f"HybridIR.query: querying with the whole message and {len(query_texts) - 1} subqueries")
 
-        # Prepare query for vector search (slow — server roundtrip; no datastore access).
+        # Prepare queries for keyword search (slow — runs the spaCy NLP pipeline; no datastore access).
+        self._query_progress_text = "Tokenizing query…"
+        query_tokens = [self._tokenize(text) for text in query_texts]
+
+        # Prepare queries for vector search (slow — server roundtrip; no datastore access). One call for all
+        # of them: the embedder batches, so the subqueries cost no extra round trip, only extra rows.
         self._query_progress_text = "Embedding query…"
-        query_embedding = self.embedder.encode([query])[0]
+        query_embeddings = self.embedder.encode(query_texts)
 
         # Pin the index references atomically and run both searches under the *same* `datastore_lock`
         # acquisition, so the keyword corpus and the chromadb state agree on the snapshot. A concurrent
@@ -967,56 +993,70 @@ class HybridIR:
             self._query_progress_text = "Keyword search…"
             logger.info("HybridIR.query: keyword search")
             # Here we always search all documents; we filter afterward, if needed.
-            raw_keyword_results, raw_keyword_scores = keyword_retriever.retrieve([query_tokens],  # list of list of tokens (outer list = one element per query; can run multiple queries at once)
+            raw_keyword_results, raw_keyword_scores = keyword_retriever.retrieve(query_tokens,  # list of list of tokens (outer list = one element per query; runs them all in one pass)
                                                                                   k=keyword_k)
 
             # Vector search
             self._query_progress_text = "Semantic search…"
             logger.info("HybridIR.query: semantic search")
             if include_documents is not None:  # search only documents with given IDs
-                chroma_results = vector_collection.query(query_embeddings=[query_embedding],
+                chroma_results = vector_collection.query(query_embeddings=list(query_embeddings),
                                                          n_results=internal_k,
                                                          include=["metadatas", "distances"],
                                                          where={"document_id": {"$in": include_documents}})
             else:  # search all documents
-                chroma_results = vector_collection.query(query_embeddings=[query_embedding],
+                chroma_results = vector_collection.query(query_embeddings=list(query_embeddings),
                                                          n_results=internal_k,
                                                          include=["metadatas", "distances"])
-            # list of list of metadatas (outer list = one element per query?)
+            # list of list of metadatas (outer list = one element per query)
             # https://github.com/chroma-core/chroma/blob/main/chromadb/api/types.py
-            raw_vector_results = chroma_results["metadatas"][0]  # -> list of metadatas
-            raw_vector_distances = chroma_results["distances"][0]  # -> list of float
+            raw_vector_results = chroma_results["metadatas"]  # -> list (per query) of list of metadatas
+            raw_vector_distances = chroma_results["distances"]  # -> list (per query) of list of float
         # Now we no longer need datastore access; the rest of the function uses the pinned references.
 
-        # Filter keyword results by threshold (and by `include_documents`, if specified)
-        keyword_results = []
-        keyword_scores = []
+        # Filter each query's results by threshold (and by `include_documents`, if specified). One ranked
+        # list per (query, engine) pair — the fusion below treats them all as peers, so a document has to
+        # earn its place by being found repeatedly rather than by being found once, very well.
+        keyword_hits = []  # per query: the corpus entries as-is
+        vector_hits = []  # per query
+        # Flat unions, for the log line and the `return_extra_info` contract. A debugger asking "what did
+        # the keyword arm find" wants everything it found, not a per-query breakdown of it.
+        keyword_results, keyword_scores = [], []
+        vector_results, vector_distances = [], []
         include_documents_set = set(include_documents) if include_documents is not None else set()  # for O(1) checking
-        for j in range(raw_keyword_results.shape[1]):
-            # https://github.com/xhluca/bm25s/blob/main/examples/save_and_reload_end_to_end.py
-            keyword_result = raw_keyword_results[0, j]
-            keyword_score = raw_keyword_scores[0, j]
-            if keyword_score > keyword_score_threshold:
-                if include_documents is not None and keyword_result["document_id"] not in include_documents_set:
-                    continue
-                keyword_results.append(keyword_result)
-                keyword_scores.append(keyword_score)
-        # Now `keyword_results` contains the corpus entries as-is
+        for i in range(len(query_texts)):
+            per_query_keyword = []
+            for j in range(raw_keyword_results.shape[1]):
+                # https://github.com/xhluca/bm25s/blob/main/examples/save_and_reload_end_to_end.py
+                keyword_result = raw_keyword_results[i, j]
+                keyword_score = raw_keyword_scores[i, j]
+                if keyword_score > keyword_score_threshold:
+                    if include_documents is not None and keyword_result["document_id"] not in include_documents_set:
+                        continue
+                    per_query_keyword.append(keyword_result)
+                    keyword_results.append(keyword_result)
+                    keyword_scores.append(keyword_score)
+            keyword_hits.append(per_query_keyword)
 
-        # Filter vector results by threshold
-        vector_results = []
-        vector_distances = []
-        for vector_result, vector_distance in zip(raw_vector_results, raw_vector_distances):
-            if vector_distance < semantic_distance_threshold:
-                vector_results.append(vector_result)
-                vector_distances.append(vector_distance)
+            per_query_vector = []
+            for vector_result, vector_distance in zip(raw_vector_results[i], raw_vector_distances[i]):
+                if vector_distance < semantic_distance_threshold:
+                    per_query_vector.append(vector_result)
+                    vector_results.append(vector_result)
+                    vector_distances.append(vector_distance)
+            vector_hits.append(per_query_vector)
 
         logger.info("HybridIR.query: fusing results")
 
-        # Fuse results with RRF
-        full_ids_bm25 = [record["full_id"] for record in keyword_results]  # anything hashable that uniquely identifies each result -> use the full ID
-        full_ids_vector = [record["full_id"] for record in vector_results]
-        rrf_results = reciprocal_rank_fusion(full_ids_bm25, full_ids_vector)
+        # Fuse every list in one RRF call rather than fusing per query and then fusing the fusions. Nesting
+        # would rank on `1/(rank + K)` values, which carry no information about how good a match was — the
+        # same flattening RRF already performs once, applied twice.
+        ranked_lists = []
+        for i in range(len(query_texts)):
+            # anything hashable that uniquely identifies each result -> use the full ID
+            ranked_lists.append([record["full_id"] for record in keyword_hits[i]])
+            ranked_lists.append([record["full_id"] for record in vector_hits[i]])
+        rrf_results = reciprocal_rank_fusion(*ranked_lists)
 
         # Collect the actual data records for each full ID, and populate the fused scores.
         # Note we need the chunks, not the full documents. We can collect them from the
