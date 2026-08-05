@@ -373,7 +373,7 @@ corpora chose it, and a fourth could unseat it. The difference is that a constan
 a mechanism, so it has less to be wrong about. `calibrate.py` is kept as the instrument that produced the
 table, with its recommendation removed.
 
-## Open: a fourth corpus stresses document *length*, and another prediction written first
+## Resolved: the fourth corpus breaks the single constant — and these predictions held
 
 The three corpora so far vary topic and genre while holding one thing constant: every document carries a
 few hundred words of prose. The axially-moving-materials bibliography (`00_stuff/rawdata/banichuk_references.bib`,
@@ -397,6 +397,61 @@ Written before the run:
 Prediction 2 is the one with consequences. Note it is a *different* mechanism from the one refuted above:
 that one calibrated against off-corpus probes and failed; this one would key on a property of the documents
 themselves, which is measurable at index time without any probes at all.
+
+### The result: all four corpora scored in one sweep, 2026-08-06
+
+**Both predictions held — the first of the day to survive.** Scored after every question set was complete,
+so the negative sets are consistent across all four runs:
+
+| corpus | docs | median doc | on-corpus min | median | lost at cut 0.40 |
+|---|---|---|---|---|---|
+| hydrogen | 11974 | 2214 B | 0.460 | 0.670 | 0/99 (0.0%) |
+| arxiv-ai | 1268 | 1768 B | 0.421 | 0.549 | 0/99 (0.0%) |
+| fiction | 19 | 45268 B | 0.352 | 0.519 | 6/88 (6.8%) |
+| **banichuk** | 541 | **303 B** | **0.147** | **0.395** | **53/99 (53.5%)** |
+
+**So the single global constant is dead**, and it lasted about four hours. There is no good value left:
+
+| cut | worst on-corpus lost | worst negatives missed |
+|---|---|---|
+| 0.35 | 32.3% | 32.3% |
+| 0.40 | 53.5% | 14.8% |
+| 0.45 | 78.8% | 3.3% |
+
+Every option rejects a third to three-quarters of answerable questions on *some* corpus. The three-corpus
+conclusion was not wrong about its three corpora; it was drawn from a sample that happened to hold the
+relevant variable fixed, which is the same failure as the two-corpus one, one level up.
+
+**The mechanism is not what the prediction said, and the difference matters.** The prediction reasoned from
+*document* length, and the ranking does not follow document length: fiction's documents are 45 kB, twenty
+times an abstract and 150 times a banichuk record, yet it sits mid-table rather than top. What does line up
+is the size of the **matched unit**. Chunking is ~1000 characters, so:
+
+- banichuk's 303-byte record is *one short chunk* — well under the window, so the chunk is the whole record.
+- an abstract is one to three chunks near the window size.
+- fiction is dozens of chunks, each near the window size — so its *chunks* look like abstracts, which is
+  exactly where it lands.
+
+Read that way the ordering is clean: what a QA embedder can match against is a chunk, and banichuk is the
+only corpus whose chunks are far below the window. Document length only mattered here because for
+sub-chunk documents the two are the same thing.
+
+**A second mechanism is confounded with it, and one experiment separates them.** Corpus size tracks the
+same ordering among the comparable corpora: hydrogen at 11974 documents scores 0.670 against arXiv's 0.549
+at 1268, on near-identical document shape. More candidates means a higher best-of-N, which needs no
+embedding story at all. The four corpora cannot separate "text per chunk" from "number of chunks searched".
+
+The fulltext experiment described above now does, and it is worth stating that **it discriminates precisely
+because the two mechanisms predict opposite things**. Indexing the same 1268 arXiv papers as fulltext holds
+document count and topic fixed while multiplying chunks per document by roughly twenty:
+
+- If **number of chunks searched** drives it, similarity rises sharply.
+- If **text per chunk** drives it, similarity barely moves — chunks are the same size either way.
+
+Which also corrects the prediction written for that experiment a few hours earlier ("on-corpus similarity
+should rise, since a question's answer is stated in the full paper and only gestured at in the abstract").
+That is the first hypothesis only. Under the second it is wrong, and the point of running it is that we do
+not know which.
 
 A hazard specific to this corpus, to check rather than assume: questions generated from a title alone have
 much less room to avoid reusing the title's distinctive words than questions generated from an abstract, so

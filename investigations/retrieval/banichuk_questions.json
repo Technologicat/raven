@@ -1,0 +1,1086 @@
+{
+  "corpus": "an axially-moving-materials bibliography accumulated over a working career and typed by hand, 541 records spanning 1766-2013, almost all of them titles only; local to the developer machine (not in this repository)",
+  "corpus_size": 541,
+  "seed": 20260728,
+  "generator_model": "qwen3.6-35b-a3b",
+  "questions": [
+    {
+      "kind": "focused",
+      "question": "How does thermal energy and vapor transport interact during moisture evaporation in cellulose fiber networks?",
+      "gold": [
+        "LuShen2007.bib"
+      ],
+      "gold_titles": [
+        "Numerical and experimental investigation of paper drying: Heat and mass transfer with phase change in porous media"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can engineers mathematically model the bending behavior of concrete plates reinforced with steel bars running in two perpendicular directions?",
+      "gold": [
+        "Huber1923.bib"
+      ],
+      "gold_titles": [
+        "Die Theorie des Kreuzweise Bewehrten Eisenbetonplatten"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How do you calculate natural frequencies and buckling thresholds for rectangular flat panels with direction-dependent stiffness using complete series expansions?",
+      "gold": [
+        "KshirsagarBhaskar2008.bib"
+      ],
+      "gold_titles": [
+        "Accurate and elegant free vibration and buckling studies of orthotropic rectangular plates using untruncated infinite series"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What triggers dynamic buckling in continuously moving flexible ribbons when pulled vertically?",
+      "gold": [
+        "Saksa2011presentation-2.bib"
+      ],
+      "gold_titles": [
+        "On the Instability of Elastic Bands Travelling in a Gravitational Field"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Which numerical discretization techniques are most effective for modeling coupled fluid dynamics and thermal energy distribution?",
+      "gold": [
+        "TannehillEtAl1997book.bib"
+      ],
+      "gold_titles": [
+        "Computational Fluid Mechanics and Heat Transfer"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What advanced mechanics of materials work focuses on theoretical derivations and includes solved exercises?",
+      "gold": [
+        "Timoshenko1956book.bib"
+      ],
+      "gold_titles": [
+        "Strength of Materials, Part II: Advanced Theory and Problems"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How do I compute the dynamic characteristics of a longitudinally translating structural member with time-dependent stiffness and damping using a high-order global polynomial discretization method?",
+      "gold": [
+        "OhChoLee2004.bib"
+      ],
+      "gold_titles": [
+        "Spectral element analysis for an axially moving viscoelastic beam"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What numerical scheme computes two-dimensional solitary waves for the Boussinesq equation using a Fourier spectral projection?",
+      "gold": [
+        "christou-fmf2sobe2007.bib"
+      ],
+      "gold_titles": [
+        "Fourier--Galerkin method for 2D solitons of Boussinesq equation"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How do spring-supported guides affect the critical transport speed at which a continuously traveling thin sheet becomes unstable?",
+      "gold": [
+        "BIJT2013.bib"
+      ],
+      "gold_titles": [
+        "On stability of moving web with elastic supports"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can a Galerkin method with complex eigenfunctions be used to simulate the lateral oscillations of a moving cord that speeds up and exhibits time-dependent damping?",
+      "gold": [
+        "ZhangWangCheng2007.bib"
+      ],
+      "gold_titles": [
+        "Complex-mode Galerkin approach in transverse vibration of an axially accelerating viscoelastic string"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What are the standard definitions for common imperfections found on continuous material strips and the support cylinders used in their processing?",
+      "gold": [
+        "Smith1995book.bib"
+      ],
+      "gold_titles": [
+        "Roll and web defect terminology"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What is the observable stretching behavior of paper under uniaxial load?",
+      "gold": [
+        "SkowronskiRobertson1985.bib"
+      ],
+      "gold_titles": [
+        "A phenomenological study of the tensile deformation properties of paper"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What is the effect of a co-flowing fluid on the dynamics of traveling plates and membranes?",
+      "gold": [
+        "Jeronen2010presentation.bib"
+      ],
+      "gold_titles": [
+        "Fourier--Galerkin Simulation of Dynamics of Axially Moving Membranes and Plates Submerged in Axially Flowing Ideal Fluid"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What are the mathematical principles, numerical techniques, and practical examples for solving optimization problems involving multiple conflicting goals?",
+      "gold": [
+        "Steuer1986.bib"
+      ],
+      "gold_titles": [
+        "Multiple Criteria Optimization: Theory, Computation, and Applications"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What analytical approaches are best suited for deriving exact solutions to the governing equations of theoretical physics?",
+      "gold": [
+        "CourantHilbert1966.bib"
+      ],
+      "gold_titles": [
+        "Methods of mathematical Physics"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does fluid flowing parallel to the length of a long, thin structure affect its stability?",
+      "gold": [
+        "Paidoussis1998.bib"
+      ],
+      "gold_titles": [
+        "Fluid-Structure Interactions: Slender Structures and Axial Flow"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can I quantify the statistical dependence between two variables without assuming a specific underlying probability model?",
+      "gold": [
+        "ImanConover1982.bib"
+      ],
+      "gold_titles": [
+        "A distribution-free approach to rank correlation"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can I determine the best geometry for a thin structure carrying only tension to ensure it does not fail due to cracking in materials that have a fracture process zone, using a reliable optimization method?",
+      "gold": [
+        "BanichukRagneddaSerra2003.bib"
+      ],
+      "gold_titles": [
+        "Probabilistic-Guaranteed Optimal Design of Membrane Shells Against Quasi-brittle Fracture"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does high-frequency acoustic transmission through thin, damping sheets relate to measuring the physical properties of paper?",
+      "gold": [
+        "BonninHuchonDeschamps2000.bib"
+      ],
+      "gold_titles": [
+        "Ultrasonic waves propagation in absorbing thin plates: Application to paper characterization"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does damping in the material affect the large-amplitude free vibrations of a translating belt?",
+      "gold": [
+        "HouZu2002.bib"
+      ],
+      "gold_titles": [
+        "Non-linear free oscillations of moving viscoelastic belts"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can the variational formulation be employed to solve equations governing fluid motion?",
+      "gold": [
+        "CSC2006.bib"
+      ],
+      "gold_titles": [
+        "Elementtimenetelm\\\"a virtauslaskennassa (The finite element method in computational fluid dynamics)"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can we derive approximate analytical formulas for the natural frequencies and mode shapes of longitudinally translating beams with negligible bending rigidity?",
+      "gold": [
+        "KongParker2004.bib"
+      ],
+      "gold_titles": [
+        "Approximate eigensolutions of axially moving beams with small flexural stiffness"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does fluid flowing parallel to the length of a long, thin beam affect its dynamic stability?",
+      "gold": [
+        "Paidoussis2004.bib"
+      ],
+      "gold_titles": [
+        "Fluid-Structure Interactions: Slender Structures and Axial Flow"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How do gaps in material characterization impact error estimates for elastic solids?",
+      "gold": [
+        "MaliPhd2011.bib"
+      ],
+      "gold_titles": [
+        "Analysis of errors caused by incomplete knowledge of material data in mathematical models of elastic media"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How do liquids and gases flow and respond to applied forces?",
+      "gold": [
+        "White1994book.bib"
+      ],
+      "gold_titles": [
+        "Fluid Mechanics"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What arguments support the idea that science originated in the third century BCE, was lost, and needed to be revived?",
+      "gold": [
+        "Russo2004.bib"
+      ],
+      "gold_titles": [
+        "The Forgotten Revolution: How Science Was Born in 300 BC and Why it Had to Be Reborn"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can motion graphics be used to display error in geographic datasets?",
+      "gold": [
+        "EhlschlaegerShortridgeGoodchild1997.bib"
+      ],
+      "gold_titles": [
+        "Visualizing spatial data uncertainty using animation"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What numerical techniques are used to approximate solutions for equations that include derivatives?",
+      "gold": [
+        "CDE.bib"
+      ],
+      "gold_titles": [
+        "Computational Differential Equations"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does a flat, continuously traveling flexible sheet deform and what are the resulting internal stress patterns when subjected to a perpendicular force?",
+      "gold": [
+        "LinMote1995.bib"
+      ],
+      "gold_titles": [
+        "Equilibrium Displacement and Stress Distribution in a Two-Dimensional, Axially Moving Web Under Transverse Loading"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What methods are recommended for initially inspecting and visualizing raw datasets to uncover hidden patterns before formal statistical modeling?",
+      "gold": [
+        "Tukey1977.bib"
+      ],
+      "gold_titles": [
+        "Exploratory Data Analysis"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can the safety of axially moving thin sheets be optimized to prevent rupture and loss of structural integrity?",
+      "gold": [
+        "BanichukEtAl2012springer.bib"
+      ],
+      "gold_titles": [
+        "Safety Analysis and Optimization of Travelling Webs Subjected to Fracture and Instability"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How do the directional stiffness and deformation parameters of thin cellulosic fibrous sheets vary with the orientation of applied forces?",
+      "gold": [
+        "BaumEtal1981.bib"
+      ],
+      "gold_titles": [
+        "Orthotropic elastic constants of paper"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does ambient airflow influence the dynamic stability of a continuously moving paper sheet?",
+      "gold": [
+        "BanichukNeittaanmaki2008-3.bib"
+      ],
+      "gold_titles": [
+        "Instability Analysis for Traveling Paper Web Interacting with Surrounding Air"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Under what conditions does a traveling flat sheet become unstable?",
+      "gold": [
+        "BanichukEtAl2009-IJSS.bib"
+      ],
+      "gold_titles": [
+        "On the instability of an axially moving elastic plate"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How are mesh-based numerical discretization methods used to solve energy minimization models for practical engineering and scientific problems?",
+      "gold": [
+        "KrizekNeittaanmaki1990.bib"
+      ],
+      "gold_titles": [
+        "Finite Element Approximation of Variational Problems and Applications"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How is energy balance formulated for continuous materials that travel along a single axis?",
+      "gold": [
+        "wickert.bib"
+      ],
+      "gold_titles": [
+        "On the energetics of axially moving continua"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How do time-dependent material properties influence the dynamic response of moving strip systems?",
+      "gold": [
+        "Guan1995thesis.bib"
+      ],
+      "gold_titles": [
+        "Modeling of Viscoelastic Effects on Web Handling System Behavior"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does inviscid flow parallel to the motion affect the cylindrical bending vibrations of a translating sheet?",
+      "gold": [
+        "BanichukEtAl2011-JFS.bib"
+      ],
+      "gold_titles": [
+        "Dynamic behaviour of an axially moving plate undergoing small cylindrical deformation submerged in axially flowing ideal fluid"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How do mixed boundary constraints affect the dynamic stability and oscillatory response of a translating strip composed of a material exhibiting both elastic and viscous deformation?",
+      "gold": [
+        "ChenYang2006.bib"
+      ],
+      "gold_titles": [
+        "Vibration and stability of an axially moving viscoelastic beam with hybrid supports"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can actively regulated systems suppress lateral oscillations in continuously translating flexible cables?",
+      "gold": [
+        "Chen2005review.bib"
+      ],
+      "gold_titles": [
+        "Analysis and Control of Transverse Vibrations of Axially Moving Strings"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How should transport speed and tension be adjusted to prevent both dynamic flutter and material failure in continuously traveling thin sheets?",
+      "gold": [
+        "BKNSTT2011-B9.bib"
+      ],
+      "gold_titles": [
+        "Optimization of Axially Moving Webs Subjected to Instability and Fracture"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can researchers construct stratified sampling plans that maintain statistical independence between input factors for computational simulations?",
+      "gold": [
+        "Ye1998.bib"
+      ],
+      "gold_titles": [
+        "Orthogonal column Latin hypercubes and their application in computer experiments"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can researchers best display aggregated data metrics alongside their associated confidence intervals or variability ranges in graphical formats?",
+      "gold": [
+        "PotterEtAl2010.bib"
+      ],
+      "gold_titles": [
+        "Visualizing Summary Statistics and Uncertainty"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What is the vibration response of a conveying strip with hysteretic material properties at large deflections?",
+      "gold": [
+        "Marynowski2002.bib"
+      ],
+      "gold_titles": [
+        "Non-linear dynamic analysis of an axially moving viscoelastic beam"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What mathematical framework describes the reversible deformation of solid bodies under external loads?",
+      "gold": [
+        "TimoshenkoGoodier1951book.bib"
+      ],
+      "gold_titles": [
+        "Theory of Elasticity"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How do transient structural responses develop in sliding panels that move in the same direction as a frictionless fluid stream?",
+      "gold": [
+        "BJNT2008-3.bib"
+      ],
+      "gold_titles": [
+        "Nonstationary Dynamics of Travelling Membranes and Plates Interacting with Axially Moving Ideal Fluid. Part II: Numerical Results"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How do constraints at the domain limits determine the characteristic values and solution structures of equations in physical sciences?",
+      "gold": [
+        "Sagan1961.bib"
+      ],
+      "gold_titles": [
+        "Boundary and Eigenvalue Problems in Mathematical Physics"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What are the main approaches for quantifying how changes in input parameters affect computational model results?",
+      "gold": [
+        "Hamby1993.bib"
+      ],
+      "gold_titles": [
+        "A Review of Sensitivity Analysis Techniques"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does the aspect ratio influence the onset of self-excited oscillations in a flat panel with orthogonal boundaries?",
+      "gold": [
+        "eloy-foarp2007.bib"
+      ],
+      "gold_titles": [
+        "Flutter of a rectangular plate"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What causes a thin flexible panel to become dynamically unstable while being transported unidirectionally along its length?",
+      "gold": [
+        "NBJJPNTT2009.bib"
+      ],
+      "gold_titles": [
+        "On the Instability of an Axially Moving Elastic Plate"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How do you solve equations with third or more derivatives when conditions are specified at the endpoints rather than the starting point?",
+      "gold": [
+        "Agarwal1986book.bib"
+      ],
+      "gold_titles": [
+        "Boundary Value Problems for Higher Order Differential Equations"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "At what speed do direction-dependent plates and flexible sheets buckle during transport?",
+      "gold": [
+        "BanichukEtAl2011-IJSS.bib"
+      ],
+      "gold_titles": [
+        "On the limit velocity and buckling phenomena of axially moving orthotropic membranes and plates"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does a tensioned cable moving at a steady rate vibrate laterally when undergoing large deflections between two fixed supports?",
+      "gold": [
+        "Skutch1897.bib"
+      ],
+      "gold_titles": [
+        "Uber die Bewegung Eines Gespannten Fadens, Weicher Gezwungen ist Durch Zwei Feste Punkte, mit Einer Constanten Geschwindigkeit zu gehen, und Zwischen denselben in Transversal-Schwingungen von Gerlinger Amplitude Versetzt Wird"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What is the analytical expression for the steady-state deflection of an axially translating extensible string under a uniform distributed load?",
+      "gold": [
+        "LuoMote2000.bib"
+      ],
+      "gold_titles": [
+        "An exact, closed-form solution for equilibrium of traveling, sagged, elastic cables under uniformly distributed loading"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How should researchers structure their choice of input parameters for numerical simulations to maximize understanding of a system during early-stage investigation?",
+      "gold": [
+        "MorrisMitchell1995.bib"
+      ],
+      "gold_titles": [
+        "Exploratory designs for computational experiments"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can one construct stratified sampling plans that achieve both high minimum distance between points and statistical orthogonality?",
+      "gold": [
+        "JosephHung2008.bib"
+      ],
+      "gold_titles": [
+        "Orthogonal-Maximin Latin Hypercube Designs"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What are the core principles describing how air moves past solid bodies and generates forces?",
+      "gold": [
+        "AndersonAerodynamicsBook.bib"
+      ],
+      "gold_titles": [
+        "Fundamentals of Aerodynamics"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Under what conditions do traveling elastic sheets lose dynamic stability when coupled to a parallel inviscid flow?",
+      "gold": [
+        "JeronenEtAl2009a.bib"
+      ],
+      "gold_titles": [
+        "Instability Analysis of Axially Travelling Membranes and Plates Interacting with Axially Moving Ideal Fluid"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What is the foundational mathematical framework that describes how solid bodies deform under applied forces and defines their ultimate load-bearing limits?",
+      "gold": [
+        "Winkler1867.bib"
+      ],
+      "gold_titles": [
+        "Die Lehre Von Elasticit\\\"at Und Festigkeit"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "how to calculate the steady oscillation frequencies and critical stability limits of a pre-stressed linearly moving beam with fixed ends",
+      "gold": [
+        "JJTechNotePanel2-2010.bib"
+      ],
+      "gold_titles": [
+        "Semi-analytical solutions for the stationary free vibrations and buckling modes of an axially travelling clamped-clamped Euler--Bernoulli beam tensioned at its ends"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How do the dimensions of a flexible sheet and the proximity of the walls influence its dynamic instability in internal flow?",
+      "gold": [
+        "DoareSauzadeEloy2011.bib"
+      ],
+      "gold_titles": [
+        "Flutter of an elastic plate in a channel flow: Confinement and finite-size effects"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How did the understanding of numbers, shapes, and patterns evolve over time?",
+      "gold": [
+        "BoyerMerzbachBook1991.bib"
+      ],
+      "gold_titles": [
+        "A History of Mathematics"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What are the best methods for determining how uncertain input factors influence the output of ecological and climate simulations?",
+      "gold": [
+        "Hamby1994.bib"
+      ],
+      "gold_titles": [
+        "A Review of Techniques for Parameter Sensitivity Analysis of Environmental Models"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can one computationally predict the sideways oscillations of a string traveling along its axis?",
+      "gold": [
+        "ChenZhao2005.bib"
+      ],
+      "gold_titles": [
+        "A numerical method for simulating transverse vibrations of an axially moving string"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How do Rossby waves behave in the atmosphere?",
+      "gold": [
+        "silberman1954.bib"
+      ],
+      "gold_titles": [
+        "Planetary Waves in the Atmosphere"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How reliable are the existing mathematical descriptions of crack growth?",
+      "gold": [
+        "ParisErdogan1963.bib"
+      ],
+      "gold_titles": [
+        "A critical analysis of crack propagation laws"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How do conventional analytical methods predict the dynamic oscillations of continuous media that translate along their length?",
+      "gold": [
+        "WickertMote1990.bib"
+      ],
+      "gold_titles": [
+        "Classical vibration analysis of axially moving continua"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What causes a moving flexible web to vibrate and become unstable when pulled through a fluid moving in the same direction, especially in paper manufacturing?",
+      "gold": [
+        "JeronenPhd2011.bib"
+      ],
+      "gold_titles": [
+        "On the mechanical stability and out-of-plane dynamics of a travelling panel submerged in axially flowing ideal fluid: a study into paper production in mathematical terms"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Why does adding damping cause instability in some mechanical systems and what is the singular geometric structure of the associated bifurcation set?",
+      "gold": [
+        "KirillovVerhulst2010.bib"
+      ],
+      "gold_titles": [
+        "Paradoxes of dissipation-induced destabilization or who opened Whitney's umbrella?"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can a traveling polymer sheet be simulated using a spring-dashpot arrangement that accounts for deformation in two directions?",
+      "gold": [
+        "Marynowski2006.bib"
+      ],
+      "gold_titles": [
+        "Two-dimensional rheological element in modelling of axially moving viscoelastic web"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can one generate stratified sampling designs that also satisfy pairwise orthogonality constraints?",
+      "gold": [
+        "Tang1993.bib"
+      ],
+      "gold_titles": [
+        "Orthogonal Array-Based Latin Hypercubes"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How do drive chains vibrate perpendicular to their length?",
+      "gold": [
+        "Mahalingam1957.bib"
+      ],
+      "gold_titles": [
+        "Transverse vibrations of power transmission chains"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does mechanical loading cause permanent changes to the large-scale structure of paper?",
+      "gold": [
+        "Sanborn1962.bib"
+      ],
+      "gold_titles": [
+        "A Study of Irreversible, Stress-Induced Changes in the Macrostructure of Paper"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can evolutionary optimization and non-cooperative game theory be used for the inverse design of high-lift wing sections?",
+      "gold": [
+        "Wang2011.bib"
+      ],
+      "gold_titles": [
+        "CFD Inverse Problems Solved by Hybrid Mesh/Mesless Methods Using EAs and Nash Games on Multi-element Airfoils in Aerodynamics."
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does periodic variation in system parameters influence the complex oscillatory behavior of traveling flexible cords with internal damping?",
+      "gold": [
+        "MockensturmGuo2005.bib"
+      ],
+      "gold_titles": [
+        "Nonlinear Vibration of Parametrically Excited, Viscoelastic, Axially Moving Strings"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can I automatically determine the optimal smoothing parameter for nonparametric probability curves using only the observed dataset?",
+      "gold": [
+        "SheatherJones1991.bib"
+      ],
+      "gold_titles": [
+        "A Reliable Data-Based Bandwidth Selection Method for Kernel Density Estimation"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can angle-preserving transformations be used to convert complex boundaries into simpler shapes for calculation?",
+      "gold": [
+        "Nehari1952book.bib"
+      ],
+      "gold_titles": [
+        "Conformal Mapping"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I have been following recent developments in how researchers populate high-dimensional parameter spaces with structured grids that maintain strong statistical properties. Concurrently, there is a growing emphasis on developing visual tools to help practitioners assess the reliability and noise levels embedded within geographic datasets. I am trying to bridge these methodological threads to see which computational frameworks yield the most robust performance metrics when evaluating model outputs. Given that context, how do the empirical error estimates and parameter influence rankings actually shift when you swap out traditional Monte Carlo approaches for that systematic sampling protocol?",
+      "gold": [
+        "HeltonDavisJohnson2005.bib"
+      ],
+      "gold_titles": [
+        "A comparison of uncertainty and sensitivity analysis results obtained with random and Latin hypercube sampling"
+      ],
+      "distractors": [
+        "CioppaLucas2007.bib",
+        "BeardButtenfieldClapham1991.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I’ve been trying to wrap my head around how flexible structural elements behave when they slide through a perfect, unresisting liquid, particularly when those flows change over time rather than staying steady. It naturally makes me think about biological locomotion, like the undulatory propulsion used by elongated aquatic creatures to navigate similar environments. Then there’s that other study on the dynamic equilibrium of flexible sheets composed of time-dependent materials when they’re immersed in a surrounding medium. I’m attempting to see whether the mathematical models for unsteady structural response in inviscid flows can actually predict the onset of flutter in those viscoelastic configurations, or if the biological examples point toward entirely different scaling laws. Given that this theoretical framework establishes a purely mathematical foundation for such unsteady interactions, how does it formally couple the temporal evolution of the boundary deformation with the pressure distribution when the background flow itself is accelerating along the transport direction?",
+      "gold": [
+        "BJNT2008-2.bib"
+      ],
+      "gold_titles": [
+        "Nonstationary Dynamics of Travelling Membranes and Plates Interacting with Axially Moving Ideal Fluid. Part I: Theory"
+      ],
+      "distractors": [
+        "lighthill-notsosf1960.bib",
+        "SaksaEtAl2012-JSM.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I'm trying to piece together how to handle the numerical stability when simulating complex flow scenarios. It feels like I need to account for the dynamic response of flexible boundaries when they're coupled with the fluid, especially regarding those modal characteristics. Then there's the issue of accurately modeling transport through heterogeneous structures, whether they're random or structured, and I need robust ways to synthesize those three-dimensional geometries for testing. But whenever I run these simulations, I worry about accumulated rounding errors messing up the results, so I'm looking into better ways to refine the arithmetic operations to maintain precision during massive calculations. Could you detail how your synthetic method builds three-dimensional representations that encompass both regular and stochastic material arrangements?",
+      "gold": [
+        "QuintardWhitaker1994d.bib"
+      ],
+      "gold_titles": [
+        "Transport in Ordered and Disordered Porous Media IV: Computer Generated Porous Media for Three-Dimensional Systems"
+      ],
+      "distractors": [
+        "Saksa2012presentation-Oulu.bib",
+        "Anderson1999.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I’ve been juggling a few different computational approaches lately, trying to bridge theoretical modeling with practical manufacturing constraints. There’s that recent work on optimizing continuous web transport to minimize production interruptions, which really highlights how delicate parameter balancing can be. Then I keep reviewing methodological updates on stratified space-filling designs, noting both their enhanced coverage capabilities and the computational bottlenecks that still plague high-dimensional setups. All of this makes me realize I need a more robust way to capture the time-dependent behavior of flexible materials under constant tension, especially when standard basis functions fail to account for the directional motion. Given that standard fixed-mode expansions struggle with traveling waves, how does constructing the projection basis directly from the system’s own translational dynamics improve numerical convergence when simulating the transient vibrations of a stretching polymer cord?",
+      "gold": [
+        "Zhang2008.bib"
+      ],
+      "gold_titles": [
+        "Dynamic analysis of an axially moving viscoelastic string by the Galerkin method using translating string eigenfunctions"
+      ],
+      "distractors": [
+        "BNSTT2012-B2.bib",
+        "HuntingtonLyrintzis1998.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I've been reviewing recent work on how geometric boundaries influence dynamic stability in flat and curved structural elements, and I'm also cross-referencing that with advanced coursework on how cracks propagate under large deformations. It's fascinating how edge constraints and material damage thresholds interact when predicting whether a component will suddenly fail or just deform plastically. Meanwhile, I keep coming back to studies on how flexible linear elements behave when they are simultaneously moving and experiencing lateral displacements. I need to figure out exactly how to formulate the governing equations for those sideways waves when the baseline transport speed remains uniform. Specifically, how do you properly decouple the steady axial motion from the lateral wave motion without introducing artificial damping artifacts?",
+      "gold": [
+        "Sack1954.bib"
+      ],
+      "gold_titles": [
+        "Transverse oscillations in traveling strings"
+      ],
+      "distractors": [
+        "ChenColemanDing1998.bib",
+        "Hutchinson1979.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I'm trying to wrap my head around the mechanics of thin, flexible filaments moving rapidly through processing equipment, focusing on how time-dependent stretching and stress states confined to the sheet surface affect deformation patterns in those moving networks. It makes me think about the structural integrity of the handling systems too, especially how the math for bending curved geometries and thin-walled components might apply to the guides, even if that's a bit of a side track. But then I keep circling back to the raw material—specifically how cellulose-based mats expand or contract when they pick up humidity, which introduces a whole different layer of dimensional change that complicates the analysis. How can we accurately measure the moisture-induced expansion of the fibrous substrate while distinguishing it from the mechanical strains inherent to the high-speed transport process?",
+      "gold": [
+        "UesakaMossNanri1992.bib"
+      ],
+      "gold_titles": [
+        "The Characterization of Hygroexpansivity of Paper"
+      ],
+      "distractors": [
+        "KurkiEtAl2012.bib",
+        "Timoshenko1959.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I've been juggling thoughts about how we discretize continuous systems using mesh-based approximations to simulate physical phenomena. At the same time, I'm trying to figure out the most robust ways to sample parameter ranges when running large-scale simulations, since poor choices really skew the results. It got me thinking about how these computational frameworks eventually feed into broader questions about time symmetry and statistical recurrence in thermodynamic systems. I keep wondering whether the foundational contradictions around microscopic reversibility and macroscopic irreversibility are actually just mathematical artifacts rather than insurmountable physical barriers. Specifically, does the literature ultimately classify those time-reversal and recurrence objections as non-existent rather than legitimate scientific problems?",
+      "gold": [
+        "Rothstein1974.bib"
+      ],
+      "gold_titles": [
+        "Loschmidt's and Zermelo's Paradoxes Do Not Exist"
+      ],
+      "distractors": [
+        "McKayBeckmanConover1979.bib",
+        "Johnson1987book.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I’ve been reviewing recent literature on how structural materials degrade under stress and how cracks propagate through brittle components. That failure behavior really ties into the broader methodological shifts I’m seeing in how researchers collect and refine observational data sets. Speaking of data refinement, I’m trying to bridge those statistical approaches with dynamic systems where flexible sheets translate along a linear path while their velocity fluctuates. The main challenge is figuring out when those moving materials will experience resonance-driven instabilities and how we can computationally verify those thresholds. Could you explain how the numerical simulations validate the stability boundaries for those translating sheets when their forward velocity varies continuously over time?",
+      "gold": [
+        "TangChen2013.bib"
+      ],
+      "gold_titles": [
+        "Stability Analysis and Numerical Confirmation in Parametric Resonance of Axially Moving Viscoelastic Plates with Time-Dependent Speed"
+      ],
+      "distractors": [
+        "Perez2004book.bib",
+        "TariDahmani2002.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I've been juggling a few different research threads lately, starting with how to systematically label messy or ambiguous data so we can actually use it in our models. That got me thinking about structural dynamics, specifically how we model the oscillatory behavior of slanted surfaces when objects travel across them. Meanwhile, I keep circling back to material durability, particularly how thin fibrous sheets hold up when you try to tear or crack them. I'm trying to see if there's a common methodological thread linking data labeling, dynamic surface modeling, and material failure. Does the cellulose sheet study actually report the exact load thresholds needed to initiate a tear under controlled conditions?",
+      "gold": [
+        "SethPage1974.bib"
+      ],
+      "gold_titles": [
+        "Fracture resistance of paper"
+      ],
+      "distractors": [
+        "wu.bib",
+        "CedilnikRheingans2000.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I’m trying to sync up a few different modeling workflows on my desk. One track focuses on systematic parameter sampling strategies to streamline digital testing pipelines, while another examines how continuous flexible sheets buckle when subjected to uneven pulling forces. Meanwhile, I’m reviewing how material damping and directional stiffness characteristics influence the oscillatory behavior of flat structural components under large deformations. I need to figure out how to properly couple these time-dependent material properties with anisotropic geometric constraints. Given that both factors dictate whether these dampened, directionally sensitive panels will return to equilibrium or diverge, what specific mathematical framework does the research propose to predict that exact stability threshold?",
+      "gold": [
+        "Eshmatov2007709.bib"
+      ],
+      "gold_titles": [
+        "Nonlinear vibrations and dynamic stability of viscoelastic orthotropic rectangular plates"
+      ],
+      "distractors": [
+        "GiuntaWojtkiewiczEldred2003.bib",
+        "BanichukEtAl2012-IJMS.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I’ve been reviewing recent image processing methods that adjust brightness derivatives to fit wide luminance scales into standard displays. At the same time, I’m looking into mathematical routines that limit precision loss when approximating infinite series. All of this computational work makes me think about how we ultimately present probabilistic or noisy measurements in visual formats. I need to figure out how to properly handle probabilistic information when generating visual outputs. Which established techniques actually solve the core challenges when rendering datasets that contain inherent measurement ambiguity?",
+      "gold": [
+        "GrietheSchumann2006.bib"
+      ],
+      "gold_titles": [
+        "The Visualization of Uncertain Data: Methods and Problems"
+      ],
+      "distractors": [
+        "FattalEtAl2002.bib",
+        "Kahan1965.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I'm trying to synthesize approaches across different structural analyses, starting with the precise mathematical limits for vertical members that collapse due to their own mass. I'm also considering how hierarchical sampling strategies can optimize experimental frameworks to explore parameter spaces efficiently. It raises the challenge of integrating these deterministic failure models and statistical designs into broader simulations of fluid-structure interaction. I need to clarify the core tenets that govern how aerodynamic forces and elastic deformations mutually influence each other. What are the fundamental laws governing the coupled behavior of flexible bodies moving through a fluid?",
+      "gold": [
+        "BisplinghoffAshley1962.bib"
+      ],
+      "gold_titles": [
+        "Principles of Aeroelasticity"
+      ],
+      "distractors": [
+        "DuanWang2008.bib",
+        "Qian2009.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I've been juggling a few different computational and structural mechanics problems lately. There's that recent study on using evolutionary algorithms to numerically integrate complex calculus problems, which got me thinking about how we might automate model generation. At the same time, I'm reviewing analytical methods for predicting how thin, load-bearing slabs behave when they oscillate without external forcing. Meanwhile, my current project keeps circling back to how flexible, sheet-like materials respond to dynamic airflow, especially when they start oscillating unpredictably in a gaseous medium. Given that, could you clarify whether the aerodynamic drag and lift forces scale linearly with the oscillation frequency for those compliant, flexible surfaces?",
+      "gold": [
+        "ChangMoretti1991.bib"
+      ],
+      "gold_titles": [
+        "Interaction of fluttering webs with surrounding air"
+      ],
+      "distractors": [
+        "TsoulosLagaris2006.bib",
+        "LimLuXiangYao2009.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I have been reviewing how foundational treatments of continuous media and principles for extremizing energy integrals apply to practical transport setups. The literature clearly establishes how to model bulk stress distributions and derive governing equations through functional optimization, but connecting those abstractions to time-sensitive material responses under physical contact remains challenging. I am specifically trying to map those theoretical tools onto a scenario where a compliant sheet undergoes steady longitudinal transport while sliding against stationary support structures. Although the underlying field theories and mathematical frameworks are well documented, I lack precise information on how that moving system actually responds to operational stresses. Specifically, what transient oscillation patterns and stability limits arise when a time-dependent flexible membrane is drawn continuously over fixed cylindrical guides?",
+      "gold": [
+        "Sedov1971Book.bib"
+      ],
+      "gold_titles": [
+        "A Course in Continuum Mechanics"
+      ],
+      "distractors": [
+        "Weinstock2008.bib",
+        "Saksa2011.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I’ve been reviewing harmonic-based simulation techniques for flowing media, and they really underscore how tricky it is to model complex boundary interactions. I’m also cross-referencing that with the stratified randomized sampling approach used to estimate structural failure rates under varying loads. It makes me wonder how material flexibility actually interacts with those flow patterns and failure thresholds in practice. I keep circling back to how we actually track the bending and sideways drift of a continuously advancing flexible sheet during operation. Does your proposed framework capture those coupled lateral shifts in real time, or does it treat the sheet’s sideways movement as completely independent from the surrounding medium?",
+      "gold": [
+        "Brown2005.bib"
+      ],
+      "gold_titles": [
+        "A New Method for Analyzing the Deformation and Lateral Translation of a Moving Web"
+      ],
+      "distractors": [
+        "canuto-smifd1988.bib",
+        "DingZhouLiu1998.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I’ve been reviewing computational models on how translating thin sheets oscillate dynamically, alongside theoretical frameworks for liquid migration through permeable structured networks. Those seepage studies really make me reconsider how internal fluid channels evolve when such composite layers are subjected to repeated mechanical loading. It’s fascinating to observe how flat cellulose-based products transition from elastic bending to permanent structural deformation under sustained stress. Specifically, what constitutive relationships or experimental protocols does that study propose to quantify the yielding threshold and recovery characteristics of cellulose-based substrates?",
+      "gold": [
+        "CastroOstojaStarzewski2003.bib"
+      ],
+      "gold_titles": [
+        "Elasto-Plasticity of Paper"
+      ],
+      "distractors": [
+        "KoivurovaPramila1997.bib",
+        "Whitaker1986a.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I've been looking into how to efficiently pick test locations when related measurements are already available, which feels like the logical next step for our experimental setup. While reviewing that, I also had to think about the oscillation risks in continuously translating sheets, since those mechanical instabilities could easily compromise our physical prototypes. Then I realized we still need a clearer way to graphically communicate measurement doubt and confidence ranges so the team doesn't misinterpret the data. Given that background, how exactly does the conditional sampling framework actually integrate supplementary side data to preserve uniform coverage without skewing the final distribution?",
+      "gold": [
+        "MinasnyMcBratney2006.bib"
+      ],
+      "gold_titles": [
+        "A conditioned Latin hypercube method for sampling in the presence of ancillary information"
+      ],
+      "distractors": [
+        "mote-dsoamm1972.bib",
+        "JohnsonSanderson2003.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I’ve been tracing how the classification of second-order systems dictates which numerical strategies actually stabilize time-dependent simulations. When I consider flexible moving components undergoing large deformations and material damping, it becomes obvious that rigid spatial grids often fail to track evolving boundaries without excessive computational overhead. That realization pushes me toward scattered-node approaches that sidestep traditional mesh generation, especially when modeling inviscid fluid dynamics. I’m trying to determine how an unconditionally stable temporal integration scheme performs when paired with a mesh-free spatial discretization for compressible flow. Specifically, what are the stability constraints and conservation properties of a node-based algorithm designed for inviscid fluid dynamics?",
+      "gold": [
+        "Chen2003.bib"
+      ],
+      "gold_titles": [
+        "Implicit gridless method for Euler equations"
+      ],
+      "distractors": [
+        "ChenZuWuYang2004.bib",
+        "ScholarpediaPDE2.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I've been reviewing recent literature on structural dynamics, starting with a study on how conveying elastic sheets and flat panels become unstable when coupled with a moving fluid. That got me thinking about visualization, so I also looked into a paper discussing the evolution of graphical representation tools from basic data display to more advanced, automated plotting techniques. Now I'm focusing on the mathematical side, specifically investigating analytical results for the unforced oscillatory modes of flat rectangular structures. Which study introduces a Hamiltonian-based framework to derive closed-form results for these unforced oscillatory modes of flat rectangular structures?",
+      "gold": [
+        "XingLiu2009.bib"
+      ],
+      "gold_titles": [
+        "New exact solutions for free vibrations of rectangular thin plates by symplectic dual method"
+      ],
+      "distractors": [
+        "AvitzurBachmannKajler1995.bib",
+        "BanichukEtAl2009-JFS.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I’ve been reviewing recent work on polymer sheet extrusion methods, and I’m trying to connect that to the mechanics of lightweight structural panels and curved load-bearing elements. There’s also a lot of discussion lately about probabilistic engineering refinement when manufacturing tolerances and material variability introduce unpredictable stresses. I keep wondering how moving grid techniques handle the rapid deformation during molten plastic forming compared to fixed reference frames. Based on your findings, which numerical framework delivers better convergence and mesh stability when tracking the thinning profile throughout the extrusion process?",
+      "gold": [
+        "SmithStolle2002.bib"
+      ],
+      "gold_titles": [
+        "A Comparison of Eulerian and Updated Lagrangian Finite Element Algorithms for Simulating Film Casting"
+      ],
+      "distractors": [
+        "VentselKrauthammer2001.bib",
+        "BanichukNeittaanmaki2010Book.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I’ve been trying to figure out how to properly space out experimental points when the feasible region isn’t a standard grid or box, especially since I need to reconstruct complex surfaces from those scattered measurements. At the same time, I’m wrestling with how discrete mechanical models behave over time when energy dissipates and rotational forces dominate the dynamics. It makes me wonder whether the stratified random sampling approach we use to generate those initial configurations actually settles down reliably as we increase the total number of observations. I realize these three areas touch on fundamentally different mathematical challenges, yet they all rely on how we sample and approximate underlying structures. Given that overlap, could you point me toward the specific methodology that handles optimal point placement on irregular boundaries while explicitly relying on smooth reconstruction methods that blend local measurements?",
+      "gold": [
+        "AuffrayBarbillonMarin2010.bib"
+      ],
+      "gold_titles": [
+        "Maximin Design on Non-Hypercube Domain and Kernel Interpolation"
+      ],
+      "distractors": [
+        "YangMote1991.bib",
+        "Manteufel2000.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I've been looking into numerical simulations of dynamic structures involving traveling sheets that interact with non-viscous fluids, paying close attention to the coupled mechanical response. It raises interesting questions about how we could systematically adjust process variables to minimize energy loss or prevent instabilities in such continuous material handling systems. To properly validate any new tuning strategy, we would need a reliable collection of reference scenarios that cover a broad spectrum of application types and complexities. I remember coming across a description of a publicly available repository designed specifically to facilitate the evaluation of algorithmic performance across diverse engineering challenges. Do you know of any open resource that provides a standardized collection of test instances for comparing optimization methods across multiple distinct problem domains?",
+      "gold": [
+        "VarisTuovinen2012.bib"
+      ],
+      "gold_titles": [
+        "Open benchmark database for multidisciplinary optimization problems"
+      ],
+      "distractors": [
+        "NiemiPramila1987.bib",
+        "laukkanen.bib"
+      ]
+    }
+  ]
+}

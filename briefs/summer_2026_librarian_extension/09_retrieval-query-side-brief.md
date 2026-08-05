@@ -328,12 +328,44 @@ of "close" belongs to the collection; a score that measures whether the query is
 about does not have much of a per-collection scale to begin with. That is why one constant works, and it is
 why the second attempt was solving a problem smaller than it looked.
 
-**What to ship:** one constant, near 0.40, global rather than per-collection, with the tradeoff curve
-recorded in `investigations/retrieval/README.md` so the operating point can be moved knowingly (0.35 loses
-nothing and misses 23.7%; 0.45 misses 6.9% and loses 27.3%). The same caveat that killed p75 applies here
-and is stated in advance: three corpora chose 0.40, and a fourth could unseat it. A constant makes a weaker
-claim than a mechanism, so it has less to be wrong about — and it removes this brief's dependency on the
-scopes work in brief 13, which the per-collection version would have needed.
+**What to ship:** ~~one constant, near 0.40~~ — see the next subsection. Three corpora chose 0.40, the
+caveat above said a fourth could unseat it, and a fourth did, within hours.
+
+#### The fourth corpus unseats the constant (2026-08-06): ship nothing yet
+
+A titles-only bibliography — 541 hand-typed records, 303 bytes median, the shape a working researcher's
+own BibTeX file actually has — puts on-corpus similarity at median **0.395**, against 0.519–0.670 for the
+three corpora the constant was chosen on. At 0.40 it rejects **53 of 99** answerable questions. Scored
+across all four, no constant survives: 0.35 loses 32.3% and misses 32.3%, 0.40 loses 53.5%, 0.45 loses
+78.8%. Every value fails badly on *some* corpus a user might plausibly have.
+
+The three-corpus conclusion was not wrong about its three corpora. It was drawn from a sample that happened
+to hold the deciding variable fixed — the same failure as the two-corpus one, one level up, and the second
+time in a day that a result died of the sample rather than of the reasoning.
+
+**What decides it is the size of the matched unit, not of the document.** Chunking is ~1000 characters, and
+the ordering follows chunk content rather than document length: fiction's documents are 45 kB yet it sits
+mid-table, because its *chunks* are window-sized and so look like abstracts. banichuk is the only corpus
+whose chunks fall far below the window. That is measurable at index time with no probes and no labels,
+which is what makes it a candidate mechanism rather than a knob — but it is **confounded with corpus size**
+(hydrogen scores 0.670 at 11974 documents against arXiv's 0.549 at 1268, on near-identical document shape),
+and these four corpora cannot separate the two.
+
+**So the grounding marker in brief 10 does not get a threshold from here yet.** What it can have, and what
+is unchanged by all of this, is the *ordering* result: on-corpus questions separate from off-corpus ones at
+AUROC 0.99+ on every corpus tested, near and far. The signal is real; only its absolute calibration is
+unsettled. Options, in the order they should be tried:
+
+1. **Run the fulltext experiment** (`investigations/retrieval/README.md`), which separates the two
+   mechanisms because they predict opposite outcomes. Cheap — the PDFs already exist, and the question set
+   and gold labels transfer unchanged.
+2. **If chunk size is the driver**, the threshold becomes a function of a measurable index-time statistic
+   rather than a constant, and the per-collection idea returns in a form that has nothing to do with the
+   off-corpus probes that failed.
+3. **Only then** pick an operating point, and state which corpus shapes it was validated on.
+
+Shipping a constant now would mean a Librarian user with a hand-built bibliography — the exact person this
+feature is for — seeing half their answerable questions marked ungrounded.
 
 **The constant belongs to the embedder, and the embedder is scheduled to change.** Every number in this
 section is a cosine similarity under `multi-qa-mpnet-base-cos-v1`, the currently configured
