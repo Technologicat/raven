@@ -234,6 +234,27 @@ effect, not enough for a few points of R@5.
   distinction. And it is a **product gap worth its own treatment**: "which of my documents is the one
   about X" is an ordinary thing to ask a document database, and chunk RAG structurally cannot serve it.
 
+  **A harder class sits behind it, and retrieval is the wrong tool for that one entirely.** "Which of these
+  is an Asimov pastiche?" is answerable in a second by anyone who has read *The Last Question* — the story
+  is `The Last Optimization`, it opens on entropy and closes on "And friendship was magic", echoing "And
+  there was light". The word "Asimov" occurs nowhere in it. The answer is not distributed across the
+  document the way the setting was; it is not in the corpus **at all**. It lives in the reader's knowledge
+  of a work outside the corpus, and no indexing strategy over these files can recover it.
+
+  That is worth separating from the document-level gap, because it has a different remedy: the *model*
+  already knows *The Last Question*, so the answer comes from world knowledge applied to retrieved text,
+  not from better retrieval. It marks the boundary of what the retrieval layer should be asked to do —
+  and, usefully, it is a case where the confidence signal reporting "nothing here" is the *correct*
+  behaviour rather than a failure to be tuned away.
+
+  **All three probes came from hazy recollection, and one of them dissolved on inspection.** A fourth,
+  "which is the post-apocalyptic village story", retrieved `My Life In Fimbria` on strong surface evidence
+  (132 mentions of "village", "from before the fall of man and my retreat into hiding") — and the reader's
+  verdict was that Fimbria is really the story where the protagonist edits the world and it turns out not
+  to be the real Equestria Online. Contested ground truth, so it is not usable as a labelled item. Which is
+  the limitation above meeting practice: human-recalled probes are a spot-check, and some of them do not
+  survive being checked.
+
 - **2026-08-05 — the retrieval confidence signal (brief 09, lever 1): the level, not the shape.** Brief 09
   designed a `min_p`-style reading of the *shape* of a query's score distribution, having rejected an
   absolute threshold on cosine distance. Measured, the shape reading is anti-correlated with what it was
