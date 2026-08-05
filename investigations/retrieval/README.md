@@ -1,6 +1,9 @@
 # Retrieval evaluation
 
-A known-item evaluation set for `raven.librarian.hybridir`, and a harness that scores it.
+Known-item evaluation sets for `raven.librarian.hybridir`, and the harnesses that score them.
+
+These are instruments, not probes: they are committed and re-scored whenever a lever changes, which is the
+whole point of having them — a measurement nobody can repeat settles an argument once and then rots.
 
 This exists because retrieval-quality arguments are otherwise undecidable. The motivating complaint —
 *the hybrid rank does not track how good a result is* — names a ranking failure, and no amount of reading
@@ -38,6 +41,12 @@ say whether the right papers came back. Known-item retrieval measures whether th
 planted document; only a reader who knows the field can measure whether it found the *useful* ones, which
 is the thing the tool claims to do.
 
+This is a *different* need from the one the fiction corpus below answers, and the two should not be
+confused: fiction is there to test whether a constant survives a change of collection, and could be a
+literature nobody here had read without losing any of that. Judging needs the opposite property. (The
+fiction corpus happens to have it — the maintainer has read all 19 — so it could seed pooled judgments
+too. That is opportunity, not design.)
+
 ## The hazard to watch
 
 The questions are LLM-written, and a question that reuses its abstract's distinctive phrasing turns the
@@ -49,18 +58,46 @@ task into string matching. The generator prompt forbids verbatim phrases, and `e
 - If BM25 alone matches or beats the fusion, that is the finding — RRF is losing information rather than
   adding it.
 
+## Two corpora, and why
+
+Every conclusion drawn from a single corpus that takes the form of *a tuned constant* is a conclusion about
+that corpus. Librarian indexes whatever the user drops in the folder, so a threshold measured on one
+collection has to be shown to survive another before it can ship as a default. Hence a second, deliberately
+distant one.
+
+| set | corpus | questions | what it is for |
+|---|---|---|---|
+| `questions.json` | ~12k Web of Science records, hydrogen production | 99 | the original: comparing retrieval configurations |
+| `fiction_questions.json` | 19 Optimalverse stories saved from fimfiction.net, ~2.2M characters | ~100 on-corpus + ~30 adjacent | whether a threshold travels |
+
+Prose fiction is about as far from scientific abstracts as a document set gets while still being something
+someone might plausibly index, which is what makes it a fair adversary rather than a token second sample.
+
+**Each set doubles as the other's negatives.** A hydrogen question is unanswerable from a corpus of pony
+fiction and vice versa, by construction — so scoring either corpus gets ~100 real, well-formed negatives for
+free, in place of hand-written probes. The fiction set additionally carries an `adjacent` group generated
+from 13 stories deliberately *held out* of the index: same universe, same site, same generator, same
+prompts, differing only in that the answer is not in the corpus. That is as hard as a negative gets, and it
+is a lower bound by construction — fan fiction in one shared universe overlaps, so a held-out question may
+be answerable from an indexed story, which mislabels it and biases *against* the signal being measured.
+
 ## Corpus and copyright
 
-The corpus is a local collection of Web of Science records (hydrogen production, ~12k entries) living in
-Librarian's documents directory. **It is not in this repository and must not be**, being copyrighted
-third-party abstracts.
+**Neither corpus is in this repository, and neither may be** — one is copyrighted third-party abstracts, the
+other copyrighted third-party fiction. Both live in Librarian's documents directory on the developer machine.
 
-What *is* committed is `questions.json`: the generated questions (new text) and the WoS accession numbers
-they point at (identifiers). Anyone with the same corpus can reproduce the scores; anyone without it gets
-a question set and no answers, which is the correct outcome.
+What *is* committed is the question sets, and the rule is the same for both: **generated text plus
+identifiers, never source text.** A question is new writing that the generator was explicitly told not to
+phrase in the source's words, and the labels are WoS accession numbers in one set and filenames in the
+other. Anyone with the same corpus can reproduce the scores; anyone without it gets a question set and no
+answers, which is the correct outcome. Note that neither generator writes the sampled passage into its
+output, and neither should be changed to — that is the line that keeps the sets publishable.
 
-Consequence for regeneration: the sampling seed is fixed in `make_questions.py`, so a rerun draws the same
-papers. Changing the seed changes the set, and scores across different sets are not comparable.
+Consequence for regeneration: the sampling seed is fixed in each generator, so a rerun draws the same papers
+or passages. It does *not* make the questions identical — the model is sampled at temperature, so a rerun
+produces different questions about the same sources. Changing the seed changes the sources too, and scores
+across different sets are not comparable either way. Both generators checkpoint after every question, so an
+interrupted run leaves a valid, shorter set rather than nothing.
 
 ## Running it
 
