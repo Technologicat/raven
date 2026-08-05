@@ -18,6 +18,7 @@
         - [Why?](#why)
         - [Notes](#notes)
     - [Document database](#document-database)
+    - [Message attachments](#message-attachments)
     - [Tools](#tools)
         - [Security warning](#security-warning)
         - [Notes](#notes-1)
@@ -53,6 +54,7 @@
 - **Animated AI avatar** with emotional reactions based on LLM text output, lipsynced speech (English), and optional machine-translated subtitles (in a language of your choice).
 - **Voice mode**. Talk with the AI using your mic. (English only for now.)
 - **Document database** for fact grounding. Talk with the AI about the content of your documents. Powered by a local hybrid semantic and keyword search engine for optimal results.
+- **Message attachments**. Hand the AI one specific document or image to read right now, as opposed to searching a database for it. Documents work on any model; images need a vision-capable one.
 - **Tool use** (tool-calling) for more fact grounding. The AI has access to tools provided by the *Librarian* software: websearch, web page fetching, and searching your document database itself when the automatic search did not find what it needed.
 - **Open source**. 2-clause BSD license.
 
@@ -64,7 +66,7 @@ That said, some important features are still missing, and others will be expande
 
 # Features
 
-The main features are a multiversal chat history for natural, branching AI conversations; document database and tool use features for fact grounding, especially from locally stored documents; and a real-time animated, talking, lipsynced AI avatar with a voice input mode, for a futuristic touch on the user interface.
+The main features are a multiversal chat history for natural, branching AI conversations; a document database, message attachments and tool use for fact grounding, especially from locally stored documents; and a real-time animated, talking, lipsynced AI avatar with a voice input mode, for a futuristic touch on the user interface.
 
 ## Multiversal history
 
@@ -202,6 +204,16 @@ If the search index ever becomes corrupted - or if you need to force a full rebu
 
 **Tip**: If you have a BibTeX file full of scientific abstracts, and would like to feed those into *Librarian* as separate documents, see the `raven-burstbib` command-line tool. It splits your huge `.bib` file into individual entry `.bib` files. These files can then be copied/moved into *Librarian*'s document database folder, and *Librarian* will then pick them up as individual documents. Better forms of integration with *Visualizer* datasets are planned to be added later.
 
+## Message attachments
+
+The document database answers *what do my documents say about this*. An attachment answers a different question — *read this one, now* — and the two are governed differently because of it. A search returns the snippets that matched; an attachment is handed over whole.
+
+Attach a **document** (the same formats the document database accepts, listed above) and its text is folded into your message when the request is built, so **any** model can read it — no vision capability required, and a PDF works as well as a `.txt`. Attach an **image** and a vision-capable model sees it directly; on a text-only model there is nothing to see, and *Librarian* says so rather than sending it into the void. Both kinds ride along with the message you attached them to, so they stay put in the branch where you asked about them.
+
+**The AI produces attachments too.** When it fetches a web page and the page is long, the result is stored as an attachment rather than pasted into the conversation: the chat log shows the opening and a chip you can click, and the model still reads the whole thing. Without that, one fetch buries the conversation it was meant to inform under dozens of screens of text. A long result from the document database is handled the other way round — it stays in the conversation, collapsed to its opening, with a toggle and a link to the file it came from, because that file is already on your disk and does not need a second copy.
+
+Attachments are stored beside the chat, **content-addressed** — identical bytes are stored once, however many messages refer to them, and a page fetched twice is one file when it has not changed and two when it has, so a message keeps the version it actually saw. They are sized against the context window along with everything else: several large attachments in one conversation share the room that is left, rather than one of them silently pushing the others out. Anything no longer referenced by any message can be reviewed and cleaned up from the GUI, with the option to rescue a copy first.
+
 ## Tools
 
 *Tool use* (a.k.a. *tool-calling* or *function-calling*) is a feature of many LLMs published since early 2025. The idea is to give the LLM partial control over engineering its own context. When the LLM notices that in order to respond to the user's request, it needs to use an external tool, the LLM can tell its surrounding scaffold app (such as *Librarian*) to invoke that tool. A tool can be anything that produces text, for example: websearch, calculators, weather services, database access, file access, shell access, or a programming environment. As the last few examples suggest, tools may also trigger actions in the external world, just like any computer software. For example, a tool call could cause a document to be sent to a printer, or a meeting to be scheduled for the user. Effectively, tool use allows the LLM to control a (predefined set of services on a) computer.
@@ -234,7 +246,11 @@ There is a configurable ceiling on how many rounds of tool calls one reply may t
 
 Past that point the tools stay on offer and any further call is answered with an error saying so, rather than being quietly taken away. Two reasons. Changing the set of tools mid-reply invalidates the backend's KV cache from that point on, so the rest of the conversation has to be reprocessed; and a conversation whose earlier messages call a tool the current request no longer declares is a shape models have seen little of in training, whereas a tool that answers "not now" is one they have seen plenty of. A refusal cannot *guarantee* the reply ends, though, so after `max_tool_call_refusal_rounds` of them the tools are withdrawn outright, which does.
 
-The document database is available to the LLM as a tool (`search_documents`) whenever the **Documents** mode toggle is on, in addition to the automatic search. The two do different jobs: the automatic search costs no extra round trip but has to guess a query from your message, while the tool lets the LLM write a better query *after* reading what the first search returned. This matters most when your question is about something the first search phrased badly — asking about a specific instrument by name, say, when your message mentioned it only in passing.
+*Librarian* provides five tools, in two pairs and a straggler. On the web side, `websearch` returns a list of results, and `webfetch` reads one page — search first, then follow a link, which is the same gesture you would make yourself. A page is fetched by *Raven-server*, which strips navigation, sidebars and footers and hands back the article; if the page builds its content by running scripts, there is nothing in the markup to read and the tool says so rather than returning an empty page as though it were the truth.
+
+Which hosts the AI may fetch from is up to you, via `webfetch_allowlist` in [`raven.librarian.config`](../librarian/config.py). The default is unrestricted, subject to the network-level checks *Raven-server* enforces regardless (it refuses private-network addresses and non-HTTP(S) schemes, so the AI cannot be talked into fetching your router's admin page). Set the allowlist to a list of hosts and the AI is confined to them — a curated scientific baseline is provided in the same file as `webfetch_default_allowlist`, ready to assign. Whatever the setting, a URL **you** type in your message is fetchable for that turn: the constraint is on the AI's initiative, not on your instructions. A host that merely turned up in a websearch result is *not* auto-allowed by default (`webfetch_trust_search_results`), because a search result is nobody's instruction — a page crafted to rank for a likely query could otherwise talk the AI into fetching it, and whatever it says next arrives inside the AI's context. There is also a per-session approval: when a fetch is refused, the chat log offers a button to allow that host for the rest of the session. See the security warning below before loosening any of this.
+
+On the document side, the database is available to the LLM as a tool (`search_documents`) whenever the **Documents** mode toggle is on, in addition to the automatic search. The two do different jobs: the automatic search costs no extra round trip but has to guess a query from your message, while the tool lets the LLM write a better query *after* reading what the first search returned. This matters most when your question is about something the first search phrased badly — asking about a specific instrument by name, say, when your message mentioned it only in passing.
 
 The LLM also gets `fetch_document`, to read a document in full once a search match looks worth following up, and `list_consulted_documents`, which names the documents this conversation has already looked at. The last one exists because the automatic search's results are shown once and then dropped: without it, a follow-up question arrives with the AI's earlier reply in view and the material behind it gone, with nothing to say so. Raven pushes that list into every turn as well as offering it as a tool, since the AI cannot notice a gap its own transcript hides. Each entry carries a label read from the document itself — a BibTeX record's title, author and year where there is one, otherwise the document's first line — so the AI can tell which one is worth re-reading without fetching all of them to find out.
 

@@ -82,7 +82,7 @@ For my stance on AI contributions, see the [collaboration guidelines](https://gi
 <img src="img/screenshot-librarian.png" alt="Screenshot of Raven-librarian" height="200"/>
 
 - **Documentation**: [Librarian user manual](raven/librarian/README.md) (under development)
-- **Goal**: Efficiently interrogate a stack of 2k scientific papers. Talk with a local LLM for synthesis, clarifications, speculation, ...
+- **Goal**: Pick up where *Visualizer*'s screening leaves off — a few hundred papers, still far more than anyone can read. Talk with a local LLM for synthesis, clarifications, speculation, ...
   - **Status**: :construction: The GUI app `raven-librarian` is usable day to day, and under active development. A command-line client `raven-minichat` shares the same backend (note that the GUI app has more features).
     - For the GUI app `raven-librarian`, `raven-server` must be running.
     - For the command-line `raven-minichat`, we recommend having `raven-server` running; this allows the LLM to search the web.
