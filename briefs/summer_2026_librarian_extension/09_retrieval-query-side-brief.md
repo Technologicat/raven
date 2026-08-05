@@ -631,11 +631,50 @@ Two things, in this order:
    two corpora, with a limitation that is known and must be stated rather than discovered (coarse — it sees
    a conversation leaving the corpus, not a document missing from it).
 2. **Work out what is still available on the retrieval side**, before conceding the remainder to stage 3.
-   Open, and deliberately not pre-answered here. Candidates this brief already carries: lever 2's tokenizer
-   fix, which none of today's results touch and which is independently motivated; adaptive `k`, which is
-   `score_sharpness`'s surviving consumer and is offline-evaluable; lever 4's PRF. Plus whatever the fiction
-   measurements suggest that nobody has thought of yet — that is the part worth arriving at with a clear
-   head rather than by continuing down this list. Reranking sits behind all of it, still unmeasured.
+   Open, and deliberately not pre-answered here. Candidates this brief already carries: **the MiniLM
+   reranker**, which is now the strongest of them and has its own section above — CPU-only, named, and with
+   a falsifiable prediction attached; lever 2's tokenizer fix, which none of today's results touch and which
+   is independently motivated; adaptive `k`, which is `score_sharpness`'s surviving consumer and is
+   offline-evaluable; lever 4's PRF. Plus whatever the fiction measurements suggest that nobody has thought
+   of yet — that is the part worth arriving at with a clear head rather than by continuing down this list.
+
+## Reranking: there is a named candidate, and it is now measurable (2026-08-05)
+
+**Test this as part of this brief rather than after it.** The model is
+`cross-encoder/ms-marco-MiniLM-L6-v2` — 23M parameters, CPU. It is recorded in
+`monday-2026-08-03-checklist.md`, which is otherwise stale, so it is repeated here to keep it from being
+lost with that file.
+
+Two things changed today that turn it from a queued idea into an experiment that can be run:
+
+- **CPU-only removes the objection that blocked it.** The cost table below prices a reranker in VRAM on
+  laptop dGPUs where 8 GB is already crowded. At 23M on CPU there is nothing to displace; the card stays
+  with the LLM. What needs measuring is latency over a shortlist, not whether it fits.
+- **The known domain-shift risk is now testable, on two corpora rather than argued about.** MS MARCO is web
+  search queries. Scientific abstracts are one shift from that and narrative fiction is another, and brief
+  13 predicted exactly this use for the fiction corpus before it existed ("out-of-domain in three ways the
+  current eval set cannot test … the MiniLM reranker is MS MARCO-trained"). Both corpora are now indexed,
+  with question sets and harnesses.
+
+**Which harness measures what, because they do not overlap and picking wrong wastes the run:**
+
+- **`evaluate.py` on hydrogen** gives the recall/MRR numbers. A reranker is a retrieval configuration, which
+  is what that harness was built to compare, and 12k documents give the known-item task real discrimination.
+- **`run_probes.py` on fiction** gives the domain-shift and failure-class answer. Known-item is degenerate
+  there (19 documents at k=20), so recall says nothing — but the probe set is stratified by failure class
+  and reports per-class hit rates, which is the shape the question actually has.
+
+**A specific prediction worth writing down before running it**, since it is the strongest reason to expect
+a reranker to earn its place here rather than a general hope for better ranking. A cross-encoder reads query
+and passage *together*, which is precisely the thing a bi-encoder cannot do — and today's sharpest measured
+failure is the description-to-dramatization gap, where `holdout-and-father` retrieves its gold document at
+rank 1 **zero times of two** and the gold's best chunk scores below eleven stories that are not about it.
+That failure is a bi-encoder failure by construction. If the cross-encoder does not move that probe, the
+mechanism is not what we think it is, and that is worth learning early. If it does, it is evidence for
+reranking on exactly the corpus type where the query-side levers ran out.
+
+Note the reranker also cannot fix the two classes that are not ranking problems: `document-level-unstated`
+and `intertextual` stay unfixed, because there is no passage to score highly.
 
 ## What reranking is still for, after the levers
 
