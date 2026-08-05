@@ -134,6 +134,11 @@ supply:
 - **`evaluate.py` compares retrieval configurations** — does this change to how a query is built or fused
   find the gold document more often? Output is recall@k / MRR per condition, plus per-question ranks in
   `results.json`. This is what settled lever 3.
+- **`run_probes.py` scores the hand-written probe set** in `probes.json` — nine information needs with
+  human-verified labels, each in several phrasings. It covers what the generated sets structurally cannot:
+  questions stratified by *where the answer lives* (in a chunk, in the document but stated, in the document
+  but only exhibited, or outside the corpus entirely), and phrasing sensitivity with ground truth held
+  constant. Output is per-class hit rates and per-probe similarity spreads, plus `probe_results.json`.
 - **`sharpness.py` scores a *diagnostic signal*** — given a query, can we tell from its own score
   distribution whether it found anything? Output is AUROC per candidate signal, plus per-query signal
   values in `sharpness_results.json`. It asks that twice: once against retrieval success over the
@@ -290,6 +295,26 @@ effect, not enough for a few points of R@5.
   The remedy is not on the query side of brief 09: a description-to-dramatization gap is closed by
   something that has *read* the corpus, which is the RAG tool surface letting the model author the query,
   or a document-level summary layer. Worth knowing before more effort goes into query rewriting.
+
+- **2026-08-05 — the level signal crosses, and this time both labels are verified.** The retracted version
+  of this claim rested on a guessed label. The probe set (`probes.json`, scored by `run_probes.py`) supplies
+  it properly, because two of its probes have settled ground truth pointing opposite ways:
+
+  | probe | truth | retrieval | best similarity |
+  |---|---|---|---|
+  | `runs-until-end-of-time` | answerable, in the corpus | **gold at rank 1, both phrasings** | 0.387–0.409 |
+  | `asimov-pastiche` | not in the corpus in any form | correctly finds nothing | 0.356–**0.395** |
+
+  **0.395 > 0.387.** A question the corpus answers *perfectly* scores below one it cannot answer at all,
+  and no threshold placed anywhere separates them. The `holdout-and-father` probe closes the pincer from
+  the other side: 0.550–0.636, the highest readings in the set, on a probe that retrieves the gold document
+  at rank 1 **zero** times out of two.
+
+  So on this corpus the level is not merely differently-calibrated — high when wrong, low when right. That
+  is the consumer lever 1 was built for, and it is the reading the generated run now has to confirm or
+  overturn at proper sample size. Note what is *not* claimed: measurement A already found the level weak at
+  predicting retrieval success (AUROC 0.563), so the surprise is not that it fails there. The surprise is
+  the on-corpus/off-corpus crossing, which is measurement B's own job.
 
 - **2026-08-05 — one information need, three phrasings, 0.17 of confidence signal between them.** The
   reader asked which story has the protagonist work out what data structure Equestria is built from,

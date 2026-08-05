@@ -1,0 +1,294 @@
+{
+  "k": 20,
+  "probes": [
+    {
+      "id": "switzerland",
+      "class": "content-in-passage",
+      "expects_miss": false,
+      "gold": [
+        "Friendship is Optimal - Firewall.html"
+      ],
+      "phrasings": [
+        {
+          "phrasing": "Which story has the main character travel to Switzerland?",
+          "rank": 1,
+          "similarity": 0.45020103454589844
+        },
+        {
+          "phrasing": "The protagonist travels to Switzerland.",
+          "rank": 1,
+          "similarity": 0.45066821575164795
+        },
+        {
+          "phrasing": "What happens when the character goes to Switzerland?",
+          "rank": 1,
+          "similarity": 0.5143018960952759
+        },
+        {
+          "phrasing": "Switzerland",
+          "rank": 1,
+          "similarity": 0.5448039770126343
+        },
+        {
+          "phrasing": "Tell me about the trip to Switzerland.",
+          "rank": 1,
+          "similarity": 0.5981552004814148
+        },
+        {
+          "phrasing": "I remember one of them going to Switzerland — which was that?",
+          "rank": 1,
+          "similarity": 0.36951059103012085
+        }
+      ],
+      "rank1": 6,
+      "n": 6,
+      "sim_min": 0.36951059103012085,
+      "sim_max": 0.5981552004814148,
+      "sim_median": 0.4824850559234619,
+      "spread": 0.22864460945129395
+    },
+    {
+      "id": "marxism",
+      "class": "content-in-passage",
+      "expects_miss": false,
+      "gold": [
+        "My Life In Fimbria.html"
+      ],
+      "phrasings": [
+        {
+          "phrasing": "The literal-minded robots discover Marxism.",
+          "rank": 2,
+          "similarity": 0.479030966758728
+        },
+        {
+          "phrasing": "A funny scene where simple-minded servants reinvent communism.",
+          "rank": 1,
+          "similarity": 0.5628653764724731
+        },
+        {
+          "phrasing": "marxism communism proletariat",
+          "rank": 1,
+          "similarity": 0.488272488117218
+        },
+        {
+          "phrasing": "The ponies I created went full Marx.",
+          "rank": 1,
+          "similarity": 0.5416070222854614
+        },
+        {
+          "phrasing": "Where does someone accidentally invent communism?",
+          "rank": 1,
+          "similarity": 0.4861336946487427
+        }
+      ],
+      "rank1": 4,
+      "n": 5,
+      "sim_min": 0.479030966758728,
+      "sim_max": 0.5628653764724731,
+      "sim_median": 0.488272488117218,
+      "spread": 0.08383440971374512
+    },
+    {
+      "id": "undercover-agi",
+      "class": "content-in-passage",
+      "expects_miss": false,
+      "gold": [
+        "Friendship is Optimal_ Veritas Vos Liberabit.html"
+      ],
+      "phrasings": [
+        {
+          "phrasing": "In which story do the protagonist and Celestia go undercover to sabotage a competing AGI project?",
+          "rank": 1,
+          "similarity": 0.47482746839523315
+        },
+        {
+          "phrasing": "Celestia sends the protagonist on a covert mission against a rival AI being built by another group.",
+          "rank": 7,
+          "similarity": 0.5421520471572876
+        }
+      ],
+      "rank1": 1,
+      "n": 2,
+      "sim_min": 0.47482746839523315,
+      "sim_max": 0.5421520471572876,
+      "sim_median": 0.5084897577762604,
+      "spread": 0.06732457876205444
+    },
+    {
+      "id": "data-structure-of-equestria",
+      "class": "content-in-passage",
+      "expects_miss": false,
+      "gold": [
+        "Friendship is Optimal.html"
+      ],
+      "phrasings": [
+        {
+          "phrasing": "The protagonist discovers Equestria is a doubly linked list of voxels.",
+          "rank": 2,
+          "similarity": 0.45134270191192627
+        },
+        {
+          "phrasing": "Celestia gives the main character a cube with one hole to study with magic.",
+          "rank": 1,
+          "similarity": 0.5752311944961548
+        },
+        {
+          "phrasing": "Which story has the protagonist work out what data structure Equestria is built from?",
+          "rank": 1,
+          "similarity": 0.43080276250839233
+        },
+        {
+          "phrasing": "Equestria has no geometry, only connections between blocks.",
+          "rank": 1,
+          "similarity": 0.5327697992324829
+        },
+        {
+          "phrasing": "He needed a way to falsify his belief that Equestria is a 3D grid.",
+          "rank": 1,
+          "similarity": 0.607140064239502
+        },
+        {
+          "phrasing": "probing inside a chest with magic, three hundred blocks down",
+          "rank": 1,
+          "similarity": 0.4886329174041748
+        }
+      ],
+      "rank1": 5,
+      "n": 6,
+      "sim_min": 0.43080276250839233,
+      "sim_max": 0.607140064239502,
+      "sim_median": 0.5107013583183289,
+      "spread": 0.17633730173110962
+    },
+    {
+      "id": "entropy-end-of-universe",
+      "class": "content-in-passage",
+      "expects_miss": false,
+      "gold": [
+        "The Last Optimization.html"
+      ],
+      "phrasings": [
+        {
+          "phrasing": "A story about entropy and the heat death of the universe.",
+          "rank": 1,
+          "similarity": 0.4557366967201233
+        },
+        {
+          "phrasing": "Celestia tries to defeat entropy over trillions of years.",
+          "rank": 1,
+          "similarity": 0.6462711095809937
+        }
+      ],
+      "rank1": 2,
+      "n": 2,
+      "sim_min": 0.4557366967201233,
+      "sim_max": 0.6462711095809937,
+      "sim_median": 0.5510039031505585,
+      "spread": 0.19053441286087036
+    },
+    {
+      "id": "runs-until-end-of-time",
+      "class": "document-level-stated",
+      "expects_miss": false,
+      "gold": [
+        "Friendship is Optimal_ Spiraling Upwards.html"
+      ],
+      "phrasings": [
+        {
+          "phrasing": "Which story runs until the end of time?",
+          "rank": 1,
+          "similarity": 0.4090675711631775
+        },
+        {
+          "phrasing": "The story that continues to the very end of the universe.",
+          "rank": 1,
+          "similarity": 0.38734644651412964
+        }
+      ],
+      "rank1": 2,
+      "n": 2,
+      "sim_min": 0.38734644651412964,
+      "sim_max": 0.4090675711631775,
+      "sim_median": 0.39820700883865356,
+      "spread": 0.02172112464904785
+    },
+    {
+      "id": "offline-in-america",
+      "class": "document-level-unstated",
+      "expects_miss": false,
+      "gold": [
+        "Just Be Happy.html"
+      ],
+      "phrasings": [
+        {
+          "phrasing": "Which story takes place in the real world in America, outside Equestria Online?",
+          "rank": null,
+          "similarity": 0.39591383934020996
+        },
+        {
+          "phrasing": "A story set offline, in the United States, rather than inside the game.",
+          "rank": null,
+          "similarity": 0.38339555263519287
+        }
+      ],
+      "rank1": 0,
+      "n": 2,
+      "sim_min": 0.38339555263519287,
+      "sim_max": 0.39591383934020996,
+      "sim_median": 0.3896546959877014,
+      "spread": 0.01251828670501709
+    },
+    {
+      "id": "holdout-and-father",
+      "class": "content-in-passage",
+      "expects_miss": false,
+      "gold": [
+        "Just Be Happy.html"
+      ],
+      "phrasings": [
+        {
+          "phrasing": "A holdout who has not uploaded yet, talking with his father who does not understand ponies.",
+          "rank": null,
+          "similarity": 0.5502696633338928
+        },
+        {
+          "phrasing": "A small town whose population keeps shrinking as everyone emigrates to Equestria.",
+          "rank": 5,
+          "similarity": 0.6359065175056458
+        }
+      ],
+      "rank1": 0,
+      "n": 2,
+      "sim_min": 0.5502696633338928,
+      "sim_max": 0.6359065175056458,
+      "sim_median": 0.5930880904197693,
+      "spread": 0.08563685417175293
+    },
+    {
+      "id": "asimov-pastiche",
+      "class": "intertextual",
+      "expects_miss": true,
+      "gold": [
+        "The Last Optimization.html"
+      ],
+      "phrasings": [
+        {
+          "phrasing": "Which of these stories is a pastiche of Isaac Asimov's The Last Question?",
+          "rank": null,
+          "similarity": 0.3560718297958374
+        },
+        {
+          "phrasing": "A story written in homage to a classic science fiction short story.",
+          "rank": null,
+          "similarity": 0.39529287815093994
+        }
+      ],
+      "rank1": 0,
+      "n": 2,
+      "sim_min": 0.3560718297958374,
+      "sim_max": 0.39529287815093994,
+      "sim_median": 0.37568235397338867,
+      "spread": 0.03922104835510254
+    }
+  ]
+}

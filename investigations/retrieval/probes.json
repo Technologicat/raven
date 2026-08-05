@@ -1,0 +1,129 @@
+{
+  "corpus": "Optimalverse fan fiction saved from fimfiction.net (19 stories), local to the developer machine",
+  "note": "Hand-written probes with human-verified labels, from a reader who has read the whole corpus. These cover what the generated set structurally cannot: question classes that differ in *where the answer lives*, not just in phrasing. Each probe carries several phrasings of one information need, so that phrasing sensitivity can be measured with ground truth held constant. Verified 2026-08-05; two labels were got wrong before being settled by reading, so treat `verified: false` as a hard exclusion rather than a soft one.",
+  "classes": {
+    "content-in-passage": "The answer is stated in some chunk. Retrieval should find it.",
+    "document-level-stated": "A property of the whole document, which the document nevertheless states in text (e.g. as headings). Retrievable.",
+    "document-level-unstated": "A property of the whole document that it exhibits but never states. Not retrievable by chunk RAG; wants a document-level layer.",
+    "intertextual": "The answer is not in the corpus at all — it lives in the reader's knowledge of a work outside it. NOT retrievable, and should not be: a confidence signal reporting nothing here is the correct behaviour."
+  },
+  "probes": [
+    {
+      "id": "switzerland",
+      "class": "content-in-passage",
+      "gold": ["Friendship is Optimal - Firewall.html"],
+      "verified": true,
+      "note": "19 mentions of Switzerland/Swiss in the gold; the two other stories mentioning it do so once in passing. The phrasing list is deliberately graded from bare keyword to conversational half-memory, which is what makes this the phrasing-sensitivity probe.",
+      "phrasings": [
+        "Which story has the main character travel to Switzerland?",
+        "The protagonist travels to Switzerland.",
+        "What happens when the character goes to Switzerland?",
+        "Switzerland",
+        "Tell me about the trip to Switzerland.",
+        "I remember one of them going to Switzerland — which was that?"
+      ]
+    },
+    {
+      "id": "marxism",
+      "class": "content-in-passage",
+      "gold": ["My Life In Fimbria.html"],
+      "verified": true,
+      "note": "The gold says 'they've gone full Marx'. A rare token present in the text, so both arms have a lexical anchor — the control against which the anchorless probes below are read.",
+      "phrasings": [
+        "The literal-minded robots discover Marxism.",
+        "A funny scene where simple-minded servants reinvent communism.",
+        "marxism communism proletariat",
+        "The ponies I created went full Marx.",
+        "Where does someone accidentally invent communism?"
+      ]
+    },
+    {
+      "id": "undercover-agi",
+      "class": "content-in-passage",
+      "gold": ["Friendship is Optimal_ Veritas Vos Liberabit.html"],
+      "verified": true,
+      "note": "Ryan runs covert jobs; Chandra 'just wanted to stop dangerous AIs from coming into being'. Partial lexical anchor ('infiltration'), so it sits between the anchored and anchorless probes.",
+      "phrasings": [
+        "In which story do the protagonist and Celestia go undercover to sabotage a competing AGI project?",
+        "Celestia sends the protagonist on a covert mission against a rival AI being built by another group."
+      ]
+    },
+    {
+      "id": "data-structure-of-equestria",
+      "class": "content-in-passage",
+      "gold": ["Friendship is Optimal.html"],
+      "verified": true,
+      "note": "Light Sparks, given a puzzle cube with one sapphire block, concludes 'Equestria didn't have a geometry, but only had connections. You couldn't give a 3D coordinate for a block.' THE key probe: the reader's remembered wording ('a doubly linked list of voxels') shares no vocabulary with the passage, so it isolates whether the semantic arm bridges concept to text. It does — and a dozen hand-written greps did not.",
+      "phrasings": [
+        "The protagonist discovers Equestria is a doubly linked list of voxels.",
+        "Celestia gives the main character a cube with one hole to study with magic.",
+        "Which story has the protagonist work out what data structure Equestria is built from?",
+        "Equestria has no geometry, only connections between blocks.",
+        "He needed a way to falsify his belief that Equestria is a 3D grid.",
+        "probing inside a chest with magic, three hundred blocks down"
+      ]
+    },
+    {
+      "id": "entropy-end-of-universe",
+      "class": "content-in-passage",
+      "gold": ["The Last Optimization.html"],
+      "verified": true,
+      "note": "The content half of the Asimov pair below. Same document, asked by what it says rather than by what it is.",
+      "phrasings": [
+        "A story about entropy and the heat death of the universe.",
+        "Celestia tries to defeat entropy over trillions of years."
+      ]
+    },
+    {
+      "id": "runs-until-end-of-time",
+      "class": "document-level-stated",
+      "gold": ["Friendship is Optimal_ Spiraling Upwards.html"],
+      "verified": true,
+      "note": "The chapter titles escalate An Hour ... A Millennium, An Eternity, A Yoctosecond. A property of the whole story that is nonetheless *text*, because headings are text — which is exactly why it succeeds where 'offline in America' fails. Also the probe that measured the HTML extraction fix: the answering chunk is at offset 313500 of a document the extractor was truncating at 20999 characters that same morning.",
+      "phrasings": [
+        "Which story runs until the end of time?",
+        "The story that continues to the very end of the universe."
+      ]
+    },
+    {
+      "id": "offline-in-america",
+      "class": "document-level-unstated",
+      "gold": ["Just Be Happy.html"],
+      "verified": true,
+      "note": "Set in a dwindling town as everyone emigrates; the last certified auto mechanic on the planet has left. The word 'America' appears ZERO times — the setting is carried by cowboy boots, a truck, oil rigs and register. So the fact is neither in a chunk nor stated by the document; it is inferred by a reader. Retrieval returns confident wrong stories.",
+      "phrasings": [
+        "Which story takes place in the real world in America, outside Equestria Online?",
+        "A story set offline, in the United States, rather than inside the game."
+      ]
+    },
+    {
+      "id": "holdout-and-father",
+      "class": "content-in-passage",
+      "gold": ["Just Be Happy.html"],
+      "verified": true,
+      "note": "Its opening chapter, 'A Chat With Dad'. The content IS in a chunk, and retrieval still fails: scored per document with everything else held out, the gold's best chunk sits at 0.442, below eleven stories that are not about this at all. The query is analytical and the scene is pure dialogue, which is the dramatized-text failure. Keep as the counterexample to the data-structure probe.",
+      "phrasings": [
+        "A holdout who has not uploaded yet, talking with his father who does not understand ponies.",
+        "A small town whose population keeps shrinking as everyone emigrates to Equestria."
+      ]
+    },
+    {
+      "id": "asimov-pastiche",
+      "class": "intertextual",
+      "gold": ["The Last Optimization.html"],
+      "verified": true,
+      "expectation": "not-retrievable-by-design",
+      "note": "Opens on entropy, closes on 'And friendship was magic' against Asimov's 'And there was light'. The word 'Asimov' appears nowhere. NOT A FAILURE IF IT MISSES: the fact asked for is not in the corpus in any form, so no definition of retrieval covers it, and a confidence signal reporting nothing is the right answer. Scored the two lowest similarities of the session.",
+      "phrasings": [
+        "Which of these stories is a pastiche of Isaac Asimov's The Last Question?",
+        "A story written in homage to a classic science fiction short story."
+      ]
+    }
+  ],
+  "excluded": [
+    {
+      "id": "post-apocalyptic-village",
+      "reason": "Contested ground truth. Retrieved My Life In Fimbria on strong surface evidence (132 mentions of 'village', 'from before the fall of man and my retreat into hiding'), and the reader's verdict is that Fimbria is really the story where the protagonist edits the world and it turns out not to be the real Equestria Online. A labelled item with a wrong label is worse than no item: it biases every score computed from the set afterwards, and does so silently."
+    }
+  ]
+}
