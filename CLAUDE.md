@@ -15,14 +15,19 @@ Local research assistant constellation. Privacy-first, 100% local.
 
 ## Who develops Raven
 
-A two-member human-AI team: Juha Jeronen (researcher, JAMK University of Applied Sciences) working with
-Claude, agentically. That is the whole team, and this constellation is what the arrangement produces.
+Raven is what agentic development lets one researcher build. Juha Jeronen (JAMK University of Applied
+Sciences) directs and reviews; Claude writes a large share of the code, the tests and the notes. Several
+conventions in this file look arbitrary until you know that, so they are worth stating together:
 
-It shapes the conventions below rather than being incidental to them. Review bandwidth is one human's, so a
-change has to arrive as a reviewable diff. Context does not survive between sessions, so a decision that
-exists only in conversation is gone — hence `briefs/`, `investigations/`, and the habit of writing findings
-to a file before a session ends. And documentation is written for a reader who is not on the team, because
-nearly every reader is.
+- **Review is the binding constraint, not implementation.** Code arrives faster than it can be read, so
+  anything reaching a commit without rendering as a diff spends the one resource that does not scale. That
+  is why the rule about editing through the edit tools is strict, and why commits are kept small and
+  separately reviewable.
+- **Sessions are bounded; the repository is not.** A decision that exists only in conversation is lost at
+  the next context boundary — hence `briefs/`, `investigations/`, and writing findings to a file *before*
+  a session ends rather than after.
+- **Every reader is an outside reader**, the next session included. Documentation that assumes shared
+  context has none.
 
 ## Where the non-source material lives
 
