@@ -39,6 +39,38 @@ regeneration and GC.
   - **Consequence: Procrustes gets less urgent.** Still wanted for deliberate refit-and-realign, but no longer
     load-bearing for the add-new-papers workflow that motivated it (brief 11 item 4).
 
+### The attachment scope: membership computed, not configured
+
+Worked out 2026-08-05, from the other end — asking how the AI could search a chat's own attachments the way a
+human hits Ctrl+F in a long document. It lands here rather than beside here, because what it needs is an
+ordinary scope whose membership happens to be *computed*, and that is a shape this machinery should have
+anyway (a saved Visualizer selection is the same idea with a different generator).
+
+- **[N] Content-addressing removes the hard question before it is asked.** A sidecar filename is a content
+  hash, so it already *is* a stable document ID. Index each attachment **once, globally**. There is then no
+  per-chat index, and "what even is a chat in a multiverse" — the question that makes this look intractable —
+  never arises at index time.
+- **[P] "This chat's attachments" is a query-time filter, not an index.** It is the set of sidecar filenames
+  reachable from HEAD: exactly `chattree.linearize_up(HEAD)` walked for `text_file` parts, which is the walk
+  `llmclient.count_branch_tokens` already does and the mark phase `textfilestore.sidecar_refs_in_payload`
+  already implements (union it with `imagestore`'s, as the datastore's `sidecar_extractor` does).
+  - Branch-correct by construction: an attachment on a sibling branch is simply not in the reachable set.
+  - Nothing to reindex on branch, reroll, or delete.
+  - One page fetched twice on two branches is *one* index entry, because the hashes match.
+- **[D] The retriever already supports it.** `hybridir.HybridIR.query` takes
+  `include_documents: Optional[List[str]]` — "search only in the specified documents". Verified 2026-08-05.
+  It was put there in 2025 against exactly this class of need, and searching across a Visualizer *selection*
+  once the unified DB lands is the same mechanism with a different filter set. So this costs a filter
+  computation, not a retriever change.
+- **[P] Prefer this to slicing an attachment by offset.** The alternative under discussion — a `read_document`
+  that takes `offset`/`length` on an attachment handle — makes the model navigate a document by arithmetic.
+  Search is the affordance a reader actually uses. Both can exist; if only one gets built, this is the one.
+  Context in `TODO_DEFERRED.md`, "A fetched web page is budgeted as a user attachment, not as a speculative
+  fetch", under v2.
+- **Open:** whether an attachment scope is *visible* as a scope in the UI or only reachable by the AI; and
+  whether indexing every attachment globally wants a retention policy, since the index then outlives the
+  chats whose attachments produced it.
+
 ## 2. When to cluster, and what a map is
 
 **[N] Visualizer: a dataset is a document scope, or several.** Clustering is expensive, so the question is
