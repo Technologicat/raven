@@ -229,6 +229,19 @@ effect, not enough for a few points of R@5.
   | which story is set offline in America | **no** — "America" never appears | not retrieved, sim 0.38–0.40 |
   | which story is an Asimov pastiche | **no** — and the referent is outside the corpus entirely | not retrieved, sim 0.36–0.40 — **and it should not be.** No reasonable definition of retrieval covers this: the fact being asked for is not in the corpus in any form |
   | the same story, asked by its content | yes, "entropy" ×4 | correct story at rank 1, sim 0.46–0.65 |
+  | which story runs until the end of time | yes — "endless eternities" in the prose, and the chapter titles escalate "An Hour" … "A Millennium", "An Eternity", "A Yoctosecond" | correct story at rank 1 on both phrasings |
+
+  **That last row only works because of a bug fixed the same morning**, which is worth recording as the
+  concrete value of the fix rather than as a coincidence. The chunk that answers it sits at offset 313500
+  of `Spiraling Upwards`, and until that day the HTML extractor returned the first 20999 characters of that
+  document's 366881 — one chapter of fifteen. The answering text did not exist in the index. What the query
+  would have got instead is the failure mode the rest of this table documents: a confident wrong story,
+  with nothing marking it as wrong.
+
+  Also note *how* the document-level question succeeds here when "set offline in America" did not. The
+  structure of the whole story is legible in this one because its chapter headings are **text** — they say
+  "An Eternity" — and headings survive extraction (they are recovered per article by the same fix). A
+  document-level property that the document happens to state is retrievable; one it merely exhibits is not.
 
   The last two rows are the same document, and the pair is the cleanest thing in the table: `The Last
   Optimization` is unfindable as *an Asimov pastiche* and trivially findable as *a story about entropy*.
