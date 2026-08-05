@@ -118,12 +118,20 @@ when it runs. Everything in this section is [P] and wants arguing with.
   roughly 1000:1, but internal callbacks make that layer awkward to reach through f2py. A suspected bug at
   `subgrad_help_b` line 1308 (`a(j,i)` for the value, `b(j,i)` for the gradient) is still to be raised with
   the authors.
+  - **[N] No URL recorded, which blocks acting on this.** The note carries authors, method and a Fortran
+    line count, all of which came from a March 2026 conversation rather than from the paper in hand. Someone
+    has to supply the link before the f2py-wrap test or the `subgrad_help_b` bug report can start.
   - **[P] Its incrementality is in k, not in data** — easy to conflate under a "when to cluster" heading.
   - **[P] But centroid-based fits the placed/fitted model better than density-based.** MSSC gives real
     centers, so placing a new point is an exact `argmin` over k rather than `approximate_predict`, and brief
     11 item 3 is already retrofitting a centroid model onto HDBSCAN output. Against: HDBSCAN's variable
     density and its *noise* concept model something real — literature embeddings are not spherical, and
     forcing every document into a cluster is a lie you then have to look at on the map. Plus MSSC needs k.
+  - **[P] Brief 11 item 5 (added 2026-08-05) adds a practical argument to that modelling one.** The
+    authoritative clustering should move into the high-dimensional space, where HDBSCAN's memory is what
+    forces the current 10k sample — so an algorithm that fits the whole corpus in that space wins something
+    the present 2D arrangement never made visible. Keep the two choices separate: *which space* is brief
+    11's, *which algorithm* is this one. The first changes the constraints on the second.
 
 ## 3. What a document is — settled enough to stop re-litigating
 

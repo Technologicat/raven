@@ -89,6 +89,16 @@ Bundled changes to the import pipeline (`importer.py` / `raven-importer`):
    the bibliography below is the instrument, since "is this cluster about one thing" is exactly the
    judgement it supports.
 
+   **And it sharpens the algorithm question already open in brief 13** (UTU's Clust-Splitter, MSSC via
+   LMBM). That note weighs centroid-based against density-based on modelling grounds — real centers make
+   placing a new point an exact `argmin`, against HDBSCAN's variable density and its genuine *noise*
+   concept. Moving the authoritative fit into high-D adds a practical argument on top: **HDBSCAN's memory
+   is what forces the 10k sample**, so whichever algorithm can fit the whole corpus in the space that
+   matters has an advantage the 2D-clustering arrangement never exposed. These are two separate choices —
+   *which space* (this item) and *which algorithm* (brief 13) — and they should not be bundled, but the
+   first changes the constraints on the second. Note brief 13's reference carries authors and method but
+   **no URL**; it needs one before anyone can act on it.
+
 ## How to tell whether any of this made things better
 
 Every item above changes where documents land on the map, and none of them has an obvious metric. Cluster
