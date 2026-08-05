@@ -70,10 +70,23 @@ python investigations/retrieval/make_questions.py <llm_base_url> <model> [n_focu
 
 # Score (needs raven-server for spaCy + embeddings, and the local document index)
 python investigations/retrieval/evaluate.py [k]
+python investigations/retrieval/sharpness.py [k]
 ```
 
-`evaluate.py` reads the index and does not write to it, so it is safe to run against a live Librarian
-installation.
+The two scoring scripts answer different questions, and the second one needs a set the first one cannot
+supply:
+
+- **`evaluate.py` compares retrieval configurations** — does this change to how a query is built or fused
+  find the gold document more often? Output is recall@k / MRR per condition, plus per-question ranks in
+  `results.json`. This is what settled lever 3.
+- **`sharpness.py` scores a *diagnostic signal*** — given a query, can we tell from its own score
+  distribution whether it found anything? Output is AUROC per candidate signal, plus per-query signal
+  values in `sharpness_results.json`. It asks that twice: once against retrieval success over the
+  known-item questions, and once against 16 hand-written off-corpus probes carried in the script itself,
+  because every generated question is answerable by construction and the interesting case is the one that
+  is not. This is what settled lever 1.
+
+Both read the index and do not write to it, so either is safe to run against a live Librarian installation.
 
 ## Baseline, 2026-07-28
 
@@ -147,3 +160,22 @@ effect, not enough for a few points of R@5.
   largest opportunity in the data — and it was wrong, in a direction nobody predicted, for a reason that
   only shows up in numbers. Two hours of implementation and three minutes of scoring beat any amount of
   arguing about it.
+
+- **2026-08-05 — the retrieval confidence signal (brief 09, lever 1): the level, not the shape.** Brief 09
+  designed a `min_p`-style reading of the *shape* of a query's score distribution, having rejected an
+  absolute threshold on cosine distance. Measured, the shape reading is anti-correlated with what it was
+  built for: an off-corpus query reads *sharper* than an on-corpus one (mean 0.92 against 0.53), because
+  with nothing genuinely matching, an accidental best hit stands clear of an already-low field. The
+  rejected design wins outright — absolute best vector similarity separates the 99 known-item questions
+  from 16 off-corpus probes at AUROC 0.99, with a cut at 0.45 rejecting 13 of 16 probes and none of the 99.
+
+  The two readings turn out to answer different questions, which is the finding worth keeping. **Level**
+  (best vector similarity) says whether the corpus can answer this at all; **shape** (keyword `best/mean`,
+  AUROC 0.73) says whether a query the corpus *can* answer landed well. Asking either one the other's
+  question gets a confident wrong answer.
+
+  What this cannot say: whether 0.45 travels. The objection to absolute thresholds was always that the
+  scale of "close" belongs to the collection, and one hydrogen corpus cannot test that — which is the
+  sharpest argument yet for the second, native-area corpus described above. The probes are also
+  hand-written rather than sampled, and the only hard group among them ("adjacent" — real science, not in
+  this corpus) has four members.

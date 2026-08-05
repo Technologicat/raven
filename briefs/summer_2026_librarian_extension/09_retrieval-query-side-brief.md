@@ -26,6 +26,11 @@ the `min_p`-style survivor count read off the distribution. Until those exist th
 on, and against a real corpus the marker will almost never fire, because retrieval nearly always returns
 *something*. That is a silent failure, not a visible one.
 
+**Measured 2026-08-05, and only half of that sentence survived:** the survivor count is the wrong signal
+for this consumer and points the wrong way, while the absolute vector similarity separates a question the
+corpus can answer from one it cannot at AUROC 0.99. The marker wants the *level*, not the shape. See
+"Built and measured" under lever 1.
+
 So the ordering has changed: lever 1 and the confidence signal are now the front of this brief's queue,
 ahead of the multi-query decomposition that was going to be built first. (The alternative route does not
 run through here at all — inline citations, where the model reports its own grounding instead of Raven
@@ -178,6 +183,89 @@ off the evaluation set.
 `1/(rank + K)` by construction, so its distribution has the same shape whatever was retrieved — running a
 shape test on it measures the arithmetic, not the corpus. One more reason the raw scores have to survive
 to the fusion boundary.
+
+#### Built and measured 2026-08-05: the shape loses to the level, and the rejected design wins
+
+`score_sharpness` was implemented as specified above and scored against `investigations/retrieval/`
+(`sharpness.py`, which is the apparatus for everything in this subsection). Two questions were asked,
+because the consumers below want different things, and they came back with different answers.
+
+**Question A — does sharpness predict retrieval success?** Over the 99 known-item questions, is the
+signal higher where the gold document was found than where it was missed? Reported as AUROC — the
+probability that a success outranks a failure, so 0.5 discriminates nothing.
+
+| signal | all (77/22) | focused (63/14) | rambling (14/8) |
+|---|---|---|---|
+| keyword `best/mean` | **0.734** | 0.671 | **0.893** |
+| keyword sharpness @ 0.7 | 0.730 | **0.681** | 0.750 |
+| vector `best/mean` | 0.650 | 0.621 | 0.688 |
+| vector best similarity | 0.563 | 0.588 | 0.616 |
+
+Moderate, real, and strongest exactly where the brief expected the problem to be — the rambling
+subset, where a bad query is the whole failure mode. Note the *n* before leaning on that 0.893.
+
+**Question B — does sharpness separate on-corpus from off-corpus?** The known-item questions were
+written *from* the corpus, so every one of them is answerable, and question A structurally cannot see
+the case brief 10's grounding marker exists for. So the 99 questions were scored against 16
+hand-written probes with no answer in a hydrogen corpus: eight plainly off-topic, four conversational
+pleasantries, and four *adjacent* — real science, plausibly phrased, still not in this corpus, which
+is the only one of the three that is a hard test.
+
+| signal | vs. off-topic (8) | vs. pleasantry (4) | vs. adjacent (4) |
+|---|---|---|---|
+| **vector best similarity** | **0.996** | **1.000** | **0.987** |
+| keyword best score | 0.986 | 1.000 | 0.924 |
+| keyword sharpness @ 0.9 | 0.684 | 0.535 | 0.444 |
+| vector sharpness @ 0.9 | 0.142 | 0.331 | 0.201 |
+
+**The shape reading does not merely fail here, it points the wrong way**, and the mechanism is
+measured rather than guessed: an off-corpus query reads *sharper* than an on-corpus one (mean vector
+sharpness @ 0.9 of 0.92 against 0.53) while its level is less than half as high (mean best similarity
+0.31 against 0.67). With nothing genuinely matching, the accidental best hit stands well clear of an
+already-low field; a question the corpus can answer pulls twenty genuinely related chunks that all sit
+near the top and therefore look flat. So sharpness is *anti*-correlated with the thing it was invented
+to detect. The brief's own stated limit — that it cannot tell flat-because-nothing-matches from
+flat-because-everything-matches — turns out to be the benign half of a worse problem.
+
+**And the winner is the design this section opens by rejecting.** Absolute vector distance was
+dismissed on the grounds that, applied per document, it discards exactly what BM25 exists to
+catch. That objection stands and is untouched — but it was an argument against a *per-document
+filter*, and this is the per-query advisory reading the same paragraph demanded instead. The
+separation is wide enough to be usable rather than merely significant:
+
+| group | n | min | median | max |
+|---|---|---|---|---|
+| known-item questions | 99 | 0.460 | 0.670 | 0.823 |
+| adjacent probes | 4 | 0.386 | 0.452 | 0.509 |
+| off-topic + pleasantries | 12 | 0.160 | 0.320 | 0.479 |
+
+A cut at 0.45 rejects 13 of 16 probes and **none** of the 99 questions; at 0.50 it rejects 15 of 16
+and 4 of 99. That is a real operating point, not a curve-fitting artifact.
+
+**What this does not establish, and the caution is the whole of it.** This is one corpus, and the
+argument against absolute thresholds was never that they do not work — it was that *the scale of close
+is a property of the collection*. Nothing here tests that: a single hydrogen corpus cannot show whether
+0.45 travels to fanfiction. So the threshold is corpus-dependent until a second corpus says otherwise,
+which is precisely the measurement the evaluation set's README already lists as needed, and the reason
+to want a curated set in a literature the maintainer knows from the inside. Two further limits worth
+stating plainly: the 16 probes are hand-written by the implementer rather than sampled, and the
+"adjacent" column — the only hard one — rests on four negatives.
+
+**So the levers split, and this is the durable finding.** Two signals, answering two questions, for
+two different consumers:
+
+- **Level** (best vector similarity) answers *can this corpus answer this at all?* — the grounding
+  marker, dropping a no-confidence match set instead of injecting it, and the per-subquery gate that
+  lever 3 is waiting on. A pleasantry scores 0.32 against a question's 0.67.
+- **Shape** (keyword `best/mean`) answers *given a corpus that can answer it, did this query land
+  well?* — adaptive `k`, and the reranking triage. It says nothing about the first question and must
+  not be asked it.
+
+`score_sharpness` ships as the shape reading, with no consumer in the retrieval path, because the
+shape's own consumer (adaptive `k`) has not been measured yet. The level has no implementation at all
+yet; it is one `max()` over the vector arm's candidates, and what it needs is not code but the
+per-collection home the "corpus-dependent, do not ship as a tuned constant" note below already
+specifies.
 
 #### What consumes the signal
 
