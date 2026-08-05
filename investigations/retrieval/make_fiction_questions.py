@@ -44,6 +44,7 @@ import pathlib
 import random
 import sys
 import urllib.request
+from typing import Iterator
 
 from raven.common import docextract
 
@@ -166,24 +167,27 @@ def ask(base: str, model: str, prompt: str) -> str:
 
 
 def generate(base: str, model: str, passages: list[dict], n_focused: int, n_rambling: int,
-             label: str, on_corpus: bool) -> list[dict]:
-    """Turn drawn passages into questions. `label` prefixes the progress lines and names the group."""
-    questions = []
+             label: str, on_corpus: bool) -> Iterator[dict]:
+    """Turn drawn passages into questions, yielding each as it arrives.
 
+    A generator rather than a list so the caller can checkpoint after every question. This run costs over an
+    hour of GPU time, and a crash at question 90 that returned nothing would be the expensive kind of
+    failure. `label` prefixes the progress lines and names the group.
+    """
     for i in range(min(n_focused, len(passages))):
         passage = passages[i]
         text = ask(base, model, FOCUSED_PROMPT.format(passage=passage["text"]))
         if not text:
-            print(f"  {label} focused {i + 1}: SKIPPED (empty reply)")
+            print(f"  {label} focused {i + 1}: SKIPPED (empty reply)", flush=True)
             continue
-        questions.append({"kind": "focused" if on_corpus else "adjacent",
-                          "group": label,
-                          "on_corpus": on_corpus,
-                          "question": text,
-                          "gold": [passage["id"]] if on_corpus else [],
-                          "source": passage["id"],
-                          "source_offset": passage["offset"]})
-        print(f"  {label} focused {i + 1}/{n_focused}: {text[:100]}")
+        print(f"  {label} focused {i + 1}/{n_focused}: {text[:100]}", flush=True)
+        yield {"kind": "focused" if on_corpus else "adjacent",
+               "group": label,
+               "on_corpus": on_corpus,
+               "question": text,
+               "gold": [passage["id"]] if on_corpus else [],
+               "source": passage["id"],
+               "source_offset": passage["offset"]}
 
     offset = n_focused
     for i in range(n_rambling):
@@ -195,19 +199,17 @@ def generate(base: str, model: str, passages: list[dict], n_focused: int, n_ramb
                   for j, p in enumerate(group)]
         text = ask(base, model, RAMBLING_PROMPT.format(passages="\n\n".join(blocks)))
         if not text:
-            print(f"  {label} rambling {i + 1}: SKIPPED (empty reply)")
+            print(f"  {label} rambling {i + 1}: SKIPPED (empty reply)", flush=True)
             continue
-        questions.append({"kind": "rambling" if on_corpus else "adjacent",
-                          "group": label,
-                          "on_corpus": on_corpus,
-                          "question": text,
-                          "gold": [target["id"]] if on_corpus else [],
-                          "source": target["id"],
-                          "source_offset": target["offset"],
-                          "distractors": [p["id"] for p in group[1:]]})
-        print(f"  {label} rambling {i + 1}/{n_rambling}: {text[:100]}")
-
-    return questions
+        print(f"  {label} rambling {i + 1}/{n_rambling}: {text[:100]}", flush=True)
+        yield {"kind": "rambling" if on_corpus else "adjacent",
+               "group": label,
+               "on_corpus": on_corpus,
+               "question": text,
+               "gold": [target["id"]] if on_corpus else [],
+               "source": target["id"],
+               "source_offset": target["offset"],
+               "distractors": [p["id"] for p in group[1:]]}
 
 
 def main() -> None:
@@ -222,38 +224,54 @@ def main() -> None:
 
     rng = random.Random(SEED)
 
-    print(f"--- indexed corpus: {corpus_dir} ---")
+    questions: list[dict] = []
+
+    def save() -> None:
+        """Write everything generated so far. Called after each question, not once at the end.
+
+        The run costs over an hour of GPU time, and a crash at question 90 that had written nothing is the
+        expensive kind of failure — the whole set has to be regenerated, and the seed guarantees only that
+        the *passages* repeat, not the model's replies to them.
+        """
+        OUT_PATH.write_text(json.dumps(
+            {"corpus": "Optimalverse fan fiction saved from fimfiction.net, local to the developer "
+                       "machine (not in this repository)",
+             "corpus_dir": str(corpus_dir),
+             "held_out_dir": str(held_out_dir) if held_out_dir else None,
+             "seed": SEED,
+             "passage_chars": PASSAGE_CHARS,
+             "generator_model": model,
+             "questions": questions},
+            indent=2, ensure_ascii=False) + "\n")
+
+    print(f"--- indexed corpus: {corpus_dir} ---", flush=True)
     passages = load_passages(corpus_dir, rng, n_focused + 3 * n_rambling)
     if not passages:
         print(f"no usable documents in {corpus_dir}")
         return
-    questions = generate(base, model, passages, n_focused, n_rambling,
-                         label="on-corpus", on_corpus=True)
+    for question in generate(base, model, passages, n_focused, n_rambling,
+                             label="on-corpus", on_corpus=True):
+        questions.append(question)
+        save()
 
-    held_out_questions = []
     if held_out_dir is not None and held_out_dir.is_dir():
         # Two thirds as many as the positives is plenty: these are only ever the negative class, and the
         # cost of a negative is a full generation each.
         n_adjacent_focused = max(1, n_focused // 3)
         n_adjacent_rambling = max(1, n_rambling // 3)
-        print(f"\n--- held-out corpus (adjacent negatives): {held_out_dir} ---")
+        print(f"\n--- held-out corpus (adjacent negatives): {held_out_dir} ---", flush=True)
         held_out_passages = load_passages(held_out_dir, rng,
                                           n_adjacent_focused + 3 * n_adjacent_rambling,
                                           by_length=False)
-        held_out_questions = generate(base, model, held_out_passages,
-                                      n_adjacent_focused, n_adjacent_rambling,
-                                      label="adjacent", on_corpus=False)
+        for question in generate(base, model, held_out_passages,
+                                 n_adjacent_focused, n_adjacent_rambling,
+                                 label="adjacent", on_corpus=False):
+            questions.append(question)
+            save()
 
-    payload = {"corpus": "Optimalverse fan fiction saved from fimfiction.net, local to the developer "
-                         "machine (not in this repository)",
-               "corpus_dir": str(corpus_dir),
-               "held_out_dir": str(held_out_dir) if held_out_dir else None,
-               "seed": SEED,
-               "passage_chars": PASSAGE_CHARS,
-               "generator_model": model,
-               "questions": questions + held_out_questions}
-    OUT_PATH.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n")
-    print(f"\nwrote {len(questions)} on-corpus and {len(held_out_questions)} adjacent questions "
+    save()
+    n_on_corpus = sum(1 for q in questions if q["on_corpus"])
+    print(f"\nwrote {n_on_corpus} on-corpus and {len(questions) - n_on_corpus} adjacent questions "
           f"to {OUT_PATH}")
 
 

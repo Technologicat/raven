@@ -169,15 +169,32 @@ def main() -> None:
 
     questions = []
 
+    def save() -> None:
+        """Write everything generated so far. Called after each question, not once at the end.
+
+        The run costs about an hour of GPU time, and a crash near the end that had written nothing is the
+        expensive kind of failure — the whole set has to be regenerated, and the seed guarantees only that
+        the same *papers* are drawn, not that the model says the same thing about them.
+        """
+        OUT_PATH.write_text(json.dumps(
+            {"corpus": "Web of Science hydrogen-production records, local to the developer machine "
+                       "(not in this repository)",
+             "corpus_size": len(files),
+             "seed": SEED,
+             "generator_model": model,
+             "questions": questions},
+            indent=2, ensure_ascii=False) + "\n")
+
     for i in range(n_focused):
         entry = entries[i]
         text = ask(base, model, FOCUSED_PROMPT.format(title=entry["title"], abstract=entry["abstract"]))
         if not text:
-            print(f"  focused {i + 1}: SKIPPED (empty reply)")
+            print(f"  focused {i + 1}: SKIPPED (empty reply)", flush=True)
             continue
         questions.append({"kind": "focused", "question": text, "gold": [entry["id"]],
                           "gold_titles": [entry["title"]]})
-        print(f"  focused {i + 1}/{n_focused}: {text[:110]}")
+        save()
+        print(f"  focused {i + 1}/{n_focused}: {text[:110]}", flush=True)
 
     offset = n_focused
     for i in range(n_rambling):
@@ -189,20 +206,15 @@ def main() -> None:
                   for j, e in enumerate(group)]
         text = ask(base, model, RAMBLING_PROMPT.format(papers="\n\n".join(blocks)))
         if not text:
-            print(f"  rambling {i + 1}: SKIPPED (empty reply)")
+            print(f"  rambling {i + 1}: SKIPPED (empty reply)", flush=True)
             continue
         questions.append({"kind": "rambling", "question": text, "gold": [target["id"]],
                           "gold_titles": [target["title"]],
                           "distractors": [e["id"] for e in group[1:]]})
-        print(f"  rambling {i + 1}/{n_rambling}: {text[:110]}")
+        save()
+        print(f"  rambling {i + 1}/{n_rambling}: {text[:110]}", flush=True)
 
-    payload = {"corpus": "Web of Science hydrogen-production records, local to the developer machine "
-                         "(not in this repository)",
-               "corpus_size": len(files),
-               "seed": SEED,
-               "generator_model": model,
-               "questions": questions}
-    OUT_PATH.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n")
+    save()
     print(f"\nwrote {len(questions)} questions to {OUT_PATH}")
 
 
