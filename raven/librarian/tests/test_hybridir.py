@@ -231,6 +231,29 @@ class TestResultStructure:
         assert isinstance(report.vector_distances, list)
         assert len(report.vector_results) == len(report.vector_distances)
 
+    def test_the_report_breaks_the_candidate_scores_down_per_query(self, retriever):
+        # The sharpness signal is a per-query reading, so the flat unions above cannot carry it: they merge
+        # every subquery's candidates into one list, which is exactly the distinction being measured.
+        rambling = ("I have been reading around this area for a while now and there is a lot of it. "
+                    "What do these papers say about agents built on language models?")
+        _results, report = retriever.query(rambling, k=5, multi_query=True, return_extra_info=True)
+        assert len(report.per_query) == 1 + len(hybridir.split_into_subqueries(rambling))
+        assert report.per_query[0].text == rambling  # the whole message is always queried, and always first
+        for entry in report.per_query:
+            assert entry.candidate_keyword_scores and entry.candidate_vector_distances
+
+    def test_the_candidate_scores_are_not_thresholded(self, retriever):
+        # `score_sharpness` needs the population the threshold cut from, not what survived it: a candidate the
+        # threshold rejected is precisely a candidate the best result left behind. Ask with a threshold high
+        # enough to admit nothing, and the candidates must still be there.
+        _results, report = retriever.query("ai agents", k=5,
+                                           keyword_score_threshold=1e9,
+                                           semantic_distance_threshold=-1.0,
+                                           return_extra_info=True)
+        assert not report.keyword_results and not report.vector_results
+        assert report.per_query[0].candidate_keyword_scores
+        assert report.per_query[0].candidate_vector_distances
+
 
 # ---------------------------------------------------------------------------
 # Keyword search
@@ -448,3 +471,49 @@ class TestSplitIntoSubqueries:
 
     def test_whitespace_only_input_is_safe(self):
         assert hybridir.split_into_subqueries("   \n  ") == []
+
+
+# ---------------------------------------------------------------------------
+# Reading the shape of a score distribution (lever 1 of brief 09)
+# ---------------------------------------------------------------------------
+
+class TestScoreSharpness:
+    """Telling "this query found something" from "this query's best result is best by noise"."""
+
+    def test_a_towering_top_hit_is_sharp(self):
+        scores = [30.0] + [0.5] * 19
+        assert hybridir.score_sharpness(scores, min_ratio=0.1) == pytest.approx(0.95)
+
+    def test_a_flat_list_is_not_sharp(self):
+        assert hybridir.score_sharpness([5.0] * 20, min_ratio=0.1) == 0.0
+
+    def test_the_best_result_always_keeps_up_with_itself(self):
+        # So the maximum is 1 - 1/n rather than 1, and a single candidate reports no sharpness at all —
+        # there is no distribution to read off one number.
+        assert hybridir.score_sharpness([42.0], min_ratio=0.1) == 0.0
+
+    def test_nothing_found_is_not_confident(self):
+        # A query matching nothing yields all-zero scores. That is the least confident case there is, so it
+        # must not come out at the sharp end merely because the list is degenerate.
+        assert hybridir.score_sharpness([0.0] * 20, min_ratio=0.1) == 0.0
+        assert hybridir.score_sharpness([], min_ratio=0.1) == 0.0
+
+    def test_the_reading_is_scale_free(self):
+        # The property the whole design rests on: no constant fitted to a corpus, and immunity to an
+        # embedder swap or a corpus changing character, because only a query's results are ever compared
+        # to each other.
+        scores = [30.0, 6.0, 3.0, 1.0]
+        assert (hybridir.score_sharpness(scores, min_ratio=0.15) ==
+                hybridir.score_sharpness([1000.0 * s for s in scores], min_ratio=0.15))
+
+    def test_a_stricter_ratio_never_reads_sharper(self):
+        # Raising the bar can only shrink the survivor set, so sharpness is monotone in `min_ratio`. This is
+        # what makes sweeping the ratio against the evaluation set a well-behaved search.
+        scores = [30.0, 12.0, 6.0, 3.0, 1.0, 0.2]
+        readings = [hybridir.score_sharpness(scores, min_ratio=r) for r in (0.01, 0.05, 0.1, 0.3, 0.5, 0.9)]
+        assert readings == sorted(readings)
+
+    def test_order_does_not_matter(self):
+        scores = [30.0, 6.0, 3.0, 1.0]
+        assert (hybridir.score_sharpness(scores, min_ratio=0.15) ==
+                hybridir.score_sharpness(list(reversed(scores)), min_ratio=0.15))

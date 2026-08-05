@@ -15,7 +15,7 @@ laptops have enough RAM for this not to be an issue with the dataset sizes neede
 QwQ-32B wrote a very first initial rough draft outline, from which this was then manually coded.
 """
 
-__all__ = ["split_into_subqueries",
+__all__ = ["split_into_subqueries", "score_sharpness",
            "init", "shutdown", "HybridIR", "HybridIRFileSystemEventHandler", "setup"]
 
 import logging
@@ -127,6 +127,54 @@ def split_into_subqueries(text: str) -> List[str]:
         # already carries.
         subqueries = subqueries[-_MAXIMUM_SUBQUERIES:]
     return subqueries
+
+def score_sharpness(scores: List[float], min_ratio: float) -> float:
+    """How far the best of `scores` stands off from the rest. In `[0, 1)`; bigger is sharper.
+
+    This answers a question nothing else in the pipeline answers: *did this query find anything, or is
+    its best result merely the head of a flat list?* A query that found something produces a sharp head
+    and a long tail; a query that found nothing produces a list of near-equals, whose "best" is best by
+    noise. Both look identical once fusion has replaced every score with its rank.
+
+    `scores`: One query's raw candidate scores, from one engine, in any order. **Bigger must mean
+              better, and zero must mean no match** — which is true of BM25 as-is, and of a cosine
+              *similarity*, but not of the cosine *distance* a vector store returns. Convert first
+              (`similarity = 1 - distance`); passing distances measures the worst match instead.
+
+              Use the full retrieved candidate list, not the survivors of a score threshold: the
+              denominator has to be a fixed population for the fraction below to be comparable across
+              queries, and a candidate the threshold rejected is precisely a candidate the best result
+              left behind.
+
+    `min_ratio`: A candidate counts as keeping up if it scores at least `min_ratio` times the best.
+
+    Returns the fraction of candidates the best result left behind, i.e. `1 - survivors / len(scores)`.
+    A query whose top hit towers over 19 of its 20 candidates scores 0.95; one where everything keeps up
+    scores 0. The best result always keeps up with itself, so the maximum is `1 - 1/len(scores)` rather
+    than 1. Degenerate cases — no candidates, or nothing scoring above zero — return 0.0, since a query
+    that found nothing has no sharpness to report and should not read as a confident one.
+
+    This is LLM sampling's `min_p` filter, transplanted, and it runs *backwards* here: on a flat
+    distribution the bar is low and nearly everything survives, on a sharp one almost nothing does. So
+    the survivor count is the signal rather than the selection, which is why this returns the complement
+    and calls it sharpness — a consumer that has to remember an inversion will eventually forget it.
+
+    **Borrow the idea, not the number.** `min_p` operates on a normalized probability distribution, and
+    BM25 scores are neither normalized nor bounded. The ratio-to-best test survives that (it is in fact
+    scale-free in a way `min_p` itself is not, which is what makes it immune to a corpus changing
+    character or an embedder being swapped), but the values in circulation for LLM sampling were fitted
+    against a distribution with different properties and carry no information about what to use here.
+    The two engines will not want the same `min_ratio` either: BM25 scores range over orders of
+    magnitude while cosine similarities sit in a narrow band, so the same ratio reads as a much weaker
+    test on the vector arm.
+    """
+    if not scores:
+        return 0.0
+    best = max(scores)
+    if best <= 0.0:  # nothing matched at all
+        return 0.0
+    survivors = sum(1 for score in scores if score >= min_ratio * best)
+    return 1.0 - survivors / len(scores)
 
 def reciprocal_rank_fusion(*item_lists: List[Any], K: int = 60) -> List[Tuple[Any, float]]:
     """Fuse rank from multiple IR systems using Reciprocal Rank Fusion (RRF).
@@ -934,6 +982,18 @@ class HybridIR:
                        run (see `multi_query`) — a caller asking "what did the keyword arm find" wants
                        everything it found, not a per-query breakdown of it.
 
+                       Plus `per_query`, which is the breakdown: one `env` per query actually run, with
+
+                           `text`                         the query string
+                           `candidate_keyword_scores`     BM25 scores of its retrieved candidates
+                           `candidate_vector_distances`   cosine distances of its retrieved candidates
+
+                       These are the raw scores as the engines returned them, in engine rank order and
+                       *before* the two score thresholds — the score-to-quality mapping that fusion
+                       discards. Read their shape with `score_sharpness` to tell a query that found
+                       something from one whose best result is best by noise; note that the vector arm
+                       reports distances, which have to be converted to similarities first.
+
                        This can be useful for debugging your knowledge base.
             If `False`: Return `final_results` only.
 
@@ -1038,24 +1098,33 @@ class HybridIR:
         # earn its place by being found repeatedly rather than by being found once, very well.
         keyword_hits = []  # per query: the corpus entries as-is
         vector_hits = []  # per query
-        # Flat unions, for the log line and the `return_extra_info` contract. A debugger asking "what did
-        # the keyword arm find" wants everything it found, not a per-query breakdown of it.
+        # Flat unions, for the log line and the report. A debugger asking "what did the keyword arm find"
+        # wants everything it found; the report's `per_query` carries the breakdown separately.
         keyword_results, keyword_scores = [], []
         vector_results, vector_distances = [], []
         include_documents_set = set(include_documents) if include_documents is not None else set()  # for O(1) checking
+        candidate_keyword_scores = []  # per query: raw scores, *before* the score threshold — see `score_sharpness`
         for i in range(len(query_texts)):
             per_query_keyword = []
+            per_query_candidate_scores = []
             for j in range(raw_keyword_results.shape[1]):
                 # https://github.com/xhluca/bm25s/blob/main/examples/save_and_reload_end_to_end.py
                 keyword_result = raw_keyword_results[i, j]
                 keyword_score = raw_keyword_scores[i, j]
+                if include_documents is not None and keyword_result["document_id"] not in include_documents_set:
+                    continue
+                # With `include_documents` the BM25 arm scores the whole corpus and filters afterwards, so
+                # take the best `internal_k` survivors of the filter — the same population it would have
+                # retrieved had the filter been applied by the engine. Without it, `keyword_k` already is
+                # `internal_k` and this truncation never fires.
+                if len(per_query_candidate_scores) < internal_k:
+                    per_query_candidate_scores.append(float(keyword_score))
                 if keyword_score > keyword_score_threshold:
-                    if include_documents is not None and keyword_result["document_id"] not in include_documents_set:
-                        continue
                     per_query_keyword.append(keyword_result)
                     keyword_results.append(keyword_result)
                     keyword_scores.append(keyword_score)
             keyword_hits.append(per_query_keyword)
+            candidate_keyword_scores.append(per_query_candidate_scores)
 
             per_query_vector = []
             for vector_result, vector_distance in zip(raw_vector_results[i], raw_vector_distances[i]):
@@ -1121,10 +1190,15 @@ class HybridIR:
         logger.info("HybridIR.query: exiting. All done.")
 
         if return_extra_info:
+            per_query = [envcls(text=query_texts[i],
+                                candidate_keyword_scores=candidate_keyword_scores[i],
+                                candidate_vector_distances=[float(d) for d in raw_vector_distances[i]])
+                         for i in range(len(query_texts))]
             return merged, envcls(keyword_results=keyword_results,
                                   keyword_scores=keyword_scores,
                                   vector_results=vector_results,
-                                  vector_distances=vector_distances)
+                                  vector_distances=vector_distances,
+                                  per_query=per_query)
         return merged
 
 # --------------------------------------------------------------------------------
