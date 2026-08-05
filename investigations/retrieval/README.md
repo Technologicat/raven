@@ -216,6 +216,24 @@ effect, not enough for a few points of R@5.
   only shows up in numbers. Two hours of implementation and three minutes of scoring beat any amount of
   arguing about it.
 
+- **2026-08-05 — document-level questions are a distinct failure class, and the signal detects them.** Three
+  hand-written probes against the fiction corpus, from a reader who had read it. Two asked about content in
+  a passage ("which story has the protagonist travel to Switzerland?", "…go undercover to sabotage a
+  competing AGI project?"): both retrieved the right story at rank 1, at best vector similarity 0.45–0.54.
+  The third asked about a property of a whole story ("which one is set offline, in America?"): it retrieved
+  the wrong story, at 0.38–0.40 — clearly below the other two.
+
+  The reason is structural rather than a ranking failure. **No chunk says "this story is set offline in
+  America."** That fact is distributed over the whole document, and the index holds 1000-character chunks,
+  so the question is unanswerable in the form asked even though the corpus plainly contains the answer. A
+  reader answers it by having read the thing; retrieval would need document-level metadata or a summary
+  layer, which is a different mechanism from anything in brief 09.
+
+  Two things follow. It is **evidence for the confidence signal**, which separated "the corpus can answer
+  this" from "the corpus contains this but cannot be asked this way" without being built for that
+  distinction. And it is a **product gap worth its own treatment**: "which of my documents is the one
+  about X" is an ordinary thing to ask a document database, and chunk RAG structurally cannot serve it.
+
 - **2026-08-05 — the retrieval confidence signal (brief 09, lever 1): the level, not the shape.** Brief 09
   designed a `min_p`-style reading of the *shape* of a query's score distribution, having rejected an
   absolute threshold on cosine distance. Measured, the shape reading is anti-correlated with what it was
