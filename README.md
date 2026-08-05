@@ -51,9 +51,7 @@
 
 *Raven* is a constellation of apps loosely related to natural language processing, with a focus on scientific use cases.
 
-The vision is to help you absorb information from large volumes of text.
-
-This README describes what ships today; for what Raven is for and where it is going, see [VISION.md](VISION.md).
+The goal is to make a large body of text navigable: screen tens of thousands of sources down to the few hundred that bear on your work — still far more than anyone can read — and then find out what those say. This README describes what ships today; for what Raven is for and where it is going, see [VISION.md](VISION.md).
 
 *Raven* is 100% local, 100% privacy-first, 100% open source.
 
@@ -85,8 +83,7 @@ For my stance on AI contributions, see the [collaboration guidelines](https://gi
 
 - **Documentation**: [Librarian user manual](raven/librarian/README.md) (under development)
 - **Goal**: Efficiently interrogate a stack of 2k scientific papers. Talk with a local LLM for synthesis, clarifications, speculation, ...
-  - **Status**: :construction: An initial prototype of GUI app `raven-librarian` is available; as well as a command-line mini-prototype `raven-minichat` (note that the GUI app has more features).
-    - The GUI app is under development.
+  - **Status**: :construction: The GUI app `raven-librarian` is usable day to day, and under active development. A command-line client `raven-minichat` shares the same backend (note that the GUI app has more features).
     - For the GUI app `raven-librarian`, `raven-server` must be running.
     - For the command-line `raven-minichat`, we recommend having `raven-server` running; this allows the LLM to search the web.
 - **Features**:
@@ -99,8 +96,12 @@ For my stance on AI contributions, see the [collaboration guidelines](https://gi
     - Semantic backend: [Chroma](https://www.trychroma.com/) (with telemetry off, for maximum privacy).
     - Keyword backend: [bm25s](https://huggingface.co/blog/xhluca/bm25s), which implements the [BM25](https://en.wikipedia.org/wiki/Okapi_BM25) ranking algorithm.
     - Results are combined with [reciprocal rank fusion](https://www.assembled.com/blog/better-rag-results-with-reciprocal-rank-fusion-and-hybrid-search).
-  - Tool-calling (a.k.a. tool use).
-    - Currently, a websearch tool is provided. This will be expanded later.
+  - Tool-calling (a.k.a. tool use). The AI is given five tools: `websearch` and `webfetch` for the live web, `search_documents` and `fetch_document` for your document database, and `list_consulted_documents` to see what this conversation has already read.
+    - Web access is gated by a client-side domain allowlist, separately from the network-level checks *Raven-server* enforces.
+    - A configurable ceiling limits how many rounds of tool calls one reply may take. It is a backstop against a runaway agent loop, not a normal limit.
+  - Message attachments. Attach images (on a vision model) and documents (on any model) to your message; a long web page the AI fetches becomes an attachment too, so one fetch cannot bury the conversation it was meant to inform.
+    - Documents are read as text, so a text-only model can use them.
+    - Attachments are stored alongside the chat, content-addressed, and can be opened from the chat log.
   - Anime avatar for the LLM, see *Raven-avatar* below.
     - Speech synthesizer with lipsynced animation.
     - Subtitles with machine translation.
@@ -400,21 +401,23 @@ python -m pdm install
 
 This works because PDM is just a Python module. This will be allowed to run if `python` is allowed to run.
 
-Similarly, Raven apps are just Python modules, and can be run via Python, as follows. Full list as of Raven v0.2.5:
+Similarly, Raven apps are just Python modules, and can be run via Python, as follows. Full list as of Raven v0.2.8:
 
 ```
 Command                                Replacement
 
 raven-visualizer                  →    python -m raven.visualizer.app
-raven-importer                    →    python -m raven.visualizer.importer
+raven-importer                    →    python -m raven.visualizer.importer_cli
 raven-librarian                   →    python -m raven.librarian.app
 raven-xdot-viewer                 →    python -m raven.xdot_viewer.app
+raven-cherrypick                  →    python -m raven.cherrypick.app
 raven-conference-timer            →    python -m raven.conference_timer.app
 raven-arxiv2id                    →    python -m raven.papers.identifiers
 raven-arxiv-download              →    python -m raven.papers.download
 raven-arxiv-search                →    python -m raven.papers.search
 raven-burstbib                    →    python -m raven.papers.burstbib
 raven-dehyphenate                 →    python -m raven.tools.dehyphenate
+raven-qoi2png                     →    python -m raven.tools.qoi2png
 raven-csv2bib                     →    python -m raven.papers.csv2bib
 raven-wos2bib                     →    python -m raven.papers.wos2bib
 raven-pdf2bib                     →    python -m raven.papers.pdf2bib

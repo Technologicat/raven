@@ -547,8 +547,8 @@ Areas to improve:
   - As of 2025, LLMs are (mostly) [system-1](https://en.wikipedia.org/wiki/Thinking%2C_Fast_and_Slow) thinkers, but intelligence has other components, too.
     - Cattell-Horn-Carroll theory suggests ten core cognitive domains, including e.g. reasoning, memory, and perception ([Hendrycks et al., 2025](https://arxiv.org/abs/2510.18212)).
     - Maybe also useful [[1]](https://ai-frontiers.org/articles/agis-last-bottlenecks), [[2]](https://medium.com/@sevakavakians/the-9-components-of-general-intelligence-to-model-for-agi-aa13526b7b38)
-  - Perception: add support for VLMs (vision-language models) and multimodal LLMs
-    - E.g. Qwen3-VL, Qwen3-Omni, GLM-4.6V
+    - On building the system-2 half deliberately, in the scaffold rather than in the model: [Seth Herd (2025): System 2 Alignment: Deliberation, Review, and Thought Management](https://www.lesswrong.com/posts/cus5CGmLrjBRgcPSF/system-2-alignment-deliberation-review-and-thought). Cited again under *Executive function* below, which is where it bears on *Librarian* concretely.
+  - Perception: vision-language models (VLMs) are supported — attach an image to a message and a VLM sees it. Other modalities are not; e.g. Qwen3-Omni's audio input has no counterpart here yet.
   - **Long-term memory**
     - Context engineering based implementation
     - Essentially a second document database instance, where a document = a chat message (with its node ID so that we can walk the tree)
@@ -568,7 +568,7 @@ Areas to improve:
       - QLoRA tuning ([Dettmers et al., 2023](https://arxiv.org/abs/2305.14314))?
     - For a review of old continual learning techniques, see [Wang et al. (2023)](https://arxiv.org/abs/2302.00487)
   - Context compaction
-    - As of v0.2.4, *Librarian* has **no** context management when the LLM's context fills up. The LLM will just fail to generate if the context is already full.
+    - *Librarian* budgets what it *adds* to the context — a fetched page and an attached document are each sized against what the window has left, and the GUI shows how full the context is — but it does not compact the conversation itself. Once the chat proper fills the window, the LLM will just fail to generate.
       - This hasn't been an issue in testing *Librarian*, because my own LLM chat sessions tend to be rather short.
     - Standard solution: invoke the LLM itself to summarize the context so far, and then replace the start of the chat with that summary.
       - This yields a "logarithmic time axis" for the context.
@@ -589,22 +589,15 @@ Areas to improve:
     - As mentioned, "recent chat" is not really defined with the natively nonlinear format; maybe "user's first message" is a good enough splitting point
   - Add tree view
     - N levels around chosen point, to keep rendering relatively fast
-    - Currently missing a suitable GUI widget in DPG; seems we'll have to roll our own (let's port [xdottir](https://github.com/Technologicat/xdottir) to DPG)
+    - The graph widget this needs already exists: *Raven-xdot-viewer*'s renderer, written for this purpose. It is not wired to the chat tree yet.
   - Add search
     - incremental fragment search (like in *Raven-visualizer*)
     - use the local search engine here, too (since we need to search-index chats for the memory feature, anyway)
 - Improve **document database**
   - Scopes (AI research, engineering sciences, My Little Pony fanfics, ...)
     - Allows the AI to search the right umbrella topics, actually acting as a *librarian*
-  - PDF import
 - Add **more tools** for the AI to call
-  - Explicit access to document database (not just RAG autosearch as it is now)
   - Explicit access to memory (once the memory feature is added)
-  - Web download access to read web pages?
-    - Convenient for inputting recent talking points in fast-moving fields such as AI
-    - Potentially [dangerous](https://simonwillison.net/2025/Jun/16/the-lethal-trifecta/)
-      - Trusted link sources? User's messages only? Websearch results... a careful maybe?
-      - Untrusted link: always ask user, do not provide an option to disable the confirmation. (Provide option to auto-disallow all untrusted links, though.)
   - Maybe (not sure if *Librarian* needs these):
     - Calculator with [simpleeval](https://github.com/danthedeckie/simpleeval) sandbox?
     - Weather with [open-meteo](https://open-meteo.com/en/docs)?
@@ -621,11 +614,10 @@ Areas to improve:
     - E.g. filter the memory feature to include/exclude specific tags
 - Add **message editing**
   - E.g. to fix typos or to make small editorial changes before exporting a linearized chatlog for external consumption
-- Add **chat attachments**
-  - Whole-file context injection, to show a complete document to the LLM
-    - Contrast the document database, which search-indexes the document and shows only snippets matching the current search
-  - E.g. to discuss an individual PDF document (or two) in detail
+- Improve **chat attachments**
   - When fed a scientific paper, strip the reference list or not? Maybe an option during uploading?
+  - Let the AI read a *part* of an attachment on demand, the way `fetch_document` reads part of a document-database document. Today an attachment is shown whole, sized to what the context window can carry.
+  - Make a chat's attachments searchable, so the AI can look something up in a long attached document instead of re-reading it.
 - Integration with *Raven-visualizer*
   - Integrate the document database with the semantic map visualization
   - Select data points in *Visualizer*, talk about those studies in *Librarian*
