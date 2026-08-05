@@ -1096,9 +1096,11 @@ def _share_characters(wanted: List[int],
     shares would instead cut the short one to half the budget for no gain, since the characters freed that
     way are ones nobody was asking for.
 
-    Order-independent by construction, which matters because two callers walk the same attachments in
-    opposite directions (`count_branch_tokens` from the head up, `_serialize_history_for_wire` from the
-    root down) and must arrive at the same numbers.
+    Order-independent by construction: the allocation is a property of the multiset of demands, so permuting
+    the inputs permutes the outputs and changes nothing else. That is the right shape for an allocation
+    anyway — an attachment's share should not depend on where it happens to sit in the list — and it is what
+    lets two callers walk the same attachments in opposite directions (`count_branch_tokens` from the head
+    up, `_serialize_history_for_wire` from the root down) and arrive at the same numbers.
     """
     allowances = [0] * len(wanted)
     if budget <= 0:
