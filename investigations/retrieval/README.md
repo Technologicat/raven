@@ -124,3 +124,26 @@ argument for having grown the set:
 
 Worth keeping as a calibration on how much a 30-question known-item set can carry: enough for a factor-of-two
 effect, not enough for a few points of R@5.
+
+## What the set has decided so far
+
+- **2026-08-05 — multi-query retrieval (brief 09, lever 3): rejected as specified.** Splitting a rambling
+  message into sentences and fusing every result set alongside the whole message measured *worse* than not
+  splitting: rambling MRR 0.315 → 0.286, R@20 0.64 → 0.50. Focused questions were identical to three
+  decimals, which is both the control working and the evidence that the plumbing is sound — a fault in the
+  per-query indexing or the fusion would have moved both subsets.
+
+  Cause: a rambling message yields five to seven subqueries, so the whole-message query holds one vote in
+  seven, and the context sentences outvoting it agree with each other about the general topic. RRF rewards
+  agreement, so it promotes exactly the generically-topical documents the brief set out to demote.
+
+  The diagnosis it was built from is untouched — rambling questions really do retrieve at half the MRR of
+  focused ones, still the largest effect in this data. Only the remedy is refuted. The machinery ships
+  defaulted off (`HybridIR.query(multi_query=...)`) pending lever 1's confidence signal, which would drop
+  the subqueries that found nothing in particular. Per-question ranks for all four conditions are in
+  `results.json`.
+
+  **This is the case the set exists for.** The change was plausible, well-argued, and measured as the
+  largest opportunity in the data — and it was wrong, in a direction nobody predicted, for a reason that
+  only shows up in numbers. Two hours of implementation and three minutes of scoring beat any amount of
+  arguing about it.
