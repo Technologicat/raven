@@ -19,10 +19,10 @@ Raven is what agentic development lets one researcher build. Juha Jeronen (JAMK 
 Sciences) directs and reviews; Claude writes a large share of the code, the tests and the notes. Several
 conventions in this file look arbitrary until you know that, so they are worth stating together:
 
-- **Review is the binding constraint, not implementation.** Code arrives faster than it can be read, so
-  anything reaching a commit without rendering as a diff spends the one resource that does not scale. That
-  is why the rule about editing through the edit tools is strict, and why commits are kept small and
-  separately reviewable.
+- **Review is the binding constraint, not implementation.** Code arrives faster than it can be read, so a
+  change that never renders as a diff has skipped the only review there is. Hence commits kept small and
+  separately reviewable, and edits made so that they show up as diffs rather than as in-place rewrites
+  nobody sees.
 - **Sessions are bounded; the repository is not.** A decision that exists only in conversation is lost at
   the next context boundary — hence `briefs/`, `investigations/`, and writing findings to a file *before*
   a session ends rather than after.
