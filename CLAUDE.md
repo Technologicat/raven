@@ -13,6 +13,17 @@ Local research assistant constellation. Privacy-first, 100% local.
 - **Papers** (`raven/papers/`): Academic paper tools — arXiv search/download, bibliography converters (WoS, CSV, PDF, BibTeX burst).
 - **Tools** (`raven/tools/`): Miscellaneous CLI utilities (CUDA check, audio device listing, image format conversion, dehyphenation).
 
+## Who develops Raven
+
+A two-member human-AI team: Juha Jeronen (researcher, JAMK University of Applied Sciences) working with
+Claude, agentically. That is the whole team, and this constellation is what the arrangement produces.
+
+It shapes the conventions below rather than being incidental to them. Review bandwidth is one human's, so a
+change has to arrive as a reviewable diff. Context does not survive between sessions, so a decision that
+exists only in conversation is gone — hence `briefs/`, `investigations/`, and the habit of writing findings
+to a file before a session ends. And documentation is written for a reader who is not on the team, because
+nearly every reader is.
+
 ## Where the non-source material lives
 
 Four trees, sorted by what a document *is* rather than what it is about. Each has its own README; this is the
