@@ -234,6 +234,24 @@ The progress display adapts to where the output is going: a live single line tha
 
 **Tip**: If you have a BibTeX file full of scientific abstracts, and would like to feed those into *Librarian* as separate documents, see the `raven-burstbib` command-line tool. It splits your huge `.bib` file into individual entry `.bib` files. These files can then be copied/moved into *Librarian*'s document database folder, and *Librarian* will then pick them up as individual documents. Better forms of integration with *Visualizer* datasets are planned to be added later.
 
+### Turning a folder of arXiv PDFs into a searchable database
+
+A common starting point is a directory of papers downloaded from arXiv over the years, with the arXiv identifier somewhere in each filename. Three commands turn that into an indexed document database of abstracts:
+
+```bash
+raven-arxiv2id -i ~/papers | raven-arxiv2bib -o papers.bib   # identifiers -> metadata
+raven-burstbib papers.bib -o ~/.config/raven/llmclient/documents
+raven-indexer                                                 # or just start Librarian
+```
+
+- **`raven-arxiv2id`** scans the directory (recursively) for arXiv identifiers in PDF filenames, and prints the unique ones. Where several versions of the same paper are present, only the newest is kept.
+- **`raven-arxiv2bib`** fetches each paper's metadata from arXiv and writes BibTeX. It waits arXiv's requested three seconds between requests, so a few hundred papers takes a few minutes — leave it running. Identifiers arXiv does not recognize are reported at the end rather than aborting the run. Version suffixes are kept by default (`--strip-versions` to record papers without them).
+- **`raven-burstbib`** splits the result into one `.bib` file per paper, since the document database works in whole documents — a single large `.bib` would be one document, and a search would return the entire bibliography as one result.
+
+This gives you the *abstracts*, which is usually what you want for retrieval: they are short, self-contained, and one paper is one document. Put the PDFs themselves in the folder instead (or as well) if you want the full text searchable — *Librarian* reads born-digital PDFs directly.
+
+If your papers are not from arXiv, the same shape applies with a different first step: `raven-wos2bib` for a Web of Science export, `raven-csv2bib` for a spreadsheet, `raven-pdf2bib` for conference abstract booklets. All of them produce BibTeX for `raven-burstbib`.
+
 ## Message attachments
 
 The document database answers *what do my documents say about this*. An attachment answers a different question — *read this one, now* — and the two are governed differently because of it. A search returns the snippets that matched; an attachment is handed over whole.

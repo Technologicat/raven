@@ -413,6 +413,7 @@ raven-xdot-viewer                 →    python -m raven.xdot_viewer.app
 raven-cherrypick                  →    python -m raven.cherrypick.app
 raven-conference-timer            →    python -m raven.conference_timer.app
 raven-arxiv2id                    →    python -m raven.papers.identifiers
+raven-arxiv2bib                   →    python -m raven.papers.arxiv2bib
 raven-arxiv-download              →    python -m raven.papers.download
 raven-arxiv-search                →    python -m raven.papers.search
 raven-burstbib                    →    python -m raven.papers.burstbib

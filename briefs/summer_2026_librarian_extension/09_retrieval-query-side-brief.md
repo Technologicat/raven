@@ -331,6 +331,71 @@ why the second attempt was solving a problem smaller than it looked.
 **What to ship:** ~~one constant, near 0.40~~ — see the next subsection. Three corpora chose 0.40, the
 caveat above said a fourth could unseat it, and a fourth did, within hours.
 
+#### Rescope, 2026-08-06: reranking is the lever the measurements point at
+
+Taking stock with four corpora measured, against what this brief set out to do. The brief exists because
+Raven should have better retrieval; it is ours, so the sub-goals are not binding.
+
+**1. Detect that the corpus cannot answer the query — not shippable.** The ordering is excellent (AUROC
+0.99+ on every corpus, near and far) and the absolute calibration is not transferable, as the four-corpus
+result below records. There is no honest global cut, and no label-free way found so far to derive a local
+one. Parked, not abandoned: the fulltext experiment may yet explain the corpus-to-corpus scale shift.
+
+**2. Adaptive `k` from distribution shape — real, weak, and aimed at the wrong deficit.** The shape reading
+does predict whether a query's gold document lands at rank 1, which is the job it was actually built for
+(as opposed to on/off-corpus detection, where it was refuted). But choosing a signal per corpus is how
+today's two mistakes happened, so what matters is the worst case across corpora:
+
+| signal | worst | hydrogen | arxiv-ai | banichuk | fiction |
+|---|---|---|---|---|---|
+| `keyword sharpness @ 0.5` | **0.635** | 0.650 | 0.646 | 0.707 | 0.635 |
+| `keyword best/mean` | 0.605 | **0.785** | 0.669 | 0.637 | 0.605 |
+
+The headline 0.785 is hydrogen-specific; the best *consistent* signal is `score_sharpness` at ratio 0.5,
+worst-case 0.635. Above chance, but not enough to size a context budget on — and it is the wrong lever
+anyway, which the next table shows.
+
+**3. Neural reranking — this is where the measured headroom is.** Retrieval as it stands, k=20:
+
+| corpus | gold at rank 1 | gold found within k=20 |
+|---|---|---|
+| hydrogen | 39% | 78% |
+| arxiv-ai | 42% | 84% |
+| banichuk | 9% | 42% |
+| fiction | 70% | 95% |
+
+**The right document is usually already in the candidate set; it is just not at the top.** On the abstract
+corpora that is a 39→78 and 42→84 gap, and closing it is the textbook cross-encoder job — reorder the
+candidates you already have. Nothing about adaptive `k` addresses it, and a `k` that *shrank* would make it
+worse by discarding gold documents currently sitting at ranks 2–20.
+
+So the rescope: **reranking is the deliverable, adaptive `k` is deferred, and off-corpus detection is
+parked.** Adaptive `k` becomes interesting again *after* reranking, and for the opposite reason to the
+original one — if reranking concentrates the relevant material at the top, a smaller `k` becomes safe, and
+the same shape signal would then be sizing a genuinely better-ordered list.
+
+**Falsifiable predictions, written before the run:**
+
+- Reranking helps **banichuk most in relative terms**. A bi-encoder must compress a ten-word title into a
+  vector that also has to sit near the question's vector; a cross-encoder reads the question and the title
+  together and never forms that vector. Titles are where the bi-encoder is structurally weakest, and
+  banichuk's 9% rank-1 is the worst number in the table.
+- Reranking helps **fiction least**, at 70% rank-1 already, with the least room above it.
+- It should move `holdout-and-father` (`investigations/retrieval/probes.json`), which is a bi-encoder
+  failure by construction: the content is in a chunk, the query is analytical, the passage is dialogue.
+- It will **not** fix `offline-in-america` or `asimov-pastiche`. Neither has a passage to score highly —
+  one is a document-level property never stated, the other is not in the corpus at all. A reranker that
+  appeared to fix them would mean the labels are wrong, not that it is better than expected.
+
+**A bonus worth testing but not promising:** a cross-encoder emits a *relevance* score rather than a
+similarity, trained against graded judgements, so it may be far more comparable across corpora than cosine
+distance turned out to be. If so, sub-goal 1 comes back for free on the reranker's score instead. Stated as
+a hypothesis; today's lesson is that plausible mechanisms need measuring.
+
+Model candidate and cost argument are in the reranking section further down. Scope for the 0.2.8 window:
+rerank the existing k=20 candidate set, measure with `evaluate.py` across all four corpora, and ship it
+behind a config toggle.
+
 #### The fourth corpus unseats the constant (2026-08-06): ship nothing yet
 
 A titles-only bibliography — 541 hand-typed records, 303 bytes median, the shape a working researcher's

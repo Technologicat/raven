@@ -184,6 +184,7 @@ Repository = "https://github.com/Technologicat/raven"
 raven-check-cuda = "raven.tools.check_cuda:main"
 raven-check-audio-devices = "raven.tools.check_audio_devices:main"
 raven-arxiv2id = "raven.papers.identifiers:main"
+raven-arxiv2bib = "raven.papers.arxiv2bib:main"  # arXiv IDs -> BibTeX, completes the raven-arxiv2id path
 raven-arxiv-download = "raven.papers.download:main"
 raven-arxiv-search = "raven.papers.search:main"
 raven-burstbib = "raven.papers.burstbib:main"
