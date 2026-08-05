@@ -421,6 +421,49 @@ means a different metric — recall over the gold set, not rank of the gold docu
 addition to the harness rather than a new prompt. Worth building, and it is the piece that would let
 sub-goal 2 be evaluated on its own terms for the first time.
 
+**And it looks like a third catch-22** — knowing which documents *jointly* answer a question is what the
+retrieval under test is for. It is not, and the escape is the one the existing sets already use: the
+known-item design never searches for a question's answer, it **writes the question from the document**, so
+the label holds by construction. The same trick generalizes directly. Show a model several documents, ask
+for a question that needs *all* of them, and the gold set is the documents you showed it.
+
+Most of the machinery is already there. `make_questions.py`'s `rambling` path samples groups of three and
+asks for a question only the TARGET answers; the synthesis variant asks for one that needs the whole group,
+and records `gold` as the group instead of the target. Prompt and gold field change; the sampler does not.
+
+Two design points that do need deciding:
+
+- **Sample related documents, not random ones.** Three unrelated abstracts force an artificial question
+  that no user would ask. Nearest neighbours in embedding space are the cheap grouping — seed on one
+  document, take its neighbours — and note this *uses* retrieval without being circular, because it is
+  forming the group, not finding an answer to a pre-existing question. (Visualizer clusters would also
+  serve, at the cost of depending on that pipeline.)
+- **The metric understates, in the familiar way.** Other documents in the corpus may also contribute to a
+  synthesis answer while not being in the gold set, so recall over that set is a floor — exactly as
+  known-item recall is a floor on precision. Same limitation, same shape, and worth stating in the set's
+  own documentation rather than rediscovering.
+
+##### And the recall@k curve is only meaningful where k is small relative to the corpus
+
+Juha's point, and it bounds the experiment above: recall rises with `k` until `k` reaches the corpus size,
+where it hits 100% and the first-stage ranking has contributed nothing — the reranker would be doing all
+the work on an unranked pile. So the curve is informative only while `k` is a small fraction of the
+collection.
+
+That rules two of the four corpora out of this particular measurement, which is worth knowing before the
+runs rather than after:
+
+- **hydrogen** (11974 documents) and **arxiv-ai** (1268) — k=200 is 1.7% and 16% of the corpus. Both fine.
+- **banichuk** (541) — k=200 is 37%. Borderline; read with caution.
+- **fiction** (19 documents) — k=20 already exceeds the document count. Degenerate for document-level
+  recall, and its flattering 95% is partly that. It stays useful for *chunk*-level questions, not for this.
+
+The saturation point is itself the number worth having, and not only as a cost bound: **it is where the
+cheap first stage stops earning its keep.** If recall@200 ≫ recall@20 on hydrogen, the ranking is weak and
+the reranker is carrying the result; if they are close, the first stage is doing real work and the
+reranker is refining rather than rescuing. That distinction decides how much to invest in each stage, and
+it comes free with the same four runs.
+
 ##### Retrieve deep, then rerank: the candidate set should be much larger than 20
 
 Also Juha's, same date, and it is the standard retrieve-and-rerank shape rather than anything exotic: fetch
@@ -437,6 +480,13 @@ The constraint is reranker latency, which is linear in candidate count, so **the
 reranker at all**: run `evaluate.py` at k = 20, 50, 100, 200 and find where recall saturates. Reranking 200
 candidates is pointless if recall@100 already has them, and that curve costs four cheap runs per corpus.
 Do that before choosing the candidate depth, then size the rerank stage against the latency budget.
+
+**Where the reranker runs is a second measurement, not an assumption.** GPU preferred, CPU as the fallback
+— the candidate model is small enough that CPU may well be sufficient at a sane candidate depth, which is
+what made it attractive in the first place, but "may well be" is exactly the kind of claim this brief has
+been burned on twice today. Time it at each candidate depth on both, and let the numbers pick the default.
+Note the GPU is not free here: it already holds the embedding model, and `briefs/06`'s VRAM accounting is
+the place that has to absorb another resident model.
 
 Model candidate and cost argument are in the reranking section further down. Scope for the 0.2.8 window:
 rerank the existing k=20 candidate set, measure with `evaluate.py` across all four corpora, and ship it
