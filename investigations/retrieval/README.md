@@ -266,9 +266,20 @@ effect, not enough for a few points of R@5.
   **The mechanism, inferred from the pattern rather than measured directly:** the embedder is
   `multi-qa-mpnet`, trained on question↔answer-passage pairs, and the query is analytical where the passage
   is dramatized. Stories that *discuss* holdouts and uploading in expository prose beat the one that *shows*
-  one. The hybrid's keyword arm is what rescues the rows where it works — a rare proper noun like
-  "Switzerland" or "Marx" is exactly what BM25 exists to catch — so on this corpus the fusion is leaning on
-  BM25 much harder than the hydrogen numbers suggest.
+  one.
+
+  **Corrected the same day, and the correction matters more than the original claim.** An earlier version of
+  this entry concluded that the fusion must therefore be leaning on BM25, since the rows that work all have
+  a rare term to grab. A later probe refutes the general form of that: "the protagonist discovers Equestria
+  is a doubly linked list of voxels" retrieves the right passage at rank 4 out of a 2977-chunk index, and
+  the passage contains not one of those words — it says chest, void, blocks, cells, *connections*. The
+  investigator had by then failed to find that same passage with a dozen hand-written greps, for exactly
+  the reason the embedder did not: grep searches the asker's vocabulary.
+
+  So the rule is not "shared words or nothing". It is that the embedder bridges concept to text **when the
+  text is itself expository** — Light Sparks reasoning explicitly about grids, coordinates and adjacency is
+  as abstract as the query — and fails when the text is purely dramatized, as `Just Be Happy`'s opening
+  dialogue is. Both observations stand; only the generalisation drawn from the first was wrong.
 
   This also supplies the mechanism for the threshold finding below, which was flagged there as unverified
   speculation: abstracts are expository and state things the way a question asks for them, narrative prose
@@ -297,19 +308,31 @@ effect, not enough for a few points of R@5.
   need depending on the user's phrasing, which is not a property a grounding marker can be built on
   without saying so out loud.
 
-  **The ground truth here is unresolved, and the entry is written that way on purpose.** Neither corpus
-  contains "linked list" or "doubly linked" anywhere; the only `voxel` mentions are Fimbria musing on
-  deletion and, in the held-out `The Advocate`, a passage about *chip design* rather than a protagonist
-  probing anything. So the scene is either worded in vocabulary no keyword search reaches, or it is not in
-  these files. **An earlier draft of this entry claimed the answer was verifiably in `The Advocate` and
-  drew a much stronger conclusion from it** — that on-corpus and off-corpus similarity distributions
-  *overlap*, since 0.510 exceeds the verified-answerable Switzerland probe at 0.450. That conclusion rested
-  entirely on the label, the label rested on one keyword hit that does not survive reading the passage, and
-  it is withdrawn. The spread finding above needs no label and stands.
+  **Ground truth, established only after two wrong answers from the investigator:** the scene is in the
+  original `Friendship is Optimal`. Light Sparks, studying magic at Celestia's suggestion, is given a
+  puzzle cube with one sapphire block; probing it and then his own treasure chest, he finds "one hundred
+  blocks in, the command to get the next adjacent block failed", and concludes that "Equestria didn't have
+  a geometry, but only had **connections**. You couldn't give a 3D coordinate for a block." The reader's
+  "doubly linked list of voxels" is an exact paraphrase of a passage that contains none of those words.
+
+  **Two claims were made and retracted along the way, and both are worth keeping visible.** First, that the
+  answer was verifiably in the held-out `The Advocate` — from a single keyword hit which, read, is about
+  chip design. A conclusion was built on that label (that on-corpus and off-corpus distributions *overlap*,
+  since 0.510 beat the verified-answerable Switzerland probe at 0.450); it fell with the label. Second,
+  that the scene was in neither corpus at all — also wrong, and wrong the same way: the searches looked for
+  the *reader's* vocabulary (`cube`, `hole`, `voxel`, `linked list`) where the text says chest, void,
+  blocks, cells, connections. One search did look for `cube`, and filtered it by co-occurrence with "hole"
+  — the text says "void", so the filter discarded the answer.
+
+  **The retrieval engine found it on every phrasing, including the one with no shared vocabulary at all.**
+  "The protagonist discovers Equestria is a doubly linked list of voxels" returns the right document at
+  rank 2 and the right passage at rank 4; the text's own wording does better still, but the concept-level
+  query works. That is the reverse of the investigator's experience with grep, and it is the clearest
+  single demonstration in this directory of what the semantic arm is *for*.
 
   Worth keeping as a note on method: **a labelled item with a wrong label is worse than no item**, because
-  it silently biases every score computed from the set afterwards. This one is not going into
-  `fiction_questions.json` until someone who has read the story can say which one it is.
+  it silently biases every score computed from the set afterwards — which is why this one was held out of
+  `fiction_questions.json` while its label was in doubt.
 
 - **2026-08-05 — document-level questions are a distinct failure class, and the signal detects them.** Three
   hand-written probes against the fiction corpus, from a reader who had read it. Two asked about content in
