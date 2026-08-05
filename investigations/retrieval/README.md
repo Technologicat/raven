@@ -104,18 +104,22 @@ even the same generated question set applies unchanged. Document length is then 
 moved. Every corpus comparison up to now has confounded length with topic and genre; this one would not,
 and it is the only way to attribute anything measured to chunking rather than to subject matter.
 
-**Dedup is a prerequisite, and the obvious rule is the wrong one.** The PDFs on disk include several
-versions of some papers (arXiv IDs carry a `vN` suffix). The *abstract* corpus does not — checked, 1268
-files and 1268 distinct IDs — so nothing measured so far is affected by this; it is purely a constraint on
-building the fulltext set.
+**Dedup is already handled, and the remaining risk is drift rather than the rule.** The PDFs on disk
+include several versions of some papers (arXiv IDs carry a `vN` suffix), but the *abstract* corpus does
+not — 1268 files, 1268 distinct IDs. That is not luck: `raven-arxiv2id`'s `collect_latest_ids` deduplicates
+while parsing IDs out of the filenames, keeping the latest version of each paper. So the `.bib` set is
+already latest-version-per-paper, and nothing measured so far is affected.
 
-The reflex would be "keep the highest version per paper". That silently destroys the experiment. The
-abstract corpus pinned *particular* versions (`2410.07866v5`, `0706.3639v1`, …) and the document ID is the
-filename, which is what every gold label keys on. Selecting by newest would produce a corpus whose IDs no
-longer match, so the question set would have to be regenerated and the comparison would stop being
-controlled — which was the entire reason to prefer this corpus. **Select the PDFs by exact filename match
-against the 1268 `.bib` files**, and treat any paper whose pinned version is missing from disk as an
-exclusion to report rather than a version to substitute.
+Which means "select the newest PDF per paper" and "match the `.bib` set" agree **by construction, at the
+moment the set was generated** — the first rule is what produced the second. They can come apart
+afterwards, and the corpus is expected to grow (10–30 items pending). A newer version landing on disk would
+then make the two rules select different files, and the document ID is the filename every gold label keys
+on, so the mismatch would surface as unexplained retrieval misses rather than as an error.
+
+So prefer the exact-filename match against the 1268 `.bib` files — not because selecting by newest is wrong
+in principle, but because it re-derives an answer that is already recorded, and can silently re-derive a
+different one. Treat any pinned version missing from disk as an exclusion to report rather than a version
+to substitute.
 
 Two things to expect, worth writing down before it is run. On-corpus similarity should *rise*, since a
 question's answer is likely stated somewhere in a full paper and only gestured at in its abstract — which
