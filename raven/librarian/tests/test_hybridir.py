@@ -215,22 +215,21 @@ class TestResultStructure:
         # result and its score has to survive the flattening.
         rambling = ("I have been reading around this area for a while now and there is a lot of it. "
                     "What do these papers say about agents built on language models?")
-        results, (kw_results, kw_scores), (vec_results, vec_distances) = retriever.query(
+        results, report = retriever.query(
             rambling, k=5, multi_query=True, return_extra_info=True)  # explicit: the default is off
-        assert len(kw_results) == len(kw_scores)
-        assert len(vec_results) == len(vec_distances)
+        assert len(report.keyword_results) == len(report.keyword_scores)
+        assert len(report.vector_results) == len(report.vector_distances)
         assert len(results) > 0
 
     def test_extra_info_shape(self, retriever):
-        results, (kw_results, kw_scores), (vec_results, vec_distances) = retriever.query(
-            "ai agents", k=5, return_extra_info=True)
+        results, report = retriever.query("ai agents", k=5, return_extra_info=True)
         assert isinstance(results, list)
-        assert isinstance(kw_results, list)
-        assert isinstance(kw_scores, list)
-        assert len(kw_results) == len(kw_scores)
-        assert isinstance(vec_results, list)
-        assert isinstance(vec_distances, list)
-        assert len(vec_results) == len(vec_distances)
+        assert isinstance(report.keyword_results, list)
+        assert isinstance(report.keyword_scores, list)
+        assert len(report.keyword_results) == len(report.keyword_scores)
+        assert isinstance(report.vector_results, list)
+        assert isinstance(report.vector_distances, list)
+        assert len(report.vector_results) == len(report.vector_distances)
 
 
 # ---------------------------------------------------------------------------
@@ -239,24 +238,23 @@ class TestResultStructure:
 
 class TestKeywordSearch:
     def test_relevant_query_returns_results(self, retriever):
-        _results, (kw_results, _kw_scores), _vec = retriever.query(
-            "ai agents", k=5, return_extra_info=True)
-        assert len(kw_results) > 0
+        _results, report = retriever.query("ai agents", k=5, return_extra_info=True)
+        assert len(report.keyword_results) > 0
 
     def test_unrelated_query_returns_few_or_no_results(self, retriever):
-        _results, (kw_results, _kw_scores), _vec = retriever.query(
+        _results, report = retriever.query(
             "quantum physics", k=5,
             keyword_score_threshold=0.1,
             return_extra_info=True)
         # "quantum physics" doesn't appear in any document.
-        assert len(kw_results) == 0
+        assert len(report.keyword_results) == 0
 
     def test_nonsense_returns_no_results(self, retriever):
-        _results, (kw_results, _kw_scores), _vec = retriever.query(
+        _results, report = retriever.query(
             "blurba zaaaarrrgh blah qwertyuiop", k=5,
             keyword_score_threshold=0.1,
             return_extra_info=True)
-        assert len(kw_results) == 0
+        assert len(report.keyword_results) == 0
 
 
 # ---------------------------------------------------------------------------
@@ -265,27 +263,27 @@ class TestKeywordSearch:
 
 class TestSemanticSearch:
     def test_relevant_query_returns_results(self, retriever):
-        _results, _kw, (vec_results, _vec_distances) = retriever.query(
+        _results, report = retriever.query(
             "ai agents", k=5,
             semantic_distance_threshold=0.8,
             return_extra_info=True)
-        assert len(vec_results) > 0
+        assert len(report.vector_results) > 0
 
     def test_related_topic_returns_results(self, retriever):
-        _results, _kw, (vec_results, _vec_distances) = retriever.query(
+        _results, report = retriever.query(
             "language models", k=5,
             semantic_distance_threshold=0.8,
             return_extra_info=True)
-        assert len(vec_results) > 0
+        assert len(report.vector_results) > 0
 
     def test_unrelated_topic_returns_few_or_no_results(self, retriever):
-        _results, _kw, (vec_results, _vec_distances) = retriever.query(
+        _results, report = retriever.query(
             "quantum physics", k=5,
             semantic_distance_threshold=0.8,
             return_extra_info=True)
         # May return zero or very few; all should have high distance.
-        if vec_results:
-            for dist in _vec_distances:
+        if report.vector_results:
+            for dist in report.vector_distances:
                 assert dist > 0.5  # anything returned should be weakly related at best
 
 

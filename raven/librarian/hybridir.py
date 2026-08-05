@@ -877,7 +877,7 @@ class HybridIR:
               semantic_distance_threshold: float = 0.8,
               include_documents: Optional[List[str]] = None,
               multi_query: bool = False,
-              return_extra_info: bool = False) -> List[Dict]:
+              return_extra_info: bool = False) -> Union[List[Dict], Tuple[List[Dict], envcls]]:
         """Hybrid BM25 + Vector search with RRF fusion.
 
         `query`: Search query, of the kind you'd type into Google: space-separated keywords, or a natural-language question.
@@ -925,8 +925,15 @@ class HybridIR:
                        one Chroma query over all embeddings. Cost is not what is wrong with it.
 
         `return_extra_info`:
-            If `True`: Return
-                       `final_results, (keyword_results, keyword_scores), (vector_results, vector_distances)`.
+            If `True`: Return `final_results, report`, where `report` is an `env` with the fields
+
+                           `keyword_results`, `keyword_scores`      what the BM25 arm found, and how well
+                           `vector_results`, `vector_distances`     what the vector arm found, and how far
+
+                       Each pair is index-aligned, and each is the union across all the queries actually
+                       run (see `multi_query`) — a caller asking "what did the keyword arm find" wants
+                       everything it found, not a per-query breakdown of it.
+
                        This can be useful for debugging your knowledge base.
             If `False`: Return `final_results` only.
 
@@ -1114,7 +1121,10 @@ class HybridIR:
         logger.info("HybridIR.query: exiting. All done.")
 
         if return_extra_info:
-            return merged, (keyword_results, keyword_scores), (vector_results, vector_distances)
+            return merged, envcls(keyword_results=keyword_results,
+                                  keyword_scores=keyword_scores,
+                                  vector_results=vector_results,
+                                  vector_distances=vector_distances)
         return merged
 
 # --------------------------------------------------------------------------------
