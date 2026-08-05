@@ -307,6 +307,30 @@ dilute the whole-message embedding is still hard, because both queries are indiv
 wants a query built by something that has read the message — which is pass 2, the RAG tool call, not
 anything in this brief.
 
+**The conversational sentence is the failure mode to design around, and it creates a dependency on lever 1**
+(raised by Juha, 2026-08-05, while lever 3 was being built). A chat message is not all query: "Good evening!
+How are you doing today? I've been reading about alkaline electrolyzers — what is their specific energy
+consumption?" splits into three pieces, two of which are social. Those retrieve whatever happens to sit
+nearest them in a corpus about something else, and then vote in the fusion with the same weight as the piece
+that asked the actual question.
+
+A minimum word count is the obvious guard and it is not sufficient: it catches "Good evening!" and lets "How
+are you doing today?" through, which is five words of pure noise. Nor is a stoplist of pleasantries the
+answer — it is unmaintainable, language-specific, and wrong the moment someone asks a genuine short question.
+
+Two things bound the damage in the meantime, and it is worth knowing they are bounds rather than fixes. The
+whole-message query is always in the fusion, so a social piece can dilute but never replace. And RRF rewards
+*agreement across lists*: a noise subquery's hits are scattered and corroborated by nothing, so each collects
+a single `1/(1+K)` vote, while a document the query set actually agrees on collects several. The cost lands
+in the tail slots rather than at the top.
+
+**The fix is lever 1's confidence signal, applied per subquery rather than per turn: a subquery whose own
+score distribution is flat does not get a vote.** That is the same shape test, at a different granularity,
+and it dissolves the conversational-sentence case without anyone maintaining a list of greetings — a
+pleasantry against a technical corpus produces a textbook flat distribution. So the two levers compose more
+tightly than the ordering above suggests: lever 3 shipped alone is bounded-but-diluted, and lever 1 is what
+makes it clean. Whoever builds lever 1 should treat this as one of its consumers.
+
 Recency is a usable prior when a cheaper cut is wanted: the last paragraph, or the sentence carrying the
 question mark, is what the user is actually asking.
 

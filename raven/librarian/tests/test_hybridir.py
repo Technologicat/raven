@@ -361,3 +361,62 @@ def test_pend_edit_delete_of_indexed_document():
     fake = _fake_ir_for_pend_edit(indexed_document_ids=("doc1",))
     hybridir.HybridIR._pend_edit(fake, action="delete", document_id="doc1")
     assert _pending_kinds(fake) == ["delete"]
+
+
+# ---------------------------------------------------------------------------
+# Splitting a chat message into subqueries (lever 3 of brief 09)
+# ---------------------------------------------------------------------------
+
+class TestSplitIntoSubqueries:
+    """A chat message is not a query, so it is also queried in pieces — beside the whole, never instead."""
+
+    def test_a_single_sentence_adds_nothing(self):
+        # The caller already has the whole text; returning it again would double its vote in the fusion.
+        assert hybridir.split_into_subqueries("What is the specific energy consumption of alkaline electrolyzers?") == []
+
+    def test_a_multi_sentence_message_splits(self):
+        out = hybridir.split_into_subqueries("I am working on alkaline electrolyzers for a review. "
+                                             "What is their specific energy consumption?")
+        assert out == ["I am working on alkaline electrolyzers for a review.",
+                       "What is their specific energy consumption?"]
+
+    def test_the_context_carrying_sentence_survives_as_its_own_query(self):
+        # The mirror-image failure the whole-text query exists to cover: split alone, "What is the specific
+        # energy consumption?" is about nothing, because the topic lived in the previous sentence. Both
+        # pieces are returned, so the fusion sees the topic sentence too.
+        out = hybridir.split_into_subqueries("I'm working on alkaline electrolyzers. "
+                                             "What is the specific energy consumption?")
+        assert "I'm working on alkaline electrolyzers." in out
+
+    def test_short_pleasantries_are_dropped(self):
+        out = hybridir.split_into_subqueries("Good evening! Thanks. "
+                                             "What is the specific energy consumption of alkaline electrolyzers?")
+        assert all("evening" not in piece and "Thanks" not in piece for piece in out)
+
+    def test_question_marks_and_exclamations_both_end_a_sentence(self):
+        out = hybridir.split_into_subqueries("Is hydrogen storage solved yet? "
+                                             "I keep reading that it is not solved at all!")
+        assert len(out) == 2
+
+    def test_a_closing_quote_after_the_stop_still_ends_the_sentence(self):
+        out = hybridir.split_into_subqueries('The paper says "this is settled." '
+                                             "I would like to know whether that is actually true.")
+        assert len(out) == 2
+
+    def test_the_number_of_pieces_is_capped(self):
+        # Not for retrieval cost — the pieces batch into one call each — but for the fusion, where twenty
+        # mediocre sentence-queries outvote the one good whole-message query.
+        message = " ".join(f"This is sentence number {i} of a rambling message." for i in range(30))
+        assert len(hybridir.split_into_subqueries(message)) <= 8
+
+    def test_the_cap_keeps_the_end_of_the_message(self):
+        # Recency is the usable prior: someone who has typed five paragraphs is asking about the end of them,
+        # and the opening is scene-setting that the whole-text query already carries.
+        message = " ".join(f"This is sentence number {i} of a rambling message." for i in range(30))
+        assert "number 29" in hybridir.split_into_subqueries(message)[-1]
+
+    def test_a_message_of_only_pleasantries_adds_nothing(self):
+        assert hybridir.split_into_subqueries("Hi! Thanks. Bye.") == []
+
+    def test_whitespace_only_input_is_safe(self):
+        assert hybridir.split_into_subqueries("   \n  ") == []

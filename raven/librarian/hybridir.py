@@ -15,7 +15,8 @@ laptops have enough RAM for this not to be an issue with the dataset sizes neede
 QwQ-32B wrote a very first initial rough draft outline, from which this was then manually coded.
 """
 
-__all__ = ["init", "shutdown", "HybridIR", "HybridIRFileSystemEventHandler", "setup"]
+__all__ = ["split_into_subqueries",
+           "init", "shutdown", "HybridIR", "HybridIRFileSystemEventHandler", "setup"]
 
 import logging
 logger = logging.getLogger(__name__)
@@ -28,6 +29,7 @@ import json
 import operator
 import os
 import pathlib
+import re
 import threading
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import uuid
@@ -68,6 +70,63 @@ api.initialize(raven_server_url=client_config.raven_server_url,
 def format_chunk_full_id(document_id: str, chunk_id: str) -> str:
     """Generate an identifier for a chunk of a document, based on the given IDs."""
     return f"doc-{document_id}-chunk-{chunk_id}"
+
+# A sentence end: `.`, `?` or `!`, optionally closed by a quote or bracket, followed by whitespace. Kept
+# deliberately naive — it splits "et al. 2020" and "Fig. 3" in the middle, and that costs almost nothing
+# here, because the pieces are *additional* queries beside the whole text rather than a partition of it. A
+# fragment that means nothing retrieves nothing in particular and contributes a flat list to the fusion; a
+# fragment that means something is exactly what we wanted. Buying spaCy's sentence segmentation (a server
+# round trip, on the latency path before every reply) to avoid that is the wrong trade.
+_SENTENCE_END = re.compile(r"(?<=[.?!][\"'’”)\]])\s+|(?<=[.?!])\s+")
+
+# Below this many words a piece is not a query. "Thanks!", "Hmm.", "See below." retrieve noise, and every
+# extra list handed to RRF dilutes the ones that mean something, since fusion weights by position only.
+#
+# It is a floor, not a solution, and the gap is worth naming: it catches "Good evening!" and lets "How are
+# you doing today?" through at five words of pure pleasantry. A stoplist of greetings would be
+# unmaintainable and language-specific, so the real answer is a per-subquery confidence test — a piece whose
+# own score distribution comes back flat should not get a vote in the fusion, which is exactly what a
+# pleasantry against a technical corpus produces. Until that exists, the damage is bounded rather than
+# absent: the whole-text query is always in the fusion too, and RRF rewards agreement across lists, so an
+# uncorroborated noise piece costs tail slots rather than the top of the ranking.
+_MINIMUM_SUBQUERY_WORDS = 4
+
+# At most this many pieces, beside the whole text. A cap is needed because the cost of a subquery is not
+# the retrieval — those batch — but its vote in the fusion: twenty mediocre sentence-queries outvote the
+# one good whole-message query. Eight is a guess, not a measurement; it wants sweeping against
+# `investigations/retrieval/` alongside the rest of this lever.
+_MAXIMUM_SUBQUERIES = 8
+
+def split_into_subqueries(text: str) -> List[str]:
+    """Split a chat message into the sentences worth querying separately. Returns them in document order.
+
+    The user's message is not a query. With a multiline composer it can be several paragraphs of context
+    ending in one specific question, and such a message embeds to a *centroid* — near nothing in particular,
+    since a centroid's nearest neighbours are chosen by average topicality rather than by answering anything.
+    Measured on `investigations/retrieval/`, that shape retrieves at 0.292 MRR against 0.562 for a focused
+    question: the largest effect in that data by some way.
+
+    **These are meant to be used *beside* the whole text, never instead of it**, which is what makes the
+    naive splitting safe and is easy to get wrong. Splitting alone trades one failure for its mirror image:
+    "I'm working on alkaline electrolyzers. What is the specific energy consumption?" yields a second
+    sentence about nothing at all, because the topic lived in the first one. Querying with the whole message
+    *and* each piece, then fusing all the result sets, needs no decision about which shape the message is —
+    the whole carries the context, the pieces carry the specificity, and neither has to be right.
+
+    Returns `[]` when there is nothing to add: a single-sentence message (the caller already has it), or one
+    whose pieces are all too short to mean anything. A caller can therefore treat the empty list as "just
+    query the text", with no special case.
+    """
+    pieces = [piece.strip() for piece in _SENTENCE_END.split(text.strip())]
+    subqueries = [piece for piece in pieces if len(piece.split()) >= _MINIMUM_SUBQUERY_WORDS]
+    if len(subqueries) < 2:  # nothing gained: one piece is the whole text again, none is nothing to add
+        return []
+    if len(subqueries) > _MAXIMUM_SUBQUERIES:
+        # Keep the *last* ones. Recency is the usable prior in a chat message: a reader who has typed five
+        # paragraphs is asking about the end of them, and the opening is scene-setting the whole-text query
+        # already carries.
+        subqueries = subqueries[-_MAXIMUM_SUBQUERIES:]
+    return subqueries
 
 def reciprocal_rank_fusion(*item_lists: List[Any], K: int = 60) -> List[Tuple[Any, float]]:
     """Fuse rank from multiple IR systems using Reciprocal Rank Fusion (RRF).
