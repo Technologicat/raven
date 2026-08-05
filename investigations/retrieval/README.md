@@ -280,6 +280,37 @@ effect, not enough for a few points of R@5.
   something that has *read* the corpus, which is the RAG tool surface letting the model author the query,
   or a document-level summary layer. Worth knowing before more effort goes into query rewriting.
 
+- **2026-08-05 — one information need, three phrasings, 0.17 of confidence signal between them.** The
+  reader asked which story has the protagonist work out what data structure Equestria is built from,
+  remembering the answer — a doubly linked list of voxels — but not the story. Three phrasings of that one
+  question, against the same index:
+
+  | phrasing | best vector similarity |
+  |---|---|
+  | "…discovers it is a doubly linked list of voxels" | 0.344 — the lowest reading of the session |
+  | "…what data structure Equestria is built from?" | 0.431 |
+  | "experimenting to find out how the simulated world is represented internally" | 0.510 |
+
+  All three returned 20 confident results. **The spread is 0.166, which is comparable to the entire gap
+  between the two corpora that any threshold has to straddle** — and it comes from nothing but how the
+  same question was worded. A fixed cut anywhere in that range accepts or rejects the same information
+  need depending on the user's phrasing, which is not a property a grounding marker can be built on
+  without saying so out loud.
+
+  **The ground truth here is unresolved, and the entry is written that way on purpose.** Neither corpus
+  contains "linked list" or "doubly linked" anywhere; the only `voxel` mentions are Fimbria musing on
+  deletion and, in the held-out `The Advocate`, a passage about *chip design* rather than a protagonist
+  probing anything. So the scene is either worded in vocabulary no keyword search reaches, or it is not in
+  these files. **An earlier draft of this entry claimed the answer was verifiably in `The Advocate` and
+  drew a much stronger conclusion from it** — that on-corpus and off-corpus similarity distributions
+  *overlap*, since 0.510 exceeds the verified-answerable Switzerland probe at 0.450. That conclusion rested
+  entirely on the label, the label rested on one keyword hit that does not survive reading the passage, and
+  it is withdrawn. The spread finding above needs no label and stands.
+
+  Worth keeping as a note on method: **a labelled item with a wrong label is worse than no item**, because
+  it silently biases every score computed from the set afterwards. This one is not going into
+  `fiction_questions.json` until someone who has read the story can say which one it is.
+
 - **2026-08-05 — document-level questions are a distinct failure class, and the signal detects them.** Three
   hand-written probes against the fiction corpus, from a reader who had read it. Two asked about content in
   a passage ("which story has the protagonist travel to Switzerland?", "…go undercover to sabotage a
