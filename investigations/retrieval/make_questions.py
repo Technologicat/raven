@@ -36,10 +36,19 @@ too easy and the set needs regenerating, not celebrating.
 generated questions and the WoS accession numbers they point at are written out - identifiers and
 new text, not the abstracts. Keep it that way.
 
-Usage:
-    python make_questions.py <base_url> <model> [n_focused] [n_rambling]
+**Two BibTeX corpora share this generator**, because they are the same *shape* of thing — one record per
+file, title plus abstract, academic register — and differ only in subject. That is exactly what makes the
+second one worth having: fiction tested the retrieval signals against a corpus as far from hydrogen
+abstracts as anything gets, which is the flattering direction. arXiv AI/ML is the near well, where genre,
+length and phrasing all match and only the topic moves. See `CORPORA` below.
 
-    python make_questions.py http://localhost:1234 qwen3.6-35b-a3b 24 8
+(Fiction has its own generator, `make_fiction_questions.py`, and that split is not duplication for its own
+sake: prose has no abstracts to sample, so both the sampling and the prompts differ down to the bone.)
+
+Usage:
+    python make_questions.py <hydrogen|arxiv-ai> <base_url> <model> [n_focused] [n_rambling]
+
+    python make_questions.py hydrogen http://localhost:1234 qwen3.6-35b-a3b 24 8
 """
 
 import json
@@ -51,8 +60,40 @@ import urllib.request
 
 import bibtexparser
 
-CORPUS_DIR = pathlib.Path("~/.config/raven/llmclient/documents").expanduser()
-OUT_PATH = pathlib.Path(__file__).parent / "questions.json"
+HERE = pathlib.Path(__file__).parent
+
+# Per-corpus profiles. `sibling_topic` goes into the focused prompt as the thing a *different* paper in the
+# same collection would be about, which is what stops the generator writing questions so broad that half
+# the corpus answers them. It has to name the collection's subject, not the individual paper's.
+CORPORA = {
+    # Note the asymmetry in `docs_dir`: hydrogen reads the *live* Librarian docs slot, which now rotates
+    # between three corpora, so generating for it while another one is swapped in silently draws from the
+    # wrong collection. arXiv reads a stable path and cannot. Check what is in the slot before regenerating.
+    "hydrogen": {"docs_dir": pathlib.Path("~/.config/raven/llmclient/documents").expanduser(),
+                 "out_path": HERE / "questions.json",
+                 "sibling_topic": "hydrogen production",
+                 "description": "Web of Science hydrogen-production records, local to the developer "
+                                "machine (not in this repository)"},
+    # `use_abstracts: False` is not a degraded mode — it is what a hand-built BibTeX database looks like.
+    # This one was typed by hand between 2007 and 2016, partly predating routine online abstracts, so 537
+    # of its 541 records are title, authors and year. Asking "which paper was the one about X" over such a
+    # collection is a plausible thing to want, and it is the case where a QA-type embedder has roughly a
+    # tenth of the surface to match a question against.
+    "banichuk": {"docs_dir": pathlib.Path("~/Documents/koodit/raven/00_stuff/datasets/banichuk").expanduser(),
+                 "out_path": HERE / "banichuk_questions.json",
+                 "sibling_topic": "axially moving materials and structural mechanics",
+                 "use_abstracts": False,
+                 "description": "an axially-moving-materials bibliography accumulated over a working "
+                                "career and typed by hand, 541 records spanning 1766-2013, almost all of "
+                                "them titles only; local to the developer machine (not in this repository)"},
+    "arxiv-ai": {"docs_dir": pathlib.Path("~/Documents/koodit/raven/00_stuff/datasets/ai_papers/burst").expanduser(),
+                 "out_path": HERE / "arxiv_ai_questions.json",
+                 "sibling_topic": "AI and machine learning",
+                 "description": "arXiv AI/ML abstracts as actually accumulated by one reader, so a "
+                                "minority of cosmology, astronomy and speculative-physics records are "
+                                "mixed in — strays from saving everything to one folder, not planted "
+                                "confounders; local to the developer machine (not in this repository)"},
+}
 
 # Fixed, so that a rerun samples the same papers and the set stays comparable across regenerations.
 SEED = 20260728
@@ -68,7 +109,7 @@ Write ONE question that this paper answers, as a researcher might type it into a
 
 Requirements:
 - The question must be answerable from this paper, and specific enough that a random other paper on
-  hydrogen production would not answer it.
+  {sibling_topic} would not answer it.
 - Do NOT reuse distinctive phrases from the abstract. Rephrase in your own words. A reader who has
   the abstract in front of them should recognize the question as being about it, but a keyword
   search for the question's exact words should not trivially land on it.
@@ -95,8 +136,44 @@ Requirements:
 {papers}"""
 
 
-def load_entry(path: pathlib.Path) -> dict | None:
-    """Return `{"id", "title", "abstract"}` for a BibTeX file, or `None` if it has no usable abstract."""
+TITLES_FOCUSED_PROMPT = """Below is the title of a scientific paper. There is no abstract available.
+
+Write ONE question that this paper is likely to answer, as a researcher might type it into a search box
+when trying to find a paper they half-remember.
+
+Requirements:
+- The question must be about what the title says the paper is about, and specific enough that a random
+  other paper on {sibling_topic} would not be an equally good answer.
+- Do NOT reuse the title's distinctive noun phrases. Rephrase in your own words — describe the same
+  subject the way someone would who recalled the topic but not the wording.
+- Do not mention the authors, the journal, or the year.
+- Output the question and nothing else. No preamble, no quotation marks.
+
+Title: {title}"""
+
+TITLES_RAMBLING_PROMPT = """Below are the titles of several scientific papers. No abstracts are available.
+
+Write a short message (4 to 6 sentences) of the kind a researcher types into a chat assistant when they
+are thinking out loud. It should wander across the subjects of ALL the titles shown, and end with a
+specific question that ONLY the paper marked TARGET can answer.
+
+Requirements:
+- Do NOT reuse distinctive noun phrases from any title. Rephrase in your own words.
+- The wandering part should be genuine context, not filler: mention what the other papers are about as
+  things the researcher is already thinking about.
+- Do not mention authors, journals, or years.
+- Output the message and nothing else.
+
+{papers}"""
+
+
+def load_entry(path: pathlib.Path, require_abstract: bool = True) -> dict | None:
+    """Return `{"id", "title", "abstract"}` for a BibTeX file, or `None` if it is not usable.
+
+    `require_abstract`: when True, a record whose abstract is missing or too short is rejected — those tend
+                        to be truncated records with nothing specific to ask about. When False, only a
+                        title is required, and `abstract` comes back as the empty string.
+    """
     try:
         library = bibtexparser.parse_file(str(path))
     except Exception:  # noqa: BLE001 -- a malformed record is data, not a crash
@@ -106,7 +183,7 @@ def load_entry(path: pathlib.Path) -> dict | None:
     fields = {field.key: field.value for field in library.entries[0].fields}
     abstract = (fields.get("Abstract") or "").strip()
     title = (fields.get("Title") or "").strip()
-    if len(abstract) < MIN_ABSTRACT_CHARS or not title:
+    if not title or (require_abstract and len(abstract) < MIN_ABSTRACT_CHARS):
         return None
     # The document id HybridIR reports is the filename, which is what the labels must key on.
     return {"id": path.name, "title": clean(title), "abstract": clean(abstract)}
@@ -140,27 +217,32 @@ def ask(base: str, model: str, prompt: str) -> str:
 
 
 def main() -> None:
-    if len(sys.argv) < 3:
+    if len(sys.argv) < 4:
         print(__doc__)
         return
-    base, model = sys.argv[1], sys.argv[2]
-    n_focused = int(sys.argv[3]) if len(sys.argv) > 3 else 24
-    n_rambling = int(sys.argv[4]) if len(sys.argv) > 4 else 8
+    corpus, base, model = sys.argv[1], sys.argv[2], sys.argv[3]
+    if corpus not in CORPORA:
+        raise SystemExit(f"unknown corpus '{corpus}'; expected one of {', '.join(CORPORA)}")
+    profile = CORPORA[corpus]
+    corpus_dir, out_path = profile["docs_dir"], profile["out_path"]
+    n_focused = int(sys.argv[4]) if len(sys.argv) > 4 else 24
+    n_rambling = int(sys.argv[5]) if len(sys.argv) > 5 else 8
 
-    files = sorted(CORPUS_DIR.glob("*.bib"))
+    files = sorted(corpus_dir.glob("*.bib"))
     if not files:
-        print(f"no .bib files in {CORPUS_DIR}")
+        print(f"no .bib files in {corpus_dir}")
         return
-    print(f"corpus: {len(files)} records in {CORPUS_DIR}")
+    print(f"corpus '{corpus}': {len(files)} records in {corpus_dir}")
 
     rng = random.Random(SEED)
     rng.shuffle(files)
 
     # Draw more candidates than needed; short or malformed records are skipped.
     needed = n_focused + 3 * n_rambling
+    use_abstracts = profile.get("use_abstracts", True)
     entries = []
     for path in files:
-        entry = load_entry(path)
+        entry = load_entry(path, require_abstract=use_abstracts)
         if entry is not None:
             entries.append(entry)
         if len(entries) >= needed + 20:
@@ -176,9 +258,8 @@ def main() -> None:
         expensive kind of failure — the whole set has to be regenerated, and the seed guarantees only that
         the same *papers* are drawn, not that the model says the same thing about them.
         """
-        OUT_PATH.write_text(json.dumps(
-            {"corpus": "Web of Science hydrogen-production records, local to the developer machine "
-                       "(not in this repository)",
+        out_path.write_text(json.dumps(
+            {"corpus": profile["description"],
              "corpus_size": len(files),
              "seed": SEED,
              "generator_model": model,
@@ -187,7 +268,11 @@ def main() -> None:
 
     for i in range(n_focused):
         entry = entries[i]
-        text = ask(base, model, FOCUSED_PROMPT.format(title=entry["title"], abstract=entry["abstract"]))
+        prompt = (FOCUSED_PROMPT.format(title=entry["title"], abstract=entry["abstract"],
+                                        sibling_topic=profile["sibling_topic"]) if use_abstracts
+                  else TITLES_FOCUSED_PROMPT.format(title=entry["title"],
+                                                    sibling_topic=profile["sibling_topic"]))
+        text = ask(base, model, prompt)
         if not text:
             print(f"  focused {i + 1}: SKIPPED (empty reply)", flush=True)
             continue
@@ -202,9 +287,11 @@ def main() -> None:
         if len(group) < 3:
             break
         target = group[0]
-        blocks = [f"{'TARGET - ' if j == 0 else ''}Title: {e['title']}\nAbstract: {e['abstract']}"
+        blocks = [f"{'TARGET - ' if j == 0 else ''}Title: {e['title']}"
+                  + (f"\nAbstract: {e['abstract']}" if use_abstracts else "")
                   for j, e in enumerate(group)]
-        text = ask(base, model, RAMBLING_PROMPT.format(papers="\n\n".join(blocks)))
+        template = RAMBLING_PROMPT if use_abstracts else TITLES_RAMBLING_PROMPT
+        text = ask(base, model, template.format(papers="\n\n".join(blocks)))
         if not text:
             print(f"  rambling {i + 1}: SKIPPED (empty reply)", flush=True)
             continue
@@ -215,7 +302,7 @@ def main() -> None:
         print(f"  rambling {i + 1}/{n_rambling}: {text[:110]}", flush=True)
 
     save()
-    print(f"\nwrote {len(questions)} questions to {OUT_PATH}")
+    print(f"\nwrote {len(questions)} questions to {out_path}")
 
 
 if __name__ == "__main__":

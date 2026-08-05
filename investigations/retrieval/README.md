@@ -205,9 +205,109 @@ argument for having grown the set:
 Worth keeping as a calibration on how much a 30-question known-item set can carry: enough for a factor-of-two
 effect, not enough for a few points of R@5.
 
+## Resolved: the third corpus falsified both predictions, and the second retraction is mine from this morning
+
+Fiction tested the calibration against a corpus as *far* from hydrogen electrolysis abstracts as a document
+set gets. That is the easy direction, and it is the one that flatters the signal: fiction and abstracts
+differ in genre, register, sentence length and vocabulary all at once, so almost anything would separate
+them. The near case is the one that decides whether the mechanism is real — 686 arXiv AI/ML abstracts,
+which share genre, register, length distribution and academic phrasing with the hydrogen corpus, and differ
+**only in topic**.
+
+Stated in advance, so the run can falsify it rather than confirm whatever happens:
+
+1. **Cross-corpus AUROC will fall materially below the 0.9997/0.9998 measured against fiction.** If it does
+   not — if a near well separates as cleanly as a far one — then the signal is reading *topic* rather than
+   *register*, which is better news than expected and would widen where it can ship.
+2. **The p75 calibration will still beat any fixed constant**, because its mechanism does not depend on how
+   similar the corpora are: a probe about sourdough is off-corpus for all three collections. What should
+   shrink is the *margin* — the gap between the on-corpus distribution and the near-corpus negatives.
+3. **The recommended cut for arXiv AI will land near hydrogen's 0.382 rather than fiction's 0.367**, since
+   the probes are being scored against the same genre of text.
+
+Prediction 1 is the one that matters. It is also the one most likely to be wrong in the interesting
+direction.
+
+### The result: 1268 arXiv AI/ML abstracts, indexed 2026-08-05
+
+**Prediction 1 was wrong, in exactly the direction named as interesting.** The near well separates as
+cleanly as the far one — arXiv on-corpus questions against hydrogen questions score **AUROC 0.999**, and
+against fiction questions **0.999**. Identical. The two negative distributions sit on top of each other
+(hydrogen 0.232–0.464, fiction 0.201–0.470), so sharing genre, register, length and academic phrasing with
+the corpus buys a query essentially nothing.
+
+**So the signal reads topical match, not register.** That is worth more than the prediction was: the
+standing worry about any absolute cut was that "the scale of close belongs to the collection". If the
+score is about whether the query is *about* what the corpus is about, then its scale is far more
+corpus-independent than that argument assumed.
+
+**Prediction 2 was also wrong, and it was this morning's finding.** p75-of-probes does not survive contact
+with a third corpus: on arXiv it cuts at 0.282 and lets **72.8%** of off-corpus negatives through. It
+looked good on hydrogen and fiction because on both, p75 of the probe distribution happened to land near
+the on-corpus floor. Redone with all three corpora, and scored on the worst case rather than the average —
+which is what a shipped default has to survive:
+
+| estimator | worst on-corpus lost | worst negatives missed |
+|---|---|---|
+| p75 of probes *(this morning's pick)* | 3.4% | **72.8%** |
+| p90 of probes | 6.8% | 14.6% |
+| max of probes | 11.4% | 11.8% |
+| fixed 0.45 *(the hydrogen pick)* | **27.3%** | 6.9% |
+| **fixed 0.40** | **6.8%** | **15.3%** |
+
+**A fixed 0.40 matches the best probe-calibrated estimator on both axes.** So calibration-from-probes buys
+essentially nothing, and this morning's conclusion was an artifact of comparing it against 0.45 — a
+constant chosen on hydrogen alone, and therefore the wrong baseline. Comparing a new mechanism against a
+badly-chosen incumbent is how a mechanism gets adopted on someone else's mistake.
+
+**The two falsifications are one finding.** Prediction 1 failing is *why* prediction 2 fails: a signal that
+reads topic rather than register does not have a per-collection scale, so there is little for a
+per-collection calibration to recover. What survives from this morning is only the narrow claim — that
+**0.45 specifically** does not travel, costing 27.3% of answerable questions on fiction — not the mechanism
+built on top of it.
+
+The caveat that killed p75 applies to 0.40 as well, and is now stated before rather than after: three
+corpora chose it, and a fourth could unseat it. The difference is that a constant makes a weaker claim than
+a mechanism, so it has less to be wrong about. `calibrate.py` is kept as the instrument that produced the
+table, with its recommendation removed.
+
+## Open: a fourth corpus stresses document *length*, and another prediction written first
+
+The three corpora so far vary topic and genre while holding one thing constant: every document carries a
+few hundred words of prose. The axially-moving-materials bibliography (`00_stuff/rawdata/banichuk_references.bib`,
+541 records, 1766–2013, shape documented in brief 11) breaks that — **only 4 of its 541 records carry an
+abstract**, because it was typed by hand between 2007 and 2016, partly predating routine online abstracts.
+It is titles, authors and years. That is not a degenerate case invented to be hard; it is what a hand-built
+BibTeX database looks like, and answering "which paper was the one about X" over one is a plausible thing
+to want.
+
+Written before the run:
+
+1. **On-corpus similarity will be systematically lower than on any of the three abstract corpora**, whose
+   medians run 0.519–0.670. A QA-type embedder maps a question near its *answer*; a title names a topic
+   without answering anything, and gives roughly a tenth of the surface to match against.
+2. **Therefore the shipping constant of 0.40 will lose materially more than its current worst case of
+   6.8%** — and if the on-corpus median lands near 0.40, then "one global constant" needs a document-length
+   caveat, and the per-collection idea comes back in a form that has nothing to do with off-corpus probes.
+3. **The keyword arm will degrade more than the vector arm.** BM25 on a twelve-token document has almost no
+   term-frequency signal to work with.
+
+Prediction 2 is the one with consequences. Note it is a *different* mechanism from the one refuted above:
+that one calibrated against off-corpus probes and failed; this one would key on a property of the documents
+themselves, which is measurable at index time without any probes at all.
+
+A hazard specific to this corpus, to check rather than assume: questions generated from a title alone have
+much less room to avoid reusing the title's distinctive words than questions generated from an abstract, so
+`check_leakage.py` matters more here than it did.
+
 ## What the set has decided so far
 
-- **2026-08-05 — "per collection" means calibrated at index time, not typed into a config file.** The
+- **2026-08-05 (superseded the same day — see the arXiv section above) — "per collection" means calibrated
+  at index time, not typed into a config file.** Retained because the reasoning is a clean example of a
+  result that is real on its evidence and wrong on a wider sample: everything below is correctly measured
+  on hydrogen and fiction, and the estimator it selects fails on a third corpus that had not been built
+  yet. The self-flagged caveat — "the estimator was chosen on the same two corpora it is scored on" — is
+  exactly what cashed. The
   fiction run left the off-corpus cut as a per-collection setting without saying what such a number is made
   of. A user-typed threshold is not an answer: the value cannot be derived from anything a user knows, and
   the failure is silent in the direction that hurts — an answerable question marked ungrounded reads as a

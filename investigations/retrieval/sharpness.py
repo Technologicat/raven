@@ -25,12 +25,21 @@ against itself.
 signal was the absolute best vector similarity with a cut near 0.45. The standing objection to any such
 constant is that the scale of "close" belongs to the collection — which one corpus cannot test. So:
 
-    hydrogen   the Web of Science corpus is indexed. Positives are `questions.json`; negatives are the
-               fiction questions (none of those stories is in this index) plus the built-in probes.
-    fiction    the Optimalverse corpus is indexed. Positives are the `on_corpus` entries of
-               `fiction_questions.json`; negatives are its `adjacent` entries — questions written from
-               stories deliberately held out of the index, which is as hard as a negative gets — plus all
-               the hydrogen questions and the built-in probes.
+    hydrogen   11974 Web of Science abstracts on hydrogen production. The original corpus.
+    fiction    19 Optimalverse fan fiction stories. The *far* negative for hydrogen — genre, register,
+               length and vocabulary all differ at once, which is the flattering direction to test in.
+               Its question set also carries `adjacent` entries, written from stories deliberately held
+               out of the index, which is as hard as a negative gets.
+    arxiv-ai   1268 arXiv AI/ML abstracts. The *near* negative for hydrogen: same genre, same register,
+               same length distribution, differing only in topic — so this is where a signal that is
+               really reading "does this look like an academic abstract" gets caught.
+    banichuk   541 axially-moving-materials records, hand-typed 2007–2016 and therefore **titles only**
+               (4 carry an abstract). Varies document *length* rather than topic: a QA-type embedder gets
+               roughly a tenth of the surface to match a question against, which is what a hand-built
+               BibTeX database actually offers.
+
+Positives are the named corpus's own questions; negatives are every other corpus's questions plus the
+built-in probes, reported per source corpus so that near and far negatives never get averaged together.
 
 **Whichever corpus is actually indexed has to match the argument**, and nothing here can check that for
 you: pointing this at the wrong index silently relabels every question. Both directions need a full
@@ -40,7 +49,7 @@ Requires a running raven-server (spaCy tokenization + embeddings) and the local 
 the index; it does not write to it.
 
 Usage:
-    python sharpness.py <hydrogen|fiction> [k]
+    python sharpness.py <hydrogen|fiction|arxiv-ai> [k]
 """
 
 import collections
@@ -56,8 +65,16 @@ from raven.librarian import config as librarian_config
 from raven.librarian import hybridir
 
 HERE = pathlib.Path(__file__).parent
-HYDROGEN_QUESTIONS = HERE / "questions.json"
-FICTION_QUESTIONS = HERE / "fiction_questions.json"
+
+# Every corpus with a generated question set. Each other corpus's questions are this one's off-corpus
+# negatives, for free and by construction — nobody has to write them, and nobody can bias them towards
+# being easy. Reported per source corpus rather than pooled, because the corpora are not equally distant:
+# fiction against hydrogen is a far negative, arXiv AI against hydrogen is a near one, and pooling them
+# would average a distinction that is the whole point of having three.
+CORPUS_QUESTIONS = {"hydrogen": HERE / "questions.json",
+                    "fiction": HERE / "fiction_questions.json",
+                    "arxiv-ai": HERE / "arxiv_ai_questions.json",
+                    "banichuk": HERE / "banichuk_questions.json"}
 
 # Ratios to sweep. Wide and coarse: the brief is explicit that the values in circulation for `min_p`
 # sampling carry no information about what to use here, so this is a search rather than a refinement.
@@ -91,36 +108,38 @@ def load_json(path: pathlib.Path) -> dict | None:
 
 
 def build_workload(corpus: str) -> tuple[list[dict], dict]:
-    """Return the queries to run and a note about the corpus, or raise if the question sets are missing.
+    """Return the queries to run and a note about the corpus, or raise if the question set is missing.
 
     Each item is `{"kind", "query", "on_corpus", "gold"}`. `kind` names the group it is reported under;
     `on_corpus` is the label measurement B discriminates on.
+
+    Positives come from the named corpus, negatives from every *other* corpus that has a question set,
+    plus the built-in probes. A question set may mark its own entries `on_corpus: False` — fiction does,
+    for the questions written from stories deliberately held out of the index — and those stay negatives
+    of their own group rather than being promoted to positives.
     """
-    hydrogen = load_json(HYDROGEN_QUESTIONS)
-    fiction = load_json(FICTION_QUESTIONS)
+    if corpus not in CORPUS_QUESTIONS:
+        raise SystemExit(f"unknown corpus '{corpus}'; expected one of {', '.join(CORPUS_QUESTIONS)}")
+    own_path = CORPUS_QUESTIONS[corpus]
+    own = load_json(own_path)
+    if own is None:
+        raise SystemExit(f"no question set at {own_path}; generate it first")
 
-    if corpus == "hydrogen":
-        if hydrogen is None:
-            raise SystemExit(f"no question set at {HYDROGEN_QUESTIONS}; run make_questions.py first")
-        items = [{"kind": q["kind"], "query": q["question"], "on_corpus": True, "gold": q["gold"]}
-                 for q in hydrogen["questions"]]
-        if fiction is not None:
-            items += [{"kind": "other_corpus", "query": q["question"], "on_corpus": False, "gold": []}
-                      for q in fiction["questions"]]
-        note = {"corpus_size": hydrogen["corpus_size"], "questions_from": str(HYDROGEN_QUESTIONS)}
-    elif corpus == "fiction":
-        if fiction is None:
-            raise SystemExit(f"no question set at {FICTION_QUESTIONS}; run make_fiction_questions.py first")
-        items = [{"kind": q["kind"], "query": q["question"], "on_corpus": q["on_corpus"], "gold": q["gold"]}
-                 for q in fiction["questions"]]
-        if hydrogen is not None:
-            items += [{"kind": "other_corpus", "query": q["question"], "on_corpus": False, "gold": []}
-                      for q in hydrogen["questions"]]
-        note = {"corpus_dir": fiction.get("corpus_dir"), "questions_from": str(FICTION_QUESTIONS)}
-    else:
-        raise SystemExit(f"unknown corpus '{corpus}'; expected 'hydrogen' or 'fiction'")
-
+    items = [{"kind": q["kind"], "query": q["question"], "on_corpus": q.get("on_corpus", True),
+              "gold": q["gold"]}
+             for q in own["questions"]]
+    for name, path in CORPUS_QUESTIONS.items():
+        if name == corpus:
+            continue
+        other = load_json(path)
+        if other is None:
+            continue
+        items += [{"kind": f"other_corpus:{name}", "query": q["question"], "on_corpus": False, "gold": []}
+                  for q in other["questions"]]
     items += [{"kind": kind, "query": probe, "on_corpus": False, "gold": []} for kind, probe in PROBES]
+
+    note = {"questions_from": str(own_path), "description": own.get("corpus"),
+            "corpus_size": own.get("corpus_size"), "corpus_dir": own.get("corpus_dir")}
     return items, note
 
 

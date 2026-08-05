@@ -263,11 +263,15 @@ two different consumers:
 
 `score_sharpness` ships as the shape reading, with no consumer in the retrieval path, because the
 shape's own consumer (adaptive `k`) has not been measured yet. The level has no implementation at all
-yet; it is one `max()` over the vector arm's candidates, and what it needs is not code but the
-per-collection home the "corpus-dependent, do not ship as a tuned constant" note below already
-specifies.
+yet; it is one `max()` over the vector arm's candidates, compared against the constant the arXiv
+section below settles on.
 
-#### Verdict, 2026-08-05: the level ships per collection, and only as a coarse signal
+#### Verdict, 2026-08-05: the level ships as one global constant, and only as a coarse signal
+
+*(This heading said "per collection" until a third corpus was measured later the same day. The two
+subsections below are in the order they were written — the fiction result, then the arXiv result that
+overturned its conclusion while leaving its evidence intact. Read both; the second does not repeat the
+first.)*
 
 A second corpus was built to settle the one thing the hydrogen numbers could not — whether an absolute cut
 is a fact about retrieval or a fact about that collection. 19 Optimalverse stories, 2.2M characters, as far
@@ -278,8 +282,9 @@ full numbers in `investigations/retrieval/`; the answer is in two parts.
 0.352–0.804 on fiction, medians 0.670 against 0.519. The 0.45 cut that rejected *none* of 99 hydrogen
 questions rejects **24 of 88** fiction ones. Shipping it globally would have marked 27% of answerable
 questions on a narrative corpus as ungrounded — a confident wrong answer, which is worse than the silent
-failure it was meant to fix. So this is a per-collection setting, and it belongs with the scopes work in
-brief 13 rather than in a global default.
+failure it was meant to fix. **This read as making it a per-collection setting** — see the arXiv section
+below, where a third corpus shows the right conclusion is a *different* global constant rather than a
+per-collection one.
 
 **The signal detects the coarse case and little else.** Against negatives from a different field entirely it
 is essentially perfect, and this is now measured in both directions rather than assumed symmetric: 0.9998
@@ -290,36 +295,74 @@ negatives — questions written from Optimalverse stories deliberately held out
 of the index, same universe and site and generator — it is 0.742, and the distributions overlap so widely
 that no cut preserving the on-corpus questions rejects any of them.
 
-**"Per collection" means calibrated, not configured (2026-08-05).** The verdict above leaves open what a
-per-collection number is *made of*, and the obvious reading — a setting in `config.py` — is the wrong one.
-The value cannot be derived from anything a user knows, so a knob hands them a calibration problem dressed
-as a preference, and a wrong value fails silently in the direction that hurts: an answerable question marked
-ungrounded reads as a confident refusal.
+**A third corpus settles it: one constant near 0.40, and the per-collection machinery is not needed
+(2026-08-05).** This section was written twice in one day, and the first version is worth stating because
+the correction is the useful part.
 
-Calibrate it at index time instead. The asymmetry that makes this possible: on-corpus questions do not exist
-when a collection is indexed, but *off-corpus* queries are corpus-independent by definition — a probe about
-sourdough is off-corpus for every collection anyone would build. So run a fixed probe set against the new
-index and put the cut at the top of the resulting distribution. Measured on both corpora, against the fixed
-0.45 this section proposed:
+The first attempt reasoned that "per collection" must mean *calibrated*, not configured — a threshold
+cannot be derived from anything a user knows, so a knob hands them a calibration problem dressed as a
+preference. Calibrate it at index time from a fixed off-corpus probe set, the argument went, since a probe
+about sourdough is off-corpus for every collection anyone would build. Measured against the fixed 0.45,
+p75-of-probes cut fiction's losses from 24/88 to 3/88 at no cost on hydrogen. Two corpora agreed.
 
-| estimator | hydrogen: on-corpus lost | fiction: on-corpus lost |
+**A third corpus — 1268 arXiv AI/ML abstracts — refuted it.** On arXiv, p75-of-probes cuts at 0.282 and
+lets **72.8%** of off-corpus negatives through. Scored on the worst case across all three, which is what a
+shipped default has to survive:
+
+| estimator | worst on-corpus lost | worst negatives missed |
 |---|---|---|
-| fixed 0.45 | 0 / 99 (0.0%) | 24 / 88 (27.3%) |
-| **p75 of the probes** | **0 / 99 (0.0%)** | **3 / 88 (3.4%)** |
+| p75 of probes | 3.4% | **72.8%** |
+| p90 of probes | 6.8% | 14.6% |
+| fixed 0.45 | **27.3%** | 6.9% |
+| **fixed 0.40** | **6.8%** | **15.3%** |
 
-Far negatives are still caught at 112/117 and 99/99, so the gain does not come out of the detection the
-signal exists for. Anchoring on the probe *maximum* is the trap — the top probe is an outlier, and any
-estimator resting on it inherits one query's bad luck. Prototype and full estimator comparison in
-`investigations/retrieval/calibrate.py`; it needs no labelled questions, which is what makes it a shape the
-implementation could actually take. Two caveats travel with it: the probe set is 12 queries, so a quantile
-of it is noisy, and the estimator was chosen on the same two corpora it is scored on — a third collection
-is what would test it.
+A fixed 0.40 matches the best probe-calibrated estimator on both axes, so the calibration machinery buys
+nothing. The first result was an artifact of comparing against 0.45 — a constant chosen on hydrogen alone,
+and so the wrong incumbent to beat.
+
+**And the reason is the more useful finding.** arXiv AI is the *near* well: same genre, same register, same
+length distribution as the hydrogen abstracts, differing only in topic. It separates at AUROC 0.999 —
+identical to fiction, the far well — and the two negative distributions lie on top of each other. So the
+signal reads *topical match*, not register. The standing objection to any absolute cut was that the scale
+of "close" belongs to the collection; a score that measures whether the query is about what the corpus is
+about does not have much of a per-collection scale to begin with. That is why one constant works, and it is
+why the second attempt was solving a problem smaller than it looked.
+
+**What to ship:** one constant, near 0.40, global rather than per-collection, with the tradeoff curve
+recorded in `investigations/retrieval/README.md` so the operating point can be moved knowingly (0.35 loses
+nothing and misses 23.7%; 0.45 misses 6.9% and loses 27.3%). The same caveat that killed p75 applies here
+and is stated in advance: three corpora chose 0.40, and a fourth could unseat it. A constant makes a weaker
+claim than a mechanism, so it has less to be wrong about — and it removes this brief's dependency on the
+scopes work in brief 13, which the per-collection version would have needed.
+
+**The constant belongs to the embedder, and the embedder is scheduled to change.** Every number in this
+section is a cosine similarity under `multi-qa-mpnet-base-cos-v1`, the currently configured
+`qa_embedding_model`. The nomic-embed v1.5 migration in brief 06 replaces it with a different model, and a
+different model puts its similarities on a different scale. That alone invalidates 0.40; nothing subtler is
+needed to make the point.
+
+(Asymmetric retrieval is *not* the reason, and it is worth saying so because the phrase invites the
+mistake. A QA-type model like the current mpnet is already asymmetric in task — trained on question↔passage
+pairs, which is exactly the "map a question near its answer" property this brief has been leaning on
+throughout. What nomic changes is the *mechanism*: the asymmetry moves into explicit `search_query:` /
+`search_document:` prefixes over shared weights, rather than being baked into what the weights were trained
+for. Brief 06 rates that lift "small" and "marginal in context". So the migration is a scale change to
+re-measure, and separately a new way to get retrieval quietly wrong — a caller that forgets the prefix gets
+degraded embeddings with no error, which is brief 06's known Hindsight limitation.)
+
+So the constant carries an explicit dependency: **re-measure it when the embedder changes, before shipping
+the new embedder.** The cost of doing so is now small and that is the point of having built the harness —
+four indexed corpora, one `sharpness.py <corpus>` run each, and the comparison table falls out. What must
+not happen is the embedder swap landing while a stale 0.40 stays in the config, since the failure mode is
+silent: a threshold in the wrong place does not error, it just starts calling answerable questions
+ungrounded (or stops catching off-corpus ones), and nothing in the app would report that.
 
 **That is still enough for the consumer this brief was blocked on.** Brief 10's grounding marker exists
 because "what is 2 + 2?" returned electrolysis documents and read as grounding. That is the far case. The
 marker does not need to know that one paper is missing; it needs to know the conversation left the corpus,
-and that is measured at 1.000. It ships per collection, described as coarse, and the docs should not claim
-it can tell a missing document from a present one.
+and that is measured at 1.000 — and at 0.999 against a corpus in the same genre, which is the case that
+would have been easy to assume was harder. It ships as one constant near 0.40, described as coarse, and the
+docs should not claim it can tell a missing document from a present one.
 
 **What is refuted rather than deferred:** the `min_p`-style *shape* reading this section was built around.
 It is anti-correlated with the on-corpus/off-corpus distinction on both corpora — an off-corpus query reads
