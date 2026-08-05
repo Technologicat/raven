@@ -450,13 +450,36 @@ where it hits 100% and the first-stage ranking has contributed nothing — the r
 the work on an unranked pile. So the curve is informative only while `k` is a small fraction of the
 collection.
 
-That rules two of the four corpora out of this particular measurement, which is worth knowing before the
-runs rather than after:
+**The denominator is the chunk count, not the document count** — Raven's retrieval is chunk-level
+throughout, so `k` counts chunks and a corpus of few long documents is not a small collection. Fiction's 19
+documents hold 2977 chunks (measured from the live index, not estimated), which makes it one of the *larger*
+collections here:
 
-- **hydrogen** (11974 documents) and **arxiv-ai** (1268) — k=200 is 1.7% and 16% of the corpus. Both fine.
-- **banichuk** (541) — k=200 is 37%. Borderline; read with caution.
-- **fiction** (19 documents) — k=20 already exceeds the document count. Degenerate for document-level
-  recall, and its flattering 95% is partly that. It stays useful for *chunk*-level questions, not for this.
+| corpus | documents | chunks | k=200 as a share |
+|---|---|---|---|
+| hydrogen | 11974 | ~36000 | 0.6% |
+| arxiv-ai | 1268 | ~3070 | 6.5% |
+| fiction | 19 | **2977** | 6.7% |
+| banichuk | 541 | 541 | **37%** |
+
+So only **banichuk** is compromised, and for a reason specific to it: its records are sub-chunk-size, so
+chunks and documents coincide and there is no multiplier. Fiction, which the document count made look
+degenerate, is fine — comparable to arxiv-ai. (A bytes-divided-by-stride estimate gets banichuk wrong for
+the same reason, predicting 229; chunks never span documents, so the floor is one per document.)
+
+**And that table contains a result the fulltext experiment was going to be needed for.** On-corpus median
+similarity is *monotonic in chunk count* across all four — 541 → 0.395, 2977 → 0.519, 3070 → 0.549,
+36000 → 0.670 — and the decisive pair is fiction against arxiv-ai. They sit next to each other in chunk
+count (2977 vs ~3070) and next to each other in similarity (0.519 vs 0.549), while differing completely in
+document shape: 19 long narrative documents against 1268 short scientific ones. If *text per chunk* drove
+the score, those two should differ; they barely do. If *number of chunks searched* drove it — a best-of-N
+effect, needing no embedding story at all — they should match, and they do.
+
+That is four points and a confound (genre still varies with everything else), so it is evidence rather than
+settlement. But it shifts the prior substantially toward best-of-N, and it sharpens the fulltext
+prediction into something crisper: indexing the same 1268 papers as fulltext takes them from ~3070 chunks
+to perhaps 60000, so best-of-N predicts on-corpus similarity **rising to around hydrogen's 0.670**, while
+text-per-chunk predicts it barely moving. One run, and the two hypotheses are far apart.
 
 The saturation point is itself the number worth having, and not only as a cost bound: **it is where the
 cheap first stage stops earning its keep.** If recall@200 ≫ recall@20 on hydrogen, the ranking is weak and
