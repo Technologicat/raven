@@ -25,6 +25,7 @@ import atexit
 from collections import defaultdict
 import concurrent.futures
 import copy
+import functools
 import json
 import operator
 import os
@@ -465,8 +466,11 @@ class HybridIR:
     def get_indexing_progress_text(self) -> str:
         """Return the current human-readable indexing progress message, or `""` if not indexing.
 
-        Per-document during commit: `"[14 / 186] | 2106.01345v2.bib | elapsed 6s, ETA 01:14, total 01:20"`
-        (the trailing chunk is `unpythonic.ETAEstimator.formatted_eta`). The "INDEXING" verb sits in the
+        During commit: `"[14 / 186] | 2106.01345v2.bib | tokenizing 240 / 288 | elapsed 6s, ETA 01:14,
+        total 01:20"` (the trailing part is `unpythonic.ETAEstimator.formatted_eta`). The middle field says
+        where the *current* document is, and updates per chunk — without it a large document leaves this
+        string unchanged for tens of seconds, which reads as a hung job rather than a slow one. It is absent
+        for work that has no inner steps to report, such as a deletion. The "INDEXING" verb sits in the
         indicator's static label, so the progress text doesn't repeat it. During the rebuild + datastore
         save tail: `"Saving…"`. Outside of commit: `""`.
 
@@ -474,6 +478,20 @@ class HybridIR:
         The underlying string is set from the worker thread that runs `commit()`; GIL-atomic, no lock.
         """
         return self._indexing_progress_text
+
+    def _set_indexing_progress(self, edit_num: int, n_edits: int, document_id: str,
+                               eta_estimator: ETAEstimator, detail: str = "") -> None:
+        """Render one line of indexing progress into `get_indexing_progress_text`'s value.
+
+        The commit loop binds everything but `detail` and hands the result to the per-document work, so that
+        a long document reports where it is inside itself rather than going quiet until it finishes. The ETA
+        is re-read on every call, which is what keeps its `elapsed` live between documents.
+        """
+        fields = [f"[{edit_num} / {n_edits}]", document_id]
+        if detail:
+            fields.append(detail)
+        fields.append(eta_estimator.formatted_eta)
+        self._indexing_progress_text = " | ".join(fields)
 
     def set_indexing_callbacks(self,
                                *,
@@ -718,7 +736,14 @@ class HybridIR:
                 break
             # Both add and delete data shapes carry `document_id` (made uniform when the edit was queued).
             document_id = data["document_id"] if isinstance(data, dict) else "?"
-            self._indexing_progress_text = f"[{edit_num} / {len(pending_edits)}] | {document_id} | {eta_estimator.formatted_eta}"
+            # Passed into the slow part below so it can report where it is *within* one document. A
+            # per-document update was fine while a document was a 1.3 kB abstract and is not once it is a
+            # 216 kB story: that one takes 23 s to prepare, of which 97% is tokenizing chunk by chunk, so
+            # the indicator would sit unchanged for half a minute at a stretch and read as hung. Re-rendering
+            # the line per chunk also makes `elapsed` in the ETA tick live, for free.
+            report_progress = functools.partial(self._set_indexing_progress,
+                                                edit_num, len(pending_edits), document_id, eta_estimator)
+            report_progress()
             logger.info(f"HybridIR.commit: Applying change {edit_num} out of {len(pending_edits)}; {eta_estimator.formatted_eta}")
             try:
                 if edit_kind == "add":
@@ -727,7 +752,7 @@ class HybridIR:
                     logger.info(f"HybridIR.commit: Adding document '{document_id}'.")
 
                     # The slow part runs *outside* `datastore_lock`. Pure: returns a new dict; no self-state mutation.
-                    prepared = self._prepare_document_for_indexing(doc)
+                    prepared = self._prepare_document_for_indexing(doc, on_progress=report_progress)
 
                     # Brief lock for the actual mutation. The dup check is here too so the check + insert is atomic.
                     with self.datastore_lock:
@@ -830,7 +855,13 @@ class HybridIR:
                 return None, None
 
     # TODO: support other media such as images (semantic embedding via `clip-ViT-L-14`, available in `sentence_transformers`; and keyword extraction by CLIP/Deepbooru)
-    def _prepare_document_for_indexing(self, doc: Dict) -> Dict:
+    def _prepare_document_for_indexing(self, doc: Dict, on_progress: Optional[Callable[[str], None]] = None) -> Dict:
+        """Chunk, tokenize and embed one document. Returns the new fields; does not mutate `self`.
+
+        `on_progress`: Called with a short description of where this document is — `"tokenizing 240 / 288"`
+                       — often enough to drive a live indicator. See `_set_indexing_progress`, which is what
+                       the commit loop passes in.
+        """
         document_id = doc["document_id"]
         text = doc["text"]
 
@@ -840,14 +871,23 @@ class HybridIR:
         document_chunks = common_utils.chunkify_text(text, chunk_size=self.chunk_size, overlap=self.overlap, extra=0.4)  # -> [{"text": ..., "chunk_id": ..., "offset": ...}, ...]
 
         # Tokenizing each chunk enables keyword search. These are used by the keyword index (bm25s).
-        # NOTE: This can be slow, since we use spaCy's neural model for lemmatization.
+        # NOTE: This is the slow part, by a wide margin — one spaCy roundtrip per chunk, and spaCy's neural
+        # model does the lemmatization. Measured on a 216 kB document (288 chunks): 22.5 s of the 23.2 s
+        # total, at 78 ms per chunk. Hence the per-chunk progress report; nothing else here needs one.
         logger.info(f"HybridIR._prepare_document_for_indexing: tokenizing document '{document_id}'.")
-        tokenized_chunks = [self._tokenize(chunk["text"]) for chunk in document_chunks]
+        tokenized_chunks = []
+        for chunk_num, chunk in enumerate(document_chunks, start=1):
+            if on_progress is not None:
+                on_progress(f"tokenizing {chunk_num} / {len(document_chunks)}")
+            tokenized_chunks.append(self._tokenize(chunk["text"]))
 
         # Embedding each chunk enables semantic search. These are used by the vector index (chromadb).
-        # NOTE: This can be slow, depending on the embedding model, and whether GPU acceleration is available.
+        # One batched call for the whole document, and it does not need breaking up for progress: on the same
+        # measurement it was 3% of the work (0.7 s for 288 chunks), because the embedder runs on the GPU.
         logger.info(f"HybridIR._prepare_document_for_indexing: computing semantic embeddings for document '{document_id}'.")
-        document_embeddings = self.embedder.encode([chunk["text"] for chunk in document_chunks])  # SLOW; embeddings for each chunk
+        if on_progress is not None:
+            on_progress(f"embedding {len(document_chunks)} chunks")
+        document_embeddings = self.embedder.encode([chunk["text"] for chunk in document_chunks])
         document_embeddings = document_embeddings.tolist()  # for JSON serialization
 
         prepdata = {"chunks": document_chunks,  # [{"text": ..., "chunk_id": ..., "offset": ...}, ...]

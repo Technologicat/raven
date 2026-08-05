@@ -382,6 +382,70 @@ def _pending_kinds(fake):
     return [kind for (kind, _data) in fake._pending_edits]
 
 
+# ---------------------------------------------------------------------------
+# Indexing progress reporting — unit-level, no real index needed
+# ---------------------------------------------------------------------------
+
+def _fake_ir_for_prepare(chunk_size=1000, overlap=250):
+    """A minimal stand-in exposing just what `_prepare_document_for_indexing` touches.
+
+    Avoids constructing a real `HybridIR`, which would load an embedding model and reach the server for
+    spaCy tokenization. Both slow steps are stubbed; what is under test is when progress gets reported.
+    """
+    fake = types.SimpleNamespace()
+    fake.chunk_size = chunk_size
+    fake.overlap = overlap
+    fake._tokenize = lambda text: text.lower().split()
+    fake.embedder = types.SimpleNamespace(encode=lambda texts: _FakeEmbeddings(len(texts)))
+    return fake
+
+
+class _FakeEmbeddings:
+    def __init__(self, n):
+        self.n = n
+
+    def tolist(self):
+        return [[0.0] for _ in range(self.n)]
+
+
+def test_indexing_progress_is_reported_per_chunk():
+    # A per-document update was fine when a document was a 1.3 kB abstract. On a 216 kB story it leaves the
+    # indicator unchanged for ~23 s, of which 97% is tokenizing chunk by chunk, and a frozen indicator reads
+    # as a hung job rather than a slow one — the user cannot tell the difference.
+    fake = _fake_ir_for_prepare()
+    text = "word " * 20000  # ~100k characters, so comfortably many chunks
+    seen = []
+    prepared = hybridir.HybridIR._prepare_document_for_indexing(
+        fake, {"document_id": "big.txt", "text": text}, on_progress=seen.append)
+
+    n_chunks = len(prepared["chunks"])
+    assert n_chunks > 10  # guard: if chunking changes so this is one chunk, the test stops testing
+    tokenizing = [s for s in seen if s.startswith("tokenizing")]
+    assert len(tokenizing) == n_chunks
+    assert tokenizing[0] == f"tokenizing 1 / {n_chunks}"
+    assert tokenizing[-1] == f"tokenizing {n_chunks} / {n_chunks}"
+    assert seen[-1] == f"embedding {n_chunks} chunks"  # one report, not per chunk: it is 3% of the work
+
+
+def test_preparing_a_document_without_a_progress_callback_still_works():
+    # The callback is optional, and the full index rebuild path does not pass one.
+    fake = _fake_ir_for_prepare()
+    prepared = hybridir.HybridIR._prepare_document_for_indexing(
+        fake, {"document_id": "small.txt", "text": "word " * 500})
+    assert prepared["chunks"] and prepared["tokens"] and prepared["embeddings"]
+
+
+def test_indexing_progress_line_omits_an_empty_detail():
+    # A deletion has no inner steps to report, and an empty field would show as a stray separator.
+    fake = types.SimpleNamespace(_indexing_progress_text="")
+    eta = types.SimpleNamespace(formatted_eta="elapsed 6s, ETA 01:14, total 01:20")
+    hybridir.HybridIR._set_indexing_progress(fake, 14, 186, "paper.bib", eta)
+    assert fake._indexing_progress_text == "[14 / 186] | paper.bib | elapsed 6s, ETA 01:14, total 01:20"
+    hybridir.HybridIR._set_indexing_progress(fake, 14, 186, "paper.bib", eta, "tokenizing 240 / 288")
+    assert fake._indexing_progress_text == ("[14 / 186] | paper.bib | tokenizing 240 / 288 | "
+                                            "elapsed 6s, ETA 01:14, total 01:20")
+
+
 def test_pend_edit_new_file_add_then_modify_stays_single_add():
     # A brand-new file: watchdog fires create (-> add) then modify (-> update). The update must not queue a
     # delete for a document that was never indexed, or the commit no-ops it with a KeyError and the change count
