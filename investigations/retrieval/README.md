@@ -139,18 +139,31 @@ those questions, which key on the filename — and it would have done so silentl
 
 **The decision this forces**, because it cannot be dodged: the fulltext and abstract corpora must hold the
 *same* document set for the comparison to be controlled, and that matters more here than it would have
-yesterday, since chunk count is now the leading explanation for the similarity level. Three options:
+yesterday, since chunk count is now the leading explanation for the similarity level. Four options:
 
-1. **Restrict both sides to the 1025 exact matches**, re-indexing the abstracts as a 1025-document corpus
-   too. Genuinely controlled, costs 19% of the corpus, and 1025 is ample. **Recommended.**
+1. Restrict both sides to the 1025 exact matches, re-indexing the abstracts as a 1025-document corpus too.
+   Controlled, costs 19% of the corpus.
 2. Use all 1268 fulltexts by substituting newer versions. Breaks 243 gold labels; those questions become
    unscorable, which is the same loss wearing a disguise.
 3. Re-pin the `.bib` to the newest versions and regenerate the question set. Loses the controlled
    comparison entirely, since the abstract-side results would then come from a different corpus than the
    ones already measured.
+4. **Download the 243 missing pinned versions.** We know exactly which they are — the `.bib` names them —
+   and `raven-arxiv-download` honours a versioned identifier rather than silently fetching the latest.
+   **Recommended:** it gives the full 1268 at exact ID match, so the question set and every gold label
+   transfer unchanged and no corpus is subsetted.
 
-Option 1 also has the tidiest failure mode: the excluded 243 are *listed*, so the subsetting is auditable
-rather than an unexplained count.
+Option 4 was verified rather than assumed, since the tool canonicalizes filenames in a way that *looks*
+like it might discard the requested version: `download.py` strips the suffix and re-appends one, and
+`raven-arxiv2bib`'s docstring warns about a related trap. It does not. The check: the `.bib` pins
+`2410.07866v5`; requesting `2410.07866v1` downloaded v1. The mechanism is that the requested ID goes
+straight into `id_list`, which arXiv's manual documents as version-honouring, and the substituted version
+is read back out of the *response*.
+
+Cost is about 12 minutes of rate-limited fetching plus transfer. One build detail: downloaded files are
+named `Authors (Year) - Title - id.pdf`, unlike whatever convention the existing PDFs follow, so the
+corpus build should canonicalize filenames to the document ID — `raven-arxiv2id` reads the ID out of any
+filename shape, but the *indexed* `document_id` is the filename and has to match the gold labels.
 
 Two things to expect, worth writing down before it is run. On-corpus similarity should *rise*, since a
 question's answer is likely stated somewhere in a full paper and only gestured at in its abstract — which
