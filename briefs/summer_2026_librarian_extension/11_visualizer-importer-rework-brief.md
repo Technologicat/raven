@@ -53,6 +53,42 @@ Bundled changes to the import pipeline (`importer.py` / `raven-importer`):
 3. **Cosine-to-medoid outlier assignment**: HDBSCAN noise points assigned to the cluster whose medoid has highest cosine similarity, instead of leaving them unassigned.
 4. **Procrustes alignment**: When adding new papers to an existing dataset, re-embed the full combined corpus, then use SVD on correspondence points (papers present in both old and new embeddings) to find the optimal rotation matrix R. Apply R to align the new embedding with the old one. Preserves spatial memory while allowing new clusters to appear. Side benefit: novelty detection (new papers far from existing clusters may indicate field-expanding work).
 
+5. **Cluster once, in high-D — the clusters the user sees are currently computed in 2D, and that is a defect.**
+   Added 2026-08-05. The pipeline runs HDBSCAN twice, and the run that produces the visible answer is the
+   wrong one:
+
+   - `cluster_highdim_semantic_vectors` (importer.py) fits HDBSCAN with `metric="cosine"` on the
+     high-dimensional embeddings — but **discards its labels**. They are used only to stratify a sample of
+     up to 20 points per cluster, which then trains the dimension reduction. Only `unique_vs` and a cluster
+     *count* come back.
+   - `cluster_lowdim_data` then fits HDBSCAN again with `metric="euclidean"` on the 2D output, and *those*
+     labels become `entry.cluster_id` — what the visualizer colours, labels, and builds word clouds from.
+
+   So cluster membership is decided after the projection, which is exactly where the information needed to
+   decide it has been destroyed. t-SNE and UMAP preserve local neighbourhoods and are explicit that
+   inter-cluster distances and densities in the output are not faithful; crowding forces genuinely separate
+   high-D groups to overlap, and can split one group across the plane. Clustering that output measures the
+   projection as much as the corpus. The high-D fit, which does have the geometry to answer the question,
+   is already being computed and then thrown away.
+
+   The fix in principle is to keep the high-D labels and let the 2D map be presentation only. Two things
+   make it more than a re-wiring, and both need settling before it is scheduled:
+
+   - **The high-D fit currently runs on a sample** (`max_n=10000`, random beyond that, because HDBSCAN
+     exhausts 32 GB at ~50k). Labels for the *whole* dataset need either a fit over everything, or an
+     assignment step for the unsampled remainder — which is item 3's cosine-to-medoid machinery, so the
+     two items compose rather than compete.
+   - **The parameters are not transferable.** The high-D fit uses `min_cluster_size=5, min_samples=1`
+     chosen to seed the projection; the 2D fit uses `10` and `2` chosen to look right on a map. Promoting
+     the high-D labels to visible output means re-tuning against what a reader should see, not against
+     what trains t-SNE well.
+
+   Also note this interacts with item 2: PCA to ~50 dimensions before the projection would give a *third*
+   space to cluster in, and a middle one is arguably the right home — enough dimensions to keep the
+   geometry, few enough for HDBSCAN to scale past the sampling limit. Worth measuring rather than assuming;
+   the bibliography below is the instrument, since "is this cluster about one thing" is exactly the
+   judgement it supports.
+
 ## How to tell whether any of this made things better
 
 Every item above changes where documents land on the map, and none of them has an obvious metric. Cluster
