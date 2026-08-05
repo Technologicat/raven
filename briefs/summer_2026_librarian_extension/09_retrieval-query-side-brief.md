@@ -267,6 +267,44 @@ yet; it is one `max()` over the vector arm's candidates, and what it needs is no
 per-collection home the "corpus-dependent, do not ship as a tuned constant" note below already
 specifies.
 
+#### Verdict, 2026-08-05: the level ships per collection, and only as a coarse signal
+
+A second corpus was built to settle the one thing the hydrogen numbers could not — whether an absolute cut
+is a fact about retrieval or a fact about that collection. 19 Optimalverse stories, 2.2M characters, as far
+from scientific abstracts as a document set gets while remaining something someone might index. Method and
+full numbers in `investigations/retrieval/`; the answer is in two parts.
+
+**The constant does not travel.** On-corpus best vector similarity runs 0.460–0.823 on hydrogen and
+0.352–0.804 on fiction, medians 0.670 against 0.519. The 0.45 cut that rejected *none* of 99 hydrogen
+questions rejects **24 of 88** fiction ones. Shipping it globally would have marked 27% of answerable
+questions on a narrative corpus as ungrounded — a confident wrong answer, which is worse than the silent
+failure it was meant to fix. So this is a per-collection setting, and it belongs with the scopes work in
+brief 13 rather than in a global default.
+
+**The signal detects the coarse case and little else.** Against negatives from a different field entirely it
+is essentially perfect (AUROC 1.000 both directions, each corpus's questions serving as the other's
+negatives). Against *adjacent* negatives — questions written from Optimalverse stories deliberately held out
+of the index, same universe and site and generator — it is 0.742, and the distributions overlap so widely
+that no cut preserving the on-corpus questions rejects any of them.
+
+**That is still enough for the consumer this brief was blocked on.** Brief 10's grounding marker exists
+because "what is 2 + 2?" returned electrolysis documents and read as grounding. That is the far case. The
+marker does not need to know that one paper is missing; it needs to know the conversation left the corpus,
+and that is measured at 1.000. It ships per collection, described as coarse, and the docs should not claim
+it can tell a missing document from a present one.
+
+**What is refuted rather than deferred:** the `min_p`-style *shape* reading this section was built around.
+It is anti-correlated with the on-corpus/off-corpus distinction on both corpora — an off-corpus query reads
+*sharper*, because with nothing genuinely matching, an accidental best hit stands clear of an already-low
+field. `score_sharpness` is kept, with no consumer in the retrieval path, because it is a correct
+implementation of a reading that turns out to answer a different question (see below).
+
+**And a finding that constrains any threshold, not just this one:** six phrasings of one verified question,
+all retrieving the gold document at rank 1, span 0.229 of signal — wider than the gap between the two
+corpora. The most conversational phrasing ("I remember one of them going to Switzerland — which was that?")
+scores lowest, at 0.370. So the signal moves more with wording than with whether the corpus can answer,
+which caps how sharp any cut can usefully be and is an argument for reporting a band rather than a verdict.
+
 #### What consumes the signal
 
 A signal with no consumer is a statistic. The through-line for choosing among these: **the shape of a
@@ -536,6 +574,41 @@ The expansion is a pure function of a query and a result set, so it can be proto
 into the live retrieval path is a separate decision that should follow an **in-conversation** measurement
 taken *after* the RAG tool surface lands — because the tool changes what a weak pass 1 costs, and
 therefore changes what automatic expansion is worth. The standalone number cannot see that interaction.
+
+## Keep the levers; retarget them (Juha, 2026-08-05)
+
+**Decision: retrieval quality goes back to the drawing board, and none of the machinery is reverted.** Both
+levers were built, measured, and found not to do the job they were specified for. Neither is wrong code, and
+both answer questions worth answering — just not the ones that motivated them. Reverting would spend the
+build cost twice, since the next attempt needs the same parts.
+
+What exists, and what it is now good for:
+
+- **`score_sharpness`** — reads the shape of a score distribution, scale-free, no fitted constant. Refuted as
+  an on-corpus/off-corpus detector, where it points the wrong way. It is the best *available* predictor of
+  whether a query that the corpus can answer will land well (`vector best/mean` and the sharpness family
+  lead measurement A on both corpora), which is what **adaptive `k`** wants — spend context on five results
+  when the head is sharp and on fifteen when it is not. That consumer is unbuilt and unmeasured.
+- **`split_into_subqueries` and the batched multi-query path** — the split, the per-query retrieval and the
+  single flat fusion all measured correct; only equal-weight fusion over every sentence is wrong. Its most
+  likely use is no longer decomposition-for-recall but **per-subquery gating** once there is a signal worth
+  gating on, and the level is not it at the sentence granularity.
+- **`query(return_extra_info=True).per_query`** — raw candidate scores before the thresholds. This is the
+  part with no plausible replacement: any future scoring work needs the scores that fusion discards, and
+  they now survive to the fusion boundary.
+
+**What the drawing board has to account for**, from the fiction measurements — these are properties of the
+problem rather than of any lever:
+
+- The embedder bridges concept to text when the text is **expository** and fails when it is **dramatized**.
+  A query describing a scene misses the scene and hits stories that discuss the topic abstractly.
+- **Document-level questions** ("which of my documents is the one about X") are unanswerable by chunk
+  retrieval unless the document happens to *state* the property in text. See `TODO.md`.
+- **Phrasing moves the scores more than the corpus does**, so anything read off an absolute level is
+  softer than it looks.
+
+Which together point away from the query side: the remaining gaps want something that has *read* the
+corpus — the RAG tool surface, or a document-level summary layer — rather than a better query string.
 
 ## What reranking is still for, after the levers
 

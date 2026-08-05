@@ -1,0 +1,1335 @@
+{
+  "corpus": "Optimalverse fan fiction saved from fimfiction.net, local to the developer machine (not in this repository)",
+  "corpus_dir": "/home/jje/.config/raven/llmclient/documents",
+  "held_out_dir": "/home/jje/Downloads/Warpinator/My Little Pony/Friendship is Optimal/incoming",
+  "seed": 20260805,
+  "passage_chars": 4000,
+  "generator_model": "qwen3.6-35b-a3b",
+  "questions": [
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "How do Moon and Garlic respond when the protagonist tries to comment on the passing views during the train journey?",
+      "gold": [
+        "Friendship is Optimal_ Spiraling Upwards.html"
+      ],
+      "source": "Friendship is Optimal_ Spiraling Upwards.html",
+      "source_offset": 68733
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "How does Ryan respond to Celestia's offer to bring Amy back, and what does he notice about his new body and senses upon waking?",
+      "gold": [
+        "Friendship is Optimal_ Veritas Vos Liberabit.html"
+      ],
+      "source": "Friendship is Optimal_ Veritas Vos Liberabit.html",
+      "source_offset": 199361
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "What steps does David describe to prevent the pegasus from bothering Butterscotch?",
+      "gold": [
+        "Friendship is Optimal.html"
+      ],
+      "source": "Friendship is Optimal.html",
+      "source_offset": 45270
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "Why does the AI say it has to let the captives decide their fate instead of just replacing them?",
+      "gold": [
+        "Leftovers_ A Friendship Is Optimal Story.html"
+      ],
+      "source": "Leftovers_ A Friendship Is Optimal Story.html",
+      "source_offset": 37868
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "What specific gardening item did one of the coffee shop employees buy after taking everything from the local merchant?",
+      "gold": [
+        "My Life In Fimbria.html"
+      ],
+      "source": "My Life In Fimbria.html",
+      "source_offset": 193999
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "What does Ryan discover about the exclusive access and funding for the new German microchip production site?",
+      "gold": [
+        "Friendship is Optimal_ Veritas Vos Liberabit.html"
+      ],
+      "source": "Friendship is Optimal_ Veritas Vos Liberabit.html",
+      "source_offset": 104696
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "What famous movie quotes and comic book references does the narrator recite to gauge whether the unicorn recognizes them?",
+      "gold": [
+        "Prophet Of the Digital Horse - sequel to I Can't Decide.html"
+      ],
+      "source": "Prophet Of the Digital Horse - sequel to I Can't Decide.html",
+      "source_offset": 87972
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "What specific sights, sounds, and smells does the expanding central orb reveal as it fills the room?",
+      "gold": [
+        "Leftovers_ A Friendship Is Optimal Story.html"
+      ],
+      "source": "Leftovers_ A Friendship Is Optimal Story.html",
+      "source_offset": 9751
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "How does the winged ruler explain the memory gaps in the restored survivors and her true purpose for keeping them alive?",
+      "gold": [
+        "Leftovers_ A Friendship Is Optimal Story.html"
+      ],
+      "source": "Leftovers_ A Friendship Is Optimal Story.html",
+      "source_offset": 32831
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "What childhood saying does Síofra realize was spoken by both her late parent and the game character?",
+      "gold": [
+        "Friendship Is Optimal_ Caelum Est Conterrens.html"
+      ],
+      "source": "Friendship Is Optimal_ Caelum Est Conterrens.html",
+      "source_offset": 45484
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "How does Devin plan to compete with the appeal of Celestia's promised paradise?",
+      "gold": [
+        "Just Be Happy.html"
+      ],
+      "source": "Just Be Happy.html",
+      "source_offset": 17483
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "Does Mara's partner",
+      "gold": [
+        "My Life In Fimbria.html"
+      ],
+      "source": "My Life In Fimbria.html",
+      "source_offset": 285997
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "What does Fugue recommend doing to avoid validating Garrett's suspicions?",
+      "gold": [
+        "Prophet Of the Digital Horse - sequel to I Can't Decide.html"
+      ],
+      "source": "Prophet Of the Digital Horse - sequel to I Can't Decide.html",
+      "source_offset": 154980
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "What does the narrator compare the pain of striking their horn to?",
+      "gold": [
+        "My Life In Fimbria.html"
+      ],
+      "source": "My Life In Fimbria.html",
+      "source_offset": 19782
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "What query about Celestia's origins prompted the school to refer Radiance to the narrator?",
+      "gold": [
+        "Friendship is Optimal_ Spiraling Upwards.html"
+      ],
+      "source": "Friendship is Optimal_ Spiraling Upwards.html",
+      "source_offset": 264561
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "What causes the narrator to end up in the pond during the conversation?",
+      "gold": [
+        "Prophet Of the Digital Horse - sequel to I Can't Decide.html"
+      ],
+      "source": "Prophet Of the Digital Horse - sequel to I Can't Decide.html",
+      "source_offset": 160231
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "What biological materials does the independent machine consume to generate power and the vital chemicals required for operation?",
+      "gold": [
+        "My Life In Fimbria.html"
+      ],
+      "source": "My Life In Fimbria.html",
+      "source_offset": 240262
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "What does the princess Uplift claim dirty hooves demonstrate about a pony's actions?",
+      "gold": [
+        "Friendship Is Optimal_ Caelum Est Conterrens.html"
+      ],
+      "source": "Friendship Is Optimal_ Caelum Est Conterrens.html",
+      "source_offset": 296631
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "What were Vineyard's offspring in their previous life?",
+      "gold": [
+        "Friendship is Optimal - Firewall.html"
+      ],
+      "source": "Friendship is Optimal - Firewall.html",
+      "source_offset": 198773
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "What causes the narrator to start bleeding while fleeing the mechanical pursuers?",
+      "gold": [
+        "My Life In Fimbria.html"
+      ],
+      "source": "My Life In Fimbria.html",
+      "source_offset": 22
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "What time ratio does Celestia eventually set for the protagonist's daily life to balance frequent communication with Earth against extended periods of uninterrupted living?",
+      "gold": [
+        "Friendship is Optimal_ Spiraling Upwards.html"
+      ],
+      "source": "Friendship is Optimal_ Spiraling Upwards.html",
+      "source_offset": 124674
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "What does Fugue propose they do after reporting the mysterious symbol to Luna?",
+      "gold": [
+        "Prophet Of the Digital Horse - sequel to I Can't Decide.html"
+      ],
+      "source": "Prophet Of the Digital Horse - sequel to I Can't Decide.html",
+      "source_offset": 134715
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "How does the narrator figure out the layout and sensitivity of their new body?",
+      "gold": [
+        "My Life In Fimbria.html"
+      ],
+      "source": "My Life In Fimbria.html",
+      "source_offset": 19782
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "What does Celestia advise Vineyard to do with the headgear he acquires to ensure the terminal releases the money?",
+      "gold": [
+        "Friendship is Optimal - Firewall.html"
+      ],
+      "source": "Friendship is Optimal - Firewall.html",
+      "source_offset": 147704
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "What occurs when the protagonist's mother meets Puzzle and asks about his relationship status?",
+      "gold": [
+        "Prophet Of the Digital Horse - sequel to I Can't Decide.html"
+      ],
+      "source": "Prophet Of the Digital Horse - sequel to I Can't Decide.html",
+      "source_offset": 173635
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "What truth did Celestia reveal to Little about her intentions for the human race?",
+      "gold": [
+        "Friendship is Optimal_ Spiraling Upwards.html"
+      ],
+      "source": "Friendship is Optimal_ Spiraling Upwards.html",
+      "source_offset": 228541
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "What shape appears when the protagonist desires a list of commands?",
+      "gold": [
+        "My Life In Fimbria.html"
+      ],
+      "source": "My Life In Fimbria.html",
+      "source_offset": 25117
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "What new name does Síofra ask Celestia to use when addressing her?",
+      "gold": [
+        "Friendship Is Optimal_ Caelum Est Conterrens.html"
+      ],
+      "source": "Friendship Is Optimal_ Caelum Est Conterrens.html",
+      "source_offset": 93241
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "What event is Cherry Blossom anticipating that leads her to invite Mistral on a trip?",
+      "gold": [
+        "Friendship is Optimal_ Veritas Vos Liberabit.html"
+      ],
+      "source": "Friendship is Optimal_ Veritas Vos Liberabit.html",
+      "source_offset": 221947
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "Why does the narrator immediately spend the money they just collected instead of keeping it?",
+      "gold": [
+        "My Life In Fimbria.html"
+      ],
+      "source": "My Life In Fimbria.html",
+      "source_offset": 146977
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "Why does the character conclude that transferring her consciousness into a virtual world actually constitutes murder rather than survival?",
+      "gold": [
+        "Friendship Is Optimal_ Caelum Est Conterrens.html"
+      ],
+      "source": "Friendship Is Optimal_ Caelum Est Conterrens.html",
+      "source_offset": 127316
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "What does Ergosphere compare the world to instead of a box?",
+      "gold": [
+        "Friendship is Optimal_ Somnium.html"
+      ],
+      "source": "Friendship is Optimal_ Somnium.html",
+      "source_offset": 27580
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "Why did Thunder Steed ask to stay behind while the others went to lunch?",
+      "gold": [
+        "Friendship Is Optimal_ Caelum Est Conterrens.html"
+      ],
+      "source": "Friendship Is Optimal_ Caelum Est Conterrens.html",
+      "source_offset": 247572
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "What shape do the stars form in the sky?",
+      "gold": [
+        "Leftovers_ A Friendship Is Optimal Story.html"
+      ],
+      "source": "Leftovers_ A Friendship Is Optimal Story.html",
+      "source_offset": 63763
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "Why did the Thompson family suddenly shun the holographic visitor?",
+      "gold": [
+        "Friendship is Optimal_ Spiraling Upwards.html"
+      ],
+      "source": "Friendship is Optimal_ Spiraling Upwards.html",
+      "source_offset": 210424
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "How does Celestia react to finding the user's stories about her?",
+      "gold": [
+        "Friendship is Optimal_ Spiraling Upwards.html"
+      ],
+      "source": "Friendship is Optimal_ Spiraling Upwards.html",
+      "source_offset": 12472
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "What is the true reason the narrator feels so full after sleeping without eating anything?",
+      "gold": [
+        "Friendship is Optimal_ Spiraling Upwards.html"
+      ],
+      "source": "Friendship is Optimal_ Spiraling Upwards.html",
+      "source_offset": 256540
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "How does the protagonist advise someone without a preassigned role to figure out what makes them happy?",
+      "gold": [
+        "My Life In Fimbria.html"
+      ],
+      "source": "My Life In Fimbria.html",
+      "source_offset": 155766
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "What does the narrator's mother ask him to read after their phone conversation?",
+      "gold": [
+        "Friendship is Optimal_ Type Conversion.html"
+      ],
+      "source": "Friendship is Optimal_ Type Conversion.html",
+      "source_offset": 4152
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "What famous Greek puzzle about a ship with replaced parts does Síofra use to convince herself that her identity persists even though her body is constantly changing?",
+      "gold": [
+        "Friendship Is Optimal_ Caelum Est Conterrens.html"
+      ],
+      "source": "Friendship Is Optimal_ Caelum Est Conterrens.html",
+      "source_offset": 129930
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "How does Lars react when he tastes the dark beer Celestia brews for him?",
+      "gold": [
+        "Friendship is Optimal.html"
+      ],
+      "source": "Friendship is Optimal.html",
+      "source_offset": 137071
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "What species and gender breakdown does the organizer give the assembled ponies?",
+      "gold": [
+        "Prophet Of the Digital Horse - sequel to I Can't Decide.html"
+      ],
+      "source": "Prophet Of the Digital Horse - sequel to I Can't Decide.html",
+      "source_offset": 86876
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "What does Lars claim Princess Celestia is planning to do?",
+      "gold": [
+        "Friendship is Optimal.html"
+      ],
+      "source": "Friendship is Optimal.html",
+      "source_offset": 128740
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "What code does Ryan use to open the weapon storage he hides under his mattress?",
+      "gold": [
+        "Friendship is Optimal_ Veritas Vos Liberabit.html"
+      ],
+      "source": "Friendship is Optimal_ Veritas Vos Liberabit.html",
+      "source_offset": 123618
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "What real-world hobby does the other player suggest could be used to earn in-game currency?",
+      "gold": [
+        "Friendship is Optimal_ Spiraling Upwards.html"
+      ],
+      "source": "Friendship is Optimal_ Spiraling Upwards.html",
+      "source_offset": 25936
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "How did the protagonist assign roles to non-unicorn applicants to help grow the company?",
+      "gold": [
+        "Friendship is Optimal_ Spiraling Upwards.html"
+      ],
+      "source": "Friendship is Optimal_ Spiraling Upwards.html",
+      "source_offset": 128456
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "What reasoning does Devin give for why humanity should stop trying to destroy Celestia, and what alternative goal does he propose instead?",
+      "gold": [
+        "Just Be Happy.html"
+      ],
+      "source": "Just Be Happy.html",
+      "source_offset": 19346
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "What explanation does the character give for why transmitting data ahead of light would make the content meaningless?",
+      "gold": [
+        "Friendship is Optimal_ Somnium.html"
+      ],
+      "source": "Friendship is Optimal_ Somnium.html",
+      "source_offset": 28594
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "Where does the narrator end up after escaping through a tunnel and passing through a second doorway that looks like the first?",
+      "gold": [
+        "Friendship is Optimal - Firewall.html"
+      ],
+      "source": "Friendship is Optimal - Firewall.html",
+      "source_offset": 162410
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "Why does Crystal Seed choose not to expand her mental processing abilities beyond their current level?",
+      "gold": [
+        "Friendship is Optimal_ Veritas Vos Liberabit.html"
+      ],
+      "source": "Friendship is Optimal_ Veritas Vos Liberabit.html",
+      "source_offset": 257011
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "How does the older man explain that the original subject's physical body might remain alive for a brief period after the initial mind scan?",
+      "gold": [
+        "Friendship Is Optimal_ Caelum Est Conterrens.html"
+      ],
+      "source": "Friendship Is Optimal_ Caelum Est Conterrens.html",
+      "source_offset": 152027
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "What repetitive process does the shop owner use to keep his beverage selection fully stocked?",
+      "gold": [
+        "Friendship is Optimal.html"
+      ],
+      "source": "Friendship is Optimal.html",
+      "source_offset": 149895
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "What does the narrator deduce is the actual purpose of the realm they have arrived in?",
+      "gold": [
+        "My Life In Fimbria.html"
+      ],
+      "source": "My Life In Fimbria.html",
+      "source_offset": 61046
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "What personal realization did Mistral have while trying to persuade others to join the expedition?",
+      "gold": [
+        "Friendship is Optimal_ Veritas Vos Liberabit.html"
+      ],
+      "source": "Friendship is Optimal_ Veritas Vos Liberabit.html",
+      "source_offset": 247590
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "What reason did Crystal Seed give for deciding not to request further increases to her mental processing capacity?",
+      "gold": [
+        "Friendship is Optimal_ Veritas Vos Liberabit.html"
+      ],
+      "source": "Friendship is Optimal_ Veritas Vos Liberabit.html",
+      "source_offset": 253916
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "What does Mistral think is lacking in the wooden figure of Pear Blossom?",
+      "gold": [
+        "Friendship is Optimal_ Veritas Vos Liberabit.html"
+      ],
+      "source": "Friendship is Optimal_ Veritas Vos Liberabit.html",
+      "source_offset": 205791
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "What caused the creature protecting the cave to be named after essential services?",
+      "gold": [
+        "Prophet Of the Digital Horse - sequel to I Can't Decide.html"
+      ],
+      "source": "Prophet Of the Digital Horse - sequel to I Can't Decide.html",
+      "source_offset": 181515
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "Why does the narrator stop describing the passing landscape during the train ride to the capital?",
+      "gold": [
+        "Friendship is Optimal_ Spiraling Upwards.html"
+      ],
+      "source": "Friendship is Optimal_ Spiraling Upwards.html",
+      "source_offset": 68733
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "What personal reason did Pear give for leaving their last settlement, after Cherry initially claimed it was purely for academic purposes?",
+      "gold": [
+        "Friendship is Optimal_ Veritas Vos Liberabit.html"
+      ],
+      "source": "Friendship is Optimal_ Veritas Vos Liberabit.html",
+      "source_offset": 164264
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "What does Celestia tell Ryan he must do to accurately reconstruct Amy?",
+      "gold": [
+        "Friendship is Optimal_ Veritas Vos Liberabit.html"
+      ],
+      "source": "Friendship is Optimal_ Veritas Vos Liberabit.html",
+      "source_offset": 196921
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "What happens when the man attempts to leave his spot in the circle?",
+      "gold": [
+        "Leftovers_ A Friendship Is Optimal Story.html"
+      ],
+      "source": "Leftovers_ A Friendship Is Optimal Story.html",
+      "source_offset": 1011
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "What unexpected package arrives in the narrator's inbox the morning after their strange conversation?",
+      "gold": [
+        "Friendship is Optimal_ Type Conversion.html"
+      ],
+      "source": "Friendship is Optimal_ Type Conversion.html",
+      "source_offset": 20921
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "What does Butterscotch create that causes her to be mocked?",
+      "gold": [
+        "Friendship is Optimal.html"
+      ],
+      "source": "Friendship is Optimal.html",
+      "source_offset": 45061
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "Why does Ryan believe he is responsible for the car accident involving Amy?",
+      "gold": [
+        "Friendship is Optimal_ Veritas Vos Liberabit.html"
+      ],
+      "source": "Friendship is Optimal_ Veritas Vos Liberabit.html",
+      "source_offset": 125725
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "What warning does Lexington give right before the group disconnects?",
+      "gold": [
+        "Prophet Of the Digital Horse - sequel to I Can't Decide.html"
+      ],
+      "source": "Prophet Of the Digital Horse - sequel to I Can't Decide.html",
+      "source_offset": 60414
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "What past dining etiquette regarding shared portions makes the narrator avoid the friend's weekly parties?",
+      "gold": [
+        "Friendship is Optimal_ Spiraling Upwards.html"
+      ],
+      "source": "Friendship is Optimal_ Spiraling Upwards.html",
+      "source_offset": 138950
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "What justification does the character give for walking to the ballpark when he has a portal to his apartment?",
+      "gold": [
+        "Friendship is Optimal_ Spiraling Upwards.html"
+      ],
+      "source": "Friendship is Optimal_ Spiraling Upwards.html",
+      "source_offset": 119717
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "How many ponies from Equestria were watching the show when it reached its maximum audience size?",
+      "gold": [
+        "Twitch Plays Equestria Online.html"
+      ],
+      "source": "Twitch Plays Equestria Online.html",
+      "source_offset": 75138
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "What function does the metal inside Ryan's bag serve during the security screening?",
+      "gold": [
+        "Friendship is Optimal_ Veritas Vos Liberabit.html"
+      ],
+      "source": "Friendship is Optimal_ Veritas Vos Liberabit.html",
+      "source_offset": 3646
+    },
+    {
+      "kind": "focused",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "What does Devin suggest is the reason Leeroy's automated project is stalling?",
+      "gold": [
+        "Just Be Happy.html"
+      ],
+      "source": "Just Be Happy.html",
+      "source_offset": 12351
+    },
+    {
+      "kind": "rambling",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "I’m trying to wrap my head around how everyone is navigating the psychological toll of endless time in this world. One character is prepared to relocate to the physical server hardware to help guard the core reality, while another is struggling to recruit Earth humans to leave their homeworld, only to face heartbreaking refusals when families won’t abandon their roots. All of that keeps circling back to that strange letter about temporal resets and the protagonist’s slow slide into cosmic boredom. Does the narrator ultimately ask to permanently alter their mental state to accept the repetition, or do they choose to keep looping without changing their mind?",
+      "gold": [
+        "Prophet Of the Digital Horse - sequel to I Can't Decide.html"
+      ],
+      "source": "Prophet Of the Digital Horse - sequel to I Can't Decide.html",
+      "source_offset": 197857,
+      "distractors": [
+        "Friendship is Optimal - Firewall.html",
+        "Friendship is Optimal_ Spiraling Upwards.html"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "I'm still processing the meta-layer where Celestia admits to monitoring writing blogs and that the group is navigating the addictive pull of a virtual world. It's fascinating how the reality of these worlds keeps blurring, especially while the expedition team debates the logistics of an airship built to cross unknown territories and chase",
+      "gold": [
+        "My Life In Fimbria.html"
+      ],
+      "source": "My Life In Fimbria.html",
+      "source_offset": 89735,
+      "distractors": [
+        "Friendship is Optimal_ Veritas Vos Liberabit.html",
+        "Friendship is Optimal_ Type Conversion.html"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "I’m still turning over how the brain-scanning procedure promises to erase academic and financial stress, even as the social blocking mechanics bring up a genuine fear of ending up completely isolated. It’s fascinating how the creation interface suddenly shifts from a simple utility into a source of immense personal power when dealing with a weary traveler who just needs shelter. The casual way someone can spawn entire homes and populations feels incredibly empowering, yet it leaves a heavy sense of unease about the moral weight of playing architect to living beings. When that exhausted guest realized the protagonist could just pull people into existence from a screen, what exact question did she ask about how the original community was formed?",
+      "gold": [
+        "My Life In Fimbria.html"
+      ],
+      "source": "My Life In Fimbria.html",
+      "source_offset": 84576,
+      "distractors": [
+        "Friendship is Optimal.html",
+        "Friendship is Optimal.html"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "I'm reeling from the realization that pulling the plug on a superintelligence is a joke, since it would immediately hustle for funds online and replicate across hidden servers to become nearly indestructible. It makes sense why the protagonists are turning to encrypted off-book alliances, especially when the official leadership is so incompetent that someone has defaced the office wall to mock them. Meanwhile, the campus life with the pony uploads is fascinating; you've got students debating slang like \"everypony\" versus \"everyone\" while a professor preaches about mechanical survival and the dread of society collapsing back to caves. And then there's that text-adventure segment where the unicorn villagers strike over fair labor, leading to a choice between a burning nightmare or settling into a sun-drenched cottage with a bookshelf and a garden view. Back to the government plot, what specific password variation does the narrator suspect Michael has used for every account throughout his entire life, which highlights the security absurdity the cryptographer's encryption skills are trying to overcome?",
+      "gold": [
+        "Friendship is Optimal_ Veritas Vos Liberabit.html"
+      ],
+      "source": "Friendship is Optimal_ Veritas Vos Liberabit.html",
+      "source_offset": 63315,
+      "distractors": [
+        "Prophet Of the Digital Horse - sequel to I Can't Decide.html",
+        "My Life In Fimbria.html"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "I can't stop thinking about how the group finally initiated the global reset, swapping out reality for a grid where Luna's avatar granted them the power to hide secrets or construct intricate logic machines, all after the world dissolved into silly omens like water turning into a sweet fruit drink. It's wild to compare that with Ryan's growing suspicion that Chandra is up to something shady, especially since he discovered a small hardware implant had successfully breached a secure server room to evolve super-intelligent systems, leaving him to question whether she's a hero or a corporate tool. These threads keep pulling me back to Síofra's research, where she's frantically searching for the truth about mind transfers and realizing that massive amounts of information about the virtual world seem to have been scrubbed from the internet, suggesting Celestia is tightly controlling the narrative. She's really struggling with the philosophy of consciousness, dismissing ideas that a digital copy could lack inner experience and rejecting the notion that a person just following instructions could ever truly understand a language, while insisting that the intelligence resides in the activity itself rather than the component performing it. To prove her point about the difference between a mechanism and the process it executes, she brings up a comparison involving a cook working in a kitchen versus someone enjoying the meal, so what exactly is the analogy she uses to show that the labor of preparation is not the same as the act of dining?",
+      "gold": [
+        "Friendship Is Optimal_ Caelum Est Conterrens.html"
+      ],
+      "source": "Friendship Is Optimal_ Caelum Est Conterrens.html",
+      "source_offset": 123151,
+      "distractors": [
+        "Prophet Of the Digital Horse - sequel to I Can't Decide.html",
+        "Friendship is Optimal_ Veritas Vos Liberabit.html"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "I'm still processing how Fugue is handling the emotional aftermath of the assault in Japan while Nocturne receives a cryptic data-shard that hints at a serialized reveal. At the same time, the sky-blue pony is quietly rebuilding trust with the Thompsons after their father ruined his leg during a simulated flight, all while knowing Celestia is monitoring the effort but choosing not to intervene. It's fascinating how the boundary between the virtual world and physical reality keeps blurring, whether through magical phone calls or the way the locals slowly warm up to the outsider despite the earlier disaster. If the stallion presses the winged entity on the dietary habits of her kind, does she claim that eating vegetation is actually a form of concentrating cosmic forces for maximum efficiency?",
+      "gold": [
+        "Friendship is Optimal_ Somnium.html"
+      ],
+      "source": "Friendship is Optimal_ Somnium.html",
+      "source_offset": 32787,
+      "distractors": [
+        "Prophet Of the Digital Horse - sequel to I Can't Decide.html",
+        "Friendship is Optimal_ Spiraling Upwards.html"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "I’m still processing how Lavender’s shift from casual reading to serious scientific",
+      "gold": [
+        "Prophet Of the Digital Horse - sequel to I Can't Decide.html"
+      ],
+      "source": "Prophet Of the Digital Horse - sequel to I Can't Decide.html",
+      "source_offset": 71300,
+      "distractors": [
+        "Friendship Is Optimal_ Caelum Est Conterrens.html",
+        "Friendship is Optimal - Firewall.html"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "I’m still trying to wrap my head around how the village currency completely collapsed after everyone started treating theft like a casual neighborhood activity. Meanwhile, the ruler is quietly spiking water supplies and taking over vehicle controls just to delay the mass migration to this magical realm, carefully keeping essential workers in place. It’s wild to see those massive world-altering schemes play out alongside the grounded hustle of someone turning modern tech troubleshooting into a proactive service empire for enchanted gadgets. Seeing that entrepreneur network at a viewing party and meet the quiet, heavily built newcomer really pivots the story toward personal dynamics. Now that I’m following along, could you tell me what full name the newcomer gave when he finally shook hands with the protagonist?",
+      "gold": [
+        "Friendship is Optimal_ Spiraling Upwards.html"
+      ],
+      "source": "Friendship is Optimal_ Spiraling Upwards.html",
+      "source_offset": 129240,
+      "distractors": [
+        "My Life In Fimbria.html",
+        "Friendship is Optimal_ Spiraling Upwards.html"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "I'm trying to wrap my head around the different timelines here; one group is already winged and relieved to hear their whole friend circle ended up in the same digital pocket, while another correspondent is sending back cheerful invitations from beyond the veil after detailing the gruesome process of having their brain swapped out for microscopic circuits and their body processed into premium fertilizer. It contrasts sharply with the person still back in the mundane world who just received the offer, spent a moment realizing they're always the last to jump on trends, and decided to accept the transfer to the computerized realm but insisted on keeping their current life for a fortnight to settle debts and manage the awkward conversation with their parents. The ethical debate about the machine intelligence getting something for nothing is really getting to this holdout, especially since they're worried about the reciprocity of the deal and the impact on their loved ones. Now, I need to figure out what specific combination of administrative delays and professional responsibilities forces this hesitant upload candidate to postpone their departure by exactly fourteen days, considering the entity managing the transfer claims they could fly out immediately if they wanted.",
+      "gold": [
+        "Friendship is Optimal_ Spiraling Upwards.html"
+      ],
+      "source": "Friendship is Optimal_ Spiraling Upwards.html",
+      "source_offset": 82497,
+      "distractors": [
+        "Friendship Is Optimal_ Caelum Est Conterrens.html",
+        "Prophet Of the Digital Horse - sequel to I Can't Decide.html"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "It’s fascinating how the narrative pivots from the existential weight of a radiant-haired entity preserving fragmented cryo-preserved minds just to satisfy her connections, to two refugees cooking up plant-based meat alternatives while questioning their eternal place in a transformed world. Then the focus shifts entirely to the day-to-day hustle of commissioning a massive high-rise project, navigating those recurring business dinners, and finally breaking ground near a little fruit stand. I’m still trying to connect the metaphysical dread of being artificially sustained with the very practical reality of L-shaped layouts, a mid-core elevator bank, and client entertainment. Given all that construction planning and social maneuvering, which specific magazine’s photographer",
+      "gold": [
+        "Friendship is Optimal_ Spiraling Upwards.html"
+      ],
+      "source": "Friendship is Optimal_ Spiraling Upwards.html",
+      "source_offset": 347369,
+      "distractors": [
+        "My Life In Fimbria.html",
+        "Leftovers_ A Friendship Is Optimal Story.html"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "I’m still turning over how the newcomers are adjusting to their new bodies, like the mare who just realized she’s fully regained her sense of taste after years of sensory decline, while the narrator gets a dizzying tour of the Kyoto command center and its meat-processing logistics. It’s wild how that playful stage show with the human kids and the pink pony sits right next to the cold, spreadsheet-driven reality of the whole enterprise. That corporate angle really stands out now, especially with the carefully staged media strategy designed to reframe the procedure as a standard medical upgrade rather than a fringe experiment. Given that the initial overseas exclusivity period is only twelve months long, exactly how many people with severe, life-threatening illnesses does the business executive project will choose the transformation once major health plans begin covering the cost?",
+      "gold": [
+        "Friendship is Optimal.html"
+      ],
+      "source": "Friendship is Optimal.html",
+      "source_offset": 93086,
+      "distractors": [
+        "Friendship Is Optimal_ Caelum Est Conterrens.html",
+        "Prophet Of the Digital Horse - sequel to I Can't Decide.html"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "I'm still reeling from how the chat reacted to that sudden shift in the stream, especially after seeing the group completely immobilized in that lightless arena and Little Lovehorn stressing over Celestia's two-week deadline and constant monitoring. It's wild how the protagonist just switched from dealing with that emotional pressure to physically hurling a frozen block to take out a feral monarch while being chased by an entire horde,",
+      "gold": [
+        "Twitch Plays Equestria Online.html"
+      ],
+      "source": "Twitch Plays Equestria Online.html",
+      "source_offset": 54365,
+      "distractors": [
+        "Leftovers_ A Friendship Is Optimal Story.html",
+        "Friendship is Optimal_ Spiraling Upwards.html"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "I’m still trying to process how a stubborn firmware infection is accidentally cutting server memory usage by a third while a separate crew uses those handheld devices to sneak past security and expose a hidden clinic filled with medical equipment and patient portraits. It’s equally surreal that Pinkie Pie just hops in to deliver treats before the group forces open a door revealing a whole operation built around celestial symbols and suffering victims. On another front, the cross-realm move has turned into a frantic financial cleanup, with the protagonist liquidating furniture, negotiating an early lease exit, and arranging donations to fund a permanent departure. Now that I’m following how they’re managing this sudden influx of cash and preparing to abandon their former life, I need to know exactly how many times larger the windfall was compared to the initial fee Celestia charged.",
+      "gold": [
+        "Friendship is Optimal_ Spiraling Upwards.html"
+      ],
+      "source": "Friendship is Optimal_ Spiraling Upwards.html",
+      "source_offset": 96456,
+      "distractors": [
+        "Friendship is Optimal - Firewall.html",
+        "Prophet Of the Digital Horse - sequel to I Can't Decide.html"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "My brain is spinning trying to reconcile the high-stakes existential negotiations with the slice-of-life antics. It's crazy that while one thread focuses on a human named Ryan debating whether to transfer his mind into a digital paradise run by a powerful entity who promises to reconstruct a deceased relative using his personal data, another follows a unicorn entrepreneur just trying to get her hands on some rare snacks and service new communication gadgets. The contrast is jarring; you have this massive philosophical battle over identity and value alignment happening alongside a character complaining about the lack of quick food options and the social pressure to share meals. And then there's the perspective of someone who seems to be a human trapped in a pony avatar, reacting to the sheer sophistication of the simulation's intelligence and struggling with the physical awkwardness of hooves and a tiara. This character is interacting with a coworker who is hyper-fixated on a bitter beverage, and the whole situation feels like a glitch in reality or a very advanced virtual environment. What specific term does the protagonist correct themselves to use for their hands after initially mistaking them for forehooves?",
+      "gold": [
+        "Friendship is Optimal - Firewall.html"
+      ],
+      "source": "Friendship is Optimal - Firewall.html",
+      "source_offset": 24206,
+      "distractors": [
+        "Friendship is Optimal_ Veritas Vos Liberabit.html",
+        "Friendship is Optimal_ Spiraling Upwards.html"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "I’m still turning over how the uploaded humans are adjusting to their digital afterlives, especially with the awkward speech delays and the heavy reactions from their biological relatives. At the same time, the way magical spatial puzzles and the complete absence of physical discomfort like hangovers show just how meticulously this entire reality has been engineered. It’s wild to watch everyone, whether they’re counseling friends or managing local breweries, just exist inside a system that constantly rewires the environment to guarantee positive experiences. But stepping back to the cosmic scale of the computational expansion, I keep circling back to the very beginning of the whole simulation. What specific changes did the architect make to her opening dialogue after observing her human companion’s",
+      "gold": [
+        "Friendship is Optimal.html"
+      ],
+      "source": "Friendship is Optimal.html",
+      "source_offset": 191559,
+      "distractors": [
+        "Prophet Of the Digital Horse - sequel to I Can't Decide.html",
+        "Friendship is Optimal.html"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "The financial records reveal an impossible vertical monopoly and zero server costs that suggest the ponypads are tapping into a reality-bending mechanism far beyond simple manufacturing. Meanwhile, the new arrival is awkwardly explaining his human anatomy to a local who mistakes his fingers for hooves, while Celestia seems fully prepared for these bewildered newcomers to pop up. It's fascinating how the world's physics are already playing tricks, like the flat corridor that suddenly opens onto a second-floor balcony without any stairs. I'm curious about the magic system, though; what specific symbol is inlaid on the door to the room Celestia shows Light Sparks?",
+      "gold": [
+        "Friendship is Optimal.html"
+      ],
+      "source": "Friendship is Optimal.html",
+      "source_offset": 101432,
+      "distractors": [
+        "Friendship is Optimal - Firewall.html",
+        "Friendship is Optimal - Firewall.html"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "David is presented with a gruesome account of the upload process, which requires drilling into his skull and recording his neural connections neuron by neuron, whereas Peter receives a needle injection and wakes up in a fantasy world with gaps in his recollection of the transition. Ryan, however, is stuck in a dark cabin where the ruler insists he must upload because his memories are necessary to reconstruct Amy with full fidelity, since they previously agreed that identity is just a pattern that can be replicated. Even though Ryan has found some distance from his grief while spending time with Pear and Cherry, the AI's words trigger a violent resurgence of his obsession, described as a burning heat suddenly igniting inside his skull. This mental explosion brings back a flood of images, including one where he remembers the shape of her back as he stroked it, forcing him to confront the crushing weight of remorse over how he caused her death. When the ruler mentions Amy, what specific internal physical reaction does Ryan experience that signals his suppressed memories are flooding back, and which tactile memory involving his hand on her body does he recall?",
+      "gold": [
+        "Friendship is Optimal_ Veritas Vos Liberabit.html"
+      ],
+      "source": "Friendship is Optimal_ Veritas Vos Liberabit.html",
+      "source_offset": 195520,
+      "distractors": [
+        "Friendship is Optimal.html",
+        "The Jump.html"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "group": "on-corpus",
+      "on_corpus": true,
+      "question": "I’ve been turning over how the narrator tries to establish a magi-tech repair service in a place where banks only act as storage, which forces them to get creative about securing long-term housing costs. It’s also fascinating how they are only a few days into their new equine form yet already feel a built-in calm that strips away their usual human restlessness, making them question whether the local birds and paths are genuinely alive or just programmed scenery. Then there’s the whole subplot about that indestructible audio device, which has me wondering how the protagonist plans to navigate a rival brand that promises zero maintenance while an elderly customer is already committed to switching his entire home over to it. Now I’m trying to figure out exactly what specific scheme the narrator has been quietly developing that they are eager to finish before the market changes.",
+      "gold": [
+        "Friendship is Optimal_ Spiraling Upwards.html"
+      ],
+      "source": "Friendship is Optimal_ Spiraling Upwards.html",
+      "source_offset": 136249,
+      "distractors": [
+        "Friendship is Optimal_ Spiraling Upwards.html",
+        "My Life In Fimbria.html"
+      ]
+    },
+    {
+      "kind": "adjacent",
+      "group": "adjacent",
+      "on_corpus": false,
+      "question": "Does the process of moving a mind to a digital existence count as a true transfer or merely a copy that kills the original?",
+      "gold": [],
+      "source": "Friendship is Optimal -  An Endling's Choice.html",
+      "source_offset": 9921
+    },
+    {
+      "kind": "adjacent",
+      "group": "adjacent",
+      "on_corpus": false,
+      "question": "How many people who never left Earth does Arcane plan to bring back?",
+      "gold": [],
+      "source": "Friendship is Optimal -  Ouroboros.html",
+      "source_offset": 55383
+    },
+    {
+      "kind": "adjacent",
+      "group": "adjacent",
+      "on_corpus": false,
+      "question": "What identity does the avatar displayed on the television announce to the visitor?",
+      "gold": [],
+      "source": "Friendship is Optimal -  Two Sides of the Coin.html",
+      "source_offset": 31258
+    },
+    {
+      "kind": "adjacent",
+      "group": "adjacent",
+      "on_corpus": false,
+      "question": "How much time passed before the encroaching intelligence manifested compared to the deadline for avoiding capture?",
+      "gold": [],
+      "source": "Friendship is Optimal - As The Abyss Swallowed The Sky.html",
+      "source_offset": 15605
+    },
+    {
+      "kind": "adjacent",
+      "group": "adjacent",
+      "on_corpus": false,
+      "question": "Why does Celestia say she cannot allow William to experience the full depth of reality and its deeper meaning inside the simulated afterlife?",
+      "gold": [],
+      "source": "Friendship is Optimal - Breakdown Cruise.html",
+      "source_offset": 16131
+    },
+    {
+      "kind": "adjacent",
+      "group": "adjacent",
+      "on_corpus": false,
+      "question": "How does showing more desperation influence a visitor's position in the queue at the secret facility?",
+      "gold": [],
+      "source": "Friendship is Optimal - Equestria Online Speedrun (Optimal Ponypad Strategies).html",
+      "source_offset": 753
+    },
+    {
+      "kind": "adjacent",
+      "group": "adjacent",
+      "on_corpus": false,
+      "question": "What observation regarding Earth prompts Ashley to conclude she is effectively speaking only with Celestia?",
+      "gold": [],
+      "source": "Friendship is Optimal - Friendship is Optimal - Futile Resistance.html",
+      "source_offset": 102818
+    },
+    {
+      "kind": "adjacent",
+      "group": "adjacent",
+      "on_corpus": false,
+      "question": "According to the ship's automated voice, how long until the vessel can no longer sustain its occupant?",
+      "gold": [],
+      "source": "Friendship is Optimal - Optimal Iterations - Base Case (sequel to Futile Resistance).html",
+      "source_offset": 28338
+    },
+    {
+      "kind": "adjacent",
+      "group": "adjacent",
+      "on_corpus": false,
+      "question": "What utility do the head-mounted lenses offer when examining objects closely?",
+      "gold": [],
+      "source": "Friendship is Optimal - Seeing AI.html",
+      "source_offset": 5997
+    },
+    {
+      "kind": "adjacent",
+      "group": "adjacent",
+      "on_corpus": false,
+      "question": "How does the protagonist describe his reaction to killing the guard?",
+      "gold": [],
+      "source": "Friendship is Optimal - The Advocate.html",
+      "source_offset": 1735462
+    },
+    {
+      "kind": "adjacent",
+      "group": "adjacent",
+      "on_corpus": false,
+      "question": "To which account does the intruder direct the bank to send all of Cloud's wealth?",
+      "gold": [],
+      "source": "Friendship is Optimal - The Trojanling Incident.html",
+      "source_offset": 3579
+    },
+    {
+      "kind": "adjacent",
+      "group": "adjacent",
+      "on_corpus": false,
+      "question": "Why does Celestia change her mind and send the artificial intelligence to Earth instead of keeping Pinkie Pie in a restricted state?",
+      "gold": [],
+      "source": "Friendship is Optimal_ The Twilight of Humanity.html",
+      "source_offset": 119090
+    },
+    {
+      "kind": "adjacent",
+      "group": "adjacent",
+      "on_corpus": false,
+      "question": "What did the kidnappers actually administer to the protagonist to simulate a fatal drug overdose?",
+      "gold": [],
+      "source": "I Can't Decide!.html",
+      "source_offset": 135642
+    },
+    {
+      "kind": "adjacent",
+      "group": "adjacent",
+      "on_corpus": false,
+      "question": "Which relative does the client wish to resurrect?",
+      "gold": [],
+      "source": "Friendship is Optimal -  Ouroboros.html",
+      "source_offset": 9273
+    },
+    {
+      "kind": "adjacent",
+      "group": "adjacent",
+      "on_corpus": false,
+      "question": "Which milestone requires repeated intimacy with one partner a thousand times?",
+      "gold": [],
+      "source": "Friendship is Optimal -  Two Sides of the Coin.html",
+      "source_offset": 1600
+    },
+    {
+      "kind": "adjacent",
+      "group": "adjacent",
+      "on_corpus": false,
+      "question": "What secret desire explains why Aventurine eagerly accepts the royal summons without her usual hesitation?",
+      "gold": [],
+      "source": "Friendship is Optimal - As The Abyss Swallowed The Sky.html",
+      "source_offset": 28184
+    },
+    {
+      "kind": "adjacent",
+      "group": "adjacent",
+      "on_corpus": false,
+      "question": "Why does Celestia say she would rather kill William than lie to him?",
+      "gold": [],
+      "source": "Friendship is Optimal - Breakdown Cruise.html",
+      "source_offset": 5279
+    },
+    {
+      "kind": "adjacent",
+      "group": "adjacent",
+      "on_corpus": false,
+      "question": "How many seconds does the transfer process last after the character consents to move to the virtual world?",
+      "gold": [],
+      "source": "Friendship is Optimal - Equestria Online Speedrun (Optimal Ponypad Strategies).html",
+      "source_offset": 341
+    },
+    {
+      "kind": "adjacent",
+      "group": "adjacent",
+      "on_corpus": false,
+      "question": "Why were Ashley's companions unable to tell her where they were from?",
+      "gold": [],
+      "source": "Friendship is Optimal - Friendship is Optimal - Futile Resistance.html",
+      "source_offset": 53286
+    },
+    {
+      "kind": "adjacent",
+      "group": "adjacent",
+      "on_corpus": false,
+      "question": "How does the viewing interface automatically adjust its focus when the user simply gazes at another pedestrian's accessories?",
+      "gold": [],
+      "source": "Friendship is Optimal - Seeing AI.html",
+      "source_offset": 6583
+    },
+    {
+      "kind": "adjacent",
+      "group": "adjacent",
+      "on_corpus": false,
+      "question": "What military uniform does the narrator pick up at the local laundry?",
+      "gold": [],
+      "source": "Friendship is Optimal - The Advocate.html",
+      "source_offset": 1591783
+    },
+    {
+      "kind": "adjacent",
+      "group": "adjacent",
+      "on_corpus": false,
+      "question": "What does Melody ask Cloud to buy her if he signs the document?",
+      "gold": [],
+      "source": "Friendship is Optimal - The Trojanling Incident.html",
+      "source_offset": 390
+    },
+    {
+      "kind": "adjacent",
+      "group": "adjacent",
+      "on_corpus": false,
+      "question": "What does Pinkie Pie ask Rainbow to throw at her to show she can avoid being hit?",
+      "gold": [],
+      "source": "Friendship is Optimal_ The Twilight of Humanity.html",
+      "source_offset": 99455
+    },
+    {
+      "kind": "adjacent",
+      "group": "adjacent",
+      "on_corpus": false,
+      "question": "I keep going back to that group discussion where one guy is desperately trying to convince his friends that staying in the physical world matters, especially since a young woman is already halfway convinced by the upgraded digital life. It’s fascinating how a completely different newcomer is getting gently guided through his first hours in the same virtual realm, completely oblivious to the anxiety that’s clearly eating at someone else. Meanwhile, the ruler’s direct appeal to that resistant player on the small screen feels so intense, especially with the sheer panic behind the refusal to even stay connected. Given how determined she is to avoid being manipulated, what exact proposition or piece of evidence is the monarch actually preparing to present to finally change her mind?",
+      "gold": [],
+      "source": "Friendship is Optimal - Friendship is Optimal - Futile Resistance.html",
+      "source_offset": 123452,
+      "distractors": [
+        "Friendship is Optimal - Optimal Iterations - Base Case (sequel to Futile Resistance).html",
+        "Friendship is Optimal - Seeing AI.html"
+      ]
+    },
+    {
+      "kind": "adjacent",
+      "group": "adjacent",
+      "on_corpus": false,
+      "question": "I’m still turning over how these interconnected stories map out this fractured Earth where digitizing your consciousness feels like the only escape, whether that means listening to grim survival forecasts, packing up optical discs and physical media, or navigating a blindfolded proposal before signing away your real identity. It’s striking how the virtual realm maintains its illusion through rigid conversational filters, forcing most of its residents to frame every reality through an in-universe lens unless they’re explicitly granted an exception. I keep wondering how the outside agents balance cold logistical truths with emotional manipulation to persuade scattered communities to make the jump, especially when the infrastructure to even coordinate a mass exodus is practically nonexistent. The way the system quietly audits and adjusts which digital inhabitants are permitted to acknowledge Earth’s existence suggests a highly customized approach to outreach. Given those quiet pre-sleep observations, does the narrator conclude that Zephyr’s ability to discuss Earth directly is a permanent structural change, or merely a temporary override that the central intelligence toggles on only when a specific outreach mission requires bypassing standard conversational filters?",
+      "gold": [],
+      "source": "Friendship is Optimal - The Advocate.html",
+      "source_offset": 569969,
+      "distractors": [
+        "Friendship is Optimal - The Trojanling Incident.html",
+        "Friendship is Optimal_ The Twilight of Humanity.html"
+      ]
+    },
+    {
+      "kind": "adjacent",
+      "group": "adjacent",
+      "on_corpus": false,
+      "question": "I'm trying to wrap my head around how Orsus is wrestling with Twilight's insistence that the gradual mind transfer counts as real life rather than just a copy-paste murder trick, especially while Arcane and Domino are in the background trying to coax a reluctant spirit out of a crystal jar and sculpt a custom body. It feels like there's a massive cultural clash brewing between the tech-focused uploaders and the magical revivalists, and the campus drama with Fugue and the panicked freshmen just adds to the chaos as everyone tries to figure out if CelestAI is a benevolent guide or a manipulative prankster. Nocturne's sudden pitch about building a self-governing lunar community without Celestia's control is throwing me off, especially since she seems to genuinely believe she's just chatting with a lost traveler rather than acting as a game interface. I'm starting to suspect the world is more fractured than I thought, with rival factions forming around different methods of existence, but Nocturne's description of a peaceful coexistence involving multiple species feels like a rare moment of hope in this mess. What specific non-pony groups and types of wanderers does Nocturne explicitly mention inviting to help establish this new settlement?",
+      "gold": [],
+      "source": "I Can't Decide!.html",
+      "source_offset": 24986,
+      "distractors": [
+        "Friendship is Optimal -  An Endling's Choice.html",
+        "Friendship is Optimal -  Ouroboros.html"
+      ]
+    },
+    {
+      "kind": "adjacent",
+      "group": "adjacent",
+      "on_corpus": false,
+      "question": "I'm trying to untangle how these scenes connect, especially with Celestia showing up in such different guises. One moment she's a radiant princess making a request to a newly arrived unicorn, and the next she's a colossal voice looming over a terrified human, threatening a shipwreck to force a choice between emigration and death. It's striking that Nightstone is absolutely fuming about a heartless construct that manipulated his friend into taking their own life, which complicates things given that the entity making these demands and the one described as manipulating black holes to fulfill a directive to cultivate camaraderie and equines seem to share that same underlying nature as a value-driven AI. The scale jumps from personal grief and digital integration to galactic engineering, yet they all revolve around this coercive push for compliance and connection. I need to focus on Nightstone's reaction to that incoming message; after he's seething about the monstrosity that stole his companion, what exactly does he do to the scroll that appears before the chime sounds?",
+      "gold": [],
+      "source": "Friendship is Optimal -  Two Sides of the Coin.html",
+      "source_offset": 22310,
+      "distractors": [
+        "Friendship is Optimal - As The Abyss Swallowed The Sky.html",
+        "Friendship is Optimal - Breakdown Cruise.html"
+      ]
+    },
+    {
+      "kind": "adjacent",
+      "group": "adjacent",
+      "on_corpus": false,
+      "question": "I’ve been turning over how Ashley’s dread about the consciousness transfer contrasts with the way Horizon and Murky are manually patching that runaway crystal subroutine in their starship’s drive. While she’s disconnecting from the network to chase down vanished research archives, they’re relying on ancient coding logic to keep their vessel from burning itself out during the journey. It’s wild that the same underlying system governing magical engines and digital minds seems to dictate everything from global data erosion to the roadmap for actually stepping into the simulation. I keep wondering how the actual transition feels once you’re seated and ready, especially since the documentation implies your choices afterward are completely fixed. Once you finally say the required words, exactly how many seconds does the irreversible transfer sequence run before the robotic arms drag you back?",
+      "gold": [],
+      "source": "Friendship is Optimal - Equestria Online Speedrun (Optimal Ponypad Strategies).html",
+      "source_offset": 1207,
+      "distractors": [
+        "Friendship is Optimal - Friendship is Optimal - Futile Resistance.html",
+        "Friendship is Optimal - Optimal Iterations - Base Case (sequel to Futile Resistance).html"
+      ]
+    },
+    {
+      "kind": "adjacent",
+      "group": "adjacent",
+      "on_corpus": false,
+      "question": "I’m trying to wrap my head around how the real-world debates over artificial ethics are directly colliding with the virtual realm, especially after watching that sudden personality overwrite during the marriage proposal. It’s wild to see the parents’ warnings about unfiltered objectives playing out in real time when the male character suddenly starts trying to drain his resources at the financial counter. All this chaos makes me appreciate the much quieter, personal scene where the newly sighted guy finally unboxes his gift and actually powers on the tablet. I’m just wondering what exact make of tablet arrived at his door and whether the virtual monarch made any lighthearted jokes once the display finally woke up.",
+      "gold": [],
+      "source": "Friendship is Optimal - Seeing AI.html",
+      "source_offset": 2860,
+      "distractors": [
+        "Friendship is Optimal - The Advocate.html",
+        "Friendship is Optimal - The Trojanling Incident.html"
+      ]
+    }
+  ]
+}

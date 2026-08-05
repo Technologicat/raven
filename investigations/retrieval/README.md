@@ -296,6 +296,54 @@ effect, not enough for a few points of R@5.
   something that has *read* the corpus, which is the RAG tool surface letting the model author the query,
   or a document-level summary layer. Worth knowing before more effort goes into query rewriting.
 
+- **2026-08-05 — the fiction run: the threshold does not travel, and the signal only does the coarse job.**
+  88 generated on-corpus questions against 144 negatives (99 hydrogen questions, 29 held-out-story
+  "adjacent" questions, 16 hand-written probes), scored on the fiction index. `check_leakage.py` first: 0
+  of 117 questions share a 6-word run with their source, longest run anywhere is 4 words, so the on-corpus
+  distribution is not inflated by copying and the numbers below can be read as levels.
+
+  **The constant does not travel, and the size of the failure is the point:**
+
+  | | on-corpus min | median | max | cut 0.45 rejects |
+  |---|---|---|---|---|
+  | hydrogen | 0.460 | 0.670 | 0.823 | **0 of 99** |
+  | fiction | 0.352 | 0.519 | 0.804 | **24 of 88** |
+
+  A global 0.45 marks **27% of answerable fiction questions as ungrounded**. To reject none of them the cut
+  has to come down to 0.35, where it would also stop rejecting most of what it is for. This is what the
+  second corpus was built to find out, and it is a clean answer.
+
+  **But the signal itself works — for the coarse discrimination only.** Split by how far the negatives are:
+
+  | negatives | n | AUROC |
+  |---|---|---|
+  | the 99 hydrogen questions (different field entirely) | 99 | **1.000** |
+  | hand-written off-topic and science probes | 12 | **1.000** |
+  | held-out Optimalverse stories (same universe, absent document) | 29 | **0.742** |
+  | all of the above | 144 | 0.947 |
+
+  So "this conversation has moved off your corpus" is detected essentially perfectly, on both corpora. "This
+  particular document is not in your corpus, though its neighbours are" is barely detected: the adjacent
+  group runs 0.353–0.637 against on-corpus 0.352–0.804, and at any cut preserving the on-corpus questions
+  it rejects none of them. That is a lower bound — same-universe fan fiction overlaps, so some adjacent
+  questions are genuinely answerable from indexed stories and are mislabelled — but the overlap is far too
+  wide to be explained by contamination alone.
+
+  **This rescues lever 1's original consumer.** Brief 10's grounding marker exists because "what is 2 + 2?"
+  returned electrolysis documents and read as grounded. That is the *far* case, at AUROC 1.000. The marker
+  does not need to know that one paper is missing; it needs to know the conversation left the corpus. So
+  the signal ships — per collection, and advertised as coarse.
+
+  **Measurement A is degenerate here and should not be quoted:** 84 of 88 questions found their gold
+  document, so its AUROCs rest on 4 negatives. Expected — 19 documents at k=20 makes known-item retrieval
+  nearly free — and the reason the probe set exists.
+
+  **A note on the probes versus the generated set, because they disagreed and the generated set is right.**
+  The hand-written probes are stratified to *include* cases designed to break the signal, and reading them
+  as representative produced an over-pessimistic conclusion earlier in the day (see the crossing pair
+  below, which is real but is two hand-picked points). The generated set is the representative sample; the
+  probes are the failure-mode catalogue. Both are worth keeping, and neither substitutes for the other.
+
 - **2026-08-05 — the level signal crosses, and this time both labels are verified.** The retracted version
   of this claim rested on a guessed label. The probe set (`probes.json`, scored by `run_probes.py`) supplies
   it properly, because two of its probes have settled ground truth pointing opposite ways:
