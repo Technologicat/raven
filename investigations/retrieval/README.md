@@ -121,6 +121,37 @@ in principle, but because it re-derives an answer that is already recorded, and 
 different one. Treat any pinned version missing from disk as an exclusion to report rather than a version
 to substitute.
 
+**Measured 2026-08-06, and the drift is real: 19%.** The PDFs arrived in `~/Downloads/papers` (1629 items,
+6.3 GB, a general papers directory rather than a curated set — it also holds course material and non-arXiv
+PDFs, which `raven-arxiv2id` ignores). Matching them against the pinned set:
+
+| | count |
+|---|---|
+| arXiv identifiers found on disk | 1275 |
+| identifiers in the `.bib` set | 1268 |
+| **papers present on disk, either version** | **1268 — none missing** |
+| exact matches including version | 1025 |
+| **pinned version superseded on disk** | **243** |
+
+So every paper is there, and the entire shortfall is newer versions having landed since the `.bib` was
+generated. Selecting by newest would therefore have changed 243 document IDs — breaking the gold labels for
+those questions, which key on the filename — and it would have done so silently.
+
+**The decision this forces**, because it cannot be dodged: the fulltext and abstract corpora must hold the
+*same* document set for the comparison to be controlled, and that matters more here than it would have
+yesterday, since chunk count is now the leading explanation for the similarity level. Three options:
+
+1. **Restrict both sides to the 1025 exact matches**, re-indexing the abstracts as a 1025-document corpus
+   too. Genuinely controlled, costs 19% of the corpus, and 1025 is ample. **Recommended.**
+2. Use all 1268 fulltexts by substituting newer versions. Breaks 243 gold labels; those questions become
+   unscorable, which is the same loss wearing a disguise.
+3. Re-pin the `.bib` to the newest versions and regenerate the question set. Loses the controlled
+   comparison entirely, since the abstract-side results would then come from a different corpus than the
+   ones already measured.
+
+Option 1 also has the tidiest failure mode: the excluded 243 are *listed*, so the subsetting is auditable
+rather than an unexplained count.
+
 Two things to expect, worth writing down before it is run. On-corpus similarity should *rise*, since a
 question's answer is likely stated somewhere in a full paper and only gestured at in its abstract — which
 would put the fulltext case on the opposite side of the constant from the titles case, and a single
