@@ -6,7 +6,7 @@
   "summary": {
     "all": [
       {
-        "label": "hybrid (RRF, as shipped)",
+        "label": "whole message only (the 2026-07-28 baseline)",
         "n": 99,
         "recall@k": 0.7777777777777778,
         "recall@1": 0.3939393939393939,
@@ -243,11 +243,95 @@
           17,
           20
         ]
+      },
+      {
+        "label": "whole message + subqueries (lever 3)",
+        "n": 99,
+        "recall@k": 0.7474747474747475,
+        "recall@1": 0.3838383838383838,
+        "recall@5": 0.6161616161616161,
+        "mrr": 0.4799982787727886,
+        "ranks": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          3,
+          3,
+          3,
+          3,
+          3,
+          3,
+          3,
+          3,
+          3,
+          3,
+          4,
+          4,
+          4,
+          4,
+          4,
+          5,
+          6,
+          7,
+          7,
+          8,
+          8,
+          9,
+          14,
+          14,
+          16,
+          17,
+          17,
+          20,
+          20
+        ]
       }
     ],
     "focused": [
       {
-        "label": "hybrid (RRF, as shipped)",
+        "label": "whole message only (the 2026-07-28 baseline)",
         "n": 77,
         "recall@k": 0.8181818181818182,
         "recall@1": 0.44155844155844154,
@@ -450,11 +534,84 @@
           17,
           20
         ]
+      },
+      {
+        "label": "whole message + subqueries (lever 3)",
+        "n": 77,
+        "recall@k": 0.8181818181818182,
+        "recall@1": 0.44155844155844154,
+        "recall@5": 0.6623376623376623,
+        "mrr": 0.5354306874264857,
+        "ranks": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          2,
+          2,
+          2,
+          2,
+          2,
+          3,
+          3,
+          3,
+          3,
+          3,
+          3,
+          3,
+          3,
+          4,
+          4,
+          4,
+          5,
+          6,
+          7,
+          7,
+          8,
+          9,
+          14,
+          14,
+          16,
+          17,
+          17,
+          20,
+          20
+        ]
       }
     ],
     "rambling": [
       {
-        "label": "hybrid (RRF, as shipped)",
+        "label": "whole message only (the 2026-07-28 baseline)",
         "n": 22,
         "recall@k": 0.6363636363636364,
         "recall@1": 0.22727272727272727,
@@ -516,6 +673,27 @@
           9,
           16
         ]
+      },
+      {
+        "label": "whole message + subqueries (lever 3)",
+        "n": 22,
+        "recall@k": 0.5,
+        "recall@1": 0.18181818181818182,
+        "recall@5": 0.45454545454545453,
+        "mrr": 0.2859848484848485,
+        "ranks": [
+          1,
+          1,
+          1,
+          1,
+          2,
+          2,
+          3,
+          3,
+          4,
+          4,
+          8
+        ]
       }
     ]
   },
@@ -527,9 +705,10 @@
         "WOS001052092000001.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": null,
+        "whole message only (the 2026-07-28 baseline)": null,
         "keyword only (BM25)": null,
-        "semantic only (vector)": null
+        "semantic only (vector)": null,
+        "whole message + subqueries (lever 3)": null
       }
     },
     {
@@ -539,9 +718,10 @@
         "WOS000532683200013.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": null,
+        "whole message only (the 2026-07-28 baseline)": null,
         "keyword only (BM25)": null,
-        "semantic only (vector)": null
+        "semantic only (vector)": null,
+        "whole message + subqueries (lever 3)": null
       }
     },
     {
@@ -551,9 +731,10 @@
         "WOS000663740500004.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 3,
+        "whole message only (the 2026-07-28 baseline)": 3,
         "keyword only (BM25)": 2,
-        "semantic only (vector)": 6
+        "semantic only (vector)": 6,
+        "whole message + subqueries (lever 3)": 3
       }
     },
     {
@@ -563,9 +744,10 @@
         "WOS000488930800008.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 1,
+        "whole message only (the 2026-07-28 baseline)": 1,
         "keyword only (BM25)": 1,
-        "semantic only (vector)": 1
+        "semantic only (vector)": 1,
+        "whole message + subqueries (lever 3)": 1
       }
     },
     {
@@ -575,9 +757,10 @@
         "WOS000709709500002.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 1,
+        "whole message only (the 2026-07-28 baseline)": 1,
         "keyword only (BM25)": 1,
-        "semantic only (vector)": 5
+        "semantic only (vector)": 5,
+        "whole message + subqueries (lever 3)": 1
       }
     },
     {
@@ -587,9 +770,10 @@
         "WOS000497255200012.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 14,
+        "whole message only (the 2026-07-28 baseline)": 14,
         "keyword only (BM25)": null,
-        "semantic only (vector)": 7
+        "semantic only (vector)": 7,
+        "whole message + subqueries (lever 3)": 14
       }
     },
     {
@@ -599,9 +783,10 @@
         "WOS001144196000002.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 14,
+        "whole message only (the 2026-07-28 baseline)": 14,
         "keyword only (BM25)": 6,
-        "semantic only (vector)": null
+        "semantic only (vector)": null,
+        "whole message + subqueries (lever 3)": 14
       }
     },
     {
@@ -611,9 +796,10 @@
         "WOS000631143800001.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 4,
+        "whole message only (the 2026-07-28 baseline)": 4,
         "keyword only (BM25)": 5,
-        "semantic only (vector)": 1
+        "semantic only (vector)": 1,
+        "whole message + subqueries (lever 3)": 4
       }
     },
     {
@@ -623,9 +809,10 @@
         "WOS000250649500032.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 1,
+        "whole message only (the 2026-07-28 baseline)": 1,
         "keyword only (BM25)": 1,
-        "semantic only (vector)": 1
+        "semantic only (vector)": 1,
+        "whole message + subqueries (lever 3)": 1
       }
     },
     {
@@ -635,9 +822,10 @@
         "WOS000382222300010.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": null,
+        "whole message only (the 2026-07-28 baseline)": null,
         "keyword only (BM25)": null,
-        "semantic only (vector)": null
+        "semantic only (vector)": null,
+        "whole message + subqueries (lever 3)": null
       }
     },
     {
@@ -647,9 +835,10 @@
         "WOSA1994NQ70600032.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 1,
+        "whole message only (the 2026-07-28 baseline)": 1,
         "keyword only (BM25)": 1,
-        "semantic only (vector)": 7
+        "semantic only (vector)": 7,
+        "whole message + subqueries (lever 3)": 1
       }
     },
     {
@@ -659,9 +848,10 @@
         "WOS000372321100004.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 3,
+        "whole message only (the 2026-07-28 baseline)": 3,
         "keyword only (BM25)": 1,
-        "semantic only (vector)": 7
+        "semantic only (vector)": 7,
+        "whole message + subqueries (lever 3)": 3
       }
     },
     {
@@ -671,9 +861,10 @@
         "WOS001018752400009.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 7,
+        "whole message only (the 2026-07-28 baseline)": 7,
         "keyword only (BM25)": null,
-        "semantic only (vector)": 2
+        "semantic only (vector)": 2,
+        "whole message + subqueries (lever 3)": 7
       }
     },
     {
@@ -683,9 +874,10 @@
         "WOS000076401800012.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 1,
+        "whole message only (the 2026-07-28 baseline)": 1,
         "keyword only (BM25)": 1,
-        "semantic only (vector)": 1
+        "semantic only (vector)": 1,
+        "whole message + subqueries (lever 3)": 1
       }
     },
     {
@@ -695,9 +887,10 @@
         "WOS000550773600008.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 1,
+        "whole message only (the 2026-07-28 baseline)": 1,
         "keyword only (BM25)": 1,
-        "semantic only (vector)": 1
+        "semantic only (vector)": 1,
+        "whole message + subqueries (lever 3)": 1
       }
     },
     {
@@ -707,9 +900,10 @@
         "WOS000472682900054.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 1,
+        "whole message only (the 2026-07-28 baseline)": 1,
         "keyword only (BM25)": 2,
-        "semantic only (vector)": 2
+        "semantic only (vector)": 2,
+        "whole message + subqueries (lever 3)": 1
       }
     },
     {
@@ -719,9 +913,10 @@
         "WOS000701949000002.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 1,
+        "whole message only (the 2026-07-28 baseline)": 1,
         "keyword only (BM25)": 15,
-        "semantic only (vector)": 7
+        "semantic only (vector)": 7,
+        "whole message + subqueries (lever 3)": 1
       }
     },
     {
@@ -731,9 +926,10 @@
         "WOS000424172500016.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 1,
+        "whole message only (the 2026-07-28 baseline)": 1,
         "keyword only (BM25)": 1,
-        "semantic only (vector)": 1
+        "semantic only (vector)": 1,
+        "whole message + subqueries (lever 3)": 1
       }
     },
     {
@@ -743,9 +939,10 @@
         "WOS000389089600052.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": null,
+        "whole message only (the 2026-07-28 baseline)": null,
         "keyword only (BM25)": null,
-        "semantic only (vector)": null
+        "semantic only (vector)": null,
+        "whole message + subqueries (lever 3)": null
       }
     },
     {
@@ -755,9 +952,10 @@
         "WOS000374616200052.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": null,
+        "whole message only (the 2026-07-28 baseline)": null,
         "keyword only (BM25)": 20,
-        "semantic only (vector)": null
+        "semantic only (vector)": null,
+        "whole message + subqueries (lever 3)": null
       }
     },
     {
@@ -767,9 +965,10 @@
         "WOS000864865300001.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": null,
+        "whole message only (the 2026-07-28 baseline)": null,
         "keyword only (BM25)": null,
-        "semantic only (vector)": null
+        "semantic only (vector)": null,
+        "whole message + subqueries (lever 3)": null
       }
     },
     {
@@ -779,9 +978,10 @@
         "WOS000709164500001.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 2,
+        "whole message only (the 2026-07-28 baseline)": 2,
         "keyword only (BM25)": 1,
-        "semantic only (vector)": null
+        "semantic only (vector)": null,
+        "whole message + subqueries (lever 3)": 2
       }
     },
     {
@@ -791,9 +991,10 @@
         "WOS000295657300012.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 3,
+        "whole message only (the 2026-07-28 baseline)": 3,
         "keyword only (BM25)": 8,
-        "semantic only (vector)": 8
+        "semantic only (vector)": 8,
+        "whole message + subqueries (lever 3)": 3
       }
     },
     {
@@ -803,9 +1004,10 @@
         "WOS000357348800007.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 20,
+        "whole message only (the 2026-07-28 baseline)": 20,
         "keyword only (BM25)": 10,
-        "semantic only (vector)": 14
+        "semantic only (vector)": 14,
+        "whole message + subqueries (lever 3)": 20
       }
     },
     {
@@ -815,9 +1017,10 @@
         "WOS000816935300001.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 1,
+        "whole message only (the 2026-07-28 baseline)": 1,
         "keyword only (BM25)": 8,
-        "semantic only (vector)": 1
+        "semantic only (vector)": 1,
+        "whole message + subqueries (lever 3)": 1
       }
     },
     {
@@ -827,9 +1030,10 @@
         "WOS000407410900015.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": null,
+        "whole message only (the 2026-07-28 baseline)": null,
         "keyword only (BM25)": null,
-        "semantic only (vector)": null
+        "semantic only (vector)": null,
+        "whole message + subqueries (lever 3)": null
       }
     },
     {
@@ -839,9 +1043,10 @@
         "WOS000793157300006.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 3,
+        "whole message only (the 2026-07-28 baseline)": 3,
         "keyword only (BM25)": 4,
-        "semantic only (vector)": 6
+        "semantic only (vector)": 6,
+        "whole message + subqueries (lever 3)": 3
       }
     },
     {
@@ -851,9 +1056,10 @@
         "WOS000786594900001.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 2,
+        "whole message only (the 2026-07-28 baseline)": 2,
         "keyword only (BM25)": 3,
-        "semantic only (vector)": 2
+        "semantic only (vector)": 2,
+        "whole message + subqueries (lever 3)": 2
       }
     },
     {
@@ -863,9 +1069,10 @@
         "WOS001091562100001.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 1,
+        "whole message only (the 2026-07-28 baseline)": 1,
         "keyword only (BM25)": 3,
-        "semantic only (vector)": 3
+        "semantic only (vector)": 3,
+        "whole message + subqueries (lever 3)": 1
       }
     },
     {
@@ -875,9 +1082,10 @@
         "WOS000823591300001.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 1,
+        "whole message only (the 2026-07-28 baseline)": 1,
         "keyword only (BM25)": 1,
-        "semantic only (vector)": 1
+        "semantic only (vector)": 1,
+        "whole message + subqueries (lever 3)": 1
       }
     },
     {
@@ -887,9 +1095,10 @@
         "WOSA1997WZ67300087.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": null,
+        "whole message only (the 2026-07-28 baseline)": null,
         "keyword only (BM25)": 11,
-        "semantic only (vector)": null
+        "semantic only (vector)": null,
+        "whole message + subqueries (lever 3)": null
       }
     },
     {
@@ -899,9 +1108,10 @@
         "WOS000518699600008.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 20,
+        "whole message only (the 2026-07-28 baseline)": 20,
         "keyword only (BM25)": 18,
-        "semantic only (vector)": 8
+        "semantic only (vector)": 8,
+        "whole message + subqueries (lever 3)": 20
       }
     },
     {
@@ -911,9 +1121,10 @@
         "WOS000279302600008.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 3,
+        "whole message only (the 2026-07-28 baseline)": 3,
         "keyword only (BM25)": null,
-        "semantic only (vector)": 2
+        "semantic only (vector)": 2,
+        "whole message + subqueries (lever 3)": 3
       }
     },
     {
@@ -923,9 +1134,10 @@
         "WOS001137795000001.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 1,
+        "whole message only (the 2026-07-28 baseline)": 1,
         "keyword only (BM25)": 1,
-        "semantic only (vector)": 1
+        "semantic only (vector)": 1,
+        "whole message + subqueries (lever 3)": 1
       }
     },
     {
@@ -935,9 +1147,10 @@
         "WOS000165470000010.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 1,
+        "whole message only (the 2026-07-28 baseline)": 1,
         "keyword only (BM25)": 4,
-        "semantic only (vector)": 1
+        "semantic only (vector)": 1,
+        "whole message + subqueries (lever 3)": 1
       }
     },
     {
@@ -947,9 +1160,10 @@
         "WOS000338810500198.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 8,
+        "whole message only (the 2026-07-28 baseline)": 8,
         "keyword only (BM25)": null,
-        "semantic only (vector)": 10
+        "semantic only (vector)": 10,
+        "whole message + subqueries (lever 3)": 8
       }
     },
     {
@@ -959,9 +1173,10 @@
         "WOS000426413600016.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 2,
+        "whole message only (the 2026-07-28 baseline)": 2,
         "keyword only (BM25)": 1,
-        "semantic only (vector)": null
+        "semantic only (vector)": null,
+        "whole message + subqueries (lever 3)": 2
       }
     },
     {
@@ -971,9 +1186,10 @@
         "WOS001101470100001.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": null,
+        "whole message only (the 2026-07-28 baseline)": null,
         "keyword only (BM25)": null,
-        "semantic only (vector)": null
+        "semantic only (vector)": null,
+        "whole message + subqueries (lever 3)": null
       }
     },
     {
@@ -983,9 +1199,10 @@
         "WOS000878997500005.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 1,
+        "whole message only (the 2026-07-28 baseline)": 1,
         "keyword only (BM25)": 1,
-        "semantic only (vector)": 1
+        "semantic only (vector)": 1,
+        "whole message + subqueries (lever 3)": 1
       }
     },
     {
@@ -995,9 +1212,10 @@
         "WOS000391246000024.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 9,
+        "whole message only (the 2026-07-28 baseline)": 9,
         "keyword only (BM25)": 5,
-        "semantic only (vector)": null
+        "semantic only (vector)": null,
+        "whole message + subqueries (lever 3)": 9
       }
     },
     {
@@ -1007,9 +1225,10 @@
         "WOS000241524100002.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 1,
+        "whole message only (the 2026-07-28 baseline)": 1,
         "keyword only (BM25)": 3,
-        "semantic only (vector)": 4
+        "semantic only (vector)": 4,
+        "whole message + subqueries (lever 3)": 1
       }
     },
     {
@@ -1019,9 +1238,10 @@
         "WOSA1993LA79700011.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 1,
+        "whole message only (the 2026-07-28 baseline)": 1,
         "keyword only (BM25)": 1,
-        "semantic only (vector)": 1
+        "semantic only (vector)": 1,
+        "whole message + subqueries (lever 3)": 1
       }
     },
     {
@@ -1031,9 +1251,10 @@
         "WOS001138007900001.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 3,
+        "whole message only (the 2026-07-28 baseline)": 3,
         "keyword only (BM25)": 8,
-        "semantic only (vector)": 2
+        "semantic only (vector)": 2,
+        "whole message + subqueries (lever 3)": 3
       }
     },
     {
@@ -1043,9 +1264,10 @@
         "WOS000493069800004.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 17,
+        "whole message only (the 2026-07-28 baseline)": 17,
         "keyword only (BM25)": 9,
-        "semantic only (vector)": null
+        "semantic only (vector)": null,
+        "whole message + subqueries (lever 3)": 17
       }
     },
     {
@@ -1055,9 +1277,10 @@
         "WOS000412033800062.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 1,
+        "whole message only (the 2026-07-28 baseline)": 1,
         "keyword only (BM25)": 1,
-        "semantic only (vector)": 1
+        "semantic only (vector)": 1,
+        "whole message + subqueries (lever 3)": 1
       }
     },
     {
@@ -1067,9 +1290,10 @@
         "WOS000887228500002.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 16,
+        "whole message only (the 2026-07-28 baseline)": 16,
         "keyword only (BM25)": 9,
-        "semantic only (vector)": null
+        "semantic only (vector)": null,
+        "whole message + subqueries (lever 3)": 16
       }
     },
     {
@@ -1079,9 +1303,10 @@
         "WOS000384451800044.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 1,
+        "whole message only (the 2026-07-28 baseline)": 1,
         "keyword only (BM25)": 1,
-        "semantic only (vector)": 3
+        "semantic only (vector)": 3,
+        "whole message + subqueries (lever 3)": 1
       }
     },
     {
@@ -1091,9 +1316,10 @@
         "WOS000981569200001.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 1,
+        "whole message only (the 2026-07-28 baseline)": 1,
         "keyword only (BM25)": 1,
-        "semantic only (vector)": 4
+        "semantic only (vector)": 4,
+        "whole message + subqueries (lever 3)": 1
       }
     },
     {
@@ -1103,9 +1329,10 @@
         "WOS000445715400049.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": null,
+        "whole message only (the 2026-07-28 baseline)": null,
         "keyword only (BM25)": null,
-        "semantic only (vector)": null
+        "semantic only (vector)": null,
+        "whole message + subqueries (lever 3)": null
       }
     },
     {
@@ -1115,9 +1342,10 @@
         "WOS000332999800030.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 1,
+        "whole message only (the 2026-07-28 baseline)": 1,
         "keyword only (BM25)": 2,
-        "semantic only (vector)": 4
+        "semantic only (vector)": 4,
+        "whole message + subqueries (lever 3)": 1
       }
     },
     {
@@ -1127,9 +1355,10 @@
         "WOS001013708200001.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 4,
+        "whole message only (the 2026-07-28 baseline)": 4,
         "keyword only (BM25)": null,
-        "semantic only (vector)": 1
+        "semantic only (vector)": 1,
+        "whole message + subqueries (lever 3)": 4
       }
     },
     {
@@ -1139,9 +1368,10 @@
         "WOS000999392900001.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": null,
+        "whole message only (the 2026-07-28 baseline)": null,
         "keyword only (BM25)": null,
-        "semantic only (vector)": null
+        "semantic only (vector)": null,
+        "whole message + subqueries (lever 3)": null
       }
     },
     {
@@ -1151,9 +1381,10 @@
         "WOS000284523900022.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 2,
+        "whole message only (the 2026-07-28 baseline)": 2,
         "keyword only (BM25)": 5,
-        "semantic only (vector)": 3
+        "semantic only (vector)": 3,
+        "whole message + subqueries (lever 3)": 2
       }
     },
     {
@@ -1163,9 +1394,10 @@
         "WOS000240809600002.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 1,
+        "whole message only (the 2026-07-28 baseline)": 1,
         "keyword only (BM25)": 1,
-        "semantic only (vector)": 1
+        "semantic only (vector)": 1,
+        "whole message + subqueries (lever 3)": 1
       }
     },
     {
@@ -1175,9 +1407,10 @@
         "WOS000361778500001.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 4,
+        "whole message only (the 2026-07-28 baseline)": 4,
         "keyword only (BM25)": 2,
-        "semantic only (vector)": 1
+        "semantic only (vector)": 1,
+        "whole message + subqueries (lever 3)": 4
       }
     },
     {
@@ -1187,9 +1420,10 @@
         "WOS000311196800071.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 7,
+        "whole message only (the 2026-07-28 baseline)": 7,
         "keyword only (BM25)": null,
-        "semantic only (vector)": 3
+        "semantic only (vector)": 3,
+        "whole message + subqueries (lever 3)": 7
       }
     },
     {
@@ -1199,9 +1433,10 @@
         "WOS000321403300005.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 2,
+        "whole message only (the 2026-07-28 baseline)": 2,
         "keyword only (BM25)": 1,
-        "semantic only (vector)": 11
+        "semantic only (vector)": 11,
+        "whole message + subqueries (lever 3)": 2
       }
     },
     {
@@ -1211,9 +1446,10 @@
         "WOS000574904900005.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 1,
+        "whole message only (the 2026-07-28 baseline)": 1,
         "keyword only (BM25)": 2,
-        "semantic only (vector)": 1
+        "semantic only (vector)": 1,
+        "whole message + subqueries (lever 3)": 1
       }
     },
     {
@@ -1223,9 +1459,10 @@
         "WOS000362292200052.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 1,
+        "whole message only (the 2026-07-28 baseline)": 1,
         "keyword only (BM25)": 1,
-        "semantic only (vector)": 1
+        "semantic only (vector)": 1,
+        "whole message + subqueries (lever 3)": 1
       }
     },
     {
@@ -1235,9 +1472,10 @@
         "WOS000623980800001.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 17,
+        "whole message only (the 2026-07-28 baseline)": 17,
         "keyword only (BM25)": null,
-        "semantic only (vector)": 7
+        "semantic only (vector)": 7,
+        "whole message + subqueries (lever 3)": 17
       }
     },
     {
@@ -1247,9 +1485,10 @@
         "WOS000949234900001.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 1,
+        "whole message only (the 2026-07-28 baseline)": 1,
         "keyword only (BM25)": 2,
-        "semantic only (vector)": 17
+        "semantic only (vector)": 17,
+        "whole message + subqueries (lever 3)": 1
       }
     },
     {
@@ -1259,9 +1498,10 @@
         "WOS001065563500001.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 3,
+        "whole message only (the 2026-07-28 baseline)": 3,
         "keyword only (BM25)": 2,
-        "semantic only (vector)": 11
+        "semantic only (vector)": 11,
+        "whole message + subqueries (lever 3)": 3
       }
     },
     {
@@ -1271,9 +1511,10 @@
         "WOS000399623500025.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 1,
+        "whole message only (the 2026-07-28 baseline)": 1,
         "keyword only (BM25)": 1,
-        "semantic only (vector)": 1
+        "semantic only (vector)": 1,
+        "whole message + subqueries (lever 3)": 1
       }
     },
     {
@@ -1283,9 +1524,10 @@
         "WOS000439095100002.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 5,
+        "whole message only (the 2026-07-28 baseline)": 5,
         "keyword only (BM25)": 3,
-        "semantic only (vector)": 20
+        "semantic only (vector)": 20,
+        "whole message + subqueries (lever 3)": 5
       }
     },
     {
@@ -1295,9 +1537,10 @@
         "WOS000992365300001.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 1,
+        "whole message only (the 2026-07-28 baseline)": 1,
         "keyword only (BM25)": 1,
-        "semantic only (vector)": 1
+        "semantic only (vector)": 1,
+        "whole message + subqueries (lever 3)": 1
       }
     },
     {
@@ -1307,9 +1550,10 @@
         "WOS000456355700026.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 1,
+        "whole message only (the 2026-07-28 baseline)": 1,
         "keyword only (BM25)": 2,
-        "semantic only (vector)": 1
+        "semantic only (vector)": 1,
+        "whole message + subqueries (lever 3)": 1
       }
     },
     {
@@ -1319,9 +1563,10 @@
         "WOS000556366300010.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 6,
+        "whole message only (the 2026-07-28 baseline)": 6,
         "keyword only (BM25)": null,
-        "semantic only (vector)": 2
+        "semantic only (vector)": 2,
+        "whole message + subqueries (lever 3)": 6
       }
     },
     {
@@ -1331,9 +1576,10 @@
         "WOS000252259500017.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": null,
+        "whole message only (the 2026-07-28 baseline)": null,
         "keyword only (BM25)": null,
-        "semantic only (vector)": null
+        "semantic only (vector)": null,
+        "whole message + subqueries (lever 3)": null
       }
     },
     {
@@ -1343,9 +1589,10 @@
         "WOS000496300800001.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 1,
+        "whole message only (the 2026-07-28 baseline)": 1,
         "keyword only (BM25)": 1,
-        "semantic only (vector)": 1
+        "semantic only (vector)": 1,
+        "whole message + subqueries (lever 3)": 1
       }
     },
     {
@@ -1355,9 +1602,10 @@
         "WOS000292084100031.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 1,
+        "whole message only (the 2026-07-28 baseline)": 1,
         "keyword only (BM25)": 1,
-        "semantic only (vector)": 4
+        "semantic only (vector)": 4,
+        "whole message + subqueries (lever 3)": 1
       }
     },
     {
@@ -1367,9 +1615,10 @@
         "WOS000521109700014.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 3,
+        "whole message only (the 2026-07-28 baseline)": 3,
         "keyword only (BM25)": 1,
-        "semantic only (vector)": null
+        "semantic only (vector)": null,
+        "whole message + subqueries (lever 3)": 3
       }
     },
     {
@@ -1379,9 +1628,10 @@
         "WOS000579568300024.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": null,
+        "whole message only (the 2026-07-28 baseline)": null,
         "keyword only (BM25)": null,
-        "semantic only (vector)": null
+        "semantic only (vector)": null,
+        "whole message + subqueries (lever 3)": null
       }
     },
     {
@@ -1391,9 +1641,10 @@
         "WOS000530094600021.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 1,
+        "whole message only (the 2026-07-28 baseline)": 1,
         "keyword only (BM25)": 1,
-        "semantic only (vector)": 2
+        "semantic only (vector)": 2,
+        "whole message + subqueries (lever 3)": 1
       }
     },
     {
@@ -1403,9 +1654,10 @@
         "WOS000325002300002.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 1,
+        "whole message only (the 2026-07-28 baseline)": 1,
         "keyword only (BM25)": 1,
-        "semantic only (vector)": 1
+        "semantic only (vector)": 1,
+        "whole message + subqueries (lever 3)": 1
       }
     },
     {
@@ -1415,9 +1667,10 @@
         "WOS000491293500016.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 1,
+        "whole message only (the 2026-07-28 baseline)": 1,
         "keyword only (BM25)": 1,
-        "semantic only (vector)": null
+        "semantic only (vector)": null,
+        "whole message + subqueries (lever 3)": 1
       }
     },
     {
@@ -1427,9 +1680,10 @@
         "WOS000864187600001.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": null,
+        "whole message only (the 2026-07-28 baseline)": null,
         "keyword only (BM25)": null,
-        "semantic only (vector)": null
+        "semantic only (vector)": null,
+        "whole message + subqueries (lever 3)": null
       }
     },
     {
@@ -1439,9 +1693,10 @@
         "WOS000366177100053.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 1,
+        "whole message only (the 2026-07-28 baseline)": 1,
         "keyword only (BM25)": 1,
-        "semantic only (vector)": 8
+        "semantic only (vector)": 8,
+        "whole message + subqueries (lever 3)": 1
       }
     },
     {
@@ -1451,9 +1706,10 @@
         "WOS000737554400001.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": null,
+        "whole message only (the 2026-07-28 baseline)": null,
         "keyword only (BM25)": null,
-        "semantic only (vector)": null
+        "semantic only (vector)": null,
+        "whole message + subqueries (lever 3)": null
       }
     },
     {
@@ -1463,9 +1719,10 @@
         "WOS000376695800039.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": null,
+        "whole message only (the 2026-07-28 baseline)": null,
         "keyword only (BM25)": null,
-        "semantic only (vector)": null
+        "semantic only (vector)": null,
+        "whole message + subqueries (lever 3)": null
       }
     },
     {
@@ -1475,9 +1732,10 @@
         "WOS000223325700006.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 1,
+        "whole message only (the 2026-07-28 baseline)": 1,
         "keyword only (BM25)": 3,
-        "semantic only (vector)": 2
+        "semantic only (vector)": 2,
+        "whole message + subqueries (lever 3)": 2
       }
     },
     {
@@ -1487,9 +1745,10 @@
         "WOS000430515400050.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 1,
+        "whole message only (the 2026-07-28 baseline)": 1,
         "keyword only (BM25)": 1,
-        "semantic only (vector)": null
+        "semantic only (vector)": null,
+        "whole message + subqueries (lever 3)": 1
       }
     },
     {
@@ -1499,9 +1758,10 @@
         "WOS000861039200005.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 7,
+        "whole message only (the 2026-07-28 baseline)": 7,
         "keyword only (BM25)": 4,
-        "semantic only (vector)": 4
+        "semantic only (vector)": 4,
+        "whole message + subqueries (lever 3)": 3
       }
     },
     {
@@ -1511,9 +1771,10 @@
         "WOS000471081800018.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 13,
+        "whole message only (the 2026-07-28 baseline)": 13,
         "keyword only (BM25)": 6,
-        "semantic only (vector)": null
+        "semantic only (vector)": null,
+        "whole message + subqueries (lever 3)": null
       }
     },
     {
@@ -1523,9 +1784,10 @@
         "WOS000922244300001.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": null,
+        "whole message only (the 2026-07-28 baseline)": null,
         "keyword only (BM25)": null,
-        "semantic only (vector)": null
+        "semantic only (vector)": null,
+        "whole message + subqueries (lever 3)": null
       }
     },
     {
@@ -1535,9 +1797,10 @@
         "WOS001045444000001.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 1,
+        "whole message only (the 2026-07-28 baseline)": 1,
         "keyword only (BM25)": 15,
-        "semantic only (vector)": 2
+        "semantic only (vector)": 2,
+        "whole message + subqueries (lever 3)": 1
       }
     },
     {
@@ -1547,9 +1810,10 @@
         "WOS000573610100012.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 4,
+        "whole message only (the 2026-07-28 baseline)": 4,
         "keyword only (BM25)": null,
-        "semantic only (vector)": 1
+        "semantic only (vector)": 1,
+        "whole message + subqueries (lever 3)": 3
       }
     },
     {
@@ -1559,9 +1823,10 @@
         "WOS000548186300077.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 18,
+        "whole message only (the 2026-07-28 baseline)": 18,
         "keyword only (BM25)": null,
-        "semantic only (vector)": 9
+        "semantic only (vector)": 9,
+        "whole message + subqueries (lever 3)": null
       }
     },
     {
@@ -1571,9 +1836,10 @@
         "WOS000551863000001.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 3,
+        "whole message only (the 2026-07-28 baseline)": 3,
         "keyword only (BM25)": null,
-        "semantic only (vector)": 1
+        "semantic only (vector)": 1,
+        "whole message + subqueries (lever 3)": null
       }
     },
     {
@@ -1583,9 +1849,10 @@
         "WOS001134771800001.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": null,
+        "whole message only (the 2026-07-28 baseline)": null,
         "keyword only (BM25)": null,
-        "semantic only (vector)": null
+        "semantic only (vector)": null,
+        "whole message + subqueries (lever 3)": null
       }
     },
     {
@@ -1595,9 +1862,10 @@
         "WOS000242677500014.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 6,
+        "whole message only (the 2026-07-28 baseline)": 6,
         "keyword only (BM25)": null,
-        "semantic only (vector)": 1
+        "semantic only (vector)": 1,
+        "whole message + subqueries (lever 3)": 4
       }
     },
     {
@@ -1607,9 +1875,10 @@
         "WOS000403626700003.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": null,
+        "whole message only (the 2026-07-28 baseline)": null,
         "keyword only (BM25)": null,
-        "semantic only (vector)": null
+        "semantic only (vector)": null,
+        "whole message + subqueries (lever 3)": null
       }
     },
     {
@@ -1619,9 +1888,10 @@
         "WOS000476964900086.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 2,
+        "whole message only (the 2026-07-28 baseline)": 2,
         "keyword only (BM25)": 13,
-        "semantic only (vector)": 16
+        "semantic only (vector)": 16,
+        "whole message + subqueries (lever 3)": 2
       }
     },
     {
@@ -1631,9 +1901,10 @@
         "WOS000332666200001.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 14,
+        "whole message only (the 2026-07-28 baseline)": 14,
         "keyword only (BM25)": 7,
-        "semantic only (vector)": null
+        "semantic only (vector)": null,
+        "whole message + subqueries (lever 3)": 8
       }
     },
     {
@@ -1643,9 +1914,10 @@
         "WOS000274079200013.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 3,
+        "whole message only (the 2026-07-28 baseline)": 3,
         "keyword only (BM25)": 1,
-        "semantic only (vector)": null
+        "semantic only (vector)": null,
+        "whole message + subqueries (lever 3)": 1
       }
     },
     {
@@ -1655,9 +1927,10 @@
         "WOS000524128500018.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 1,
+        "whole message only (the 2026-07-28 baseline)": 1,
         "keyword only (BM25)": 1,
-        "semantic only (vector)": 2
+        "semantic only (vector)": 2,
+        "whole message + subqueries (lever 3)": 1
       }
     },
     {
@@ -1667,9 +1940,10 @@
         "WOS000357671600014.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": null,
+        "whole message only (the 2026-07-28 baseline)": null,
         "keyword only (BM25)": null,
-        "semantic only (vector)": null
+        "semantic only (vector)": null,
+        "whole message + subqueries (lever 3)": null
       }
     },
     {
@@ -1679,9 +1953,10 @@
         "WOS000254479300043.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": 1,
+        "whole message only (the 2026-07-28 baseline)": 1,
         "keyword only (BM25)": 11,
-        "semantic only (vector)": 9
+        "semantic only (vector)": 9,
+        "whole message + subqueries (lever 3)": 4
       }
     },
     {
@@ -1691,9 +1966,10 @@
         "WOS000346551500013.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": null,
+        "whole message only (the 2026-07-28 baseline)": null,
         "keyword only (BM25)": null,
-        "semantic only (vector)": null
+        "semantic only (vector)": null,
+        "whole message + subqueries (lever 3)": null
       }
     },
     {
@@ -1703,9 +1979,10 @@
         "WOS000690715100002.bib"
       ],
       "rank": {
-        "hybrid (RRF, as shipped)": null,
+        "whole message only (the 2026-07-28 baseline)": null,
         "keyword only (BM25)": null,
-        "semantic only (vector)": null
+        "semantic only (vector)": null,
+        "whole message + subqueries (lever 3)": null
       }
     }
   ]

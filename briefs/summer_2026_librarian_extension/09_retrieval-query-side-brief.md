@@ -290,6 +290,52 @@ sentences of wandering context ending in one specific question, which is what th
 actually produces — retrieve at 0.292 MRR against 0.562 for focused ones. Nothing else in the brief has a
 measured effect that size. Build this first.
 
+### Built 2026-08-05, and it does not work as specified
+
+Implemented as written above — whole message plus every qualifying sentence, all fused together — and
+measured against `investigations/retrieval/`. It is **worse than not splitting**, on the subset it was built
+for:
+
+| condition | n | R@1 | R@5 | R@20 | MRR |
+|---|---|---|---|---|---|
+| *rambling*, whole message only | 22 | 0.23 | 0.41 | 0.64 | 0.315 |
+| *rambling*, whole + subqueries | 22 | 0.18 | 0.45 | **0.50** | **0.286** |
+| *focused*, whole message only | 77 | 0.44 | 0.66 | 0.82 | 0.535 |
+| *focused*, whole + subqueries | 77 | 0.44 | 0.66 | 0.82 | 0.535 |
+
+The focused rows are identical to three decimals, which is the control working: those questions do not
+split, so nothing should move, and nothing does. That is also what rules out a plumbing bug — a fault in the
+per-query indexing or the fusion would have moved both.
+
+**The mechanism, which the numbers make legible.** A rambling message yields five to seven subqueries, so
+the whole-message query holds one vote in seven. And the context sentences it is outvoted by *agree with
+each other*, because they are all about the general topic — so RRF, which rewards agreement across lists,
+promotes the generically topical documents over the one that answers the question. **That is this brief's
+own opening complaint, reproduced by the fix for it.** The dilution mechanism is the one Juha predicted for
+conversational sentences (see above); it turns out not to need pleasantries, because ordinary context
+sentences do it too.
+
+**What this does and does not retract.** The *diagnosis* stands and is untouched: rambling messages really
+do retrieve at half the MRR of focused ones, and that is still the largest effect in the data. What is
+refuted is the *remedy as specified* — "split it and fuse everything" — because equal votes for every
+sentence is not a mechanism for finding the question, it is a mechanism for amplifying the context.
+
+**The machinery is kept, defaulted off** (`HybridIR.query(multi_query=...)`, `split_into_subqueries`). The
+split, the batched multi-query retrieval and the single flat fusion are all reusable and all measured as
+correct; only the policy over them is wrong. **Juha, 2026-08-05: the jury is out until lever 1 exists** —
+a per-subquery confidence test would drop the sentences that found nothing in particular, which is precisely
+the set doing the damage here, and it is the same signal the conversational-sentence problem wants. So this
+should be re-measured with lever 1 in hand before anything is concluded about multi-query as an idea.
+
+Candidates to try at that point, cheapest first, each one re-scored against the set:
+
+- **Per-subquery confidence gating** (lever 1). The principled one, and the reason to wait.
+- **Far fewer subqueries.** Cap at two or three rather than eight, preferring the sentence carrying the
+  question mark and the last sentence — the brief's own recency prior, which the implementation applied only
+  as a tiebreak at the cap rather than as the selection rule.
+- **Weight the whole-message query above its parts** in the fusion, so that it cannot be outvoted by the
+  material it already contains.
+
 **Its failure mode is the mirror image of the one it fixes**, and it has to be designed around rather than
 discovered later. Splitting throws away exactly the context that a *short* question depends on. "I'm
 working on alkaline electrolyzers. What is the specific energy consumption?" splits into a second sentence

@@ -199,7 +199,7 @@ class TestResultStructure:
                     "My supervisor suggested I look into the practical side of things. "
                     "What do these papers say about agents built on language models?")
         assert hybridir.split_into_subqueries(rambling)  # guard: if this stops splitting, the test stops testing
-        results = retriever.query(rambling, k=5)
+        results = retriever.query(rambling, k=5, multi_query=True)  # explicit: the default is off
         assert len(results) > 0
         for r in results:
             assert "document_id" in r and "text" in r and "score" in r
@@ -216,7 +216,7 @@ class TestResultStructure:
         rambling = ("I have been reading around this area for a while now and there is a lot of it. "
                     "What do these papers say about agents built on language models?")
         results, (kw_results, kw_scores), (vec_results, vec_distances) = retriever.query(
-            rambling, k=5, return_extra_info=True)
+            rambling, k=5, multi_query=True, return_extra_info=True)  # explicit: the default is off
         assert len(kw_results) == len(kw_scores)
         assert len(vec_results) == len(vec_distances)
         assert len(results) > 0

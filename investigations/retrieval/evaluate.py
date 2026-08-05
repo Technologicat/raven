@@ -63,10 +63,10 @@ def summarize(label: str, ranks: list[int | None], k: int) -> dict:
 
 
 def report(rows: list[dict], k: int) -> None:
-    print(f"\n{'condition':<28} {'n':>4} {'R@1':>7} {'R@5':>7} {f'R@{k}':>7} {'MRR':>7}")
-    print("-" * 66)
+    print(f"\n{'condition':<44} {'n':>4} {'R@1':>7} {'R@5':>7} {f'R@{k}':>7} {'MRR':>7}")
+    print("-" * 82)
     for row in rows:
-        print(f"{row['label']:<28} {row['n']:>4} {row['recall@1']:>7.2f} {row['recall@5']:>7.2f} "
+        print(f"{row['label']:<44} {row['n']:>4} {row['recall@1']:>7.2f} {row['recall@5']:>7.2f} "
               f"{row['recall@k']:>7.2f} {row['mrr']:>7.3f}")
 
 
@@ -91,9 +91,16 @@ def main() -> None:
     # Per-question ranks under each condition. The two single-engine conditions are obtained by
     # starving the other one with an impossible threshold, so that no code path differs between
     # them and the fusion - the comparison is only meaningful if everything else is identical.
-    conditions = {"hybrid (RRF, as shipped)": {},
-                  "keyword only (BM25)": {"semantic_distance_threshold": -1.0},
-                  "semantic only (vector)": {"keyword_score_threshold": 1e9}}
+    # `multi_query` is stated explicitly on every condition rather than left to the default, so that the
+    # baseline rows keep measuring the same thing when the default changes under them. The whole-message-only
+    # rows are what the 2026-07-28 baseline in the README recorded.
+    conditions = {"whole message only (the 2026-07-28 baseline)": {"multi_query": False},
+                  "keyword only (BM25)": {"multi_query": False, "semantic_distance_threshold": -1.0},
+                  "semantic only (vector)": {"multi_query": False, "keyword_score_threshold": 1e9},
+                  "whole message + subqueries (lever 3)": {"multi_query": True}}
+
+    # What the per-question progress line and the rank histogram below describe.
+    MAIN_CONDITION = "whole message + subqueries (lever 3)"
 
     ranks: dict[str, dict[str, list]] = {name: collections.defaultdict(list) for name in conditions}
     for i, item in enumerate(questions, start=1):
@@ -103,7 +110,7 @@ def main() -> None:
             rank = rank_of_gold(results, gold)
             ranks[name][item["kind"]].append(rank)
             ranks[name]["all"].append(rank)
-        shown = ranks["hybrid (RRF, as shipped)"]["all"][-1]
+        shown = ranks[MAIN_CONDITION]["all"][-1]
         print(f"  [{i}/{len(questions)}] {item['kind']:<9} gold rank {shown if shown else '-':<4} "
               f"{item['question'][:70]}")
 
@@ -114,8 +121,8 @@ def main() -> None:
         print(f"\n=== {kind} ===")
         report(rows, k)
 
-    hist = collections.Counter(r for r in ranks["hybrid (RRF, as shipped)"]["all"] if r is not None)
-    missing = sum(1 for r in ranks["hybrid (RRF, as shipped)"]["all"] if r is None)
+    hist = collections.Counter(r for r in ranks[MAIN_CONDITION]["all"] if r is not None)
+    missing = sum(1 for r in ranks[MAIN_CONDITION]["all"] if r is None)
     print(f"\ngold-document rank histogram (hybrid): "
           f"{dict(sorted(hist.items()))}, absent from top-{k}: {missing}")
 

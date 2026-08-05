@@ -876,7 +876,7 @@ class HybridIR:
               keyword_score_threshold: float = 0.1,
               semantic_distance_threshold: float = 0.8,
               include_documents: Optional[List[str]] = None,
-              multi_query: bool = True,
+              multi_query: bool = False,
               return_extra_info: bool = False) -> List[Dict]:
         """Hybrid BM25 + Vector search with RRF fusion.
 
@@ -899,18 +899,30 @@ class HybridIR:
 
         `include_documents`: Optional list of document IDs. If provided, search only in the specified documents.
 
-        `multi_query`: If `True` (default), also query with each sentence of `query` that is worth asking
-                       separately (`split_into_subqueries`), and fuse all the result sets together. This is
-                       what makes a rambling chat message retrieve like a focused question instead of like
-                       its own centroid; see that function for the reasoning and the measured effect.
+        `multi_query`: If `True`, also query with each sentence of `query` that is worth asking separately
+                       (`split_into_subqueries`), and fuse all the result sets together.
+
+                       **Defaults to `False`, because as it stands it does not work.** Measured against
+                       `investigations/retrieval/` on 2026-08-05: no change on focused questions (0.535 MRR
+                       either way, as expected — those do not split), and on the rambling ones it is
+                       *worse* than not splitting at all (0.286 against 0.315 MRR, and R@20 0.64 → 0.50).
+
+                       The mechanism is visible in the numbers and is worth knowing before trying again. A
+                       rambling message yields five to seven subqueries, so the whole-message query holds
+                       one vote in seven — and the context sentences it is outvoted by *agree with each
+                       other* on generically topical documents, because that is what they are about. RRF
+                       rewards agreement, so it promotes them. Which is the brief's own opening complaint,
+                       reproduced by the fix for it: less topical matches outscoring the ones that answer
+                       the question.
+
+                       Kept rather than reverted because the machinery is right and reusable — the split,
+                       the batched multi-query retrieval, the single flat fusion — and only the policy over
+                       it is wrong. What it wants is fewer and better subqueries rather than every sentence
+                       voting equally: see brief 09 lever 3 for the candidates.
 
                        Every backend here batches, so the extra queries cost extra rows rather than extra
                        round trips: one `bm25s.retrieve` over all token lists, one `encode` over all texts,
-                       one Chroma query over all embeddings.
-
-                       Set to `False` to query with `query` verbatim — for an evaluation harness comparing
-                       the two, or for a caller whose query is already one focused question and who would
-                       rather not pay for the split.
+                       one Chroma query over all embeddings. Cost is not what is wrong with it.
 
         `return_extra_info`:
             If `True`: Return
