@@ -42,6 +42,15 @@ Bundled changes to the import pipeline (`importer.py` / `raven-importer`):
    - **v1.5** — figures rank against text natively in one collection. English-centric.
    - **v2-moe** — Finnish, Japanese and other non-English material works, which matters because JAMK's own
      context is Finnish and multilingual scientific literature is a corpus property rather than a niche.
+     - **Measured 2026-08-05, and it is not only a Finnish argument.** The axially-moving-materials
+       bibliography named below as the evaluation instrument is *itself* multilingual, because a field's
+       founding literature predates English as its lingua franca: its oldest record is Euler 1766, *De motu
+       vibratorio tympanorum* (Latin), and the field's founding paper is Skutch 1897, *Über die Bewegung
+       eines gespannten Fadens…* (German). Huber 1923 is German too. So the corpus we would judge clustering
+       quality *with* contains material an English-centric embedder handles worst — and those records are
+       the historically important ones, the papers a reader most wants placed correctly on the map. That is
+       a concrete argument for v2-moe rather than a hypothetical one, and it cuts against the v1.5 branch
+       independently of the Finnish case.
      Images lose the direct route and reach text queries through the description pivot instead — which exists
      anyway, since images carry OCR and description channels regardless (see brief 12).
 
@@ -96,8 +105,7 @@ Bundled changes to the import pipeline (`importer.py` / `raven-importer`):
    is what forces the 10k sample**, so whichever algorithm can fit the whole corpus in the space that
    matters has an advantage the 2D-clustering arrangement never exposed. These are two separate choices —
    *which space* (this item) and *which algorithm* (brief 13) — and they should not be bundled, but the
-   first changes the constraints on the second. Note brief 13's reference carries authors and method but
-   **no URL**; it needs one before anyone can act on it.
+   first changes the constraints on the second. Code and paper are linked from brief 13's note.
 
 ## How to tell whether any of this made things better
 

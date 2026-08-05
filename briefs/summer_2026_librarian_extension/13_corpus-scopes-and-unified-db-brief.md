@@ -118,9 +118,11 @@ when it runs. Everything in this section is [P] and wants arguing with.
   roughly 1000:1, but internal callbacks make that layer awkward to reach through f2py. A suspected bug at
   `subgrad_help_b` line 1308 (`a(j,i)` for the value, `b(j,i)` for the gradient) is still to be raised with
   the authors.
-  - **[N] No URL recorded, which blocks acting on this.** The note carries authors, method and a Fortran
-    line count, all of which came from a March 2026 conversation rather than from the paper in hand. Someone
-    has to supply the link before the f2py-wrap test or the `subgrad_help_b` bug report can start.
+  - **[D] References**, supplied 2026-08-05 — until then this note carried authors and method from a March
+    2026 conversation with no way to reach the source, which blocked both the f2py-wrap test and the
+    `subgrad_help_b` bug report:
+    - Code: [github.com/jmlamp/Clust-Splitter](https://github.com/jmlamp/Clust-Splitter)
+    - Paper: [arXiv:2505.04389](https://arxiv.org/abs/2505.04389)
   - **[P] Its incrementality is in k, not in data** — easy to conflate under a "when to cluster" heading.
   - **[P] But centroid-based fits the placed/fitted model better than density-based.** MSSC gives real
     centers, so placing a new point is an exact `argmin` over k rather than `approximate_predict`, and brief
