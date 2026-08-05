@@ -208,7 +208,12 @@ If the search index ever becomes corrupted - or if you need to force a full rebu
 
 The document database answers *what do my documents say about this*. An attachment answers a different question — *read this one, now* — and the two are governed differently because of it. A search returns the snippets that matched; an attachment is handed over whole.
 
-Attach a **document** (the same formats the document database accepts, listed above) and its text is folded into your message when the request is built, so **any** model can read it — no vision capability required, and a PDF works as well as a `.txt`. Attach an **image** and a vision-capable model sees it directly; on a text-only model there is nothing to see, and *Librarian* says so rather than sending it into the void. Both kinds ride along with the message you attached them to, so they stay put in the branch where you asked about them.
+Two kinds can be attached, and they place different demands on the model:
+
+- **Documents** — the same formats the document database accepts, listed above. The text is extracted and folded into your message when the request is built, so **any** model can read one; no vision capability is required, and a PDF works as well as a `.txt`.
+- **Images** — these need a vision-capable model (a VLM). Whether *Librarian* can tell in advance depends on your LLM backend. LM Studio reports the flag, so a confirmed text-only model refuses an image at the point you pick it, with an explanation rather than a silent failure later. oobabooga does not report it, so the image is allowed on faith and the backend errors on send if the model cannot see. Documents are unaffected either way.
+
+Both kinds ride along with the message you attached them to, so they stay put in the branch where you asked about them.
 
 **The AI produces attachments too.** When it fetches a web page and the page is long, the result is stored as an attachment rather than pasted into the conversation: the chat log shows the opening and a chip you can click, and the model still reads the whole thing. Without that, one fetch buries the conversation it was meant to inform under dozens of screens of text. A long result from the document database is handled the other way round — it stays in the conversation, collapsed to its opening, with a toggle and a link to the file it came from, because that file is already on your disk and does not need a second copy.
 
