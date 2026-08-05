@@ -64,6 +64,18 @@
       ]
     },
     {
+      "id": "resurrected-girlfriend",
+      "class": "content-in-passage",
+      "gold": ["Friendship is Optimal_ Veritas Vos Liberabit.html"],
+      "verified": true,
+      "note": "Ryan Szilard's girlfriend Amy died years before the story opens; late on, Celestia tells him 'I have recreated your past girlfriend, as you requested', and she is renamed Crystal Seed. 'Amy' occurs 40 times in the gold and zero times in the story the reader first guessed. Verified from the source text rather than by retrieval, because the fiction index was swapped out at the time. NOTE THE PREMISE IS SLIGHTLY WRONG, deliberately kept: the reader's phrasing has Celestia uploading humanity *in order to* resurrect Amy, and that inverts the causation — per the reader, the resurrection is a side effect, and a lever to motivate Ryan into helping Celestia. That mismatch is the point. A real recollection compresses plot into causation, and a probe set of only well-formed queries would never test what retrieval does with a query whose premise the corpus does not support. Second probe on this document; `undercover-agi` is the other, and they are different information needs.",
+      "phrasings": [
+        "Which story has Celestia upload all of humanity to resurrect the protagonist's dead girlfriend?",
+        "The main character's girlfriend died, and Celestia brings her back as an upload.",
+        "Celestia recreated his dead girlfriend in Equestria."
+      ]
+    },
+    {
       "id": "entropy-end-of-universe",
       "class": "content-in-passage",
       "gold": ["The Last Optimization.html"],

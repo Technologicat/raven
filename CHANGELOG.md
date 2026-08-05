@@ -15,6 +15,11 @@
 - RAG: closing the app while indexing is in progress no longer blocks until the full backlog is processed. The commit loop exits cleanly after the current document on cancellation, persists whatever was applied, and requeues the unprocessed remainder; on the next app start, `bootup`'s rescan re-detects the corresponding file changes via mtime.
 - the indicators are now stacked vertically — INDEXING (red, RAG database update), DOCS (white, RAG search), SYSTEM (LLM prompt processing), WEB (websearch tool) — instead of overlapping at the same screen position. INDEXING and DOCS are independent and show simultaneously when an LLM query lands during a background reindex, each with its own progress label.
 
+- **`raven-indexer`, a new command-line tool that builds or refreshes the document database without starting the GUI.** Indexing a corpus previously meant launching `raven-librarian` and waiting, which tied a batch job to a desktop session — and to the GUI being in a runnable state, so an unrelated frontend problem could block an indexing run that had nothing to do with it. Run with no arguments it indexes your configured documents directory; give it a directory to index that one instead, `-d` to write the index elsewhere, `-r` to descend into subdirectories, and `-q` for just the summary.
+  - It reconciles rather than rebuilds: new files are added, changed files re-read, deleted files dropped, and files already indexed are left alone. Re-running it on an unchanged corpus takes a few seconds.
+  - Interrupting it with Ctrl+C leaves a valid partial index rather than a corrupt one, and re-running resumes from there.
+  - It ingests exactly what Librarian ingests, so the index it builds is the one the chat clients expect.
+
 - the chat input is now **multiline**, for composing multi-paragraph messages. The send / microphone controls move below the text field.
   - **Ctrl+Enter sends, Enter inserts a newline.** Set `config.send_message_key = "enter"` to swap them. Ctrl+Enter is the default because a mis-aimed Enter costs much more than a mis-aimed Ctrl+Enter: sending half a message cannot be undone (there is no message editing yet — you would copy the sent text back out, paste, delete, resume), while an unwanted newline is one backspace.
 

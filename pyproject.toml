@@ -192,6 +192,7 @@ raven-csv2bib = "raven.papers.csv2bib:main"
 raven-pdf2bib = "raven.papers.pdf2bib:main"
 raven-qoi2png = "raven.tools.qoi2png:main"
 raven-wos2bib = "raven.papers.wos2bib:main"
+raven-indexer = "raven.librarian.indexer:main"  # build/refresh Librarian's RAG index headlessly
 raven-minichat = "raven.librarian.minichat:main"
 raven-librarian = "raven.librarian.app:main"
 raven-server = "raven.server.app:main"
