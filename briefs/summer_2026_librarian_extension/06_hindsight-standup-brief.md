@@ -123,6 +123,13 @@ brief's work makes the migration load-bearing — Hindsight will consume whateve
 serves, so the migration ships with the standup rather than waiting for Visualizer's importer
 rework.
 
+**The migration carries one measurement, and it is easy to miss from here.** Brief 09 settles
+Librarian's off-corpus detection on an absolute cosine threshold near 0.40, denominated in
+`multi-qa-mpnet-base-cos-v1`'s similarity scale, so **swapping the embedder invalidates it** —
+silently, since a threshold in the wrong place does not error. Re-measure before the swap
+ships; the harness makes it four `sharpness.py` runs. Full statement of the trigger, and why
+it is written in two briefs rather than referenced from one, in brief 11 item 1.
+
 Concrete plan:
 
 - **Single "default" role** serving both text and image via the paired nomic v1.5 models

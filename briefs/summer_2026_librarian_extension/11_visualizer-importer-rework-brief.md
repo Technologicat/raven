@@ -18,6 +18,25 @@ Bundled changes to the import pipeline (`importer.py` / `raven-importer`):
      evidence from a search rather than a checked changelog, so re-verify before committing — but plan for
      the fork standing.
 
+   **Amended 2026-08-05: the migration carries one measurement, whichever branch is taken.** Brief 09
+   settles Librarian's off-corpus detection on an absolute cosine threshold near 0.40 — a number denominated
+   in `multi-qa-mpnet-base-cos-v1`'s similarity scale. Any replacement model puts its similarities on a
+   different scale, so **swapping the embedder invalidates that constant**, and the failure is silent: a
+   threshold in the wrong place does not error, it starts calling answerable questions ungrounded, or stops
+   catching off-corpus ones, and nothing in the app reports either. Re-measure before the swap ships.
+
+   The cost is small, which is what the retrieval harness was built for — four indexed corpora (hydrogen,
+   arXiv AI, fan fiction, and a titles-only bibliography), one `sharpness.py <corpus>` run each, and the
+   comparison table falls out. Method in `investigations/retrieval/README.md`.
+
+   Expect more than a rescaling: mpnet dates from 2021, so a 2024 model may move retrieval quality itself
+   rather than only the axis it is measured on. The titles-only corpus is where the current embedder is
+   weakest, and so the case most likely to improve.
+
+   *(This trigger is repeated in brief 06, because the two briefs disagree about which lands first — 06 has
+   the migration shipping with the Hindsight standup, and this brief has it in the importer rework. Whoever
+   gets there first needs to see it, so it is written in both rather than referenced from one.)*
+
    So the two branches, and they are mutually exclusive as long as that holds:
 
    - **v1.5** — figures rank against text natively in one collection. English-centric.
