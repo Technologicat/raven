@@ -323,6 +323,19 @@ recall-quality issue:
   asymmetric-retrieval's small quality lift, but Hindsight's TEMPR retrieval architecture
   (semantic + BM25 + graph + temporal) is doing most of the work; the prefix benefit is
   marginal in context.
+  - **"Marginal in context" is a prior, not a measurement, and the context is Hindsight's**
+    (2026-08-05). The argument is that TEMPR's four retrieval channels absorb what the prefixes
+    would have added — which says nothing about **Librarian**, whose hybrid is two channels and
+    which therefore has less to absorb it with. Two different claims, and only the first has an
+    argument behind it.
+  - The prefix question is cheap to settle once the migration is underway, because it is a
+    one-line change to the embedding call and the harness is already built: run
+    `investigations/retrieval/evaluate.py` with prefixes on and off over the same index, and
+    read recall@k and MRR. Do it while re-measuring the threshold (see above) — same corpora,
+    same sweep, one extra condition.
+  - Worth the twenty minutes rather than trusting the prior: on 2026-08-05 four predictions in
+    this problem area were written down before their runs and four were falsified, one of them
+    exactly backwards. Priors here have a poor record.
 - **Small Hindsight-side wrapper**: inject `task="query"` for recall calls and
   `task="document"` for retain calls. No Raven-side changes needed (the `task` extension is
   ready to receive). Adds a small layer between Hindsight and Raven; reasonable if v0
