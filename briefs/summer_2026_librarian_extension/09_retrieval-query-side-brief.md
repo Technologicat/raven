@@ -392,6 +392,52 @@ similarity, trained against graded judgements, so it may be far more comparable 
 distance turned out to be. If so, sub-goal 1 comes back for free on the reranker's score instead. Stated as
 a hypothesis; today's lesson is that plausible mechanisms need measuring.
 
+##### Correction to the adaptive-`k` verdict: the measurement above answers a different question
+
+Juha's framing, 2026-08-06, and it invalidates the dismissal rather than softening it. Adaptive `k` was
+weighed above as a *context budget* decision — how many results to spend on this query. The more
+interesting version is **detecting whether a question is specific or general against this corpus**:
+
+- *"What is the drift rate of the Kelvin-3 microarray?"* — one document answers it; more results are noise.
+- *"What component models are needed for a green hydrogen value chain, assuming photovoltaics?"* — a
+  synthesis question, where the answer is assembled from many documents and a small `k` truncates it.
+
+**The 0.635 figure says nothing about this**, and cannot, because **every question in all four sets is a
+known-item question by construction**. Each was written *from* one passage and is answerable by one
+document; `rambling` wanders on the way but still lands on a single gold document. Specificity has no
+variance in the eval data, so what was measured is *difficulty* — will this query's one right answer reach
+rank 1 — which is a different variable that happens to be measurable with the sets we have.
+
+**And the mechanism points the right way this time**, which is worth stating carefully given how the same
+signal was refuted for off-corpus detection. `score_sharpness` measures how concentrated a query's matches
+are. For on/off-corpus that was backwards: a query with nothing matching reads *sharp*, because an
+accidental best hit stands clear of an already-low field. For specific-vs-general the semantics line up —
+a general question genuinely matches many documents well, giving a flat distribution and low sharpness;
+a specific one concentrates. Same primitive, third use, and the first where its meaning matches the job.
+
+**What it needs is a question class that does not exist yet**: `broad` or `synthesis`, written to be
+answerable only by combining several documents, with *a set* of gold documents rather than one. That also
+means a different metric — recall over the gold set, not rank of the gold document — so it is a genuine
+addition to the harness rather than a new prompt. Worth building, and it is the piece that would let
+sub-goal 2 be evaluated on its own terms for the first time.
+
+##### Retrieve deep, then rerank: the candidate set should be much larger than 20
+
+Also Juha's, same date, and it is the standard retrieve-and-rerank shape rather than anything exotic: fetch
+a wide, cheap candidate set, then spend an expensive model only on reordering it. Local BM25 and vector
+queries are cheap, so `k=20` for the *candidate* stage is a limit inherited from the days when `k` was also
+what reached the LLM, and there is no reason for the two to be the same number.
+
+The measured case for it is strong: gold is at rank 1 for 39/42/9/70% but within k=20 for 78/84/42/95%, so
+a large fraction of the misses are already ordering failures rather than retrieval failures — and **going
+deeper can only add more of them**, since recall@k is monotone in k. banichuk at 42% within k=20 has the
+most to gain.
+
+The constraint is reranker latency, which is linear in candidate count, so **the first measurement needs no
+reranker at all**: run `evaluate.py` at k = 20, 50, 100, 200 and find where recall saturates. Reranking 200
+candidates is pointless if recall@100 already has them, and that curve costs four cheap runs per corpus.
+Do that before choosing the candidate depth, then size the rerank stage against the latency budget.
+
 Model candidate and cost argument are in the reranking section further down. Scope for the 0.2.8 window:
 rerank the existing k=20 candidate set, measure with `evaluate.py` across all four corpora, and ship it
 behind a config toggle.
