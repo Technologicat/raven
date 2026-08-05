@@ -610,6 +610,33 @@ problem rather than of any lever:
 Which together point away from the query side: the remaining gaps want something that has *read* the
 corpus — the RAG tool surface, or a document-level summary layer — rather than a better query string.
 
+**That is stage 3 of `VISION.md`, reached from the opposite direction, and the convergence is worth naming.**
+Stage 3 — *LLM as first-pass reviewer: read all of the selection against one question* — was specified from
+the researcher's workflow, and that document already says of it, flatly, "That is not a retrieval problem."
+These measurements are the same conclusion arrived at by exhausting the retrieval side and seeing what is
+left over. Two of the three properties above are what a per-document reading pass simply dissolves: a
+document-level question is trivial for something that has read the document, and a dramatized scene is
+findable by a reader who is not matching vocabulary. Note too that stage 3's half-built piece is
+**per-document summarization — shipped code, currently switched off** because it was built to run over a
+whole dataset at import time rather than over a selection; and a summary layer is also exactly what the
+document-level gap wants indexed. Whether those are one mechanism or two is a real design question, and not
+one to answer here.
+
+### Next, when this is picked up again (agreed 2026-08-05)
+
+Two things, in this order:
+
+1. **Ship the levers for what they measured well** — the off-corpus detector, at collection granularity,
+   into brief 10's grounding marker and the drop-the-injects decision. This part is *finished*: measured on
+   two corpora, with a limitation that is known and must be stated rather than discovered (coarse — it sees
+   a conversation leaving the corpus, not a document missing from it).
+2. **Work out what is still available on the retrieval side**, before conceding the remainder to stage 3.
+   Open, and deliberately not pre-answered here. Candidates this brief already carries: lever 2's tokenizer
+   fix, which none of today's results touch and which is independently motivated; adaptive `k`, which is
+   `score_sharpness`'s surviving consumer and is offline-evaluable; lever 4's PRF. Plus whatever the fiction
+   measurements suggest that nobody has thought of yet — that is the part worth arriving at with a clear
+   head rather than by continuing down this list. Reranking sits behind all of it, still unmeasured.
+
 ## What reranking is still for, after the levers
 
 Sharpening the query does not make ranking *comparative*. A cross-encoder reads the query and a candidate
