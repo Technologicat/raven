@@ -300,6 +300,39 @@ A hazard specific to this corpus, to check rather than assume: questions generat
 much less room to avoid reusing the title's distinctive words than questions generated from an abstract, so
 `check_leakage.py` matters more here than it did.
 
+**That hazard was backwards, and looking for it found the real one (2026-08-05).** Leakage measured on the
+first 31 titles-only questions is the *lowest* of any set — longest shared run 2 words, against hydrogen's
+6 and fiction's worse. The reason is obvious in hindsight: a ten-word title offers almost nothing to echo,
+while an abstract offers paragraphs of it. For reference, `check_leakage.py` now covers all four sets:
+
+| set | max shared run | share at 6+ words |
+|---|---|---|
+| hydrogen | 6 | 2% |
+| arxiv-ai | 5 | 0% |
+| banichuk (first 31) | 2 | 0% |
+
+What the zero-overlap cases turned up instead is **a known-item validity problem, not a copying one**. Six
+questions share *no* word with their title, and inspection shows all six are good paraphrases — one even
+translates a German title correctly. But two of them come from bare textbook titles, and those paraphrase
+into questions that identify no particular document:
+
+- *Fluid Mechanics* → "How do liquids and gases flow and respond to applied forces?"
+- *Exploratory Data Analysis* → "What methods are recommended for initially inspecting and visualizing raw
+  datasets to uncover hidden patterns before formal statistical modeling?"
+
+Both are faithful to their source and neither is answerable *only* by it. The generator's docstring already
+warns that known-item scoring understates precision because other documents may also answer a question;
+a titles-only corpus makes that much worse, because a generic title gives nothing specific to build a
+discriminating question from. So expect this corpus's retrieval numbers to be a floor with a wider gap
+beneath them than the abstract corpora's.
+
+It also suggests a mechanism for something already measured: scored against the *hydrogen* index, banichuk
+questions sit higher than any other off-corpus group (median 0.372, max 0.558, against fiction's 0.266 and
+0.494). Generic questions match more things everywhere. Topical proximity — structural mechanics is nearer
+to hydrogen-production engineering than fan fiction is — would explain it equally well, so the two are
+confounded on the present evidence and the mechanism is *not* established. What would separate them: score
+the generic questions and the specific ones separately against an unrelated index.
+
 ## What the set has decided so far
 
 - **2026-08-05 (superseded the same day — see the arXiv section above) — "per collection" means calibrated

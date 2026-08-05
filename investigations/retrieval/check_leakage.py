@@ -20,11 +20,19 @@ that are partly copies of their sources shift that distribution upward and make 
 separate from off-corpus queries than it is. The number that comes out is then wrong in the unsafe
 direction: a cut placed too high, rejecting real questions in the field.
 
-Reads the corpus to recover each passage, so it needs the documents directory the set was generated from —
-which is recorded in the set itself.
+**The BibTeX sets need it too, for a reason the BM25 baseline cannot cover.** That baseline answers "are
+these questions trivially findable", which is about retrieval scores. The threshold question is different
+and sharper: a set whose questions are partly copies sits higher in similarity than an honest one, so the
+cut read off it lands too high, and the harm shows up as real questions rejected in the field. Both need
+checking, and the titles-only corpus needs it most — a question generated from a title alone has an order
+of magnitude less room to paraphrase away from its source than one generated from an abstract.
+
+Reads the corpus to recover each source, so it needs the documents directory the set was generated from.
+Fiction records that directory in the set itself; the BibTeX sets are looked up by corpus name in
+`make_questions.CORPORA`, and the source text is the title-plus-abstract the generator was shown.
 
 Usage:
-    python check_leakage.py [worst_n]
+    python check_leakage.py [fiction|hydrogen|arxiv-ai|banichuk] [worst_n]
 """
 
 import collections
@@ -34,6 +42,8 @@ import re
 import sys
 
 from raven.common import docextract
+
+import make_questions  # shared instrument: corpus profiles and record parsing are defined once
 
 HERE = pathlib.Path(__file__).parent
 QUESTIONS_PATH = HERE / "fiction_questions.json"
@@ -70,17 +80,11 @@ def longest_shared_run(question: str, source: str) -> tuple[int, str]:
     return 0, ""
 
 
-def main() -> None:
-    worst_n = int(sys.argv[1]) if len(sys.argv) > 1 else 10
-
-    if not QUESTIONS_PATH.exists():
-        print(f"no question set at {QUESTIONS_PATH}; run make_fiction_questions.py first")
-        return
-    payload = json.loads(QUESTIONS_PATH.read_text())
-    questions = payload["questions"]
+def fiction_rows(payload: dict) -> tuple[list[dict], str]:
+    """Score the fiction set, whose source for a question is a passage at a recorded offset."""
     passage_chars = payload["passage_chars"]
 
-    # Each set records where it drew from, so the passages can be recovered without saving them into the
+    # The set records where it drew from, so the passages can be recovered without saving them into the
     # committed file — which would put third-party prose in the repository.
     corpus_dirs = [pathlib.Path(payload["corpus_dir"]).expanduser()]
     if payload.get("held_out_dir"):
@@ -99,7 +103,7 @@ def main() -> None:
                     print(f"  skipping '{path.name}': {type(exc).__name__}: {exc}")
 
     rows = []
-    for item in questions:
+    for item in payload["questions"]:
         source = texts.get(item["source"])
         if source is None:
             continue
@@ -108,14 +112,60 @@ def main() -> None:
         length, run = longest_shared_run(item["question"], passage)
         rows.append({"length": length, "run": run, "kind": item["kind"],
                      "question": item["question"], "source": item["source"]})
+    return rows, f"the {passage_chars}-character passage it was written from"
 
+
+def bibtex_rows(corpus: str, payload: dict) -> tuple[list[dict], str]:
+    """Score a BibTeX set, whose source for a question is the record the generator was shown.
+
+    That is title-plus-abstract, or title alone for a titles-only corpus — reconstructed rather than
+    stored, for the same reason fiction reconstructs its passages.
+    """
+    profile = make_questions.CORPORA[corpus]
+    corpus_dir = profile["docs_dir"]
+    use_abstracts = profile.get("use_abstracts", True)
+    if not corpus_dir.is_dir():
+        print(f"warning: corpus directory missing, cannot check: {corpus_dir}")
+        return [], ""
+
+    rows = []
+    for item in payload["questions"]:
+        for document_id in item["gold"]:
+            entry = make_questions.load_entry(corpus_dir / document_id, require_abstract=use_abstracts)
+            if entry is None:
+                continue
+            source = entry["title"] + " " + entry["abstract"]
+            length, run = longest_shared_run(item["question"], source)
+            rows.append({"length": length, "run": run, "kind": item["kind"],
+                         "question": item["question"], "source": document_id})
+    return rows, "its record's title" + (" and abstract" if use_abstracts else " (no abstract available)")
+
+
+def main() -> None:
+    corpus = sys.argv[1] if len(sys.argv) > 1 else "fiction"
+    worst_n = int(sys.argv[2]) if len(sys.argv) > 2 else 10
+
+    if corpus == "fiction":
+        questions_path = QUESTIONS_PATH
+    elif corpus in make_questions.CORPORA:
+        questions_path = make_questions.CORPORA[corpus]["out_path"]
+    else:
+        raise SystemExit(f"unknown corpus '{corpus}'; expected 'fiction' or one of "
+                         f"{', '.join(make_questions.CORPORA)}")
+
+    if not questions_path.exists():
+        print(f"no question set at {questions_path}; generate it first")
+        return
+    payload = json.loads(questions_path.read_text())
+
+    rows, against = (fiction_rows(payload) if corpus == "fiction" else bibtex_rows(corpus, payload))
     if not rows:
-        print("no questions could be checked (corpus directories missing?)")
+        print("no questions could be checked (corpus directory missing?)")
         return
 
     histogram = collections.Counter(r["length"] for r in rows)
-    print(f"longest shared word run, over {len(rows)} questions "
-          f"(each against the {passage_chars}-character passage it was written from):\n")
+    print(f"corpus '{corpus}': longest shared word run, over {len(rows)} questions "
+          f"(each against {against}):\n")
     for length in sorted(histogram):
         marker = "  <-- copied phrasing" if length >= SUSPECT_RUN else ""
         print(f"  {length:>2} words: {'#' * histogram[length]:<40} {histogram[length]:>3}{marker}")
