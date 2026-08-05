@@ -202,6 +202,29 @@ The search index syncs automatically:
 
 If the search index ever becomes corrupted - or if you need to force a full rebuild for any reason - you can simply delete the search index directory while *Librarian* is not running. A full search index rebuild will then automatically take place when *Librarian* is started. By default, the index is stored in `~/.config/raven/llmclient/rag_index`.
 
+### Indexing from the command line: `raven-indexer`
+
+Everything above happens inside the GUI. If you have just dropped several hundred documents into the folder, you may not want to sit and watch *Librarian* chew through them before you can use it - and on a headless machine, or over SSH, starting the GUI at all is not an option. `raven-indexer` does the same indexing from a terminal and then exits:
+
+```bash
+raven-indexer                        # index the configured document database
+raven-indexer ~/papers               # index some other directory instead
+raven-indexer ~/papers -r            # ...including its subdirectories
+raven-indexer -d /tmp/scratch-index  # write the index somewhere else
+raven-indexer -q                     # only the final summary, no per-document progress
+```
+
+*Raven-server* must be running, since the semantic embedding goes through its `embeddings` module - the same requirement *Librarian* itself has, and for the same reason (GPU acceleration, and one copy of the model rather than one per app).
+
+Things worth knowing:
+
+- **It reconciles; it does not rebuild.** New files are indexed, changed files re-read, deleted files dropped, and files already indexed are left alone. Running it again on an unchanged folder takes a few seconds. To force a genuine rebuild, delete the index directory first, as above.
+- **Interrupting it is safe.** Ctrl+C stops after the current document, leaving a valid partial index rather than a corrupt one, and re-running picks up where it left off.
+- **It reads exactly what *Librarian* reads** - the same file types, from the same `llm_docs_exts` setting - so the index it builds is the one the chat clients expect. It is the same code underneath; only the front end differs.
+- **It is not a separate database.** With no arguments it writes to your configured index, so the next time you start *Librarian*, the work is simply already done.
+
+The progress display adapts to where the output is going: a live single line that rewrites itself in a terminal, one line per update when redirected to a log file.
+
 **What happens to a conversation when you delete a document.** You can add, change and remove documents at any time, including in the middle of a chat that has been reading them, and nothing breaks — but it is worth knowing what survives and what does not.
 
 - **The conversation stays readable.** When the AI reads a document, the passage it read is stored in the chat itself. Deleting the file later does not blank out anything you can already see in the log.

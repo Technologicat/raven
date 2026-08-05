@@ -427,6 +427,7 @@ raven-avatar-pose-editor          →    python -m raven.avatar.pose_editor.app
 raven-check-cuda                  →    python -m raven.tools.check_cuda
 raven-check-audio-devices         →    python -m raven.tools.check_audio_devices
 raven-minichat                    →    python -m raven.librarian.minichat
+raven-indexer                     →    python -m raven.librarian.indexer
 ```
 
 
