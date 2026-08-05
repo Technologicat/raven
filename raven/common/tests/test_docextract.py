@@ -265,6 +265,65 @@ def test_html_extracts_body_and_drops_chrome(tmp_path):
     assert "Copyright 2026" not in text          # footer
 
 
+# Each article has to be *big* for this to test anything. Readability extraction keeps every article on a
+# page of short ones and switches to picking a single block once they pass roughly 5000 characters — which is
+# the size a real chapter is, and why the defect shows up on saved fiction and not on a hand-written fixture.
+# Measured against trafilatura 2.1.0: at 2000 characters per article all 13 survive, at 5000 exactly one does.
+_ARTICLE_CHARS = 6000
+_FILLER = ("The narrator considered the situation at some length, and then considered it again from a "
+           "second angle entirely, which did not help as much as had been hoped. ")
+
+
+def _multi_article_html(n_articles: int) -> bytes:
+    """A saved page holding several full-length articles — the shape a multi-chapter story is archived in."""
+    filler = (_FILLER * (_ARTICLE_CHARS // len(_FILLER) + 1))[:_ARTICLE_CHARS]
+    articles = "".join(
+        f'<article class="chapter"><header><h1>{i}. Chapter Title {i}</h1></header>'
+        f"<p>Chapter {i} opens on the marker phrase chaptermarker{i}. {filler}</p>"
+        f'<footer><p><a href="#top">Jump to top</a></p></footer></article>'
+        for i in range(1, n_articles + 1))
+    return (f"<!DOCTYPE html><html><head><title>A Serial</title></head><body>"
+            f"<nav>Home | Archive</nav>{articles}<footer>Copyright 2026</footer>"
+            f"</body></html>").encode("utf-8")
+
+
+def test_html_with_many_articles_keeps_all_of_them(tmp_path):
+    # Readability extraction selects one main content block. On a page that holds several — a story archived
+    # as one article per chapter — that silently discards the rest, and the document lands in the index
+    # present, findable and a fraction complete. Measured at 6% of the text on a real saved page.
+    p = tmp_path / "serial.html"
+    p.write_bytes(_multi_article_html(13))
+    text = docextract.extract_text(p)
+    missing = [i for i in range(1, 14) if f"chaptermarker{i}" not in text]
+    assert not missing, f"chapters dropped from the extraction: {missing}"
+
+
+def test_html_article_headings_are_recovered(tmp_path):
+    # Each article's own heading is dropped by the readability pass the same way the page `<title>` is, and
+    # on a serial those are the chapter titles — worth having in a retrieval index.
+    #
+    # Only the per-article headings are asserted, not the page heading above them: which string trafilatura's
+    # metadata pass calls the title is its own business, and on a synthetic fixture it takes the first `<h1>`
+    # rather than `<title>`. That pairing is covered by `test_html_title_is_recovered`, against a page shaped
+    # the way the extractor expects.
+    p = tmp_path / "serial.html"
+    p.write_bytes(_multi_article_html(3))
+    text = docextract.extract_text(p)
+    assert ["## 1. Chapter Title 1", "## 2. Chapter Title 2", "## 3. Chapter Title 3"] == \
+        [line for line in text.splitlines() if line.startswith("## ")]
+
+
+def test_html_single_article_still_drops_page_chrome(tmp_path):
+    # The guard against the fix above defeating the feature it guards: a page with one content block must
+    # still get boilerplate removal rather than being handed back whole.
+    p = tmp_path / "post.html"
+    p.write_bytes(_ARTICLE_HTML)
+    text = docextract.extract_text(p)
+    assert "optimization pressure" in text
+    assert "Home | Archive | About" not in text
+    assert "Copyright 2026" not in text
+
+
 def test_html_title_is_recovered(tmp_path):
     # Readability extraction drops `<title>`, and on a saved page it is often the only thing naming the
     # document — filenames off the web are routinely useless.

@@ -197,6 +197,21 @@ def _extract_odf(path: pathlib.Path) -> str:
                                       f"{type(exc).__name__}: {exc}") from exc
 
 
+# How much of a page's text content selection must keep before we believe it selected rather than truncated.
+#
+# Readability extraction picks *one* main content block, which is the right call for a news page wrapped in
+# navigation and comments, and the wrong one for a saved document that holds several: a multi-chapter story
+# arrives as one `<article>` per chapter and comes back as a single chapter, with nothing to indicate that the
+# other twelve were dropped. Silent, and catastrophic for a retrieval index — the document is present, findable
+# and 6% complete.
+#
+# Measured over 32 saved multi-chapter pages: where selection was correct it kept 82-100% of the page's text,
+# and where it truncated it kept 2-32%. Nothing landed in between, so the halfway point has better than 1.5x
+# margin on both sides. The two failure directions are not symmetric either, which is what justifies erring
+# low: falling back needlessly costs a page's navigation chrome, while not falling back costs the document.
+_HTML_CONTENT_SELECTION_MIN_RETENTION = 0.5
+
+
 def _extract_html(path: pathlib.Path) -> str:
     # `trafilatura` is imported here rather than at module level because it costs about 0.3 s — three times the
     # whole office stack put together — and most sessions never open an HTML document. `raven.server.modules
@@ -214,6 +229,22 @@ def _extract_html(path: pathlib.Path) -> str:
         # surprised by it. `favor_recall` errs toward keeping borderline content: for a retrieval index, a
         # paragraph wrongly kept costs far less than one wrongly discarded.
         body = trafilatura.extract(raw, output_format="markdown", include_tables=True, favor_recall=True) or ""
+
+        # Guard against content selection having discarded content rather than chrome. `html2txt` takes the
+        # whole page instead of choosing a block, so it is the denominator that says how much went missing.
+        whole_page = trafilatura.html2txt(raw) or ""
+        if len(body) < _HTML_CONTENT_SELECTION_MIN_RETENTION * len(whole_page):
+            # Re-extract per `<article>`, which is the remedy that keeps the Markdown: selection went wrong
+            # by choosing among the page's compositions, so hand it each one on its own and let it choose
+            # nothing. Whole-page text is the last resort, for a page whose blocks are not marked up as
+            # articles — flat and complete beats shapely and truncated, but it is the worse of the two.
+            per_article = _extract_html_articles(trafilatura, raw)
+            recovered = per_article if len(per_article) >= len(body) else ""
+            logger.info(f"_extract_html: '{path}': content selection kept {len(body)} of {len(whole_page)} "
+                        f"characters, which reads as truncation rather than boilerplate removal; "
+                        f"{'re-extracting per article' if recovered else 'falling back to whole-page text'}.")
+            body = recovered or whole_page
+
         title = _html_title(trafilatura, raw)
     except Exception as exc:  # noqa: BLE001 -- trafilatura surfaces malformed input as several unrelated types
         raise DocumentExtractionError(f"extract_text: '{path}' could not be read as an HTML document: "
@@ -225,6 +256,49 @@ def _extract_html(path: pathlib.Path) -> str:
     if title and not _body_opens_with(body, title):
         return f"# {title}\n\n{body}" if body else f"# {title}"
     return body
+
+
+def _extract_html_articles(trafilatura: Any, raw: bytes) -> str:
+    """Extract each `<article>` on a page separately, as Markdown, and join them in document order.
+
+    For a page that holds several compositions rather than one — a serial archived as one article per
+    chapter, a digest, a thread — extracting the page as a whole makes the readability pass choose between
+    them, and it discards everything it did not choose. Handing it one article at a time removes the choice.
+
+    Returns `""` when the page has no `<article>` elements, or when none of them yields any text, so a caller
+    can treat an empty result as "this page is not built that way" with no special case.
+    """
+    import lxml.html  # noqa: PLC0415 -- deferred alongside trafilatura, which is what brings lxml in
+
+    try:
+        tree = lxml.html.fromstring(raw)
+    except Exception:  # noqa: BLE001 -- lxml surfaces malformed markup as several unrelated types
+        return ""
+
+    parts = []
+    for article in tree.findall(".//article"):
+        body = trafilatura.extract(lxml.html.tostring(article, encoding="unicode"),
+                                   output_format="markdown", include_tables=True, favor_recall=True) or ""
+        if not body:
+            continue
+        # The readability pass treats an article's own heading as its title and drops it, the same way it
+        # drops the page's `<title>` — so recover it here for the same reason, one level below the page
+        # heading the caller prepends. On a serial these are the chapter titles, and they are worth having
+        # in a retrieval index: "which chapter is the one about the shutdown" is a question people ask.
+        heading = _first_heading(article)
+        if heading and not _body_opens_with(body, heading):
+            body = f"## {heading}\n\n{body}"
+        parts.append(body)
+    return "\n\n".join(parts)
+
+
+def _first_heading(element: Any) -> str | None:
+    """Text of the first `<h1>`–`<h6>` anywhere inside an lxml element, or `None` if it has no heading."""
+    for node in element.iter("h1", "h2", "h3", "h4", "h5", "h6"):
+        text = " ".join(node.text_content().split())
+        if text:
+            return text
+    return None
 
 
 def _body_opens_with(body: str, title: str) -> bool:
