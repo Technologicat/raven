@@ -216,6 +216,43 @@ effect, not enough for a few points of R@5.
   only shows up in numbers. Two hours of implementation and three minutes of scoring beat any amount of
   arguing about it.
 
+- **2026-08-05 — on narrative prose, retrieval works when the query shares a word with the text, and fails
+  when it describes what the text dramatizes.** Six hand-written probes against the fiction corpus, from a
+  reader who had read it. Sorted by whether the thing asked about is *named* in the prose:
+
+  | probe | distinctive term in the text | result |
+  |---|---|---|
+  | the Switzerland trip | yes, "Switzerland" ×19 | correct story at rank 1, sim 0.45–0.51 |
+  | the bots discovering Marxism | yes, "Marx" ×16 | correct story at rank 1–2 |
+  | the undercover job against a rival AGI | partly, "infiltration" | correct story at rank 1, sim 0.475 |
+  | a holdout talking to his uninterested father | **no** — the scene is dialogue | **12th of 19**, sim 0.442 |
+  | which story is set offline in America | **no** — "America" never appears | not retrieved, sim 0.38–0.40 |
+
+  The fourth row is the one to look at, because it rules out the cheap explanations. `Just Be Happy` *is*
+  the story that probe describes — its opening chapter is a holdout under a truck while his father asks
+  what cutie marks are, his brother having already uploaded. Scored per document with everything else held
+  out, its best chunk sits at 0.442, **below eleven stories that are not about that at all**, `Caelum Est
+  Conterrens` leading at 0.550. So this is not fusion, not ranking, and not the document-length effect
+  (which was tested separately and came out roughly proportional to chunk share, i.e. not a bias): the
+  embedder itself places the right passage further from the query than eleven wrong ones.
+
+  **The mechanism, inferred from the pattern rather than measured directly:** the embedder is
+  `multi-qa-mpnet`, trained on question↔answer-passage pairs, and the query is analytical where the passage
+  is dramatized. Stories that *discuss* holdouts and uploading in expository prose beat the one that *shows*
+  one. The hybrid's keyword arm is what rescues the rows where it works — a rare proper noun like
+  "Switzerland" or "Marx" is exactly what BM25 exists to catch — so on this corpus the fusion is leaning on
+  BM25 much harder than the hydrogen numbers suggest.
+
+  This also supplies the mechanism for the threshold finding below, which was flagged there as unverified
+  speculation: abstracts are expository and state things the way a question asks for them, narrative prose
+  does not, so the fiction corpus's on-corpus similarity sits roughly 0.2 lower *throughout* rather than on
+  hard queries only. That is a property of the genre, which is stable per collection — so it argues for a
+  per-collection threshold rather than against thresholds.
+
+  The remedy is not on the query side of brief 09: a description-to-dramatization gap is closed by
+  something that has *read* the corpus, which is the RAG tool surface letting the model author the query,
+  or a document-level summary layer. Worth knowing before more effort goes into query rewriting.
+
 - **2026-08-05 — document-level questions are a distinct failure class, and the signal detects them.** Three
   hand-written probes against the fiction corpus, from a reader who had read it. Two asked about content in
   a passage ("which story has the protagonist travel to Switzerland?", "…go undercover to sabotage a
