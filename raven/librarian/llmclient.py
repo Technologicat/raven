@@ -340,9 +340,10 @@ def label_documents(retriever: "Optional[hybridir.HybridIR]",
                an automatic search, `query` (what surfaced it). `chatutil.format_consulted_documents` is what
                renders the result for the model.
 
-    Returns new dicts, each the input entry plus `label` and `present`; the input is not modified. An entry naming a document that is no longer in the
-    database keeps an empty label rather than being dropped - the conversation did consult it, and saying
-    so with only an ID is more honest than pretending it was never there.
+    Returns new dicts, each the input entry plus `label` and `present`; the input is not modified. An entry
+    naming a document that is no longer in the database keeps an empty label rather than being dropped - the
+    conversation did consult it, and saying so with only an ID is more honest than pretending it was never
+    there.
 
     `present` says which of those two an entry is, because the label cannot: an empty label means *either* a
     deleted document *or* one whose text yielded nothing to label it with, and those want opposite responses

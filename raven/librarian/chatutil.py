@@ -82,7 +82,7 @@ def image_content_part(url: str) -> Dict[str, Any]:
     return {"type": "image_url", "image_url": {"url": url}}
 
 def text_file_content_part(url: str, name: str, source: str) -> Dict[str, Any]:
-    """Wrap an attached document as a text-file content-part: `{"type": "text_file", "text_file": {"url", "name", "source"}}`.
+    """Wrap an attached document as a content-part: `{"type": "text_file", "text_file": {"url", "name", "source"}}`.
 
     A Raven-internal part type for a document (plain text or PDF) attached to a message. As with
     `image_content_part`, in a *stored* message `url` is a `sidecar:<filename>` reference — the document bytes
