@@ -227,8 +227,22 @@ effect, not enough for a few points of R@5.
   | the undercover job against a rival AGI | partly, "infiltration" | correct story at rank 1, sim 0.475 |
   | a holdout talking to his uninterested father | **no** — the scene is dialogue | **12th of 19**, sim 0.442 |
   | which story is set offline in America | **no** — "America" never appears | not retrieved, sim 0.38–0.40 |
+  | which story is an Asimov pastiche | **no** — and the referent is outside the corpus entirely | not retrieved, sim 0.36–0.40 — **and it should not be.** No reasonable definition of retrieval covers this: the fact being asked for is not in the corpus in any form |
+  | the same story, asked by its content | yes, "entropy" ×4 | correct story at rank 1, sim 0.46–0.65 |
 
-  The fourth row is the one to look at, because it rules out the cheap explanations. `Just Be Happy` *is*
+  The last two rows are the same document, and the pair is the cleanest thing in the table: `The Last
+  Optimization` is unfindable as *an Asimov pastiche* and trivially findable as *a story about entropy*.
+  The allusion queries also score the two lowest similarities of the whole session, so the confidence
+  signal calls it correctly — and calling it correctly here means reporting nothing, which is the answer.
+
+  Note the 0.646 on "Celestia tries to defeat entropy over trillions of years", the highest on-corpus
+  reading on this corpus and close to hydrogen's median. That query nearly quotes the story's opening
+  ("she had tried repeatedly and multiply, for hundreds of trillions of original-Earth years"). So the
+  genre gap is really a *register* gap: narrative scores low against a question, and high against a query
+  phrased in its own terms. Which is the same effect as the "generated questions are easier" limitation
+  above, seen from the other side — a reader working from memory does not phrase queries that way.
+
+  The holdout row is the one that rules out the cheap explanations. `Just Be Happy` *is*
   the story that probe describes — its opening chapter is a holdout under a truck while his father asks
   what cutie marks are, his brother having already uploaded. Scored per document with everything else held
   out, its best chunk sits at 0.442, **below eleven stories that are not about that at all**, `Caelum Est
