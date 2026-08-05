@@ -3486,9 +3486,12 @@ for an attachment, which is a hole for user-attached documents as much as for fe
 - **What to measure first**, in the shape of `investigations/tool_refusal/`: does the model read-more
   reflexively-always, or only when what it needs is missing? Two documents — answer in the head, answer in
   the omitted middle — and compare the read counts. Equal counts mean reflexive.
-- Related and probably better than slicing: make a chat's attachments **searchable**. Humans Ctrl+F; models
-  should too. See `briefs/summer_2026_librarian_extension/13_corpus-scopes-and-unified-db-brief.md`, which
-  now carries the design sketch for that.
+- **Its other half is making a chat's attachments searchable**, and the two are a pair rather than competing
+  designs: search locates a match and says where it sits, the reader fetches the span around it — which is
+  exactly the contract `search_documents` and `fetch_document` already have. Humans Ctrl+F, then read around
+  the hit. Design sketch in `briefs/summer_2026_librarian_extension/13_corpus-scopes-and-unified-db-brief.md`,
+  which also notes the consequence for the tool surface: once attachments are searchable, an attachment and a
+  knowledge-base document are the same kind of thing at query time, so one `read_document` covers both.
 
 **This interacts with extraction quality, and the interaction runs the wrong way.** `truncate_middle` keeps
 the head and the tail. When the head is a navigation infobox — the Wikipedia case already recorded under

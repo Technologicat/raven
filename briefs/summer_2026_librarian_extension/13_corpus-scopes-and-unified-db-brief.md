@@ -62,11 +62,17 @@ anyway (a saved Visualizer selection is the same idea with a different generator
   It was put there in 2025 against exactly this class of need, and searching across a Visualizer *selection*
   once the unified DB lands is the same mechanism with a different filter set. So this costs a filter
   computation, not a retriever change.
-- **[P] Prefer this to slicing an attachment by offset.** The alternative under discussion — a `read_document`
-  that takes `offset`/`length` on an attachment handle — makes the model navigate a document by arithmetic.
-  Search is the affordance a reader actually uses. Both can exist; if only one gets built, this is the one.
-  Context in `TODO_DEFERRED.md`, "A fetched web page is budgeted as a user attachment, not as a speculative
-  fetch", under v2.
+- **[D] This and the offset-reader are a pair, not alternatives.** They do different jobs, in the order a
+  person does them: search locates a match and reports where in the document it sits, and the reader then
+  fetches the surrounding span — the same gesture as clicking a search result and reading around it. That is
+  already the contract between `search_documents` and `fetch_document`, whose docstring states it outright,
+  so applying it to attachments adds no new concept.
+  - **Consequence, and it is the strongest argument for one `read_document` rather than two tools:** once
+    attachments are a searchable scope, an attachment and a knowledge-base document are the *same kind of
+    thing* at query time. Two tool pairs would then be two spellings of one operation, differing only in
+    which handle they accept.
+  - The reader half is scoped in `TODO_DEFERRED.md`, "A fetched web page is budgeted as a user attachment,
+    not as a speculative fetch", under v2.
 - **Open:** whether an attachment scope is *visible* as a scope in the UI or only reachable by the AI; and
   whether indexing every attachment globally wants a retention policy, since the index then outlives the
   chats whose attachments produced it.
