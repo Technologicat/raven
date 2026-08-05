@@ -141,18 +141,21 @@ Still open, in the order they are expected to be done:
      handler at all, because ImGui commits *and unfocuses* the field first. The second took three attempts,
      two of them confident and wrong, before reading `add_input_text`'s parameter list showed
      `ctrl_enter_for_new_line` sitting there — the toolkit had owned this the whole time.
-   - **Two consequences of shipping it are filed rather than fixed, and both are defect-shaped** — a fetched
-     page is now budgeted as a *user attachment* (no per-fetch ceiling) though the config says a speculative
-     fetch should have one, and a long `fetch_document` result still fills the log, wanting a collapsible
-     rendering rather than the attachment treatment.
-     - **Juha, 2026-08-04: these should probably be fixed before the tag**, on the same reasoning that
-       admitted item 3 itself — 0.2.8 creates both of them, so shipping as-is means a release whose headline
-       feature is visibly half-applied in the two places a user would next look. Not yet a firm decision;
-       revisit at the start of the next session, before starting item 4, since the answer changes what is
-       left on the runway. The budget one carries a cost worth weighing in that decision: it needs a `source`
-       field on the `text_file` content part, because the two readers of the budget can see different things
-       (`count_branch_tokens` walks payloads and can read provenance; `_serialize_history_for_wire` gets bare
-       messages and cannot), and they must agree exactly or the context-fill readout drifts from what is sent.
+   - **Two consequences were filed alongside it. Settled 2026-08-05: one of them never existed.**
+     - *A long `fetch_document` result fills the log* — **already fixed when the note was written**, by the
+       polish cascade above. A result past `tool_result_attachment_threshold` renders collapsed to an excerpt
+       with a toggle, and the knowledge-base document gets its own chip with open-file and open-folder
+       actions. The collapsible landed at 15:47 and the note claiming it was missing at 15:55; it was carried
+       forward from the earlier filing without re-reading what had just landed. Worth knowing as a failure
+       mode: a note written from a note, rather than from the tree, and the eight-minute gap made it
+       invisible. Deferred item removed.
+     - *A fetched page is budgeted as a user attachment* — **real, and fixed before the tag.** `webfetch`
+       applies no budget at fetch time and inherits `fit_attachments_to_context`, which deliberately carries
+       no per-document ceiling because an attachment is the user saying *read this*. A fetch is the opposite
+       case, and `docs_fetch_max_fraction_of_context`'s own comment says so. Not a regression — `webfetch`
+       does not exist in v0.2.7 at all — but the policy is now stated in one place and contradicted in
+       another. The v1 shape and the v2 it defers are in `TODO_DEFERRED.md`, "A fetched web page is budgeted
+       as a user attachment, not as a speculative fetch".
 4. ~~**Tool budget: error out informatively instead of withdrawing the tools.**~~ — **done 2026-08-04**, as
    scoped and without surprises. Past `max_tool_call_rounds` the tool schema stays put and a call is answered
    with an error result saying the budget is spent; the "no more calls" system notice now fires on the same

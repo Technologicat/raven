@@ -3392,30 +3392,6 @@ Axes to settle, roughly in order of how much they constrain the rest:
 Cheap and safe to do *now*, independent of the above: make `save` atomic. It reduces the blast radius of
 the current once-per-session write, and every later design needs it anyway.
 
-## A long `fetch_document` result still fills the chat log
-
-**For after 0.2.8.** The sibling of the `webfetch` case, which 0.2.8 solved by storing the fetched page as an
-attachment — but the same fix is the wrong one here, for three reasons worth writing down so the parallel is
-not drawn too quickly:
-
-- **The bytes are already on disk.** A docs-DB document is a file in the user's `documents/` folder, and it
-  cannot 404. The archival argument that carries `webfetch` — the stored copy is a hedge against link rot,
-  and after a 404 it is the only copy — has no counterpart here, so a sidecar would be a second copy of a
-  local file for nothing.
-- **`fetch_document` returns a span, not a document.** It takes `offset`/`length`, slices, and then
-  middle-truncates to `budget_for_fetched_text`. Storing that as an attachment would archive a mangled
-  fragment under a name claiming to be the whole thing.
-- **It is already bounded**, by `docs_fetch_max_fraction_of_context` (0.10). `webfetch` had no budget at all,
-  which is why it could bury the log without limit.
-
-What is left is still real: a tenth of a 128k window is several screens of text sitting in the conversation.
-Two directions, and they compose rather than compete — a *collapsible* rendering of the result (the passage is
-legitimately part of the conversation; it just does not need to be open), and a handle on the source document
-by ID, which is what [Expose the docs-DB source files behind a reply's RAG citations] is about. That item's
-"open file / open folder" machinery is the same one, so the two want doing together.
-
-Raised by Juha (2026-08-04), while attachment-ifying `webfetch` results.
-
 ## The docs DB stores each document's full text *and* its chunks, both in the JSON
 
 `HybridIR`'s `fulldocs/data.json` holds, per document, a `"text"` field (`# copy of original text as-is`,
@@ -3460,11 +3436,58 @@ they must agree exactly or the context-fill readout drifts away from what is act
 - `_serialize_history_for_wire` receives bare messages from `chatutil.linearize_chat`, which carry no
   `general_metadata` at all — so it cannot.
 
-So the discriminator has to live in the `text_file` content part itself (a `source` field alongside `url`
-and `name`, absent meaning user attachment). Additive and backward-compatible, but it is a content-part
-schema change, which is why it was not done inline. With it in hand, the change to
-`fit_attachments_to_context` is small: pre-clamp a fetched attachment's *want* to the per-fetch ceiling
-before `_share_characters` does the fair split, and the existing water-filling handles the rest.
+So the discriminator has to live in the `text_file` content part itself: a `source` field alongside `url`
+and `name`, carrying the same vocabulary `sidecarstore.base_provenance` already documents. Additive and
+backward-compatible, but it is a content-part schema change, which is why it was not done inline.
+
+**Decided 2026-08-05, and scoped into a v1 that ships in 0.2.8 and a v2 that does not.**
+
+v1 — bound what is *sent*, not what is *stored*:
+
+- The sidecar keeps the **full page**, unchanged. Storage and wire-fold are separate steps, and nothing
+  forces them to agree. Truncating at fetch time was considered and rejected: the archival copy is a hedge
+  against the URL 404ing later, and after that it is the only copy there is.
+- `source` is emitted **explicitly on every `text_file` part**, user attachments included — no "absent means
+  user attachment" default. The migration is then exact rather than a guess: `chatutil.upgrade_datastore`
+  has the whole payload, so for each part it reads the true value out of
+  `general_metadata["sidecars"][f]["source"]` and copies it onto the part. Old datastores come out correct,
+  including webfetch results already stored during 0.2.8 development.
+- The policy must be a **classification**, not `if source == "tool_result"`. The vocabulary is already open
+  — `"paste_url"` and `"mcp:<server>"` are reserved for pathways that do not exist yet — so the mapping
+  wants somewhere obvious for them to land. Note the two axes hiding in those four values: *where the bytes
+  came from* (local file / network) and *who asked for them* (user / tool), which is why `"paste_url"` is a
+  user attachment that was downloaded and `"mcp:<server>"` is a tool result from a non-builtin tool. Whether
+  to split the field along those axes or keep it flat is open; flat is fine while the budget is the only
+  reader.
+- Fold the shared decision out of both readers while doing it: **one classifier** (part → budget kind), and
+  `fit_attachments_to_context` takes `(text, kind)` pairs instead of bare texts. Then neither caller decides
+  anything — they only collect and hand over — and "the two must agree exactly" stops being a property to
+  maintain. Pre-clamp a fetched attachment's *want* to the per-fetch ceiling before `_share_characters` does
+  the fair split, and the existing water-filling handles the rest.
+
+v2, deferred and worth its own brief — **let the model read *part* of an attachment**, so truncation stops
+being the mechanism. `fetch_document` takes `offset`/`length` for a docs-DB document; there is no equivalent
+for an attachment, which is a hole for user-attached documents as much as for fetched pages. Notes toward it:
+
+- One tool, not two. A `read_document` that accepts either handle beats a second tool the model has to
+  choose between; the sidecar (`sidecar:<hash>.<ext>`) and docs-DB namespaces are distinguishable by prefix.
+  Whether it also wants a `scope` parameter is open.
+- Truncation-with-a-marker stays underneath it regardless. It is the floor that needs no model cooperation,
+  and `truncate_middle` already writes the `[... N characters omitted ...]` marker that *is* the affordance
+  a read-more tool pattern-matches onto.
+- **What to measure first**, in the shape of `investigations/tool_refusal/`: does the model read-more
+  reflexively-always, or only when what it needs is missing? Two documents — answer in the head, answer in
+  the omitted middle — and compare the read counts. Equal counts mean reflexive.
+- Related and probably better than slicing: make a chat's attachments **searchable**. Humans Ctrl+F; models
+  should too. See `briefs/summer_2026_librarian_extension/13_corpus-scopes-and-unified-db-brief.md`, which
+  now carries the design sketch for that.
+
+**This interacts with extraction quality, and the interaction runs the wrong way.** `truncate_middle` keeps
+the head and the tail. When the head is a navigation infobox — the Wikipedia case already recorded under
+[Markdown tables don't render in the chat view] — truncation *preserves* the least useful part of the
+document and spends the omission on the prose. So better extraction improves the truncated case more than it
+improves the untruncated one, which is an argument for doing extraction work before leaning harder on
+truncation.
 
 Raised by Juha (2026-08-04), reviewing the webfetch attachment work.
 
