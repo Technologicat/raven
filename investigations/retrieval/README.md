@@ -77,6 +77,22 @@ Alpha Tuning for Hybrid Retrieval in RAG* (per-query dense/BM25 weighting — le
 Overlooked Role of Graded Relevance Thresholds in Multilingual Dense Retrieval* (both live questions at
 once), and *BalanceRAG: Joint Risk Calibration for Cascaded RAG*.
 
+**This set is also the obvious fifth corpus, and `raven-arxiv-download` would make it the one shape the
+other four do not have.** The current matrix is short-scientific (hydrogen and arXiv abstracts),
+very-short-scientific (banichuk titles) and long-narrative (fiction). Nothing is *long scientific* — which
+is Librarian's actual pitch, a researcher dropping PDFs into the folder.
+
+The gap matters for a specific reason rather than for symmetry: **chunking barely runs in any corpus we
+have.** An abstract is one to three chunks, a title is one, so the sliding window, the overlap, the
+contiguous-chunk merging and within-document ranking are all essentially untested by this harness — every
+result so far is close to one-chunk-per-document retrieval wearing a chunking engine's clothes. A fulltext
+paper is dozens of chunks, and is the case where a wrong answer can come from the right document.
+
+Cheap to build from here (`raven-arxiv-download` over the 157 identifiers already in hand), and it brings
+a second question with it: a fulltext corpus of *IR papers about thresholds* is a corpus whose own subject
+is what we are measuring, so the hand-written probes for it can be written from genuine curiosity rather
+than generated — the first set where the reader would be asking real questions with a stake in the answer.
+
 Full judgments can be layered on later by pooling the top-N of each configuration and judging the union.
 This set is the seed for that, not a competitor to it.
 
