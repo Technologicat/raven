@@ -29,6 +29,24 @@ Two honest limitations, because they are structural rather than fixable:
   score-aware fusion against plain RRF requires only the same questions and the same gold documents on
   both sides.
 
+**And a third, which only shows up once a number is read off the set rather than compared across it.** A
+generated question is written *with the passage in front of the generator*, so it names the right entities
+and asks about something the passage demonstrably contains. A real query is written from fading memory —
+"there was one where they went to Switzerland, I think?" — and is vaguer, wronger and shorter. So the
+generated questions are systematically **easier** than the real ones they stand in for.
+
+That costs nothing when comparing two retrieval configurations, since both face the same questions. It
+matters a great deal when a *threshold* is read off where the on-corpus scores sit: real queries will score
+below the measured on-corpus distribution, so a cut calibrated here sits too high and rejects real
+questions that the corpus can answer. Any threshold taken from this set is an upper bound on the safe one.
+
+The observation is Juha's, 2026-08-05, and arrived as a joke about needing a working search engine in order
+to write the questions that test the search engine. It is not circular — using retrieval to surface
+candidates that are then *verified by reading* breaks the loop, and that is how both hand-written probes so
+far were checked. But it does say what the hand-written probes are for: they are a spot-check on the
+instrument, not a scaling path, because human recall of a corpus runs out long before the question count
+does.
+
 Full judgments can be layered on later by pooling the top-N of each configuration and judging the union.
 This set is the seed for that, not a competitor to it.
 
