@@ -17,6 +17,8 @@ and nothing else about it counts. Two alternatives cost nothing to compute:
 
   max    the shipped rule — the document is as good as its best passage
   sum    every matching chunk contributes, so a document matching in five places outranks one matching once
+  mean   relevance *density*: the average quality of what matched, so a document is not helped by having
+         more chances to match. Sits between `max` and `sum` and carries the opposite length bias to `sum`
   count  how many chunks matched at all, ignoring how well
 
 `sum` and `count` differ from `max` only when documents produce several matching chunks, so they are
@@ -109,8 +111,12 @@ def order_chunks(chunk_scores: dict[str, float], chunk_document: dict[str, str],
     per_document: dict[str, list[float]] = {}
     for key, score in chunk_scores.items():
         per_document.setdefault(chunk_document[key], []).append(score)
-    document_score = ({d: sum(v) for d, v in per_document.items()} if how == "sum"
-                      else {d: float(len(v)) for d, v in per_document.items()})
+    if how == "sum":
+        document_score = {d: sum(v) for d, v in per_document.items()}
+    elif how == "mean":
+        document_score = {d: sum(v) / len(v) for d, v in per_document.items()}
+    else:
+        document_score = {d: float(len(v)) for d, v in per_document.items()}
     return sorted(chunk_scores,
                   key=lambda key: (document_score[chunk_document[key]], chunk_scores[key]),
                   reverse=True)
@@ -125,6 +131,8 @@ def aggregate(chunk_scores: dict[str, float], chunk_document: dict[str, str], ho
         scored = {d: max(v) for d, v in per_document.items()}
     elif how == "sum":
         scored = {d: sum(v) for d, v in per_document.items()}
+    elif how == "mean":
+        scored = {d: sum(v) / len(v) for d, v in per_document.items()}
     else:  # count: how many chunks matched at all, ignoring how well
         scored = {d: float(len(v)) for d, v in per_document.items()}
     return [d for d, _s in sorted(scored.items(), key=lambda kv: kv[1], reverse=True)]
@@ -170,7 +178,7 @@ def main() -> None:  # pragma: no cover
 
     conditions = [("rrf", "max", None)]
     for how in ("minmax", "zscore"):
-        for agg in ("max", "sum", "count"):
+        for agg in ("max", "sum", "mean", "count"):
             for w in WEIGHTS:
                 conditions.append((how, agg, w))
     ranks: dict[tuple, list] = {c: [] for c in conditions}
@@ -226,7 +234,7 @@ def main() -> None:  # pragma: no cover
             vec_norm = dict(zip(vec_keys, normalize([vec_raw[k] for k in vec_keys], how)))
             for w in WEIGHTS:
                 fused = fuse_scores(kw_norm, vec_norm, w)
-                for agg in ("max", "sum", "count"):
+                for agg in ("max", "sum", "mean", "count"):
                     ordered = aggregate(fused, chunk_document, agg)
                     ranks[(how, agg, w)].append(fusion_weight.gold_rank(ordered, gold))
                     promoted_lengths[(how, agg, w)].extend(

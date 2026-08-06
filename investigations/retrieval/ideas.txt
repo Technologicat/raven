@@ -1,0 +1,19 @@
+● Your sorting analogy is the right frame, and I think it's more than an analogy — it argues for what we've drifted into anyway: measure the distribution across corpora, ship honest defaults plus knobs, and stop hunting a single best configuration. Worst-case analysis, not average-case marketing.
+
+  On being out of ideas: no, and I don't think it's close. Several attacks we haven't imagined, let alone measured. Ranked by value over cost:
+
+  Cheap, uses the existing harness, attacks the original complaint directly:
+
+  1. Score-based fusion instead of rank-based. This is the gap I'd feel worst about missing. We swept RRF's weights and its K — but never questioned RRF itself. RRF discards scores entirely and fuses positions. Brief 09's founding complaint was "the hybrid rank does not track how good a result is" — that is a direct consequence of rank-only fusion, and we spent the day tuning inside the thing causing it. A convex
+  combination of normalized scores (z-scored BM25 + cosine) is the standard alternative, needs no re-index and no new model, and would also produce the calibrated confidence number the whole lever-1 thread wanted and never got.
+  2. Document-level score aggregation. A document currently ranks where its best chunk ranked. Sum-of-chunks, or count-of-matching-chunks, are different and untested — and they matter most exactly where we now have a corpus: fulltext, where a paper matching in five places is likely more relevant than one matching once, and the current rule cannot see the difference.
+
+  Medium cost, attacks documented failure modes:
+
+  3. A better embedder. Every number today came from multi-qa-mpnet. The Nomic-embed v1.5 migration is already planned in CLAUDE.md and never measured. Rerankers were the "better model" attack on ordering and lost; a stronger embedder attacks candidate generation, which is upstream of everything and is where the recall curve says the losses are.
+  4. HyDE (Gao et al. 2022, arXiv:2212.10496). Multi-query failed, but that was splitting a query. HyDE asks the LLM for a hypothetical answer and searches with that — which attacks precisely the register mismatch the fiction probes documented: analytical question against dramatized passage. The README's own diagnosis said that gap closes with "something that has read the corpus"; HyDE is the cheap version.
+  5. Document summaries as extra indexed chunks. The document-level failure class ("no chunk says this story is set offline in America") is structural and we named it as unfixable by query-side work. One LLM-written summary per document, indexed as a chunk, addresses it directly.
+
+  Expensive, plausible, unswept: chunk size and overlap. Never varied once. Banichuk showed chunk size interacts strongly with corpus shape, so this may be the largest single-parameter effect available — it just costs a re-index per setting.
+
+  I'd propose 1 and 2 tomorrow (both cheap, both use tonight's grown sets), with 3 as the one to schedule for October if it doesn't fit.

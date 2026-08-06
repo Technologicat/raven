@@ -78,6 +78,30 @@ to be the source than one matching once, and the best-chunk rule cannot see the 
 conditions are a clean null on hydrogen (11 gained, 10 lost) — as they must be, since an abstract is one
 to three chunks and the two rules nearly coincide there. A prediction that could have failed and did not.
 
+**It held when the sample doubled**, which is the test `K=10` failed. At n≈136 it was 15 gained against 6
+lost; at n=283, **17 against 8, p=0.108, +3.1 points**. The ratio and the effect size are stable where
+`K=10` went from 4:1 to 11:10 under the same treatment. Still not significant at 0.05, and the evidential
+weight is in the pattern rather than the p-value: three weights agreeing, a stable effect across two
+sample sizes, a control corpus behaving as predicted, and the two neighbouring rules failing for reasons
+that make sense.
+
+**The control: same papers, same questions, indexed as abstracts — a clean null.** `minmax/sum/0.5`
+scores 87.0% against a baseline of 86.6% on the abstract index, 9 gained against 8 lost, p=1.000, with a
+length ratio of 1.06× against fulltext's 1.64×. `sum` differs from `max` only when a document yields
+several matching chunks, so it *must* be a null on one-to-three-chunk abstracts. It is. The mechanism is
+confirmed by control rather than by argument.
+
+**Neighbouring rules, and both fail informatively.** `mean` — relevance *density*, `sum` divided by the
+number of matching chunks — was worth testing because normalizing away the length advantage could have
+gone either way. It is **catastrophic**: 69.3% against the baseline's 85.2%, 14 gained against 59 lost,
+p < 0.001, worse than `count`. The reason is clear once seen: `mean` rewards documents where *few but
+good* chunks matched, so one lucky chunk scoring 0.9 outranks five chunks averaging 0.7. It inverts the
+evidence-accumulation signal that makes `sum` work.
+
+Taken together the three rules say something specific: what helps is **accumulating evidence**, combining
+quality and quantity. Quantity alone (`count`) is bad, quality alone (`mean`, and `max` to a lesser
+degree) leaves information on the table, and only `sum` uses both.
+
 **Treat as unconfirmed until the grown arXiv set is scored.** This is structurally the situation that
 produced the retracted `K=10` result this morning: a suggestive p just under 0.1, several related cells
 agreeing, on a question set of about 136. The differences are that a mechanism was named in advance, that
@@ -213,6 +237,39 @@ detection buys nothing however well it works.
 the data, which is why the useful output is a distribution across corpora rather than a champion setting.
 That argues for what this work converged on anyway — honest defaults, exposed knobs, and worst-case
 reporting rather than average-case claims.
+
+### What to look for: cheap independent evidence, combined without tuning
+
+The design target is a simple technique with a disproportionate gain — `min_p` in LLM sampling is the
+reference example, and BM25 + vector + RRF is the one already in Raven (Juha, 2026-08-06). Stated as a
+selection criterion it is sharper than "try promising things", and it explains this sprint's results
+better than the individual measurements do.
+
+What those two share: **two or more cheap signals that fail independently, combined with no tuning.** BM25
+and embeddings fail on different queries — one on paraphrase, the other on rare exact terms — and RRF
+exploits that without a fitted parameter. `min_p` reads the shape of the distribution it is given instead
+of imposing a constant on it.
+
+Read that way, **`sum` aggregation is the same idea on a different axis.** RRF says *a document found by
+two independent engines is better*; `sum` says *a document matching in several independent places is
+better*. Accumulating independent evidence, within a document rather than across engines. That is a reason
+to weight it slightly above its p-value, and it predicts `mean`'s failure exactly: dividing by the number
+of matches discards the independence that the accumulation was exploiting.
+
+It also re-ranks the open work in §3, which was ordered by expected gain rather than by this criterion:
+
+- **Fits well** — `sum` aggregation (a one-line change, no new model, no user-visible knob); reference-list
+  stripping (a heuristic at extraction, no new model); chunk size and overlap (one constant, if a win
+  exists); a stronger embedder (a drop-in component swap, though it costs a re-index).
+- **Fits badly, whatever its merit** — HyDE (an extra LLM call in the query path, so latency on every
+  turn) and document summaries (an LLM pass per document at ingest). Both may work; neither is cheap, and
+  the summaries only earn their place because VISION.md stage 3 wants them anyway.
+
+And a caution the criterion carries with it: the sprint's null results cluster almost entirely in one
+family — *query-side* levers, which is what brief 09 scoped. The one thing that moved is a **structural**
+choice nobody had questioned, sitting in how chunk evidence becomes document evidence. That is where to
+look next: not better tuning of the parts that were designed deliberately, but the defaults that were
+never decisions in the first place.
 
 ---
 
