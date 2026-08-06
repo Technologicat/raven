@@ -399,11 +399,26 @@ on-corpus similarity distribution the threshold work needed.
 In order. The first group needs no GPU and no decisions; the second is the new corpus; the third is what
 the sprint's live leads still need.
 
-**Ready to run, nothing blocking:**
+**Ready to run, with one exception noted under item 1:**
 
 1. **Free result reordering** — no LLM, no extra pass. Settles whether the LLM-rerank question is about
    *placement* rather than *judgment*, and any LLM version afterwards has to beat this rather than the
    unordered baseline (§3).
+
+   **"Free" describes the technique, not the measurement, and the measurement does not exist yet**
+   (checked 2026-08-06). Reordering changes only the order the retrieved results are presented in — the
+   set is identical — so every metric in this investigation is invariant to it *by construction*: gold
+   rank, recall@k, passage coverage and the signal AUROCs all read the retrieval, and the retrieval does
+   not change. Scoring these arms means scoring what the model *answered*, which is the first
+   answer-quality question in the sprint. Nothing here does that: all 19 scripts are retrieval-side, and
+   the question sets store `gold` and `gold_titles` but no gold answer text, so there is no cheap
+   extractive check either.
+
+   So the honest cost is one generation plus one judgment per question per arm, with the gold passage as
+   the reference — LLM-as-judge, on the same local backend, which also makes it the first eval here whose
+   result depends on the judge. That is a half-day of harness before any arm runs, and it is a decision
+   about what we are willing to trust rather than a build detail. Worth settling before the harness is
+   written, not during.
 
    **Two effects compete here and the experiment has to separate them** (Juha, 2026-08-06). *Lost in the
    middle* says put the best material at the ends. But a ranked result list is best-first **by
