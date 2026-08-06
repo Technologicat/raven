@@ -657,6 +657,44 @@ how the questions were made, and it would not show up as a bad number anywhere e
 a corpus in a native area is what separates them, which is the same instrument the "judging needs a
 corpus in a native area" section above asks for.
 
+### Where the reranker sits matters more than which reranker it is (2026-08-06)
+
+Juha's question — if BM25 is what the metric rewards, why rerank the list that contains it? — turns into
+a cheap experiment, because `return_extra_info=True` already hands back the two arms separately.
+`arm_rerank.py`, same 99 hydrogen questions, same retrieval, six orderings of it:
+
+| condition | @1 | @5 | @10 | @20 | MRR |
+|---|---|---|---|---|---|
+| BM25 arm only | 32.3% | 51.5% | 60.6% | 67.7% | 0.414 |
+| vector arm only | 26.3% | 47.5% | 61.6% | 70.7% | 0.375 |
+| **fused (shipped)** | **38.4%** | 57.6% | **67.7%** | **74.7%** | **0.471** |
+| rerank BM25 arm, then fuse | 32.3% | 62.6% | 63.6% | 71.7% | 0.449 |
+| rerank vector arm, then fuse | 35.4% | 55.6% | 62.6% | 69.7% | 0.445 |
+| rerank the fused list | 26.3% | 46.5% | 54.5% | 64.6% | 0.358 |
+
+**The placement explains most of the earlier loss.** Reranking one arm and fusing afterwards recovers
+0.358 to 0.449 — so the cross-encoder was not simply wrong about these documents. What cost the most was
+collapsing two independent signals into one model's opinion. Which arm gets reranked barely matters
+(0.449 vs 0.445); *whether the fusion survives* matters a great deal.
+
+**Fusion still wins outright.** 0.471 beats every reranked variant. The one cell that does not — BM25-arm
+rerank at @5, 62.6% against 57.6% — should not be believed: with n=99 a five-point difference is about
+one standard error, and it is non-monotonic, losing at @1 and @10, which a real effect would not do.
+
+So the finding sharpens rather than reverses. Two cheap, genuinely independent signals fused by RRF beat
+one expensive model's judgment, and beat that model applied to either signal alone. That is a statement
+about what RRF is *for* — evidence diversity — and it is the reason the reranker had less to add here
+than the recall curve's 57-point gap suggested.
+
+It also retires the earlier framing that the domain-mismatch and metric-artifact explanations were the
+only two live options. A third was true and neither of them: the reranker was being applied where it
+destroyed the baseline's structure.
+
+**Still open, and now the cheapest things to try** (in this order, since each is one command against
+existing corpora): the same table on fiction and banichuk, which sit at opposite ends of the headroom
+range (70.5% and 9.1% at rank 1) and may not behave alike; and other small rerankers in the
+best-performing placement rather than the worst.
+
 **If length does become a problem later** (it is not now, but a fulltext corpus will have longer merged
 spans): rerank the chunks *before* `merge_contiguous_spans` rather than after. That removes the
 truncation risk by construction, and may help independently — a merged span is a longer, more diluted

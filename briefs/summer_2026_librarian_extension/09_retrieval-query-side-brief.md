@@ -638,6 +638,19 @@ for interpreting results; it is now the blocker.
 So: **do not try a third reranker.** That is the move this evidence invites and it would be the fourth
 plausible-but-unmeasurable improvement in a row. Build the judged set first.
 
+**Amended within the hour, because that was too broad.** It was aimed at *swapping models*, and Juha
+proposed something else: change where the reranker sits. Reranking one retrieval arm and fusing
+afterwards, rather than reranking the fused list, recovers MRR from 0.358 to 0.449 — most of the loss —
+and it is testable with the known-item set we already have, so it is not in the class the sentence above
+was warning about. Fusion still wins outright at 0.471, so nothing ships either way, but the mechanism
+is now understood: RRF's value is evidence diversity, and reranking the fused list collapses two
+independent signals into one model's opinion. Table and reading in the investigation README.
+
+The rule the two together suggest, which is worth more than either: **a negative result about a
+technique is only as broad as the configuration it was measured in.** "Reranking does not help" was
+measured in the one placement that destroys the baseline's structure, and stated as though it were about
+rerankers.
+
 #### The fourth corpus unseats the constant (2026-08-06): ship nothing yet
 
 A titles-only bibliography — 541 hand-typed records, 303 bytes median, the shape a working researcher's
