@@ -3420,10 +3420,44 @@ load parses it.
 
 The reason this is worth acting on rather than noting: **1268 papers is a small collection for the use case
 Librarian is pitched at** — a researcher dropping their PDF folder in. The abstract corpora that every
-earlier measurement used are the unrepresentative case, not this one. Related, and to be considered
-together rather than separately: the BM25 backend migration item above (`bm25s` is rebuilt whole at the end
-of each commit, which is the same shape of cost) and the autosave/durability item, which named this coupling
-first.
+earlier measurement used are the unrepresentative case, not this one.
+
+### Where the bytes actually are, and why that dissolves the item
+
+Measured over 200 documents of that corpus, as a share of serialized JSON:
+
+| field | share |
+|---|---|
+| `chunks` | 40.2% |
+| `tokens` | 30.8% |
+| `text` | 29.0% |
+| `path`, `document_id`, `mtime`, `filesize` | 0.0% (four scalars per document) |
+
+Three fields are **100.0%** of the file, and they do not want the same fix — each belongs somewhere that is
+already its own item. So this is not a project; it is the consequence of three others landing:
+
+- **`text` → the content-addressed extraction store** described under *"A crash during ingest loses the
+  whole run, however long it was"*. That item motivates the store from crash-safety and from
+  `fetch_document` re-parsing every PDF per process; storing it there *also* removes 29% of this file, and
+  removes the objection raised above ("a document whose source file has moved stops being readable"), since
+  the store keeps the text keyed by content hash rather than by the file still being where it was. **This
+  is the one to build first** — it is the only one of the three with three independent payoffs.
+- **`chunks` → derivable, or one sidecar per document.** Already established above: slices of the text at
+  known offsets. Once `text` lives in the extraction store, recomputing them is a slice, not a parse.
+- **`tokens` → belongs with the BM25 backend**, not here. This is the lemmatized token list the keyword arm
+  searches, and it is the one field that is *expensive* to recompute (the spaCy pipeline — the step whose
+  per-call overhead is its own item). It should move with the backend migration rather than be dropped;
+  keeping a search backend's working data in the document store is what makes both of them awkward.
+
+**What is left afterwards is ~190 KB for 1268 documents** — four scalars each. Which answers the question
+this raises ("is anything actually left in there?") and settles the follow-on one: a monolithic JSON is a
+perfectly reasonable home for a per-document metadata table of that size, and stops being the thing that
+makes the store unsuitable for large corpora. The monolith is not the problem; what was put in it is.
+
+Related and to be sequenced together: the BM25 backend migration item above (`bm25s` is rebuilt whole at the
+end of every commit — the same shape of cost, and where `tokens` should go), and the autosave/durability
+item, which named this coupling first. Second measurement and the field breakdown taken from
+`investigations/retrieval/README.md`, under the arXiv fulltext corpus state.
 
 Raised by Juha (2026-08-04); the measurement was taken while filing it. Cross-referenced from
 `investigations/retrieval/README.md`, under the arXiv fulltext corpus state, which is where the second

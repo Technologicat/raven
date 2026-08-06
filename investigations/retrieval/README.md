@@ -611,13 +611,19 @@ same 1268 papers as abstracts:
 | `fulldocs` | 16 MB | 854 MB | 53x |
 
 The ratios track the chunk count, so nothing is behaving unexpectedly — but `fulldocs` is a **single JSON
-file** holding every document's full text *and* its chunks, and at this corpus size it is 587 MB that has
-to be parsed at load and rewritten whole on every commit. That is a known scaling property of the current
-store rather than a new finding: `TODO_DEFERRED.md`, "The docs DB stores each document's full text *and*
-its chunks, both in the JSON", which already establishes that the chunk texts are derivable from the full
-text plus offsets and that dropping the full text is the part needing a decision.
+file** that at this corpus size is 587 MB, parsed at load and rewritten whole on every commit. Measured
+over 200 of its documents, three fields are all of it: `chunks` 40.2%, `tokens` 30.8%, `text` 29.0%, with
+`path` / `document_id` / `mtime` / `filesize` rounding to 0.0%.
 
-What this measurement adds to that item is the *scale at which it stops being theoretical* — it was filed
+That breakdown is the useful part, because the three want different homes and each already has an item in
+`TODO_DEFERRED.md` — `text` belongs in the content-addressed extraction store filed under "A crash during
+ingest loses the whole run", `chunks` are slices at known offsets, and `tokens` is the keyword arm's
+working data and should move with the BM25 backend. Roughly 190 KB of per-document metadata is what
+remains. The full reasoning is in that file under "The docs DB stores each document's full text *and* its
+chunks, both in the JSON"; recorded there rather than here because it is a design decision, not a
+measurement.
+
+What this measurement contributes is the *scale at which it stops being theoretical*: the item was filed
 against 48 MB of sources producing 124 MB, and 1268 papers is a small collection for the use case Librarian
 is pitched at. The abstract corpora every earlier measurement used are the unrepresentative case.
 
