@@ -258,9 +258,10 @@ Preprints get revised, sometimes years later, and a collection assembled over ti
 
 ```bash
 raven-arxiv2id -i ~/papers --strip-versions > ids.txt
-raven-arxiv-download -o ~/papers $(cat ids.txt)   # newest version of each paper
-raven-arxiv2bib ids.txt -o papers.bib             # metadata to match
+raven-arxiv-download -o ~/papers --save-bib papers.bib $(cat ids.txt)
 ```
+
+`--save-bib` writes the bibliography from the metadata the download already fetched in order to name the files, so it costs nothing — no extra requests, no extra waiting. Running `raven-arxiv2bib` over the same identifiers afterwards would ask arXiv for all of it a second time.
 
 The mechanism is arXiv's own: an identifier *with* a version means that version, and an identifier *without* one means whatever is current. So dropping the suffix is precisely the request "give me the latest", and both tools honour it — no separate update mode needed.
 

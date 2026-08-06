@@ -3,6 +3,7 @@
 import textwrap
 from unittest.mock import patch
 
+import bibtexparser
 import pytest
 
 from raven.papers import download as download_module
@@ -604,6 +605,43 @@ class TestDownloadPapers:
             download_papers(["2301.12345", "2301.12345"], output_dir=str(tmp_path))
         pdf_calls = [u for u in calls if "/pdf/" in u]
         assert len(pdf_calls) == 1  # PDF fetched once, even though ID repeated
+
+    def test_save_bib_writes_parseable_bibtex_without_extra_requests(self, tmp_path):
+        """`--save-bib` is made from metadata already fetched, so it costs no additional requests."""
+        responses = {"2301.00001": _atom_response(arxiv_id="2301.00001", title="First"),
+                     "2301.00002": _atom_response(arxiv_id="2301.00002", title="Second")}
+        metadata_calls = []
+
+        def counting_get(url, *a, **kw):
+            if "/pdf/" not in url:
+                metadata_calls.append(url)
+            return _mock_requests_get(responses)(url, *a, **kw)
+
+        bib_path = tmp_path / "out.bib"
+        with patch.object(download_module, "RateLimiter", _NoWaitRateLimiter), \
+             patch.object(httpfetch_module.requests, "get", side_effect=counting_get):
+            download_papers(list(responses), output_dir=str(tmp_path), save_bib=str(bib_path))
+
+        assert len(metadata_calls) == 1  # one batch, and nothing extra for the bibliography
+        library = bibtexparser.parse_string(bib_path.read_text(encoding="utf-8"))
+        assert not library.failed_blocks
+        titles = {e.fields_dict["title"].value for e in library.entries}
+        assert titles == {"First", "Second"}
+        # Versions are kept: a download names a specific version, and the bibliography should say which.
+        assert {e.fields_dict["eprint"].value for e in library.entries} == {"2301.00001v1",
+                                                                           "2301.00002v1"}
+
+    def test_save_bib_records_papers_already_present(self, tmp_path):
+        """The bibliography describes the set that was asked for, not the subset that was missing."""
+        (tmp_path / "Existing (2023) - Old - 2301.00001v1.pdf").write_bytes(b"already here")
+        responses = {"2301.00001": _atom_response(arxiv_id="2301.00001", title="First")}
+        bib_path = tmp_path / "out.bib"
+        with patch.object(download_module, "RateLimiter", _NoWaitRateLimiter), \
+             patch.object(httpfetch_module.requests, "get",
+                          side_effect=_mock_requests_get(responses)):
+            download_papers(["2301.00001"], output_dir=str(tmp_path), save_bib=str(bib_path))
+        library = bibtexparser.parse_string(bib_path.read_text(encoding="utf-8"))
+        assert len(library.entries) == 1
 
     def test_failed_metadata_batch_does_not_abort_the_run(self, tmp_path, capsys):
         """A network blip costs its batch, not the whole run, and keeps its traceback for debugging.

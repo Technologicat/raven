@@ -19,6 +19,7 @@ __all__ = [
     "get_paper_metadata",
     "parse_metadata_responses",
     "get_papers_metadata",
+    "metadata_to_feed_entry",
 
     "download_papers",
     "extract_ids_from_bib",
@@ -31,7 +32,7 @@ import pathlib
 import sys
 
 import traceback
-from typing import Dict, List
+from typing import Dict, List, Union
 import xml.etree.ElementTree as ET
 
 import bibtexparser
@@ -40,6 +41,7 @@ from mcpyrate import colorizer
 
 from .. import __version__
 from ..common import stringmaps
+from . import bibtex
 from . import httpfetch
 from . import identifiers
 from .ratelimit import RateLimiter
@@ -52,6 +54,7 @@ CROSS = "\u2717"      # ✗
 
 ARXIV_API_URL = "https://export.arxiv.org/api/query"
 ATOM_NS = {"atom": "http://www.w3.org/2005/Atom"}
+ARXIV_NS = {"arxiv": "http://arxiv.org/schemas/atom"}
 
 # Identifiers per metadata request. arXiv answers an `id_list` naming many papers in one response, and
 # the rate limit is per *request*, so the metadata for a whole run costs ceil(N / 100) waits instead of
@@ -202,11 +205,18 @@ def _metadata_from_entry(entry: ET.Element,
     # title (not the filename-safe one), so punctuation stays intact.
     citation = f"{author_str} {format_years(original_year, version_year)} - {title}"
 
+    # arXiv's own extensions, in a second namespace. Only needed for BibTeX output, and all optional —
+    # a preprint that was never published has no DOI and no journal reference.
+    primary_category_elem = entry.find(".//arxiv:primary_category", ARXIV_NS)
+    doi_elem = entry.find(".//arxiv:doi", ARXIV_NS)
+    journal_ref_elem = entry.find(".//arxiv:journal_ref", ARXIV_NS)
+
     return {
         "original_id": arxiv_id,
         "resolved_id": resolved_id,
         "version": version,
         "authors": author_str,
+        "author_names": authors,
         "original_year": original_year,
         "version_year": version_year,
         "title": title,
@@ -214,7 +224,41 @@ def _metadata_from_entry(entry: ET.Element,
         "abstract": abstract,
         "pdf_url": pdf_url,
         "filename": filename,
+        "primary_category": (primary_category_elem.get("term")
+                             if primary_category_elem is not None else None),
+        "doi": doi_elem.text.strip() if doi_elem is not None and doi_elem.text else None,
+        "journal_ref": (journal_ref_elem.text.strip()
+                        if journal_ref_elem is not None and journal_ref_elem.text else None),
     }
+
+
+class _FeedLikeEntry(dict):
+    """A `dict` that also answers attribute access, matching what `bibtex.entries_to_bibtex` consumes.
+
+    That function is written against `feedparser` entries, which support both `entry.published` and
+    `entry.get("authors")`. This module parses the same Atom with `ElementTree` instead, so rather than
+    grow a second BibTeX writer it hands `bibtex` something shaped the way it already expects.
+    """
+    __getattr__ = dict.__getitem__
+
+
+def metadata_to_feed_entry(metadata: Dict[str, str]) -> _FeedLikeEntry:
+    """Reshape one metadata dict into the entry shape `bibtex.entries_to_bibtex` reads.
+
+    Keeps the version in the `id`, since a caller that downloaded a specific version wants a
+    bibliography naming it — `entries_to_bibtex(..., keep_versions=True)` is the matching argument.
+    """
+    return _FeedLikeEntry(
+        id=f"http://arxiv.org/abs/{metadata['resolved_id']}",
+        published=metadata["original_year"],  # only [:4] is ever read, so the bare year suffices
+        authors=[{"name": name} for name in metadata["author_names"]],
+        title=metadata["title"],
+        summary=metadata["abstract"],
+        arxiv_primary_category=({"term": metadata["primary_category"]}
+                                if metadata.get("primary_category") else {}),
+        arxiv_doi=metadata.get("doi"),
+        arxiv_journal_ref=metadata.get("journal_ref"),
+    )
 
 
 def get_paper_metadata(arxiv_id: str,
@@ -320,15 +364,46 @@ def get_papers_metadata(arxiv_ids: List[str],
     return found
 
 
+def _write_bibtex(metadata_by_id: Dict[str, Dict[str, str]],
+                  arxiv_ids: List[str],
+                  path: Union[str, pathlib.Path]) -> None:
+    """Write the fetched metadata as BibTeX, in the order the identifiers were requested."""
+    entries = [metadata_to_feed_entry(metadata_by_id[i]) for i in arxiv_ids if i in metadata_by_id]
+    if not entries:
+        print(f"{colorizer.colorize(CROSS, colorizer.Style.BRIGHT, colorizer.Fore.RED)} "
+              f"no metadata to write to '{path}'")
+        return
+    path = pathlib.Path(path).expanduser()
+    try:
+        path.write_text(bibtex.entries_to_bibtex(entries, keep_versions=True), encoding="utf-8")
+    except OSError as exc:  # an unwritable path must not cost the downloads that follow
+        print(f"{colorizer.colorize(CROSS, colorizer.Style.BRIGHT, colorizer.Fore.RED)} "
+              f"could not write '{path}': {exc}")
+        return
+    print(f"{colorizer.colorize(CHECKMARK, colorizer.Style.BRIGHT, colorizer.Fore.GREEN)} "
+          f"wrote {len(entries)} BibTeX entries to '{path}'")
+
+
 def download_papers(arxiv_ids: List[str],
                     output_dir: str = "papers",
-                    batch_size: int = METADATA_BATCH_SIZE) -> None:
+                    batch_size: int = METADATA_BATCH_SIZE,
+                    save_bib: Union[str, pathlib.Path, None] = None) -> None:
     """Download papers from arXiv, naming files from their metadata.
 
     Skips papers already present in *output_dir* (matched by arXiv ID in filename).
 
     `batch_size`: identifiers per metadata request, passed to `get_papers_metadata`. Lower it to make
                   a failure lose fewer papers; the cost is one rate-limit wait per extra request.
+
+    `save_bib`: if given, also write the fetched metadata to this path as BibTeX.
+
+                This costs no extra requests. Downloading a paper already requires its metadata, to
+                build the filename, so the bibliography is made from what is in hand — which is the
+                whole reason to do it here rather than by running `raven-arxiv2bib` over the same
+                identifiers afterwards.
+
+                Written even for papers that were skipped as already present, since the bibliography
+                describes the *set that was asked for*, not the subset that happened to be missing.
     """
     output_dir = str(pathlib.Path(output_dir).expanduser().resolve())
 
@@ -357,6 +432,9 @@ def download_papers(arxiv_ids: List[str],
     # Metadata for the whole run first, batched — see `get_papers_metadata`. The PDFs below still cost
     # one rate-limited request each, so this roughly halves the run rather than making it instant.
     metadata_by_id = get_papers_metadata(arxiv_ids, batch_size=batch_size, rate_limiter=rate_limiter)
+
+    if save_bib is not None:
+        _write_bibtex(metadata_by_id, arxiv_ids, save_bib)
 
     seen: set[str] = set()
     for arxiv_id in arxiv_ids:
@@ -454,6 +532,12 @@ def main() -> None:  # pragma: no cover
                         help="Output directory where to write the PDF file(s). "
                         "Can be a relative or absolute path. Default: current "
                         "working directory.")
+    parser.add_argument("-s", "--save-bib", dest="save_bib", default=None,
+                        type=str, metavar="file.bib",
+                        help="Also write the papers' metadata to this file as BibTeX. Free: the "
+                        "metadata is already fetched in order to name the PDFs, so this costs no "
+                        "extra requests and no extra waiting, unlike running raven-arxiv2bib over "
+                        "the same identifiers afterwards.")
     parser.add_argument('-v', '--version', action='version',
                         version=('%(prog)s ' + __version__))
     opts = parser.parse_args()
@@ -467,7 +551,8 @@ def main() -> None:  # pragma: no cover
         parser.error("no arXiv IDs specified (provide IDs on the command line and/or via --from-bib)")
 
     download_papers(arxiv_ids=arxiv_ids,
-                    output_dir=opts.output_dir)
+                    output_dir=opts.output_dir,
+                    save_bib=opts.save_bib)
 
 
 if __name__ == "__main__":
