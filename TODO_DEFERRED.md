@@ -3551,6 +3551,29 @@ fails there, which says nothing about the server.)
 Discovered while asking whether the tokenizer was the indexing bottleneck. It was not — that was pypdf
 extraction, in a different phase. Raised by Juha (2026-08-06).
 
+## A crash during ingest loses the whole run, however long it was
+
+The delayed-commit coalescer defers a commit for one second after each finished document read, so on a
+large corpus it never fires until the reads stop arriving. Measured on the 1268-PDF fulltext corpus
+(2026-08-06): **~40 minutes** in which every extracted document sat in memory as a pending edit with
+nothing written to disk. A crash, a kill, or a power loss anywhere in that window discards all of it and
+the next run starts from zero.
+
+The design is right for the case it was written for — an interactive session where documents arrive one
+at a time and committing per document would rebuild the index constantly. It has no bound on the other
+end, and the bound is what is missing: commit anyway after N documents or T seconds, whichever the
+coalescer would otherwise defer past. That caps the loss window without giving up the coalescing.
+
+The same missing bound is what makes the progress display read as a hang (see the entry below): the
+visible counter is the last *commit*, so it sits at whatever the first accidental commit indexed until
+the entire ingest phase drains.
+
+Note the exposure is specific to ingest. Once committing starts, chunks land in ChromaDB per document,
+so a crash there costs one document rather than a thousand.
+
+Discovered while indexing the arXiv AI fulltext corpus. Raised by Juha (2026-08-06), on realizing what
+"the count will jump from 42 to the full corpus in one step" implies for durability.
+
 ## Indexing a large corpus is silent for minutes, and reads as a hang
 
 `raven-indexer` on a 1268-document fulltext corpus printed one document's progress, then nothing for
