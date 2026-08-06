@@ -784,6 +784,41 @@ This is what makes the per-query sharpness rule worth measuring before anything 
 to capture a fraction of this to beat every configuration tried so far, and it costs no model, no LLM
 pass, and no calibration state.
 
+##### Measured: the per-query signal does not predict which arm wins (2026-08-06)
+
+`arm_signal.py <corpus>`. Label: which arm ranked the gold document better. Ties dropped, since the
+label is undefined for them — a third to a half of queries on these corpora. AUROC with bootstrap 95%
+CIs over the decided queries:
+
+| corpus | sharpness difference | standardized-top difference | 95% CI | decided n |
+|---|---|---|---|---|
+| hydrogen | 0.526 | 0.545 | [0.414, 0.676] | 75 |
+| banichuk | 0.424 | 0.570 | [0.426, 0.709] | 72 |
+| fiction | 0.584 | **0.768** | [0.600, 0.907] | 42 |
+
+**Strategy 1 is dead as specified.** The signal reaches significance on exactly one corpus — fiction,
+where recall@20 is already 100% and there is nothing to fix — and is indistinguishable from chance on
+the two where the oracle headroom lives. Fiction's result also rests on 42 of 88 queries, the rest
+being ties.
+
+**The sharpness difference specifically is not merely weak, it is ill-formed**, and this is worth
+keeping. `score_sharpness` counts candidates scoring at least `min_ratio` times the best, which presumes
+a score whose zero means "no match". True of BM25; false of cosine similarity, where an unrelated
+document still scores 0.2–0.4. So at a low `min_ratio` essentially every vector candidate "keeps up" and
+the arm's sharpness is ~0 regardless of what it found — differencing the two arms then measures the
+scoring convention rather than the retrieval. It points the *wrong way* on banichuk (0.424), which is
+the tell. The replacement statistic, a z-score of the top result within its own candidate list, is
+location- and scale-invariant and so comparable by construction; it is the one that reaches 0.768 on
+fiction.
+
+**What this does not touch: strategy 2.** Index-time calibration chooses a *corpus-level* weighting and
+needs no per-query predictor, and the corpus-level differences are large and real — banichuk's vector
+arm at 0.201 against fusion's 0.169. So the failure here removes one option, not the direction.
+
+And the cheapest version of strategy 2 needs no machinery at all: **expose the knob and let the user
+choose**. Someone who has assembled a titles-only bibliography knows that they have, which is precisely
+the information an index-time calibration would spend an LLM pass rediscovering.
+
 ##### Can the right arm configuration be detected automatically?
 
 Juha's reading of the table above was that there is no known algorithmic way to tell which corpus wants
