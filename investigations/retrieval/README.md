@@ -929,6 +929,43 @@ that. Read it as a trade worth weighing, not as a verdict. It does converge with
 idea recorded above — both say the unit that should reach the model is the chunk — which is two independent
 routes to the same suggestion and the reason it is worth testing properly rather than filing.
 
+###### Two controls, and they turn the effect into a mechanism
+
+Hydrogen is the *weakest* case for this measurement, which was not obvious until the other two ran. An
+abstract is one to three chunks, so merging barely fires there. Run at both ends of the chunks-per-document
+range, at the tightest budget (7,500 characters, ~1,875 tokens):
+
+| corpus | chunks per document | merged | results | chunks | results | delta |
+|---|---|---|---|---|---|---|
+| banichuk | 1 (documents are sub-chunk) | 40.4% | 18 | 40.4% | 19 | **+0.0** |
+| hydrogen | 1–3 | 53.8% | 4 | 62.3% | 7 | +8.5 |
+| fiction | dozens | 60.2% | **1** | 92.0% | 7 | **+31.8** |
+
+**Banichuk is the negative control and it passes exactly.** Its records average 303 bytes, well under the
+1000-character window, so every document is a single chunk and `merge_contiguous_spans` provably cannot
+fire. The delta is 0.0 at every uncensored budget. Had it not been, the hydrogen result would have been a
+bug rather than a finding.
+
+It also justifies the censoring flag added an hour earlier: banichuk's capped rows read +6.1 and +11.1,
+which is an eleven-point "merging effect" on a corpus where merging is a no-op. Without the flag that would
+have gone into this file as a result.
+
+**Fiction is the positive control, and the `results` column is the mechanism.** At 7,500 characters the
+merged arm returns **one** result — a single stitched span that eats the entire budget — against seven
+chunks. The model sees one document where it could have seen seven. That is the whole effect, and it
+explains the ordering: the more chunks a document has, the longer a merged span can grow, and the more of
+the budget one document can monopolize.
+
+**Which suggests a better fix than a toggle.** Disabling merging trades away the readability it exists for.
+Capping how much of the budget any *single* merged span may take keeps stitching where it helps — adjacent
+chunks from one document, arriving scattered — while preventing one document from crowding out the rest. A
+query-time switch is still worth having for debugging; the cap is what would ship.
+
+**And it makes a prediction about the corpus we just built.** The arXiv fulltext corpus is ~118 chunks per
+document, further along this axis than fiction. If the mechanism above is right, it should show the largest
+effect of any corpus here — and it is also the case Librarian is actually pitched at, a researcher dropping
+PDFs in a folder. Stated before running it, so the run can falsify it.
+
 **A reproducibility hazard met while running it**: `n` was 128 on one run and 130 on another minutes later,
 because `make_questions.py --append` was writing to the question file at the time and the harness reads it
 at startup. The paired comparison within each run is unaffected, but two runs are not comparable unless the
