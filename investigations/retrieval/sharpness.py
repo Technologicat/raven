@@ -152,7 +152,11 @@ def build_workload(corpus: str) -> tuple[list[dict], dict]:
     items += [{"kind": kind, "query": probe, "on_corpus": False, "gold": []} for kind, probe in PROBES]
 
     note = {"questions_from": str(own_path), "description": own.get("corpus"),
-            "corpus_size": own.get("corpus_size"), "corpus_dir": own.get("corpus_dir")}
+            "corpus_size": own.get("corpus_size"), "corpus_dir": own.get("corpus_dir"),
+            # How long a passage the generator sampled to write each question from, where it sampled
+            # passages at all. Passage-level scoring needs it: the gold answer is an interval of this
+            # length starting at `source_offset`, not the single point.
+            "passage_chars": own.get("passage_chars")}
     return items, note
 
 

@@ -960,33 +960,44 @@ produce a set that cannot be scored at passage level, which is the only reason t
 So the ranking of what to grow changed: fiction was deprioritized on the strength of a saturated number
 that was saturated for an uninteresting reason.
 
-**Measured the same afternoon (`passage_recall.py`), and the gap is enormous.** 88 fiction questions,
-`k=20`, scoring both "is the gold document anywhere in the results" and "does any result actually cover
-the passage the question was written from":
+**Measured the same afternoon (`passage_recall.py`), twice, because the first metric was wrong.** 88
+fiction questions at `k=20`, scoring both "is the gold document anywhere in the results" and "does any
+result reach the passage the question was written from":
 
 | arm | document@20 | passage@20 | gap |
 |---|---|---|---|
-| merged spans | 95.5% | **39.8%** | 55.7 |
-| bare chunks | 95.5% | **30.7%** | 64.8 |
+| merged spans | 95.5% | **89.8%** | 5.7 |
+| bare chunks | 95.5% | **88.6%** | 6.8 |
 
-**Retrieval finds the right document nineteen times in twenty and the right passage twice in five.** On a
-corpus of long documents the document-level number is not a slightly optimistic version of the passage
-number — it is a different measurement, and the one that has been quoted throughout this file is the one
-that cannot fail. The 100% previously recorded here was measuring the corpus size.
+**Retrieval on prose is good at passage level too**, and the document-level number is not hiding a
+collapse underneath it — 5.7 points, not the 56 the first version of this measured. What remains true is
+the narrower point that prompted the run: the 100% quoted elsewhere in this file was measuring the corpus
+size, and 95.5% here is the same near-tautology. It just happens that the harder question also answers
+well.
 
-Read as a floor rather than a level: a question written from one passage may be perfectly answerable from
-a neighbouring one, and this scores only exact coverage of the sampled offset. The *comparison* between
-arms is unaffected, since both face the same standard.
+**The first version scored 39.8% and 30.7%, and both numbers were artifacts.** Juha's question — what is
+the offset measured in, and how long is the passage? — is what caught it. The generator samples
+**4000-character** passages and records `source_offset` as the passage *start*; chunks are 1000
+characters. Asking whether a result *contains that start point* therefore scores a chunk covering the
+relevant text as a miss whenever the relevant text is not in the first quarter of the passage.
 
-**And it pulls the opposite way from the token-budget result, which is the interesting part.** There,
-bare chunks beat merged spans, because chunks reach more distinct documents per character. Here merged
-spans beat chunks by 9.1 points, because a span covers more ground and is likelier to include the exact
-passage. Both are true, and they are the same trade seen from two sides: **merging spends breadth to buy
-depth.** Which of those a query needs is not something the retriever knows — a question that needs one
-specific passage wants depth, and a synthesis question spanning many documents wants breadth.
+Worse, it biased the arm comparison rather than merely deflating both: a merged span is longer, so it
+reaches back to the passage start more often than a bare chunk does. The 9.1-point "merged wins" that the
+first run produced was mostly that. **Scored by interval overlap, the arms differ by 1.2 points** — and
+the tidy story built on the first number, that *merging spends breadth to buy depth* and that this mirrors
+the token-budget result from the other side, does not survive. It was a good story about a measurement
+artifact.
 
-That is a second, independent argument for the same conclusion the synthesis question class was built to
-test: the narrow/broad distinction is the one worth detecting, and it should drive more than `k`.
+**What the two versions do give is a bracket.** Point-containment (39.8%) is too strict and length-biased;
+interval-overlap (89.8%) is lenient, since any of the four or five chunks spanning the passage counts and
+only one of them is likely to hold the answer. The true "found the text that answers this" sits between,
+and pinning it down needs the *answer* located within the passage rather than the passage located within
+the document — which the generator does not record and would have to be asked for.
+
+The lesson is the one this file keeps relearning, arriving twice in one day: a number's semantics have to
+be read before a mechanism is written onto it. `passage_chars` is now carried through
+`sharpness.build_workload` and read from the question set rather than assumed, so the scorer cannot
+silently disagree with the generator about it.
 
 ###### Two controls, and they turn the effect into a mechanism
 

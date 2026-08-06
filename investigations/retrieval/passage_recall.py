@@ -36,8 +36,18 @@ sys.path.insert(0, str(pathlib.Path(__file__).parent))
 import sharpness  # noqa: E402
 
 
-def covers_offset(result: dict, offset: int) -> bool:
-    """Whether `result`'s span in its document contains `offset`.
+def covers_offset(result: dict, offset: int, length: int) -> bool:
+    """Whether `result`'s span in its document overlaps the passage `[offset, offset + length)`.
+
+    **Overlap, not containment of the start point**, and the difference is not pedantic. The source passage
+    is `passage_chars` long — 4000 in the fiction set — while a chunk is 1000, so a passage spans four or
+    five chunks and the question may have been written from any part of it. Asking whether a result
+    contains the passage's *start* therefore scores a chunk covering the relevant text as a miss whenever
+    the relevant text is not in the first quarter.
+
+    It also biases the arm comparison, which is worse than being merely strict: a merged span is longer, so
+    it reaches back to the passage start more often than a bare chunk does, and the start-containment
+    version credited merging for that. Overlap treats both arms alike.
 
     A retrieved span runs from its own `offset` for as many characters as its text; `merge_contiguous_spans`
     preserves both fields, so this reads the same for a merged span and for a bare chunk.
@@ -45,13 +55,15 @@ def covers_offset(result: dict, offset: int) -> bool:
     start = result.get("offset")
     if start is None:
         return False
-    return start <= offset < start + len(result.get("text", ""))
+    end = start + len(result.get("text", ""))
+    return start < offset + length and offset < end
 
 
-def passage_hit(results: list[dict], gold_documents: set[str], gold_offset: int) -> bool:
-    """Whether any result is from a gold document *and* covers the passage the question came from."""
+def passage_hit(results: list[dict], gold_documents: set[str], gold_offset: int, passage_length: int) -> bool:
+    """Whether any result is from a gold document *and* overlaps the passage the question came from."""
     keys = {sharpness.document_key(g) for g in gold_documents}
-    return any(sharpness.document_key(r["document_id"]) in keys and covers_offset(r, gold_offset)
+    return any(sharpness.document_key(r["document_id"]) in keys
+               and covers_offset(r, gold_offset, passage_length)
                for r in results if r.get("document_id"))
 
 
@@ -77,8 +89,15 @@ def main() -> None:  # pragma: no cover
     from raven.librarian import config as librarian_config
     from raven.librarian import hybridir
 
-    items = [i for i in sharpness.build_workload(corpus)[0]
+    workload, note = sharpness.build_workload(corpus)
+    items = [i for i in workload
              if i["on_corpus"] and i["gold"] and i.get("source_offset") is not None]
+    # Read from the set rather than assumed: the generator records the passage length it sampled with, and
+    # the scoring depends on it — a wrong value silently mis-scores every question in the same direction.
+    passage_length = note.get("passage_chars")
+    if passage_length is None:
+        raise SystemExit(f"question set for '{corpus}' records no `passage_chars`; cannot score passages "
+                         "without knowing how long the sampled passage was")
     if not items:
         print(f"corpus '{corpus}' carries no `source_offset` labels; only passage-sampled sets can be "
               f"scored this way (see the module docstring).")
@@ -103,7 +122,7 @@ def main() -> None:  # pragma: no cover
         row = {"gold": sorted(gold), "source_offset": offset}
         for arm, results in (("merged", merged), ("chunks", chunks)):
             found_document = sharpness.rank_of_gold(results, gold) is not None
-            found_passage = passage_hit(results, gold, offset)
+            found_passage = passage_hit(results, gold, offset, passage_length)
             tally[arm]["document"] += int(found_document)
             tally[arm]["passage"] += int(found_passage)
             row[arm] = {"document": found_document, "passage": found_passage}

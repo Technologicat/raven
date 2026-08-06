@@ -1667,6 +1667,86 @@
       "gold_titles": [
         "Language Modeling with Gated Convolutional Networks"
       ]
+    },
+    {
+      "kind": "focused",
+      "question": "How effective is an unsupervised path ranking method for finding and classifying defects in knowledge graphs?",
+      "gold": [
+        "2412.04780v1.bib"
+      ],
+      "gold_titles": [
+        "Anomaly Detection and Classification in Knowledge Graphs"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How do reinforcement learning and preference-based learning compare in their tendency to preserve training examples during model alignment, and does the reinforcement learning pipeline erase previously stored data from programming models?",
+      "gold": [
+        "2406.11715v2.bib"
+      ],
+      "gold_titles": [
+        "Measuring memorization in RLHF for code completion"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What structural change to feedforward layers allows tracing feature composition through weight eigenanalysis rather than observing activation patterns?",
+      "gold": [
+        "2410.08417v1.bib"
+      ],
+      "gold_titles": [
+        "Bilinear MLPs enable weight-based mechanistic interpretability"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What method enables a single, constant-dimension representation space to jointly process written text across numerous languages and spoken audio for direct cross-lingual and cross-modal translation?",
+      "gold": [
+        "2308.11466v2.bib"
+      ],
+      "gold_titles": [
+        "SONAR: Sentence-Level Multimodal and Language-Agnostic Representations"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can attention mechanisms across diverse machine learning architectures be derived from marginalization, and how does this framework unify existing models while connecting to neural attention theories?",
+      "gold": [
+        "2304.04556v1.bib"
+      ],
+      "gold_titles": [
+        "Attention: Marginal Probability is All You Need?"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What rationale is offered for the position that current autonomous systems represent the terminal stage of machine intelligence evolution?",
+      "gold": [
+        "2505.09932v1.bib"
+      ],
+      "gold_titles": [
+        "Demystifying AI Agents: The Final Generation of Intelligence"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What are the design patterns and taxonomy of auxiliary knowledge representations used to augment neural sequence generation systems?",
+      "gold": [
+        "2010.04389v4.bib"
+      ],
+      "gold_titles": [
+        "A Survey of Knowledge-Enhanced Text Generation"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Under what conditions can fine-tuned language models internally combine separate pieces of information without generating explicit reasoning traces?",
+      "gold": [
+        "2411.16353v4.bib"
+      ],
+      "gold_titles": [
+        "Lessons from Studying Two-Hop Latent Reasoning"
+      ]
     }
   ]
 }
