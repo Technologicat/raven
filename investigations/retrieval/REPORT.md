@@ -533,15 +533,30 @@ quality at the compression ratio wanted was judged inadequate, and BART's 1024-t
 spaCy sentence-boundary splitter as a preprocessing step. The long-context LED options were on the list
 and lost on *quality*, not length.
 
+**The task then was scientific abstracts condensed to 1–2 sentences, for stage 3 — and that pairing was
+correctly matched, which makes the negative stronger than it first appears.** An arXiv-tuned summarization
+model, evaluated on arXiv abstracts, at roughly 10:1 compression, is the model doing exactly what it was
+built for. It still lost. Fiction was never tested, by any of them. (An earlier version of this section
+described the models as "mismatched" and inferred the negative was therefore weak. That was wrong in the
+direction that flatters the idea.)
+
 **Then the ecosystem removed the abstraction.** The module was deleted in `5bc503d` (Feb 2026) — not by
 preference: *"'summarization' task is gone from the transformers side. Major social signal that LLMs have
 eaten this use case."* The `translate` module met the same fate the same day and now loads its model
 directly, which is the working precedent in this repo for how a revival would have to be built. Some of
 the models tried are also simply gone from HF now.
 
-**One pairing was never tested, and it is the one that matches fiction.** Every LED variant tried was
-**arXiv**-tuned and evaluated on **abstracts** — doubly mismatched. A **BookSum**-tuned LED on narrative
-is a different proposition:
+**And for stage 3 specifically, a seq2seq summarizer is the wrong *shape*, not merely lower quality.**
+Stage 3 asks each document a *question* — "which of these describes a computationally lightweight yet
+reasonably accurate model I could use in a value chain?" — and wants a summary that answers **that**. A
+dedicated summarization model cannot take a query at all; it performs generic compression and nothing
+else. So the small-model path could only ever have served the *generic tldr* variant, never the
+query-conditioned one that stage 3 is built around. That is an architectural exclusion rather than a
+quality judgement, and it holds however good the model gets.
+
+**Fiction, by contrast, was never tested at all**, and it is the case where a specialized model still has
+a plausible claim: generic compression is genuinely what is wanted there, so the shape objection above
+does not apply. A **BookSum**-tuned LED on narrative is the untested combination:
 [`pszemraj/led-large-book-summary`](https://huggingface.co/pszemraj/led-large-book-summary) fine-tunes
 `allenai/led-large-16384` on BookSum, which is long-form narrative — novels, plays and stories — with
 human-written abstractive summaries at paragraph, chapter and book granularity. 16,384 tokens is ~64k
@@ -550,11 +565,32 @@ summarization rather than an arbitrary splitter. Siblings:
 [`led-base-book-summary`](https://huggingface.co/pszemraj/led-base-book-summary) and
 [`long-t5-tglobal-xl-16384-book-summary`](https://huggingface.co/pszemraj/long-t5-tglobal-xl-16384-book-summary).
 
-Worth an evaluation rather than a decision: the prior is that a 30B-class LLM is the only competent
-summarizer at this compression ratio, and that prior was formed on models mismatched to the task. Polished
-previous-generation tooling can beat a developing current generation, and its hardware profile favours
-local deployment — but the last time this was measured the specialized models lost, and nothing here says
-they would not lose again.
+**Where that leaves the four uses**, which is a cleaner split than "revive it or don't":
+
+| use | needs | verdict |
+|---|---|---|
+| stage 3 map-and-reduce | a *query-conditioned* summary | **LLM only** — a summarizer model cannot take a question |
+| generic tldr of abstracts | 10:1 generic compression | **LLM** — the matched specialized model was measured and lost |
+| scientific fulltext for retrieval | a document-level summary | **extraction**, not generation — the abstract is inside the paper |
+| **fiction for retrieval** | generic compression of long narrative | **open** — never tested, and the one case a specialized model still fits |
+
+**And "only fiction" is the wrong way to read that last row.** Fiction stands in for *long-form text with
+no author-written summary*, which is the **general** case — novels, memoirs, reports, transcripts, manuals,
+legal documents, meeting notes. The scientific paper is the **special** case: it is unusual in shipping
+with an author-written abstract that can simply be extracted. So the open question is not a corner of the
+problem; it is everything except the one document type that happens to summarize itself.
+
+That is also why the fiction corpus earns its place as an instrument rather than as a joke. Raven indexes
+whatever the user drops in the folder, and domain-agnosticism is structural here rather than a
+nice-to-have — a summarization story that works only where an abstract already exists is not a
+summarization story.
+
+Worth an evaluation rather than a decision, then, with the burden correctly placed: the standing prior is
+that only a 30B-class LLM is competent at this compression ratio, and it was formed on a *correctly
+matched* test that the specialized model lost — so the prior is well-founded rather than an artifact of a
+bad pairing. Polished previous-generation tooling can beat a developing current generation, and its
+hardware profile favours local deployment. But the specialized model has to earn its way back in, on a
+corpus type where nothing has been measured yet.
 
 **One caveat on the metric, which cuts against the synthesis numbers specifically.** Set recall asks
 whether *these four* documents came back, and a broad question over a large corpus has many documents that
