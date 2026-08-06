@@ -40,7 +40,7 @@ import watchdog.observers
 
 import numpy as np
 
-from unpythonic import allsame, box, ETAEstimator, partition, uniqify
+from unpythonic import allsame, box, ETAEstimator, uniqify
 from unpythonic.env import env as envcls
 
 # database
@@ -1504,6 +1504,21 @@ class HybridIRFileSystemEventHandler(watchdog.events.FileSystemEventHandler):
             return None
         return content.strip()
 
+    def _make_delete_task(self, document_id: str) -> Callable:
+        """Deletion by id, for a document whose file is gone.
+
+        Separate from `_make_task` because it is the one operation with no file to name: the caller has an
+        index record and nothing on disk. Deriving the id from the record's stored path instead would fail
+        exactly when the documents directory has been renamed, moved or symlinked since indexing — which is
+        also when a rescan is most likely to be running.
+        """
+        def scheduled_delete(task_env: envcls) -> None:
+            logger.debug(f"HybridIRFileSystemEventHandler.scheduled_delete: document '{document_id}': deleting from search indices.")
+            self.retriever.delete(document_id)
+            logger.debug(f"HybridIRFileSystemEventHandler.scheduled_delete: document '{document_id}': scheduling commit to save changes to HybridIR.")
+            task_managers["commit"].submit(self.commit_task, envcls(wait=True))
+        return scheduled_delete
+
     def _make_task(self, kind: str, path: Union[pathlib.Path, str]) -> Callable:
         abspath = common_utils.canonical_path(path)
         document_id = self._make_document_id_from_path(abspath)
@@ -1568,33 +1583,43 @@ class HybridIRFileSystemEventHandler(watchdog.events.FileSystemEventHandler):
         plural_s = "s" if len(found_paths) != 1 else ""
         logger.info(f"HybridIRFileSystemEventHandler.rescan: Found {len(found_paths)} file{plural_s}.")
 
+        # Compare by `document_id` -- the path *relative* to the documents directory -- and not by the
+        # absolute path each record also stores. The relative path is what identifies a document, and it is
+        # what survives the documents directory being renamed, moved, or reached through a symlink; the
+        # absolute path is a fact about where the collection sits today. Keying on the latter makes a
+        # collection reached by a second spelling of the same directory read as an entirely different one:
+        # every file new, every indexed document deleted. It also *raised*, because building the deletion
+        # task re-derived an id from the stored path, and a stored path outside the current documents
+        # directory has no relative form -- the same "'<target>' is not in the subpath of '<documents dir>'"
+        # that symlinked documents used to fail with, surviving on the deletion path.
         with self.retriever.datastore_lock:
             def came_from_file(doc: Dict) -> bool:  # convention: in-memory sources use paths of the form "<document_name_here>"
                 return not (doc["path"].startswith("<") and doc["path"].endswith(">"))
-            indexed_paths = [doc["path"] for doc in self.retriever.documents.values() if came_from_file(doc)]
-            indexed_paths_set = set(indexed_paths)
-            def is_in_index(path: str) -> bool:
-                return path in indexed_paths_set
-            def is_file_updated(path: str) -> bool:
+            indexed_document_ids = {document_id for document_id, doc in self.retriever.documents.items()
+                                    if came_from_file(doc)}
+            # Safe to derive: every found path came from walking `self.docs_dir`, so it is under it by
+            # construction. This is the direction that always works, which is why deletion is handled by
+            # id below rather than by re-deriving one from a stored path.
+            found_document_ids = {self._make_document_id_from_path(path): path for path in found_paths}
+
+            def is_file_updated(document_id: str, path: str) -> bool:
                 stats = self.retriever._stat(path)
-                document_id = self._make_document_id_from_path(path)
-                assert document_id in self.retriever.documents  # this is only ever called for already indexed documents
                 doc = self.retriever.documents[document_id]
                 mtime_increased = (stats["mtime"] > doc["mtime"])
                 filesize_changed = (stats["size"] != doc["filesize"])
                 return mtime_increased or filesize_changed
 
-            new_found_paths, already_indexed_found_paths = partition(is_in_index, found_paths)
-            new_found_paths = list(new_found_paths)
-            already_indexed_found_paths = list(already_indexed_found_paths)
-            updated_paths = [path for path in already_indexed_found_paths if is_file_updated(path)]
-            found_paths_set = set(found_paths)
-            deleted_paths = [path for path in indexed_paths if path not in found_paths_set]
+            new_found_paths = [path for document_id, path in found_document_ids.items()
+                               if document_id not in indexed_document_ids]
+            updated_paths = [path for document_id, path in found_document_ids.items()
+                             if document_id in indexed_document_ids and is_file_updated(document_id, path)]
+            deleted_document_ids = [document_id for document_id in indexed_document_ids
+                                    if document_id not in found_document_ids]
 
         new_plural_s = "s" if len(new_found_paths) != 1 else ""
         updated_plural_s = "s" if len(updated_paths) != 1 else ""
-        deleted_plural_s = "s" if len(deleted_paths) != 1 else ""
-        logger.info(f"HybridIRFileSystemEventHandler.rescan: Scan complete. Found {len(new_found_paths)} new file{new_plural_s}, {len(updated_paths)} updated file{updated_plural_s}, and {len(deleted_paths)} deleted file{deleted_plural_s}.")
+        deleted_plural_s = "s" if len(deleted_document_ids) != 1 else ""
+        logger.info(f"HybridIRFileSystemEventHandler.rescan: Scan complete. Found {len(new_found_paths)} new file{new_plural_s}, {len(updated_paths)} updated file{updated_plural_s}, and {len(deleted_document_ids)} deleted file{deleted_plural_s}.")
 
         for path in new_found_paths:
             logger.info(f"HybridIRFileSystemEventHandler.rescan: File '{path}' is new: scheduling ingest.")
@@ -1602,9 +1627,9 @@ class HybridIRFileSystemEventHandler(watchdog.events.FileSystemEventHandler):
         for path in updated_paths:
             logger.info(f"HybridIRFileSystemEventHandler.rescan: File '{path}' was updated: scheduling ingest.")
             task_managers["ingest"].submit(self._make_task(kind="update", path=path), envcls())
-        for path in deleted_paths:
-            logger.info(f"HybridIRFileSystemEventHandler.rescan: File '{path}' was deleted: scheduling deletion from index.")
-            task_managers["ingest"].submit(self._make_task(kind="delete", path=path), envcls())
+        for document_id in deleted_document_ids:
+            logger.info(f"HybridIRFileSystemEventHandler.rescan: Document '{document_id}' was deleted: scheduling deletion from index.")
+            task_managers["ingest"].submit(self._make_delete_task(document_id), envcls())
 
     def on_created(self, event) -> None:
         path = event.src_path

@@ -7,6 +7,7 @@ yet cached.
 """
 
 import math
+import pathlib
 import textwrap
 import threading
 import types
@@ -502,6 +503,67 @@ def test_pend_edit_delete_of_indexed_document():
     fake = _fake_ir_for_pend_edit(indexed_document_ids=("doc1",))
     hybridir.HybridIR._pend_edit(fake, action="delete", document_id="doc1")
     assert _pending_kinds(fake) == ["delete"]
+
+
+# ---------------------------------------------------------------------------
+# Rescan identifies documents by their id, not by where the collection sits
+# ---------------------------------------------------------------------------
+
+class TestRescanKeysOnDocumentId:
+    """A document is identified by its path *relative* to the documents directory.
+
+    So a collection reached through a renamed, moved or symlinked documents directory is still the same
+    collection, and a rescan of it has nothing to do. Keying on the absolute path each record also stores
+    made the same collection read as an entirely different one — every file new, every indexed document
+    deleted — and then raised on the way there, because building the deletion task re-derived an id from a
+    stored path that has no relative form under the new directory.
+    """
+
+    def _handler(self, docs_dir, indexed):
+        """A handler wired to a stub retriever holding `indexed`, as `{document_id: absolute path}`."""
+        retriever = types.SimpleNamespace(
+            documents={document_id: {"path": path, "mtime": 0, "filesize": 1}
+                       for document_id, path in indexed.items()},
+            datastore_lock=threading.RLock(),
+            _stat=lambda path: {"mtime": 0, "size": 1})
+        handler = hybridir.HybridIRFileSystemEventHandler.__new__(hybridir.HybridIRFileSystemEventHandler)
+        handler.docs_dir = pathlib.Path(docs_dir)
+        handler.retriever = retriever
+        handler.commit_task = lambda task_env: None  # bypassing __init__, so the real one is not bound
+        return handler
+
+    def test_the_same_collection_under_a_second_spelling_needs_no_work(self, tmp_path, monkeypatch):
+        real = tmp_path / "documents_hydrogen"
+        real.mkdir()
+        (real / "paper.bib").write_text("@article{a, title={H2}}", encoding="utf-8")
+        slot = tmp_path / "documents"
+        slot.symlink_to(real)
+
+        # Indexed by its real directory; rescanned through the symlink. Same document, both times.
+        handler = self._handler(slot, {"paper.bib": str(real / "paper.bib")})
+        monkeypatch.setattr(handler, "_sanity_check", lambda path: True)
+        scheduled = []
+        monkeypatch.setitem(hybridir.task_managers, "ingest",
+                            types.SimpleNamespace(submit=lambda *a, **kw: scheduled.append(a)))
+
+        handler.rescan(slot)
+        assert scheduled == []   # not "every file new and every document deleted", and no ValueError
+
+    def test_a_document_whose_file_is_gone_is_deleted_by_id(self, tmp_path, monkeypatch):
+        # The deletion path specifically: the record's stored path lies outside the current documents
+        # directory, so it has no relative form and must not be asked for one.
+        slot = tmp_path / "documents"
+        slot.mkdir()
+        handler = self._handler(slot, {"vanished.bib": str(tmp_path / "somewhere_else" / "vanished.bib")})
+        deleted = []
+        monkeypatch.setattr(handler.retriever, "delete", deleted.append, raising=False)
+        monkeypatch.setitem(hybridir.task_managers, "ingest",
+                            types.SimpleNamespace(submit=lambda task, env: task(env)))
+        monkeypatch.setitem(hybridir.task_managers, "commit",
+                            types.SimpleNamespace(submit=lambda *a, **kw: None))
+
+        handler.rescan(slot)
+        assert deleted == ["vanished.bib"]
 
 
 # ---------------------------------------------------------------------------

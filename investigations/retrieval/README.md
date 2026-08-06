@@ -305,20 +305,26 @@ Switching corpora is then two `ln -s` calls and nothing moves.
 one genuinely destructive state: Librarian rescans at startup, finds none of the indexed filenames, and
 schedules every document for deletion and every file for ingest. Nothing warns; it just starts working.
 
-**Why the symlink does not confuse the index, which is not obvious.** `canonical_path` normalizes lexically
-without resolving symlinks, so a scan through `documents` yields paths spelled `.../documents/...`
-regardless of what it points at — which is exactly what an index built through the same spelling recorded.
-The stable spelling is the slot name, not the corpus name, and that is what makes this work at all.
+**Why the symlink does not confuse the index.** A document is identified by its `document_id`, which is its
+path *relative* to the documents directory — so a flat corpus is identified by bare filename, and where the
+collection sits is not part of its identity. Rescan compares on that, so the same collection reached
+through a renamed, moved or symlinked directory has nothing to do.
 
-The corollary is a real constraint: **an index intended for the active slot must be built through the
-slot.** The per-corpus evaluation indexes here were built by naming their real directories, so they carry
-`.../documents_hydrogen/...` and a rescan through the slot would re-ingest all of them. That costs nothing
-in practice because the harness only ever reads them, via `--db-dir`, and never rescans — but pointing
-Librarian itself at one of them is not free.
+That was not true until 2026-08-06: `rescan` compared the *absolute* path each record also stores, which
+made a second spelling of the same directory read as an entirely different collection — every file new,
+every indexed document deleted — and then raised `'<target>' is not in the subpath of '<documents dir>'`
+while building the first deletion task, the same error surface as the symlinked-documents bug fixed earlier
+in this sprint. Fixed and pinned by `TestRescanKeysOnDocumentId`.
 
-**This is scaffolding with a known end date.** Document scopes (brief 13, autumn 2026, after Researchers'
-Night) give a corpus a first-class identity, at which point one installation holds several collections
-without a slot to contend over and the symlinks go away.
+**No corpus needs re-indexing because of this**, checked rather than assumed. The four corpora that were
+built while sitting in the slot recorded `.../documents/...` and agree on both keys anyway; the fulltext
+corpus was indexed by naming its own directory and so records `00_stuff/...`, which after the fix is simply
+not consulted for identity. Verified against the live hydrogen index: 11974 indexed documents against 11974
+files under the slot, 0 new and 0 deleted.
+
+**This is scaffolding with a known end date.** Corpus scopes — the *corpus scopes and unified DB* brief,
+scheduled for autumn 2026, after Researchers' Night — give a collection a first-class identity, at which
+point one installation holds several of them without a slot to contend over and the symlinks go away.
 
 **Prefer `--db-dir` over renaming index directories into the configured slot.** Four corpora share one
 `llm_database_dir`, and the parking convention (`rag_index_hydrogen`, `rag_index_arxiv`, …) invites a
