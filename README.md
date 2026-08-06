@@ -23,6 +23,7 @@
     - [Raven-conference-timer: Countdown timer for talks](#raven-conference-timer-countdown-timer-for-talks)
     - [Raven-server: Web API server](#raven-server-web-api-server)
         - [Quickstart](#quickstart)
+    - [Command-line tools](#command-line-tools)
 - [Install & run](#install--run)
     - [From source](#from-source)
         - [Install PDM in your Python environment](#install-pdm-in-your-python-environment)
@@ -247,6 +248,33 @@ source run-on-internal-gpu.sh
 source no-hammer-hf.sh
 raven-server
 ```
+
+
+## Command-line tools
+
+Beside the desktop apps, Raven installs a set of headless tools. They exist so that the parts of a workflow that do not need a window do not open one — a document collection can be indexed over SSH, and a bibliography can be assembled in a shell pipeline.
+
+**Document database**
+
+- **`raven-indexer`** builds or refreshes *Librarian*'s RAG index over a documents directory, then exits. Useful when you have just dropped several hundred files into the folder and would rather not watch the GUI chew through them, and necessary on a headless machine. `-d/--db-dir` writes the index somewhere other than the configured location, so several collections can be kept side by side. See [the Librarian README](raven/librarian/README.md#indexing-from-the-command-line-raven-indexer) for the options.
+
+**Building a bibliography**
+
+- **`raven-arxiv-search`** runs a boolean search against arXiv and prints the matching identifiers.
+- **`raven-arxiv2id`** scans a directory for arXiv identifiers in PDF filenames, keeping the newest version of each paper. `--strip-versions` drops the version suffix, which is how a collection gets refreshed to the current revisions.
+- **`raven-arxiv2bib`** turns identifiers into BibTeX, recording the version arXiv actually answered with.
+- **`raven-arxiv-download`** fetches the fulltext PDFs. `--save-bib` writes the BibTeX from metadata it already had to fetch anyway, so you pay arXiv's politeness delays once instead of twice.
+- **`raven-burstbib`** splits a multi-entry `.bib` into one file per entry — which is what makes a bibliography usable as a document database, since otherwise the whole thing indexes as a single document.
+- **`raven-wos2bib`**, **`raven-csv2bib`**, **`raven-pdf2bib`** convert Web of Science exports, CSV, and PDF metadata into BibTeX.
+
+**Datasets and odds and ends**
+
+- **`raven-importer`** runs *Visualizer*'s import pipeline (BibTeX → analyzed dataset) without the GUI.
+- **`raven-dehyphenate`** undoes line-break hyphenation in text extracted from PDFs.
+- **`raven-qoi2png`** converts QOI images to PNG.
+- **`raven-check-cuda`** and **`raven-check-audio-devices`** report what the machine offers, which is usually the fastest way to settle an installation question.
+
+The end-to-end recipes that chain these — [turning a folder of arXiv PDFs into a searchable database](raven/librarian/README.md#turning-a-folder-of-arxiv-pdfs-into-a-searchable-database), and [refreshing that collection when papers get new versions](raven/librarian/README.md#refreshing-a-collection-when-papers-get-new-versions) — are in the Librarian README.
 
 
 # Install & run

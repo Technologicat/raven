@@ -117,7 +117,35 @@ pdm use --venv in-project
 
 Prefix commands with `pdm run` if the venv is not active.
 
-Entry points defined in `pyproject.toml` under `[project.scripts]` — main apps are `raven-visualizer`, `raven-librarian`, `raven-server`, `raven-importer`, `raven-minichat`, `raven-xdot-viewer`, `raven-cherrypick`, `raven-conference-timer`, `raven-avatar-pose-editor`, `raven-avatar-settings-editor`.
+### Entry points: reach for the CLI before writing a script
+
+All defined in `pyproject.toml` under `[project.scripts]`, which is authoritative — this table is an index
+so the tools are *findable*, and its failure mode is a one-off script doing badly what a shipped tool does
+well. (Live case: an ad-hoc `HybridIR(...).add(...).commit()` script written to re-ingest three documents
+that `raven-indexer` indexes as a matter of course.) Before scripting against `raven.*` internals for an
+operational task, check here.
+
+**GUI apps** — `raven-visualizer` (the main app), `raven-librarian`, `raven-avatar-pose-editor`,
+`raven-avatar-settings-editor`, `raven-xdot-viewer`, `raven-cherrypick`, `raven-conference-timer`.
+
+**Servers and terminal frontends** — `raven-server` (the ML inference API), `raven-minichat` (readline REPL
+on the Librarian backend).
+
+**Headless pipeline tools**, the ones worth knowing before writing anything:
+
+| tool | what it does |
+|---|---|
+| `raven-indexer` | build or refresh Librarian's RAG index over a documents directory. Takes `-d/--db-dir`, so it indexes any corpus into any index without touching config |
+| `raven-importer` | Visualizer's BibTeX → dataset import pipeline |
+| `raven-arxiv-search` | arXiv boolean search → identifiers |
+| `raven-arxiv2id` | parse arXiv identifiers out of filenames or BibTeX; `--strip-versions` discards the pinned version, which is how a collection gets refreshed to latest |
+| `raven-arxiv2bib` | arXiv identifiers → BibTeX (records the version arXiv *returned*) |
+| `raven-arxiv-download` | fetch fulltext PDFs for identifiers; `--save-bib` writes the BibTeX from metadata it already fetched, so the two runs cost one set of politeness delays |
+| `raven-burstbib` | split a multi-entry BibTeX file into one file per entry |
+| `raven-wos2bib`, `raven-csv2bib`, `raven-pdf2bib` | bibliography converters from Web of Science exports, CSV, and PDF metadata |
+| `raven-dehyphenate` | undo line-break hyphenation in extracted text |
+| `raven-qoi2png` | image format conversion |
+| `raven-check-cuda`, `raven-check-audio-devices` | environment diagnostics |
 
 ### Running Tests
 
