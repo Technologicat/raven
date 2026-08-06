@@ -895,6 +895,45 @@ That makes **recall per thousand tokens** the metric worth computing, rather tha
 derivable from data already recorded. It also converges with the pre-merge reranking idea above: both
 say the unit that should reach the model is the chunk, not the merged span.
 
+##### Measured: at an equal budget, bare chunks beat merged spans — most where the budget is tight
+
+`token_budget.py`, hydrogen, same retrieval filled two ways until it reaches a character budget. Budgeted
+in characters rather than tokens because a token count needs the LLM backend, one call per measurement;
+both arms are the same kind of text from the same corpus, so the ratio is common to them and only the axis
+label changes (~4 characters per token here).
+
+| chars | ~tokens | merged | results | chunks | results | delta |
+|---|---|---|---|---|---|---|
+| 7,500 | 1,875 | 53.8% | 4 | 62.3% | 7 | **+8.5** |
+| 15,000 | 3,750 | 66.9% | 8 | 69.2% | 14 | +2.3 |
+| 30,000 | 7,500 | 72.3% | 18 | 75.4% | 29 | +3.1 |
+| 60,000 | 15,000 | 78.5% | 39 | 80.8% | 58 | +2.3 |
+| 120,000 | 30,000 | 85.4% | 87 | 86.2% | 116 | +0.8 |
+| ~~300,000~~ | ~~75,000~~ | ~~85.4%~~ | ~~100~~ | ~~93.8%~~ | ~~291~~ | ~~+8.5~~ |
+
+**The last row is an artifact and is struck out rather than deleted, because it looked like the headline.**
+`query` returns at most `k` results, so past a certain budget the merged arm stops growing while the chunk
+arm keeps going: that +8.5 measures the depth cap, not the merging. The script now flags any row where the
+merged arm has hit `k`. Worth keeping visible — it is the same shape of error as reading a winning cell off
+a swept grid, and it was one row away from being written up as the strongest result in the file.
+
+**Chunks win everywhere, modestly at the operating point and substantially when the budget is tight.**
+`k=50` sits near 18k tokens, where the gap is about +2 points — real, and not on its own a reason to change
+anything. The gap at 1,875 tokens is +8.5, and *that* is the interesting cell, because it is where adaptive
+`k` would put a narrow question. The two ideas compose: shrinking the budget costs less if the unit being
+spent is the chunk.
+
+**What this does not measure is whether the reply is any better.** Merging exists so the model receives
+readable passages instead of fragments cut mid-sentence, and a recall-per-character win says nothing about
+that. Read it as a trade worth weighing, not as a verdict. It does converge with the pre-merge reranking
+idea recorded above — both say the unit that should reach the model is the chunk — which is two independent
+routes to the same suggestion and the reason it is worth testing properly rather than filing.
+
+**A reproducibility hazard met while running it**: `n` was 128 on one run and 130 on another minutes later,
+because `make_questions.py --append` was writing to the question file at the time and the harness reads it
+at startup. The paired comparison within each run is unaffected, but two runs are not comparable unless the
+set was still between them. Do not score anything while a generation is in flight.
+
 ##### The per-query arm-selection oracle, and it is wide (2026-08-06)
 
 Computed from the per-question ranks already recorded in `arm_rerank_<corpus>.json` — no new runs. The
