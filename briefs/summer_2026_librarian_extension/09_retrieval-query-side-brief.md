@@ -14,6 +14,44 @@ the *scoring* stage — so it is worth knowing what the *query* stage is current
 makes it measurable. Some of it may make reranking unnecessary at the current corpus size. That is an
 outcome, not a claim.
 
+## Status: closes for 0.2.8 as an experiment set (2026-08-06)
+
+**This brief turned out to be applied science rather than a build**, and it is worth saying so at the top,
+because the sections below are written as an implementation plan and a reader who takes them at face value
+will start building things that were subsequently measured and refuted.
+
+The negative results are the bulk of the output, and they live in `investigations/retrieval/REPORT.md`,
+organized by decision. `investigations/retrieval/README.md` is the unpruned record, retractions and all.
+Where a section below has been overtaken, it carries a dated correction in place; the two files above are
+authoritative where they disagree with the plan.
+
+**What shipped**, all of it small and all of it measured:
+
+- `docs_num_results = 50`, up from 20 — the largest single win of the sprint. Known-item recall on a
+  12k-abstract corpus goes 74.7% → 84.8%, at ~1.7 s more prefill per turn on a 30B model. 100 buys half as
+  much for four times the extra wait, which is what makes 50 the stopping point rather than a round number.
+- `docs_max_result_length = 2000` — bounds a merged span, which previously had no upper limit at all.
+- `keyword_weight`, `rrf_k` and `merge` as query-time parameters, so the fusion can be varied without
+  editing config — which is what made the sweeps possible in the first place.
+- Fixes found by running the harness against real corpora: UTF-16 surrogate repair at extraction (three of
+  1268 arXiv papers were being silently lost), `rescan` keying on document id instead of absolute path,
+  the empty-index return shape, symlinked document directories, and batched tokenization at index time.
+
+**What was refuted** — each with a mechanism, not just a p-value: the MiniLM and BGE rerankers (RRF's value
+is evidence diversity, and reranking the fused list collapses it), `K=10` as an RRF constant, score fusion
+on balanced corpora, `armsum`, term coverage, and `mean` and `count` aggregation.
+
+**The consumer that was blocking on this is unblocked**, for the coarse case only: brief 10's grounding
+marker gets "the conversation left the corpus" at AUROC ≈ 1.0, and does not get a travelling absolute
+threshold, because no such threshold exists across corpora.
+
+**What carries forward, and none of it before Researchers' Night (2026-09-26):** adaptive `k` with its
+domain of validity attached (it pays below ~1.3k documents and is dead at ~12k), stratified sampling and
+therefore clustering for the large-corpus case, and a document-level summary layer — which is `VISION.md`
+stage 3 reached from the retrieval side. Two live leads at p ≈ 0.08 are described in the report rather than
+here, since both want a mechanism before another sweep. The experiments that are ready to run and need
+nothing new are in `REPORT.md` §3b.
+
 ## A shipped feature now depends on this (2026-07-28)
 
 This started as quality work with no hard deadline. It has since acquired a caller. Brief 10's grounding

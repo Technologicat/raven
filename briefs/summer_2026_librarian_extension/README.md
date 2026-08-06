@@ -176,11 +176,19 @@ Still open, in the order they are expected to be done:
      `perform_tool_calls` built its error report and then raised `TypeError` delivering it, so none of the
      five had ever reached a model. Shipped that way since 0.2.7 at least — the paths are reached only when a
      backend garbles a `tool_calls` entry, which ours do not.
-5. **Brief 09** — the retrieval query side, and the last blocker. Absorbs the inject-shape decisions that were
-   filed separately: document-inject offset/length, the consulted-docs list gaining offsets and a
-   "previously consulted" marker, the "no sources consulted" marker, and whether the Speculation toggle still
-   carries information once Docs-ON implies marking. These are all §4-shaped — 09's implementation has to
-   settle them anyway, so they are scoped into it rather than tracked apart.
+5. ~~**Brief 09** — the retrieval query side, and the last blocker.~~ **Closed 2026-08-06 as an experiment
+   set**, which is a different thing from finished: it shipped `docs_num_results = 50` (+10 points of
+   known-item recall on a 12k corpus), a cap on merged result length, query-time fusion parameters and a
+   handful of fixes the harness surfaced — and it refuted rather more than it shipped, reranking included.
+   The brief's own status section says what landed; `investigations/retrieval/REPORT.md` carries the
+   findings and the ready-to-run experiments. The remaining levers want clustering and a summary layer, so
+   they are post-Researchers' Night.
+   - **The absorbed inject-shape decisions did not close with it**, and should not be assumed to have.
+     Document-inject offset/length, the consulted-docs list gaining offsets and a "previously consulted"
+     marker, the "no sources consulted" marker, and whether the Speculation toggle still carries
+     information once Docs-ON implies marking were scoped into 09 on the reasoning that its implementation
+     would have to settle them. 09 stopped being that implementation, so they need a home of their own
+     before anyone builds against them.
 
 Then the release-prep checklist below.
 
