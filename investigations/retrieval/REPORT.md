@@ -454,6 +454,29 @@ of the collection, it should track corpus size rather than any property of the s
 actionable design number rather than a vague "large corpora are harder": a few thousand documents is where
 top-`k` retrieval stops being able to answer broad questions at all.
 
+**And a corpus that lands inside the bracket already exists** (Juha, 2026-08-06): **ECCOMAS 2024**, 2520
+conference abstracts at `00_stuff/datasets/ECCOMAS2024`, with a hand-corrected `.bib`. At 2520 documents it
+sits between the corpus where adaptive `k` works and the one where it does not, which makes it the direct
+probe of where the transition is — and it is a *drop-in* fifth corpus, since the `.bib` carries abstracts
+in the same shape the other sets use (`raven-burstbib` → `raven-indexer` → a `CORPORA` entry).
+
+Measured shape: 1637 characters per abstract on average (median 1606, p75 1923, max 8371), about 2.2 chunks
+each, ~5500 chunks for the collection.
+
+**Two other things make it the most representative corpus here, both about provenance rather than size.**
+It is *dirty in the way real collections are dirty*: free-form PDFs where most but not all follow the
+mandatory template, some missing titles, some missing author names, one a verbatim copy of the template
+itself, and several authored in Word with text layers broken badly enough to need `ocrmypdf`. Building the
+`.bib` took `raven-pdf2bib` with Qwen 3 for ~2200 of them and hand-fixing for the remaining ~300. Every
+other corpus here arrived clean — WoS exports, arXiv metadata, a hand-typed bibliography — so this is the
+only one that exercises the ingestion path the way a conference organizer's dump would.
+
+Its abstracts are also **verbatim author text**, not generated: `pdf2bib`'s prompt says *"Do NOT summarize
+or reword the input in any way. Just copy the main text… AS-IS"*, and the pipeline additionally strips the
+conference template boilerplate, author affiliations and addresses, and any reference list. So the field is
+the author's own abstract body with the packaging removed — which is what makes it usable as ground truth
+rather than as a model's paraphrase of one.
+
 Which reorders the roadmap. Clustering was justified as an interface and organization feature; it is now
 also the only route to broad-question retrieval on the collection sizes Raven is built for.
 
@@ -571,8 +594,19 @@ summarization rather than an arbitrary splitter. Siblings:
 |---|---|---|
 | stage 3 map-and-reduce | a *query-conditioned* summary | **LLM only** — a summarizer model cannot take a question |
 | generic tldr of abstracts | 10:1 generic compression | **LLM** — the matched specialized model was measured and lost |
-| scientific fulltext for retrieval | a document-level summary | **extraction**, not generation — the abstract is inside the paper |
+| scientific *fulltext* for retrieval | a document-level summary | **extraction**, not generation — the abstract is inside the paper |
+| scientific documents that *are* abstracts | a shorter form | **generation** — there is nothing shorter to extract |
 | **fiction for retrieval** | generic compression of long narrative | **open** — never tested, and the one case a specialized model still fits |
+
+**The extraction row is narrower than it first looked** (Juha, 2026-08-06). It holds for documents that
+*contain* an author-written summary of themselves — journal papers and preprints, where the abstract sits
+inside the fulltext. It does **not** hold for scientific documents that *are* abstracts: a conference
+abstract is already the shortest form its author wrote, so wanting a one-sentence version means generating
+one. The ECCOMAS 2024 set below is 2520 of exactly that, and it is a normal scientific corpus rather than
+an edge case.
+
+So the split is not "scientific versus everything else" but **"does the document contain a summary of
+itself?"** — and only the journal-paper shape does. Extraction is the special case twice over.
 
 **And "only fiction" is the wrong way to read that last row.** Fiction stands in for *long-form text with
 no author-written summary*, which is the **general** case — novels, memoirs, reports, transcripts, manuals,
