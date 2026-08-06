@@ -1,5 +1,11 @@
 # Retrieval evaluation
 
+**Looking for the findings? Read [`REPORT.md`](REPORT.md).** It states what has been decided, what has been
+refuted, and what is open, organized by decision. This file is the *research notes*: the historical record,
+in the order things happened, including the wrong turns and the reasoning that produced each result. It is
+where to look for **why** something is claimed, and it is deliberately not pruned when a claim is
+retracted — a retraction with its original argument still visible is worth more than a tidy conclusion.
+
 Known-item evaluation sets for `raven.librarian.hybridir`, and the harnesses that score them.
 
 These are instruments, not probes: they are committed and re-scored whenever a lever changes, which is the
