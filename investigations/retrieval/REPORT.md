@@ -304,12 +304,39 @@ Measurable with the known-item harness exactly as the cross-encoder was: rerank 
 main model and score recall@5 against gold. The free reordering variant needs no LLM at all and can be run
 against the existing sweeps; the LLM variants queue behind question generation.
 
-**Score-based fusion instead of rank-based — no gain in ranking quality.** *Measured 2026-08-06.* This
-was ranked as the most promising untried idea, on the reasoning that RRF fuses positions and discards
-scores, which is exactly why "the hybrid rank does not track how good a result is". `CombSUM` over
-per-query-normalized scores measures **equal** to RRF: the best cell reaches 74.4% against 73.0% on
-hydrogen, paired 13 gained against 9 lost, p = 0.52, and the picture repeats on fulltext. Both min-max and
-z-score normalization, at three weights each.
+**Score-based fusion instead of rank-based — a null when the arms are balanced, a gain when they are
+not.** *Measured 2026-08-06, and the second half was found by a control run late that evening.*
+
+The first reading was a flat null. `CombSUM` over per-query-normalized scores measures **equal** to RRF on
+hydrogen (74.4% against 73.0%, 13 gained against 9 lost, p = 0.52) and the picture repeats on the arXiv
+corpora. Then the banichuk control — run to check `sum` aggregation, where it is provably a no-op because
+every document is a single chunk — showed score fusion **beating** RRF: 43.7% against 41.0% at @20, 12
+gained against 4 lost, **p = 0.077**. With every aggregation rule coinciding on that corpus, the difference
+is purely `CombSUM` against RRF.
+
+**The pattern across corpora is the mechanism, and it is not curve-fitting**:
+
+| corpus | BM25 arm MRR | vector arm MRR | arms | score fusion vs RRF |
+|---|---|---|---|---|
+| hydrogen | 0.414 | 0.375 | comparable | null |
+| arxiv-ai | comparable | | comparable | null |
+| **banichuk** | **0.090** | **0.201** | **very unequal** | **+2.7, p = 0.077** |
+
+**Score fusion self-weights, and RRF cannot.** When one arm is much weaker, RRF still gives it an equal
+vote *by position* — rank 1 of a bad list is indistinguishable from rank 1 of a good one, which is the same
+information-discarding that makes the fused rank blind to result quality in the first place. Score fusion
+lets a weak arm's genuinely low scores contribute proportionally less, automatically, **with no tuning
+constant**. That is the "cheap, no tuning" shape this investigation is selecting for, and it means the
+earlier null was not a property of score fusion but of the corpora it was measured on: both are collections
+where the two arms happen to be evenly matched.
+
+It also connects to the corpus-dependent arm weight (§3, `keyword_weight`): score fusion is doing
+approximately what a per-corpus weight would do, but per *query* and without anyone having to choose the
+number. Whether it does it well enough to make the knob unnecessary is the obvious next question.
+
+*Still to check before believing it:* one corpus, p = 0.077, and banichuk is the corpus this file has
+repeatedly found to be unlike the others. Fiction is the natural fourth test (arms 0.692 against 0.814,
+moderately unequal) but its document-level recall saturates, so it would need the passage-coverage metric.
 
 *What this does not close:* score fusion produces a fused **value** where RRF produces a reciprocal-rank
 artifact, so the argument from *calibrated confidence* survives its failure to improve *ranking*. Those
@@ -407,6 +434,28 @@ reasoned.
 collections and stops paying on large ones, where stratified sampling is the real answer and `k` is only
 the affordable approximation. Shipping it without that caveat would produce a feature that works on the
 demo corpus and quietly does nothing on a researcher's 12k-record library.
+
+#### And this promotes clustering from a nice-to-have to a prerequisite
+
+Juha's reading, and it is the consequence that matters most: **the hydrogen corpus wants stratification,
+and nothing available today can give it that.** A broad question there has a relevant set that no
+conversational `k` samples adequately — 24.3% of the planted documents at k=200, still climbing, with the
+next doubling unaffordable on prefill grounds. Raising `k` is not a partial solution to that; it is the
+wrong axis.
+
+What a broad question needs is a *few results from each region* of the relevant material rather than the
+top-`k` by score, which oversamples whichever region ranks highest. That requires cluster structure over
+the corpus — which the Visualizer pipeline already builds and the Librarian side does not have, and which
+the **corpus scopes and unified DB** work is what makes reachable.
+
+**The measurement also brackets when it starts to matter.** Adaptive `k` works at 1,268 documents and
+fails at 11,974, so the transition sits somewhere between — and since the mechanism is `k` as a *fraction*
+of the collection, it should track corpus size rather than any property of the subject matter. That is an
+actionable design number rather than a vague "large corpora are harder": a few thousand documents is where
+top-`k` retrieval stops being able to answer broad questions at all.
+
+Which reorders the roadmap. Clustering was justified as an interface and organization feature; it is now
+also the only route to broad-question retrieval on the collection sizes Raven is built for.
 
 **One caveat on the metric, which cuts against the synthesis numbers specifically.** Set recall asks
 whether *these four* documents came back, and a broad question over a large corpus has many documents that
