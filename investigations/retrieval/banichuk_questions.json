@@ -1541,6 +1541,226 @@
       "gold_titles": [
         "Odds and ends concerning analytical handling of axially travelling string and beam problems"
       ]
+    },
+    {
+      "kind": "focused",
+      "question": "Under what conditions does a stratified sampling method produce estimators that converge to a normal distribution as the sample size increases?",
+      "gold": [
+        "Owen1992a.bib"
+      ],
+      "gold_titles": [
+        "A Central Limit Theorem for Latin Hypercube Sampling"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can researchers mathematically arrange stratified sampling points to maximize coverage when running simulation studies?",
+      "gold": [
+        "Park1994.bib"
+      ],
+      "gold_titles": [
+        "Optimal Latin-hypercube designs for computer experiments"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does mode coupling occur in continuous axially moving flexible strip systems?",
+      "gold": [
+        "MoteWu1985.bib"
+      ],
+      "gold_titles": [
+        "Vibration coupling in continuous belt and band systems"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What fundamental insights from the stability of internally flowing fluid in tubes can be generalized to solve broader structural dynamics problems?",
+      "gold": [
+        "Paidoussis2008.bib"
+      ],
+      "gold_titles": [
+        "The canonical problem of the fluid-conveying pipe and radiation of the knowledge gained to other dynamics problems across applied mechanics"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does the fibrous network structure govern the deformation and failure behavior of commercial cellulose-based sheets and manufactured goods?",
+      "gold": [
+        "Niskanen2012book.bib"
+      ],
+      "gold_titles": [
+        "Mechanics of Paper Products"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How well does a direction-dependent time-dependent constitutive model capture the low-strain mechanical response of cellulose-based sheet materials?",
+      "gold": [
+        "LifOstlundFellers1999.bib"
+      ],
+      "gold_titles": [
+        "Applicability of Anisotropic Viscoelasticity of Paper at Small Deformations"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does a computational study characterize crack growth in structural components under repeated loading?",
+      "gold": [
+        "FormanKearneyEngle1967.bib"
+      ],
+      "gold_titles": [
+        "Numerical Analysis of Crack Propagation in Cyclic-Loaded Structure"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can we determine the critical translation speeds at which small sideways displacements grow or decay in a continuously moving filament using a phase-space energy formulation?",
+      "gold": [
+        "WangHuangLiu2005.bib"
+      ],
+      "gold_titles": [
+        "Eigenvalue and stability analysis for transverse vibrations of axially moving strings based on Hamiltonian dynamics"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How to calculate crack tip singularity magnitude and non-singular stress using influence functions?",
+      "gold": [
+        "Fett2008.bib"
+      ],
+      "gold_titles": [
+        "Stress Intensity Factors - T-Stresses - Weight Functions"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does internal flow lead to instability in hollow curved structures?",
+      "gold": [
+        "FirouzabadiNoorianHaddadpour2010.bib"
+      ],
+      "gold_titles": [
+        "A fluid--structure interaction model for stability analysis of shells conveying fluid"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What condition removes secular terms in the multiple scales method for rotating continuous bodies?",
+      "gold": [
+        "ChenZu2008.bib"
+      ],
+      "gold_titles": [
+        "Solvability condition in multi-scale analysis of gyroscopic continua"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How do airflow patterns and force distributions change when aircraft lifting surfaces are integrated with their central fuselage sections?",
+      "gold": [
+        "AshleyLandahl1985Book.bib"
+      ],
+      "gold_titles": [
+        "Aerodynamics of wings and bodies"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What tension and speed settings should be adjusted to prevent both dynamic buckling and material tearing in a continuously moving strip?",
+      "gold": [
+        "Saksa2012presentation-ECCOMAS.bib"
+      ],
+      "gold_titles": [
+        "A study on optimal conditions for a travelling web system subject to instability and fracture"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does steady, low-speed airflow trigger dynamic failure in thin flat plates?",
+      "gold": [
+        "KorneckiDowellOBrien1976.bib"
+      ],
+      "gold_titles": [
+        "On the aeroelastic instability of two-dimensional panels in uniform incompressible flow"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What is the mathematical description for the movement of two non-mixing fluids in a porous rock?",
+      "gold": [
+        "Whitaker1986b.bib"
+      ],
+      "gold_titles": [
+        "Flow in Porous Media II: The Governing Equations for Immiscible, Two-Phase Flow"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can the complete set of independent stiffness coefficients be quantified for orthotropic paper manufactured using industrial processes?",
+      "gold": [
+        "MannEtAl1980.bib"
+      ],
+      "gold_titles": [
+        "Determination of all nine orthotropic elastic constants for machine-made paper"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What covers the foundational mathematical principles behind mesh-based numerical discretization techniques for engineering simulations?",
+      "gold": [
+        "ZienkiewiczTaylor2000book.bib"
+      ],
+      "gold_titles": [
+        "The Finite Element Method Volume 1: The Basis"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can the directional distribution of randomly arranged fibers in paper be characterized?",
+      "gold": [
+        "Karkkainen2003.bib"
+      ],
+      "gold_titles": [
+        "Orientation analysis of stochastic fibre systems with an application to paper research"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What are the convergence and stability properties of the element-based numerical approach?",
+      "gold": [
+        "FixStrang1973.bib"
+      ],
+      "gold_titles": [
+        "An Analysis of the Finite Element Method"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What attributes characterize saturated fiber networks?",
+      "gold": [
+        "Robertson1963.bib"
+      ],
+      "gold_titles": [
+        "The Physical Properties of Wet Webs"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What computational sampling approaches are best suited for propagating input randomness and identifying key drivers of model output?",
+      "gold": [
+        "HeltonEtAl2006.bib"
+      ],
+      "gold_titles": [
+        "Survey of Sampling-Based Methods for Uncertainty and Sensitivity Analysis"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does translation velocity affect the transverse oscillation modes and natural frequencies of a traveling thin sheet?",
+      "gold": [
+        "shin.bib"
+      ],
+      "gold_titles": [
+        "Dynamic characteristics of the out-of-plane vibration for an axially moving membrane"
+      ]
     }
   ]
 }

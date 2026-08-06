@@ -382,11 +382,24 @@ If the principle is the attack, the generative question is what *else* fails ind
    is a better argument for building it — a summary is an **independent view** of the document, not merely
    extra coverage of it.
 
-7. **Across query terms — cheap, and the data is already there.** How many *distinct* query terms a
-   document matches, as against matching one term strongly. Classic coordination-level matching, which
-   BM25's per-term saturation does not capture. The index stores `tokens` **per chunk**, lemmatized by the
-   same pipeline the query goes through, so this is an offline set intersection with no re-tokenization and
-   no new retrieval. The cheapest untested axis on this list.
+7. ~~**Across query terms.**~~ **Tested 2026-08-06 — a null, and it corrects the reasoning behind it.**
+   The idea: how many *distinct* query terms a document matches, as against matching one term strongly.
+   Fused as a third ranked list so there was no constant to tune. On the fulltext corpus at n=295:
+
+   | condition | @20 | @50 | MRR | gained | lost | p |
+   |---|---|---|---|---|---|---|
+   | bm25 + vector *(baseline)* | 85.4% | 93.9% | 0.581 | — | — | — |
+   | + coverage as a third arm | **85.4%** | 92.5% | 0.569 | 6 | 6 | **1.000** |
+   | coverage alone | 72.9% | 83.1% | 0.405 | 11 | 48 | < 0.001 |
+
+   **The signal is real but not independent.** It has genuine spread — the best candidate averages 46.3%
+   coverage against the worst at 3.8% — and ranks meaningfully alone at 72.9%, so this is not a broken
+   measurement. It simply carries nothing BM25 does not already have.
+
+   The justification was wrong, which is the more useful part. It claimed that BM25's per-term saturation
+   fails to reward breadth across terms. But BM25 *is a sum over matched query terms*: breadth is precisely
+   what it accumulates, and saturation bounds each term's *depth*, which makes it **more** coordination-like
+   rather than less. The proposal was to add to BM25 a property BM25 is largely made of.
 
 **And one to rule out, for the reason that makes the principle work.** Corroboration from a document's
 *semantic neighbours* is tempting and should not be done: neighbours are correlated by construction — that

@@ -1,0 +1,34 @@
+{
+ "corpus": "arxiv-ai",
+ "depth": 100,
+ "n": 295,
+ "rows": [
+  {
+   "condition": "bm25+vector",
+   "recall20": 0.8542372881355932,
+   "recall50": 0.9389830508474576,
+   "mrr": 0.5811741457496046,
+   "gained": 0,
+   "lost": 0,
+   "p": 1.0
+  },
+  {
+   "condition": "bm25+vector+coverage",
+   "recall20": 0.8542372881355932,
+   "recall50": 0.9254237288135593,
+   "mrr": 0.5691657154641724,
+   "gained": 6,
+   "lost": 6,
+   "p": 1.0
+  },
+  {
+   "condition": "coverage alone",
+   "recall20": 0.7288135593220338,
+   "recall50": 0.8305084745762712,
+   "mrr": 0.4051825500429335,
+   "gained": 11,
+   "lost": 48,
+   "p": 1.2416282261784595e-06
+  }
+ ]
+}
