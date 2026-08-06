@@ -160,6 +160,7 @@ def _search_docs(retriever: "hybridir.HybridIR",
         k = 10
     return retriever.query(query,
                            k=k,
+                           max_span_length=librarian_config.docs_max_result_length,
                            return_extra_info=False)
 
 def _grounding_was_declared(content: List[Dict],

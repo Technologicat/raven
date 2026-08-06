@@ -950,21 +950,65 @@ It also justifies the censoring flag added an hour earlier: banichuk's capped ro
 which is an eleven-point "merging effect" on a corpus where merging is a no-op. Without the flag that would
 have gone into this file as a result.
 
-**Fiction is the positive control, and the `results` column is the mechanism.** At 7,500 characters the
-merged arm returns **one** result — a single stitched span that eats the entire budget — against seven
-chunks. The model sees one document where it could have seen seven. That is the whole effect, and it
-explains the ordering: the more chunks a document has, the longer a merged span can grow, and the more of
-the budget one document can monopolize.
+**Fiction is the positive control, and the `results` column points at the mechanism** — though not at the
+one first written here. The obvious reading, that a merged span "monopolizes" the budget and crowds other
+documents out, is wrong: retrieval had already ranked those adjacent chunks highly, so the chunk arm often
+spends its budget on the *same* document. Juha's correction, and it sent the question back to the data.
 
-**Which suggests a better fix than a toggle.** Disabling merging trades away the readability it exists for.
-Capping how much of the budget any *single* merged span may take keeps stitching where it helps — adjacent
-chunks from one document, arriving scattered — while preventing one document from crowding out the rest. A
-query-time switch is still worth having for debugging; the cap is what would ship.
+Per-query, fiction at a 7,500-character budget:
+
+| query | merged results | docs | biggest span | budget used | chunk results | docs | budget used |
+|---|---|---|---|---|---|---|---|
+| 1 | 2 | 1 | 4000 | 6500 | 7 | 1 | 7000 |
+| 2 | **0** | 0 | — | **0** | 7 | 1 | 7000 |
+| 3 | **0** | 0 | — | **0** | 7 | 1 | 7000 |
+| 4 | 3 | 2 | 2500 | 6750 | 7 | 3 | 7000 |
+| 5 | 1 | 1 | 4000 | **4000** | 7 | 3 | 7000 |
+
+**The mechanism is indivisibility, not crowding.** A merged span is atomic — take all of it or none — so
+against a fixed budget the merged arm *quantizes badly*. Queries 2 and 3 are the extreme: the top span is
+larger than the entire budget, so the arm returns **nothing at all** where the chunk arm returns seven.
+Query 5 is the mild form, 4000 of 7500 characters spent because the second span would not fit. Query 1
+shows the case with no effect at all — both arms spend the budget on one document, and recall is identical.
+
+So the ordering across corpora still holds, and for a related reason: more chunks per document means longer
+spans, and longer spans quantize worse against any given budget.
+
+**One framing correction that matters for how much to read into this.** Production applies no character
+budget — `docs_num_results` caps by *count*, so fifty merged spans are sent however long they are. This
+measurement therefore prices a *proposed* token-budgeted retrieval, not a live defect. What it does say
+about today's behaviour is narrower and still worth having: at a fixed `k`, merged spans deliver fewer
+distinct documents per token than chunks would.
+
+**Two changes follow, and they are different in kind.** A query-time switch to skip merging is a debugging
+and evaluation affordance — it makes this comparison runnable from the shipped code path instead of from a
+re-implementation in the harness, which is what `token_budget.py` currently does. A **cap on the length of
+any single merged span** is the one that changes behaviour: it bounds the quantization error, and it costs
+only the stitching that would have run past the cap. Neither disables merging, which exists so the model
+reads passages rather than fragments.
 
 **And it makes a prediction about the corpus we just built.** The arXiv fulltext corpus is ~118 chunks per
 document, further along this axis than fiction. If the mechanism above is right, it should show the largest
 effect of any corpus here — and it is also the case Librarian is actually pitched at, a researcher dropping
 PDFs in a folder. Stated before running it, so the run can falsify it.
+
+**A second prediction about that corpus, and a different mechanism: reference lists.** Juha's observation,
+2026-08-06. A paper's bibliography is several hundred *other* papers' titles, and nothing marks it as
+different from the body — so a query phrased in the vocabulary of paper X will match the reference list of
+every paper that cites X. Fulltext is the only corpus here with this property; an abstract has no
+bibliography and a title is one line.
+
+Two consequences to expect, and they are not the same size:
+
+- **Measured precision falls**, in the way this harness understates anyway: a citing paper is a real match
+  for the query terms and is not the gold document, so it scores as a miss. That much is cosmetic.
+- **Measured recall may fall too**, which is the one that matters. If enough citing papers outrank the
+  gold document, it is pushed out of the top `k` by documents that merely *cite* the answer. That is a
+  ranking failure with a clear cause, and it would be invisible on any corpus we have scored so far.
+
+It also suggests the remedy, which belongs at ingest rather than at query time: detect and drop the
+reference section when extracting a scientific PDF. Cheap to try, and testable against exactly this corpus
+by scoring it twice. Worth knowing before reading the fulltext numbers as a verdict on chunking.
 
 **A reproducibility hazard met while running it**: `n` was 128 on one run and 130 on another minutes later,
 because `make_questions.py --append` was writing to the question file at the time and the harness reads it

@@ -211,7 +211,7 @@ def reciprocal_rank_fusion(*item_lists: List[Any], K: int = 60) -> List[Tuple[An
                                reverse=True))  # -> [(item0, score0), ...]
     return sorted_items
 
-def merge_contiguous_spans(results: List[Dict]) -> List[Dict]:
+def merge_contiguous_spans(results: List[Dict], max_span_length: Optional[int] = None) -> List[Dict]:
     """Given a list of search results, merge overlapping/adjacent document chunks into contiguous spans.
 
     `results`: List of search hits with:
@@ -219,6 +219,19 @@ def merge_contiguous_spans(results: List[Dict]) -> List[Dict]:
         - `text` (str): The chunk text
         - `offset` (int): Start offset in original text
         - `score` (float): Search rank score
+
+    `max_span_length`: Longest merged span to produce, in characters; `None` for unlimited. A run of
+                       contiguous chunks longer than this is emitted as several spans rather than one,
+                       split at chunk boundaries. Each piece keeps the best score among its own chunks,
+                       so the ordering of the result list is unaffected except that a long span no longer
+                       carries its whole run at its best chunk's rank.
+
+                       This bounds *granularity*, not total output. A merged span is atomic to whoever
+                       spends a token budget on it — take all of it or none — so one span longer than the
+                       budget yields nothing at all, and one slightly under it wastes the remainder.
+                       Measured on a prose corpus at a 7500-character budget, the unbounded version
+                       returned zero results on two queries in five and left a third of the budget unspent
+                       on a third. Splitting costs only the seam.
 
     Returns a list of the merged chunks, with each merged chunk (contiguous text from the same document)
     assigned the highest score of the original chunks that the merged chunk was built from.
@@ -277,18 +290,27 @@ def merge_contiguous_spans(results: List[Dict]) -> List[Dict]:
 
         current_group = []
         current_end = 0
+        group_start = 0
         for hit in sorted_hits:
             hit_start = hit["offset"]
             hit_end = hit_start + len(hit["text"])
 
             # Check if either this is the first group, or the current hit can join the existing group.
-            if not current_group or (hit_start <= current_end):
+            # A hit that would take the span past `max_span_length` starts a new one instead: the chunks
+            # are still all returned, just as several spans rather than one indivisible slab.
+            joins = current_group and (hit_start <= current_end)
+            if joins and max_span_length is not None and (hit_end - group_start) > max_span_length:
+                joins = False
+            if not current_group or joins:
+                if not current_group:
+                    group_start = hit_start
                 current_group.append(hit)
             else:
                 # Commit current group if there was one, and start new group.
                 if current_group:
                     groups_by_document[doc_id].append(current_group)
                 current_group = [hit]
+                group_start = hit_start
             current_end = hit_end
         # Commit the last group
         groups_by_document[doc_id].append(current_group)
@@ -997,6 +1019,8 @@ class HybridIR:
               keyword_score_threshold: float = 0.1,
               semantic_distance_threshold: float = 0.8,
               include_documents: Optional[List[str]] = None,
+              merge: bool = True,
+              max_span_length: Optional[int] = None,
               multi_query: bool = False,
               return_extra_info: bool = False) -> Union[List[Dict], Tuple[List[Dict], envcls]]:
         """Hybrid BM25 + Vector search with RRF fusion.
@@ -1019,6 +1043,24 @@ class HybridIR:
                                        The default is for cosine distance using the default embedding model.
 
         `include_documents`: Optional list of document IDs. If provided, search only in the specified documents.
+
+        `merge`: Whether to stitch retrieved chunks that are adjacent in the same document into one result
+                 (`merge_contiguous_spans`). On by default, and normally what you want: a reader handed
+                 two halves of a sentence as separate results has to reassemble them, and the overlap
+                 between adjacent chunks is sent twice.
+
+                 Turn it off to see what retrieval actually ranked, which is what an evaluation harness
+                 wants — merging changes both the number of results and their ordering, so a comparison
+                 against raw ranks has to disable it rather than model it.
+
+        `max_span_length`: Longest merged span to produce, in characters; `None` for unlimited. Ignored
+                           when `merge` is `False`. A span longer than this comes back as several,
+                           split at chunk boundaries — all the same text, in more pieces.
+
+                           Worth setting when the caller spends a *token budget* rather than a result
+                           count, because a span is atomic to such a caller: one longer than the budget
+                           contributes nothing at all. Long documents are where this bites, since a span
+                           can only grow as long as the run of adjacent chunks that were retrieved.
 
         `multi_query`: If `True`, also query with each sentence of `query` that is worth asking separately
                        (`split_into_subqueries`), and fuse all the result sets together.
@@ -1086,6 +1128,8 @@ class HybridIR:
                                     keyword_score_threshold=keyword_score_threshold,
                                     semantic_distance_threshold=semantic_distance_threshold,
                                     include_documents=include_documents,
+                                    merge=merge,
+                                    max_span_length=max_span_length,
                                     multi_query=multi_query,
                                     return_extra_info=return_extra_info)
         finally:
@@ -1099,6 +1143,8 @@ class HybridIR:
                     keyword_score_threshold: float,
                     semantic_distance_threshold: float,
                     include_documents: Optional[List[str]],
+                    merge: bool,
+                    max_span_length: Optional[int],
                     multi_query: bool,
                     return_extra_info: bool):
         # The whole text is always queried; `split_into_subqueries` adds the sentences worth asking
@@ -1259,9 +1305,13 @@ class HybridIR:
         # NOTE: Merged results don't have a "chunk_id" or "full_id" (design choice; multiple chunks may
         #       have been merged into each result, so chunk-specific fields wouldn't make sense), but only
         #       "document_id", "offset", "text", and "score" (RRF score).
-        self._query_progress_text = "Merging results…"
-        logger.info("HybridIR.query: merging contiguous spans in results")
-        merged = merge_contiguous_spans(fused_results)
+        if merge:
+            self._query_progress_text = "Merging results…"
+            logger.info(f"HybridIR.query: merging contiguous spans in results (max span length: {max_span_length})")
+            merged = merge_contiguous_spans(fused_results, max_span_length=max_span_length)
+        else:
+            logger.info("HybridIR.query: merging disabled; returning chunks as retrieved")
+            merged = fused_results
 
         kw_plural_s = "es" if len(keyword_results) != 1 else ""
         vec_plural_s = "es" if len(vector_results) != 1 else ""

@@ -90,8 +90,13 @@ def roles_up(forest, node_id):
 class FakeRetriever:
     """Minimal stand-in for `raven.librarian.hybridir.HybridIR`.
 
-    Implements `.query(q, k, return_extra_info=False)`, plus the `documents` mapping and the
-    `datastore_lock` guarding it — between them, the whole retriever surface the librarian touches.
+    Implements `.query(q, k, max_span_length=None, return_extra_info=False)`, plus the `documents` mapping
+    and the `datastore_lock` guarding it — between them, the whole retriever surface the librarian touches.
+
+    The query signature takes `**kwargs` for the tuning parameters rather than naming each: a double that
+    names them has to be edited every time one is added, and the failure is a `TypeError` in a dozen
+    unrelated tests that says nothing about what the change was. The ones this file asserts on are named
+    explicitly; the rest are recorded and ignored.
     """
     def __init__(self, results=None, documents=None):
         self.results = list(results) if results is not None else []
@@ -99,8 +104,8 @@ class FakeRetriever:
         self.datastore_lock = threading.RLock()
         self.calls = []
 
-    def query(self, q, k=10, return_extra_info=False):
-        self.calls.append({"q": q, "k": k, "return_extra_info": return_extra_info})
+    def query(self, q, k=10, return_extra_info=False, **kwargs):
+        self.calls.append({"q": q, "k": k, "return_extra_info": return_extra_info, **kwargs})
         return list(self.results)
 
 

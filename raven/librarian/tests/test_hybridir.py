@@ -506,6 +506,87 @@ def test_pend_edit_delete_of_indexed_document():
 
 
 # ---------------------------------------------------------------------------
+# Stitching adjacent chunks back together
+# ---------------------------------------------------------------------------
+
+def _chunk(doc, offset, score, size=100, fill=None):
+    """One retrieval hit. `fill` defaults to a per-offset letter, so a merged text says where it came from."""
+    text = (fill or chr(ord("a") + (offset // size) % 26)) * size
+    return {"document_id": doc, "offset": offset, "text": text, "score": score}
+
+
+class TestMergeContiguousSpans:
+    """Chunks that were adjacent in the document come back as one result, so the reader gets a passage."""
+
+    def test_adjacent_chunks_become_one_span(self):
+        merged = hybridir.merge_contiguous_spans([_chunk("d", 0, 0.9), _chunk("d", 100, 0.5)])
+        assert len(merged) == 1
+        assert merged[0]["offset"] == 0
+        assert len(merged[0]["text"]) == 200
+
+    def test_a_span_keeps_the_best_score_of_its_chunks(self):
+        # It has to: the span occupies the rank its strongest evidence earned, not its weakest.
+        merged = hybridir.merge_contiguous_spans([_chunk("d", 0, 0.2), _chunk("d", 100, 0.9)])
+        assert merged[0]["score"] == 0.9
+
+    def test_chunks_with_a_gap_between_them_stay_separate(self):
+        merged = hybridir.merge_contiguous_spans([_chunk("d", 0, 0.9), _chunk("d", 5000, 0.5)])
+        assert len(merged) == 2
+
+    def test_chunks_of_different_documents_never_merge(self):
+        # Offsets collide across documents, so grouping by offset alone would splice two documents together.
+        merged = hybridir.merge_contiguous_spans([_chunk("a", 0, 0.9), _chunk("b", 100, 0.5)])
+        assert len(merged) == 2
+        assert {m["document_id"] for m in merged} == {"a", "b"}
+
+    def test_results_come_back_ordered_by_score(self):
+        merged = hybridir.merge_contiguous_spans([_chunk("a", 0, 0.1), _chunk("b", 0, 0.9), _chunk("c", 0, 0.5)])
+        assert [m["score"] for m in merged] == [0.9, 0.5, 0.1]
+
+
+class TestMergedSpanLengthCap:
+    """A span is atomic to a caller spending a token budget, so its length has to be boundable.
+
+    One longer than the budget contributes nothing at all — measured on a prose corpus at 7500 characters,
+    the unbounded version returned zero results on two queries out of five. The cap splits such a run into
+    several spans instead, which costs only the seam.
+    """
+
+    def _run(self, n, size=100):
+        return [_chunk("d", i * size, 1.0 - i / 100, size=size) for i in range(n)]
+
+    def test_a_long_run_is_split_rather_than_returned_whole(self):
+        merged = hybridir.merge_contiguous_spans(self._run(4), max_span_length=200)
+        assert len(merged) == 2
+        assert all(len(m["text"]) <= 200 for m in merged)
+
+    def test_splitting_loses_no_text(self):
+        # The invariant that makes this safe: the same characters come back, in more pieces. A cap that
+        # dropped the tail would look identical in a length assertion and be a data-loss bug.
+        whole = hybridir.merge_contiguous_spans(self._run(6))
+        assert len(whole) == 1
+        pieces = hybridir.merge_contiguous_spans(self._run(6), max_span_length=200)
+        assert len(pieces) > 1
+        rejoined = "".join(p["text"] for p in sorted(pieces, key=lambda p: p["offset"]))
+        assert rejoined == whole[0]["text"]
+
+    def test_a_cap_wider_than_the_run_changes_nothing(self):
+        assert (hybridir.merge_contiguous_spans(self._run(3), max_span_length=100_000) ==
+                hybridir.merge_contiguous_spans(self._run(3)))
+
+    def test_no_cap_means_unlimited(self):
+        merged = hybridir.merge_contiguous_spans(self._run(20))
+        assert len(merged) == 1 and len(merged[0]["text"]) == 2000
+
+    def test_every_piece_still_carries_its_own_best_score(self):
+        # Not the whole run's best: a later piece must not inherit the rank of an earlier piece's evidence,
+        # or the split would silently promote text that nothing matched.
+        pieces = hybridir.merge_contiguous_spans(self._run(4), max_span_length=200)
+        by_offset = sorted(pieces, key=lambda p: p["offset"])
+        assert by_offset[0]["score"] > by_offset[1]["score"]
+
+
+# ---------------------------------------------------------------------------
 # Rescan identifies documents by their id, not by where the collection sits
 # ---------------------------------------------------------------------------
 

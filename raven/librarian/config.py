@@ -380,6 +380,29 @@ llm_image_token_cost = {
 # few points of recall for a wait the user will notice.
 docs_num_results = 50
 
+# Longest single search result, in characters; `None` for unlimited.
+#
+# Results are stitched back together from adjacent chunks of the same document, and a run of adjacent
+# chunks can be arbitrarily long — so without a cap, `docs_num_results` bounds the *number* of results
+# and nothing bounds their size. The prefill cost of a turn is then unbounded in principle, and in
+# practice varies by an order of magnitude with how much stitching happened to occur.
+#
+# The number is in *document* characters, so read it against the chunking: chunks are 1000 characters
+# with 25% overlap, hence each additional chunk extends a span by 750. A cap of 2000 therefore admits
+# two chunks (spanning 1750) and starts a new result at the third:
+#
+#     1 chunk  1000     3 chunks  2500
+#     2 chunks 1750     4 chunks  3250
+#
+# With `docs_num_results = 50` that puts the worst case near 25000 tokens — about the measured 5-second
+# prefill, and close enough to the 3.4 s typical case that the ceiling is no longer a surprise. That is
+# what the cap is for; it is chosen to make the cost predictable, not to improve retrieval.
+#
+# A capped run is not truncated. It comes back as several results covering the same text, so nothing is
+# lost but the seam. Raise it if you would rather have longer continuous passages than a bounded worst
+# case, or set it to `None` for the old unlimited behavior.
+docs_max_result_length = 2000
+
 # How many previously consulted documents to list back to the LLM (`list_consulted_documents`).
 #
 # The automatic search injects its matches for one turn and then drops them, so a follow-up question

@@ -286,6 +286,7 @@ def search_documents_wrapper(query: str) -> Tuple[Union[str, List[Dict]], Dict]:
 
     matches = retriever.query(query,
                               k=librarian_config.docs_num_results,
+                              max_span_length=librarian_config.docs_max_result_length,
                               return_extra_info=False)
     plural_s = "es" if len(matches) != 1 else ""
     logger.info(f"search_documents_wrapper: {len(matches)} match{plural_s} for '{query}'.")
