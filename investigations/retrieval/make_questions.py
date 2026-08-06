@@ -25,12 +25,26 @@ telling you nothing. The prompt below forbids verbatim phrases, and `evaluate.py
 keyword-only baseline for exactly this reason: if BM25 alone scores near-perfect, the questions are
 too easy and the set needs regenerating, not celebrating.
 
-**Two question shapes**, because the levers under evaluation fail differently:
+**Three question shapes**, because the levers under evaluation fail differently:
 
 - `focused` - one question from one abstract, the ordinary case.
 - `rambling` - several sentences of context from several abstracts, ending in a question aimed at
   one of them. This is what the multiline composer produces in real use, and it is the shape that
   the "embed the whole message and get its centroid" failure needs in order to show up at all.
+- `synthesis` - one question that needs *all* of a group of related papers, carrying the whole group as
+  its gold set. The other two are known-item questions with exactly one right document, so *specificity
+  has no variance in them* — which means they cannot say anything about telling a narrow question from a
+  broad one, the signal adaptive `k` would need. This shape is the one that can.
+
+  It escapes the obvious catch-22 (knowing which documents *jointly* answer a question is what the
+  retrieval under test is for) by the same move the rest of the file uses: it never searches for an
+  answer, it writes the question **from** the documents, so the label holds by construction. Groups are
+  formed by embedding proximity rather than at random, since three unrelated abstracts force a question
+  no researcher would ask — and forming a group is not answering a question, so that is not circular
+  either.
+
+  It needs a different metric. Recall over the gold *set* is the question being asked, and a scorer that
+  reports the rank of "the" gold document reads only the first one it finds.
 
 **Copyright.** The corpus is Web of Science records and does not enter the repository. Only the
 generated questions and the WoS accession numbers they point at are written out - identifiers and
@@ -46,7 +60,12 @@ length and phrasing all match and only the topic moves. See `CORPORA` below.
 sake: prose has no abstracts to sample, so both the sampling and the prompts differ down to the bone.)
 
 Usage:
-    python make_questions.py <hydrogen|arxiv-ai> <base_url> <model> [n_focused] [n_rambling]
+    python make_questions.py [--append] <hydrogen|arxiv-ai> <base_url> <model> [n_focused] [n_rambling]
+                             [--synthesis N]
+
+`--append` keeps every question already in the output file and adds more from papers not yet used. That is
+the way to grow a set: the seed fixes which *papers* are drawn, not what the model says about them, so
+regenerating would quietly invalidate every score already recorded against the old questions.
 
     python make_questions.py hydrogen http://localhost:1234 qwen3.6-35b-a3b 24 8
 """
@@ -167,6 +186,61 @@ Requirements:
 {papers}"""
 
 
+SYNTHESIS_PROMPT = """Below are the titles and abstracts of several related scientific papers.
+
+Write ONE question that a researcher would need to read ALL of these papers to answer well.
+
+Requirements:
+- The question must require synthesizing across the papers. A reader who found only one of them should
+  come away with a partial answer, not a complete one. Aim at what they have in common: a shared
+  problem approached differently, a design space they each cover part of, a trade-off they disagree on.
+- It must still be a question someone would actually ask, not a survey instruction. "What component
+  models are needed for X, and how do they constrain each other?" is good; "Summarize these papers" is not.
+- Do NOT reuse distinctive phrases from any abstract. Rephrase in your own words.
+- Do not mention the authors, the journal, the year, or how many papers there are.
+- Output the question and nothing else. No preamble, no quotation marks.
+
+{papers}"""
+
+
+def nearest_neighbour_groups(entries: list[dict], size: int, count: int, embedder) -> list[list[dict]]:
+    """Group `entries` into `count` clusters of `size`, each a seed plus its nearest neighbours.
+
+    **Related, not random.** Three unrelated abstracts force an artificial question that no researcher
+    would ask, and a synthesis set built from those measures nothing anyone wants. Nearest neighbours in
+    embedding space are the cheap grouping that makes the question answerable in principle.
+
+    **This uses retrieval without being circular**, which is worth stating because the whole evaluation
+    set exists to avoid exactly that. The embedder is forming the *group*, not finding an answer to a
+    pre-existing question — and the label is then true by construction, because the question is written
+    from the group afterwards. Retrieval could rank these papers terribly and the labels would still hold.
+
+    Each entry is used at most once, so the groups partition rather than overlap: a paper appearing in two
+    gold sets would let a single lucky retrieval score twice.
+    """
+    import numpy as np
+
+    texts = [f"{e['title']}\n\n{e.get('abstract', '')}".strip() for e in entries]
+    vectors = np.asarray(embedder.encode(texts), dtype=float)
+    vectors /= np.maximum(np.linalg.norm(vectors, axis=1, keepdims=True), 1e-12)
+    similarity = vectors @ vectors.T
+    np.fill_diagonal(similarity, -np.inf)  # a paper is not its own neighbour
+
+    groups, spent = [], set()
+    for seed in range(len(entries)):
+        if len(groups) >= count:
+            break
+        if seed in spent:
+            continue
+        order = np.argsort(-similarity[seed])
+        picked = [seed] + [int(j) for j in order if int(j) not in spent and int(j) != seed][:size - 1]
+        if len(picked) < size:
+            break
+        spent.update(picked)
+        groups.append([entries[i] for i in picked])
+    return groups
+
+
 def load_entry(path: pathlib.Path, require_abstract: bool = True) -> dict | None:
     """Return `{"id", "title", "abstract"}` for a BibTeX file, or `None` if it is not usable.
 
@@ -224,6 +298,12 @@ def main() -> None:
     append = "--append" in argv
     if append:
         argv.remove("--append")
+    n_synthesis = 0
+    if "--synthesis" in argv:
+        at = argv.index("--synthesis")
+        n_synthesis = int(argv[at + 1])
+        del argv[at:at + 2]
+    synthesis_group_size = 4
     corpus, base, model = argv[0], argv[1], argv[2]
     if corpus not in CORPORA:
         raise SystemExit(f"unknown corpus '{corpus}'; expected one of {', '.join(CORPORA)}")
@@ -264,7 +344,7 @@ def main() -> None:
 
     # Draw more candidates than needed; short or malformed records are skipped, and in append mode the
     # records already spoken for are skipped too — so the pool has to be deep enough to clear them first.
-    needed = n_focused + 3 * n_rambling
+    needed = n_focused + 3 * n_rambling + synthesis_group_size * n_synthesis
     use_abstracts = profile.get("use_abstracts", True)
     entries = []
     for path in files:
@@ -328,8 +408,50 @@ def main() -> None:
         save()
         print(f"  rambling {i + 1}/{n_rambling}: {text[:110]}", flush=True)
 
+    if n_synthesis:
+        if not use_abstracts:
+            raise SystemExit("--synthesis needs abstracts; a titles-only corpus gives nothing to synthesize across")
+        # The papers the focused and rambling loops just spent are off the table, so a synthesis group is
+        # never built from a paper that already has its own question — otherwise one retrieval would score
+        # in two places.
+        spent_ids = {g for q in questions for g in q.get("gold", [])} | {d for q in questions for d in q.get("distractors", [])}
+        pool = [e for e in entries if e["id"] not in spent_ids]
+        print(f"\n  synthesis: forming {n_synthesis} groups of {synthesis_group_size} from {len(pool)} unspent records")
+
+        from raven.client import api as client_api
+        from raven.client import config as client_config
+        from raven.client import mayberemote
+        from raven.librarian import config as librarian_config
+        import concurrent.futures
+        client_api.initialize(raven_server_url=client_config.raven_server_url,
+                              raven_api_key_file=client_config.raven_api_key_file,
+                              executor=concurrent.futures.ThreadPoolExecutor())
+        embedder = mayberemote.Embedder(allow_local=True,
+                                        model_name=librarian_config.qa_embedding_model,
+                                        device_string=librarian_config.devices["embeddings"]["device_string"],
+                                        dtype=librarian_config.devices["embeddings"]["dtype"])
+
+        groups = nearest_neighbour_groups(pool, synthesis_group_size, n_synthesis, embedder)
+        for i, group in enumerate(groups):
+            blocks = [f"Title: {e['title']}\nAbstract: {e['abstract']}" for e in group]
+            text = ask(base, model, SYNTHESIS_PROMPT.format(papers="\n\n".join(blocks)))
+            if not text:
+                print(f"  synthesis {i + 1}: SKIPPED (empty reply)", flush=True)
+                continue
+            # `gold` is the whole group, which is what makes this a different measurement: the question is
+            # scored by how much of the set was retrieved, not by the rank of one document.
+            questions.append({"kind": "synthesis", "question": text,
+                              "gold": [e["id"] for e in group],
+                              "gold_titles": [e["title"] for e in group]})
+            save()
+            print(f"  synthesis {i + 1}/{len(groups)}: {text[:110]}", flush=True)
+
     save()
     print(f"\nwrote {len(questions)} questions to {out_path}")
+    if n_synthesis:
+        print("  note: synthesis questions carry a *set* of gold documents. Scorers that report the rank "
+              "of 'the' gold document read only the first one found, which understates them — recall over "
+              "the gold set is the metric they want.")
     if append:
         print("  note: the cross-corpus negatives in `sharpness.py` are built from whatever question "
               "files exist when it runs, so re-score every corpus before comparing any two of them.")
