@@ -1,0 +1,1249 @@
+{
+ "corpus": "fiction",
+ "k": 20,
+ "n": 88,
+ "tally": {
+  "merged": {
+   "document": 84,
+   "passage": 35
+  },
+  "chunks": {
+   "document": 84,
+   "passage": 27
+  }
+ },
+ "rows": [
+  {
+   "gold": [
+    "Friendship is Optimal_ Spiraling Upwards.html"
+   ],
+   "source_offset": 68733,
+   "merged": {
+    "document": true,
+    "passage": false
+   },
+   "chunks": {
+    "document": true,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "Friendship is Optimal_ Veritas Vos Liberabit.html"
+   ],
+   "source_offset": 199361,
+   "merged": {
+    "document": true,
+    "passage": true
+   },
+   "chunks": {
+    "document": true,
+    "passage": true
+   }
+  },
+  {
+   "gold": [
+    "Friendship is Optimal.html"
+   ],
+   "source_offset": 45270,
+   "merged": {
+    "document": true,
+    "passage": true
+   },
+   "chunks": {
+    "document": true,
+    "passage": true
+   }
+  },
+  {
+   "gold": [
+    "Leftovers_ A Friendship Is Optimal Story.html"
+   ],
+   "source_offset": 37868,
+   "merged": {
+    "document": false,
+    "passage": false
+   },
+   "chunks": {
+    "document": false,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "My Life In Fimbria.html"
+   ],
+   "source_offset": 193999,
+   "merged": {
+    "document": true,
+    "passage": false
+   },
+   "chunks": {
+    "document": true,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "Friendship is Optimal_ Veritas Vos Liberabit.html"
+   ],
+   "source_offset": 104696,
+   "merged": {
+    "document": true,
+    "passage": false
+   },
+   "chunks": {
+    "document": true,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "Prophet Of the Digital Horse - sequel to I Can't Decide.html"
+   ],
+   "source_offset": 87972,
+   "merged": {
+    "document": false,
+    "passage": false
+   },
+   "chunks": {
+    "document": false,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "Leftovers_ A Friendship Is Optimal Story.html"
+   ],
+   "source_offset": 9751,
+   "merged": {
+    "document": true,
+    "passage": false
+   },
+   "chunks": {
+    "document": true,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "Leftovers_ A Friendship Is Optimal Story.html"
+   ],
+   "source_offset": 32831,
+   "merged": {
+    "document": true,
+    "passage": false
+   },
+   "chunks": {
+    "document": true,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "Friendship Is Optimal_ Caelum Est Conterrens.html"
+   ],
+   "source_offset": 45484,
+   "merged": {
+    "document": true,
+    "passage": false
+   },
+   "chunks": {
+    "document": true,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "Just Be Happy.html"
+   ],
+   "source_offset": 17483,
+   "merged": {
+    "document": true,
+    "passage": true
+   },
+   "chunks": {
+    "document": true,
+    "passage": true
+   }
+  },
+  {
+   "gold": [
+    "My Life In Fimbria.html"
+   ],
+   "source_offset": 285997,
+   "merged": {
+    "document": true,
+    "passage": true
+   },
+   "chunks": {
+    "document": true,
+    "passage": true
+   }
+  },
+  {
+   "gold": [
+    "Prophet Of the Digital Horse - sequel to I Can't Decide.html"
+   ],
+   "source_offset": 154980,
+   "merged": {
+    "document": true,
+    "passage": true
+   },
+   "chunks": {
+    "document": true,
+    "passage": true
+   }
+  },
+  {
+   "gold": [
+    "My Life In Fimbria.html"
+   ],
+   "source_offset": 19782,
+   "merged": {
+    "document": true,
+    "passage": false
+   },
+   "chunks": {
+    "document": true,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "Friendship is Optimal_ Spiraling Upwards.html"
+   ],
+   "source_offset": 264561,
+   "merged": {
+    "document": true,
+    "passage": true
+   },
+   "chunks": {
+    "document": true,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "Prophet Of the Digital Horse - sequel to I Can't Decide.html"
+   ],
+   "source_offset": 160231,
+   "merged": {
+    "document": true,
+    "passage": false
+   },
+   "chunks": {
+    "document": true,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "My Life In Fimbria.html"
+   ],
+   "source_offset": 240262,
+   "merged": {
+    "document": true,
+    "passage": false
+   },
+   "chunks": {
+    "document": true,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "Friendship Is Optimal_ Caelum Est Conterrens.html"
+   ],
+   "source_offset": 296631,
+   "merged": {
+    "document": true,
+    "passage": true
+   },
+   "chunks": {
+    "document": true,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "Friendship is Optimal - Firewall.html"
+   ],
+   "source_offset": 198773,
+   "merged": {
+    "document": true,
+    "passage": false
+   },
+   "chunks": {
+    "document": true,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "My Life In Fimbria.html"
+   ],
+   "source_offset": 22,
+   "merged": {
+    "document": true,
+    "passage": true
+   },
+   "chunks": {
+    "document": true,
+    "passage": true
+   }
+  },
+  {
+   "gold": [
+    "Friendship is Optimal_ Spiraling Upwards.html"
+   ],
+   "source_offset": 124674,
+   "merged": {
+    "document": true,
+    "passage": false
+   },
+   "chunks": {
+    "document": true,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "Prophet Of the Digital Horse - sequel to I Can't Decide.html"
+   ],
+   "source_offset": 134715,
+   "merged": {
+    "document": true,
+    "passage": false
+   },
+   "chunks": {
+    "document": true,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "My Life In Fimbria.html"
+   ],
+   "source_offset": 19782,
+   "merged": {
+    "document": true,
+    "passage": false
+   },
+   "chunks": {
+    "document": true,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "Friendship is Optimal - Firewall.html"
+   ],
+   "source_offset": 147704,
+   "merged": {
+    "document": true,
+    "passage": false
+   },
+   "chunks": {
+    "document": true,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "Prophet Of the Digital Horse - sequel to I Can't Decide.html"
+   ],
+   "source_offset": 173635,
+   "merged": {
+    "document": true,
+    "passage": false
+   },
+   "chunks": {
+    "document": true,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "Friendship is Optimal_ Spiraling Upwards.html"
+   ],
+   "source_offset": 228541,
+   "merged": {
+    "document": true,
+    "passage": false
+   },
+   "chunks": {
+    "document": true,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "My Life In Fimbria.html"
+   ],
+   "source_offset": 25117,
+   "merged": {
+    "document": true,
+    "passage": false
+   },
+   "chunks": {
+    "document": true,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "Friendship Is Optimal_ Caelum Est Conterrens.html"
+   ],
+   "source_offset": 93241,
+   "merged": {
+    "document": true,
+    "passage": false
+   },
+   "chunks": {
+    "document": true,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "Friendship is Optimal_ Veritas Vos Liberabit.html"
+   ],
+   "source_offset": 221947,
+   "merged": {
+    "document": true,
+    "passage": true
+   },
+   "chunks": {
+    "document": true,
+    "passage": true
+   }
+  },
+  {
+   "gold": [
+    "My Life In Fimbria.html"
+   ],
+   "source_offset": 146977,
+   "merged": {
+    "document": true,
+    "passage": true
+   },
+   "chunks": {
+    "document": true,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "Friendship Is Optimal_ Caelum Est Conterrens.html"
+   ],
+   "source_offset": 127316,
+   "merged": {
+    "document": true,
+    "passage": false
+   },
+   "chunks": {
+    "document": true,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "Friendship is Optimal_ Somnium.html"
+   ],
+   "source_offset": 27580,
+   "merged": {
+    "document": true,
+    "passage": false
+   },
+   "chunks": {
+    "document": true,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "Friendship Is Optimal_ Caelum Est Conterrens.html"
+   ],
+   "source_offset": 247572,
+   "merged": {
+    "document": true,
+    "passage": true
+   },
+   "chunks": {
+    "document": true,
+    "passage": true
+   }
+  },
+  {
+   "gold": [
+    "Leftovers_ A Friendship Is Optimal Story.html"
+   ],
+   "source_offset": 63763,
+   "merged": {
+    "document": true,
+    "passage": true
+   },
+   "chunks": {
+    "document": true,
+    "passage": true
+   }
+  },
+  {
+   "gold": [
+    "Friendship is Optimal_ Spiraling Upwards.html"
+   ],
+   "source_offset": 210424,
+   "merged": {
+    "document": true,
+    "passage": false
+   },
+   "chunks": {
+    "document": true,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "Friendship is Optimal_ Spiraling Upwards.html"
+   ],
+   "source_offset": 12472,
+   "merged": {
+    "document": true,
+    "passage": false
+   },
+   "chunks": {
+    "document": true,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "Friendship is Optimal_ Spiraling Upwards.html"
+   ],
+   "source_offset": 256540,
+   "merged": {
+    "document": true,
+    "passage": false
+   },
+   "chunks": {
+    "document": true,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "My Life In Fimbria.html"
+   ],
+   "source_offset": 155766,
+   "merged": {
+    "document": true,
+    "passage": false
+   },
+   "chunks": {
+    "document": true,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "Friendship is Optimal_ Type Conversion.html"
+   ],
+   "source_offset": 4152,
+   "merged": {
+    "document": true,
+    "passage": false
+   },
+   "chunks": {
+    "document": true,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "Friendship Is Optimal_ Caelum Est Conterrens.html"
+   ],
+   "source_offset": 129930,
+   "merged": {
+    "document": true,
+    "passage": true
+   },
+   "chunks": {
+    "document": true,
+    "passage": true
+   }
+  },
+  {
+   "gold": [
+    "Friendship is Optimal.html"
+   ],
+   "source_offset": 137071,
+   "merged": {
+    "document": true,
+    "passage": false
+   },
+   "chunks": {
+    "document": true,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "Prophet Of the Digital Horse - sequel to I Can't Decide.html"
+   ],
+   "source_offset": 86876,
+   "merged": {
+    "document": true,
+    "passage": false
+   },
+   "chunks": {
+    "document": true,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "Friendship is Optimal.html"
+   ],
+   "source_offset": 128740,
+   "merged": {
+    "document": true,
+    "passage": true
+   },
+   "chunks": {
+    "document": true,
+    "passage": true
+   }
+  },
+  {
+   "gold": [
+    "Friendship is Optimal_ Veritas Vos Liberabit.html"
+   ],
+   "source_offset": 123618,
+   "merged": {
+    "document": true,
+    "passage": false
+   },
+   "chunks": {
+    "document": true,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "Friendship is Optimal_ Spiraling Upwards.html"
+   ],
+   "source_offset": 25936,
+   "merged": {
+    "document": true,
+    "passage": false
+   },
+   "chunks": {
+    "document": true,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "Friendship is Optimal_ Spiraling Upwards.html"
+   ],
+   "source_offset": 128456,
+   "merged": {
+    "document": true,
+    "passage": false
+   },
+   "chunks": {
+    "document": true,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "Just Be Happy.html"
+   ],
+   "source_offset": 19346,
+   "merged": {
+    "document": true,
+    "passage": true
+   },
+   "chunks": {
+    "document": true,
+    "passage": true
+   }
+  },
+  {
+   "gold": [
+    "Friendship is Optimal_ Somnium.html"
+   ],
+   "source_offset": 28594,
+   "merged": {
+    "document": true,
+    "passage": true
+   },
+   "chunks": {
+    "document": true,
+    "passage": true
+   }
+  },
+  {
+   "gold": [
+    "Friendship is Optimal - Firewall.html"
+   ],
+   "source_offset": 162410,
+   "merged": {
+    "document": true,
+    "passage": false
+   },
+   "chunks": {
+    "document": true,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "Friendship is Optimal_ Veritas Vos Liberabit.html"
+   ],
+   "source_offset": 257011,
+   "merged": {
+    "document": true,
+    "passage": true
+   },
+   "chunks": {
+    "document": true,
+    "passage": true
+   }
+  },
+  {
+   "gold": [
+    "Friendship Is Optimal_ Caelum Est Conterrens.html"
+   ],
+   "source_offset": 152027,
+   "merged": {
+    "document": true,
+    "passage": false
+   },
+   "chunks": {
+    "document": true,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "Friendship is Optimal.html"
+   ],
+   "source_offset": 149895,
+   "merged": {
+    "document": true,
+    "passage": false
+   },
+   "chunks": {
+    "document": true,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "My Life In Fimbria.html"
+   ],
+   "source_offset": 61046,
+   "merged": {
+    "document": true,
+    "passage": false
+   },
+   "chunks": {
+    "document": true,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "Friendship is Optimal_ Veritas Vos Liberabit.html"
+   ],
+   "source_offset": 247590,
+   "merged": {
+    "document": true,
+    "passage": true
+   },
+   "chunks": {
+    "document": true,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "Friendship is Optimal_ Veritas Vos Liberabit.html"
+   ],
+   "source_offset": 253916,
+   "merged": {
+    "document": true,
+    "passage": true
+   },
+   "chunks": {
+    "document": true,
+    "passage": true
+   }
+  },
+  {
+   "gold": [
+    "Friendship is Optimal_ Veritas Vos Liberabit.html"
+   ],
+   "source_offset": 205791,
+   "merged": {
+    "document": true,
+    "passage": true
+   },
+   "chunks": {
+    "document": true,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "Prophet Of the Digital Horse - sequel to I Can't Decide.html"
+   ],
+   "source_offset": 181515,
+   "merged": {
+    "document": true,
+    "passage": false
+   },
+   "chunks": {
+    "document": true,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "Friendship is Optimal_ Spiraling Upwards.html"
+   ],
+   "source_offset": 68733,
+   "merged": {
+    "document": true,
+    "passage": false
+   },
+   "chunks": {
+    "document": true,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "Friendship is Optimal_ Veritas Vos Liberabit.html"
+   ],
+   "source_offset": 164264,
+   "merged": {
+    "document": true,
+    "passage": true
+   },
+   "chunks": {
+    "document": true,
+    "passage": true
+   }
+  },
+  {
+   "gold": [
+    "Friendship is Optimal_ Veritas Vos Liberabit.html"
+   ],
+   "source_offset": 196921,
+   "merged": {
+    "document": true,
+    "passage": true
+   },
+   "chunks": {
+    "document": true,
+    "passage": true
+   }
+  },
+  {
+   "gold": [
+    "Leftovers_ A Friendship Is Optimal Story.html"
+   ],
+   "source_offset": 1011,
+   "merged": {
+    "document": true,
+    "passage": true
+   },
+   "chunks": {
+    "document": true,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "Friendship is Optimal_ Type Conversion.html"
+   ],
+   "source_offset": 20921,
+   "merged": {
+    "document": true,
+    "passage": false
+   },
+   "chunks": {
+    "document": true,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "Friendship is Optimal.html"
+   ],
+   "source_offset": 45061,
+   "merged": {
+    "document": true,
+    "passage": true
+   },
+   "chunks": {
+    "document": true,
+    "passage": true
+   }
+  },
+  {
+   "gold": [
+    "Friendship is Optimal_ Veritas Vos Liberabit.html"
+   ],
+   "source_offset": 125725,
+   "merged": {
+    "document": true,
+    "passage": true
+   },
+   "chunks": {
+    "document": true,
+    "passage": true
+   }
+  },
+  {
+   "gold": [
+    "Prophet Of the Digital Horse - sequel to I Can't Decide.html"
+   ],
+   "source_offset": 60414,
+   "merged": {
+    "document": true,
+    "passage": false
+   },
+   "chunks": {
+    "document": true,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "Friendship is Optimal_ Spiraling Upwards.html"
+   ],
+   "source_offset": 138950,
+   "merged": {
+    "document": true,
+    "passage": false
+   },
+   "chunks": {
+    "document": true,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "Friendship is Optimal_ Spiraling Upwards.html"
+   ],
+   "source_offset": 119717,
+   "merged": {
+    "document": true,
+    "passage": false
+   },
+   "chunks": {
+    "document": true,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "Twitch Plays Equestria Online.html"
+   ],
+   "source_offset": 75138,
+   "merged": {
+    "document": true,
+    "passage": false
+   },
+   "chunks": {
+    "document": true,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "Friendship is Optimal_ Veritas Vos Liberabit.html"
+   ],
+   "source_offset": 3646,
+   "merged": {
+    "document": true,
+    "passage": true
+   },
+   "chunks": {
+    "document": true,
+    "passage": true
+   }
+  },
+  {
+   "gold": [
+    "Just Be Happy.html"
+   ],
+   "source_offset": 12351,
+   "merged": {
+    "document": true,
+    "passage": true
+   },
+   "chunks": {
+    "document": true,
+    "passage": true
+   }
+  },
+  {
+   "gold": [
+    "Prophet Of the Digital Horse - sequel to I Can't Decide.html"
+   ],
+   "source_offset": 197857,
+   "merged": {
+    "document": true,
+    "passage": false
+   },
+   "chunks": {
+    "document": true,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "My Life In Fimbria.html"
+   ],
+   "source_offset": 89735,
+   "merged": {
+    "document": true,
+    "passage": false
+   },
+   "chunks": {
+    "document": true,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "My Life In Fimbria.html"
+   ],
+   "source_offset": 84576,
+   "merged": {
+    "document": true,
+    "passage": false
+   },
+   "chunks": {
+    "document": true,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "Friendship is Optimal_ Veritas Vos Liberabit.html"
+   ],
+   "source_offset": 63315,
+   "merged": {
+    "document": true,
+    "passage": true
+   },
+   "chunks": {
+    "document": true,
+    "passage": true
+   }
+  },
+  {
+   "gold": [
+    "Friendship Is Optimal_ Caelum Est Conterrens.html"
+   ],
+   "source_offset": 123151,
+   "merged": {
+    "document": true,
+    "passage": true
+   },
+   "chunks": {
+    "document": true,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "Friendship is Optimal_ Somnium.html"
+   ],
+   "source_offset": 32787,
+   "merged": {
+    "document": true,
+    "passage": false
+   },
+   "chunks": {
+    "document": true,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "Prophet Of the Digital Horse - sequel to I Can't Decide.html"
+   ],
+   "source_offset": 71300,
+   "merged": {
+    "document": false,
+    "passage": false
+   },
+   "chunks": {
+    "document": false,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "Friendship is Optimal_ Spiraling Upwards.html"
+   ],
+   "source_offset": 129240,
+   "merged": {
+    "document": true,
+    "passage": false
+   },
+   "chunks": {
+    "document": true,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "Friendship is Optimal_ Spiraling Upwards.html"
+   ],
+   "source_offset": 82497,
+   "merged": {
+    "document": true,
+    "passage": false
+   },
+   "chunks": {
+    "document": true,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "Friendship is Optimal_ Spiraling Upwards.html"
+   ],
+   "source_offset": 347369,
+   "merged": {
+    "document": true,
+    "passage": true
+   },
+   "chunks": {
+    "document": true,
+    "passage": true
+   }
+  },
+  {
+   "gold": [
+    "Friendship is Optimal.html"
+   ],
+   "source_offset": 93086,
+   "merged": {
+    "document": true,
+    "passage": true
+   },
+   "chunks": {
+    "document": true,
+    "passage": true
+   }
+  },
+  {
+   "gold": [
+    "Twitch Plays Equestria Online.html"
+   ],
+   "source_offset": 54365,
+   "merged": {
+    "document": true,
+    "passage": false
+   },
+   "chunks": {
+    "document": true,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "Friendship is Optimal_ Spiraling Upwards.html"
+   ],
+   "source_offset": 96456,
+   "merged": {
+    "document": true,
+    "passage": true
+   },
+   "chunks": {
+    "document": true,
+    "passage": true
+   }
+  },
+  {
+   "gold": [
+    "Friendship is Optimal - Firewall.html"
+   ],
+   "source_offset": 24206,
+   "merged": {
+    "document": true,
+    "passage": false
+   },
+   "chunks": {
+    "document": true,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "Friendship is Optimal.html"
+   ],
+   "source_offset": 191559,
+   "merged": {
+    "document": false,
+    "passage": false
+   },
+   "chunks": {
+    "document": false,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "Friendship is Optimal.html"
+   ],
+   "source_offset": 101432,
+   "merged": {
+    "document": true,
+    "passage": true
+   },
+   "chunks": {
+    "document": true,
+    "passage": false
+   }
+  },
+  {
+   "gold": [
+    "Friendship is Optimal_ Veritas Vos Liberabit.html"
+   ],
+   "source_offset": 195520,
+   "merged": {
+    "document": true,
+    "passage": true
+   },
+   "chunks": {
+    "document": true,
+    "passage": true
+   }
+  },
+  {
+   "gold": [
+    "Friendship is Optimal_ Spiraling Upwards.html"
+   ],
+   "source_offset": 136249,
+   "merged": {
+    "document": true,
+    "passage": true
+   },
+   "chunks": {
+    "document": true,
+    "passage": true
+   }
+  }
+ ]
+}

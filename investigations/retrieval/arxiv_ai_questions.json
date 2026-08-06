@@ -1597,6 +1597,76 @@
       "gold_titles": [
         "When Will AI Exceed Human Performance? Evidence from AI Experts"
       ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does anchoring a continuous transport tether to the lunar surface rather than Earth bypass the tensile strength limitations that prevent traditional orbital elevators from being constructed with contemporary materials?",
+      "gold": [
+        "1908.09339v1.bib"
+      ],
+      "gold_titles": [
+        "The Spaceline: a practical space elevator alternative achievable with current technology"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What is the relationship between the number of intermediate reasoning steps and the maximum boolean circuit size solvable by a constant-depth transformer?",
+      "gold": [
+        "2402.12875v4.bib"
+      ],
+      "gold_titles": [
+        "Chain of Thought Empowers Transformers to Solve Inherently Serial Problems"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can a pre-trained language model be fine-tuned to autonomously route its own computations to external software interfaces, format the requests, and integrate the outputs back into its next-token predictions using only a few examples per interface?",
+      "gold": [
+        "2302.04761v1.bib"
+      ],
+      "gold_titles": [
+        "Toolformer: Language Models Can Teach Themselves to Use Tools"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can automated token optimization and gradient updates create a single prompt ending that reliably bypasses safety guardrails across both proprietary and open-source text models?",
+      "gold": [
+        "2307.15043v2.bib"
+      ],
+      "gold_titles": [
+        "Universal and Transferable Adversarial Attacks on Aligned Language Models"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What training methodology enables a moderately sized reasoning model to reliably process extensive document inputs and outperform larger flagship systems when using reinforcement learning?",
+      "gold": [
+        "2505.17667v2.bib"
+      ],
+      "gold_titles": [
+        "QwenLong-L1: Towards Long-Context Large Reasoning Models with Reinforcement Learning"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What combination of training compute, supervised data, and scoring mechanisms is required to reliably develop extended multi-step reasoning in large language models, and how do these factors interact to stabilize reasoning length?",
+      "gold": [
+        "2502.03373v1.bib"
+      ],
+      "gold_titles": [
+        "Demystifying Long Chain-of-Thought Reasoning in LLMs"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Can a parallelizable text model based on stacked filters and a lightweight gating unit rival recurrent networks on massive datasets while providing significantly lower inference latency?",
+      "gold": [
+        "1612.08083v3.bib"
+      ],
+      "gold_titles": [
+        "Language Modeling with Gated Convolutional Networks"
+      ]
     }
   ]
 }

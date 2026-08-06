@@ -949,8 +949,44 @@ sets do not — their questions come from abstracts, where document and passage 
 fulltext at passage level needs questions generated *from the PDFs' passages*, which is a generation run
 rather than a scorer.
 
+**And that generation run should be built from `make_fiction_questions.py`, not from `make_questions.py`**
+(Juha, 2026-08-06). The distinction is structural rather than a matter of taste: `make_questions.py`
+samples whole BibTeX *records*, so it has no notion of where in a document a question came from and no
+place to put one. The fiction generator samples *passages* and records `source` and `source_offset` for
+exactly this reason. A fulltext generator is the fiction generator pointed at extracted PDF text — same
+sampling, same offset bookkeeping, different prompt — and building it on the record-shaped generator would
+produce a set that cannot be scored at passage level, which is the only reason to build it at all.
+
 So the ranking of what to grow changed: fiction was deprioritized on the strength of a saturated number
 that was saturated for an uninteresting reason.
+
+**Measured the same afternoon (`passage_recall.py`), and the gap is enormous.** 88 fiction questions,
+`k=20`, scoring both "is the gold document anywhere in the results" and "does any result actually cover
+the passage the question was written from":
+
+| arm | document@20 | passage@20 | gap |
+|---|---|---|---|
+| merged spans | 95.5% | **39.8%** | 55.7 |
+| bare chunks | 95.5% | **30.7%** | 64.8 |
+
+**Retrieval finds the right document nineteen times in twenty and the right passage twice in five.** On a
+corpus of long documents the document-level number is not a slightly optimistic version of the passage
+number — it is a different measurement, and the one that has been quoted throughout this file is the one
+that cannot fail. The 100% previously recorded here was measuring the corpus size.
+
+Read as a floor rather than a level: a question written from one passage may be perfectly answerable from
+a neighbouring one, and this scores only exact coverage of the sampled offset. The *comparison* between
+arms is unaffected, since both face the same standard.
+
+**And it pulls the opposite way from the token-budget result, which is the interesting part.** There,
+bare chunks beat merged spans, because chunks reach more distinct documents per character. Here merged
+spans beat chunks by 9.1 points, because a span covers more ground and is likelier to include the exact
+passage. Both are true, and they are the same trade seen from two sides: **merging spends breadth to buy
+depth.** Which of those a query needs is not something the retriever knows — a question that needs one
+specific passage wants depth, and a synthesis question spanning many documents wants breadth.
+
+That is a second, independent argument for the same conclusion the synthesis question class was built to
+test: the narrow/broad distinction is the one worth detecting, and it should drive more than `k`.
 
 ###### Two controls, and they turn the effect into a mechanism
 

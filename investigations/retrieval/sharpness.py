@@ -117,8 +117,14 @@ def load_json(path: pathlib.Path) -> dict | None:
 def build_workload(corpus: str) -> tuple[list[dict], dict]:
     """Return the queries to run and a note about the corpus, or raise if the question set is missing.
 
-    Each item is `{"kind", "query", "on_corpus", "gold"}`. `kind` names the group it is reported under;
-    `on_corpus` is the label measurement B discriminates on.
+    Each item is `{"kind", "query", "on_corpus", "gold", "source_offset"}`. `kind` names the group it is
+    reported under; `on_corpus` is the label measurement B discriminates on.
+
+    `source_offset` is where in the gold document the question was written from, and is `None` for every
+    set whose questions come from whole records rather than from sampled passages — which is all of them
+    except fiction. It is carried through because it is the label for *passage*-level scoring, and on a
+    corpus of few long documents that is the only question worth asking: fiction's document-level recall
+    is 100% over 19 documents at k=20, which is nearly tautological, while its 2977 chunks are not.
 
     Positives come from the named corpus, negatives from every *other* corpus that has a question set,
     plus the built-in probes. A question set may mark its own entries `on_corpus: False` — fiction does,
@@ -133,7 +139,7 @@ def build_workload(corpus: str) -> tuple[list[dict], dict]:
         raise SystemExit(f"no question set at {own_path}; generate it first")
 
     items = [{"kind": q["kind"], "query": q["question"], "on_corpus": q.get("on_corpus", True),
-              "gold": q["gold"]}
+              "gold": q["gold"], "source_offset": q.get("source_offset")}
              for q in own["questions"]]
     for name, path in CORPUS_QUESTIONS.items():
         if name == corpus:
