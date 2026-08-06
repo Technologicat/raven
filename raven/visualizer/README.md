@@ -229,42 +229,30 @@ Useful especially for AI/CS topics.
 
 #### Converting a list of arXiv IDs into a BibTeX file
 
-For this use case, Raven itself does not provide a tool; rather, we recommend the external tool [`arxiv2bib`](https://github.com/nathangrigg/arxiv2bib). It will pull the relevant metadata from arXiv, and write a BibTeX file.
+We provide `raven-arxiv2bib`, which pulls the metadata from arXiv and writes a BibTeX file. For a short help message, run `raven-arxiv2bib -h`.
 
 Usage:
 
 ```bash
-arxiv2bib <arxiv_ids.txt >arxiv_papers.bib
-```
-
-where `arxiv_ids.txt` is a text file containing arXiv identifiers, one per line.
-
-This gives you a BibTeX bibliography (`arxiv_papers.bib`) that be imported into *Raven-visualizer*.
-
-**:exclamation: If your list has hundreds of arXiv identifiers, `arxiv2bib` may fail with an HTTP 414 error (URI too long). :exclamation:**
-
-The issue has been fixed in the `arxiv2bib` source code, but the updated package has not been released yet. In the meantime, it is preferred to install the tool from [the `arxiv2bib` GitHub repo](https://github.com/nathangrigg/arxiv2bib).
-
-You can install it e.g. in the same venv as Raven:
-
-```bash
 $(pdm venv activate)
-python -m pip install git+https://github.com/nathangrigg/arxiv2bib.git@master
+raven-arxiv2bib arxiv_ids.txt -o arxiv_papers.bib
 ```
 
-Alternatively, if you want, you can install it into the same Python environment as PDM, so that using `arxiv2bib` does not require activating Raven's venv.
+where `arxiv_ids.txt` is a text file containing arXiv identifiers, one per line. Identifiers can also be given directly as arguments, or piped in on stdin.
 
-To do that, make sure that Raven's venv is **not** active, and then run the install command in your Python environment:
+This gives you a BibTeX bibliography (`arxiv_papers.bib`) that can be imported into *Raven-visualizer*.
 
-```bash
-python -m pip install git+https://github.com/nathangrigg/arxiv2bib.git@master
-```
+Identifiers are sent in batches, so a list of hundreds costs a handful of requests rather than one per paper, and the three seconds arXiv asks between requests is paid once per batch. Identifiers arXiv returns nothing for are reported at the end rather than aborting the run.
+
+The version arXiv answered with is recorded, whether or not you asked for one: request the bare `2410.07866` — which means "whatever is current" — and the entry says `2410.07866v5`. So the bibliography states which revision it describes. Pass `--strip-versions` if you want a bibliography for *citing* papers rather than for tracking a collection.
+
+**Earlier versions of this document recommended the external `arxiv2bib` package** and described a workaround for an HTTP 414 (URI too long) error it hit on long identifier lists. Neither is needed now: `raven-arxiv2bib` replaces it, is rate-limited like Raven's other arXiv tools, and batches its requests so the 414 cannot arise. If you installed the external tool on this advice, it is no longer a Raven dependency.
 
 #### Extracting arXiv IDs from PDF filenames
 
-In case you have a directory full of PDFs downloaded from arXiv, with the identifier somewhere in the filename, we provide `raven-arxiv2id`, which extracts arXiv identifiers from filenames, in a format suitable for handing over to [`arxiv2bib`](https://github.com/nathangrigg/arxiv2bib).
+In case you have a directory full of PDFs downloaded from arXiv, with the identifier somewhere in the filename, we provide `raven-arxiv2id`, which extracts arXiv identifiers from filenames.
 
-Only unique identifiers will be returned. For a short help message, run `raven-arxiv2id -h`.
+Only unique identifiers will be returned; where several versions of the same paper are present, only the newest is kept. For a short help message, run `raven-arxiv2id -h`.
 
 Usage:
 
@@ -273,13 +261,28 @@ $(pdm venv activate)
 raven-arxiv2id >arxiv_ids.txt  # run this in a directory that has arXiv PDF files
 ```
 
-Then you can proceed as above:
+Then pipe that into `raven-arxiv2bib`, in one command or two:
 
 ```bash
-arxiv2bib <arxiv_ids.txt >arxiv_papers.bib
+raven-arxiv2id -i ~/papers | raven-arxiv2bib -o arxiv_papers.bib
 ```
 
 and import the resulting `.bib` file into *Raven-visualizer*.
+
+##### Refreshing a collection when papers get new versions
+
+Preprints get revised, sometimes years later, and a collection assembled over time drifts out of date without saying so. `--strip-versions` is what refreshes it:
+
+```bash
+raven-arxiv2id -i ~/papers --strip-versions > ids.txt
+raven-arxiv-download -o ~/papers --save-bib arxiv_papers.bib $(cat ids.txt)
+```
+
+The mechanism is arXiv's own: an identifier *with* a version means that version, and one *without* means whatever is current. So dropping the suffix is exactly the request "give me the latest", and both tools honour it.
+
+`--save-bib` writes the bibliography from metadata the download already fetched in order to name the files, so it costs no extra requests and no extra waiting — where running `raven-arxiv2bib` over the same identifiers afterwards would ask arXiv for all of it a second time. Papers already present in the output directory are included in the `.bib` too: it describes the set you asked for, not just the part that had changed.
+
+Note that the old versions stay on disk, and that a refreshed paper's *filename* changes with its version — so if you have measured anything against this collection by filename, those references need regenerating alongside the refresh.
 
 #### Auto-downloading arXiv fulltexts by IDs
 
