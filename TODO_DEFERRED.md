@@ -3411,7 +3411,23 @@ Two separable reductions, and they are not equally safe:
   where today the index still has it. Whether that is a loss or a correct behaviour is the actual question;
   `document_text` (used by `fetch_document`) and result reconstruction are the readers to check.
 
-Raised by Juha (2026-08-04); the measurement was taken while filing it.
+**Measured again at the size that matters (2026-08-06), and the ratio holds while the absolute number stops
+being ignorable.** The arXiv fulltext corpus — 1268 papers, built for `investigations/retrieval/` — produces
+a **587 MB `fulldocs/data.json`**, inside a 2.6 GB index (`chromadb` 1.5 GB, `bm25s` 257 MB). Against the
+same 1268 documents indexed as *abstracts*, every component is 53–62× larger, so nothing is behaving
+unexpectedly; what changed is that a whole-file JSON rewrite per commit now moves half a gigabyte, and a
+load parses it.
+
+The reason this is worth acting on rather than noting: **1268 papers is a small collection for the use case
+Librarian is pitched at** — a researcher dropping their PDF folder in. The abstract corpora that every
+earlier measurement used are the unrepresentative case, not this one. Related, and to be considered
+together rather than separately: the BM25 backend migration item above (`bm25s` is rebuilt whole at the end
+of each commit, which is the same shape of cost) and the autosave/durability item, which named this coupling
+first.
+
+Raised by Juha (2026-08-04); the measurement was taken while filing it. Cross-referenced from
+`investigations/retrieval/README.md`, under the arXiv fulltext corpus state, which is where the second
+measurement was taken.
 
 ## A fetched web page is budgeted as a user attachment, not as a speculative fetch
 

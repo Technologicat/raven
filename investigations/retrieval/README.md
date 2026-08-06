@@ -274,6 +274,10 @@ python investigations/retrieval/calibrate.py [hydrogen|fiction]
 
 # Read (no server, no index, no GPU — these only read the JSON the sweep wrote)
 python investigations/retrieval/recall_curve.py [results.json ...]
+python investigations/retrieval/fusion_weight.py report [corpus ...]
+
+# Record both arms' rankings for a corpus (needs server + index), so `report` can run offline
+python investigations/retrieval/fusion_weight.py sweep <corpus> [--db-dir DIR]
 
 # Build the fulltext corpus (see the fulltext section above)
 python investigations/retrieval/build_fulltext_corpus.py plan
@@ -295,6 +299,12 @@ The scoring scripts answer different questions, and each needs something the oth
   curve costs one deep sweep rather than one run per depth — `sharpness.py` records each gold rank, and
   every k below the sweep depth is a count over those. It exists to size the candidate stage of a
   retrieve-deep-then-rerank pipeline, which is the ceiling on everything the reranker can do.
+- **`fusion_weight.py` sweeps the two fusion constants** — the arms' relative weight and RRF's `K` — which
+  every other harness here holds fixed at "equal votes, K=60". Split in two on purpose: `sweep` pays for
+  retrieval once per corpus and records both arms' full ranked lists; `report` then computes any weight,
+  any `K` and any `k` from that record as arithmetic, so a new question about the same data needs no GPU.
+  It also carries the paired significance tests, since a grid this size will always have a winning cell
+  and the interesting question is whether a *named* comparison survives.
 - **`build_fulltext_corpus.py` assembles the arXiv AI fulltext corpus** so it holds the same documents
   under the same identifiers as the abstract corpus, which is what lets the two be compared and what lets
   the existing gold labels transfer unchanged.
@@ -572,30 +582,67 @@ to hydrogen-production engineering than fan fiction is — would explain it equa
 confounded on the present evidence and the mechanism is *not* established. What would separate them: score
 the generic questions and the specific ones separately against an unrelated index.
 
-## Corpus state: the arXiv fulltext index (as of 2026-08-06 evening)
+## Corpus state: the arXiv fulltext index (built 2026-08-06)
 
-**A build was in progress when the session ended** — `raven-indexer` on `electra`, indexing
-`00_stuff/datasets/ai_papers/fulltext` into `~/.config/raven/llmclient/rag_index_arxiv_fulltext`, at
-894/1262 documents and 112182 chunks after ~58 minutes. It runs unattended; it does not need a session.
+**Complete, at the full 1268 documents.** `raven-indexer` over
+`~/.config/raven/llmclient/documents_arxiv_fulltext` into `rag_index_arxiv_fulltext`; 4123 s for the bulk
+of it, index 2.6 GB. The document set matches the abstract corpus one-for-one under the same identifiers,
+which is what lets the two be compared and lets the existing gold labels transfer unchanged.
 
-Check these before trusting it for the fulltext-vs-abstract comparison:
+**It finished at 1265, and the missing three were a bug rather than a property of the corpus** — worth
+recording because the run *reported success*, and the shortfall was the only sign. Three PDFs extracted
+with stray UTF-16 surrogates in their text (all `U+D835`, the mathematical-alphanumerics block), which
+`str.encode("utf-8")` refuses; each died at the server boundary as `HTTP 400 BAD REQUEST`, naming neither
+the document nor the character. Fixed in `raven.common.docextract`, which now repairs at extraction and
+logs the document it repaired, and pinned by tests in `raven/common/tests/test_docextract.py`. The three
+were re-ingested, so the index on disk is complete.
 
-- **It reached 1262 documents**, not fewer. The failure mode this build already hit once was
-  `raven-indexer` reporting success after a single document (fixed, and pinned by a regression test) —
-  the tell was the ChromaDB chunk count stuck at 42.
-- **Which 6 of the 1268 dropped out.** The corpus was assembled with 1268 symlinks and the indexer is
-  working through 1262, so six documents failed extraction or came back empty. They are unlikely to
-  matter for the comparison, but an unexplained shortfall in a corpus built specifically to be
-  document-for-document comparable is worth one grep of the log before it is quoted in a result.
-- **Expect ~150000 chunks**, from ~118 chunks per document — the abstract side is 2596, so the fulltext
-  corpus is about 58x larger and `k=200` sits at 0.13% of it, comfortably inside the regime where
-  recall@k means something.
+The general lesson is the one this file keeps relearning: **a count that falls short of what was asked for
+is a finding, not a rounding error.** The earlier version of this section guessed the shortfall was
+"unlikely to matter"; it was a data-loss bug affecting exactly the document type Librarian is pitched at.
 
-**Naming inconsistency, deliberately not fixed yet.** The other corpora keep their documents at
-`~/.config/raven/llmclient/documents_<name>` beside their index; this one's documents live in the repo's
-`00_stuff` tree with only the index in the standard place. Moving them would strand every path already
-committed to the index, so it costs a full re-index (~70 minutes). Worth doing when the corpus is next
-rebuilt for another reason, not on its own account.
+**The index is 2.6 GB, and its shape is worth a look before anyone ships this corpus size.** Against the
+same 1268 papers as abstracts:
+
+| | abstracts | fulltext | ratio |
+|---|---|---|---|
+| `bm25s` | 4.7 MB | 257 MB | 55x |
+| `chromadb` | 24 MB | 1.5 GB | 62x |
+| `fulldocs` | 16 MB | 854 MB | 53x |
+
+The ratios track the chunk count, so nothing is behaving unexpectedly — but `fulldocs` is a **single JSON
+file** holding every document's full text *and* its chunks, and at this corpus size it is 587 MB that has
+to be parsed at load and rewritten whole on every commit. That is a known scaling property of the current
+store rather than a new finding: `TODO_DEFERRED.md`, "The docs DB stores each document's full text *and*
+its chunks, both in the JSON", which already establishes that the chunk texts are derivable from the full
+text plus offsets and that dropping the full text is the part needing a decision.
+
+What this measurement adds to that item is the *scale at which it stops being theoretical* — it was filed
+against 48 MB of sources producing 124 MB, and 1268 papers is a small collection for the use case Librarian
+is pitched at. The abstract corpora every earlier measurement used are the unrepresentative case.
+
+**Storage of the documents themselves: nothing is duplicated.** `documents_arxiv_fulltext` is a symlink to
+`00_stuff/datasets/ai_papers/fulltext`, which is itself 1268 symlinks (5 MB) into the machine's downloads
+folder. The only real copy of the 4.9 GB is the original one. This is what the symlink support added to
+`hybridir` on the same day is for, and it is the reason the naming inconsistency this section previously
+recorded as costing a ~70-minute re-index cost nothing at all.
+
+One caveat, and it is narrower than it first looks. **Document identity is safe**: `document_id` is the
+path *relative to the documents directory* (`_make_document_id_from_path`), so a flat corpus is identified
+by bare filename and both spellings agree. Read back off the built index, the record is
+
+    key   '0706.3639v1.pdf'
+    path  '/home/jje/.../00_stuff/datasets/ai_papers/fulltext/0706.3639v1.pdf'
+
+— bare filename as the key, absolute path as a field beside it. The gold labels key on the former, so
+nothing about the evaluation depends on which spelling built the index.
+
+What does not agree is `rescan`'s **change detection**, which compares the stored *absolute* `doc["path"]`
+against the paths it just walked. `canonical_path` normalizes lexically without resolving symlinks, so the
+two spellings stay textually distinct, and a rescan under the other one classifies all 1268 files as new
+and all 1268 indexed documents as deleted. The ids collide correctly rather than duplicating — it is a
+full re-ingest, not a corrupted index — but it is a full re-ingest. Index under one spelling and stay
+with it.
 
 ## The recall curve, 2026-08-06: the reranker is cleared, and depth turns out not to be a truncation
 
@@ -863,6 +910,82 @@ arm at 0.201 against fusion's 0.169. So the failure here removes one option, not
 And the cheapest version of strategy 2 needs no machinery at all: **expose the knob and let the user
 choose**. Someone who has assembled a titles-only bibliography knows that they have, which is precisely
 the information an index-time calibration would spend an LLM pass rediscovering.
+
+##### The fusion constants were never swept, and one of them is set wrong (2026-08-06)
+
+Everything above treats fusion as a *switch* — BM25, vector, or RRF with equal votes. That is three points
+on a continuum nobody had swept, and the corpus where fusion loses fails in the way a weight would fix:
+banichuk's keyword arm scores MRR 0.090 against the vector arm's 0.201, and voting them equally drags the
+good arm down to 0.169. "Use less of the bad arm" had never been measured.
+
+`fusion_weight.py` sweeps it. One retrieval pass per corpus records both arms' full ranked lists; the whole
+(weight × RRF constant × k) grid is then offline arithmetic over that record, so a new question about the
+same data costs no GPU. Weighted RRF is `w/(K + rank_bm25) + (1-w)/(K + rank_vector)` — one free parameter,
+since RRF scores are only ever compared against each other and scaling both weights leaves the order alone.
+`w=1` is the keyword arm exactly, `w=0` the semantic arm exactly, `w=0.5` what ships.
+
+**MRR across the grid, K rows against w columns:**
+
+| corpus | K | w=0.0 | 0.1 | 0.2 | 0.3 | 0.4 | **0.5** | 0.6 | 0.7 |
+|---|---|---|---|---|---|---|---|---|---|
+| hydrogen | 3 | 0.375 | 0.383 | 0.410 | 0.440 | 0.497 | 0.516 | 0.491 | 0.452 |
+| hydrogen | **10** | 0.375 | 0.403 | 0.441 | 0.478 | 0.503 | **0.519** | 0.506 | 0.481 |
+| hydrogen | 60 | 0.375 | 0.446 | 0.469 | 0.490 | 0.497 | *0.502* | 0.505 | 0.500 |
+| arxiv-ai | 3 | 0.431 | 0.438 | 0.475 | 0.519 | 0.529 | 0.574 | 0.562 | 0.540 |
+| arxiv-ai | **10** | 0.431 | 0.469 | 0.508 | 0.532 | 0.539 | **0.577** | 0.595 | 0.568 |
+| arxiv-ai | 60 | 0.431 | 0.517 | 0.525 | 0.542 | 0.546 | *0.565* | 0.566 | 0.560 |
+| fiction | 3 | 0.814 | 0.814 | 0.817 | 0.819 | 0.816 | 0.784 | 0.767 | 0.729 |
+| fiction | **10** | 0.814 | 0.814 | 0.807 | 0.827 | 0.808 | **0.796** | 0.771 | 0.732 |
+| fiction | 60 | 0.814 | 0.816 | 0.824 | 0.815 | 0.815 | *0.796* | 0.772 | 0.754 |
+| banichuk | 3 | 0.201 | 0.204 | 0.206 | 0.202 | 0.203 | 0.189 | 0.154 | 0.135 |
+| banichuk | **10** | 0.201 | 0.204 | 0.197 | 0.200 | 0.197 | **0.183** | 0.156 | 0.134 |
+| banichuk | 60 | 0.201 | 0.189 | 0.186 | 0.188 | 0.179 | *0.170* | 0.152 | 0.147 |
+
+Two findings, and they want different treatment because one is universal and the other is not.
+
+**1. `K = 60` is the wrong RRF constant here, and `K = 10` is free.** Hold the weight at what ships and vary
+only the constant: MRR rises on hydrogen (0.502 → 0.519), on arxiv-ai (0.565 → 0.577) and on banichuk
+(0.170 → 0.183), and is unchanged on fiction. **Up on three, down on none.** Paired on "gold within top
+20", the discordant pairs run 4:1, 4:1, 0:0 and 1:0 — individually meaningless at n≈99, pooled **9 gained
+against 2 lost, p = 0.065**.
+
+That is a shallow interior optimum rather than a trend running to a degenerate limit, which is the thing
+worth checking before believing it: `K = 1` and `K = 3` are *worse* than `K = 10` at `w = 0.5` on both
+abstract corpora (hydrogen 0.491, 0.516, 0.519; arxiv-ai 0.559, 0.574, 0.577). The limit `K → 0` is plain
+reciprocal rank, where a rank-1 hit outvotes a rank-2 hit two to one; the data does not want that, it wants
+something less damped than 60.
+
+Note that 60 was never a Raven decision — it is `reciprocal_rank_fusion`'s documented default, "a typical
+value from IR literature", inherited unexamined. That is the honest description of what this measures: not
+a tuning failure but a constant that arrived with the algorithm and was never asked whether it fit.
+
+**2. The arm weight is corpus-dependent, and that is now quantified rather than inferred.** Best weight by
+MRR: hydrogen 0.5, arxiv-ai 0.6, fiction 0.3 (flat from 0.0 to 0.4), banichuk 0.1–0.3. No single value
+serves all four — moving to banichuk's optimum costs the abstract corpora, and vice versa. On banichuk
+specifically, `w = 0.5 → 0.1` at `K = 10` is worth +6.1 points at @20 (42.4% → 48.5%), discordant pairs
+8:2, p = 0.11.
+
+So the earlier "expose the arms as a query-time choice" argument survives the sharper measurement, and
+gains a second reading: the useful setting is not only *which arms* but *in what proportion*. It is also
+the first quantitative estimate of what index-time calibration would be worth, which is what makes it
+worth more than the recall points — see the economics note below.
+
+**3. What did *not* survive: the merge and chunk-level-fusion difference.** The shipped path fuses at chunk
+level and then merges contiguous spans; this sweep fuses at document level and does not merge. MRR favours
+the sweep (hydrogen 0.471 → 0.502, arxiv-ai 0.541 → 0.565) but **membership of the top 20 barely moves** —
+2:2 on hydrogen, 2:0 on arxiv-ai, 0:0 on both others. MRR is head-weighted, so it registers a reordering
+within the head that changes nothing about what reaches the model. At `k = 50` that is the metric that
+matters, so this is a candidate cleanly killed rather than one to chase. (The two paths differ in two ways
+at once — granularity and merging — so nothing here attributes the MRR shift to either alone; it did not
+need attributing, because it does not cash.)
+
+**A caveat that applies to the whole grid, stated before it can be forgotten.** The winning *cell* was
+chosen on the same questions it is scored on, which is exactly how p75-of-probes and the 0.45 constant went
+wrong earlier in this investigation. What is defensible here is the two comparisons named as hypotheses
+*before* the grid was read — does the constant matter at the shipped weight, and does the shipped fusion
+path cost anything — plus the shape of the banichuk weight curve, which is monotone over ten points rather
+than a lucky cell. The specific value `K = 10` being best is the swept part, and a fifth corpus could move
+it within 3–30.
 
 ##### Can the right arm configuration be detected automatically?
 
