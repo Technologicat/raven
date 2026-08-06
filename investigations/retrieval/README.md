@@ -284,6 +284,42 @@ python investigations/retrieval/build_fulltext_corpus.py plan
 python investigations/retrieval/build_fulltext_corpus.py assemble
 ```
 
+### The active slot is a pair of symlinks, and they are flipped together
+
+Librarian has one configured documents directory and one configured index (`llm_docs_dir`,
+`llm_database_dir` — `~/.config/raven/llmclient/documents` and `rag_index`). Five corpora share that one
+slot, and the old arrangement was to rename directories into and out of it, which loses a corpus whenever a
+run dies partway through the dance.
+
+Both are now **symlinks**, and every corpus keeps its own real directories:
+
+```bash
+documents      -> documents_hydrogen        rag_index  -> rag_index_hydrogen
+documents_fiction  documents_banichuk  documents_arxiv  documents_arxiv_fulltext
+rag_index_fiction  rag_index_banichuk  rag_index_arxiv  rag_index_arxiv_fulltext
+```
+
+Switching corpora is then two `ln -s` calls and nothing moves.
+
+**Flip both or neither.** A `documents` pointing at one corpus with `rag_index` pointing at another is the
+one genuinely destructive state: Librarian rescans at startup, finds none of the indexed filenames, and
+schedules every document for deletion and every file for ingest. Nothing warns; it just starts working.
+
+**Why the symlink does not confuse the index, which is not obvious.** `canonical_path` normalizes lexically
+without resolving symlinks, so a scan through `documents` yields paths spelled `.../documents/...`
+regardless of what it points at — which is exactly what an index built through the same spelling recorded.
+The stable spelling is the slot name, not the corpus name, and that is what makes this work at all.
+
+The corollary is a real constraint: **an index intended for the active slot must be built through the
+slot.** The per-corpus evaluation indexes here were built by naming their real directories, so they carry
+`.../documents_hydrogen/...` and a rescan through the slot would re-ingest all of them. That costs nothing
+in practice because the harness only ever reads them, via `--db-dir`, and never rescans — but pointing
+Librarian itself at one of them is not free.
+
+**This is scaffolding with a known end date.** Document scopes (brief 13, autumn 2026, after Researchers'
+Night) give a corpus a first-class identity, at which point one installation holds several collections
+without a slot to contend over and the symlinks go away.
+
 **Prefer `--db-dir` over renaming index directories into the configured slot.** Four corpora share one
 `llm_database_dir`, and the parking convention (`rag_index_hydrogen`, `rag_index_arxiv`, …) invites a
 rename-run-rename dance that leaves the wrong corpus live whenever a run dies partway. Naming the index on

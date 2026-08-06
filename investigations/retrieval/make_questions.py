@@ -220,13 +220,17 @@ def main() -> None:
     if len(sys.argv) < 4:
         print(__doc__)
         return
-    corpus, base, model = sys.argv[1], sys.argv[2], sys.argv[3]
+    argv = sys.argv[1:]
+    append = "--append" in argv
+    if append:
+        argv.remove("--append")
+    corpus, base, model = argv[0], argv[1], argv[2]
     if corpus not in CORPORA:
         raise SystemExit(f"unknown corpus '{corpus}'; expected one of {', '.join(CORPORA)}")
     profile = CORPORA[corpus]
     corpus_dir, out_path = profile["docs_dir"], profile["out_path"]
-    n_focused = int(sys.argv[4]) if len(sys.argv) > 4 else 24
-    n_rambling = int(sys.argv[5]) if len(sys.argv) > 5 else 8
+    n_focused = int(argv[3]) if len(argv) > 3 else 24
+    n_rambling = int(argv[4]) if len(argv) > 4 else 8
 
     files = sorted(corpus_dir.glob("*.bib"))
     if not files:
@@ -234,22 +238,45 @@ def main() -> None:
         return
     print(f"corpus '{corpus}': {len(files)} records in {corpus_dir}")
 
+    # In append mode the counts are how many to *add*, and the questions already in the file are kept
+    # verbatim. Keeping them is the point: every result committed under `investigations/retrieval/` was
+    # scored against those exact questions, so regenerating them would silently invalidate the lot — the
+    # seed fixes which *papers* are drawn, not what the model says about them (it is sampled at
+    # temperature). Growing the set instead leaves every past number comparable and only narrows the
+    # confidence intervals.
+    questions = []
+    used_ids: set[str] = set()
+    if append:
+        if not out_path.exists():
+            raise SystemExit(f"--append: nothing to append to; '{out_path}' does not exist")
+        questions = json.loads(out_path.read_text(encoding="utf-8"))["questions"]
+        # Reconstructed from the questions themselves rather than from a recorded count, because a
+        # generation that came back empty consumed its paper without leaving a question behind. Counting
+        # kinds would therefore drift by exactly those, and the drift would show up as a second question
+        # about a paper already in the set — not fatal, but a correlated sample nobody asked for.
+        for q in questions:
+            used_ids.update(q.get("gold", []))
+            used_ids.update(q.get("distractors", []))
+        print(f"appending to {len(questions)} existing questions, over {len(used_ids)} already-used records")
+
     rng = random.Random(SEED)
     rng.shuffle(files)
 
-    # Draw more candidates than needed; short or malformed records are skipped.
+    # Draw more candidates than needed; short or malformed records are skipped, and in append mode the
+    # records already spoken for are skipped too — so the pool has to be deep enough to clear them first.
     needed = n_focused + 3 * n_rambling
     use_abstracts = profile.get("use_abstracts", True)
     entries = []
     for path in files:
         entry = load_entry(path, require_abstract=use_abstracts)
-        if entry is not None:
+        if entry is not None and entry["id"] not in used_ids:
             entries.append(entry)
         if len(entries) >= needed + 20:
             break
     print(f"usable records drawn: {len(entries)}\n")
-
-    questions = []
+    if len(entries) < needed:
+        print(f"  note: only {len(entries)} unused records available, wanted {needed} — "
+              f"the corpus is running out of papers to ask about.")
 
     def save() -> None:
         """Write everything generated so far. Called after each question, not once at the end.
@@ -303,6 +330,9 @@ def main() -> None:
 
     save()
     print(f"\nwrote {len(questions)} questions to {out_path}")
+    if append:
+        print("  note: the cross-corpus negatives in `sharpness.py` are built from whatever question "
+              "files exist when it runs, so re-score every corpus before comparing any two of them.")
 
 
 if __name__ == "__main__":

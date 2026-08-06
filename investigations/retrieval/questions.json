@@ -1081,6 +1081,26 @@
         "WOS000696831300001.bib",
         "WOS000322562800012.bib"
       ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does supplementing anaerobic sludge digestion with a specific glycolipid surfactant alter hydrolysis efficiency and short-chain organic acid profiles, and how does the resulting fermentation broth subsequently enable high-yield algal lipid synthesis?",
+      "gold": [
+        "WOS000921784800001.bib"
+      ],
+      "gold_titles": [
+        "Insights into the Effect of Rhamnolipids on the Anaerobic Fermentation and Microalgae Lipid Production of Waste Activated Sludge: Performance and Mechanisms"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does knocking out the primary reabsorption pathway affect biohydrogen yields during light-independent cultivation of Allochromatium vinosum?",
+      "gold": [
+        "WOS000273494200010.bib"
+      ],
+      "gold_titles": [
+        "Increased biological hydrogen production by deletion of hydrogen-uptake system in photosynthetic bacteria"
+      ]
     }
   ]
 }
