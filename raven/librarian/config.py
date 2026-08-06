@@ -401,6 +401,12 @@ docs_num_results = 50
 # A capped run is not truncated. It comes back as several results covering the same text, so nothing is
 # lost but the seam. Raise it if you would rather have longer continuous passages than a bounded worst
 # case, or set it to `None` for the old unlimited behavior.
+#
+# This setting is a stopgap. The reason results vary in length at all is that they are assembled from
+# however many neighbouring chunks happened to be retrieved, which is not a statement about how much
+# context the passage needs — so the eventual fix is to take a fixed window around each match from the
+# stored document text, at which point every result is the same size and no cap is required. See the
+# `TODO` above `_build_full_id_to_record_index` in `hybridir.py`.
 docs_max_result_length = 2000
 
 # How many previously consulted documents to list back to the LLM (`list_consulted_documents`).

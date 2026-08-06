@@ -7,10 +7,15 @@ merged result carries context the chunk alone did not. That is a purchase, and t
 
 The comparison holds the budget fixed and varies the unit:
 
-  merged    hybridir's shipped output — contiguous chunks stitched, best span first
-  chunks    the same fused ranking, unmerged, best chunk first
+  merged    contiguous chunks stitched with no length limit — the behaviour before the cap
+  capped    the same, with `max_span_length` — what ships
+  chunks    the fused ranking unmerged, best chunk first
 
-Both are filled from the same retrieval until they reach the budget, so the only difference is what a
+All three come from `HybridIR.query` itself rather than from a re-implementation here, which matters: the
+first version of this script rebuilt the chunk-level fusion in the harness, so a divergence between the two
+would have shown up as a finding. `merge=False` exists for exactly this.
+
+Each is filled from its own retrieval until it reaches the budget, so the only difference is what a
 "result" is. The metric is whether the gold document is anywhere in the material the model would see.
 
 **Budgeted in characters, not tokens.** A token count would need the LLM backend, one call per
@@ -69,7 +74,14 @@ def gold_in(results: list[dict], gold: set[str]) -> bool:
 
 def main() -> None:  # pragma: no cover
     argv = sys.argv[1:]
-    depth, db_dir = DEFAULT_DEPTH, None
+    depth, db_dir, label = DEFAULT_DEPTH, None, None
+    # The output filename is keyed on the corpus, and two *indexes* can share one question set — the arXiv
+    # abstracts and the arXiv fulltexts hold the same documents under the same ids, which is the whole point
+    # of that pair. Without a label the second run silently overwrites the first.
+    if "--label" in argv:
+        at = argv.index("--label")
+        label = argv[at + 1]
+        del argv[at:at + 2]
     if "--depth" in argv:
         at = argv.index("--depth")
         depth = int(argv[at + 1])
@@ -98,27 +110,21 @@ def main() -> None:  # pragma: no cover
     print(f"corpus '{corpus}': {len(items)} on-corpus questions, depth {depth}")
     print(f"  index: {db_dir}\n")
 
-    hits = {arm: {b: 0 for b in BUDGETS} for arm in ("merged", "chunks")}
-    counts = {arm: {b: [] for b in BUDGETS} for arm in ("merged", "chunks")}
+    arms = ("merged", "capped", "chunks")
+    hits = {arm: {b: 0 for b in BUDGETS} for arm in arms}
+    counts = {arm: {b: [] for b in BUDGETS} for arm in arms}
     rows = []
     for n, item in enumerate(items, 1):
         gold = set(item["gold"])
-        merged, rep = retriever.query(item["query"], k=depth, multi_query=False, return_extra_info=True)
-
-        # The unmerged arm, re-fused from the same two candidate lists at chunk level. `merge_contiguous_spans`
-        # is what the merged arm applied to exactly this; skipping it is the whole manipulation.
-        scores: dict[str, float] = {}
-        record: dict[str, dict] = {}
-        for lst in (rep.keyword_results, rep.vector_results):
-            for rank, chunk in enumerate(lst, 1):
-                key = f"{chunk.get('document_id')}@{chunk.get('offset')}"
-                scores[key] = scores.get(key, 0.0) + 1.0 / (60 + rank)
-                record[key] = chunk
-        chunks = [record[key] for key, _s in sorted(scores.items(), key=lambda kv: kv[1], reverse=True)]
+        # Three retrievals rather than one derived three ways, so every arm is the shipped code path.
+        merged = retriever.query(item["query"], k=depth, multi_query=False, max_span_length=None)
+        capped = retriever.query(item["query"], k=depth, multi_query=False,
+                                 max_span_length=librarian_config.docs_max_result_length)
+        chunks = retriever.query(item["query"], k=depth, multi_query=False, merge=False)
 
         row = {"budgets": {}}
         for budget in BUDGETS:
-            for arm, results in (("merged", merged), ("chunks", chunks)):
+            for arm, results in (("merged", merged), ("capped", capped), ("chunks", chunks)):
                 taken = fill_to_budget(results, budget)
                 found = gold_in(taken, gold)
                 hits[arm][budget] += int(found)
@@ -135,7 +141,8 @@ def main() -> None:  # pragma: no cover
         return s[len(s) // 2] if s else 0
 
     print(f"\n  recall (gold document present), n={n_items}")
-    print(f"  {'chars':>8} {'~tokens':>8} | {'merged':>8} {'results':>8} | {'chunks':>8} {'results':>8} | {'delta':>7}")
+    print(f"  {'chars':>8} {'~tokens':>8} | {'merged':>8} {'results':>8} | {'capped':>8} {'results':>8} "
+          f"| {'chunks':>8} {'results':>8} | {'delta':>7}")
     censored = []
     for b in BUDGETS:
         m = hits["merged"][b] / n_items
@@ -148,11 +155,12 @@ def main() -> None:  # pragma: no cover
         if flag:
             censored.append(b)
         print(f"  {b:>8} {b // 4:>8} | {m:>8.1%} {n_merged:>8} | "
+              f"{hits['capped'][b] / n_items:>8.1%} {median(counts['capped'][b]):>8} | "
               f"{c:>8.1%} {median(counts['chunks'][b]):>8} | {c - m:>+7.1%}{flag}")
     if censored:
         print(f"\n  {len(censored)} row(s) censored by the depth cap ({depth}); read the rows above them.")
 
-    out = pathlib.Path(__file__).parent / f"token_budget_{corpus}.json"
+    out = pathlib.Path(__file__).parent / f"token_budget_{label or corpus}.json"
     out.write_text(json.dumps({"corpus": corpus, "depth": depth, "budgets": list(BUDGETS),
                                "hits": {a: {str(k): v for k, v in d.items()} for a, d in hits.items()},
                                "n": n_items, "rows": rows}, indent=1), encoding="utf-8")

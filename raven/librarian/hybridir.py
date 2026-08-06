@@ -1010,6 +1010,18 @@ class HybridIR:
                 self.full_id_to_record_index = {}
 
     # TODO: add a variant of `query` with a fixed amount of context around each match (we can do this by looking up the fulltext of the matching chunk and taking the text from there)
+    #
+    # This is the shape that dissolves the merging problem rather than managing it, so it is worth stating
+    # why before someone tunes `max_span_length` instead. Chunks exist to give *search* granularity;
+    # `merge_contiguous_spans` un-granularizes them for *presentation*. The two jobs want different units,
+    # and deriving the second from the first has a consequence nobody chose: how much context a result gets
+    # depends on how many of its neighbours also happened to score well, which says nothing about how much
+    # context a reader needs. Hence results of wildly varying length, and hence a cap to bound them.
+    #
+    # A fixed window taken from the stored document text decouples the two. Every result is the same size,
+    # so a token budget divides cleanly, the worst case is bounded by construction, and the amount of
+    # surrounding text is a deliberate setting rather than an artifact of the retrieval. `max_span_length`
+    # is a stopgap until this exists.
     # TODO: do we need `exclude_documents`, for symmetry?
     def query(self,
               query: str,

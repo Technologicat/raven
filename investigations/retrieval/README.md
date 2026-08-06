@@ -980,6 +980,19 @@ measurement therefore prices a *proposed* token-budgeted retrieval, not a live d
 about today's behaviour is narrower and still worth having: at a fixed `k`, merged spans deliver fewer
 distinct documents per token than chunks would.
 
+**And the whole arrangement is an epicycle, which is worth saying before tuning the cap.** Juha's reading,
+2026-08-06, and it is the right one: chunks exist to give *search* granularity, `merge_contiguous_spans`
+un-granularizes them for *presentation*, and the cap is a bound on the un-granularizing. Two jobs, two
+natural units, and the second derived from the first — with a consequence nobody chose, namely that **how
+much context a result carries depends on how many of its neighbours also happened to score well.** That is
+not a statement about how much context the reader needs.
+
+`hybridir.py` already carries a `TODO` for the shape that dissolves it: take a **fixed window** around each
+match from the stored document text. Then the search unit and the presentation unit are independent, every
+result is the same size, a token budget divides cleanly, the worst case is bounded by construction, and the
+amount of surrounding text is a setting rather than an artifact. Everything below is worth having in the
+meantime; none of it is the answer.
+
 **Two changes follow, and they are different in kind.** A query-time switch to skip merging is a debugging
 and evaluation affordance — it makes this comparison runnable from the shipped code path instead of from a
 re-implementation in the harness, which is what `token_budget.py` currently does. A **cap on the length of
@@ -1191,6 +1204,37 @@ spans): rerank the chunks *before* `merge_contiguous_spans` rather than after. T
 truncation risk by construction, and may help independently — a merged span is a longer, more diluted
 unit, and the reranker is scoring relevance to a whole passage rather than to the part that matched.
 Juha's suggestion, 2026-08-06.
+
+## What the harness re-implements, and what that says `hybridir` is missing
+
+A pattern worth auditing periodically rather than noticing one instance at a time (Juha, 2026-08-06):
+**where an evaluation script rebuilds something the library already does internally, that is usually a
+missing parameter rather than a harness convenience.** It also carries a specific risk — the harness copy
+and the library can diverge, and the divergence shows up as a *finding*.
+
+That already happened once. `token_budget.py` rebuilt the chunk-level fusion in order to compare merged
+spans against bare chunks; had its copy differed from `HybridIR`'s, the difference would have been read as
+an effect of merging. It now uses `query(merge=False)`, added for exactly this.
+
+Swept across the eight scripts here, four remain:
+
+- **Arm weights and the RRF constant are not query parameters.** `arm_rerank.py` and `fusion_weight.py`
+  both carry their own `rrf()`. This is the consequential one: today's two measurements — that `K=60` is
+  the wrong constant, and that the right arm weight is corpus-dependent — *cannot be acted on from the
+  shipped code path at all*, because it exposes neither. Wanted: `query(arm_weight=..., rrf_k=...)`, which
+  is also the query-time arm knob already agreed.
+- **Document-level dedup of chunk results**, written again in `arm_rerank.py` and `fusion_weight.py`.
+  "Which documents did this find" is asked constantly and answered locally every time. Wanted: a result
+  granularity option, or at least a shared helper.
+- **Cosine distance → similarity, by hand in four scripts** (`arm_signal.py` twice, `calibrate.py`,
+  `run_probes.py`, `sharpness.py`), all spelling `1.0 - distance`. Trivial arithmetic, four chances to get
+  the sign backwards — and a sign error is a live failure mode here, not a hypothetical: the first
+  reranker result was checked for exactly that before being believed. Wanted: the report exposes
+  similarities beside distances, so nobody has to convert.
+- **Budgeted retrieval.** `token_budget.py` has `fill_to_budget`, which is "take results until N
+  characters are spent". That is the shape adaptive `k` needs — *retrieve until the budget is spent*
+  rather than *retrieve k results* — so the harness has already prototyped the interface. Wanted:
+  `query(max_total_length=...)`.
 
 ## What the set has decided so far
 
