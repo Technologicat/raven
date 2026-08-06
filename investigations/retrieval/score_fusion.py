@@ -176,7 +176,14 @@ def main() -> None:  # pragma: no cover
     print(f"  index: {db_dir}"
           + (f"   passage coverage: on ({passage_length} chars)" if score_coverage else "") + "\n")
 
-    conditions = [("rrf", "max", None)]
+    # `armsum` applies both accumulation principles at the level each belongs to, and needs no tuning
+    # constant to do it: sum a document's chunk scores *within* each arm, rank documents per arm, then RRF
+    # the two document rankings. The shipped path instead fuses arms at *chunk* level and then takes each
+    # document's best chunk — which cannot distinguish a document found by both arms in the same chunk from
+    # one found by BM25 in the introduction and by the vector arm three pages later. The second is two
+    # independent engines agreeing in two independent places; the first is one piece of evidence counted
+    # twice.
+    conditions = [("rrf", "max", None), ("armsum", "-", None)]
     for how in ("minmax", "zscore"):
         for agg in ("max", "sum", "mean", "count"):
             for w in WEIGHTS:
@@ -223,7 +230,23 @@ def main() -> None:  # pragma: no cover
                 [r["full_id"] for r in rep.vector_results], 0.5, 60)
             coverage[("rrf", "max", None)].append(cover(rrf_chunks))
 
+        # `armsum`: accumulate within each arm at document level, then fuse the two document rankings.
+        # Normalized per arm so the two sums are comparable before ranking; RRF then only reads position,
+        # so the normalization choice cannot leak into the comparison.
+        kw_by_document: dict[str, float] = {}
+        vec_by_document: dict[str, float] = {}
+        for raw, bucket in ((kw_raw, kw_by_document), (vec_raw, vec_by_document)):
+            keys = list(raw)
+            for key, value in zip(keys, normalize([raw[k] for k in keys], "minmax")):
+                bucket[chunk_document[key]] = bucket.get(chunk_document[key], 0.0) + value
+        kw_ranked = [d for d, _s in sorted(kw_by_document.items(), key=lambda kv: kv[1], reverse=True)]
+        vec_ranked = [d for d, _s in sorted(vec_by_document.items(), key=lambda kv: kv[1], reverse=True)]
+        armsum_order = fusion_weight.weighted_rrf(kw_ranked, vec_ranked, 0.5, 60)
+        ranks[("armsum", "-", None)].append(fusion_weight.gold_rank(armsum_order, gold))
+
         document_lengths = doc_lengths_of(retriever)
+        promoted_lengths[("armsum", "-", None)].extend(
+            document_lengths[d] for d in armsum_order[:20] if d in document_lengths)
         promoted_lengths[("rrf", "max", None)].extend(
             document_lengths[d] for d in fusion_weight.weighted_rrf(kw_docs, vec_docs, 0.5, 60)[:20]
             if d in document_lengths)

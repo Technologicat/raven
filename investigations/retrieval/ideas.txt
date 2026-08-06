@@ -17,3 +17,35 @@
   Expensive, plausible, unswept: chunk size and overlap. Never varied once. Banichuk showed chunk size interacts strongly with corpus shape, so this may be the largest single-parameter effect available — it just costs a re-index per setting.
 
   I'd propose 1 and 2 tomorrow (both cheap, both use tonight's grown sets), with 3 as the one to schedule for October if it doesn't fit.
+
+
+
+
+❯ > Same principle — accumulate independent evidence — applied within a document rather than across engines.
+
+  Seems like a vaguely bayesian thing to do. *stamps a seal of approval*
+
+  Now *that's* the general attack we've been looking for. Other ways to gather independent evidence?
+
+● Bayesian-ish is right — it's evidence accumulation where the pieces are conditionally independent given relevance, which is exactly when adding them is legitimate and exactly when dividing them out (mean) destroys information.
+
+  Asking "what else fails independently?" systematically, the axes are:
+
+  1. Across engines — BM25 + vector. Shipped.
+
+  2. Within a document, across positions — several matching chunks. Today's lead.
+
+  3. Within a document, across engines at different positions. This is the intersection of 1 and 2, and it's free. Right now RRF fuses at chunk level, so a document found by both arms in the same chunk scores identically to one found by BM25 here and the vector arm three pages later. The second is strictly stronger evidence — two independent engines, two independent locations — and nothing currently distinguishes them.
+  Testable with data I already have, no new retrieval.
+
+  4. Across query views, for free. Embed the same query under both the qa and symmetric roles and fuse. Two embeddings of one query that fail differently, no LLM call, no latency. This is the cheap cousin of the paraphrase idea — and note it's distinct from the refuted multi-query work, which split a message into fragments that then outvoted the whole. Every view here is the whole query.
+
+  5. Across chunk scales. Index at 500 and 2000 characters, search both, fuse. Small chunks find precise facts, large chunks find diffuse topics; they fail on different queries. What I like about this: it dissolves the chunk-size sweep instead of winning it — you stop choosing a size and let the two disagree productively. Costs index space, no query-time model, no tuning constant.
+
+  6. Across document representations. We already built this by accident: the same 1268 papers as abstracts and fulltext. An abstract says what a paper is about; the fulltext says what it contains. Fusing them is independent evidence — and it reframes the summary idea as an independent view rather than as extra coverage, which is a much better argument for it.
+
+  7. Across query terms — how many distinct query terms a document matches, as opposed to one term matched strongly. Classic coordination-level matching; BM25's per-term saturation doesn't capture it.
+
+  One I'd rule out: semantic neighbours corroborating each other. Tempting, but neighbours are correlated by construction — that's what makes them neighbours — so summing over them double-counts rather than accumulating. It violates the independence the whole principle rests on.
+
+  Ranked by your criterion (simple, no tuning, cheap), 3 and 4 are the immediate ones — 3 needs no new retrieval at all, and 4 needs no model. 5 and 6 are the structurally interesting ones. Let me record the taxonomy before it evaporates:

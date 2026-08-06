@@ -1081,6 +1081,116 @@
         "NiemiPramila1987.bib",
         "laukkanen.bib"
       ]
+    },
+    {
+      "kind": "focused",
+      "question": "What is a simplified analytical approach for estimating the natural frequencies of plates with rectangular geometry and direction-dependent material properties where the thickness is small compared to lateral dimensions?",
+      "gold": [
+        "BiancoliniEtAl2005.bib"
+      ],
+      "gold_titles": [
+        "Approximate solution for free vibrations of thin orthotropic rectangular plates"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How do formal mathematical frameworks relate to philosophical concepts of preordained outcomes?",
+      "gold": [
+        "Ekeland2004-English.bib"
+      ],
+      "gold_titles": [
+        "The Best of All Possible Worlds: Mathematics and Destiny"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can I derive the functional relationship and assess the inherent error of the method for calculating a quantity from other measured parameters?",
+      "gold": [
+        "Prokopov2005.bib"
+      ],
+      "gold_titles": [
+        "An Algorithm for Deriving the Measurement Equation and Estimating the Methodological Error (Uncertainty) in the Result for Indirect Measurements"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How to dampen transverse oscillations in a traveling web by applying forces only at the ends?",
+      "gold": [
+        "LeeMote1996.bib"
+      ],
+      "gold_titles": [
+        "Vibration Control of an Axially Moving String by Boundary Control"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can a spatial representation of the epidermal barrier be used to computationally predict the penetration of topical medications?",
+      "gold": [
+        "FeuchterHeisigWittum2006.bib"
+      ],
+      "gold_titles": [
+        "A geometry model for the simulation of drug diffusion through stratum corneum"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does a tone mapping technique that aligns output contrast with human visibility thresholds improve the perceptual rendering of extremely high contrast imagery?",
+      "gold": [
+        "WardlarsonRushmeierPiatko1997.bib"
+      ],
+      "gold_titles": [
+        "Visibility Matching Tone Reproduction Operator for High Dynamic Range Scenes"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can I calculate the natural oscillation frequencies of flexible membranes subjected to spatially varying tension using a hybrid series approximation technique?",
+      "gold": [
+        "GormalSinghal1993.bib"
+      ],
+      "gold_titles": [
+        "A Superposition--Rayeigh--Ritz Method for Free Vibration Analysis of Non-uniformly Tensioned Membranes"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What are the fundamental principles and practical methods for removing moisture from various materials?",
+      "gold": [
+        "Talja2005.bib"
+      ],
+      "gold_titles": [
+        "Drying Techniques and Concepts"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does piecewise polynomial discretization handle steady-state boundary value equations?",
+      "gold": [
+        "Ciarlet1978.bib"
+      ],
+      "gold_titles": [
+        "The Finite Element Method for Elliptic Problems"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What visualization methods best convey the unpredictability of marine conditions across multiple variables?",
+      "gold": [
+        "SchmidtEtAl2004.bib"
+      ],
+      "gold_titles": [
+        "Multi-dimensional Visual Representations for Underwater Environmental Uncertainty"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Is the straight, undeflected state of a translating cable on a compliant substrate stable once the transport velocity exceeds the critical threshold?",
+      "gold": [
+        "Parker1999.bib"
+      ],
+      "gold_titles": [
+        "Supercritical speed stability of the trivial equilibrium of an axially-moving string on an elastic foundation"
+      ]
     }
   ]
 }

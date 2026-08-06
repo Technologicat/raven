@@ -109,6 +109,10 @@ degree) leaves information on the table, and only `sum` uses both.
 > the total should be divided by how many matched.* That is `mean`, it was measured, and it is the worst
 > rule tested — worse than ignoring the scores altogether.
 >
+> **This is not a hypothetical naive reader.** The proposal came from `hybridir`'s author, minutes before
+> it was tested, which is the point: it is what someone who understands the system best proposes, because
+> the length worry it responds to is genuine. The correction is wrong anyway, and only measuring said so.
+>
 > **The number of matching chunks is signal, not a nuisance factor to be divided out.** A paper that
 > matches the query in five places is more relevant than one that matches in one, and dividing by the
 > count deletes exactly that. What looks like a normalization is the removal of the evidence.
@@ -279,6 +283,47 @@ two independent engines is better*; `sum` says *a document matching in several i
 better*. Accumulating independent evidence, within a document rather than across engines. That is a reason
 to weight it slightly above its p-value, and it predicts `mean`'s failure exactly: dividing by the number
 of matches discards the independence that the accumulation was exploiting.
+
+#### Where else is there independent evidence to accumulate?
+
+If the principle is the attack, the generative question is what *else* fails independently. Enumerated
+2026-08-06; the first two are the ones already in hand, and the rest are untested.
+
+1. **Across engines** — BM25 and embeddings fail on different queries. *Shipped, as RRF.*
+2. **Within a document, across positions** — several chunks of one document matching. *The `sum` lead.*
+3. ~~**Within a document, across engines at different positions.**~~ **Tested 2026-08-06 — a null.** The
+   idea: RRF fuses at chunk level, so a document found by both arms *in the same chunk* scores exactly
+   like one found by BM25 in the introduction and by the vector arm three pages later, and the second
+   looks like better evidence — two independent engines *and* two independent locations.
+
+   Implemented without a tuning constant as `armsum`: sum a document's chunk scores *within* each arm,
+   rank documents per arm, then RRF the two document rankings. Measured on the fulltext corpus at n=295 it
+   scores 85.8% against the baseline's 85.4%, with **3 discordant questions in 295** (2 gained, 1 lost).
+   The two orderings are very nearly identical, so the hypothesized structure is either absent or already
+   captured by chunk-level fusion.
+
+   Cheap to have eliminated — ten minutes, no new retrieval — which is the argument for keeping this list
+   rather than reasoning about each idea in isolation.
+4. **Across query views, for free.** Embed the same query under both the `qa` and the symmetric role and
+   fuse the two result sets. Two embeddings of one query, failing differently, at no LLM cost and no added
+   latency. Distinct from the refuted multi-query work, which split a message into *fragments* that then
+   outvoted the whole — here every view is the whole query, so the failure mode does not apply.
+5. **Across chunk scales.** Index at, say, 500 and 2000 characters and fuse both. Small chunks find precise
+   facts, large chunks find diffuse topics. The appeal is that it **dissolves the chunk-size sweep rather
+   than winning it**: instead of choosing a size, index at two and let the disagreement be informative.
+   Costs index space, needs no query-time model and no tuning constant.
+6. **Across document representations.** Already built by accident — the same 1268 papers exist as abstracts
+   *and* as fulltext, and an abstract says what a paper is *about* where the fulltext says what it
+   *contains*. Fusing across representations is independent evidence, and it reframes the document-summary
+   idea (§3) as an *independent view* rather than as extra coverage, which is a considerably better
+   argument for building it.
+7. **Across query terms.** How many *distinct* query terms a document matches, as against matching one term
+   strongly. Classic coordination-level matching; BM25's per-term saturation does not capture it.
+
+**And one to rule out, for the reason that makes the principle work.** Corroboration from a document's
+*semantic neighbours* is tempting and should not be done: neighbours are correlated by construction — that
+is what makes them neighbours — so accumulating over them double-counts one piece of evidence rather than
+adding independent pieces. The independence is load-bearing, not decorative.
 
 It also re-ranks the open work in §3, which was ordered by expected gain rather than by this criterion:
 
