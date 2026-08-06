@@ -69,6 +69,12 @@ api.initialize(raven_server_url=client_config.raven_server_url,
 
 # --------------------------------------------------------------------------------
 
+# Chunks per tokenization request. Amortizes the ~57 ms round trip over a batch (see
+# `_prepare_document_for_indexing`) while keeping the per-document progress report updating a few times
+# a second on a large document. At ~10 ms/chunk batched, 64 chunks is roughly 0.6 s per update.
+TOKENIZE_BATCH_SIZE = 64
+
+
 def format_chunk_full_id(document_id: str, chunk_id: str) -> str:
     """Generate an identifier for a chunk of a document, based on the given IDs."""
     return f"doc-{document_id}-chunk-{chunk_id}"
@@ -545,11 +551,27 @@ class HybridIR:
         decides). So an unusual proper noun may or may not survive tokenization, and a keyword search for
         one is correspondingly a little lossy.
         """
-        docs = self.nlp.analyze(text.lower())
-        assert len(docs) == 1
-        doc = docs[0]
-        tokens = [token.lemma_ for token in doc if token.is_alpha and token.text not in self._stopwords]
-        return tokens
+        return self._tokenize_many([text])[0]
+
+    def _tokenize_many(self, texts: List[str]) -> List[List[str]]:
+        """`_tokenize` over several texts, in one call. Returns one token list per input, in order.
+
+        Batched because the analysis is a round trip to raven-server, and at chunk sizes the round trip
+        costs more than the analysis: measured 2026-08-06, ~90 ms end-to-end per chunk against ~25 ms of
+        GPU compute, so roughly 57 ms of each call is HTTP and serialization. Handing spaCy a whole
+        document's chunks at once pays that once instead of once per chunk.
+
+        This mirrors what the embedding step in `_prepare_document_for_indexing` already does — one call
+        per document — and the asymmetry was the reason tokenization dominated indexing while embedding
+        was 3% of it.
+        """
+        if not texts:
+            return []
+        docs = self.nlp.analyze([text.lower() for text in texts])
+        assert len(docs) == len(texts)
+        return [[token.lemma_ for token in doc
+                 if token.is_alpha and token.text not in self._stopwords]
+                for doc in docs]
 
     def _stat(self, path: Union[pathlib.Path, str]) -> Dict:  # size, mtime
         p = pathlib.Path(path) if not isinstance(path, pathlib.Path) else path
@@ -871,15 +893,25 @@ class HybridIR:
         document_chunks = common_utils.chunkify_text(text, chunk_size=self.chunk_size, overlap=self.overlap, extra=0.4)  # -> [{"text": ..., "chunk_id": ..., "offset": ...}, ...]
 
         # Tokenizing each chunk enables keyword search. These are used by the keyword index (bm25s).
-        # NOTE: This is the slow part, by a wide margin — one spaCy roundtrip per chunk, and spaCy's neural
-        # model does the lemmatization. Measured on a 216 kB document (288 chunks): 22.5 s of the 23.2 s
-        # total, at 78 ms per chunk. Hence the per-chunk progress report; nothing else here needs one.
+        #
+        # Sent in batches, because the analysis is a round trip to raven-server and at chunk sizes the
+        # round trip costs more than the analysis — ~57 ms of HTTP and serialization against ~25 ms of
+        # GPU compute, measured 2026-08-06. Batching pays that once per batch instead of once per chunk:
+        # on a 51-chunk document, 3.94 s -> 0.52 s, i.e. 77 ms -> 10 ms per chunk, a 7.5x speedup of what
+        # was previously the dominant cost of indexing by a wide margin (22.5 s of 23.2 s on a 288-chunk
+        # document).
+        #
+        # Batched rather than sent all at once so the progress report keeps moving: this is still the slow
+        # step for a large document, and a single silent call would put a multi-second gap in the display
+        # that reads as a stall. `TOKENIZE_BATCH_SIZE` is the trade — large enough to amortize the round
+        # trip, small enough that the report updates a few times a second.
         logger.info(f"HybridIR._prepare_document_for_indexing: tokenizing document '{document_id}'.")
         tokenized_chunks = []
-        for chunk_num, chunk in enumerate(document_chunks, start=1):
+        for start in range(0, len(document_chunks), TOKENIZE_BATCH_SIZE):
+            batch = document_chunks[start:start + TOKENIZE_BATCH_SIZE]
             if on_progress is not None:
-                on_progress(f"tokenizing {chunk_num} / {len(document_chunks)}")
-            tokenized_chunks.append(self._tokenize(chunk["text"]))
+                on_progress(f"tokenizing {start + len(batch)} / {len(document_chunks)}")
+            tokenized_chunks.extend(self._tokenize_many([chunk["text"] for chunk in batch]))
 
         # Embedding each chunk enables semantic search. These are used by the vector index (chromadb).
         # One batched call for the whole document, and it does not need breaking up for progress: on the same

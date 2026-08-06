@@ -6,6 +6,7 @@ raven-server required), but the first run may be slow if the model is not
 yet cached.
 """
 
+import math
 import textwrap
 import threading
 import types
@@ -396,6 +397,7 @@ def _fake_ir_for_prepare(chunk_size=1000, overlap=250):
     fake.chunk_size = chunk_size
     fake.overlap = overlap
     fake._tokenize = lambda text: text.lower().split()
+    fake._tokenize_many = lambda texts: [text.lower().split() for text in texts]
     fake.embedder = types.SimpleNamespace(encode=lambda texts: _FakeEmbeddings(len(texts)))
     return fake
 
@@ -408,10 +410,14 @@ class _FakeEmbeddings:
         return [[0.0] for _ in range(self.n)]
 
 
-def test_indexing_progress_is_reported_per_chunk():
+def test_indexing_progress_keeps_moving_while_tokenizing():
     # A per-document update was fine when a document was a 1.3 kB abstract. On a 216 kB story it leaves the
-    # indicator unchanged for ~23 s, of which 97% is tokenizing chunk by chunk, and a frozen indicator reads
-    # as a hung job rather than a slow one — the user cannot tell the difference.
+    # indicator unchanged for tens of seconds while tokenizing, and a frozen indicator reads as a hung job
+    # rather than a slow one — the user cannot tell the difference.
+    #
+    # What is pinned is that the report advances *during* tokenization and ends at the chunk count, not the
+    # granularity: tokenization is sent in batches of `TOKENIZE_BATCH_SIZE`, so one report per chunk would
+    # mean one round trip per chunk, which is the cost that batching exists to remove.
     fake = _fake_ir_for_prepare()
     text = "word " * 20000  # ~100k characters, so comfortably many chunks
     seen = []
@@ -419,12 +425,13 @@ def test_indexing_progress_is_reported_per_chunk():
         fake, {"document_id": "big.txt", "text": text}, on_progress=seen.append)
 
     n_chunks = len(prepared["chunks"])
-    assert n_chunks > 10  # guard: if chunking changes so this is one chunk, the test stops testing
+    assert n_chunks > hybridir.TOKENIZE_BATCH_SIZE  # guard: too few chunks and this stops testing anything
     tokenizing = [s for s in seen if s.startswith("tokenizing")]
-    assert len(tokenizing) == n_chunks
-    assert tokenizing[0] == f"tokenizing 1 / {n_chunks}"
+    expected_reports = math.ceil(n_chunks / hybridir.TOKENIZE_BATCH_SIZE)
+    assert len(tokenizing) == expected_reports
+    assert expected_reports > 1  # it must advance, not report once at the end
     assert tokenizing[-1] == f"tokenizing {n_chunks} / {n_chunks}"
-    assert seen[-1] == f"embedding {n_chunks} chunks"  # one report, not per chunk: it is 3% of the work
+    assert seen[-1] == f"embedding {n_chunks} chunks"  # one report: it is 3% of the work
 
 
 def test_preparing_a_document_without_a_progress_callback_still_works():
