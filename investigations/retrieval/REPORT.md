@@ -271,16 +271,34 @@ At the measured ~5000 tokens/s that turns 3.4 s into roughly 7 s per turn, which
 `k=100` figure in §1 — a cost already rejected there as not worth its recall. So the LLM rerank starts at
 a latency this project has *already declined to pay*, before any benefit is demonstrated.
 
-**Two ways out, and both are worth measuring before the full version:**
+**And it is worse than "one extra pass", which retires the obvious mitigation** (Juha, same day —
+correcting the paragraph above, which had proposed it). At concurrency 1 and local-machine VRAM the backend
+holds **one** cached prefix. So the sequence is:
 
-- **Rerank on candidate *previews*, not full chunks.** The pass has to judge relevance, not answer the
-  question, so it does not need the whole text: a document id plus the first hundred characters of each
-  candidate is ~3k tokens rather than ~18k. That drops the extra prefill from ~3.4 s to well under a
-  second and makes the idea viable again. It also matches what a human skimming a result list does.
-- **Reorder by the retrieval score already computed** — best-ranked first and last, weakest in the middle
-  — which costs **no extra pass at all**. If the benefit is attentional rather than judgmental, this
-  captures it for free, and its existence is what makes the LLM version falsifiable: run the free variant
-  first, and the LLM pass has to beat *it*, not the unordered baseline.
+1. the turn begins with the chat-history prefix cached from the previous turn;
+2. the rerank pass is a different prompt, and prefilling it **overwrites the slot**;
+3. the answer pass finds no history cache and prefills *the entire conversation* again.
+
+The cost is therefore not *the rerank pass*; it is *the rerank pass plus the loss of a history cache that
+would otherwise have been free*. On a chat carrying 60k tokens of history, today's design prefills ~18k
+and this becomes 3k + 60k + 18k ≈ 81k — roughly **16 s against 3.4 s**.
+
+**The preview idea does not help**, and that is the instructive part: shrinking the rerank prompt to ~3k
+tokens attacks the smallest term. A 3k-token intervening prompt evicts the slot exactly as thoroughly as an
+18k one, so the dominant cost — re-prefilling the history — is unchanged. The mitigation addressed the
+number that was easiest to see rather than the one that dominates.
+
+It also attacks the injection design head-on. Raven places retrieved context immediately before the user's
+latest message *precisely* so the history prefix stays cacheable; a rerank pass discards that every turn.
+**On a single-slot local backend this looks disqualifying regardless of how good the reranking is**, unless
+the backend can hold several prefixes (more VRAM, or cache offload to system RAM) — which is a deployment
+property, not something the retrieval layer can arrange.
+
+**Which leaves the free variant, and makes it the whole experiment:** reorder by the retrieval score
+already computed — best-ranked first and last, weakest in the middle — costing **no extra pass and no cache
+eviction**. If the benefit is attentional rather than judgmental, this captures it for nothing. Its
+existence is also what makes the LLM version falsifiable: run the free variant first, and any LLM pass then
+has to beat *it* while carrying a 5× latency penalty, not merely beat the unordered baseline.
 
 Measurable with the known-item harness exactly as the cross-encoder was: rerank the `k=50` list with the
 main model and score recall@5 against gold. The free reordering variant needs no LLM at all and can be run
