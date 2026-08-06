@@ -102,11 +102,35 @@ Taken together the three rules say something specific: what helps is **accumulat
 quality and quantity. Quantity alone (`count`) is bad, quality alone (`mean`, and `max` to a lesser
 degree) leaves information on the table, and only `sum` uses both.
 
-**Treat as unconfirmed until the grown arXiv set is scored.** This is structurally the situation that
-produced the retracted `K=10` result this morning: a suggestive p just under 0.1, several related cells
-agreeing, on a question set of about 136. The differences are that a mechanism was named in advance, that
-the corpus where it should *not* work indeed shows nothing, and that the effect is 3.6 points rather than
-under one. None of those is significance.
+> ### Do not normalize the sum by the number of chunks
+>
+> Stated as its own heading because it is the correction a future reader is most likely to propose, and it
+> reads as obviously right: *a document with more chunks has more chances to accumulate score, so surely
+> the total should be divided by how many matched.* That is `mean`, it was measured, and it is the worst
+> rule tested — worse than ignoring the scores altogether.
+>
+> **The number of matching chunks is signal, not a nuisance factor to be divided out.** A paper that
+> matches the query in five places is more relevant than one that matches in one, and dividing by the
+> count deletes exactly that. What looks like a normalization is the removal of the evidence.
+>
+> The length worry that motivates the proposal is real and was checked separately (below); it is simply
+> not answered by dividing. `sum` is *less* length-biased than the shipped rule, so there is nothing
+> needing correction.
+
+**Treat as promising rather than established.** This is structurally the situation that produced the
+retracted `K=10` result this morning — a p just under 0.1 with several related cells agreeing — and the
+resemblance is worth keeping in view. What differs, and none of it is significance:
+
+- the mechanism was named in the script's docstring **before** the run;
+- the corpus where it should *not* work (abstracts) is a clean null, by control rather than by argument;
+- it **survived a doubling of the sample**, which is precisely what `K=10` did not;
+- the length confound was measured and acquits it;
+- the two neighbouring rules fail, in opposite directions, for reasons the mechanism predicts.
+
+Five independent lines agreeing is a different kind of evidence from one p-value, and worth more than the
+p-value suggests — but it is still one corpus shape. The honest gap is that no *second* many-chunk corpus
+exists to replicate on: banichuk is single-chunk (so it can only serve as another null control) and fiction
+is too small for document-level discrimination.
 
 **The length confound was checked rather than argued away, and it acquits `sum`.** The worry is that
 summing rewards documents with more chunks, i.e. longer ones, so the gain could be a length prior wearing
