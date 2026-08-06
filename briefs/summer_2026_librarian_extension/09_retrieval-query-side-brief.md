@@ -443,6 +443,38 @@ Two design points that do need deciding:
   known-item recall is a floor on precision. Same limitation, same shape, and worth stating in the set's
   own documentation rather than rediscovering.
 
+###### Adaptive `k` is the affordable approximation to stratification, and it should be built saying so
+
+Juha's point, 2026-08-06, recorded here rather than left to be met after the feature ships. **On a large
+corpus, more `k` is a bigger sample of the relevant set, not coverage of it.** Hydrogen holds ~36000
+chunks, so even `k=100` is under 0.3% of the collection; a genuinely wide question — *"what component
+models go into a hydrogen value chain, assuming photovoltaics?"* — has a relevant set that no
+conversational `k` enumerates. Raising `k` from 20 to 50 improves the odds that the sample spans the
+answer. It does not make the sample complete, and nothing about the mechanism can.
+
+What a wide question actually wants is a **stratified** sample: a few results from each distinct cluster of
+relevant material, rather than the top `k` by score, which will happily return fifty near-duplicates of the
+same sub-topic and call it breadth. That needs cluster structure over the corpus, which Raven does not have
+on the Librarian side yet — it is what the Visualizer pipeline builds, and reaching it from here is
+downstream of the DB unification (brief 13). So stratification is the right answer and is not available.
+
+Two things follow, and the second is the one that gets forgotten:
+
+- **Adaptive `k` is worth building anyway.** It is a real improvement over a fixed budget, it needs no new
+  infrastructure, and its trigger (a flat score distribution) is a signal we already compute. Spending
+  fewer results on a question with one right answer and more on a question with many is the correct
+  direction regardless of what the ceiling is.
+- **Its ceiling is a sampling limit, not a tuning failure.** When a wide question still comes back with a
+  partial answer after adaptive `k` has done its work, that is the mechanism at its design limit, and the
+  next move is stratification — not a larger `k`, and not a rewritten trigger. Writing this down now is
+  what stops that being diagnosed as a regression later.
+
+The budget framing sharpens the same point. Because narrow questions are the common case and need *fewer*
+results than the fixed `k=50` gives them, adaptive `k` is a **reallocation** rather than an increase: it
+can spend more on wide questions at no average latency cost. That half is measurable with the sets that
+already exist, since every question in all four is narrow by construction — what shrinking `k` costs on a
+narrow question is answerable today, and only the wide half needs the synthesis set above.
+
 ##### And the recall@k curve is only meaningful where k is small relative to the corpus
 
 Juha's point, and it bounds the experiment above: recall rises with `k` until `k` reaches the corpus size,
