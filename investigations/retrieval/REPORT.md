@@ -61,16 +61,48 @@ p=1.000. See §5.
 
 ## 3. What is open, in the order worth attacking
 
-**Score-based fusion instead of rank-based.** *Untried, and the most direct attack on the founding
-complaint.* RRF fuses positions and discards scores, which is precisely why "the hybrid rank does not
-track how good a result is". A convex combination of normalized scores (z-scored BM25 with cosine) needs
-no re-index and no new model, and would produce the calibrated confidence number §2's threshold work
-wanted and never obtained. The whole sprint tuned parameters *inside* RRF without questioning it.
+**Summing chunk scores instead of taking the best one — the one positive lead.** *Measured 2026-08-06,
+promising and not established.* A document currently ranks where its single best chunk ranked. Summing
+normalized chunk scores instead, on the **fulltext** corpus:
 
-**Document-level score aggregation.** A document currently ranks where its single best chunk ranked.
-Sum-of-chunk-scores and count-of-matching-chunks are untested, and they differ most on long documents —
-where a paper matching in five places is plausibly more relevant than one matching once, and the present
-rule cannot tell them apart. Cheap; the fulltext corpus exists to test it.
+| condition | @20 | @50 | gained | lost | p |
+|---|---|---|---|---|---|
+| RRF, best-chunk *(baseline)* | 85.4% | 93.9% | — | — | — |
+| min-max scores + **sum**, w=0.5 | **89.0%** | 95.1% | 15 | 6 | **0.078** |
+| min-max scores + sum, w=0.3 | 88.6% | 94.7% | 14 | 6 | 0.115 |
+| min-max scores + sum, w=0.7 | 89.0% | 93.5% | 16 | 7 | 0.093 |
+
++3.6 points at @20, with all three weights leaning the same way at roughly 2.4:1. The mechanism is
+plausible and was **predicted before the run**: a paper matching the query in five places is more likely
+to be the source than one matching once, and the best-chunk rule cannot see the difference. The same
+conditions are a clean null on hydrogen (11 gained, 10 lost) — as they must be, since an abstract is one
+to three chunks and the two rules nearly coincide there. A prediction that could have failed and did not.
+
+**Treat as unconfirmed until the grown arXiv set is scored.** This is structurally the situation that
+produced the retracted `K=10` result this morning: a suggestive p just under 0.1, several related cells
+agreeing, on a question set of about 136. The differences are that a mechanism was named in advance, that
+the corpus where it should *not* work indeed shows nothing, and that the effect is 3.6 points rather than
+under one. None of those is significance.
+
+One caveat to check rather than assume: `sum` rewards documents with more chunks, i.e. longer ones. Gold
+documents here are sampled uniformly, so there is no obvious route for that to inflate the result — but
+the check is to score by document length, not to argue about it.
+
+**Score-based fusion instead of rank-based — no gain in ranking quality.** *Measured 2026-08-06.* This
+was ranked as the most promising untried idea, on the reasoning that RRF fuses positions and discards
+scores, which is exactly why "the hybrid rank does not track how good a result is". `CombSUM` over
+per-query-normalized scores measures **equal** to RRF: the best cell reaches 74.4% against 73.0% on
+hydrogen, paired 13 gained against 9 lost, p = 0.52, and the picture repeats on fulltext. Both min-max and
+z-score normalization, at three weights each.
+
+*What this does not close:* score fusion produces a fused **value** where RRF produces a reciprocal-rank
+artifact, so the argument from *calibrated confidence* survives its failure to improve *ranking*. Those
+are separate consumers and only the first was measured. If a confidence signal is wanted later, this is
+the cheaper foundation even at equal ranking quality.
+
+**Counting matching chunks — dead.** Ranking a document by how many chunks matched, ignoring how well,
+costs 37 points on hydrogen (8 gained against 116 lost, p < 0.001). Neutral on fulltext, which is a
+corpus-shape interaction rather than a rescue.
 
 **A stronger embedder.** Every number here comes from `multi-qa-mpnet-base-cos-v1`. The Nomic-embed v1.5
 migration is already planned. Reranking was the "better model" attack on *ordering* and lost; a better
@@ -83,13 +115,28 @@ embedding. It attacks the register mismatch the hand-written probes documented �
 against dramatized prose — which this investigation independently concluded needs "something that has read
 the corpus".
 
+> **Score the hypothetical answer with a *symmetric* embedding role, not the `qa` role** (Juha,
+> 2026-08-06). The `qa` role is trained for the asymmetry it names — a short question mapped near a long
+> answer — and HyDE's entire move is to make the query passage-like. Embedding a synthetic passage as
+> though it were a question fights the technique with the model. Raven's server already exposes
+> embedding roles, so this is a parameter rather than a second model. Worth measuring both ways, since
+> the prediction is cheap to falsify.
+
 **Document summaries as extra indexed chunks.** Document-level questions ("which of these is set offline
 in America") are a structural failure of chunk RAG: no chunk states the property. One LLM-written summary
-per document, indexed alongside its chunks, addresses it directly.
+per document, indexed alongside its chunks, addresses it directly. **This is wanted anyway** for VISION.md
+stage 3 (the LLM as first-pass recommender and reviewer), so the retrieval benefit rides on work that has
+its own justification — which changes its cost, not just its value.
 
 **Chunk size and overlap.** Never varied once, in any experiment. The corpus comparison shows chunk size
 interacts strongly with document shape, so this may be the largest single-parameter effect available. Costs
 a re-index per setting.
+
+> **Ship them as config options with a loud warning, and pick a defensible default** (Juha, 2026-08-06).
+> These cannot be changed after a database is built — the stored chunks *are* the setting — so the comment
+> has to say so where someone would edit it. Exposing them is not a hard sell in this class of tool;
+> Hindsight and comparable IR systems ship the same knobs. The default does not need to be optimal, only
+> good enough across the main use cases, which is what the corpus matrix here is for.
 
 **Reference-list stripping for scientific PDFs.** A bibliography is several hundred other papers' titles
 with nothing marking it as different from the body, so a query matching paper X also matches every paper

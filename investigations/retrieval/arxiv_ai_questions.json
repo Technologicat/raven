@@ -1877,6 +1877,706 @@
       "gold_titles": [
         "Self-Discover: Large Language Models Self-Compose Reasoning Structures"
       ]
+    },
+    {
+      "kind": "focused",
+      "question": "What architectural and optimization changes allow stable, efficient training of highly sparse neural networks at extreme scales using reduced numerical precision?",
+      "gold": [
+        "2101.03961v3.bib"
+      ],
+      "gold_titles": [
+        "Switch Transformers: Scaling to Trillion Parameter Models with Simple and Efficient Sparsity"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can large language models be aligned with human preferences by directly optimizing against preference rankings instead of relying on reinforcement learning and a separately trained scoring network?",
+      "gold": [
+        "2305.18290v3.bib"
+      ],
+      "gold_titles": [
+        "Direct Preference Optimization: Your Language Model is Secretly a Reward Model"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can input-output pairs for inference be selected for a large language model by assuming it contains hidden task representations and using a smaller model to find these pairs?",
+      "gold": [
+        "2301.11916v4.bib"
+      ],
+      "gold_titles": [
+        "Large Language Models Are Latent Variable Models: Explaining and Finding Good Demonstrations for In-Context Learning"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What approach utilizes keyword-focused prompts and reciprocal dialogue between specialized models to bypass content restrictions in both transparent and opaque language systems?",
+      "gold": [
+        "2501.18628v1.bib"
+      ],
+      "gold_titles": [
+        "Indiana Jones: There Are Always Some Useful Ancient Relics"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can human raters iteratively refine machine-generated assessment criteria to match human judgment when those standards shift based on the actual model outputs being reviewed?",
+      "gold": [
+        "2404.12272v1.bib"
+      ],
+      "gold_titles": [
+        "Who Validates the Validators? Aligning LLM-Assisted Evaluation of LLM Outputs with Human Preferences"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can annotations be removed from images when the training examples are unaligned and the annotation structure is not known in advance?",
+      "gold": [
+        "1511.05897v3.bib"
+      ],
+      "gold_titles": [
+        "Censoring Representations with an Adversary"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can a training procedure that addresses hallucination risks in both supervised fine-tuning and reinforcement learning using direct preference optimization improve the factual correctness of large language models?",
+      "gold": [
+        "2405.01525v1.bib"
+      ],
+      "gold_titles": [
+        "FLAME: Factuality-Aware Alignment for Large Language Models"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can one identify and modify the weight parameters in the intermediate layers of a language model to update specific facts while ensuring the model retains its broader capabilities?",
+      "gold": [
+        "2202.05262v5.bib"
+      ],
+      "gold_titles": [
+        "Locating and Editing Factual Associations in GPT"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What evaluation scheme assesses machine intelligence by testing performance across ten distinct mental areas relative to the standard of a comprehensively capable adult?",
+      "gold": [
+        "2510.18212v3.bib"
+      ],
+      "gold_titles": [
+        "A Definition of AGI"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What training and optimization strategies allow stable scaling of trillion-parameter mixture-of-experts architectures while achieving leading autonomous software and planning performance without prolonged reasoning?",
+      "gold": [
+        "2507.20534v1.bib"
+      ],
+      "gold_titles": [
+        "Kimi K2: Open Agentic Intelligence"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does the capacity of multi-agent language models to coordinate via negotiated protocols and strategic planning deteriorate when the network size expands?",
+      "gold": [
+        "2507.08616v1.bib"
+      ],
+      "gold_titles": [
+        "AgentsNet: Coordination and Collaborative Reasoning in Multi-Agent LLMs"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What single concept explains why deep learning models frequently succeed on controlled tests yet fail in real-world deployments, and what evaluation practices can researchers adopt to prevent systems from exploiting spurious correlations?",
+      "gold": [
+        "2004.07780v5.bib"
+      ],
+      "gold_titles": [
+        "Shortcut Learning in Deep Neural Networks"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Can an automated conversational monitor built from existing large language models successfully identify unhealthy user-assistant attachment trends in early dialogues without generating false alarms?",
+      "gold": [
+        "2508.15748v5.bib"
+      ],
+      "gold_titles": [
+        "AI Chaperones Are (Really) All You Need to Prevent Parasocial Relationships with Chatbots"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can continuous monitoring metrics break down the training process of small transformers into distinct phases that explain delayed generalization?",
+      "gold": [
+        "2301.05217v3.bib"
+      ],
+      "gold_titles": [
+        "Progress measures for grokking via mechanistic interpretability"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How effectively can large language models simulate diverse demographic survey responses when provided with specific socio-cultural background information?",
+      "gold": [
+        "2209.06899v1.bib"
+      ],
+      "gold_titles": [
+        "Out of One, Many: Using Language Models to Simulate Human Samples"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can monitoring prediction certainty during inference eliminate wasteful self-interruptions in reasoning models without requiring parameter updates?",
+      "gold": [
+        "2508.05337v1.bib"
+      ],
+      "gold_titles": [
+        "Efficient Reasoning for Large Reasoning Language Models via Certainty-Guided Reflection Suppression"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can a retrieval-augmented language model be trained to maintain accurate confidence estimates when exposed to misleading or mixed-quality retrieved documents without relying on a more powerful teacher?",
+      "gold": [
+        "2601.11004v1.bib"
+      ],
+      "gold_titles": [
+        "NAACL: Noise-AwAre Verbal Confidence Calibration for LLMs in RAG Systems"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can text-generating AI systems effectively link unstructured digital footprints across separate databases to accurately uncover pseudonymous identities?",
+      "gold": [
+        "2602.16800v2.bib"
+      ],
+      "gold_titles": [
+        "Large-scale online deanonymization with LLMs"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does the depth of a model's foundational knowledge affect the data efficiency of fine-tuning for difficult logical problem solving?",
+      "gold": [
+        "2502.03387v1.bib"
+      ],
+      "gold_titles": [
+        "LIMO: Less is More for Reasoning"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What are the key architectural approaches designed to reduce the computational cost of large language models, and how do techniques involving sparse parameter activation and sub-quadratic sequence processing improve scalability?",
+      "gold": [
+        "2508.09834v1.bib"
+      ],
+      "gold_titles": [
+        "Speed Always Wins: A Survey on Efficient Architectures for Large Language Models"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "When trained from scratch to forecast valid moves in a rule-based board game, do autoregressive networks spontaneously develop a manipulatable internal model of the underlying game configuration?",
+      "gold": [
+        "2210.13382v5.bib"
+      ],
+      "gold_titles": [
+        "Emergent World Representations: Exploring a Sequence Model Trained on a Synthetic Task"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can vision-language-action models encode extended manipulation trajectories into stable high-level representations while dynamically synchronizing task goals with ongoing execution to boost cross-domain robustness and reduce demonstration requirements?",
+      "gold": [
+        "2605.22671v2.bib"
+      ],
+      "gold_titles": [
+        "From Abstraction to Instantiation: Learning Behavioral Representation for Vision-Language-Action Model"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Is modifying a single layer sufficient to recover the performance gains achieved by updating the entire model during reinforcement learning?",
+      "gold": [
+        "2607.01232v2.bib"
+      ],
+      "gold_titles": [
+        "Is One Layer Enough? Training A Single Transformer Layer Can Match Full-Parameter RL Training"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How accurately can base language models retrieve structured facts through sentence completion tasks without any task-specific adaptation?",
+      "gold": [
+        "1909.01066v2.bib"
+      ],
+      "gold_titles": [
+        "Language Models as Knowledge Bases?"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does strategically misspelling contextually critical words in user queries degrade the logical problem-solving accuracy of large language models?",
+      "gold": [
+        "2411.05345v1.bib"
+      ],
+      "gold_titles": [
+        "Reasoning Robustness of LLMs to Adversarial Typographical Errors"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Does a ReLU network's global symmetry with respect to a group imply that every hidden layer independently shares that symmetry?",
+      "gold": [
+        "2305.17017v2.bib"
+      ],
+      "gold_titles": [
+        "Investigating how ReLU-networks encode symmetries"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How are shifting environmental dynamics in sequential decision-making mathematically classified, and what evaluation standards exist for measuring continuous policy adaptation?",
+      "gold": [
+        "2012.13490v2.bib"
+      ],
+      "gold_titles": [
+        "Towards Continual Reinforcement Learning: A Review and Perspectives"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Can adding natural language reasoning traces alongside position-tracking markers to the output enable large language models to predict sequences beyond their training length?",
+      "gold": [
+        "2208.11445v3.bib"
+      ],
+      "gold_titles": [
+        "Induced Natural Language Rationales and Interleaved Markup Tokens Enable Extrapolation in Large Language Models"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How effective is correctness-guided policy optimization with a single demonstration at enhancing the quantitative reasoning capabilities of language models?",
+      "gold": [
+        "2504.20571v2.bib"
+      ],
+      "gold_titles": [
+        "Reinforcement Learning for Reasoning in Large Language Models with One Training Example"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What architectural modifications and training constraints improve both visual fidelity and latent space invertibility in unconditional generative models?",
+      "gold": [
+        "1912.04958v2.bib"
+      ],
+      "gold_titles": [
+        "Analyzing and Improving the Image Quality of StyleGAN"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What methods exist to alleviate the storage burden of key-value buffers in large language models, and what distinctions arise between approaches utilized during training compared to those used during inference?",
+      "gold": [
+        "2407.18003v2.bib"
+      ],
+      "gold_titles": [
+        "Keep the Cost Down: A Review on Methods to Optimize LLM' s KV-Cache Consumption"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Do standard evaluation suites for responsible AI actually track genuine risk reduction, or do they merely reflect gains in general intelligence and computational scale?",
+      "gold": [
+        "2407.21792v3.bib"
+      ],
+      "gold_titles": [
+        "Safetywashing: Do AI Safety Benchmarks Actually Measure Safety Progress?"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What structured framework identifies the primary technical barriers to securing increasingly capable learning systems in high-risk environments, and what targeted research strategies are proposed to address each category?",
+      "gold": [
+        "2109.13916v5.bib"
+      ],
+      "gold_titles": [
+        "Unsolved Problems in ML Safety"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can generative models that learn to reverse a noise corruption process be shifted to compressed representations to enable efficient high-resolution image creation with flexible conditioning?",
+      "gold": [
+        "2112.10752v2.bib"
+      ],
+      "gold_titles": [
+        "High-Resolution Image Synthesis with Latent Diffusion Models"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can language models systematically reduce factual inaccuracies, programming errors, and harmful text by iteratively querying external utilities to critique and revise their own drafts?",
+      "gold": [
+        "2305.11738v4.bib"
+      ],
+      "gold_titles": [
+        "CRITIC: Large Language Models Can Self-Correct with Tool-Interactive Critiquing"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "As language models grow larger, do their preferences exhibit increasing levels of internal consistency?",
+      "gold": [
+        "2502.08640v2.bib"
+      ],
+      "gold_titles": [
+        "Utility Engineering: Analyzing and Controlling Emergent Value Systems in AIs"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does human performance on subsequent word forecasting compare to pretrained language models?",
+      "gold": [
+        "2212.11281v2.bib"
+      ],
+      "gold_titles": [
+        "Language models are better than humans at next-token prediction"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can implicit structural patterns captured during pretraining be used to steer the stylistic and topical output of a billion-parameter transformer?",
+      "gold": [
+        "1909.05858v2.bib"
+      ],
+      "gold_titles": [
+        "CTRL: A Conditional Transformer Language Model for Controllable Generation"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Does incorporating demonstration examples from unrelated language pairs improve translation quality for low-resource languages more than using examples from pairs that share the target language?",
+      "gold": [
+        "2304.04675v4.bib"
+      ],
+      "gold_titles": [
+        "Multilingual Machine Translation with Large Language Models: Empirical Results and Analysis"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Which algorithmic modifications to the optimization constraint and data selection process enable stable, reproducible reinforcement learning for complex reasoning at scale?",
+      "gold": [
+        "2503.14476v2.bib"
+      ],
+      "gold_titles": [
+        "DAPO: An Open-Source LLM Reinforcement Learning System at Scale"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does combining step-by-step reasoning with a structured output template improve the ability of large language models to match human quality judgments for automatically generated text?",
+      "gold": [
+        "2303.16634v3.bib"
+      ],
+      "gold_titles": [
+        "G-Eval: NLG Evaluation using GPT-4 with Better Human Alignment"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can a fixed decision rule for feedback-dependent sequential tasks be trained by reducing the problem to an online optimization setting with bounded cumulative loss?",
+      "gold": [
+        "1011.0686v3.bib"
+      ],
+      "gold_titles": [
+        "A Reduction of Imitation Learning and Structured Prediction to No-Regret Online Learning"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does the optimization of attention weights uncover the underlying causal order of a sequence, and what ensures that the learning process focuses on the most relevant dependencies?",
+      "gold": [
+        "2402.14735v2.bib"
+      ],
+      "gold_titles": [
+        "How Transformers Learn Causal Structure with Gradient Descent"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does preserving selected snapshots of internal representations during sequence processing enable recurrent networks to bridge the performance gap with attention-based architectures on tasks requiring extensive context retrieval?",
+      "gold": [
+        "2602.24281v1.bib"
+      ],
+      "gold_titles": [
+        "Memory Caching: RNNs with Growing Memory"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does forcing most transformer weights to zero affect the identification of circuit components that represent semantic concepts?",
+      "gold": [
+        "2511.13653v1.bib"
+      ],
+      "gold_titles": [
+        "Weight-sparse transformers have interpretable circuits"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can training algorithms be designed to limit a model's capacity to be modified for dangerous applications while preserving its performance on intended functions?",
+      "gold": [
+        "2211.14946v2.bib"
+      ],
+      "gold_titles": [
+        "Self-Destructing Models: Increasing the Costs of Harmful Dual Uses of Foundation Models"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does conversational collaboration with a flawed language model affect human accuracy on specialist-level questions compared to working alone or relying on direct model outputs?",
+      "gold": [
+        "2211.03540v2.bib"
+      ],
+      "gold_titles": [
+        "Measuring Progress on Scalable Oversight for Large Language Models"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Can large language models improve their safety alignment by analyzing their own incorrect outputs to learn error avoidance, rather than depending on perfectly curated training examples or external supervision?",
+      "gold": [
+        "2310.10477v6.bib"
+      ],
+      "gold_titles": [
+        "Gaining Wisdom from Setbacks: Aligning Large Language Models via Mistake Analysis"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does omitting stochastic neuron deactivation during single-pass pretraining influence task accuracy and post-training editability for masked and autoregressive language models?",
+      "gold": [
+        "2505.24788v1.bib"
+      ],
+      "gold_titles": [
+        "Drop Dropout on Single-Epoch Language Model Pretraining"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Can analyzing the specific requirements of individual problems yield more accurate forecasts of a language model's success on unfamiliar challenges than approaches based on vector representations or fine-tuning?",
+      "gold": [
+        "2503.06378v2.bib"
+      ],
+      "gold_titles": [
+        "General Scales Unlock AI Evaluation with Explanatory and Predictive Power"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What comparative strengths and weaknesses do recurrent, convolutional, and attention-based sequence models display when evaluated using a multi-criteria framework for combinatorial reasoning?",
+      "gold": [
+        "1908.08351v2.bib"
+      ],
+      "gold_titles": [
+        "Compositionality decomposed: how do neural networks generalise?"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What approach allows agents to evolve their own memory structures via meta-learning for effective long-term adaptation?",
+      "gold": [
+        "2602.07755v1.bib"
+      ],
+      "gold_titles": [
+        "Learning to Continually Learn via Meta-learning Agentic Memory Designs"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How do contemporary AI coding agents architecturally reconcile user oversight, security enforcement, and modular extensibility, and what implementation trade-offs distinguish different deployment models?",
+      "gold": [
+        "2604.14228v2.bib"
+      ],
+      "gold_titles": [
+        "Dive into Claude Code: The Design Space of Today's and Future AI Agent Systems"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Is the distinction between true and false statements represented as a linear direction in the internal states of a language model?",
+      "gold": [
+        "2310.06824v2.bib"
+      ],
+      "gold_titles": [
+        "The Geometry of Truth: Emergent Linear Structure in Large Language Model Representations of True/False Datasets"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What pre-training approach can remove the step-like decline in loss and reduce training time by increasing the representation richness in the final hidden layer?",
+      "gold": [
+        "2412.05144v3.bib"
+      ],
+      "gold_titles": [
+        "$ε$-rank and the Staircase Phenomenon: New Insights into Neural Network Training Dynamics"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What relationship exists between the overlap of internal coding structures in biological and artificial agents and their behavioral similarity, and how does a shared conceptual model enable cognitive science, neuroscience, and machine learning researchers to consolidate findings and eliminate redundancy?",
+      "gold": [
+        "2310.13018v3.bib"
+      ],
+      "gold_titles": [
+        "Getting aligned on representational alignment"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does repeating a small fraction of training data cause a temporary increase in error during training and damage the internal mechanisms that support generalization?",
+      "gold": [
+        "2205.10487v1.bib"
+      ],
+      "gold_titles": [
+        "Scaling Laws and Interpretability of Learning from Repeated Data"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Can simple strategies that promote careful analysis improve resistance to adversarial requests disguised using numerical obfuscation?",
+      "gold": [
+        "2411.17075v5.bib"
+      ],
+      "gold_titles": [
+        "Don't Command, Cultivate: An Exploratory Study of System-2 Alignment"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can embeddings from different training runs be aligned for transfer or comparison by measuring their similarity to a shared set of reference points without additional training?",
+      "gold": [
+        "2209.15430v2.bib"
+      ],
+      "gold_titles": [
+        "Relative representations enable zero-shot latent space communication"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How effectively can neural models reverse AI-generated rewrites to reconstruct original passages, and does the resulting text retain sufficient stylistic features to improve automated plagiarism and authorship detection systems?",
+      "gold": [
+        "2410.21637v1.bib"
+      ],
+      "gold_titles": [
+        "Are Paraphrases Generated by Large Language Models Invertible?"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does expanding a dense multimodal checkpoint by incorporating a shared feed-forward component and numerous experts constrained to ternary values affect memory consumption and performance relative to full-precision sparse models?",
+      "gold": [
+        "2506.14435v1.bib"
+      ],
+      "gold_titles": [
+        "MoTE: Mixture of Ternary Experts for Memory-efficient Large Multimodal Models"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Does requiring multiple model copies to negotiate a shared solution over several iterations reduce error rates in quantitative and game-theoretic reasoning tasks?",
+      "gold": [
+        "2305.14325v1.bib"
+      ],
+      "gold_titles": [
+        "Improving Factuality and Reasoning in Language Models through Multiagent Debate"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Does the removal of unwanted features stem from the interference of the exclusionary and affirmative guidance vectors inside the model's hidden representations?",
+      "gold": [
+        "2406.02965v1.bib"
+      ],
+      "gold_titles": [
+        "Understanding the Impact of Negative Prompts: When and How Do They Take Effect?"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Can reinforcement learning improve mathematical reasoning even when the feedback provides no useful information about the correct answer, and is this effect consistent across different model families?",
+      "gold": [
+        "2506.10947v1.bib"
+      ],
+      "gold_titles": [
+        "Spurious Rewards: Rethinking Training Signals in RLVR"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Does modifying the neural network architecture affect the rate at which prediction error declines as the volume of training data increases?",
+      "gold": [
+        "1712.00409v1.bib"
+      ],
+      "gold_titles": [
+        "Deep Learning Scaling is Predictable, Empirically"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What is the minimum computational budget required to reverse safety refusals in large language models using lightweight fine-tuning without degrading general task performance?",
+      "gold": [
+        "2310.20624v2.bib"
+      ],
+      "gold_titles": [
+        "LoRA Fine-tuning Efficiently Undoes Safety Training in Llama 2-Chat 70B"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can training memory be halved for large neural networks by using lower precision for activations and gradients while maintaining full precision for weight updates and adjusting the loss scale?",
+      "gold": [
+        "1710.03740v3.bib"
+      ],
+      "gold_titles": [
+        "Mixed Precision Training"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Is MAML's effectiveness primarily due to the utility of representations in the initialization or the speed of adaptation during task-specific fine-tuning?",
+      "gold": [
+        "1909.09157v2.bib"
+      ],
+      "gold_titles": [
+        "Rapid Learning or Feature Reuse? Towards Understanding the Effectiveness of MAML"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Do language models rely on coherent logical argumentation or statistical correlations when addressing advanced mathematical contest problems?",
+      "gold": [
+        "2504.01995v2.bib"
+      ],
+      "gold_titles": [
+        "Brains vs. Bytes: Evaluating LLM Proficiency in Olympiad Mathematics"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can one perform variational inference for mixture-of-experts models without relying on gradient calculations?",
+      "gold": [
+        "2408.16429v2.bib"
+      ],
+      "gold_titles": [
+        "Gradient-free variational learning with conditional mixture networks"
+      ]
     }
   ]
 }
