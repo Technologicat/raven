@@ -127,15 +127,33 @@ PDFs, which `raven-arxiv2id` ignores). Matching them against the pinned set:
 
 | | count |
 |---|---|
-| arXiv identifiers found on disk | 1275 |
+| arXiv identifiers found on disk | 1319 |
 | identifiers in the `.bib` set | 1268 |
 | **papers present on disk, either version** | **1268 — none missing** |
-| exact matches including version | 1025 |
-| **pinned version superseded on disk** | **243** |
+| exact matches including version | 1098 |
+| **pinned version superseded on disk** | **170** |
 
 So every paper is there, and the entire shortfall is newer versions having landed since the `.bib` was
-generated. Selecting by newest would therefore have changed 243 document IDs — breaking the gold labels for
+generated. Selecting by newest would therefore have changed 170 document IDs — breaking the gold labels for
 those questions, which key on the filename — and it would have done so silently.
+
+**These counts are the corrected ones; the first pass reported 1275 / 1025 / 243.** Both errors were in
+the same direction — undercounting what was already on disk — and neither would have announced itself,
+so they are worth naming:
+
+- **The stash has subdirectories.** `materiaali2`, `temp`, `qualitative_analysis` and `00_stuff` hold
+  papers too, and a top-level-only scan missed them. Five pinned papers came back as absent from disk
+  *entirely* — which reads as "arXiv withdrew these", a conclusion about the world, when the truth was a
+  missing `rglob`. Any count that contradicts an earlier "none missing" deserves this suspicion first.
+- **An unversioned filename means v1 here.** 73 papers are on disk as `1503.02531.pdf` with no suffix,
+  and the first pass read that as *unknown* version and queued them for re-download. It is not unknown:
+  those files predate `raven-arxiv-download` and carry the name arXiv suggested at save time, where an
+  absent suffix means v1. This is provenance, knowable only from how the collection was built — no
+  amount of care with the filenames would have recovered it, which is why the check is to ask rather
+  than to reason harder.
+
+170 = 243 − 73, and the subdirectory fix accounts for the rest. The two corrections are independent and
+compose exactly, which is the arithmetic that makes them credible rather than a second guess.
 
 **The decision this forces**, because it cannot be dodged: the fulltext and abstract corpora must hold the
 *same* document set for the comparison to be controlled, and that matters more here than it would have
