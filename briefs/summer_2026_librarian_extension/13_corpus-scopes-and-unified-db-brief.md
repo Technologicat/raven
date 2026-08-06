@@ -193,7 +193,11 @@ when it runs. Everything in this section is [P] and wants arguing with.
   is mode 2 in the corpus-interrogation sketch (a corpus the reader already knows), "which add-on is which" is
   a known-item retrieval task, and it is **out-of-domain in three ways the current eval set cannot test** —
   the stopword list is tuned for scientific text, `format_entry_for_keyword_extraction` assumes bibliographic
-  fields, and the MiniLM reranker is MS MARCO-trained.
+  fields, and the embedding model is trained on question-answer pairs rather than narrative prose. (The
+  third reason was originally "the MiniLM reranker is MS MARCO-trained"; there is no reranker — it was
+  measured and rejected on 2026-08-06, see `investigations/retrieval/REPORT.md` §2. The out-of-domain
+  argument survives the substitution, and in fact this corpus already demonstrated it: on fiction,
+  retrieval fails exactly when the query describes what the prose *dramatizes* rather than states.)
 - The **axially-moving-materials bibliography** is the in-domain counterpart, and brief 11 records its
   measured shape and what kind of verdict it can give. Between them they cover in-domain and out-of-domain.
 

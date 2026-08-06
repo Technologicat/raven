@@ -17,8 +17,9 @@ individual items carry a "Researchers' Night" note where they feed it. Working b
 1. **Demo correctness** — the defects a live audience would *see*. The temporary-context-inject package (six
    linked items in `TODO_DEFERRED.md`, listed under its cluster index), the Markdown renderer defects, the
    remaining crash/race items. Not polish: this is whether the demo works.
-2. **Demo impressiveness** — `crt` and `atmospheric_dust` (both briefed), the avatar branch-switch glitch, RAG
-   reranking for better answers on stage, citation surfacing, colorblind-safe signalling, lorebook if it fits.
+2. **Demo impressiveness** — `crt` and `atmospheric_dust` (both briefed), the avatar branch-switch glitch,
+   ~~RAG reranking for better answers on stage~~ (measured and rejected, 2026-08-06 — the shipped
+   improvement is `k=50` instead), citation surfacing, colorblind-safe signalling, lorebook if it fits.
 ### The actual list, as of 2026-07-28 (60 days out)
 
 Phases 1 and 2 above are the framing; this is the concrete list they resolve to after today's work. Kept
@@ -58,12 +59,17 @@ measures 0.00 GiB today only because its filter chain is empty; these go into ex
 - *Avatar stutter* — deprioritized; a warm-up handles it without knowing the cause.
 - *Chat view drops a character* — one sighting, no recurrence; an open report, not a known defect, and
   nothing to test a fix against.
-- *RAG reranking* — still quality work, not correctness. But the **query-side levers**
-  (`briefs/summer_2026_librarian_extension/09`) are no longer in this category: lever 1 and the confidence
-  signal are what the grounding marker needs to tell "matches arrived" from "matches were any good", and
-  without them it stays silent against a real corpus. That makes them a prerequisite for a phase-1 feature
-  that has already shipped, so they move onto the demo path. The alternative route, inline citations, does
-  not go through brief 09 at all and should be weighed against it rather than assumed to lose.
+- *RAG reranking* — **now off the list entirely: measured and rejected** (2026-08-06, see the struck item
+  below and `investigations/retrieval/REPORT.md` §2). It was parked here as "quality work, not
+  correctness"; it turns out not to be quality work either.
+  - The **query-side levers** (`briefs/summer_2026_librarian_extension/09`) were argued onto the demo path
+    on the reasoning that lever 1's confidence signal is what the grounding marker needs to tell "matches
+    arrived" from "matches were any good". **That argument no longer holds as stated.** The signal works
+    for the coarse case only — "the conversation left the corpus", AUROC ≈ 1.0 — and no threshold on it
+    travels across corpora, so it cannot grade match quality. What ships from brief 09 is `k=50` and a
+    query-time knob, neither of which needs the marker.
+  - So the alternative route, **inline citations**, is no longer competing against a live plan. It should
+    be weighed on its own merits, which is a change in its favour.
 - *Brief 03 section D* — wanted, to close out the last unfinished brief; not demo-visible.
 
 **Both "measure early" items are closed** (per-module VRAM, MoE vs dense), so nothing further blocks the
@@ -148,7 +154,8 @@ every tier, chosen on measurements rather than reputation.
   - `HF_HUB_OFFLINE=1` — forces huggingface_hub to use only locally cached models, no network requests at all.
   - `HF_HUB_DISABLE_TELEMETRY=1` — stops telemetry pings only.
 
-- **[High]** Neural reranker for HybridIR: add a reranker stage to avoid needing large k values (k=100 style workarounds). Since we maintain our own HybridIR backend, we can power it up properly. Design worked out in `TODO_DEFERRED.md`, "RAG: rerank retrieved chunks and inject only the best few" (cross-encoder stage, three-layer `common`/`server`/`mayberemote` shape, VRAM tradeoff).
+- ~~**[High]** Neural reranker for HybridIR~~ — **measured and rejected, 2026-08-06.** Two cross-encoders (`ms-marco-MiniLM-L6-v2` at 23M and `bge-reranker-base` at 278M, different sizes and training data) in three placements, on three corpora. No configuration beat plain fusion; reranking the *fused* list is the worst option on all three and that part generalizes. The mechanism: fusing two cheap independent signals beats one expensive model's opinion, so collapsing RRF's evidence diversity is the cost. Latency was never the constraint — 144 ms for 100 candidates on the 4090. Full tables in `investigations/retrieval/REPORT.md` §2; the design in `TODO_DEFERRED.md` is kept for the shape, not as a plan.
+  - The *motivation* also weakened: `k=50` shipped (measured, +10.1 points of recall for +1.7 s prefill), so "avoid needing large k" is much less pressing than when this was filed.
 
 - **[High]** Revisit logging system: library modules should not reconfigure the logger (verify exact behavior against Python `logging` stdlib docs, but currently each module sets the log level, which is the entrypoint's responsibility). Move logging configuration to entrypoints only. Add a "detailed debug" level at that time for particularly spammy-but-useful log lines (e.g. `SmoothScrolling.render_frame`, `_managed_task`, `binary_search_item`).
 

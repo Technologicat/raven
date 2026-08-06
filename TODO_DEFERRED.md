@@ -1018,8 +1018,9 @@ clusters, as of 2026-07-27:
   context injects…" (measured, and rejected in favour of the system block plus a tool result) and "Revisit
   the 'answer from context only' reminder". Measurements in `investigations/context-injects/context-inject-shape-measurements.md`,
   the plan they argued for in `briefs/summer_2026_librarian_extension/done/08_context-injects-brief.md`. Still
-  open in this cluster: "RAG: rerank retrieved chunks…" and "Modernize the Librarian system prompt /
-  character card", plus the new "RAG access via tool-call" motivation recorded under Q11 of the
+  open in this cluster: "Modernize the Librarian system prompt / character card" ("RAG: rerank retrieved
+  chunks…" was measured and rejected on 2026-08-06 and is no longer open), plus the new "RAG access via
+  tool-call" motivation recorded under Q11 of the
   measurements — the model asks for a second, better-aimed search and currently has no way to get one.
 - **FileDialog** — "slow open and a teardown input-dead-window", "smart-case the Find field", "image thumbnail
   previews", "multi-extension filter as one labelled item", "reduce per-use-site boilerplate", plus "OS
@@ -1261,6 +1262,31 @@ Four things make this less obvious than it looks:
 Extension raised by Juha (2026-07-30).
 
 ## RAG: rerank retrieved chunks and inject only the best few
+
+> **Measured and rejected, 2026-08-06. Retained for the design, not as a plan.**
+>
+> Two cross-encoders — `ms-marco-MiniLM-L6-v2` (23M) and `bge-reranker-base` (278M), deliberately chosen to
+> differ in size and training data — in three placements, across three corpora. **No configuration beat
+> plain fusion.** Reranking the *fused* list is the worst option on all three corpora, and that part
+> generalizes: whatever else is true, do not rerank after fusion.
+>
+> The mechanism, since it is the transferable part: fusing two cheap *independent* signals beats one
+> expensive model's opinion, so collapsing RRF's evidence diversity into a single ranking is the cost.
+> Reranking one arm and fusing afterwards recovers most of the loss (MRR 0.358 → 0.449) without beating
+> the 0.471 of plain fusion — which is what identifies diversity rather than model quality as the issue.
+>
+> Latency was never the constraint (144 ms for 100 candidates on the 4090, 532 ms on loaded CPU), and two
+> mechanical explanations were eliminated before believing the result: a sign error (checked — the model
+> scores an obviously relevant passage +8.24 and an irrelevant one −11.43) and truncation (measured — only
+> 9.8% of real candidates exceed the 512-token limit).
+>
+> **The motivation also weakened independently.** This item exists to avoid needing large `k`; `k=50`
+> subsequently shipped on measurement (+10.1 points of recall for +1.7 s of prefill), which is most of what
+> the reranker was wanted for, at no model cost.
+>
+> Full tables in `investigations/retrieval/REPORT.md` §2. The three-layer `common`/`server`/`mayberemote`
+> shape sketched below is still the right shape for *some* future model — it is the reranker specifically
+> that did not survive. **`TODO.md` no longer lists this as planned work.**
 
 **Do `briefs/summer_2026_librarian_extension/09_retrieval-query-side-brief.md` first.** It documents a
 verified finding that changes the diagnosis below: `_query_body` applies each engine's quality signal as
@@ -2658,6 +2684,26 @@ panel?), and how much of the snippet vs. the whole document to show.
 Discovered during the plain-text/PDF interlude (2026-07-18, requested by Juha).
 
 ## VLM reranking of mixed-modality search results (post-Nomic)
+
+> **Note (2026-08-06): text cross-encoder reranking was measured and rejected** — see "RAG: rerank
+> retrieved chunks…" above. This item is *not* refuted by that, and the distinction is worth stating so
+> nobody strikes it by association.
+>
+> **A VLM is a different kind of thing from a cross-encoder, for text as much as for images.** A
+> cross-encoder emits a *similarity score* — the same kind of judgment the two retrieval arms already
+> make, which is exactly why collapsing them into it lost: one opinion replacing two independent ones. A
+> VLM (or any LLM) **reads and reasons**: it can say whether a passage actually answers the question,
+> which is a different kind of evidence rather than a better-scored version of the same kind. On the
+> day's own logic that makes it a *more* independent signal than a cross-encoder, not a less one — a
+> cross-encoder is trained against much the same relevance objective as the retrievers, and an LLM's
+> judgment is not.
+>
+> The image case is then the extra reach on top: a VLM can look at hits whose only current representation
+> is an embedding. But the argument does not depend on images.
+>
+> What the text result *does* transfer is the placement warning: whatever the model produces should be
+> **fused with** the existing evidence rather than replacing the ranking, since reranking the fused list
+> was the worst of the three placements tested, on all three corpora.
 
 Once the search feature encodes both text and images (the Nomic plan, autumn 2026 — this supersedes the
 CLIP/`clip-ViT-L-14` note still sitting in `hybridir.py`'s image-support TODO comment), a single result set can

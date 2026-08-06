@@ -342,8 +342,15 @@ documented partial-success contract (a duplicate key lands in `failed_blocks` ra
   - Inject if either passes.
 - [ ] **[P] The same two measurements route the retrieval mode**, so the marker work pays for this for free:
   - below both floors → nothing there; fire the marker, skip the injection, save the tokens
-  - above floor, peaked (or high-IDF exact match) → **selective** mode; rerank, small k
+  - above floor, peaked (or high-IDF exact match) → **selective** mode; ~~rerank~~, small k
   - above floor, flat → **coverage** mode; stratify, large k
+  - **Two corrections from the 2026-08-06 measurements**, since this routing is quoted elsewhere. The
+    reranking half of "selective mode" is gone — no reranker configuration beat plain fusion. And the
+    *floor* the routing keys on does not exist: no absolute similarity threshold travels across corpora
+    (a cut at 0.40 loses 53.5% of answerable questions on a titles-only collection). What survives is the
+    coarse case, "the conversation left the corpus", at AUROC ≈ 1.0 — enough for the grounding marker,
+    not enough to route between modes. The narrow/broad distinction the routing wants is real and is
+    still unmeasured; `investigations/retrieval/synthesis_recall.py` is the instrument for it.
 - [ ] **[N] Good k for scientific work.** Reviewing a cluster or user selection may need k≈100 abstracts at
       once; a non-specific search over a 10k corpus needs k≈100 for even 1% coverage. Not needle-in-haystack.
   - **[P] Top-k is the wrong tool for the coverage regime** — ranking by similarity oversamples one region, so
@@ -359,7 +366,13 @@ documented partial-success contract (a duplicate key lands in `failed_blocks` ra
         by what gets looked at rather than by corpus size. Converges on what the interrogation sketch already
         asks for — lift `summarize` out of the importer into the library, run it against a scope. Payoff at
         k=100: ~40k tokens of abstracts → ~10k of summaries.
-- [ ] **[N] MiniLM reranker** (`cross-encoder/ms-marco-MiniLM-L6-v2`, 23M, CPU).
+- [x] ~~**[N] MiniLM reranker**~~ — **measured 2026-08-06, and rejected.** This item said to measure against
+      `investigations/retrieval`; that was done, and no reranker configuration beat plain fusion. Two models
+      (MiniLM-L6 at 23M and `bge-reranker-base` at 278M — the second chosen precisely to test the domain-shift
+      worry noted below) in three placements across three corpora. The domain-shift explanation was *not* the
+      cause: two models of different size, architecture and training data agreeing on the direction is what a
+      mis-specified target looks like, not a domain mismatch. Cause is that RRF's value is evidence diversity,
+      and any reranking of the fused list collapses it. See `investigations/retrieval/REPORT.md` §2.
   - **[P]** Good for the VRAM story — CPU keeps the card for the LLM. But MS MARCO-trained on web queries, so
         domain shift to scientific abstracts is real. Measure against `investigations/retrieval`, which is mode 2
         in the interrogation sketch ("a corpus the reader already knows") doing its intended job.
@@ -559,8 +572,11 @@ designing before images land in the DB rather than discovered afterwards.**
       HTML. Genuinely useful beyond the joke — it is mode 2 in the interrogation sketch (a corpus the reader
       already knows, i.e. the evaluation-grade one), "which add-on is which" is a known-item retrieval task, and
       it is **out-of-domain** in three ways the current eval set cannot test: the stopword list is tuned for
-      scientific text, `format_entry_for_keyword_extraction` assumes bibliographic fields, and the MiniLM
-      reranker is MS MARCO-trained.
+      scientific text, `format_entry_for_keyword_extraction` assumes bibliographic fields, and the embedding
+      model is trained on question-answer pairs rather than narrative prose. (Third reason substituted
+      2026-08-06 — it read "the MiniLM reranker is MS MARCO-trained", and there is no reranker. The
+      out-of-domain point held up when tested: on fiction, retrieval fails precisely where the query
+      describes what the prose *dramatizes* instead of what it states.)
 - [ ] **[X] ~~Do the ID scheme inside the Nomic window because it's the cheapest moment.~~** Retracted: one 12k
       pile plus a couple of small ones is hours, not weeks, and the cost is the same whenever it happens. The
       only residue is "no cache-migration code needed", which is worth little when discarding and rebuilding is

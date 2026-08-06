@@ -229,6 +229,41 @@ summed chunk scores puts more of the answering passage in front of the model. Th
 `passage_recall.py`'s coverage measurement over a `sum`-ordered result list, which is a wiring job between
 two existing scripts rather than a new experiment.
 
+**Using the *main model* as the reranker — untested, and it splits into three configurations.** Juha's
+question, 2026-08-06: is having the LLM order the results better or worse than injecting them raw, as
+happens now?
+
+*On the relevance channel the prediction is that it loses, and more decisively than the cross-encoder
+did.* The measured cause of the cross-encoder's failure is that collapsing independent evidence into one
+model's opinion costs more than the opinion is worth. A same-model reranker is the **maximally dependent**
+case: its selection errors and its answering errors come from the same weights, so they are perfectly
+correlated. A cross-encoder at least contributes a different model's biases; the main model contributes
+none.
+
+*But there is a second channel, and it has nothing to do with relevance.* At `k=50` the retrieved block is
+~18k tokens, and models attend poorly to the middle of long contexts (Liu et al. 2023,
+[arXiv:2307.03172](https://arxiv.org/abs/2307.03172)). If good material is effectively invisible where it
+sits, a pass that moves it helps — not by judging relevance better, but by re-siting it where attention
+lands. Those two channels pull opposite ways and a single "does it help" measurement cannot separate them.
+
+Hence three configurations, of which only the first two are usually considered:
+
+| | what it does | expectation |
+|---|---|---|
+| (a) inject all `k` raw | what ships | baseline |
+| (b) LLM-rerank, inject top-N | filters | loses information the answer pass would have used, *and* pays a full extra pass |
+| (c) LLM-rerank, reorder all `k` | keeps everything, best material to the ends | the one worth testing: can win on attention, cannot lose information |
+
+**(c) is the configuration to test, and nobody proposed it** — the reranking literature assumes filtering
+because it was built for systems that cannot afford to send everything. Raven can. And if the benefit is
+attentional rather than relevance-based, there is a cheaper variant still: **reorder by the retrieval score
+already computed** — best-ranked first and last, worst in the middle — which costs no extra pass at all. If
+that recovers most of the gain, the LLM pass is unnecessary, and the whole question turns out to be about
+*placement* rather than *judgment*.
+
+Measurable with the known-item harness exactly as the cross-encoder was: rerank the `k=50` list with the
+main model and score recall@5 against gold. Needs the LLM backend, so it queues behind question generation.
+
 **Score-based fusion instead of rank-based — no gain in ranking quality.** *Measured 2026-08-06.* This
 was ranked as the most promising untried idea, on the reasoning that RRF fuses positions and discards
 scores, which is exactly why "the hybrid rank does not track how good a result is". `CombSUM` over
