@@ -755,6 +755,35 @@ That makes **recall per thousand tokens** the metric worth computing, rather tha
 derivable from data already recorded. It also converges with the pre-merge reranking idea above: both
 say the unit that should reach the model is the chunk, not the merged span.
 
+##### The per-query arm-selection oracle, and it is wide (2026-08-06)
+
+Computed from the per-question ranks already recorded in `arm_rerank_<corpus>.json` — no new runs. The
+oracle takes, for each query independently, whichever of the two arms actually ranked the gold document
+better. It cheats, so it is an upper bound, not an achievable score:
+
+| corpus | fused @20 | oracle @20 | fused MRR | oracle MRR |
+|---|---|---|---|---|
+| hydrogen | 74.7% | **81.8%** | 0.471 | **0.538** |
+| banichuk | 41.4% | **53.5%** | 0.169 | **0.237** |
+| fiction | 100% | 100% | 0.811 | **0.870** |
+
+**+7.1 and +12.1 points at @20** — larger than any reranking configuration offered, and requiring no
+additional model. That is the envelope a per-query selection rule is competing for.
+
+Two details carry more than the totals:
+
+- **The signal is per-query, not per-corpus.** On hydrogen, where fusion wins overall, BM25 ranks the
+  gold better on 41 queries and the vector arm on 34, with 24 ties. So this is not merely "banichuk
+  wants the vector arm" — there is exploitable structure inside every corpus measured, including the one
+  where the fixed blend is the right *average* answer.
+- **Fusion never beats both arms on a single query.** The three-way oracle equals the two-way one at @20,
+  so RRF is not surfacing anything neither arm had; it is *hedging*. That is the correct behaviour when
+  you cannot tell which arm to trust, and it is precisely the cost that disappears if you can.
+
+This is what makes the per-query sharpness rule worth measuring before anything else: a rule needs only
+to capture a fraction of this to beat every configuration tried so far, and it costs no model, no LLM
+pass, and no calibration state.
+
 ##### Can the right arm configuration be detected automatically?
 
 Juha's reading of the table above was that there is no known algorithmic way to tell which corpus wants
