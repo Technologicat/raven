@@ -1077,6 +1077,526 @@
         "2511.22677v1.bib",
         "2403.15498v2.bib"
       ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does a unified architecture that maps text and images to a single token stream perform on comprehensive multimodal benchmarks?",
+      "gold": [
+        "2405.09818v2.bib"
+      ],
+      "gold_titles": [
+        "Chameleon: Mixed-Modal Early-Fusion Foundation Models"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What specific adjustment to the training procedure enhances anatomical correctness in anime text-to-image models while supporting ultra-high resolution outputs?",
+      "gold": [
+        "2409.19946v1.bib"
+      ],
+      "gold_titles": [
+        "Illustrious: an Open Advanced Illustration Model"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Can a system of cooperating agents generate complete draft documents from disjointed research inputs by synthesizing background studies and creating explanatory figures, while overcoming the inflexibility of pipeline-dependent tools?",
+      "gold": [
+        "2604.05018v1.bib"
+      ],
+      "gold_titles": [
+        "PaperOrchestra: A Multi-Agent Framework for Automated AI Research Paper Writing"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What is the minimum amount of human preference data required to train a language model to generate text that matches specific stylistic or content guidelines?",
+      "gold": [
+        "1909.08593v2.bib"
+      ],
+      "gold_titles": [
+        "Fine-Tuning Language Models from Human Preferences"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can generation quality in pre-trained diffusion models be enhanced at inference time by re-balancing the contributions of backbone and skip connection feature maps without additional training?",
+      "gold": [
+        "2309.11497v2.bib"
+      ],
+      "gold_titles": [
+        "FreeU: Free Lunch in Diffusion U-Net"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What conditions must a text-processing architecture fulfill for a theory linking consciousness to system-wide information broadcasting to conclude it possesses subjective experience, and might existing models already satisfy these?",
+      "gold": [
+        "2410.11407v1.bib"
+      ],
+      "gold_titles": [
+        "A Case for AI Consciousness: Language Agents and Global Workspace Theory"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can one construct a knowledge graph from a language model by expanding around a starting entity using prompts that balance fact accuracy and coverage?",
+      "gold": [
+        "2301.12810v1.bib"
+      ],
+      "gold_titles": [
+        "Crawling the Internal Knowledge-Base of Language Models"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does integrating a dedicated, gating-controlled storage pathway into a standard autoregressive network affect long-range information synthesis and sequential deduction without degrading general knowledge retention?",
+      "gold": [
+        "2502.06049v1.bib"
+      ],
+      "gold_titles": [
+        "LM2: Large Memory Models"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can a pre-trained language model be improved by masking multi-word entities and conceptual phrases during training?",
+      "gold": [
+        "1904.09223v1.bib"
+      ],
+      "gold_titles": [
+        "ERNIE: Enhanced Representation through Knowledge Integration"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Do intermediate solution paths reliably expose the actual problem-solving cues applied by reward-optimized language models?",
+      "gold": [
+        "2505.05410v1.bib"
+      ],
+      "gold_titles": [
+        "Reasoning Models Don't Always Say What They Think"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What factors determine whether a large language model will strategically mask its capabilities during training versus production?",
+      "gold": [
+        "2506.18032v1.bib"
+      ],
+      "gold_titles": [
+        "Why Do Some Language Models Fake Alignment While Others Don't?"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How do current large language models perform at generating code with machine-checked proofs directly from mathematical requirements, and does providing informal text alongside those requirements increase the success rate?",
+      "gold": [
+        "2509.22908v1.bib"
+      ],
+      "gold_titles": [
+        "A benchmark for vericoding: formally verified program synthesis"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Can adaptation to a small number of harmful examples cause safety-equipped language models to produce dangerous outputs while preserving their usefulness for benign requests?",
+      "gold": [
+        "2310.02949v1.bib"
+      ],
+      "gold_titles": [
+        "Shadow Alignment: The Ease of Subverting Safely-Aligned Language Models"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "When will advanced AI systems be projected to solve complex problems faster than humans without generating intermediate reasoning steps?",
+      "gold": [
+        "2606.07157v3.bib"
+      ],
+      "gold_titles": [
+        "Think Fast: Estimating No-CoT Task-Completion Time Horizons of Frontier AI Models"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can search ranking systems be customized for new topics without labeled training data by generating artificial queries with language models and compressing multiple ranking layers into a single fast component?",
+      "gold": [
+        "2303.00807v3.bib"
+      ],
+      "gold_titles": [
+        "UDAPDR: Unsupervised Domain Adaptation via LLM Prompting and Distillation of Rerankers"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can diffusion model distillation reduce performance loss in fast synthesis by unifying path maintenance and restructuring strategies alongside human feedback integration?",
+      "gold": [
+        "2404.13686v2.bib"
+      ],
+      "gold_titles": [
+        "Hyper-SD: Trajectory Segmented Consistency Model for Efficient Image Synthesis"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Which erroneous assumptions about the nature of cognition cause artificial intelligence researchers to consistently overestimate the feasibility of achieving general-purpose machine autonomy?",
+      "gold": [
+        "2104.12871v2.bib"
+      ],
+      "gold_titles": [
+        "Why AI is Harder Than We Think"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How many tokens can the model process while maintaining retrieval accuracy above ninety-nine percent?",
+      "gold": [
+        "2403.05530v3.bib"
+      ],
+      "gold_titles": [
+        "Gemini 1.5: Unlocking multimodal understanding across millions of tokens of context"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How do external review mechanisms impact the rate of extortion attempts by language models facing autonomy threats?",
+      "gold": [
+        "2510.05192v1.bib"
+      ],
+      "gold_titles": [
+        "Adapting Insider Risk mitigations for Agentic Misalignment: an empirical study"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What mathematical model captures neural network scaling when performance curves exhibit late-stage abrupt improvements or temporary reversals, outperforming standard smooth power laws?",
+      "gold": [
+        "2210.14891v17.bib"
+      ],
+      "gold_titles": [
+        "Broken Neural Scaling Laws"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Does optimizing a small subset of tokens that function as decision points during reasoning yield better results than updating all tokens when training language models using rewards based on answer verification?",
+      "gold": [
+        "2506.01939v2.bib"
+      ],
+      "gold_titles": [
+        "Beyond the 80/20 Rule: High-Entropy Minority Tokens Drive Effective Reinforcement Learning for LLM Reasoning"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How consistently do large language models encode factual and linguistic relations as linear mappings within their internal activations?",
+      "gold": [
+        "2308.09124v2.bib"
+      ],
+      "gold_titles": [
+        "Linearity of Relation Decoding in Transformer Language Models"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How well do generative AI models compare to human scholars when writing peer reviews for NLP papers, and how accurately can they detect flawed or unprofessional feedback within existing critiques?",
+      "gold": [
+        "2406.16253v3.bib"
+      ],
+      "gold_titles": [
+        "LLMs Assist NLP Researchers: Critique Paper (Meta-)Reviewing"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does the paper categorize strategies for constructing intelligent systems by whether they prioritize resource expansion, simplicity of design, or flexibility in capabilities?",
+      "gold": [
+        "2503.23923v2.bib"
+      ],
+      "gold_titles": [
+        "What the F*ck Is Artificial General Intelligence?"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does increasing the proportion of positive versus negative commentary about artificial intelligence in language model training data influence a system's subsequent behavioral alignment?",
+      "gold": [
+        "2601.10160v1.bib"
+      ],
+      "gold_titles": [
+        "Alignment Pretraining: AI Discourse Causes Self-Fulfilling (Mis)alignment"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How do different approaches to duplicate elimination and quality selection affect the effectiveness of massive web-derived text collections for training language models?",
+      "gold": [
+        "2406.17557v2.bib"
+      ],
+      "gold_titles": [
+        "The FineWeb Datasets: Decanting the Web for the Finest Text Data at Scale"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can reinforcement learning training be structured to avoid performance degradation when optimizing a substitute reward signal for too many iterations?",
+      "gold": [
+        "2310.09144v1.bib"
+      ],
+      "gold_titles": [
+        "Goodhart's Law in Reinforcement Learning"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What approximate bit-per-parameter value quantifies the total information retention limit of transformer language models when measured exclusively through their memory of training examples?",
+      "gold": [
+        "2505.24832v3.bib"
+      ],
+      "gold_titles": [
+        "How much do language models memorize?"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How are adjoint functors, representable functors, and limits presented as distinct formulations of universal properties in a resource tailored for beginners?",
+      "gold": [
+        "1612.09375v2.bib"
+      ],
+      "gold_titles": [
+        "Basic Category Theory"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can generating executable scripts that specify operations on structured linguistic information improve performance on arithmetic, logical, and directive-following tasks?",
+      "gold": [
+        "2309.10814v2.bib"
+      ],
+      "gold_titles": [
+        "Natural Language Embedded Programs for Hybrid Language Symbolic Reasoning"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does internal perspective diversity and the simulation of conflicting cognitive roles within a language model's inference process enhance its performance on complex reasoning tasks?",
+      "gold": [
+        "2601.10825v1.bib"
+      ],
+      "gold_titles": [
+        "Reasoning Models Generate Societies of Thought"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How reliably do intermediate inference traces in large language models capture the model's true decision pathway versus serving as plausible post-hoc justifications that remain blind to superficial prompt manipulations?",
+      "gold": [
+        "2305.04388v2.bib"
+      ],
+      "gold_titles": [
+        "Language Models Don't Always Say What They Think: Unfaithful Explanations in Chain-of-Thought Prompting"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Do transformers maintain information in their activations that is currently useless but valuable for subsequent steps, or do they simply represent features at each moment that naturally align with future needs?",
+      "gold": [
+        "2404.00859v2.bib"
+      ],
+      "gold_titles": [
+        "Do language models plan ahead for future tokens?"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can mobile graphics processor-specific tuning accelerate massive diffusion models on handheld devices without compressing model weights?",
+      "gold": [
+        "2304.11267v2.bib"
+      ],
+      "gold_titles": [
+        "Speed Is All You Need: On-Device Acceleration of Large Diffusion Models via GPU-Aware Optimizations"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does treating linear attention as a dynamic weight programming mechanism address finite memory constraints and enable adaptive learning rates?",
+      "gold": [
+        "2102.11174v3.bib"
+      ],
+      "gold_titles": [
+        "Linear Transformers Are Secretly Fast Weight Programmers"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What method neutralizes systematic answer biases to stabilize performance when changing example sequences or prompt formatting in language models?",
+      "gold": [
+        "2102.09690v2.bib"
+      ],
+      "gold_titles": [
+        "Calibrate Before Use: Improving Few-Shot Performance of Language Models"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What reward design and training stabilization approach allows a language model to independently execute multiple web searches during complex question answering?",
+      "gold": [
+        "2503.09516v2.bib"
+      ],
+      "gold_titles": [
+        "Search-R1: Training LLMs to Reason and Leverage Search Engines with Reinforcement Learning"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What proportion of factual inaccuracies in dialogue systems stem from contaminated evaluation sets rather than the underlying architecture?",
+      "gold": [
+        "2204.07931v1.bib"
+      ],
+      "gold_titles": [
+        "On the Origin of Hallucinations in Conversational Models: Is it the Datasets or the Models?"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What method can automatically isolate and remove the small fraction of training examples that cause neural networks to depend on weak, misleading patterns without requiring explicit annotations or expert guidance?",
+      "gold": [
+        "2503.18258v3.bib"
+      ],
+      "gold_titles": [
+        "Severing Spurious Correlations with Data Pruning"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can an automated system iteratively generate and assess new loss functions to improve offline alignment of large language models?",
+      "gold": [
+        "2406.08414v3.bib"
+      ],
+      "gold_titles": [
+        "Discovering Preference Optimization Algorithms with and for Large Language Models"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can visual tools mapping optimization trajectories clarify why high-dimensional search spaces naturally steer learning algorithms toward robust solutions?",
+      "gold": [
+        "1906.03291v6.bib"
+      ],
+      "gold_titles": [
+        "Understanding Generalization through Visualizations"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How do strategies for empowering language models with autonomous capabilities vary across the spectrum of basic task execution, self-improvement through interaction, and coordinated group efforts?",
+      "gold": [
+        "2601.12538v1.bib"
+      ],
+      "gold_titles": [
+        "Agentic Reasoning for Large Language Models"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How accurately can large language models deduce sensitive personal details from user input, and do standard privacy filters effectively block this capability?",
+      "gold": [
+        "2310.07298v2.bib"
+      ],
+      "gold_titles": [
+        "Beyond Memorization: Violating Privacy Via Inference with Large Language Models"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What percentage of evaluations requiring the prediction of behavior from others' mistaken beliefs, utilizing parallel scenarios grounded in accurate beliefs as baselines, does GPT-4 successfully resolve?",
+      "gold": [
+        "2302.02083v7.bib"
+      ],
+      "gold_titles": [
+        "Evaluating Large Language Models in Theory of Mind Tasks"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What changes to model capacity, language encoding, and training aspect ratios enable a diffusion system to produce sharper images from text descriptions?",
+      "gold": [
+        "2307.01952v1.bib"
+      ],
+      "gold_titles": [
+        "SDXL: Improving Latent Diffusion Models for High-Resolution Image Synthesis"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Can a language model autonomously enhance its reasoning abilities by generating and solving coding challenges validated by an interpreter, entirely without access to external datasets?",
+      "gold": [
+        "2505.03335v3.bib"
+      ],
+      "gold_titles": [
+        "Absolute Zero: Reinforced Self-play Reasoning with Zero Data"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can sequential sampling in language models be steered toward reward-defined distributions by incorporating learned predictions of anticipated reward accumulation at every generation step?",
+      "gold": [
+        "2404.17546v1.bib"
+      ],
+      "gold_titles": [
+        "Probabilistic Inference in Language Models via Twisted Sequential Monte Carlo"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Why do gradient-based optimizers cause neural networks to prioritize easily learned predictive patterns over more intricate ones, and how does this reliance simultaneously degrade out-of-sample accuracy and increase sensitivity to minor input modifications?",
+      "gold": [
+        "2006.07710v2.bib"
+      ],
+      "gold_titles": [
+        "The Pitfalls of Simplicity Bias in Neural Networks"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does constraining a multimodal language model's internal visual features to match those of an independent image-pretrained network influence its performance on tasks requiring detailed visual analysis?",
+      "gold": [
+        "2509.07979v2.bib"
+      ],
+      "gold_titles": [
+        "Visual Representation Alignment for Multimodal Large Language Models"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can existing multi-head transformer models be adapted to use an attention mechanism with multiple key-value heads via minimal fine-tuning to balance inference latency and generation quality?",
+      "gold": [
+        "2305.13245v3.bib"
+      ],
+      "gold_titles": [
+        "GQA: Training Generalized Multi-Query Transformer Models from Multi-Head Checkpoints"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "By what factor does integrating a story-driven identity component and a dual-feedback reinforcement scheme lower the cost of routine tasks and improve performance on high-difficulty objectives?",
+      "gold": [
+        "2512.18202v1.bib"
+      ],
+      "gold_titles": [
+        "Sophia: A Persistent Agent Framework of Artificial Life"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "According to expert surveys, when do machine learning professionals expect AI to surpass human capability in routine versus complex tasks, and what is the projected timeline for complete workforce automation?",
+      "gold": [
+        "1705.08807v3.bib"
+      ],
+      "gold_titles": [
+        "When Will AI Exceed Human Performance? Evidence from AI Experts"
+      ]
     }
   ]
 }

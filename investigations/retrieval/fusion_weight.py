@@ -102,12 +102,20 @@ def mcnemar(a: list[int | None], b: list[int | None], k: int = 20) -> tuple[int,
 
 
 def dedup_ids(seq) -> list[str]:
-    """Document IDs in first-appearance order — a document ranks where its best chunk did."""
+    """Document keys in first-appearance order — a document ranks where its best chunk did.
+
+    Keyed by `sharpness.document_key` (the id without its extension), so a gold label naming one
+    representation of a document matches the same document indexed as another — the abstract and fulltext
+    arXiv corpora hold the same papers as `.bib` and `.pdf`. Comparing raw ids across that pair reports a
+    clean zero rather than failing.
+    """
     out: list[str] = []
     for x in seq:
         did = x.get("document_id") if isinstance(x, dict) else None
-        if did is not None and did not in out:
-            out.append(did)
+        if did is not None:
+            key = sharpness.document_key(did)
+            if key not in out:
+                out.append(key)
     return out
 
 
@@ -151,7 +159,7 @@ def sweep(corpus: str, db_dir: pathlib.Path, depth: int) -> pathlib.Path:  # pra
         row = {"kw": [index_of(d) for d in kw_ids],
                "vec": [index_of(d) for d in vec_ids],
                "shipped": [index_of(d) for d in shipped_ids],
-               "gold": [index_of(d) for d in item["gold"]]}
+               "gold": [index_of(sharpness.document_key(d)) for d in item["gold"]]}
         rows.append(row)
         if n % 20 == 0:
             print(f"  [{n}/{len(items)}]", flush=True)

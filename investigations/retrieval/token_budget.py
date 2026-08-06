@@ -69,7 +69,14 @@ def fill_to_budget(results: list[dict], budget: int) -> list[dict]:
 
 
 def gold_in(results: list[dict], gold: set[str]) -> bool:
-    return any(r.get("document_id") in gold for r in results)
+    """Whether any result is a gold document, compared by `sharpness.document_key`.
+
+    Keyed on the id without its extension, so a question written from `paper.bib` matches the same paper
+    indexed as `paper.pdf` — which is the whole point of holding the arXiv corpus in both forms. Comparing
+    raw ids reports a clean 0.0% at every budget instead of failing.
+    """
+    keys = {sharpness.document_key(g) for g in gold}
+    return any(sharpness.document_key(r["document_id"]) in keys for r in results if r.get("document_id"))
 
 
 def main() -> None:  # pragma: no cover

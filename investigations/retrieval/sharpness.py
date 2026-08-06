@@ -150,10 +150,35 @@ def build_workload(corpus: str) -> tuple[list[dict], dict]:
     return items, note
 
 
+def document_key(document_id: str) -> str:
+    """The identity a gold label and a search result should be compared on: the id without its extension.
+
+    A `document_id` is a filename, so it carries the *representation* along with the identity — the same
+    arXiv paper is `2506.19823v2.bib` as an abstract record and `2506.19823v2.pdf` as a fulltext PDF. The
+    abstract and fulltext corpora deliberately hold the same 1268 papers so that the two can be compared
+    with one question set, and comparing raw ids defeats exactly that.
+
+    **The failure it prevents is a silent zero, not an error.** Scored against the fulltext index with raw
+    ids, every gold label missed and the harness reported a clean 0.0% recall at every budget, with
+    retrieval plainly returning 100 results per query. Nothing in that output says "you compared `.bib`
+    against `.pdf`" — it reads as a corpus that cannot answer its own questions.
+
+    Stems are unique within each corpus here (arXiv identifiers, WoS accession numbers, story titles), so
+    this is safe to apply everywhere rather than only for the pair that needs it. Two files differing only
+    by extension in one corpus would collide, and there are none.
+    """
+    return document_id.rsplit(".", 1)[0] if "." in document_id else document_id
+
+
 def rank_of_gold(results: list[dict], gold: set[str]) -> int | None:
-    """1-based rank of the first result whose document is in `gold`, or `None` if absent."""
+    """1-based rank of the first result whose document is in `gold`, or `None` if absent.
+
+    Compared by `document_key`, so a gold label naming one representation of a document matches the same
+    document indexed as another.
+    """
+    keys = {document_key(g) for g in gold}
     for rank, result in enumerate(results, start=1):
-        if result["document_id"] in gold:
+        if document_key(result["document_id"]) in keys:
             return rank
     return None
 

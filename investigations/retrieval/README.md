@@ -929,6 +929,29 @@ that. Read it as a trade worth weighing, not as a verdict. It does converge with
 idea recorded above — both say the unit that should reach the model is the chunk — which is two independent
 routes to the same suggestion and the reason it is worth testing properly rather than filing.
 
+###### "Fiction is at 100%" is a statement about files, and it does not mean what it looks like
+
+Juha's question, 2026-08-06, and it corrects a number this file has quoted several times. Fiction's
+recall@20 is **document**-level over a **19-document** corpus at `k=20` — so a query that returns twenty
+results has returned essentially the whole collection, and finding the gold document among them is close
+to tautological. It says almost nothing about retrieval quality.
+
+The measurement that is not saturated is **passage**-level: those 19 documents hold 2977 chunks, and
+whether the *right passage* came back is wide open. **The labels for it already exist** — the fiction
+generator records `source_offset`, the character offset of the passage each question was written from,
+because it samples passages rather than documents. So the harder question is answerable with no new
+generation, only a scorer that asks whether a retrieved span covers that offset.
+
+This generalizes past fiction, and it is the same gap this file already noted for the fulltext corpus:
+with ~118 chunks per document, "found the right document" stops being the question, since a wrong passage
+from the right paper scores as a success. The difference is that fiction has the offsets and the arXiv
+sets do not — their questions come from abstracts, where document and passage nearly coincide. Measuring
+fulltext at passage level needs questions generated *from the PDFs' passages*, which is a generation run
+rather than a scorer.
+
+So the ranking of what to grow changed: fiction was deprioritized on the strength of a saturated number
+that was saturated for an uninteresting reason.
+
 ###### Two controls, and they turn the effect into a mechanism
 
 Hydrogen is the *weakest* case for this measurement, which was not obvious until the other two ran. An
@@ -1004,6 +1027,47 @@ reads passages rather than fragments.
 document, further along this axis than fiction. If the mechanism above is right, it should show the largest
 effect of any corpus here — and it is also the case Librarian is actually pitched at, a researcher dropping
 PDFs in a folder. Stated before running it, so the run can falsify it.
+
+###### The fulltext result: the prediction was wrong, and the cap does most of the work
+
+`token_budget.py arxiv-ai --db-dir …_arxiv_fulltext`, n=146 (the arXiv question set, mid-growth):
+
+| chars | ~tokens | merged | capped | chunks | chunks − merged |
+|---|---|---|---|---|---|
+| 7,500 | 1,875 | 53.4% | **63.0%** | 64.4% | +11.0 |
+| 15,000 | 3,750 | 67.1% | 71.2% | 77.4% | +10.3 |
+| 30,000 | 7,500 | 80.1% | 81.5% | 85.6% | +5.5 |
+| 60,000 | 15,000 | 87.7% | 87.7% | 90.4% | +2.7 |
+| 120,000 | 30,000 | 92.5% | 92.5% | 91.8% | −0.7 |
+
+**Prediction falsified.** It said fulltext, at ~118 chunks per document, would show the *largest* effect of
+any corpus — larger than fiction's +31.8. It shows +11.0, a third of fiction's, despite having far more
+chunks per document.
+
+**So the mechanism is not chunks per document; it is how contiguously the relevant material sits.** A span
+can only grow as long as the run of *adjacent* chunks that were actually retrieved. Narrative prose stays
+on topic for pages, so a fiction query pulls long contiguous runs and builds enormous spans. A scientific
+paper answers a question in scattered places — some of the introduction, some of the method, a result —
+so the retrieved chunks are spread through the document and the runs stay short. Chunks per document is
+an upper bound on span length, not a predictor of it.
+
+That is a better mechanism than the one it replaces, and it was only reachable by making a wrong
+prediction specific enough to fail.
+
+**The cap earns its place, which was not why it was added.** `max_span_length=2000` was chosen to bound
+worst-case prefill, with no claim about recall. At the tightest budget it recovers 9.6 of the 11.0-point
+gap — 87% of what un-merging entirely would buy — while still returning stitched passages. At 15,000 it
+recovers about two thirds. So the shipped default is doing more work than it was asked to do, and the
+query-time `merge=False` remains an evaluation affordance rather than something users need.
+
+**And the first run of this reported 0.0% at every budget**, which is worth recording because it did not
+fail. Gold labels name `2506.19823v2.bib` and the fulltext index holds `2506.19823v2.pdf` — the same paper
+in the other representation, never matching. Retrieval was plainly returning 100 results per query and the
+harness reported a clean zero, which reads as "this corpus cannot answer its own questions". Fixed by
+comparing on `sharpness.document_key`, the id without its extension, which is the identity the
+abstract/fulltext pair was built to share. The corpus README warned about exactly this when the corpus was
+planned ("the indexed `document_id` is the filename and has to match the gold labels") and it still
+happened, because the warning was about building the corpus and the mismatch arrived at scoring time.
 
 **A second prediction about that corpus, and a different mechanism: reference lists.** Juha's observation,
 2026-08-06. A paper's bibliography is several hundred *other* papers' titles, and nothing marks it as
