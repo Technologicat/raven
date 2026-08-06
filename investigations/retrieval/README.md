@@ -628,7 +628,20 @@ bug than a finding:
   so candidates could have been arriving pre-cut. Measured over 500 real candidates: median 299 tokens,
   p75 431, and only **9.8%** exceed 512. Not the cause.
 
-So the reordering itself is worse. Two explanations remain, and they are distinguishable:
+**A second reranker, chosen to break the domain-mismatch explanation, also loses.** `BAAI/bge-reranker-base`
+(278M, trained on general retrieval data rather than web search) on the same 99 questions:
+
+| | @1 | @5 | @10 | @20 | MRR | latency |
+|---|---|---|---|---|---|---|
+| retrieval only | 38.4% | 57.6% | 67.7% | 74.7% | 0.472 | — |
+| + ms-marco-MiniLM-L6 | 26.3% | 46.5% | 54.5% | 64.6% | 0.358 | 144 ms |
+| + bge-reranker-base | 33.3% | 49.5% | 57.6% | 63.6% | 0.413 | 807 ms |
+
+Less bad, still bad: 25 up against 34 down, and 5.6x the latency for the privilege. Two rerankers of
+different size, architecture and training data agreeing on the direction is not what a domain mismatch
+looks like — it is what a mis-specified target looks like.
+
+So the reordering itself is worse. Two explanations remain, and the second has gained weight:
 
 - **Domain mismatch.** MS MARCO is short, keyword-ish web queries against web passages. These are long
   analytical questions against scientific abstracts — a distribution the model never saw. Testable by

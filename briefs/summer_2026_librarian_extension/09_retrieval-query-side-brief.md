@@ -607,6 +607,37 @@ comparison:
    The latter is 3 points worse at the top through fusion alone, so measuring against it would credit the
    reranker with recovering damage the experiment itself caused. Compare end-to-end pipelines, not stages.
 
+##### Rescope again, same day: the reranker does not ship either
+
+Built and measured within hours of the curve above clearing it, and the answer is no. Two rerankers,
+`cross-encoder/ms-marco-MiniLM-L6-v2` and `BAAI/bge-reranker-base`, both reorder hydrogen's candidate
+sets **worse** than the hybrid retrieval that produced them — MRR 0.471 → 0.358 and 0.472 → 0.413, with
+more questions moving down than up in both cases. Full numbers and the eliminated explanations are in
+the investigation README; latency was never the binding constraint (144 ms for 100 candidates on GPU,
+532 ms on CPU), so the choice is not being made on cost.
+
+**What this costs the 0.2.8 window: all three of the brief's sub-goals are now parked.** Off-corpus
+detection died on the fourth corpus, adaptive `k` was deferred, and reranking is the third. Nothing
+from this brief ships on Monday, and the honest summary of the sprint is that it produced measurements
+rather than features.
+
+**That is not the same as producing nothing**, and the distinction matters for what happens next. What
+exists now that did not exist a week ago: four corpora with question sets, a recall curve valid to
+k=200, an apparatus (`sharpness.py`, `recall_curve.py`, `rerank.py`) that scores a retrieval change in
+one command, and four falsified hypotheses that would each have shipped as a plausible improvement.
+The single global threshold, the p75 calibration, and now the reranker were all things we would have
+merged on argument alone.
+
+**The one thing that would change the answer is the instrument, not the model.** Both surviving
+explanations — domain mismatch, and a metric that favours the lexical baseline because the questions
+were generated *from* their gold documents — are properties of how we are measuring, and the second is
+untestable with a known-item set by construction. The corpus in a native area, with judged relevance
+rather than planted gold, is what separates them. It was already on this brief's list as a nice-to-have
+for interpreting results; it is now the blocker.
+
+So: **do not try a third reranker.** That is the move this evidence invites and it would be the fourth
+plausible-but-unmeasurable improvement in a row. Build the judged set first.
+
 #### The fourth corpus unseats the constant (2026-08-06): ship nothing yet
 
 A titles-only bibliography — 541 hand-typed records, 303 bytes median, the shape a working researcher's
