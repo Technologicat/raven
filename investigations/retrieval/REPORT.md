@@ -457,6 +457,40 @@ top-`k` retrieval stops being able to answer broad questions at all.
 Which reorders the roadmap. Clustering was justified as an interface and organization feature; it is now
 also the only route to broad-question retrieval on the collection sizes Raven is built for.
 
+#### It also confirms `VISION.md` stage 3, from the opposite direction
+
+Stage 3 says of the broad-question case: *"That is not a retrieval problem. The selection was already made,
+by a person, on the map. Ranking two hundred hand-picked documents and keeping the top five would discard
+ninety percent of what the user deliberately chose."* That was reasoned from the workflow in 2024. Tonight's
+measurement reaches the same place from the retrieval side — a broad question over 12k documents retrieves
+24.3% of its relevant set at k=200, and the next doubling is unaffordable on prefill. Two independent routes
+to "stop trying to retrieve this".
+
+So there are two answers to the broad question, and they are complements rather than rivals: **stratified
+retrieval** (needs clustering) for when the user has not selected anything, and **map-and-reduce over a
+human selection** (stage 3) for when they have. The second is stronger where it applies, because a
+human-verified selection beats an algorithmically sampled one — and today's results are a long argument for
+distrusting algorithmic selection at this corpus size.
+
+#### Summarization now has four independent justifications
+
+Worth stating together, because it changes the cost case rather than merely adding a use (Juha, 2026-08-06):
+
+1. **Stage 3 map-and-reduce** — its original purpose. Shipped code in the Visualizer importer, switched off
+   because it was built to run over an entire dataset at import rather than over a selection.
+2. **Document-level retrieval failures** — the class this investigation found chunk RAG structurally cannot
+   serve, where no chunk states the property being asked about ("which story is set offline in America").
+   An indexed summary states it.
+3. **An independent view for evidence fusion** — axis 6 of the accumulation list: a summary is a different
+   representation of the document, not merely extra coverage of it.
+4. **Token budget** — summaries instead of full text at high `k`, which is directly valuable now that
+   prefill is the measured constraint on `k`.
+
+The blocker is the same in every case and has a known shape: summarizing a whole corpus at import is
+hours-to-days and was disqualified for that reason, while summarizing **lazily, over what is actually looked
+at**, bounds the cost by usage. That is what stage 3 needs anyway, so the four uses share one piece of work
+and one fix.
+
 **One caveat on the metric, which cuts against the synthesis numbers specifically.** Set recall asks
 whether *these four* documents came back, and a broad question over a large corpus has many documents that
 answer it equally well — so the absolute synthesis levels are a severe floor, more so than the known-item
