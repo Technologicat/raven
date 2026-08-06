@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+import pytest
+import requests
+
 from raven.papers import httpfetch
 
 
@@ -17,15 +20,22 @@ class _FakeResponse:
 
 
 class _ScriptedSession:
-    """Returns canned responses in order; records the request kwargs each call."""
+    """Returns canned responses in order; records the request kwargs each call.
 
-    def __init__(self, responses: list[_FakeResponse]) -> None:
+    An entry that is an `Exception` instance is *raised* instead of returned, which is how `requests`
+    reports a transport failure — a dropped connection or a read timeout never becomes a response.
+    """
+
+    def __init__(self, responses: list) -> None:
         self._responses = list(responses)
         self.calls: list[dict] = []
 
     def __call__(self, url, params=None, headers=None, timeout=None):
         self.calls.append({"url": url, "params": params, "headers": headers, "timeout": timeout})
-        return self._responses.pop(0)
+        item = self._responses.pop(0)
+        if isinstance(item, Exception):
+            raise item
+        return item
 
 
 def test_useragent_identifies_raven():
@@ -102,7 +112,12 @@ def test_arxiv_get_returns_final_429_after_max_attempts():
 
 
 def test_arxiv_get_does_not_retry_non_429():
-    """5xx and other failures are returned immediately — the caller decides."""
+    """5xx and other failures are returned immediately — the caller decides.
+
+    A status is an *answer*: the server was reached and said something. Only 429 carries a documented
+    "try again later", so the rest go straight back to the caller, which knows what a 404 means for the
+    request it made. Contrast the transport-error tests below, where there is no answer at all.
+    """
     session = _ScriptedSession([_FakeResponse(500)])
     with patch.object(httpfetch.requests, "get", side_effect=session), \
          patch.object(httpfetch.time, "sleep") as sleep_mock:
@@ -110,3 +125,41 @@ def test_arxiv_get_does_not_retry_non_429():
     assert resp.status_code == 500
     assert len(session.calls) == 1
     sleep_mock.assert_not_called()
+
+
+def test_arxiv_get_retries_transport_error_then_succeeds():
+    """A dropped connection is retried with backoff, not surfaced.
+
+    This is what `download.get_papers_metadata` depends on: one request now carries up to 100
+    identifiers, so a transient failure that used to cost a single paper would cost a hundred.
+    """
+    session = _ScriptedSession([requests.exceptions.ConnectionError("connection reset"),
+                                _FakeResponse(200)])
+    with patch.object(httpfetch.requests, "get", side_effect=session), \
+         patch.object(httpfetch.time, "sleep") as sleep_mock:
+        resp = httpfetch.arxiv_get("https://example.test/api", base_backoff=1.0)
+    assert resp.status_code == 200
+    assert len(session.calls) == 2
+    assert sleep_mock.call_args.args[0] == 1.0  # base_backoff * 2**0
+
+
+def test_arxiv_get_retries_read_timeout():
+    """The failure actually observed against arXiv's `id_list` endpoint (2026-08-06)."""
+    session = _ScriptedSession([requests.exceptions.ReadTimeout("timed out"),
+                                requests.exceptions.ReadTimeout("timed out"),
+                                _FakeResponse(200)])
+    with patch.object(httpfetch.requests, "get", side_effect=session), \
+         patch.object(httpfetch.time, "sleep") as sleep_mock:
+        resp = httpfetch.arxiv_get("https://example.test/api", base_backoff=1.0)
+    assert resp.status_code == 200
+    assert [c.args[0] for c in sleep_mock.call_args_list] == [1.0, 2.0]  # exponential
+
+
+def test_arxiv_get_reraises_transport_error_after_max_attempts():
+    """A real outage still surfaces — retrying must not turn "down" into "silently no data"."""
+    session = _ScriptedSession([requests.exceptions.ConnectionError("down")] * 3)
+    with patch.object(httpfetch.requests, "get", side_effect=session), \
+         patch.object(httpfetch.time, "sleep"), \
+         pytest.raises(requests.exceptions.ConnectionError):
+        httpfetch.arxiv_get("https://example.test/api", max_attempts=3, base_backoff=1.0)
+    assert len(session.calls) == 3

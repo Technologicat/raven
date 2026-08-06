@@ -37,22 +37,43 @@ def arxiv_get(url: str,
               timeout: float = 30,
               max_attempts: int = 3,
               base_backoff: float = 3.0) -> requests.Response:
-    """GET `url`, with arXiv-identifying `User-Agent` and retry-with-backoff on HTTP 429.
+    """GET `url`, with arXiv-identifying `User-Agent` and retry-with-backoff.
 
-    On a 429 response, retries up to `max_attempts` total attempts. Wait time
-    between attempts is taken from the `Retry-After` response header (treated
-    as seconds) when present, falling back to `base_backoff * 2**attempt`
-    (3 s, 6 s, 12 s, ...) otherwise.
+    Retried, up to `max_attempts` total attempts:
 
-    Returns the `requests.Response` from the final attempt — the caller is
-    responsible for `raise_for_status()` and body parsing. Non-429 statuses
-    (including 5xx) are returned immediately without retry; arXiv's TOU
-    only motivates 429 handling, and the caller's higher-level loop already
-    survives unrelated failures.
+    - **HTTP 429** (rate limited). Wait time comes from the `Retry-After` response header (treated as
+      seconds) when present, falling back to `base_backoff * 2**attempt` (3 s, 6 s, 12 s, ...).
+    - **Transport errors** — connection failures, read timeouts, DNS trouble: anything
+      `requests` raises rather than answers. Same backoff. The exception is re-raised if the last
+      attempt also fails, so a genuine outage still surfaces rather than being swallowed.
+
+    Returns the `requests.Response` from the final attempt — the caller is responsible for
+    `raise_for_status()` and body parsing. HTTP error *statuses* other than 429 (including 5xx) are
+    returned immediately without retry; those are answers, and the caller is better placed to decide
+    what a 404 means than this function is.
+
+    **Why transport errors are retried at all**, since an earlier version deliberately did not: the
+    argument then was that the caller's own loop already survives unrelated failures, which held while
+    callers fetched one paper per request. `download.get_papers_metadata` batches up to 100 identifiers
+    into a single request, so one dropped connection now costs a hundred papers instead of one, and the
+    per-item loop can no longer absorb it. Observed on 2026-08-06: an `id_list` request to arXiv timed
+    out while a `search_query` from the same machine answered in 0.087 s — transient, and exactly the
+    shape a retry fixes.
     """
     headers = {"User-Agent": USER_AGENT}
     for attempt in range(max_attempts):
-        response = requests.get(url, params=params, headers=headers, timeout=timeout)
+        try:
+            response = requests.get(url, params=params, headers=headers, timeout=timeout)
+        except requests.exceptions.RequestException as exc:
+            if attempt + 1 >= max_attempts:
+                raise
+            wait_s = base_backoff * (2 ** attempt)
+            logger.warning(
+                f"arxiv_get: {type(exc).__name__} from {url} "
+                f"(attempt {attempt + 1}/{max_attempts}); retrying in {wait_s:.1f} s: {exc}"
+            )
+            time.sleep(wait_s)
+            continue
         if response.status_code != 429:
             return response
         if attempt + 1 >= max_attempts:

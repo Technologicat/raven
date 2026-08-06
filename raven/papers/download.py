@@ -14,8 +14,12 @@ __all__ = [
     "ArxivMetadataError",
     "format_years",
     "format_filename",
+
     "parse_metadata_response",
     "get_paper_metadata",
+    "parse_metadata_responses",
+    "get_papers_metadata",
+
     "download_papers",
     "extract_ids_from_bib",
     "main",
@@ -44,6 +48,15 @@ from .utils import deduplicate_arxiv_ids
 GLOBE = "\U0001f310"  # 🌐 — for progress messages indicating internet access
 CHECKMARK = "\u2713"  # ✓
 CROSS = "\u2717"      # ✗
+
+
+ARXIV_API_URL = "https://export.arxiv.org/api/query"
+ATOM_NS = {"atom": "http://www.w3.org/2005/Atom"}
+
+# Identifiers per metadata request. arXiv answers an `id_list` naming many papers in one response, and
+# the rate limit is per *request*, so the metadata for a whole run costs ceil(N / 100) waits instead of
+# N. The PDFs still cost one wait each, so this halves a run's wall time rather than eliminating it.
+METADATA_BATCH_SIZE = 100
 
 
 class ArxivMetadataError(ValueError):
@@ -125,15 +138,25 @@ def parse_metadata_response(xml_content: bytes,
     a call to ``http://export.arxiv.org/api/query?id_list=<arxiv_id>``;
     *arxiv_id* is the original query ID, used to derive ``resolved_id``.
     """
-    ns = {"atom": "http://www.w3.org/2005/Atom"}
     root = ET.fromstring(xml_content)
-    entry = root.find(".//atom:entry", ns)
+    entry = root.find(".//atom:entry", ATOM_NS)
     if entry is None:
         # arXiv returns an entry-less feed for a nonexistent or malformed ID
         # (e.g. a typoed month, as in "2614.19062"). Fail with something
         # readable instead of an AttributeError from the next .find().
         raise ArxivMetadataError(f"no arXiv entry for ID '{arxiv_id}' (nonexistent or malformed ID?)")
+    return _metadata_from_entry(entry, arxiv_id, title_length_limit)
 
+
+def _metadata_from_entry(entry: ET.Element,
+                         arxiv_id: str,
+                         title_length_limit: int = 128) -> Dict[str, str]:
+    """Build the metadata dict from one already-located Atom ``<entry>`` element.
+
+    Split out from `parse_metadata_response` so that the single-ID and batched paths parse identically;
+    the two differ only in how they find the entry.
+    """
+    ns = ATOM_NS
     title_elem = entry.find(".//atom:title", ns)
     title = title_elem.text.strip() if title_elem is not None else "untitled"
 
@@ -197,17 +220,115 @@ def parse_metadata_response(xml_content: bytes,
 def get_paper_metadata(arxiv_id: str,
                        title_length_limit: int = 128) -> Dict[str, str]:
     """Fetch and parse metadata from arXiv API, including PDF link."""
-    api_url = f"https://export.arxiv.org/api/query?id_list={arxiv_id}"
+    api_url = f"{ARXIV_API_URL}?id_list={arxiv_id}"
     response = httpfetch.arxiv_get(api_url)
     response.raise_for_status()
     return parse_metadata_response(response.content, arxiv_id, title_length_limit)
 
 
+def parse_metadata_responses(xml_content: bytes,
+                             arxiv_ids: List[str],
+                             title_length_limit: int = 128) -> Dict[str, Dict[str, str]]:
+    """Parse a multi-entry arXiv Atom response into ``{requested id: metadata}``.
+
+    Pure function — no network access. `arxiv_ids` are the identifiers that were asked for, and the
+    result is keyed by those strings rather than by what arXiv answered with, so the caller can look up
+    what it requested without re-deriving anything.
+
+    Entries are matched to requests by identifier, never by position. arXiv returns entries in `id_list`
+    order in practice, but relying on that would fail silently and paper-by-paper the first time it did
+    not — every filename after a misalignment would be built from the wrong paper's metadata, which is a
+    far worse outcome than a missing entry.
+
+    **A request that names a version is matched on that exact version**, and only a request without one
+    falls back to the base identifier, taking the highest version returned. This mirrors what the two
+    forms mean to arXiv — `2301.12345v2` is that revision, `2301.12345` is whatever is current — and it
+    is what makes a batch holding two versions of one paper safe. Matching on the base alone would map
+    both requests onto whichever entry came back first, so one of them would quietly receive the other's
+    `pdf_url` and filename: the wrong PDF, saved under a name asserting it is the right one.
+
+    Requested identifiers with no matching entry are simply absent from the result. That is the
+    batching analogue of `ArxivMetadataError` for a single ID, and it is left to the caller because one
+    unusable identifier must not cost the other 99 in its batch.
+    """
+    root = ET.fromstring(xml_content)
+    by_exact: Dict[str, ET.Element] = {}
+    by_base_latest: Dict[str, tuple[int, ET.Element]] = {}
+    for entry in root.findall(".//atom:entry", ATOM_NS):
+        id_elem = entry.find(".//atom:id", ATOM_NS)
+        if id_elem is None or not id_elem.text:
+            continue
+        returned_id = id_elem.text.rsplit("/abs/", 1)[-1]
+        base, version = identifiers.split_version(returned_id)
+        by_exact.setdefault(returned_id, entry)
+        if version >= by_base_latest.get(base, (0, None))[0]:
+            by_base_latest[base] = (version, entry)
+
+    found: Dict[str, Dict[str, str]] = {}
+    for arxiv_id in arxiv_ids:
+        base, _version = identifiers.split_version(arxiv_id)
+        if arxiv_id != base:  # the request named a version; nothing else will do
+            entry = by_exact.get(arxiv_id)
+        else:
+            entry = by_base_latest.get(base, (0, None))[1]
+        if entry is not None:
+            found[arxiv_id] = _metadata_from_entry(entry, arxiv_id, title_length_limit)
+    return found
+
+
+def get_papers_metadata(arxiv_ids: List[str],
+                        batch_size: int = METADATA_BATCH_SIZE,
+                        title_length_limit: int = 128,
+                        rate_limiter: RateLimiter | None = None) -> Dict[str, Dict[str, str]]:
+    """Fetch metadata for many papers at once, keyed by requested identifier.
+
+    One request per `batch_size` identifiers rather than one per paper, which is where the wall-clock
+    saving lives: the politeness delay is charged per request, and a personal collection runs to
+    hundreds of papers.
+
+    `batch_size`: identifiers per request.
+    `rate_limiter`: share the caller's limiter so the metadata and PDF requests are paced against one
+                    budget. A fresh one is used if not given.
+
+    Identifiers arXiv returns nothing for are absent from the result rather than raising, so the caller
+    reports the gap and proceeds with what came back.
+    """
+    if rate_limiter is None:
+        rate_limiter = RateLimiter()
+
+    found: Dict[str, Dict[str, str]] = {}
+    for start in range(0, len(arxiv_ids), batch_size):
+        batch = arxiv_ids[start:start + batch_size]
+        print(f"{colorizer.colorize(GLOBE, colorizer.Style.BRIGHT, colorizer.Fore.BLUE)} "
+              f"fetching metadata for {len(batch)} papers "
+              f"({start + 1}-{start + len(batch)} of {len(arxiv_ids)})")
+        rate_limiter.wait()
+        # A failed request costs its batch, not the run. Batching trades granularity for wall time, and
+        # without this that trade would extend to failures too: one blip mid-run would abort a job that
+        # had already downloaded hundreds of papers. The batch's identifiers are simply absent from the
+        # result, which the caller already reports paper by paper.
+        try:
+            response = httpfetch.arxiv_get(ARXIV_API_URL,
+                                           params={"id_list": ",".join(batch), "max_results": len(batch)})
+            response.raise_for_status()
+        except Exception as exc:  # noqa: BLE001 -- one bad batch must not abort the run
+            print(f"{colorizer.colorize(CROSS, colorizer.Style.BRIGHT, colorizer.Fore.RED)} "
+                  f"metadata request for {len(batch)} papers failed: {type(exc).__name__}: {exc}")
+            traceback.print_exc()
+            continue
+        found.update(parse_metadata_responses(response.content, batch, title_length_limit))
+    return found
+
+
 def download_papers(arxiv_ids: List[str],
-                    output_dir: str = "papers") -> None:
+                    output_dir: str = "papers",
+                    batch_size: int = METADATA_BATCH_SIZE) -> None:
     """Download papers from arXiv, naming files from their metadata.
 
     Skips papers already present in *output_dir* (matched by arXiv ID in filename).
+
+    `batch_size`: identifiers per metadata request, passed to `get_papers_metadata`. Lower it to make
+                  a failure lose fewer papers; the cost is one rate-limit wait per extra request.
     """
     output_dir = str(pathlib.Path(output_dir).expanduser().resolve())
 
@@ -232,16 +353,17 @@ def download_papers(arxiv_ids: List[str],
     output_dir_existing_arxiv_ids = [aid for aid, unused_filename in arxiv_pdf_files_in_output_dir]
 
     rate_limiter = RateLimiter()
+
+    # Metadata for the whole run first, batched — see `get_papers_metadata`. The PDFs below still cost
+    # one rate-limited request each, so this roughly halves the run rather than making it instant.
+    metadata_by_id = get_papers_metadata(arxiv_ids, batch_size=batch_size, rate_limiter=rate_limiter)
+
     seen: set[str] = set()
     for arxiv_id in arxiv_ids:
         try:
-            # TODO: We could reduce total wait time by batching the metadata
-            # fetch into sets of up to 100 IDs each, needing just one metadata
-            # request per set (instead of per paper as now). For how, see the
-            # external `arxiv2bib` tool.
-            print(f"{colorizer.colorize(GLOBE, colorizer.Style.BRIGHT, colorizer.Fore.BLUE)} {arxiv_id}: fetching metadata")
-            rate_limiter.wait()
-            metadata = get_paper_metadata(arxiv_id)
+            metadata = metadata_by_id.get(arxiv_id)
+            if metadata is None:
+                raise ArxivMetadataError(f"no arXiv entry for ID '{arxiv_id}' (nonexistent or malformed ID?)")
             resolved_id = metadata["resolved_id"]
             resolved_id_str = f" (\u2192 {resolved_id})" if resolved_id != arxiv_id else ""
             if resolved_id not in seen:

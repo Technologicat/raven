@@ -15,6 +15,7 @@ from raven.papers.download import (
     format_years,
     get_paper_metadata,
     parse_metadata_response,
+    parse_metadata_responses,
 )
 from raven.papers.utils import deduplicate_arxiv_ids
 
@@ -440,25 +441,119 @@ class _NoWaitRateLimiter:
         pass
 
 
+def _requested_ids(url, kwargs) -> list[str]:
+    """The `id_list` of a metadata request, however it was spelled.
+
+    `get_paper_metadata` builds the query into the URL; `get_papers_metadata` passes `params=`, which is
+    the right way round for a batch (requests then encodes the commas, and the `/` in an old-style
+    identifier). The mock has to answer both.
+    """
+    id_list = (kwargs.get("params") or {}).get("id_list")
+    if id_list is None and "id_list=" in url:
+        id_list = url.split("id_list=", 1)[1].split("&", 1)[0]
+    return id_list.split(",") if id_list else []
+
+
+def _atom_feed(*entry_xmls: bytes) -> bytes:
+    """Splice one-entry feeds into a single multi-entry feed, as a batch request answers."""
+    entries = b"".join(b"<entry>" + x.split(b"<entry>", 1)[1].rsplit(b"</entry>", 1)[0] + b"</entry>"
+                       for x in entry_xmls if b"<entry>" in x)
+    return (b'<?xml version="1.0" encoding="UTF-8"?>'
+            b'<feed xmlns="http://www.w3.org/2005/Atom">' + entries + b'</feed>')
+
+
 def _mock_requests_get(metadata_responses, pdf_content=b"%PDF-fake-bytes"):
     """Return a ``requests.get`` stand-in that answers metadata+PDF calls.
 
-    *metadata_responses* is a dict mapping arXiv ID → Atom XML bytes.  Any
-    URL containing ``/pdf/`` returns *pdf_content*; any URL containing
-    ``api/query?id_list=<id>`` returns the mapped XML.
+    *metadata_responses* is a dict mapping arXiv ID → Atom XML bytes.  Any URL containing ``/pdf/``
+    returns *pdf_content*; a metadata request returns a feed holding an entry for every requested ID
+    that the dict knows about.
+
+    A batch naming an unknown ID is answered with the entries it *can* supply rather than raising, since
+    that is what arXiv does and what `parse_metadata_responses` is written against — the caller detects
+    the gap by diffing the request against the result.
     """
     def fake_get(url, *args, **kwargs):
         if "/pdf/" in url:
             return _FakeResponse(pdf_content)
-        for arxiv_id, xml in metadata_responses.items():
-            if f"id_list={arxiv_id}" in url:
-                return _FakeResponse(xml)
-        raise AssertionError(f"Unexpected URL in test: {url}")
+        wanted = _requested_ids(url, kwargs)
+        if not wanted:
+            raise AssertionError(f"Unexpected URL in test: {url}")
+        known = [metadata_responses[i] for i in wanted if i in metadata_responses]
+        return _FakeResponse(_atom_feed(*known) if known else _atom_feed())
     return fake_get
+
+
+class TestParseMetadataResponses:
+    """Batched parsing: a multi-entry feed mapped back onto the identifiers that were requested."""
+
+    def test_maps_each_requested_id_to_its_entry(self):
+        feed = _atom_feed(_atom_response(arxiv_id="2301.00001", title="First"),
+                          _atom_response(arxiv_id="2301.00002", title="Second"))
+        got = parse_metadata_responses(feed, ["2301.00001", "2301.00002"])
+        assert got["2301.00001"]["title"] == "First"
+        assert got["2301.00002"]["title"] == "Second"
+
+    def test_order_of_entries_does_not_matter(self):
+        """Matching is by identifier, never by position — arXiv's ordering is not a contract."""
+        feed = _atom_feed(_atom_response(arxiv_id="2301.00002", title="Second"),
+                          _atom_response(arxiv_id="2301.00001", title="First"))
+        got = parse_metadata_responses(feed, ["2301.00001", "2301.00002"])
+        assert got["2301.00001"]["title"] == "First"
+        assert got["2301.00002"]["title"] == "Second"
+
+    def test_two_versions_of_one_paper_do_not_collide(self):
+        """The regression that motivated exact-version matching.
+
+        Both requests share a base identifier, so matching on the base alone hands them the same entry —
+        and the loser silently receives the other version's `pdf_url` and filename: the wrong PDF, saved
+        under a name asserting it is the right one.
+        """
+        feed = _atom_feed(_atom_response(arxiv_id="2301.12345", version="1", title="Original"),
+                          _atom_response(arxiv_id="2301.12345", version="3", title="Revised"))
+        got = parse_metadata_responses(feed, ["2301.12345v1", "2301.12345v3"])
+        assert got["2301.12345v1"]["title"] == "Original"
+        assert got["2301.12345v3"]["title"] == "Revised"
+        assert got["2301.12345v1"]["pdf_url"] != got["2301.12345v3"]["pdf_url"]
+
+    def test_unversioned_request_takes_the_highest_version(self):
+        """An identifier with no version means "whatever is current", as it does to arXiv."""
+        feed = _atom_feed(_atom_response(arxiv_id="2301.12345", version="1", title="Original"),
+                          _atom_response(arxiv_id="2301.12345", version="3", title="Revised"))
+        got = parse_metadata_responses(feed, ["2301.12345"])
+        assert got["2301.12345"]["title"] == "Revised"
+
+    def test_requested_but_unreturned_id_is_absent_not_an_error(self):
+        """One unusable identifier must not cost the rest of its batch."""
+        feed = _atom_feed(_atom_response(arxiv_id="2301.00002"))
+        got = parse_metadata_responses(feed, ["2614.19062", "2301.00002"])
+        assert "2614.19062" not in got
+        assert "2301.00002" in got
+
+    def test_version_named_but_not_returned_is_absent(self):
+        """Asking for v2 and being handed v3 is a miss, not a near-enough match."""
+        feed = _atom_feed(_atom_response(arxiv_id="2301.12345", version="3"))
+        assert parse_metadata_responses(feed, ["2301.12345v2"]) == {}
 
 
 class TestDownloadPapers:
     """End-to-end download orchestration with mocked HTTP and filesystem."""
+
+    def test_metadata_is_fetched_in_one_request_per_batch(self, tmp_path):
+        """The point of batching: N papers cost ceil(N / batch_size) metadata requests, not N."""
+        responses = {f"2301.0000{i}": _atom_response(arxiv_id=f"2301.0000{i}") for i in range(1, 5)}
+        metadata_calls = []
+
+        def counting_get(url, *a, **kw):
+            if "/pdf/" not in url:
+                metadata_calls.append(kw.get("params", url))
+            return _mock_requests_get(responses)(url, *a, **kw)
+
+        with patch.object(download_module, "RateLimiter", _NoWaitRateLimiter), \
+             patch.object(httpfetch_module.requests, "get", side_effect=counting_get):
+            download_papers(list(responses), output_dir=str(tmp_path))
+        assert len(metadata_calls) == 1
+        assert len(list(tmp_path.glob("*.pdf"))) == 4
 
     def test_downloads_single_paper(self, tmp_path):
         xml = _atom_response()
@@ -510,18 +605,24 @@ class TestDownloadPapers:
         pdf_calls = [u for u in calls if "/pdf/" in u]
         assert len(pdf_calls) == 1  # PDF fetched once, even though ID repeated
 
-    def test_exception_during_fetch_continues(self, tmp_path, capsys):
-        """An unexpected failure on one ID doesn't abort the run, and prints a traceback."""
+    def test_failed_metadata_batch_does_not_abort_the_run(self, tmp_path, capsys):
+        """A network blip costs its batch, not the whole run, and keeps its traceback for debugging.
+
+        Batch size is forced to 1 so the two identifiers land in separate requests — with the real batch
+        size they would share one, and a single failure would legitimately take both. That is the trade
+        batching makes, and the property worth pinning is the weaker one: whatever else was going to be
+        fetched still gets fetched.
+        """
         xml_good = _atom_response(arxiv_id="2301.00002")
 
         def flaky_get(url, *a, **kw):
-            if "id_list=2301.00001" in url:
+            if "2301.00001" in str(kw.get("params", "")) or "id_list=2301.00001" in url:
                 raise RuntimeError("simulated network blip")
             return _mock_requests_get({"2301.00002": xml_good})(url, *a, **kw)
 
         with patch.object(download_module, "RateLimiter", _NoWaitRateLimiter), \
              patch.object(httpfetch_module.requests, "get", side_effect=flaky_get):
-            download_papers(["2301.00001", "2301.00002"], output_dir=str(tmp_path))
+            download_papers(["2301.00001", "2301.00002"], output_dir=str(tmp_path), batch_size=1)
         # The good one still lands
         pdfs = list(tmp_path.glob("*.pdf"))
         assert len(pdfs) == 1

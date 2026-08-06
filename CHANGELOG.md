@@ -114,6 +114,12 @@
 
 - prints the paper's citation (`Authors (Year) - Title`) just before downloading its PDF, so it stays on screen during the rate-limit wait — a mistyped ID that resolved to the wrong paper is caught before the download completes. Only shown when a paper is actually being fetched; already-present papers are reported by their existing one-line status.
 
+*Raven-arxiv-download*
+
+- fetches metadata for up to 100 papers per request instead of one, roughly halving the wall time of a large download. arXiv's three-second politeness delay is charged per *request*, and each paper needs two of them — one for metadata, one for the PDF — so the metadata half of that cost now amortizes away: 170 papers went from 340 waits to 172. The PDF fetches are unchanged, one per paper, which is the floor.
+  - A request that fails now costs its batch rather than the run, and transport failures (dropped connections, read timeouts) are retried with backoff before it comes to that. Batching makes this matter: one blip used to lose a single paper, and would otherwise now lose a hundred.
+  - Papers are matched to the metadata that comes back by identifier, and a request naming a version is matched on *that* version. Asking for two versions of one paper in a single run therefore gets each its own metadata, rather than both silently receiving whichever arXiv answered with first.
+
 *Raven-arxiv2id*
 
 - new `-s` / `--strip-versions` option prints each identifier without its version suffix. This is what refreshes a collection of preprints: an arXiv identifier carrying a version means *that* version, and one without means whatever is current, so dropping the suffix turns the tool's output into a request for the latest of everything — `raven-arxiv2id -i ~/papers --strip-versions` piped to `raven-arxiv-download` fetches the papers that have been revised since you saved them, and to `raven-arxiv2bib` brings the bibliography along. Previously this needed hand-editing the identifier list, and there was no way to notice which papers had moved on.
