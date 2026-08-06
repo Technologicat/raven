@@ -261,8 +261,30 @@ already computed** — best-ranked first and last, worst in the middle — which
 that recovers most of the gain, the LLM pass is unnecessary, and the whole question turns out to be about
 *placement* rather than *judgment*.
 
+**The cost objection, and it may rule the LLM pass out before quality is even measured** (Juha,
+2026-08-06): a rerank pass is a **KV-cache double miss**. It is a *cold* prompt — it does not share the
+system-prompt-and-history prefix, so it reuses nothing — and it carries the same ~18k-token retrieved
+block that the answer pass will then prefill again. The block is uncacheable either way, so reordering
+costs nothing extra downstream, but nothing is saved either: **the retrieved block is prefilled twice.**
+
+At the measured ~5000 tokens/s that turns 3.4 s into roughly 7 s per turn, which is almost exactly the
+`k=100` figure in §1 — a cost already rejected there as not worth its recall. So the LLM rerank starts at
+a latency this project has *already declined to pay*, before any benefit is demonstrated.
+
+**Two ways out, and both are worth measuring before the full version:**
+
+- **Rerank on candidate *previews*, not full chunks.** The pass has to judge relevance, not answer the
+  question, so it does not need the whole text: a document id plus the first hundred characters of each
+  candidate is ~3k tokens rather than ~18k. That drops the extra prefill from ~3.4 s to well under a
+  second and makes the idea viable again. It also matches what a human skimming a result list does.
+- **Reorder by the retrieval score already computed** — best-ranked first and last, weakest in the middle
+  — which costs **no extra pass at all**. If the benefit is attentional rather than judgmental, this
+  captures it for free, and its existence is what makes the LLM version falsifiable: run the free variant
+  first, and the LLM pass has to beat *it*, not the unordered baseline.
+
 Measurable with the known-item harness exactly as the cross-encoder was: rerank the `k=50` list with the
-main model and score recall@5 against gold. Needs the LLM backend, so it queues behind question generation.
+main model and score recall@5 against gold. The free reordering variant needs no LLM at all and can be run
+against the existing sweeps; the LLM variants queue behind question generation.
 
 **Score-based fusion instead of rank-based — no gain in ranking quality.** *Measured 2026-08-06.* This
 was ranked as the most promising untried idea, on the reasoning that RRF fuses positions and discards
