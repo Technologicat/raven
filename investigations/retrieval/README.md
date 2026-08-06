@@ -739,7 +739,27 @@ cacheable and both LM Studio and oobabooga do cache it). What is left after that
 unavoidable: the retrieved block is re-processed every turn, at the measured median of 299 tokens per
 merged result.
 
-**Where the ceiling sits is not known, and it is the number worth measuring.** `k=20` (~6k tokens) is
+**Measured 2026-08-06 — and k=50 is the answer.** `prefill_cost.py`, qwen3.6-35b-a3b (IQ4_NL_XL, 128 Ki)
+on the LLM machine, timing a request capped at one generated token so the figure is prefill rather than
+generation. Prefill runs at roughly 5000 tokens/s and the cost is near-linear:
+
+| k | tokens | prefill | recall@k | marginal cost |
+|---|---|---|---|---|
+| 20 (shipped) | 7,400 | 1.7 s | 74.7% | — |
+| **50** | 18,200 | **3.4 s** | **84.8%** | **0.17 s per recall point** |
+| 100 | 37,000 | 7.1 s | 89.9% | 0.73 s per point |
+| 200 | 75,000 | 16 s | 96.0% | 1.5 s per point |
+
+`k=50` buys its recall at roughly a quarter the price of any step beyond it, and is the last value whose
+latency stays conversational. `k=200` at 16 s per turn is unusable, which matches the operator's
+judgement before the measurement. **This is the one shippable change the retrieval work produced:** a
+config value, +10.1 points of recall@k, +1.7 s per turn.
+
+Note the tokens-per-result works out near 370, above the 299 median measured on merged spans — the
+larger results are the ones that survive to the top, so a budget estimated from the median understates
+the cost.
+
+**The earlier statement, kept because the reasoning was wrong in an instructive way:** `k=20` (~6k tokens) is
 acceptable in practice; `k=200` (~60k) is not. That leaves the interesting range untested, and the
 recall curve says the best marginal deal lies inside it — `k=50` costs 2.5x the prefill of 20 and buys
 +10.1 points (74.7% → 84.8%), where the next doubling to 100 buys only +5.1 more. So `k=50` is the
