@@ -3575,15 +3575,30 @@ indexing work that is cheaper and already lands in ChromaDB per document. So per
 as each document is read, and let a restart re-read text instead of re-parsing PDFs. This touches
 neither the coalescer, nor commit frequency, nor the rebuild cost.
 
-Sketch, to be confirmed against the code:
+**There are two extraction paths, and neither persists. They want one store** (Juha, 2026-08-06):
 
-- Cache under the datastore dir, one file per document, written atomically (temp + rename) so a crash
-  mid-write cannot leave a half-file that reads as valid.
-- Key on what `HybridIR._stat` already computes — size and mtime — so an edited document invalidates
-  its entry by the same rule the index already uses for change detection. Content hashing would be
-  more correct and costs a full read of 6 GB, which is what this is trying to avoid.
-- `HybridIRFileSystemEventHandler._read` is the single place to hook: check the cache, extract on miss,
-  write through.
+- **RAG ingest** — `HybridIRFileSystemEventHandler._read` → `docextract`. No caching at all; every
+  re-index re-parses every PDF.
+- **Chat attachments** — `textfilestore.sidecar_to_text` → `docextract`, memoized in
+  `_extracted_text_cache`, an in-memory dict keyed by sidecar filename. So an attachment is parsed once
+  per *process*: every app restart re-extracts every document the conversation touches.
+
+`docextract` is already the single extraction backend for both (see the project CLAUDE.md), which makes
+it the natural home — a content-addressed on-disk memo there serves both callers without either knowing,
+and without a third store to keep in sync.
+
+Sketch, revised:
+
+- **Key on the content hash, not size+mtime.** The first version of this note dismissed hashing as
+  "a full read of 6 GB, which is what this is trying to avoid" — wrong, and worth correcting: what is
+  being avoided is ~40 minutes of pypdf *parsing*, against ~30 s to read 6 GB from NVMe. Hashing is
+  affordable at that ratio, invalidates exactly when the content changes with no mtime heuristics, and
+  matches how sidecars are already keyed. It also means a PDF that is both attached to a chat and
+  present in the documents directory is extracted once and shared.
+- Atomic writes (temp + rename), so a crash mid-write cannot leave a half-file that reads as valid.
+- Eviction: the same problem the sidecar store already solved with mark-and-sweep. A content-addressed
+  cache has no natural owner, so it needs either a size cap with LRU, or a sweep against the union of
+  live documents and live sidecars.
 
 Second payoff, and it may matter more than the crash safety: **re-indexing the same corpus under
 different chunk settings becomes cheap**, because extraction is the part that is not repeated. That is
