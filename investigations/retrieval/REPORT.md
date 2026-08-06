@@ -132,9 +132,20 @@ resemblance is worth keeping in view. What differs, and none of it is significan
 - the two neighbouring rules fail, in opposite directions, for reasons the mechanism predicts.
 
 Five independent lines agreeing is a different kind of evidence from one p-value, and worth more than the
-p-value suggests — but it is still one corpus shape. The honest gap is that no *second* many-chunk corpus
-exists to replicate on: banichuk is single-chunk (so it can only serve as another null control) and fiction
-is too small for document-level discrimination.
+p-value suggests — but it is still one corpus shape.
+
+**What a replicating corpus would have to be**, since the constraint is not obvious: **many documents *and*
+long ones**, both at once. `sum` and `max` can only differ where a document yields several matching chunks,
+which needs long documents; and recall@20 must not saturate, which needs enough documents that 20 is a
+small fraction. Fiction fails the second (19 documents), banichuk and both abstract corpora fail the first
+(one to three chunks). That is a happy constraint rather than an awkward one, because "many long documents"
+is exactly Librarian's target case — a researcher's folder of PDFs.
+
+**A stronger and cheaper test exists inside the corpus already built.** Split the 1268 fulltext papers by
+length and ask whether `sum`'s advantage *grows with document length*. Under the proposed mechanism it must:
+near zero for the shortest papers, largest for the longest. A dose-response relationship across the corpus
+is considerably harder to obtain by chance than a single group difference, and it needs no new data, no
+downloads and no re-indexing. Run this before going looking for a second corpus.
 
 **The length confound was checked rather than argued away, and it acquits `sum`.** The worry is that
 summing rewards documents with more chunks, i.e. longer ones, so the gain could be a length prior wearing
@@ -304,21 +315,44 @@ If the principle is the attack, the generative question is what *else* fails ind
 
    Cheap to have eliminated — ten minutes, no new retrieval — which is the argument for keeping this list
    rather than reasoning about each idea in isolation.
-4. **Across query views, for free.** Embed the same query under both the `qa` and the symmetric role and
-   fuse the two result sets. Two embeddings of one query, failing differently, at no LLM cost and no added
-   latency. Distinct from the refuted multi-query work, which split a message into *fragments* that then
-   outvoted the whole — here every view is the whole query, so the failure mode does not apply.
-5. **Across chunk scales.** Index at, say, 500 and 2000 characters and fuse both. Small chunks find precise
-   facts, large chunks find diffuse topics. The appeal is that it **dissolves the chunk-size sweep rather
-   than winning it**: instead of choosing a size, index at two and let the disagreement be informative.
-   Costs index space, needs no query-time model and no tuning constant.
-6. **Across document representations.** Already built by accident — the same 1268 papers exist as abstracts
-   *and* as fulltext, and an abstract says what a paper is *about* where the fulltext says what it
-   *contains*. Fusing across representations is independent evidence, and it reframes the document-summary
-   idea (§3) as an *independent view* rather than as extra coverage, which is a considerably better
-   argument for building it.
-7. **Across query terms.** How many *distinct* query terms a document matches, as against matching one term
-   strongly. Classic coordination-level matching; BM25's per-term saturation does not capture it.
+4. **Across query views — worth testing, and *not* free as first claimed.** Embed the same query under both
+   the `qa` and the symmetric role and fuse the two result sets: two views of one query, failing
+   differently. Distinct from the refuted multi-query work, which split a message into *fragments* that
+   then outvoted the whole — here every view is the whole query, so that failure mode does not apply.
+
+   **Correction to the cost, 2026-08-06.** The roles are different *models* — `default` is
+   `snowflake-arctic-embed-l`, `qa` is `multi-qa-mpnet-base-cos-v1` — so the corpus must be embedded
+   twice and carry a second vector collection. Query-time cost stays small (one extra query embedding,
+   one extra vector search); index-time cost is a full second embedding pass. That puts it in the same
+   gated class as (5), not ahead of it. The original "no cost" claim skipped the index side.
+
+   The prior against it is worth stating so the measurement can overrule it: a *question* should embed far
+   from its *answer* under a symmetric model, which is exactly what the asymmetric `qa` role exists to fix.
+   Juha's own reading, flagged by him as a "surely" — and priors of that shape have lost twice already in
+   this investigation.
+
+5. **Across chunk scales — good idea, blocked on storage.** Index at, say, 500 and 2000 characters and fuse
+   both. Small chunks find precise facts, large chunks find diffuse topics. The appeal is that it
+   **dissolves the chunk-size sweep rather than winning it**: instead of choosing a size, index at two and
+   let the disagreement be informative. No query-time model, no tuning constant.
+
+   *Gated on the datastore work* (`TODO_DEFERRED.md`, "The docs DB stores each document's full text *and*
+   its chunks"). The fulltext corpus already produces a 587 MB `fulldocs/data.json` inside a 2.6 GB index;
+   a second scale roughly doubles it, which is not a reasonable thing to ask of a user before that store
+   is fixed. Revisit once it is.
+
+6. **Across document representations — blocked on the summary work.** The same 1268 papers exist as
+   abstracts *and* fulltext, and an abstract says what a paper is *about* where the fulltext says what it
+   *contains*. But that pair is an artifact of this investigation, not something a user has: in the general
+   case the second representation has to be *made*, which is the LLM summary pass of (§3). What this adds
+   is a better argument for building it — a summary is an **independent view** of the document, not merely
+   extra coverage of it.
+
+7. **Across query terms — cheap, and the data is already there.** How many *distinct* query terms a
+   document matches, as against matching one term strongly. Classic coordination-level matching, which
+   BM25's per-term saturation does not capture. The index stores `tokens` **per chunk**, lemmatized by the
+   same pipeline the query goes through, so this is an offline set intersection with no re-tokenization and
+   no new retrieval. The cheapest untested axis on this list.
 
 **And one to rule out, for the reason that makes the principle work.** Corroboration from a document's
 *semantic neighbours* is tempting and should not be done: neighbours are correlated by construction — that
