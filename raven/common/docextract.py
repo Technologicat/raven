@@ -40,6 +40,7 @@ means an external converter process, and PDF handling was deliberately moved off
 __all__ = ["DocumentExtractionError",
            "supported_extensions",
            "is_supported",
+           "repair_surrogates",
            "extract_text",
            "Extractor",
            "PLAINTEXT", "ALL_FORMATS"]
@@ -349,6 +350,32 @@ def is_supported(path: str | pathlib.Path) -> bool:
     return pathlib.Path(path).suffix.lower() in supported_extensions()
 
 
+def repair_surrogates(text: str) -> str:
+    """Make `text` UTF-8 encodable, recovering what can be recovered.
+
+    A Python `str` holds code points, so any U+D800–U+DFFF in one is a UTF-16 artifact that leaked in
+    undecoded — and `str.encode("utf-8")` refuses it. That refusal is the whole problem: extraction
+    succeeds, the text looks fine in a REPL, and the failure surfaces much later at whatever first tries
+    to put the text on a wire or in a file.
+
+    Two cases, and they want opposite treatment:
+
+      - A surrogate *pair* held as two code points is the real character with its UTF-16 encoding
+        showing. Re-reading the string as the UTF-16 code units it is recovers it — U+D835 U+DC34
+        becomes 𝐴. Worth doing rather than deleting: mathematical alphanumerics are the common source,
+        and dropping them silently unmaths a scientific paper.
+      - An *unpaired* surrogate encodes nothing and has to go.
+
+    Both fall out of one round trip, so mixed text needs no special case. Well-formed text is returned
+    unchanged, astral characters included.
+    """
+    try:
+        text.encode("utf-8")
+        return text
+    except UnicodeEncodeError:
+        return text.encode("utf-16", "surrogatepass").decode("utf-16", "ignore")
+
+
 def extract_text(path: str | pathlib.Path) -> str | None:
     """Extract indexable plaintext from a document file. See the module docstring for the full contract."""
     p = pathlib.Path(path).expanduser()
@@ -358,7 +385,12 @@ def extract_text(path: str | pathlib.Path) -> str | None:
     # filters by extension upstream, so an unknown suffix reaching here is already an unusual case).
     extract = _EXTRACTORS.get(p.suffix.lower(), _extract_plaintext)
     text = extract(p).strip()
-    return text or None
+    # Every extractor funnels through here, which is the point: a backend that hands back undecoded UTF-16
+    # is a property of that backend, not of the caller, and every consumer downstream assumes valid text.
+    repaired = repair_surrogates(text)
+    if repaired != text:
+        logger.warning(f"extract_text: '{p}' extracted with UTF-16 surrogates in the text; repaired.")
+    return repaired or None
 
 
 class Extractor:

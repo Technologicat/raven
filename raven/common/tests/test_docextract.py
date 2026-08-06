@@ -434,6 +434,56 @@ def test_office_extraction_error_chains_cause(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# UTF-16 surrogates leaking out of a PDF
+# ---------------------------------------------------------------------------
+
+class TestSurrogateRepair:
+    """Extracted text must be UTF-8 encodable, because everything downstream assumes it is.
+
+    Met in the wild indexing 1268 arXiv fulltext PDFs: three of them extracted with U+D835 in the text —
+    the high surrogate of the mathematical-alphanumerics block — and the ingest of each died at the
+    *server* boundary with `HTTP 400`, one `UnicodeEncodeError` deep in a JSON encoder. Nothing in that
+    error named the document or the character, and the run reported 1265 of 1268 without saying which
+    three were missing.
+    """
+
+    def test_a_surrogate_pair_is_recovered_as_the_character_it_encodes(self):
+        # The common case, and the reason this repairs rather than strips: U+D835 U+DC34 is 𝐴 with its
+        # UTF-16 encoding showing. Dropping it would quietly unmath a scientific paper.
+        assert docextract.repair_surrogates(chr(0xD835) + chr(0xDC34) + " is a matrix") == "\U0001D434 is a matrix"
+
+    def test_an_unpaired_surrogate_is_dropped(self):
+        # It encodes nothing on its own, so there is nothing to recover.
+        assert docextract.repair_surrogates("x" + chr(0xD835) + "y") == "xy"
+
+    def test_a_pair_survives_alongside_a_stray(self):
+        # Both faults in one string: dropping the stray must not cost the recoverable pair, which is what
+        # a decode of the whole string under `strict` would have done.
+        text = chr(0xD835) + chr(0xDC34) + " and " + chr(0xD835) + " alone"
+        assert docextract.repair_surrogates(text) == "\U0001D434 and  alone"
+
+    @pytest.mark.parametrize("text", ["plain ascii", "\U0001D434 café 日本語", "", "emoji 🦅 and dashes —"])
+    def test_well_formed_text_is_returned_unchanged(self, text):
+        # Including astral characters, which are exactly what a naive "strip anything above the BMP"
+        # repair would have eaten.
+        assert docextract.repair_surrogates(text) == text
+
+    def test_repaired_text_is_always_utf_8_encodable(self):
+        # The property the whole thing exists for, stated as the property rather than as its cases.
+        for text in (chr(0xD835) + chr(0xDC34), "x" + chr(0xDC34) + "y", chr(0xD800) + chr(0xDFFF), "ok"):
+            docextract.repair_surrogates(text).encode("utf-8")
+
+    def test_extract_text_repairs_what_a_backend_hands_back(self, tmp_path, monkeypatch):
+        # The funnel, not just the helper: a backend that returns undecoded UTF-16 is a property of that
+        # backend, and every caller of `extract_text` is entitled to valid text regardless of which one ran.
+        p = tmp_path / "paper.txt"
+        p.write_text("placeholder", encoding="utf-8")
+        monkeypatch.setitem(docextract._EXTRACTORS, ".txt",
+                            lambda _path: "the matrix " + chr(0xD835) + chr(0xDC34) + " is singular")
+        assert docextract.extract_text(p) == "the matrix \U0001D434 is singular"
+
+
+# ---------------------------------------------------------------------------
 # `Extractor` — the reader and its format list as one object
 # ---------------------------------------------------------------------------
 
