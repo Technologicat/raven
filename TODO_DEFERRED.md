@@ -3561,8 +3561,34 @@ the next run starts from zero.
 
 The design is right for the case it was written for — an interactive session where documents arrive one
 at a time and committing per document would rebuild the index constantly. It has no bound on the other
-end, and the bound is what is missing: commit anyway after N documents or T seconds, whichever the
-coalescer would otherwise defer past. That caps the loss window without giving up the coalescing.
+end.
+
+**Agreed fix (Juha, 2026-08-06): cache the extracted text, do not commit more often.** Committing more
+often is the obvious move and the wrong one, because `commit` ends in
+`_rebuild_keyword_search_index()`, which rebuilds from the whole of `self.documents` — bm25s cannot add
+documents incrementally, which is already why there is a separate TODO to replace that backend. So
+committing every N documents makes the rebuild cost roughly quadratic in corpus size, and can easily
+cost more than the crash it protects against.
+
+What a crash actually destroys is the **extraction**: ~40 minutes of pure-Python pypdf parsing, against
+indexing work that is cheaper and already lands in ChromaDB per document. So persist the extracted text
+as each document is read, and let a restart re-read text instead of re-parsing PDFs. This touches
+neither the coalescer, nor commit frequency, nor the rebuild cost.
+
+Sketch, to be confirmed against the code:
+
+- Cache under the datastore dir, one file per document, written atomically (temp + rename) so a crash
+  mid-write cannot leave a half-file that reads as valid.
+- Key on what `HybridIR._stat` already computes — size and mtime — so an edited document invalidates
+  its entry by the same rule the index already uses for change detection. Content hashing would be
+  more correct and costs a full read of 6 GB, which is what this is trying to avoid.
+- `HybridIRFileSystemEventHandler._read` is the single place to hook: check the cache, extract on miss,
+  write through.
+
+Second payoff, and it may matter more than the crash safety: **re-indexing the same corpus under
+different chunk settings becomes cheap**, because extraction is the part that is not repeated. That is
+exactly what the "chunk vs merged span" experiment in `investigations/retrieval/` needs, and it is
+currently a ~70-minute round trip per configuration.
 
 The same missing bound is what makes the progress display read as a hang (see the entry below): the
 visible counter is the last *commit*, so it sits at whatever the first accidental commit indexed until
