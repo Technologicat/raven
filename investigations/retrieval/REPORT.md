@@ -394,6 +394,70 @@ on-corpus similarity distribution the threshold work needed.
 
 ---
 
+## 3b. Next actions, as of 2026-08-06 end of day
+
+In order. The first group needs no GPU and no decisions; the second is the new corpus; the third is what
+the sprint's live leads still need.
+
+**Ready to run, nothing blocking:**
+
+1. **Free result reordering** — no LLM, no extra pass. Settles whether the LLM-rerank question is about
+   *placement* rather than *judgment*, and any LLM version afterwards has to beat this rather than the
+   unordered baseline (§3).
+
+   **Two effects compete here and the experiment has to separate them** (Juha, 2026-08-06). *Lost in the
+   middle* says put the best material at the ends. But a ranked result list is best-first **by
+   convention**, and models are trained on that convention — so best-first-and-last is *off-distribution*,
+   and a model reading what it takes to be a ranked list may discount the tail whatever is in it. Moving
+   good material there could mislead rather than rescue.
+
+   So at least three arms, and the third is the one that tries to have both:
+
+   | arm | ordering | tests |
+   |---|---|---|
+   | (a) best-first | as now | baseline, on-distribution |
+   | (b) best-first-and-last | strongest at both ends | pure lost-in-the-middle mitigation, off-distribution |
+   | (c) best-first, explicitly numbered | as now, plus visible rank labels | keeps the convention while telling the model the ordering, so it need not infer relevance from position |
+
+   If (b) wins, attention placement dominates. If (c) wins, the problem was that the model could not *tell*
+   the list was ranked. If (a) holds, position was never the issue.
+
+2. **`score_fusion.py fiction`** — the fourth corpus for the self-weighting hypothesis (score fusion helps
+   when the arms are unequal). Needs the passage-coverage metric, since document recall saturates at 19
+   documents.
+
+   *The 13 held-out stories could be indexed to make it 32*, but that is probably the wrong trade: 32
+   documents at `k=20` still saturates (62% of the corpus), so it does not fix the metric problem, while
+   indexing them destroys their current role as the *adjacent* negative group — the hardest negatives in
+   the whole set, and irreplaceable. They are also unread, so they bring no human ground truth. Keep them
+   held out; use the coverage metric.
+
+**Bring up the ECCOMAS 2024 corpus** (`00_stuff/datasets/ECCOMAS2024`, 2520 conference abstracts):
+
+3. **Do not re-run the PDF→BibTeX extraction.** It cost **1–2 weeks of GPU time**, and the result is
+   hand-corrected and stamped golden:
+   `success_final_manually_fixed_and_added_missing_abstracts.bib`. Start from that file. The PDFs are kept
+   for provenance, not for reprocessing.
+4. `raven-burstbib` the golden `.bib` → `documents_eccomas`, `raven-indexer` → `rag_index_eccomas`, add a
+   `CORPORA` entry to `make_questions.py`, generate a question set (~300, matching the others), and run the
+   standard sweep.
+5. **The reason it is worth the setup**: at 2520 documents it sits inside the bracket where adaptive `k`
+   stops working (works at 1268, fails at 11974), so it is the direct probe of where that transition is.
+   Secondarily it is the only *dirty-provenance* corpus in the set.
+
+**What the live leads still need:**
+
+6. `sum` aggregation is length-dependent — gains on short documents, loses on the longest — so it does not
+   ship as a blanket default. The open question is whether a **length-aware** rule is worth having, and
+   that wants a mechanism before another grid sweep.
+7. Adaptive `k` is confirmed on small corpora and dead on large ones. Building it means shipping the domain
+   of validity with it, and the large-corpus answer is stratification, which needs clustering.
+
+**Do not score any corpus while a question set for any corpus is being generated** — the scorers read every
+question file at startup, and two runs minutes apart have already seen different `n`.
+
+---
+
 ## 4. Two things the measurements agree on, from different directions
 
 **Breadth and depth are a trade, and the retriever cannot know which a query needs.** Bare chunks reach
