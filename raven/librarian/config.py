@@ -365,7 +365,20 @@ llm_image_token_cost = {
 #
 # Low-quality semantic matches are dropped, and adjacent result chunks are combined, so you may get fewer results
 # especially if there are few documents in the database, or if the database does not talk about the queried topic.
-docs_num_results = 20
+#
+# The real budget here is not the context window but *prefill time*: the retrieved block differs every turn, so
+# no backend can cache it, and the model re-reads all of it before answering. Measured on a 12k-abstract corpus
+# against qwen3.6-35b-a3b, prefill is near-linear at ~5000 tokens/s and the recall bought per second is not:
+#
+#     k=20   7.4k tokens   1.7 s   74.7% recall@k
+#     k=50  18.2k tokens   3.4 s   84.8%      <-- +10.1 points at 0.17 s per point
+#     k=100 37.0k tokens   7.1 s   89.9%          +5.1 points at 0.73 s per point
+#     k=200 75.0k tokens    16 s   96.0%          unusable in conversation
+#
+# So 50 is the knee: the last value whose latency stays conversational, and roughly a quarter the price per
+# recall point of any step beyond it. Lower it if your backend prefills slowly; raising it past 100 trades a
+# few points of recall for a wait the user will notice.
+docs_num_results = 50
 
 # How many previously consulted documents to list back to the LLM (`list_consulted_documents`).
 #
