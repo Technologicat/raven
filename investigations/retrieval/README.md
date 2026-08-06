@@ -690,6 +690,45 @@ It also retires the earlier framing that the domain-mismatch and metric-artifact
 only two live options. A third was true and neither of them: the reranker was being applied where it
 destroyed the baseline's structure.
 
+#### Across three corpora: fusion is conditional, and n=99 is too small to rank the rest
+
+MRR, `arm_rerank.py <corpus>`, same six orderings:
+
+| corpus | bm25 | vector | fused | rerank-bm25 | rerank-vector | rerank-fused |
+|---|---|---|---|---|---|---|
+| hydrogen (abstracts) | 0.414 | 0.375 | **0.471** | 0.449 | 0.445 | 0.358 |
+| banichuk (titles) | 0.090 | **0.201** | 0.169 | 0.177 | 0.148 | 0.158 |
+| fiction (prose) | 0.692 | **0.814** | 0.811 | 0.807 | 0.740 | 0.666 |
+
+**Fusion is not unconditionally right.** It wins on hydrogen, where the two arms are comparable (0.414
+against 0.375). It *loses* on banichuk, where BM25 has almost nothing to match on — a title is a few
+words — and blending a 0.090 signal into a 0.201 one drags the good arm down. On fiction it merely ties
+the vector arm. So RRF's benefit is conditional on both signals carrying information, and there is no
+reason to assume a user's corpus satisfies that. This is the argument for exposing the arms as a
+query-time choice rather than a fixed blend.
+
+**Reranking the fused list is worst or near-worst on all three.** That one generalizes, and it is the
+finding to act on: whatever else is true, do not rerank after fusion.
+
+**And the rest is under-powered.** Paired McNemar against fused on hydrogen, outcome "gold within top
+20", n=99:
+
+| condition | gained | lost | p |
+|---|---|---|---|
+| rerank-bm25 | 2 | 5 | 0.45 |
+| rerank-vector | 3 | 8 | 0.23 |
+| rerank-fused | 4 | 14 | **0.031** |
+
+Only the fused-list result is significant. Bootstrap 95% CIs on the recall@20 difference bear this out:
+rerank-bm25 spans −8.1% to +2.0%, i.e. it may help slightly or hurt moderately, and 99 questions cannot
+tell. So "arm-reranking is worse than fusion" is *not* established — the honest statement is that
+nothing was shown to help.
+
+McNemar is the right test here because every condition runs on the same queries: it conditions on the
+discordant pairs and discards the 92 of 99 where both configurations agree, which is also why the
+power is so low. **Generating more questions is the cheapest way to sharpen any of this** — roughly 400
+would halve the confidence interval — and the generator already exists (`make_questions.py`).
+
 **Still open, and now the cheapest things to try** (in this order, since each is one command against
 existing corpora): the same table on fiction and banichuk, which sit at opposite ends of the headroom
 range (70.5% and 9.1% at rank 1) and may not behave alike; and other small rerankers in the

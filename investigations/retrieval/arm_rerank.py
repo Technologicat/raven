@@ -23,8 +23,17 @@ from raven.client import config as client_config  # noqa: E402
 from raven.librarian import config as librarian_config  # noqa: E402
 from raven.librarian import hybridir  # noqa: E402
 
-MODEL = sys.argv[1] if len(sys.argv) > 1 else "cross-encoder/ms-marco-MiniLM-L6-v2"
+CORPUS = sys.argv[1] if len(sys.argv) > 1 else "hydrogen"
+MODEL = sys.argv[2] if len(sys.argv) > 2 else "cross-encoder/ms-marco-MiniLM-L6-v2"
+DB_DIR = sys.argv[3] if len(sys.argv) > 3 else None
 DEPTH = 100
+
+# Where the gold document ends up for a *typical* question, which MRR does not tell you: MRR is a mean of
+# reciprocal ranks, so a question already at rank 1 contributes 1.0 and one at rank 50 contributes 0.02.
+# It is therefore dominated by the questions that already worked, and nearly blind to the ones we would
+# most like to fix. `median rank` and `p75 rank` say what happens in the middle and in the tail; misses
+# are held at `DEPTH + 1` so a condition cannot improve its median by losing documents entirely.
+MISS_RANK = DEPTH + 1
 
 
 def dedup_ids(seq):
@@ -59,10 +68,12 @@ def main():
     client_api.initialize(raven_server_url=client_config.raven_server_url,
                           raven_api_key_file=client_config.raven_api_key_file, executor=ex)
     hybridir.init(executor=ex)
-    r = hybridir.HybridIR(datastore_base_dir=pathlib.Path.home() / ".config/raven/llmclient/rag_index_hydrogen",
+    db_dir = (pathlib.Path(DB_DIR).expanduser() if DB_DIR
+              else pathlib.Path.home() / f".config/raven/llmclient/rag_index_{CORPUS}")
+    r = hybridir.HybridIR(datastore_base_dir=db_dir,
                           embedding_model_name=librarian_config.qa_embedding_model)
 
-    items = [i for i in sharpness.build_workload("hydrogen")[0] if i["on_corpus"] and i["gold"]]
+    items = [i for i in sharpness.build_workload(CORPUS)[0] if i["on_corpus"] and i["gold"]]
     conditions = ["bm25", "vector", "fused", "rerank-bm25", "rerank-vector", "rerank-fused"]
     ranks = {c: [] for c in conditions}
 
@@ -100,12 +111,18 @@ def main():
     def rec(rs, k):
         return sum(1 for x in rs if x and x <= k) / len(rs)
 
-    print(f"\n  model: {MODEL}   n={len(items)}   depth={DEPTH}")
-    print(f"  {'condition':<15} {'@1':>7} {'@5':>7} {'@10':>7} {'@20':>7} {'MRR':>7}")
+    def pct_rank(rs, q):
+        """Rank at percentile `q`, misses held at MISS_RANK so losing a document cannot flatter it."""
+        vals = sorted(x if x else MISS_RANK for x in rs)
+        return vals[min(len(vals) - 1, int(q * len(vals)))]
+
+    print(f"\n  corpus: {CORPUS}   model: {MODEL}   n={len(items)}   depth={DEPTH}")
+    print(f"  {'condition':<15} {'@1':>7} {'@5':>7} {'@10':>7} {'@20':>7} {'MRR':>7} {'med':>5} {'p75':>5}")
     for c in conditions:
         rs = ranks[c]
-        print(f"  {c:<15} " + " ".join(f"{rec(rs, k):>6.1%}" for k in (1, 5, 10, 20)) + f" {mrr(rs):>7.3f}")
-    out = pathlib.Path("investigations/retrieval/arm_rerank_hydrogen.json")
+        print(f"  {c:<15} " + " ".join(f"{rec(rs, k):>6.1%}" for k in (1, 5, 10, 20))
+              + f" {mrr(rs):>7.3f} {pct_rank(rs, 0.5):>5} {pct_rank(rs, 0.75):>5}")
+    out = pathlib.Path(f"investigations/retrieval/arm_rerank_{CORPUS}.json")
     out.write_text(json.dumps({"model": MODEL, "depth": DEPTH, "ranks": ranks}, indent=1), encoding="utf-8")
     print(f"\n  wrote {out}")
 
