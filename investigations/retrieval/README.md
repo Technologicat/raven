@@ -268,16 +268,36 @@ python investigations/retrieval/make_questions.py <llm_base_url> <model> [n_focu
 
 # Score (needs raven-server for spaCy + embeddings, and the local document index)
 python investigations/retrieval/evaluate.py [k]
-python investigations/retrieval/sharpness.py <hydrogen|fiction> [k]
+python investigations/retrieval/sharpness.py <hydrogen|fiction|arxiv-ai|banichuk> [k] [--db-dir DIR]
 python investigations/retrieval/run_probes.py [k]
 python investigations/retrieval/calibrate.py [hydrogen|fiction]
+
+# Read (no server, no index, no GPU — these only read the JSON the sweep wrote)
+python investigations/retrieval/recall_curve.py [results.json ...]
+
+# Build the fulltext corpus (see the fulltext section above)
+python investigations/retrieval/build_fulltext_corpus.py plan
+python investigations/retrieval/build_fulltext_corpus.py assemble
 ```
+
+**Prefer `--db-dir` over renaming index directories into the configured slot.** Four corpora share one
+`llm_database_dir`, and the parking convention (`rag_index_hydrogen`, `rag_index_arxiv`, …) invites a
+rename-run-rename dance that leaves the wrong corpus live whenever a run dies partway. Naming the index on
+the command line makes the pairing visible in the shell history, which is also where you will look when a
+result seems impossible.
 
 The scoring scripts answer different questions, and each needs something the others cannot supply:
 
 - **`evaluate.py` compares retrieval configurations** — does this change to how a query is built or fused
   find the gold document more often? Output is recall@k / MRR per condition, plus per-question ranks in
   `results.json`. This is what settled lever 3.
+- **`recall_curve.py` reads recall@k off a sweep that already ran.** It needs no server and no index, so a
+  curve costs one deep sweep rather than one run per depth — `sharpness.py` records each gold rank, and
+  every k below the sweep depth is a count over those. It exists to size the candidate stage of a
+  retrieve-deep-then-rerank pipeline, which is the ceiling on everything the reranker can do.
+- **`build_fulltext_corpus.py` assembles the arXiv AI fulltext corpus** so it holds the same documents
+  under the same identifiers as the abstract corpus, which is what lets the two be compared and what lets
+  the existing gold labels transfer unchanged.
 - **`run_probes.py` scores the hand-written probe set** in `probes.json` — nine information needs with
   human-verified labels, each in several phrasings. It covers what the generated sets structurally cannot:
   questions stratified by *where the answer lives* (in a chunk, in the document but stated, in the document
@@ -551,6 +571,39 @@ questions sit higher than any other off-corpus group (median 0.372, max 0.558, a
 to hydrogen-production engineering than fan fiction is — would explain it equally well, so the two are
 confounded on the present evidence and the mechanism is *not* established. What would separate them: score
 the generic questions and the specific ones separately against an unrelated index.
+
+## The recall curve, 2026-08-06: the reranker is cleared, and depth turns out not to be a truncation
+
+One sweep per corpus at `k=200`, read with `recall_curve.py`. The design consequences live in brief 09;
+what belongs here is the measurement and the one surprise in it.
+
+| k | 1 | 5 | 10 | 20 | 50 | 100 | 200 |
+|---|---|---|---|---|---|---|---|
+| **hydrogen** (31600 chunks) | 38.4% | 56.6% | 66.7% | 74.7% | 84.8% | 89.9% | 96.0% |
+| **arxiv-ai** (2596 chunks) | 43.4% | 65.7% | 75.8% | 80.8% | 92.9% | 98.0% | 100.0% |
+
+Findable ~96–100% of the time, first ~40% of the time. The gap is ordering, so there is real work for a
+reranker to do. Read hydrogen as the result: at k=200 it is retrieving 0.6% of its corpus, against 7.7%
+for arxiv-ai, where "recall reaches 100%" is closer to enumeration than to search. banichuk (542 chunks)
+cannot be swept deep at all — k=200 would be 37% of it.
+
+**The surprise: retrieving deeper changes the ranking of what was already there.** The same 99 hydrogen
+questions scored 78% within k=20 when the sweep depth *was* 20, and 74.7% when it was 200. Exact diff
+against the previous run (recoverable because the results files are committed):
+
+- 39 of 99 gold ranks changed.
+- 5 questions left the top 20 (to ranks 21, 22, 23, 23, 33) and 2 entered — net −3, the whole difference.
+- Of the 72 in the top 20 under both depths, 16 moved, both ways: 14→6, 20→5, and 1→4.
+
+Reciprocal rank fusion reads the candidate lists, so lengthening them re-weights the fused order. This is
+benign for the reranker — everything displaced stayed within rank 33, so a k=100 candidate set still holds
+it — but it invalidates the obvious baseline. Comparing "k=200 reranked" against "k=200 unranked" would
+credit the reranker with repairing 3 points of damage the deep retrieval itself caused. The baseline has
+to be the shipped configuration.
+
+It also strikes a claim this file and brief 09 both carried: that going deeper "can only add" hits, since
+recall@k is monotone in k. Monotone within one retrieval, yes. Across sweep depths, no — and nothing about
+the notation warns you, which is why it survived being written down twice.
 
 ## What the set has decided so far
 

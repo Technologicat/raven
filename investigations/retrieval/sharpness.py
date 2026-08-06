@@ -42,14 +42,21 @@ Positives are the named corpus's own questions; negatives are every other corpus
 built-in probes, reported per source corpus so that near and far negatives never get averaged together.
 
 **Whichever corpus is actually indexed has to match the argument**, and nothing here can check that for
-you: pointing this at the wrong index silently relabels every question. Both directions need a full
-re-index, so run one, score it, then swap.
+you: pointing this at the wrong index silently relabels every question — every on-corpus question becomes
+a miss and every negative a true negative, which does not look like a configuration error, it looks like a
+result. Prefer `--db-dir` to name the index outright over renaming directories into the configured slot:
+the rename leaves the wrong corpus live if a run dies partway, and a later run then inherits it.
 
 Requires a running raven-server (spaCy tokenization + embeddings) and the local document index. It reads
 the index; it does not write to it.
 
 Usage:
-    python sharpness.py <hydrogen|fiction|arxiv-ai> [k]
+    python sharpness.py <hydrogen|fiction|arxiv-ai|banichuk> [k] [--db-dir DIR]
+
+`k` is the retrieval depth, and it is also the ceiling on what the gold ranks can tell you: a question
+whose gold document sits at rank 40 is indistinguishable from one that misses entirely when k is 20. Run
+it deep to measure a recall curve, and read `recall@k` off the recorded ranks afterwards for every k up
+to the one used.
 """
 
 import collections
@@ -243,20 +250,27 @@ def main() -> None:
     if len(sys.argv) < 2:
         print(__doc__)
         return
-    corpus = sys.argv[1]
-    k = int(sys.argv[2]) if len(sys.argv) > 2 else 20
+    argv = sys.argv[1:]
+    db_dir = librarian_config.llm_database_dir
+    if "--db-dir" in argv:
+        at = argv.index("--db-dir")
+        db_dir = pathlib.Path(argv[at + 1]).expanduser()
+        del argv[at:at + 2]
+    corpus = argv[0]
+    k = int(argv[1]) if len(argv) > 1 else 20
 
     items, note = build_workload(corpus)
     n_positive = sum(1 for i in items if i["on_corpus"])
     print(f"corpus '{corpus}': {n_positive} on-corpus questions, {len(items) - n_positive} negatives, k={k}")
     print(f"  {note}")
+    print(f"  index: {db_dir}")
 
     executor = concurrent.futures.ThreadPoolExecutor()
     client_api.initialize(raven_server_url=client_config.raven_server_url,
                           raven_api_key_file=client_config.raven_api_key_file,
                           executor=executor)
     hybridir.init(executor=executor)
-    retriever = hybridir.HybridIR(datastore_base_dir=librarian_config.llm_database_dir,
+    retriever = hybridir.HybridIR(datastore_base_dir=db_dir,
                                   embedding_model_name=librarian_config.qa_embedding_model)
     with retriever.datastore_lock:
         print(f"  live index holds {len(retriever.documents)} documents")

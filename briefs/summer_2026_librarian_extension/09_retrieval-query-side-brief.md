@@ -495,9 +495,13 @@ queries are cheap, so `k=20` for the *candidate* stage is a limit inherited from
 what reached the LLM, and there is no reason for the two to be the same number.
 
 The measured case for it is strong: gold is at rank 1 for 39/42/9/70% but within k=20 for 78/84/42/95%, so
-a large fraction of the misses are already ordering failures rather than retrieval failures — and **going
-deeper can only add more of them**, since recall@k is monotone in k. banichuk at 42% within k=20 has the
-most to gain.
+a large fraction of the misses are already ordering failures rather than retrieval failures. banichuk at
+42% within k=20 has the most to gain.
+
+~~and **going deeper can only add more of them**, since recall@k is monotone in k.~~ **Struck 2026-08-06 —
+measured false, and the way it is false matters.** Recall@k is monotone in `k` *within one retrieval*, but
+the sweep depth is not a truncation of a fixed ranking: under reciprocal rank fusion the candidate lists
+feed the fusion, so retrieving deeper changes the order of what was already there. Measured below.
 
 The constraint is reranker latency, which is linear in candidate count, so **the first measurement needs no
 reranker at all**: run `evaluate.py` at k = 20, 50, 100, 200 and find where recall saturates. Reranking 200
@@ -512,24 +516,96 @@ Note the GPU is not free here: it already holds the embedding model, and `briefs
 the place that has to absorb another resident model.
 
 Model candidate and cost argument are in the reranking section further down. Scope for the 0.2.8 window:
-rerank the existing k=20 candidate set, measure with `evaluate.py` across all four corpora, and ship it
-behind a config toggle.
+rerank a candidate set deeper than the k=20 that reaches the LLM, measure with `evaluate.py` across all
+four corpora, and ship it behind a config toggle. **The measured curve below sets that depth at 100** —
+hydrogen reaches 89.9% there against 74.7% at 20, and the latency cost is bounded by a number we can time
+before committing to it.
 
 **Order of work, because the obvious order is wrong.** The three open threads are the fulltext experiment,
 the recall@k curve, and the reranker itself, and the temptation is to take them in that order since the
 fulltext corpus is the newest arrival. That puts the longest pole in front of the only ship-critical item:
 
-1. **Start the fulltext build first and walk away** — 243 downloads at arXiv's rate limit, then extraction
-   and indexing of ~60000 chunks against 4 minutes for the same papers' abstracts. It is hours of machine
-   time and minutes of human time, so it should be running in the background, not blocking.
+1. **Start the fulltext build first and walk away** — 170 downloads at arXiv's rate limit (the count was
+   243 until two counting errors in the drift measurement were found; see the investigation README), then
+   extraction and indexing against 4 minutes for the same papers' abstracts. It is hours of machine time
+   and minutes of human time, so it should be running in the background, not blocking. *Started
+   2026-08-06.*
 2. **Then the recall@k curve** (k = 20, 50, 100, 200, on hydrogen and arxiv-ai). No new code, four cheap
-   runs, and it is what sizes the reranker's candidate stage — so it gates the deliverable.
+   runs, and it is what sizes the reranker's candidate stage — so it gates the deliverable. *Done
+   2026-08-06 — measured above, and it clears the reranker to proceed.* One correction to the plan as
+   written: it needed a single sweep at k=200 rather than four runs, since `sharpness.py` records the gold
+   rank and every shallower k reads off the same file.
 3. **Then the reranker**, which is the deliverable.
 4. **Synthesis questions last.** They feed adaptive `k`, which this section defers, so they are genuinely
    fourth unless the reranker lands early.
 
 The fulltext experiment answers a *science* question — which mechanism sets the similarity level — and
 nothing in the reranker depends on its answer. Worth having, not worth waiting on.
+
+##### The curve, measured (2026-08-06): the reranker has room, and depth is not free
+
+`sharpness.py <corpus> 200 --db-dir …` against the parked indexes, read with `recall_curve.py`. 99
+on-corpus questions each.
+
+| k | 1 | 5 | 10 | 20 | 50 | 100 | 200 |
+|---|---|---|---|---|---|---|---|
+| **hydrogen** | 38.4% | 56.6% | 66.7% | 74.7% | 84.8% | 89.9% | 96.0% |
+| **arxiv-ai** | 43.4% | 65.7% | 75.8% | 80.8% | 92.9% | 98.0% | 100.0% |
+
+**This is the case for the reranker, in one line:** the gold document is findable 96% / 100% of the time,
+and *first* 38% / 43% of the time. That ~57-point gap is ordering, which is exactly what a cross-encoder
+reorders. On hydrogen, 4 questions of 99 never surface at all — a hard ceiling the reranker cannot lift,
+but a low one; on arxiv-ai there is no ceiling at all.
+
+**Read the two curves at different discounts, because `k` means different things in them.** Measured chunk
+counts (the denominator, since retrieval is chunk-level):
+
+| corpus | documents | chunks | k=200 as a share |
+|---|---|---|---|
+| hydrogen | 11974 | 31600 | 0.6% |
+| arxiv-ai | 1268 | 2596 | 7.7% |
+| fiction | — | 2977 | 6.7% |
+| banichuk | — | 542 | 37% |
+
+hydrogen's 96% at 0.6% of the corpus is a real retrieval result. arxiv-ai's 100% at 7.7% is a weaker
+claim wearing the same notation — "read a thirteenth of the corpus and you have everything" is closer to
+enumeration than to search. The two are not a replication of each other, and quoting them as a pair
+without this column would overstate both. **banichuk cannot be swept deep at all**: k=200 is 37% of it, so
+its k=20 figure (42.4%) is the last honest point on that curve.
+
+**Neither curve saturates where it matters.** hydrogen's last step gains *more* than the one before it
+(+6.1 after +5.1), so the "find where recall saturates" plan does not terminate in this range; arxiv-ai
+saturates only by exhausting a small corpus. Choose the candidate depth against the latency budget
+instead, and treat these as floors rather than plateaus.
+
+**Focused and rambling questions separate on hydrogen, and stay separated.** Focused: 42.9% @1 rising to
+98.7% @200. Rambling: 22.7% @1 rising to 86.4% @200 — the gap does not close with depth, which says the
+vague questions are not merely ranked worse; a share of them have no single document that answers them,
+the synthesis-question case arriving unbidden in a known-item test set.
+
+On arxiv-ai the same split converges instead (rambling reaches 100% by k=100, focused by k=200), which is
+what the corpus-size column predicts: with 2596 chunks, depth eventually finds everything regardless of
+how the question was phrased. So the *separation* is the hydrogen result, and arxiv-ai neither confirms
+nor contradicts it — the corpus is too small for the question to be asked there.
+
+**And the finding that changes the experiment design: retrieval depth perturbs the ranking.** The same 99
+questions against the same index scored 78% within k=20 when swept at k=20, and 74.7% when swept at k=200.
+Diffing the per-question ranks (the old file is in git, so this is exact rather than inferred):
+
+- 39 of 99 gold ranks changed.
+- Of those in the top 20 at k=20, **5 fell out** at k=200 (to 21, 22, 23, 23, 33) and **2 entered** — net
+  −3 questions, which is the whole 78 → 74.7 difference.
+- Of the 72 in the top 20 under both, **16 moved**, in both directions (14→6, 20→5, and 1→4).
+
+The mechanism is RRF: fusion reads the candidate lists, so lengthening them re-weights the result. Two
+consequences for the reranker work, and the second is the one that would have quietly invalidated a
+comparison:
+
+1. **Benign for retrieve-deep-then-rerank.** Every displaced document landed at rank ≤ 33, so a k=100
+   candidate set still contains all of them. Deep retrieval loses nothing the reranker will not see.
+2. **The baseline must be the shipped configuration, k=20 with no reranker — not k=200 with no reranker.**
+   The latter is 3 points worse at the top through fusion alone, so measuring against it would credit the
+   reranker with recovering damage the experiment itself caused. Compare end-to-end pipelines, not stages.
 
 #### The fourth corpus unseats the constant (2026-08-06): ship nothing yet
 
