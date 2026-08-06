@@ -114,6 +114,10 @@
 
 - prints the paper's citation (`Authors (Year) - Title`) just before downloading its PDF, so it stays on screen during the rate-limit wait — a mistyped ID that resolved to the wrong paper is caught before the download completes. Only shown when a paper is actually being fetched; already-present papers are reported by their existing one-line status.
 
+*Raven-arxiv2id*
+
+- new `-s` / `--strip-versions` option prints each identifier without its version suffix. This is what refreshes a collection of preprints: an arXiv identifier carrying a version means *that* version, and one without means whatever is current, so dropping the suffix turns the tool's output into a request for the latest of everything — `raven-arxiv2id -i ~/papers --strip-versions` piped to `raven-arxiv-download` fetches the papers that have been revised since you saved them, and to `raven-arxiv2bib` brings the bibliography along. Previously this needed hand-editing the identifier list, and there was no way to notice which papers had moved on.
+
 *Constellation-wide*
 
 - New `"gpu"` device string in config files: an explicit autodetect token that picks whichever GPU backend (CUDA / MPS / XPU / Vulkan) is available, falling back to CPU if none. Replaces the implicit autodetect that was meant to live inside the `"cuda"` string with a clearly-named alias — `"cuda"` now means exactly CUDA. The defaults in the server (`raven/server/config.py`, `config_avatar_only.py`, `config_lowvram.py`) and the Visualizer / Librarian client configs now use `"gpu"`. Explicit names like `"cuda:0"` or `"mps"` are still honored as deliberate choices — no cross-backend fallback. On a machine with multiple distinct GPU backends active simultaneously (rare — e.g. NVIDIA + Intel Arc), startup raises `RuntimeError` and asks for an explicit pick.

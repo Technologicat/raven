@@ -244,13 +244,30 @@ raven-burstbib papers.bib -o ~/.config/raven/llmclient/documents
 raven-indexer                                                 # or just start Librarian
 ```
 
-- **`raven-arxiv2id`** scans the directory (recursively) for arXiv identifiers in PDF filenames, and prints the unique ones. Where several versions of the same paper are present, only the newest is kept.
+- **`raven-arxiv2id`** scans the directory (recursively) for arXiv identifiers in PDF filenames, and prints the unique ones. Where several versions of the same paper are present, only the newest is kept. `--strip-versions` prints them without the version suffix, which is what refreshes a collection — see below.
 - **`raven-arxiv2bib`** fetches each paper's metadata from arXiv and writes BibTeX. It waits arXiv's requested three seconds between requests, so a few hundred papers takes a few minutes — leave it running. Identifiers arXiv does not recognize are reported at the end rather than aborting the run. Version suffixes are kept by default (`--strip-versions` to record papers without them).
 - **`raven-burstbib`** splits the result into one `.bib` file per paper, since the document database works in whole documents — a single large `.bib` would be one document, and a search would return the entire bibliography as one result.
 
 This gives you the *abstracts*, which is usually what you want for retrieval: they are short, self-contained, and one paper is one document. Put the PDFs themselves in the folder instead (or as well) if you want the full text searchable — *Librarian* reads born-digital PDFs directly.
 
 If your papers are not from arXiv, the same shape applies with a different first step: `raven-wos2bib` for a Web of Science export, `raven-csv2bib` for a spreadsheet, `raven-pdf2bib` for conference abstract booklets. All of them produce BibTeX for `raven-burstbib`.
+
+#### Refreshing a collection when papers get new versions
+
+Preprints get revised, sometimes years later, and a collection assembled over time drifts out of date silently — nothing announces that the v2 on your disk is now a v4. `--strip-versions` is what refreshes it:
+
+```bash
+raven-arxiv2id -i ~/papers --strip-versions > ids.txt
+raven-arxiv-download -o ~/papers $(cat ids.txt)   # newest version of each paper
+raven-arxiv2bib ids.txt -o papers.bib             # metadata to match
+```
+
+The mechanism is arXiv's own: an identifier *with* a version means that version, and an identifier *without* one means whatever is current. So dropping the suffix is precisely the request "give me the latest", and both tools honour it — no separate update mode needed.
+
+Two things to know before running it on a collection you care about:
+
+- **The old versions stay on disk.** The download writes new files rather than replacing the ones already there, so a refreshed paper is present twice. That is harmless for retrieval — `raven-arxiv2id` keeps only the newest, so the next run is not confused, and the indexer treats them as two documents saying nearly the same thing — but it does grow the folder, and opening a paper by hand may land on the stale copy. Delete the superseded files if that matters to you.
+- **If you have evaluated retrieval against this collection, the document IDs change.** Filenames carry the version, and a refreshed paper is therefore a *different* document as far as any stored identifier is concerned. Query sets, gold labels and measured baselines that key on filenames need regenerating alongside the refresh, not after it.
 
 ## Message attachments
 

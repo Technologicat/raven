@@ -207,9 +207,18 @@ def main() -> None:  # pragma: no cover
                         default=False,
                         help="Print also the filename for each match, for "
                         "debugging your collection.")
+    parser.add_argument("-s", "--strip-versions", dest="strip_versions",
+                        action="store_true", default=False,
+                        help="Print each identifier without its version suffix, so that "
+                        "downstream tools resolve it to whatever is current. This is what "
+                        "refreshes a collection: piping the result to raven-arxiv-download "
+                        "fetches the newest version of every paper, and to raven-arxiv2bib "
+                        "re-fetches the metadata to match.")
     opts = parser.parse_args()
 
     for identifier, filename in collect_latest_ids(opts.input_dir or "."):
+        if opts.strip_versions:
+            identifier = strip_version(identifier)
         if opts.verbose:
             print(identifier, filename)
         else:
