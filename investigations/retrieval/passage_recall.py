@@ -67,6 +67,41 @@ def passage_hit(results: list[dict], gold_documents: set[str], gold_offset: int,
                for r in results if r.get("document_id"))
 
 
+def passage_coverage(results: list[dict], gold_documents: set[str], gold_offset: int,
+                     passage_length: int) -> float:
+    """What fraction of the source passage reaches the model, over the union of retrieved spans.
+
+    **This is the measurement the boolean versions were reaching for, and it is the one that matches how
+    the results are used** (Juha, 2026-08-06). The model does not receive "the chunk that overlapped"; it
+    receives every retrieved result *in full*. So whether it can answer depends on how much of the passage
+    the question was written from is in front of it — not on whether the particular chunk holding the
+    answer happened to be the one retrieved.
+
+    That also explains why the two boolean metrics disagreed so violently. Requiring the passage's start
+    point scores 39.8% and favours long spans; requiring any overlap scores 89.8% and treats a single
+    1000-character chunk of a 4000-character passage as a hit. Neither is wrong about what it measures;
+    both are the wrong question. A fraction needs no threshold and no tie-breaking convention, and it
+    separates the arms on the axis that actually differs between them — how much text each delivers.
+
+    Union rather than sum, because merged spans and adjacent chunks overlap each other and double-counting
+    would let an arm exceed 1.0 by returning the same text twice.
+    """
+    keys = {sharpness.document_key(g) for g in gold_documents}
+    covered = [False] * passage_length
+    for r in results:
+        if not r.get("document_id") or sharpness.document_key(r["document_id"]) not in keys:
+            continue
+        start = r.get("offset")
+        if start is None:
+            continue
+        end = start + len(r.get("text", ""))
+        lo = max(0, start - gold_offset)
+        hi = min(passage_length, end - gold_offset)
+        for i in range(lo, hi):
+            covered[i] = True
+    return sum(covered) / passage_length if passage_length else 0.0
+
+
 def main() -> None:  # pragma: no cover
     argv = sys.argv[1:]
 
@@ -113,6 +148,7 @@ def main() -> None:  # pragma: no cover
     print(f"  index: {db_dir}\n")
 
     tally = {arm: {"document": 0, "passage": 0} for arm in ("merged", "chunks")}
+    coverage = {arm: [] for arm in ("merged", "chunks")}
     rows = []
     for n, item in enumerate(items, 1):
         gold = set(item["gold"])
@@ -123,20 +159,26 @@ def main() -> None:  # pragma: no cover
         for arm, results in (("merged", merged), ("chunks", chunks)):
             found_document = sharpness.rank_of_gold(results, gold) is not None
             found_passage = passage_hit(results, gold, offset, passage_length)
+            fraction = passage_coverage(results, gold, offset, passage_length)
             tally[arm]["document"] += int(found_document)
             tally[arm]["passage"] += int(found_passage)
-            row[arm] = {"document": found_document, "passage": found_passage}
+            coverage[arm].append(fraction)
+            row[arm] = {"document": found_document, "passage": found_passage, "coverage": fraction}
         rows.append(row)
         if n % 20 == 0:
             print(f"  [{n}/{len(items)}]", flush=True)
 
     total = len(items)
-    print(f"\n  {'arm':<10} {'document@k':>12} {'passage@k':>12} {'gap':>8}")
+    print(f"\n  {'arm':<10} {'document@k':>12} {'passage@k':>12} {'mean cover':>12} {'>=50%':>8} {'>=90%':>8}")
     for arm in ("merged", "chunks"):
         d = tally[arm]["document"] / total
         p = tally[arm]["passage"] / total
-        print(f"  {arm:<10} {d:>11.1%} {p:>12.1%} {d - p:>+8.1%}")
-    print("\n  'gap' is how much of the document-level score does not survive asking for the right passage.")
+        cov = coverage[arm]
+        print(f"  {arm:<10} {d:>11.1%} {p:>12.1%} {sum(cov) / total:>12.1%} "
+              f"{sum(1 for c in cov if c >= 0.5) / total:>8.1%} {sum(1 for c in cov if c >= 0.9) / total:>8.1%}")
+    print("\n  'mean cover' is the share of the source passage the model actually receives, over the union of")
+    print("  retrieved spans. That is what decides whether it has the material to answer, since it sees each")
+    print("  result in full rather than only the part that matched — so the booleans left of it are proxies.")
 
     out = pathlib.Path(__file__).parent / f"passage_recall_{corpus}.json"
     out.write_text(json.dumps({"corpus": corpus, "k": k, "n": total, "tally": tally, "rows": rows},

@@ -988,11 +988,30 @@ the tidy story built on the first number, that *merging spends breadth to buy de
 the token-budget result from the other side, does not survive. It was a good story about a measurement
 artifact.
 
-**What the two versions do give is a bracket.** Point-containment (39.8%) is too strict and length-biased;
-interval-overlap (89.8%) is lenient, since any of the four or five chunks spanning the passage counts and
-only one of them is likely to hold the answer. The true "found the text that answers this" sits between,
-and pinning it down needs the *answer* located within the passage rather than the passage located within
-the document — which the generator does not record and would have to be asked for.
+**Both booleans are the wrong question, and the third measurement is the right one.** Juha again: the
+model does not receive "the chunk that overlapped" — it receives every retrieved result *in full*. So
+whether it can answer depends on **how much of the source passage is in front of it**, which is a fraction
+rather than a hit. That needs no threshold, no tie-breaking convention, and it separates the arms on the
+axis that actually differs between them.
+
+| arm | document@20 | passage@20 | mean coverage | ≥50% covered | ≥90% covered |
+|---|---|---|---|---|---|
+| merged spans | 95.5% | 89.8% | **55.2%** | 51.1% | **18.2%** |
+| bare chunks | 95.5% | 88.6% | **43.3%** | 36.4% | 6.8% |
+
+**The model gets about half the passage the question was written from**, and merged spans deliver 11.9
+points more of it than bare chunks — 2.7 times as often in near-entirety. Whether half is enough depends
+on where in those 4000 characters the answer sits, which is the one thing the generator does not record.
+
+**So "merging spends breadth to buy depth" is back, on evidence built for the question.** It was retracted
+above because the measurement supporting it favoured long spans mechanically; a coverage fraction does
+not, and it still shows the effect at a smaller size. The retraction was of the evidence, not of the idea
+— and the distinction is the whole reason to redo a measurement rather than argue about it.
+
+That restores the symmetry with the token-budget result, which found bare chunks reaching more distinct
+documents per character. Breadth and depth, measured separately, each favouring the arm you would expect.
+Which of the two a query needs is not something the retriever knows — and that is the same conclusion the
+synthesis question class was built to test, arrived at from a second direction.
 
 The lesson is the one this file keeps relearning, arriving twice in one day: a number's semantics have to
 be read before a mechanism is written onto it. `passage_chars` is now carried through

@@ -1747,6 +1747,136 @@
       "gold_titles": [
         "Lessons from Studying Two-Hop Latent Reasoning"
       ]
+    },
+    {
+      "kind": "focused",
+      "question": "What causes artificial networks to lose the ability to restructure their connections after a brief initial training window, and how does this early stage determine the final organization of learned representations?",
+      "gold": [
+        "1711.08856v3.bib"
+      ],
+      "gold_titles": [
+        "Critical Learning Periods in Deep Neural Networks"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How should an eight-bit floating-point encoding be designed regarding exponent-mantissa splits and special numerical values to preserve training accuracy across diverse architectures without adjusting optimization settings?",
+      "gold": [
+        "2209.05433v2.bib"
+      ],
+      "gold_titles": [
+        "FP8 Formats for Deep Learning"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Does providing feedback on each logical step during training outperform feedback only on the final answer for improving language models on complex math problems?",
+      "gold": [
+        "2305.20050v1.bib"
+      ],
+      "gold_titles": [
+        "Let's Verify Step by Step"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can mixing linear attention variants with latent attention mechanisms, structural migration pre-training, and parallel reinforcement learning yield trillion-scale models that support both rapid token generation and complex agent interactions?",
+      "gold": [
+        "2606.15079v1.bib"
+      ],
+      "gold_titles": [
+        "Ling and Ring 2.6 Technical Report: Efficient and Instant Agentic Intelligence at Trillion-Parameter Scale"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does periodically oscillating the learning rate between bounds estimated through a brief initial training run replace manual schedule tuning for deep neural networks?",
+      "gold": [
+        "1506.01186v6.bib"
+      ],
+      "gold_titles": [
+        "Cyclical Learning Rates for Training Neural Networks"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What is the uncertainty in mid-infrared extinction measurements toward the Milky Way center using short-grating integral field spectroscopy?",
+      "gold": [
+        "2511.14850v1.bib"
+      ],
+      "gold_titles": [
+        "Mid-infrared extinction toward the Galactic center"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What second-order approximation methods enable the attribution of model outputs to specific training sequences in massive language models, and what do these attributions show about the models' reliance on exact token ordering versus conceptual abstraction?",
+      "gold": [
+        "2308.03296v1.bib"
+      ],
+      "gold_titles": [
+        "Studying Large Language Model Generalization with Influence Functions"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How reliable are language model personality evaluations derived from human psychological questionnaires when question phrasing or answer choice ordering is altered?",
+      "gold": [
+        "2309.08163v2.bib"
+      ],
+      "gold_titles": [
+        "Self-Assessment Tests are Unreliable Measures of LLM Personality"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What proportion of undergraduate-level quantitative challenges across multiple scientific and economic disciplines can a language model resolve correctly when trained on technical materials and assessed without auxiliary tools?",
+      "gold": [
+        "2206.14858v2.bib"
+      ],
+      "gold_titles": [
+        "Solving Quantitative Reasoning Problems with Language Models"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can we generate linguistically coherent text that maximally activates specific internal representations in large language models?",
+      "gold": [
+        "2402.01702v1.bib"
+      ],
+      "gold_titles": [
+        "Fluent dreaming for language models"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does the shattering dimension of deep networks scale with the number of parameters and depth for architectures that use continuous piecewise linear activation functions?",
+      "gold": [
+        "1703.02930v3.bib"
+      ],
+      "gold_titles": [
+        "Nearly-tight VC-dimension and pseudodimension bounds for piecewise linear neural networks"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can redundant filters be systematically removed from deep models to achieve substantial inference speedups while preserving accuracy through an iterative process that combines sparse selection with linear reconstruction?",
+      "gold": [
+        "1707.06168v2.bib"
+      ],
+      "gold_titles": [
+        "Channel Pruning for Accelerating Very Deep Neural Networks"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does an approach enabling models to autonomously assemble fundamental reasoning primitives into customized inference paths compare to sequential reasoning strategies regarding solution quality and computational efficiency?",
+      "gold": [
+        "2402.03620v1.bib"
+      ],
+      "gold_titles": [
+        "Self-Discover: Large Language Models Self-Compose Reasoning Structures"
+      ]
     }
   ]
 }

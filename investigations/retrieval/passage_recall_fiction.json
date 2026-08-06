@@ -20,11 +20,13 @@
    "source_offset": 68733,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.625
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.625
    }
   },
   {
@@ -34,11 +36,13 @@
    "source_offset": 199361,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.5625
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.375
    }
   },
   {
@@ -48,11 +52,13 @@
    "source_offset": 45270,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 1.0
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 1.0
    }
   },
   {
@@ -62,11 +68,13 @@
    "source_offset": 37868,
    "merged": {
     "document": false,
-    "passage": false
+    "passage": false,
+    "coverage": 0.0
    },
    "chunks": {
     "document": false,
-    "passage": false
+    "passage": false,
+    "coverage": 0.0
    }
   },
   {
@@ -76,11 +84,13 @@
    "source_offset": 193999,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.62475
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.43725
    }
   },
   {
@@ -90,11 +100,13 @@
    "source_offset": 104696,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.7365
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.7365
    }
   },
   {
@@ -104,11 +116,13 @@
    "source_offset": 87972,
    "merged": {
     "document": false,
-    "passage": false
+    "passage": false,
+    "coverage": 0.0
    },
    "chunks": {
     "document": false,
-    "passage": false
+    "passage": false,
+    "coverage": 0.0
    }
   },
   {
@@ -118,11 +132,13 @@
    "source_offset": 9751,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.62525
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.4375
    }
   },
   {
@@ -132,11 +148,13 @@
    "source_offset": 32831,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.58275
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.58275
    }
   },
   {
@@ -146,11 +164,13 @@
    "source_offset": 45484,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.5585
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.4375
    }
   },
   {
@@ -160,11 +180,13 @@
    "source_offset": 17483,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 1.0
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 1.0
    }
   },
   {
@@ -174,11 +196,13 @@
    "source_offset": 285997,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.75075
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.43825
    }
   },
   {
@@ -188,11 +212,13 @@
    "source_offset": 154980,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.88
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.88
    }
   },
   {
@@ -202,11 +228,13 @@
    "source_offset": 19782,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.25
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.25
    }
   },
   {
@@ -216,11 +244,13 @@
    "source_offset": 264561,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.875
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.4375
    }
   },
   {
@@ -230,11 +260,13 @@
    "source_offset": 160231,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.4375
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.25
    }
   },
   {
@@ -244,11 +276,13 @@
    "source_offset": 240262,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.6905
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.6905
    }
   },
   {
@@ -258,11 +292,13 @@
    "source_offset": 296631,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 1.0
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.90775
    }
   },
   {
@@ -272,11 +308,13 @@
    "source_offset": 198773,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.44325
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.4375
    }
   },
   {
@@ -286,11 +324,13 @@
    "source_offset": 22,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.9945
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.682
    }
   },
   {
@@ -300,11 +340,13 @@
    "source_offset": 124674,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.4375
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.25
    }
   },
   {
@@ -314,11 +356,13 @@
    "source_offset": 134715,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.36625
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.36625
    }
   },
   {
@@ -328,11 +372,13 @@
    "source_offset": 19782,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.3205
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.25
    }
   },
   {
@@ -342,11 +388,13 @@
    "source_offset": 147704,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.4375
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.25
    }
   },
   {
@@ -356,11 +404,13 @@
    "source_offset": 173635,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.53375
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.34625
    }
   },
   {
@@ -370,11 +420,13 @@
    "source_offset": 228541,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.38525
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.19775
    }
   },
   {
@@ -384,11 +436,13 @@
    "source_offset": 25117,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.15425
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.15425
    }
   },
   {
@@ -398,11 +452,13 @@
    "source_offset": 93241,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.68525
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.25
    }
   },
   {
@@ -412,11 +468,13 @@
    "source_offset": 221947,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.875
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.6875
    }
   },
   {
@@ -426,11 +484,13 @@
    "source_offset": 146977,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.63075
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.25
    }
   },
   {
@@ -440,11 +500,13 @@
    "source_offset": 127316,
    "merged": {
     "document": true,
-    "passage": false
+    "passage": false,
+    "coverage": 0.0
    },
    "chunks": {
     "document": true,
-    "passage": false
+    "passage": false,
+    "coverage": 0.0
    }
   },
   {
@@ -454,11 +516,13 @@
    "source_offset": 27580,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.395
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.2075
    }
   },
   {
@@ -468,11 +532,13 @@
    "source_offset": 247572,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.4195
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.4195
    }
   },
   {
@@ -482,11 +548,13 @@
    "source_offset": 63763,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.87175
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.87175
    }
   },
   {
@@ -496,11 +564,13 @@
    "source_offset": 210424,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.4375
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.4375
    }
   },
   {
@@ -510,11 +580,13 @@
    "source_offset": 12472,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.4375
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.25
    }
   },
   {
@@ -524,11 +596,13 @@
    "source_offset": 256540,
    "merged": {
     "document": true,
-    "passage": false
+    "passage": false,
+    "coverage": 0.0
    },
    "chunks": {
     "document": true,
-    "passage": false
+    "passage": false,
+    "coverage": 0.0
    }
   },
   {
@@ -538,11 +612,13 @@
    "source_offset": 155766,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.379
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.25
    }
   },
   {
@@ -552,11 +628,13 @@
    "source_offset": 4152,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.3505
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.25
    }
   },
   {
@@ -566,11 +644,13 @@
    "source_offset": 129930,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.955
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.7675
    }
   },
   {
@@ -580,11 +660,13 @@
    "source_offset": 137071,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.95525
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.83025
    }
   },
   {
@@ -594,11 +676,13 @@
    "source_offset": 86876,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.4375
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.25
    }
   },
   {
@@ -608,11 +692,13 @@
    "source_offset": 128740,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.5
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.5
    }
   },
   {
@@ -622,11 +708,13 @@
    "source_offset": 123618,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.592
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.592
    }
   },
   {
@@ -636,11 +724,13 @@
    "source_offset": 25936,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.25
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.25
    }
   },
   {
@@ -650,11 +740,13 @@
    "source_offset": 128456,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.25
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.25
    }
   },
   {
@@ -664,11 +756,13 @@
    "source_offset": 19346,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.851
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.851
    }
   },
   {
@@ -678,11 +772,13 @@
    "source_offset": 28594,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.2265
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.2265
    }
   },
   {
@@ -692,11 +788,13 @@
    "source_offset": 162410,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.25
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.25
    }
   },
   {
@@ -706,11 +804,13 @@
    "source_offset": 257011,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.49725
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.12225
    }
   },
   {
@@ -720,11 +820,13 @@
    "source_offset": 152027,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.38175
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.38175
    }
   },
   {
@@ -734,11 +836,13 @@
    "source_offset": 149895,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.78625
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.625
    }
   },
   {
@@ -748,11 +852,13 @@
    "source_offset": 61046,
    "merged": {
     "document": true,
-    "passage": false
+    "passage": false,
+    "coverage": 0.0
    },
    "chunks": {
     "document": true,
-    "passage": false
+    "passage": false,
+    "coverage": 0.0
    }
   },
   {
@@ -762,11 +868,13 @@
    "source_offset": 247590,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.6875
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.25
    }
   },
   {
@@ -776,11 +884,13 @@
    "source_offset": 253916,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 1.0
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.6875
    }
   },
   {
@@ -790,11 +900,13 @@
    "source_offset": 205791,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 1.0
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.5
    }
   },
   {
@@ -804,11 +916,13 @@
    "source_offset": 181515,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.4375
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.4375
    }
   },
   {
@@ -818,11 +932,13 @@
    "source_offset": 68733,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.4375
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.4375
    }
   },
   {
@@ -832,11 +948,13 @@
    "source_offset": 164264,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 1.0
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.9965
    }
   },
   {
@@ -846,11 +964,13 @@
    "source_offset": 196921,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.89475
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.70725
    }
   },
   {
@@ -860,11 +980,13 @@
    "source_offset": 1011,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 1.0
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.75275
    }
   },
   {
@@ -874,11 +996,13 @@
    "source_offset": 20921,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.29275
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.29275
    }
   },
   {
@@ -888,11 +1012,13 @@
    "source_offset": 45061,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 1.0
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.60975
    }
   },
   {
@@ -902,11 +1028,13 @@
    "source_offset": 125725,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 1.0
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.75
    }
   },
   {
@@ -916,11 +1044,13 @@
    "source_offset": 60414,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.25
    },
    "chunks": {
     "document": true,
-    "passage": false
+    "passage": false,
+    "coverage": 0.0
    }
   },
   {
@@ -930,11 +1060,13 @@
    "source_offset": 138950,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.8625
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.3
    }
   },
   {
@@ -944,11 +1076,13 @@
    "source_offset": 119717,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.25
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.25
    }
   },
   {
@@ -958,11 +1092,13 @@
    "source_offset": 75138,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.8125
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.4375
    }
   },
   {
@@ -972,11 +1108,13 @@
    "source_offset": 3646,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 1.0
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.875
    }
   },
   {
@@ -986,11 +1124,13 @@
    "source_offset": 12351,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.875
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.5
    }
   },
   {
@@ -1000,11 +1140,13 @@
    "source_offset": 197857,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.58925
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.58925
    }
   },
   {
@@ -1014,11 +1156,13 @@
    "source_offset": 89735,
    "merged": {
     "document": true,
-    "passage": false
+    "passage": false,
+    "coverage": 0.0
    },
    "chunks": {
     "document": true,
-    "passage": false
+    "passage": false,
+    "coverage": 0.0
    }
   },
   {
@@ -1028,11 +1172,13 @@
    "source_offset": 84576,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.4375
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.25
    }
   },
   {
@@ -1042,11 +1188,13 @@
    "source_offset": 63315,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.875
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.875
    }
   },
   {
@@ -1056,11 +1204,13 @@
    "source_offset": 123151,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.96225
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.8125
    }
   },
   {
@@ -1070,11 +1220,13 @@
    "source_offset": 32787,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.25
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.25
    }
   },
   {
@@ -1084,11 +1236,13 @@
    "source_offset": 71300,
    "merged": {
     "document": false,
-    "passage": false
+    "passage": false,
+    "coverage": 0.0
    },
    "chunks": {
     "document": false,
-    "passage": false
+    "passage": false,
+    "coverage": 0.0
    }
   },
   {
@@ -1098,11 +1252,13 @@
    "source_offset": 129240,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.25
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.25
    }
   },
   {
@@ -1112,11 +1268,13 @@
    "source_offset": 82497,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.43675
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.24925
    }
   },
   {
@@ -1126,11 +1284,13 @@
    "source_offset": 347369,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.6875
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.6875
    }
   },
   {
@@ -1140,11 +1300,13 @@
    "source_offset": 93086,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.9785
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.9785
    }
   },
   {
@@ -1154,11 +1316,13 @@
    "source_offset": 54365,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.4375
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.25
    }
   },
   {
@@ -1168,11 +1332,13 @@
    "source_offset": 96456,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.136
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.136
    }
   },
   {
@@ -1182,11 +1348,13 @@
    "source_offset": 24206,
    "merged": {
     "document": true,
-    "passage": false
+    "passage": false,
+    "coverage": 0.0
    },
    "chunks": {
     "document": true,
-    "passage": false
+    "passage": false,
+    "coverage": 0.0
    }
   },
   {
@@ -1196,11 +1364,13 @@
    "source_offset": 191559,
    "merged": {
     "document": false,
-    "passage": false
+    "passage": false,
+    "coverage": 0.0
    },
    "chunks": {
     "document": false,
-    "passage": false
+    "passage": false,
+    "coverage": 0.0
    }
   },
   {
@@ -1210,11 +1380,13 @@
    "source_offset": 101432,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.642
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.4375
    }
   },
   {
@@ -1224,11 +1396,13 @@
    "source_offset": 195520,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 1.0
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 1.0
    }
   },
   {
@@ -1238,11 +1412,13 @@
    "source_offset": 136249,
    "merged": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.37525
    },
    "chunks": {
     "document": true,
-    "passage": true
+    "passage": true,
+    "coverage": 0.37525
    }
   }
  ]
