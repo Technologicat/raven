@@ -67,6 +67,35 @@ The cap comes from `kokoro` (Kokoro TTS) and its phonemizer `misaki`, which curr
 
 Until one of those branches lands, **don't add `3.13`/`3.14` to the CI matrix** — it would fail at dependency resolution time. The test CI currently works around this by using `pip install -e . --no-deps` and hand-picking a minimal dependency subset for the test suite, which avoids pulling in kokoro/misaki at all. That's how the test matrix can stay lightweight even though kokoro lives in the full `[project] dependencies`.
 
+### `source env.sh` too, not just the venv
+
+Raven's CUDA libraries are the pip-installed ones under `.venv/.../site-packages/nvidia/`, and nothing
+puts those on the loader path by default. `env.sh` does it — it appends every nvidia `lib/` directory to
+`LD_LIBRARY_PATH` and adds `ptxas` to `PATH` — and the `~/.bashrc` wrappers for `raven-server` and the
+other entry points source it before running the real command. So the *apps* always have it.
+
+**A shell that only activated the venv does not.** In that shell `import cupy` succeeds while
+`import cupy.cublas` raises `ImportError: libcublas.so.12`, so `thinc.compat.has_cupy` is False and
+`spacy.require_gpu()` fails. Everything looks like a broken GPU installation, and none of it is true of
+the processes that matter.
+
+The failure this prevents is not a crash but a *wrong conclusion*: an environment-dependent probe run in
+the wrong environment reads exactly like a bug report, and gets written up as one. (Live case,
+2026-08-06 — a deferred TODO claiming "spaCy silently runs on CPU" was raised, argued and committed
+before checking `/proc/<server-pid>/environ`, which showed sixteen nvidia directories on the path and
+cupy mapped into the process.)
+
+So when setting up a session that will touch CUDA, GPU device selection, or anything asking *which
+device is this running on*, source it alongside the venv activation:
+
+```bash
+source env.sh          # after $(pdm venv activate)
+```
+
+To check the answer for a *running* process rather than for your shell, read its environment directly —
+`tr '\0' '\n' < /proc/<pid>/environ | grep LD_LIBRARY_PATH` — or look for the library in
+`/proc/<pid>/maps`. That is authoritative where your own shell is merely suggestive.
+
 ### Working-tree state: `config.py` files are edited in place
 
 Raven is configured via in-place edits to tracked `config.py` files — paths, model choices, hardware-specific tweaks. On any dev machine, expect some subset of the following to show up as `M` in `git status` as the **normal steady state**, not as a pending change that needs committing:
