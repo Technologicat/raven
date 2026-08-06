@@ -84,9 +84,53 @@ agreeing, on a question set of about 136. The differences are that a mechanism w
 the corpus where it should *not* work indeed shows nothing, and that the effect is 3.6 points rather than
 under one. None of those is significance.
 
-One caveat to check rather than assume: `sum` rewards documents with more chunks, i.e. longer ones. Gold
-documents here are sampled uniformly, so there is no obvious route for that to inflate the result — but
-the check is to score by document length, not to argue about it.
+**The length confound was checked rather than argued away, and it acquits `sum`.** The worry is that
+summing rewards documents with more chunks, i.e. longer ones, so the gain could be a length prior wearing
+a relevance costume. Measuring the mean length of the documents each condition promotes into its top 20,
+against a corpus mean of 94,545 characters:
+
+| condition | mean length of top 20 | vs corpus |
+|---|---|---|
+| **RRF, best-chunk (shipped)** | 154,853 | **1.64×** |
+| min-max + sum, w=0.5 | 151,197 | 1.60× |
+| min-max + max, w=0.5 | 139,943 | 1.48× |
+| z-score + sum, w=0.5 | 130,115 | **1.38×** |
+| count (any weight) | 159,860 | 1.69× |
+
+`sum` is *less* length-biased than what ships, so its gain is not bought that way.
+
+**And the shipped configuration is itself strongly length-biased, which nobody was looking for.** RRF with
+best-chunk aggregation promotes documents 64% longer than the corpus average. The mechanism is obvious
+once stated: "a document ranks where its best chunk ranked" is a **maximum over N samples**, and a maximum
+over more samples is higher in expectation. Best-chunk aggregation *is* a length prior — so the intuition
+that `sum` would be the length-biased rule is exactly backwards, and the least biased condition measured
+(z-score + sum, 1.38×) is a summing one.
+
+Whether 1.64× is harmful is a separate question this does not answer: gold documents are sampled uniformly
+here, so retrieval is over-selecting long documents relative to the corpus, but on a real query a long
+paper may genuinely be likelier to be relevant. It is recorded because a systematic length preference in
+the shipped ranking is worth knowing about either way.
+
+**Fiction cannot test `sum` at document level, and is inconclusive at passage level.** With 19 documents
+at `k=20` every condition returns every document, so document recall is 100.0% for all nineteen conditions
+and the length check is degenerate too. Scored by passage coverage instead — the metric that corpus does
+support — mean coverage does not move (43.1% for the baseline against 42.0% for `sum`), while
+near-complete coverage roughly doubles (5.7% → 10.2% of questions above 90%). That is 5 questions against
+9 out of 88: a hint, not a result, and pointing the same way as the fulltext finding without adding much
+to it.
+
+**Fiction cannot test this, and the reason is structural.** It is the obvious second corpus to try, having
+dozens of chunks per document like fulltext but a completely different genre — which would separate "helps
+on long documents" from "helps on scientific papers". Run, it returns **100.0% at @20 for all nineteen
+conditions, 0 gained and 0 lost everywhere**: with 19 documents and `k=20` every configuration returns
+every document, so nothing can discriminate. Only MRR moves, and an MRR-only difference is not an
+improvement here (§5).
+
+The question survives the failed measurement. Asking it of fiction needs the metric that corpus *can*
+support — passage **coverage**, which is not saturated (55.2% for merged spans) — i.e. whether ordering by
+summed chunk scores puts more of the answering passage in front of the model. That means running
+`passage_recall.py`'s coverage measurement over a `sum`-ordered result list, which is a wiring job between
+two existing scripts rather than a new experiment.
 
 **Score-based fusion instead of rank-based — no gain in ranking quality.** *Measured 2026-08-06.* This
 was ranked as the most promising untried idea, on the reasoning that RRF fuses positions and discards

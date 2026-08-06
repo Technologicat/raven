@@ -1,0 +1,216 @@
+{
+ "corpus": "fiction",
+ "depth": 100,
+ "n": 88,
+ "rows": [
+  {
+   "fusion": "rrf",
+   "aggregate": "max",
+   "weight": null,
+   "recall20": 1.0,
+   "recall50": 1.0,
+   "mrr": 0.7964781746031746,
+   "gained": 0,
+   "lost": 0,
+   "p": 1.0
+  },
+  {
+   "fusion": "minmax",
+   "aggregate": "max",
+   "weight": 0.3,
+   "recall20": 1.0,
+   "recall50": 1.0,
+   "mrr": 0.831642316017316,
+   "gained": 0,
+   "lost": 0,
+   "p": 1.0
+  },
+  {
+   "fusion": "minmax",
+   "aggregate": "max",
+   "weight": 0.5,
+   "recall20": 1.0,
+   "recall50": 1.0,
+   "mrr": 0.8280532598714416,
+   "gained": 0,
+   "lost": 0,
+   "p": 1.0
+  },
+  {
+   "fusion": "minmax",
+   "aggregate": "max",
+   "weight": 0.7,
+   "recall20": 1.0,
+   "recall50": 1.0,
+   "mrr": 0.7510646235078053,
+   "gained": 0,
+   "lost": 0,
+   "p": 1.0
+  },
+  {
+   "fusion": "minmax",
+   "aggregate": "sum",
+   "weight": 0.3,
+   "recall20": 1.0,
+   "recall50": 1.0,
+   "mrr": 0.7761498917748917,
+   "gained": 0,
+   "lost": 0,
+   "p": 1.0
+  },
+  {
+   "fusion": "minmax",
+   "aggregate": "sum",
+   "weight": 0.5,
+   "recall20": 1.0,
+   "recall50": 1.0,
+   "mrr": 0.8078192640692641,
+   "gained": 0,
+   "lost": 0,
+   "p": 1.0
+  },
+  {
+   "fusion": "minmax",
+   "aggregate": "sum",
+   "weight": 0.7,
+   "recall20": 1.0,
+   "recall50": 1.0,
+   "mrr": 0.8079184704184704,
+   "gained": 0,
+   "lost": 0,
+   "p": 1.0
+  },
+  {
+   "fusion": "minmax",
+   "aggregate": "count",
+   "weight": 0.3,
+   "recall20": 1.0,
+   "recall50": 1.0,
+   "mrr": 0.6872839597271415,
+   "gained": 0,
+   "lost": 0,
+   "p": 1.0
+  },
+  {
+   "fusion": "minmax",
+   "aggregate": "count",
+   "weight": 0.5,
+   "recall20": 1.0,
+   "recall50": 1.0,
+   "mrr": 0.6872839597271415,
+   "gained": 0,
+   "lost": 0,
+   "p": 1.0
+  },
+  {
+   "fusion": "minmax",
+   "aggregate": "count",
+   "weight": 0.7,
+   "recall20": 1.0,
+   "recall50": 1.0,
+   "mrr": 0.6872839597271415,
+   "gained": 0,
+   "lost": 0,
+   "p": 1.0
+  },
+  {
+   "fusion": "zscore",
+   "aggregate": "max",
+   "weight": 0.3,
+   "recall20": 1.0,
+   "recall50": 1.0,
+   "mrr": 0.8527462121212122,
+   "gained": 0,
+   "lost": 0,
+   "p": 1.0
+  },
+  {
+   "fusion": "zscore",
+   "aggregate": "max",
+   "weight": 0.5,
+   "recall20": 1.0,
+   "recall50": 1.0,
+   "mrr": 0.8112603305785124,
+   "gained": 0,
+   "lost": 0,
+   "p": 1.0
+  },
+  {
+   "fusion": "zscore",
+   "aggregate": "max",
+   "weight": 0.7,
+   "recall20": 1.0,
+   "recall50": 1.0,
+   "mrr": 0.7495314344746162,
+   "gained": 0,
+   "lost": 0,
+   "p": 1.0
+  },
+  {
+   "fusion": "zscore",
+   "aggregate": "sum",
+   "weight": 0.3,
+   "recall20": 1.0,
+   "recall50": 1.0,
+   "mrr": 0.8145385168530221,
+   "gained": 0,
+   "lost": 0,
+   "p": 1.0
+  },
+  {
+   "fusion": "zscore",
+   "aggregate": "sum",
+   "weight": 0.5,
+   "recall20": 1.0,
+   "recall50": 1.0,
+   "mrr": 0.8062521220609455,
+   "gained": 0,
+   "lost": 0,
+   "p": 1.0
+  },
+  {
+   "fusion": "zscore",
+   "aggregate": "sum",
+   "weight": 0.7,
+   "recall20": 1.0,
+   "recall50": 1.0,
+   "mrr": 0.7792023679306432,
+   "gained": 0,
+   "lost": 0,
+   "p": 1.0
+  },
+  {
+   "fusion": "zscore",
+   "aggregate": "count",
+   "weight": 0.3,
+   "recall20": 1.0,
+   "recall50": 1.0,
+   "mrr": 0.6872839597271415,
+   "gained": 0,
+   "lost": 0,
+   "p": 1.0
+  },
+  {
+   "fusion": "zscore",
+   "aggregate": "count",
+   "weight": 0.5,
+   "recall20": 1.0,
+   "recall50": 1.0,
+   "mrr": 0.6872839597271415,
+   "gained": 0,
+   "lost": 0,
+   "p": 1.0
+  },
+  {
+   "fusion": "zscore",
+   "aggregate": "count",
+   "weight": 0.7,
+   "recall20": 1.0,
+   "recall50": 1.0,
+   "mrr": 0.6872839597271415,
+   "gained": 0,
+   "lost": 0,
+   "p": 1.0
+  }
+ ]
+}

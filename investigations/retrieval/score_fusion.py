@@ -43,7 +43,21 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 import fusion_weight  # noqa: E402
+import passage_recall  # noqa: E402
 import sharpness  # noqa: E402
+
+_DOC_LENGTHS: dict[int, dict[str, int]] = {}
+
+
+def doc_lengths_of(retriever) -> dict[str, int]:
+    """Document length in characters, keyed by `document_key`. Memoized: the corpus does not change here."""
+    cached = _DOC_LENGTHS.get(id(retriever))
+    if cached is None:
+        with retriever.datastore_lock:
+            cached = {sharpness.document_key(document_id): len(doc.get("text", ""))
+                      for document_id, doc in retriever.documents.items()}
+        _DOC_LENGTHS[id(retriever)] = cached
+    return cached
 
 DEFAULT_DEPTH = 100
 WEIGHTS = (0.3, 0.5, 0.7)
@@ -76,6 +90,30 @@ def fuse_scores(keyword: dict[str, float], vector: dict[str, float], w: float) -
     for key in set(keyword) | set(vector):
         out[key] = w * keyword.get(key, 0.0) + (1.0 - w) * vector.get(key, 0.0)
     return out
+
+
+def order_chunks(chunk_scores: dict[str, float], chunk_document: dict[str, str], how: str) -> list[str]:
+    """The same conditions expressed as an ordering of *chunks*, which is what the model actually receives.
+
+    Document-level recall cannot discriminate on a corpus of few documents — fiction returns every document
+    at `k=20` under every condition — but passage coverage can, and coverage is a property of the chunks
+    that reach the model rather than of the document ordering.
+
+    `max` orders chunks by their own fused score, which is the shipped behaviour. `sum` and `count` order
+    by the *document's* aggregate first and the chunk's own score second, which is what those rules mean
+    operationally: a document matching in many places gets its passages surfaced earlier, and the question
+    is whether that puts more of the answering text in front of the model.
+    """
+    if how == "max":
+        return sorted(chunk_scores, key=lambda key: chunk_scores[key], reverse=True)
+    per_document: dict[str, list[float]] = {}
+    for key, score in chunk_scores.items():
+        per_document.setdefault(chunk_document[key], []).append(score)
+    document_score = ({d: sum(v) for d, v in per_document.items()} if how == "sum"
+                      else {d: float(len(v)) for d, v in per_document.items()})
+    return sorted(chunk_scores,
+                  key=lambda key: (document_score[chunk_document[key]], chunk_scores[key]),
+                  reverse=True)
 
 
 def aggregate(chunk_scores: dict[str, float], chunk_document: dict[str, str], how: str) -> list[str]:
@@ -119,9 +157,16 @@ def main() -> None:  # pragma: no cover
     retriever = hybridir.HybridIR(datastore_base_dir=db_dir,
                                   embedding_model_name=librarian_config.qa_embedding_model)
 
-    items = [i for i in sharpness.build_workload(corpus)[0] if i["on_corpus"] and i["gold"]]
+    workload, note = sharpness.build_workload(corpus)
+    items = [i for i in workload if i["on_corpus"] and i["gold"]]
+    # Passage coverage is only measurable where the questions were written from sampled passages, which
+    # records where in the document the answer came from. It is the metric that still discriminates when
+    # document-level recall saturates, i.e. exactly on the corpora with few, long documents.
+    passage_length = note.get("passage_chars")
+    score_coverage = passage_length is not None and any(i.get("source_offset") is not None for i in items)
     print(f"corpus '{corpus}': {len(items)} on-corpus questions, depth {depth}")
-    print(f"  index: {db_dir}\n")
+    print(f"  index: {db_dir}"
+          + (f"   passage coverage: on ({passage_length} chars)" if score_coverage else "") + "\n")
 
     conditions = [("rrf", "max", None)]
     for how in ("minmax", "zscore"):
@@ -129,21 +174,34 @@ def main() -> None:  # pragma: no cover
             for w in WEIGHTS:
                 conditions.append((how, agg, w))
     ranks: dict[tuple, list] = {c: [] for c in conditions}
+    coverage: dict[tuple, list] = {c: [] for c in conditions}
+    promoted_lengths: dict[tuple, list] = {c: [] for c in conditions}
 
     for n, item in enumerate(items, 1):
         gold = {sharpness.document_key(g) for g in item["gold"]}
         _merged, rep = retriever.query(item["query"], k=depth, multi_query=False, return_extra_info=True)
 
         chunk_document: dict[str, str] = {}
+        chunk_record: dict[str, dict] = {}
         kw_raw, vec_raw = {}, {}
         for record, score in zip(rep.keyword_results, rep.keyword_scores):
             key = record["full_id"]
             chunk_document[key] = sharpness.document_key(record["document_id"])
+            chunk_record[key] = record
             kw_raw[key] = float(score)
         for record, distance in zip(rep.vector_results, rep.vector_distances):
             key = record["full_id"]
             chunk_document[key] = sharpness.document_key(record["document_id"])
+            chunk_record[key] = record
             vec_raw[key] = 1.0 - float(distance)  # distances are bigger-is-worse
+
+        offset = item.get("source_offset")
+        offset = int(offset) if (score_coverage and offset is not None) else None
+
+        def cover(ordered_keys: list[str]) -> float:
+            """Coverage of the gold passage by the top-20 chunks of this ordering."""
+            top = [chunk_record[key] for key in ordered_keys[:20]]
+            return passage_recall.passage_coverage(top, gold, offset, passage_length)
 
         # The rank-fusion baseline, from the same candidate lists, deduplicated to documents the way the
         # shipped path does — a document ranks where its best chunk ranked.
@@ -151,6 +209,16 @@ def main() -> None:  # pragma: no cover
         vec_docs = fusion_weight.dedup_ids(rep.vector_results)
         ranks[("rrf", "max", None)].append(
             fusion_weight.gold_rank(fusion_weight.weighted_rrf(kw_docs, vec_docs, 0.5, 60), gold))
+        if offset is not None:
+            rrf_chunks = fusion_weight.weighted_rrf(
+                [r["full_id"] for r in rep.keyword_results],
+                [r["full_id"] for r in rep.vector_results], 0.5, 60)
+            coverage[("rrf", "max", None)].append(cover(rrf_chunks))
+
+        document_lengths = doc_lengths_of(retriever)
+        promoted_lengths[("rrf", "max", None)].extend(
+            document_lengths[d] for d in fusion_weight.weighted_rrf(kw_docs, vec_docs, 0.5, 60)[:20]
+            if d in document_lengths)
 
         for how in ("minmax", "zscore"):
             kw_keys, vec_keys = list(kw_raw), list(vec_raw)
@@ -161,6 +229,10 @@ def main() -> None:  # pragma: no cover
                 for agg in ("max", "sum", "count"):
                     ordered = aggregate(fused, chunk_document, agg)
                     ranks[(how, agg, w)].append(fusion_weight.gold_rank(ordered, gold))
+                    promoted_lengths[(how, agg, w)].extend(
+                        document_lengths[d] for d in ordered[:20] if d in document_lengths)
+                    if offset is not None:
+                        coverage[(how, agg, w)].append(cover(order_chunks(fused, chunk_document, agg)))
         if n % 25 == 0:
             print(f"  [{n}/{len(items)}]", flush=True)
 
@@ -191,6 +263,38 @@ def main() -> None:  # pragma: no cover
     print("\n  'gain'/'loss' are questions whose gold document enters/leaves the top 20 relative to the")
     print("  baseline, and p is the exact paired test over those. Recall differences without a paired")
     print("  test are not evidence at this sample size.")
+
+    if any(coverage.values()):
+        print(f"\n  passage coverage of the top 20 chunks (n={len(coverage[conditions[0]])})")
+        print(f"  {'fusion':<9} {'aggregate':<10} {'w':>4} {'mean':>8} {'>=50%':>8} {'>=90%':>8}")
+        for cond in conditions:
+            cov = coverage[cond]
+            if not cov:
+                continue
+            how, agg, w = cond
+            print(f"  {how:<9} {agg:<10} {('-' if w is None else f'{w:.1f}'):>4} "
+                  f"{sum(cov) / len(cov):>8.1%} {sum(1 for c in cov if c >= 0.5) / len(cov):>8.1%} "
+                  f"{sum(1 for c in cov if c >= 0.9) / len(cov):>8.1%}")
+
+    # Is `sum` merely rewarding long documents? It ranks by *total* matched score, and a longer document
+    # has more chunks available to contribute — so the gain could be a length prior wearing a relevance
+    # costume. Gold documents are sampled uniformly here, which gives that no obvious route to inflate the
+    # score, but "no obvious route" is an argument and this is a measurement: compare the length of the
+    # documents each condition promotes into the top 20 against the corpus average.
+    lengths = doc_lengths_of(retriever)
+    corpus_mean = sum(lengths.values()) / max(len(lengths), 1)
+    print(f"\n  document-length confound check — corpus mean {corpus_mean:,.0f} chars")
+    print(f"  {'fusion':<9} {'aggregate':<10} {'w':>4} {'mean len of top 20':>20} {'vs corpus':>10}")
+    for cond in conditions:
+        how, agg, w = cond
+        promoted = promoted_lengths.get(cond, [])
+        if not promoted:
+            continue
+        mean_len = sum(promoted) / len(promoted)
+        print(f"  {how:<9} {agg:<10} {('-' if w is None else f'{w:.1f}'):>4} {mean_len:>20,.0f} "
+              f"{mean_len / corpus_mean:>9.2f}x")
+    print("\n  A ratio near 1.0 means the condition is not selecting on length. A `sum` rule that scored")
+    print("  well *and* promoted much longer documents would be the case to distrust.")
 
     out = pathlib.Path(__file__).parent / f"score_fusion_{corpus}.json"
     out.write_text(json.dumps({"corpus": corpus, "depth": depth, "n": total, "rows": rows}, indent=1),
