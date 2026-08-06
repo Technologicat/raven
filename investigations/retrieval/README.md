@@ -735,9 +735,16 @@ The recall curve invites raising `k`: 74.7% at 20 against 89.9% at 100, and a 12
 Capacity is not the constraint, though — **prefill time is**. The retrieved set changes every turn, so
 it can never be cached, and Raven already injects it in the cheapest possible position (immediately
 before the user's latest message, as a synthetic tool call and result, so the history prefix stays
-cacheable and both LM Studio and oobabooga do cache it). Even so, `k=20` — about 6k tokens at the
-measured median of 299 tokens per merged result — already costs several seconds per turn on a local
-model. `k=50` is 2.5x that and `k=100` is 5x. So raising `k` is not the cheap win the curve suggests.
+cacheable and both LM Studio and oobabooga do cache it). What is left after that optimization is
+unavoidable: the retrieved block is re-processed every turn, at the measured median of 299 tokens per
+merged result.
+
+**Where the ceiling sits is not known, and it is the number worth measuring.** `k=20` (~6k tokens) is
+acceptable in practice; `k=200` (~60k) is not. That leaves the interesting range untested, and the
+recall curve says the best marginal deal lies inside it — `k=50` costs 2.5x the prefill of 20 and buys
++10.1 points (74.7% → 84.8%), where the next doubling to 100 buys only +5.1 more. So `k=50` is the
+candidate, and the experiment is a stopwatch on prefill at 20 / 50 / 100 for the deployed model, not
+another retrieval run.
 
 What this reframes: the currency is **tokens**, and `k` only proxies for it. Merging contiguous spans
 *spends* tokens to make each result longer, so a fixed token budget buys fewer distinct documents than
