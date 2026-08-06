@@ -729,6 +729,51 @@ discordant pairs and discards the 92 of 99 where both configurations agree, whic
 power is so low. **Generating more questions is the cheapest way to sharpen any of this** — roughly 400
 would halve the confidence interval — and the generator already exists (`make_questions.py`).
 
+##### The budget is tokens, not `k` — and merging spends them
+
+The recall curve invites raising `k`: 74.7% at 20 against 89.9% at 100, and a 128k context has room.
+Capacity is not the constraint, though — **prefill time is**. The retrieved set changes every turn, so
+it can never be cached, and Raven already injects it in the cheapest possible position (immediately
+before the user's latest message, as a synthetic tool call and result, so the history prefix stays
+cacheable and both LM Studio and oobabooga do cache it). Even so, `k=20` — about 6k tokens at the
+measured median of 299 tokens per merged result — already costs several seconds per turn on a local
+model. `k=50` is 2.5x that and `k=100` is 5x. So raising `k` is not the cheap win the curve suggests.
+
+What this reframes: the currency is **tokens**, and `k` only proxies for it. Merging contiguous spans
+*spends* tokens to make each result longer, so a fixed token budget buys fewer distinct documents than
+it otherwise would. "50 unmerged chunks" and "20 merged spans" may cost the same prefill while covering
+more of the corpus — which attacks the p75 = rank 21 tail without buying more tokens.
+
+That makes **recall per thousand tokens** the metric worth computing, rather than recall@k, and it is
+derivable from data already recorded. It also converges with the pre-merge reranking idea above: both
+say the unit that should reach the model is the chunk, not the merged span.
+
+##### Can the right arm configuration be detected automatically?
+
+Juha's reading of the table above was that there is no known algorithmic way to tell which corpus wants
+which configuration. Two candidate routes say otherwise, and both reuse machinery this investigation
+already built and parked. Untested — recorded so they are not re-derived.
+
+Neither needs the thing that defeated the off-corpus work. That needed a constant valid across corpora,
+and no such constant exists. Choosing between arms does not:
+
+- **Per query, relative.** `score_sharpness` already measures whether a result list has a discriminating
+  head or is flat. Comparing BM25's sharpness against the vector arm's *within one query* is a relative
+  comparison, so it needs no cross-corpus calibration — the exact failure that killed the constant. On
+  banichuk a flat BM25 profile beside a peaked vector profile should be visible on nearly every query.
+- **Per corpus, at index time, and this escapes the catch-22.** Generate a few dozen questions from the
+  corpus with `make_questions.py`, score both arms, pick the weighting that wins. The labels hold *by
+  construction* because each question was written from a known document — the same property that made
+  everything else here measurable. One LLM pass per corpus at ingest, and both halves already exist.
+
+The second is the stronger candidate: measurable, ground truth for free, no new components. It is also
+the "calibrate at index time" idea from the start of this sprint, pointed at arm weighting rather than
+at a threshold — which is worth noting, because that idea was retracted on its original target and the
+retraction should not be read as condemning the shape.
+
+Treat both as hypotheses. The scoreboard for confident predictions in this investigation is four
+falsified against two confirmed.
+
 **Still open, and now the cheapest things to try** (in this order, since each is one command against
 existing corpora): the same table on fiction and banichuk, which sit at opposite ends of the headroom
 range (70.5% and 9.1% at rank 1) and may not behave alike; and other small rerankers in the
