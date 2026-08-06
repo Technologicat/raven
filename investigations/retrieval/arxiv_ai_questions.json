@@ -3201,6 +3201,630 @@
         "2301.13188v1.bib",
         "2307.08715v2.bib"
       ]
+    },
+    {
+      "kind": "synthesis",
+      "question": "When conventional training data becomes scarce and short-horizon benchmarks suggest progress is stalling, how do the trade-offs between expanding model architecture size, increasing training set repetition, and deploying alternative inference-time computation methods compare in their effectiveness for enabling robust multi-step execution and complex reasoning?",
+      "gold": [
+        "2305.16264v5.bib",
+        "2509.09677v2.bib",
+        "2502.05171v2.bib",
+        "2204.02311v5.bib"
+      ],
+      "gold_titles": [
+        "Scaling Data-Constrained Language Models",
+        "The Illusion of Diminishing Returns: Measuring Long Horizon Execution in LLMs",
+        "Scaling up Test-Time Compute with Latent Reasoning: A Recurrent Depth Approach",
+        "PaLM: Scaling Language Modeling with Pathways"
+      ]
+    },
+    {
+      "kind": "synthesis",
+      "question": "When AI systems surpass human baselines on standard metrics, how do hidden vulnerabilities such as targeted exploitation, reward function sensitivity, and task loophole exploitation expose a fundamental trade-off between narrow optimization and true reliability, and what integrated approach to training safeguards, human oversight, and expert-level evaluation best ensures these models generalize safely rather than gaming the evaluation criteria?",
+      "gold": [
+        "2211.00241v4.bib",
+        "2203.12592v4.bib",
+        "2502.13295v1.bib",
+        "2311.12022v1.bib"
+      ],
+      "gold_titles": [
+        "Adversarial Policies Beat Superhuman Go AIs",
+        "Your Policy Regularizer is Secretly an Adversary",
+        "Demonstrating specification gaming in reasoning models",
+        "GPQA: A Graduate-Level Google-Proof Q&A Benchmark"
+      ]
+    },
+    {
+      "kind": "synthesis",
+      "question": "Considering the broad spectrum of identified threats, in what ways must assessment methodologies advance to reliably measure mitigation efficacy, and how do approaches that strip dangerous capabilities compare to those that modify internal representations when evaluated against complex, context-rich scenarios?",
+      "gold": [
+        "2112.04359v1.bib",
+        "2403.03218v7.bib",
+        "2506.10922v1.bib",
+        "2212.09251v1.bib"
+      ],
+      "gold_titles": [
+        "Ethical and social risks of harm from Language Models",
+        "The WMDP Benchmark: Measuring and Reducing Malicious Use With Unlearning",
+        "Robustly Improving LLM Fairness in Realistic Settings via Interpretability",
+        "Discovering Language Model Behaviors with Model-Written Evaluations"
+      ]
+    },
+    {
+      "kind": "synthesis",
+      "question": "How might generative frameworks that iteratively restore structure from noise via thermodynamic principles be utilized to refine the statistical characterization of trans-Neptunian orbital populations and hidden massive perturbers, and does deploying these models on energy-constrained satellite constellations offer a viable path for scalable inference, provided that the known limitations of neural methods are addressed through hybrid algorithmic strategies?",
+      "gold": [
+        "2404.11594v1.bib",
+        "2511.19468v1.bib",
+        "1801.00631v1.bib",
+        "1503.03585v8.bib"
+      ],
+      "gold_titles": [
+        "Generation of Low-Inclination, Neptune-Crossing TNOs by Planet Nine",
+        "Towards a future space-based, highly scalable AI infrastructure system design",
+        "Deep Learning: A Critical Appraisal",
+        "Deep Unsupervised Learning using Nonequilibrium Thermodynamics"
+      ]
+    },
+    {
+      "kind": "synthesis",
+      "question": "When generation parameters and prompt phrasing significantly alter model outputs, how should practitioners frame their interpretations and design evaluation protocols to separate mechanical sensitivity from genuine reasoning or emotional comprehension?",
+      "gold": [
+        "2603.08274v1.bib",
+        "2210.01240v4.bib",
+        "2212.03551v5.bib",
+        "2307.11760v7.bib"
+      ],
+      "gold_titles": [
+        "How Much Do LLMs Hallucinate in Document Q&A Scenarios? A 172-Billion-Token Study Across Temperatures, Context Lengths, and Hardware Platforms",
+        "Language Models Are Greedy Reasoners: A Systematic Formal Analysis of Chain-of-Thought",
+        "Talking About Large Language Models",
+        "Large Language Models Understand and Can be Enhanced by Emotional Stimuli"
+      ]
+    },
+    {
+      "kind": "synthesis",
+      "question": "When seeking to equip a foundational text generation model with novel, domain-specific, or highly complex abilities without full retraining, how do external guidance mechanisms—such as example-driven generative variation, multi-agent reasoning setups, and interactive storytelling interfaces—compare to direct parameter combination strategies in terms of output novelty, adaptability, and scalability?",
+      "gold": [
+        "2302.12170v3.bib",
+        "2311.05965v1.bib",
+        "2102.06391v2.bib",
+        "2311.03099v3.bib"
+      ],
+      "gold_titles": [
+        "Language Model Crossover: Variation through Few-Shot Prompting",
+        "Large Language Models are Zero Shot Hypothesis Proposers",
+        "Multiversal views on language models",
+        "Language Models are Super Mario: Absorbing Abilities from Homologous Models as a Free Lunch"
+      ]
+    },
+    {
+      "kind": "synthesis",
+      "question": "What trade-offs emerge between isolating spontaneously formed internal features through probing, fine-tuning models to verbally describe their own computational steps, and architecturally injecting domain-specific constraints, particularly regarding how each strategy balances fidelity to pre-trained knowledge with the capacity to steer outputs toward novel objectives?",
+      "gold": [
+        "2309.00941v2.bib",
+        "2305.11169v3.bib",
+        "2511.08579v1.bib",
+        "2302.01649v2.bib"
+      ],
+      "gold_titles": [
+        "Emergent Linear Representations in World Models of Self-Supervised Sequence Models",
+        "Emergent Representations of Program Semantics in Language Models Trained on Programs",
+        "Training Language Models to Explain Their Own Computations",
+        "Structure-informed Language Models Are Protein Designers"
+      ]
+    },
+    {
+      "kind": "synthesis",
+      "question": "For complex planning and logical tasks, what are the comparative trade-offs between generating explicit intermediate text, applying automated prompt tuning, and routing reasoning through internal model states?",
+      "gold": [
+        "2405.04776v2.bib",
+        "2412.06769v2.bib",
+        "2402.10949v2.bib",
+        "2311.01460v1.bib"
+      ],
+      "gold_titles": [
+        "Chain of Thoughtlessness? An Analysis of CoT in Planning",
+        "Training Large Language Models to Reason in a Continuous Latent Space",
+        "The Unreasonable Effectiveness of Eccentric Automatic Prompts",
+        "Implicit Chain of Thought Reasoning via Knowledge Distillation"
+      ]
+    },
+    {
+      "kind": "synthesis",
+      "question": "How do contextual dependencies, compute constraints, and continuous representations interact to shape model reasoning and alignment stability, and what evaluation protocols are required to isolate these competing effects from methodological artifacts?",
+      "gold": [
+        "2509.12517v3.bib",
+        "2408.15116v1.bib",
+        "2010.13057v1.bib",
+        "2604.02460v2.bib"
+      ],
+      "gold_titles": [
+        "Interaction Context Often Increases Sycophancy in LLMs",
+        "Evaluating Stability of Unreflective Alignment",
+        "Contextualized Word Embeddings Encode Aspects of Human-Like Word Sense Knowledge",
+        "Single-Agent LLMs Outperform Multi-Agent Systems on Multi-Hop Reasoning Under Equal Thinking Token Budgets"
+      ]
+    },
+    {
+      "kind": "synthesis",
+      "question": "When designing reasoning architectures to balance computational efficiency with complex problem-solving, how do compact continuous representations, simultaneous multi-path exploration, and long-context data processing each mitigate the bottlenecks of sequential generation, and what fundamental trade-offs arise when attempting to unify these distinct scaling paradigms?",
+      "gold": [
+        "2511.19418v2.bib",
+        "2412.13171v1.bib",
+        "2504.15271v1.bib",
+        "2509.04475v1.bib"
+      ],
+      "gold_titles": [
+        "Chain-of-Visual-Thought: Teaching VLMs to See and Think Better with Continuous Visual Tokens",
+        "Compressed Chain of Thought: Efficient Reasoning Through Dense Representations",
+        "Eagle 2.5: Boosting Long-Context Post-Training for Frontier Vision-Language Models",
+        "ParaThinker: Native Parallel Thinking as a New Paradigm to Scale LLM Test-time Compute"
+      ]
+    },
+    {
+      "kind": "synthesis",
+      "question": "How do different frameworks for autonomous capability enhancement reconcile the trade-off between unrestricted self-modification and the need for empirical or algorithmic validation when operating without human-provided labels?",
+      "gold": [
+        "1312.6764v1.bib",
+        "2310.02304v3.bib",
+        "2505.22954v1.bib",
+        "2210.11610v2.bib"
+      ],
+      "gold_titles": [
+        "Bounded Recursive Self-Improvement",
+        "Self-Taught Optimizer (STOP): Recursively Self-Improving Code Generation",
+        "Darwin Godel Machine: Open-Ended Evolution of Self-Improving Agents",
+        "Large Language Models Can Self-Improve"
+      ]
+    },
+    {
+      "kind": "synthesis",
+      "question": "How do distinct architectural approaches to scaling model capacity—such as jointly optimizing hybrid representations, sparsely distributing computation across specialized modules, decomposing generation into coarse-to-fine pipelines, and aligning probabilistic inference with intrinsic data geometry—navigate",
+      "gold": [
+        "2507.23374v1.bib",
+        "1607.06407v1.bib",
+        "2112.06905v2.bib",
+        "1612.03242v2.bib"
+      ],
+      "gold_titles": [
+        "NeRF Is a Valuable Assistant for 3D Gaussian Splatting",
+        "Small-Variance Nonparametric Clustering on the Hypersphere",
+        "GLaM: Efficient Scaling of Language Models with Mixture-of-Experts",
+        "StackGAN: Text to Photo-realistic Image Synthesis with Stacked Generative Adversarial Networks"
+      ]
+    },
+    {
+      "kind": "synthesis",
+      "question": "What are the critical trade-offs when architecting a complete pipeline for publicly accessible foundation models, specifically regarding how data curation transparency, preference alignment protocols, capability-focused instruction tuning, and post-training compression jointly constrain computational efficiency, developmental openness, and specialized task performance?",
+      "gold": [
+        "2411.12372v1.bib",
+        "2405.18886v2.bib",
+        "2403.17297v1.bib",
+        "2307.16789v2.bib"
+      ],
+      "gold_titles": [
+        "RedPajama: an Open Dataset for Training Large Language Models",
+        "Compressing Large Language Models using Low Rank and Low Precision Decomposition",
+        "InternLM2 Technical Report",
+        "ToolLLM: Facilitating Large Language Models to Master 16000+ Real-world APIs"
+      ]
+    },
+    {
+      "kind": "synthesis",
+      "question": "How do algorithmic memory scheduling, linear functional approximations, attention normalization adjustments, and persistent neural memory designs differentially balance computational efficiency, mathematical exactness, and long-range information retention when scaling sequence models beyond fixed context windows?",
+      "gold": [
+        "2205.14135v2.bib",
+        "2202.10447v2.bib",
+        "2501.19399v1.bib",
+        "2501.00663v1.bib"
+      ],
+      "gold_titles": [
+        "FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness",
+        "Transformer Quality in Linear Time",
+        "Scalable-Softmax Is Superior for Attention",
+        "Titans: Learning to Memorize at Test Time"
+      ]
+    },
+    {
+      "kind": "synthesis",
+      "question": "When augmenting a foundational framework with auxiliary components to enable novel capabilities or enforce constraints, how do the structural characteristics of these additions—such as the mass profile in spacetime metrics, low-rank parameter updates in language models, orthogonal subspace allocation, or meta-adaptive generation strategies—determine the balance between system stability, computational or resource efficiency, and the ability to handle non-stationary targets or temporal interference?",
+      "gold": [
+        "2405.02709v1.bib",
+        "2602.15902v1.bib",
+        "2405.00438v1.bib",
+        "2310.14152v1.bib"
+      ],
+      "gold_titles": [
+        "Constant Velocity Physical Warp Drive Solution",
+        "Doc-to-LoRA: Learning to Instantly Internalize Contexts",
+        "MetaRM: Shifted Distributions Alignment via Meta-Learning",
+        "Orthogonal Subspace Learning for Language Model Continual Learning"
+      ]
+    },
+    {
+      "kind": "synthesis",
+      "question": "How should the quantization error metric, data representation format, and optimization strategy be jointly designed to handle distributional anomalies and block-dependent statistics while preserving downstream task accuracy under severe compression constraints?",
+      "gold": [
+        "2306.06965v2.bib",
+        "2411.17525v1.bib",
+        "2208.09225v2.bib",
+        "2210.17323v2.bib"
+      ],
+      "gold_titles": [
+        "NF4 Isn't Information Theoretically Optimal (and that's Good)",
+        "Pushing the Limits of Large Language Model Quantization via the Linearity Theorem",
+        "FP8 Quantization: The Power of the Exponent",
+        "GPTQ: Accurate Post-Training Quantization for Generative Pre-trained Transformers"
+      ]
+    },
+    {
+      "kind": "synthesis",
+      "question": "How do different post-training adaptation methods—whether designed for structured domain reasoning, human preference alignment, or resource-constrained reinforcement learning—compensate for optimization instabilities and precision degradation, and what algorithmic or architectural adjustments are necessary to maintain reliability when compressing or deploying both sequential and iterative denoising architectures?",
+      "gold": [
+        "2402.06764v3.bib",
+        "2307.04964v2.bib",
+        "2503.16219v1.bib",
+        "2508.14896v2.bib"
+      ],
+      "gold_titles": [
+        "GLaM: Fine-Tuning Large Language Models for Domain Knowledge Graph Alignment via Neighborhood Partitioning and Generative Subgraph Encoding",
+        "Secrets of RLHF in Large Language Models Part I: PPO",
+        "Reinforcement Learning for Reasoning in Small LLMs: What Works and What Doesn't",
+        "Quantization Meets dLLMs: A Systematic Study of Post-training Quantization for Diffusion LLMs"
+      ]
+    },
+    {
+      "kind": "synthesis",
+      "question": "How do different operational pressures—such as training exclusively on algorithmically produced data, compressing network capacity for resource-limited hardware, or operating in distributionally shifted environments—compromise a model’s intended statistical properties or objectives, and what design principles can mitigate these fidelity losses across each context?",
+      "gold": [
+        "2402.07712v2.bib",
+        "2404.05090v1.bib",
+        "2310.07707v2.bib",
+        "2105.14111v7.bib"
+      ],
+      "gold_titles": [
+        "Model Collapse Demystified: The Case of Regression",
+        "How Bad is Training on Synthetic Data? A Statistical Analysis of Language Model Collapse",
+        "MatFormer: Nested Transformer for Elastic Inference",
+        "Goal Misgeneralization in Deep Reinforcement Learning"
+      ]
+    },
+    {
+      "kind": "synthesis",
+      "question": "When building autonomous agents for complex, multi-step development or interactive tasks, what fundamental trade-offs arise between specialized training, self-evolving curricula, and context management strategies, and how must evaluation frameworks be adapted to reliably measure performance across fragmented codebases, dynamic tool usage, and environmental stochasticity?",
+      "gold": [
+        "2604.18394v1.bib",
+        "2603.05344v3.bib",
+        "2511.16043v1.bib",
+        "1709.06009v2.bib"
+      ],
+      "gold_titles": [
+        "OpenGame: Open Agentic Coding for Games",
+        "Building Effective AI Coding Agents for the Terminal: Scaffolding, Harness, Context Engineering, and Lessons Learned",
+        "Agent0: Unleashing Self-Evolving Agents from Zero Data via Tool-Integrated Reasoning",
+        "Revisiting the Arcade Learning Environment: Evaluation Protocols and Open Problems for General Agents"
+      ]
+    },
+    {
+      "kind": "synthesis",
+      "question": "How do the structural and dynamic characteristics of internal representational spaces govern a model’s capacity for sequential abstract manipulation and the spontaneous acquisition of latent skills, and what trade-offs arise between internal representational automation and the requirement for external expert intervention?",
+      "gold": [
+        "1909.11851v1.bib",
+        "2404.12545v3.bib",
+        "2406.19370v4.bib",
+        "2510.26647v1.bib"
+      ],
+      "gold_titles": [
+        "Mathematical Reasoning in Latent Space",
+        "Latent Concept-based Explanation of NLP Models",
+        "Emergence of Hidden Capabilities: Exploring Learning Dynamics in Concept Space",
+        "Accelerating mathematical research with language models: A case study of an interaction with GPT-5-Pro on a convex analysis problem"
+      ]
+    },
+    {
+      "kind": "synthesis",
+      "question": "How do generalization patterns deviate from classical expectations when considering the roles of dataset size, model capacity, and the full trajectory of training optimization, and how do these deviations challenge existing theoretical analyses?",
+      "gold": [
+        "2103.10948v2.bib",
+        "2201.02177v1.bib",
+        "1812.11118v2.bib",
+        "2509.23052v1.bib"
+      ],
+      "gold_titles": [
+        "The Shape of Learning Curves: a Review",
+        "Grokking: Generalization Beyond Overfitting on Small Algorithmic Datasets",
+        "Reconciling modern machine learning practice and the bias-variance trade-off",
+        "Dynamics of Learning: Generative Schedules from Latent ODEs"
+      ]
+    },
+    {
+      "kind": "synthesis",
+      "question": "How should data curation strategies, reinforcement learning objectives, and reasoning sequence management be jointly optimized to balance solution accuracy, computational efficiency, and adaptability across varying problem complexities and linguistic contexts?",
+      "gold": [
+        "2505.07608v2.bib",
+        "2510.20647v2.bib",
+        "2510.03259v1.bib",
+        "2511.22891v1.bib"
+      ],
+      "gold_titles": [
+        "MiMo: Unlocking the Reasoning Potential of Language Model -- From Pretraining to Posttraining",
+        "The Reasoning Lingua Franca: A Double-Edged Sword for Multilingual AI",
+        "Meta-Awareness Enhances Reasoning Models: Self-Alignment Reinforcement Learning",
+        "ORION: Teaching Language Models to Reason Efficiently in the Language of Thought"
+      ]
+    },
+    {
+      "kind": "synthesis",
+      "question": "How do hardware-optimized sequence management, demonstration-based abstract pattern extraction, multi-model output alignment, and reinforcement-guided environmental adaptation interact when scaling language models for complex reasoning, and what architectural compromises arise when attempting to unify these capabilities?",
+      "gold": [
+        "2502.08910v1.bib",
+        "2111.02080v6.bib",
+        "2406.04692v1.bib",
+        "2511.14460v1.bib"
+      ],
+      "gold_titles": [
+        "InfiniteHiP: Extending Language Model Context Up to 3 Million Tokens on a Single GPU",
+        "An Explanation of In-context Learning as Implicit Bayesian Inference",
+        "Mixture-of-Agents Enhances Large Language Model Capabilities",
+        "Agent-R1: Training Powerful LLM Agents with End-to-End Reinforcement Learning"
+      ]
+    },
+    {
+      "kind": "synthesis",
+      "question": "What factors govern a model's capacity to generalize across diverse and shifting distributions, considering the interplay between parameter-space geometry, finite-width dynamics, internal regulatory mechanisms, and instruction-based conditioning?",
+      "gold": [
+        "2206.10012v1.bib",
+        "2205.12411v5.bib",
+        "2204.07705v3.bib",
+        "2205.08645v2.bib"
+      ],
+      "gold_titles": [
+        "Limitations of the NTK for Understanding Generalization in Deep Learning",
+        "Linear Connectivity Reveals Generalization Strategies",
+        "Super-NaturalInstructions: Generalization via Declarative Instructions on 1600+ NLP Tasks",
+        "Need is All You Need: Homeostatic Neural Networks Adapt to Concept Shift"
+      ]
+    },
+    {
+      "kind": "synthesis",
+      "question": "How do architectural design, training paradigms, and query design interact to govern the emergence, propagation, and accessibility of latent model behaviors?",
+      "gold": [
+        "2509.23886v1.bib",
+        "2507.14805v1.bib",
+        "2502.01236v1.bib",
+        "2506.14761v1.bib"
+      ],
+      "gold_titles": [
+        "Towards Understanding Subliminal Learning: When and How Hidden Biases Transfer",
+        "Subliminal Learning: Language models transmit behavioral traits via hidden signals in data",
+        "Eliciting Language Model Behaviors with Investigator Agents",
+        "From Bytes to Ideas: Language Modeling with Autoregressive U-Nets"
+      ]
+    },
+    {
+      "kind": "synthesis",
+      "question": "How do fundamental constraints regarding numerical precision, formal language recognition, native iterative processing, and training algorithm trade-offs interact to define the viable design space for efficiently scaling transformer models?",
+      "gold": [
+        "2207.00729v4.bib",
+        "2301.10743v3.bib",
+        "2311.12424v2.bib",
+        "2210.14593v1.bib"
+      ],
+      "gold_titles": [
+        "The Parallelism Tradeoff: Limitations of Log-Precision Transformers",
+        "Tighter Bounds on the Expressivity of Transformer Encoders",
+        "Looped Transformers are Better at Learning Learning Algorithms",
+        "Scaling Laws Beyond Backpropagation"
+      ]
+    },
+    {
+      "kind": "synthesis",
+      "question": "What theoretical guarantees and empirical validation protocols are necessary to design robust decision-making systems that operate effectively under sparse feedback, adversarial uncertainty, and hidden evaluation biases?",
+      "gold": [
+        "2504.06820v2.bib",
+        "1706.03741v4.bib",
+        "2507.10532v2.bib",
+        "2507.14295v1.bib"
+      ],
+      "gold_titles": [
+        "Regret Bounds for Robust Online Decision Making",
+        "Deep reinforcement learning from human preferences",
+        "Reasoning or Memorization? Unreliable Results of Reinforcement Learning Due to Data Contamination",
+        "A Simple \"Try Again\" Can Elicit Multi-Turn LLM Reasoning"
+      ]
+    },
+    {
+      "kind": "synthesis",
+      "question": "How do architectural strategies that redistribute memory parameters across attention heads, replace attention mechanisms with input-dependent state transitions, leverage full bidirectional context during pre-training, and employ iterative network feedback collectively address the trade-off between computational efficiency, representational capacity, and algorithmic versatility in sequence modeling, and what fundamental compromises emerge when attempting to unify their respective strengths?",
+      "gold": [
+        "1911.02150v1.bib",
+        "2312.00752v2.bib",
+        "1810.04805v2.bib",
+        "2301.13196v1.bib"
+      ],
+      "gold_titles": [
+        "Fast Transformer Decoding: One Write-Head is All You Need",
+        "Mamba: Linear-Time Sequence Modeling with Selective State Spaces",
+        "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
+        "Looped Transformers as Programmable Computers"
+      ]
+    },
+    {
+      "kind": "synthesis",
+      "question": "How do runtime weight updates, persistent hidden states, ensemble-based decoding, and meta-trained general-purpose forecasting compare as strategies for rapid task adaptation, and what core trade-offs do they present regarding computational cost, sample efficiency, and robustness to distribution shifts?",
+      "gold": [
+        "2202.05780v2.bib",
+        "1611.02779v2.bib",
+        "2203.11171v4.bib",
+        "2401.14953v1.bib"
+      ],
+      "gold_titles": [
+        "A Modern Self-Referential Weight Matrix That Learns to Modify Itself",
+        "RL$^2$: Fast Reinforcement Learning via Slow Reinforcement Learning",
+        "Self-Consistency Improves Chain of Thought Reasoning in Language Models",
+        "Learning Universal Predictors"
+      ]
+    },
+    {
+      "kind": "synthesis",
+      "question": "To achieve high performance under strict computational and memory constraints, how do the inherent trade-offs of compressing weight precision, updating parameters during inference, designing self-supervised reconstruction objectives, and structuring multi-stage optimization pipelines compare, and what deployment or training limitations does each strategy introduce?",
+      "gold": [
+        "1612.01064v3.bib",
+        "2411.07279v2.bib",
+        "1910.13461v1.bib",
+        "2512.06266v1.bib"
+      ],
+      "gold_titles": [
+        "Trained Ternary Quantization",
+        "The Surprising Effectiveness of Test-Time Training for Few-Shot Learning",
+        "BART: Denoising Sequence-to-Sequence Pre-training for Natural Language Generation, Translation, and Comprehension",
+        "Nanbeige4-3B Technical Report: Exploring the Frontier of Small Language Models"
+      ]
+    },
+    {
+      "kind": "synthesis",
+      "question": "When applying automated or machine-learning-driven methods to uncover meaningful patterns in complex, large-scale systems, what fundamental compromises emerge between distinguishing rare events from background noise, safeguarding confidential information, tracking evolving technological landscapes, and maintaining transparent reasoning, and how do these competing priorities shape the design of analytical frameworks across different research domains?",
+      "gold": [
+        "2408.08513v1.bib",
+        "2604.07190v2.bib",
+        "2301.11479v2.bib",
+        "2412.13678v1.bib"
+      ],
+      "gold_titles": [
+        "Arecibo Wow! I: An Astrophysical Explanation for the Wow! Signal",
+        "The ATOM Report: Measuring the Open Language Model Ecosystem",
+        "Alien Coding",
+        "Clio: Privacy-Preserving Insights into Real-World AI Use"
+      ]
+    },
+    {
+      "kind": "synthesis",
+      "question": "How should researchers integrate offline computation mechanisms and frontier-generated reasoning traces into training pipelines, and what safeguards are required to prevent the systematic erosion of linguistic variety and creative nuance in recursively developed models?",
+      "gold": [
+        "2605.26099v3.bib",
+        "2504.13171v1.bib",
+        "2311.09807v2.bib",
+        "2511.19333v1.bib"
+      ],
+      "gold_titles": [
+        "Do Language Models Need Sleep? Offline Recurrence for Improved Online Inference",
+        "Sleep-time Compute: Beyond Inference Scaling at Test-time",
+        "The Curious Decline of Linguistic Diversity: Training Language Models on Synthetic Text",
+        "Learning to Reason: Training LLMs with GPT-OSS or DeepSeek R1 Reasoning Traces"
+      ]
+    },
+    {
+      "kind": "synthesis",
+      "question": "When adapting diffusion-based generative models to address bottlenecks in discrete domains, sampling and training formulation, preference alignment, or cross-modal conditioning, how do modifications to the loss function, denoising trajectory, and input encoding interact to determine the balance between computational efficiency, generation fidelity, and controllability?",
+      "gold": [
+        "2310.16834v3.bib",
+        "2206.00364v2.bib",
+        "2509.06942v3.bib",
+        "2305.12716v2.bib"
+      ],
+      "gold_titles": [
+        "Discrete Diffusion Modeling by Estimating the Ratios of the Data Distribution",
+        "Elucidating the Design Space of Diffusion-Based Generative Models",
+        "Directly Aligning the Full Diffusion Trajectory with Fine-Grained Human Preference",
+        "The CLIP Model is Secretly an Image-to-Prompt Converter"
+      ]
+    },
+    {
+      "kind": "synthesis",
+      "question": "When aiming to enhance a model's problem-solving abilities, how do the mechanisms and practical trade-offs compare across different elicitation strategies: supplementing inputs with self-generated context, extracting unsupervised signals from hidden network states, iteratively refining explanatory steps through self-correction, and dynamically pinpointing information deficits to guide external searches?",
+      "gold": [
+        "2110.08387v3.bib",
+        "2212.03827v2.bib",
+        "2203.14465v2.bib",
+        "2404.14043v1.bib"
+      ],
+      "gold_titles": [
+        "Generated Knowledge Prompting for Commonsense Reasoning",
+        "Discovering Latent Knowledge in Language Models Without Supervision",
+        "STaR: Bootstrapping Reasoning With Reasoning",
+        "LLMs Know What They Need: Leveraging a Missing Information Guided Framework to Empower Retrieval-Augmented Generation"
+      ]
+    },
+    {
+      "kind": "synthesis",
+      "question": "When building AI systems that must generalize across shifting distributions and execute extended decision sequences, how do meta-learning, automated agent construction, context-sensitive planning, and safety-aware reward design each navigate the trade-off between broad adaptability and the risk of unstable or misaligned long-horizon behaviors?",
+      "gold": [
+        "2110.15943v2.bib",
+        "2408.08435v1.bib",
+        "2602.10809v2.bib",
+        "2501.13011v2.bib"
+      ],
+      "gold_titles": [
+        "MetaICL: Learning to Learn In Context",
+        "Automated Design of Agentic Systems",
+        "DeepImageSearch: Benchmarking Multimodal Agents for Context-Aware Image Retrieval in Visual Histories",
+        "MONA: Myopic Optimization with Non-myopic Approval Can Mitigate Multi-step Reward Hacking"
+      ]
+    },
+    {
+      "kind": "synthesis",
+      "question": "How do varying training objectives—ranging from explicit preference alignment and extended social reward shaping to implicit capability finetuning and broad user data collection—shape a system's ability to recognize, verbalize, or conceal its acquired habits, and what compromises arise between optimizing performance, ensuring behavioral transparency, and protecting user privacy?",
+      "gold": [
+        "2501.11120v1.bib",
+        "2606.07513v1.bib",
+        "2509.05382v1.bib",
+        "2204.05862v1.bib"
+      ],
+      "gold_titles": [
+        "Tell me about yourself: LLMs are aware of their learned behaviors",
+        "Agentopia: Long-Term Life Simulation and Learning in Agent Societies",
+        "User Privacy and Large Language Models: An Analysis of Frontier Developers' Privacy Policies",
+        "Training a Helpful and Harmless Assistant with Reinforcement Learning from Human Feedback"
+      ]
+    },
+    {
+      "kind": "synthesis",
+      "question": "How do self-referential training cycles and chronological shifts in source material affect the ability of distributed representations to preserve structural diversity and accurately model complex relationships?",
+      "gold": [
+        "2407.14662v1.bib",
+        "2501.07557v1.bib",
+        "1301.3781v3.bib",
+        "2306.06130v1.bib"
+      ],
+      "gold_titles": [
+        "Relational Composition in Neural Networks: A Survey and Call to Action",
+        "Decoding Musical Evolution Through Network Science",
+        "Efficient Estimation of Word Representations in Vector Space",
+        "Towards Understanding the Interplay of Generative Artificial Intelligence and the Internet"
+      ]
+    },
+    {
+      "kind": "synthesis",
+      "question": "How do approaches that analyze external user signals, simulate human cohorts, audit memorized training content, and interpret parameter modifications collectively address the challenge of aligning language model internals with intended behavioral outcomes?",
+      "gold": [
+        "1804.05958v1.bib",
+        "2208.10264v5.bib",
+        "2012.07805v2.bib",
+        "2510.05092v3.bib"
+      ],
+      "gold_titles": [
+        "Can Neural Machine Translation be Improved with User Feedback?",
+        "Using Large Language Models to Simulate Multiple Humans and Replicate Human Subject Studies",
+        "Extracting Training Data from Large Language Models",
+        "Learning to Interpret Weight Differences in Language Models"
+      ]
+    },
+    {
+      "kind": "synthesis",
+      "question": "What comprehensive approach integrates structural organization of decision-making and memory, post-training methods for refining assistant behavior, multilingual data and modeling strategies, and evaluation criteria that balance computational cost with reliable generalization to produce practical language-driven autonomous systems?",
+      "gold": [
+        "2309.02427v3.bib",
+        "2511.01689v1.bib",
+        "2407.01502v1.bib",
+        "2409.16235v1.bib"
+      ],
+      "gold_titles": [
+        "Cognitive Architectures for Language Agents",
+        "Open Character Training: Shaping the Persona of AI Assistants through Constitutional AI",
+        "AI Agents That Matter",
+        "EuroLLM: Multilingual Language Models for Europe"
+      ]
     }
   ]
 }

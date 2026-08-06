@@ -376,10 +376,48 @@ prose). Each favours the arm one would expect. Nothing in the query says which m
 
 **The narrow/broad distinction is the one worth detecting**, and it arrived independently three times: as
 the arm-selection oracle, as the breadth/depth trade, and as the adaptive-`k` hypothesis. All three want
-the same missing capability rather than three separate features. Whether it *pays* is measurable and not
-yet measured — the synthesis question class was built for exactly this, and `synthesis_recall.py` asks
-whether broad questions keep gaining from larger `k` after narrow ones have stopped. If they do not,
-detection buys nothing however well it works.
+the same missing capability rather than three separate features.
+
+### Measured 2026-08-06 (late): adaptive `k` pays — but only while the corpus is small enough
+
+The synthesis question class was built for exactly this, and `synthesis_recall.py` asks whether broad
+questions keep gaining from larger `k` after narrow ones have stopped. Mean recall over each question's
+gold *set* (4 documents for synthesis, 1 for focused):
+
+| corpus | docs | group | k=5 | k=20 | k=50 | k=100 | k=200 | gain 5→200 |
+|---|---|---|---|---|---|---|---|---|
+| **arxiv-ai** | 1,268 | focused | 71.2% | 86.3% | 94.0% | 97.4% | **100.0%** | +28.8 |
+| | | synthesis | 17.3% | 39.1% | 52.6% | 63.5% | **74.4%** | **+57.1** |
+| **hydrogen** | 11,974 | focused | 62.4% | 75.5% | 84.3% | 88.2% | 92.6% | +30.1 |
+| | | synthesis | 3.3% | 6.6% | 9.9% | 19.7% | 24.3% | **+21.1** |
+
+**The two corpora disagree, and the disagreement is the finding.**
+
+On arxiv-ai the hypothesis holds cleanly: focused questions **saturate at 100%** by k=200 while synthesis
+is still climbing steeply — twice the gain, and nowhere near done. That is precisely the curve separation
+adaptive `k` exists to exploit, and it is the first confirmation of a stated prediction in this sprint.
+
+On hydrogen it fails, for the reason **Juha predicted this morning** before any of it was built: at 11,974
+documents k=200 is 1.7% of the corpus, so a broad question's relevant set outruns any conversational `k`.
+Synthesis recall reaches 24.3% and is barely moving. More `k` is a thin sample of the relevant set, not
+coverage of it — which is exactly the note recorded in brief 09 at his prompting, now measured rather than
+reasoned.
+
+**So adaptive `k` is worth building, with its domain of validity attached**: it pays on small and medium
+collections and stops paying on large ones, where stratified sampling is the real answer and `k` is only
+the affordable approximation. Shipping it without that caveat would produce a feature that works on the
+demo corpus and quietly does nothing on a researcher's 12k-record library.
+
+**One caveat on the metric, which cuts against the synthesis numbers specifically.** Set recall asks
+whether *these four* documents came back, and a broad question over a large corpus has many documents that
+answer it equally well — so the absolute synthesis levels are a severe floor, more so than the known-item
+understatement elsewhere in this file, and more so on the larger corpus. The *shape* comparison is the
+robust part: if larger `k` were bringing in more of the relevant set, the planted documents would arrive
+with it.
+
+**A process note, since it nearly went the other way.** Primed by a day of null results, and with hydrogen
+run first and delivering one, the tidy conclusion was already forming. The second corpus reversed it. The
+order the corpora happened to run in was very nearly the finding.
 
 **A structural note.** Retrieval resembles sorting: there is no configuration that is best independent of
 the data, which is why the useful output is a distribution across corpora rather than a champion setting.
