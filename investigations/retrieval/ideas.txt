@@ -49,3 +49,26 @@
   One I'd rule out: semantic neighbours corroborating each other. Tempting, but neighbours are correlated by construction — that's what makes them neighbours — so summing over them double-counts rather than accumulating. It violates the independence the whole principle rests on.
 
   Ranked by your criterion (simple, no tuning, cheap), 3 and 4 are the immediate ones — 3 needs no new retrieval at all, and 4 needs no model. 5 and 6 are the structurally interesting ones. Let me record the taxonomy before it evaporates:
+
+
+
+
+  ┌──────────────────────────────────────┬──────────────────────────────────────────────────────────────────────┐
+  │                 axis                 │                                status                                │
+  ├──────────────────────────────────────┼──────────────────────────────────────────────────────────────────────┤
+  │ 1. Across engines                    │ shipped (RRF)                                                        │
+  ├──────────────────────────────────────┼──────────────────────────────────────────────────────────────────────┤
+  │ 2. Within document, across positions │ the lead — sum, p=0.108, stable                                      │
+  ├──────────────────────────────────────┼──────────────────────────────────────────────────────────────────────┤
+  │ 3. Arms at different positions       │ tested, null — 3 discordant in 295                                   │
+  ├──────────────────────────────────────┼──────────────────────────────────────────────────────────────────────┤
+  │ 4. Two embedding roles               │ worth testing; costs a second embedding pass, not free as I claimed  │
+  ├──────────────────────────────────────┼──────────────────────────────────────────────────────────────────────┤
+  │ 5. Two chunk scales                  │ good, gated on the datastore work — 587 MB JSON would roughly double │
+  ├──────────────────────────────────────┼──────────────────────────────────────────────────────────────────────┤
+  │ 6. Multiple representations          │ gated on the LLM summary pass; strengthens the argument for it       │
+  ├──────────────────────────────────────┼──────────────────────────────────────────────────────────────────────┤
+  │ 7. Distinct query-term coverage      │ cheapest untested — per-chunk lemmas already in the index            │
+  ├──────────────────────────────────────┼──────────────────────────────────────────────────────────────────────┤
+  │ — Semantic neighbours                │ ruled out on principle (correlated by construction)                  │
+  └──────────────────────────────────────┴──────────────────────────────────────────────────────────────────────┘

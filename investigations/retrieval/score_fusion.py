@@ -113,6 +113,9 @@ def order_chunks(chunk_scores: dict[str, float], chunk_document: dict[str, str],
         per_document.setdefault(chunk_document[key], []).append(score)
     if how == "sum":
         document_score = {d: sum(v) for d, v in per_document.items()}
+    elif how.startswith("top"):
+        n = int(how[3:])
+        document_score = {d: sum(sorted(v, reverse=True)[:n]) for d, v in per_document.items()}
     elif how == "mean":
         document_score = {d: sum(v) / len(v) for d, v in per_document.items()}
     else:
@@ -131,6 +134,15 @@ def aggregate(chunk_scores: dict[str, float], chunk_document: dict[str, str], ho
         scored = {d: max(v) for d, v in per_document.items()}
     elif how == "sum":
         scored = {d: sum(v) for d, v in per_document.items()}
+    elif how.startswith("top"):
+        # Sum the best N chunks only. `max` is N=1 and `sum` is N=infinity, so this interpolates between
+        # the two rules that were measured — and it is what their *failure profiles* jointly point at:
+        # `sum` gains most on short documents and loses on the longest, i.e. unbounded accumulation
+        # eventually promotes long documents on weak evidence. Bounding how many chunks may contribute
+        # keeps the accumulation that helps while capping the part that hurts, and unlike `mean` it does
+        # not divide the evidence away.
+        n = int(how[3:])
+        scored = {d: sum(sorted(v, reverse=True)[:n]) for d, v in per_document.items()}
     elif how == "mean":
         scored = {d: sum(v) / len(v) for d, v in per_document.items()}
     else:  # count: how many chunks matched at all, ignoring how well
@@ -185,12 +197,13 @@ def main() -> None:  # pragma: no cover
     # twice.
     conditions = [("rrf", "max", None), ("armsum", "-", None)]
     for how in ("minmax", "zscore"):
-        for agg in ("max", "sum", "mean", "count"):
+        for agg in ("max", "sum", "top2", "top3", "top5", "mean", "count"):
             for w in WEIGHTS:
                 conditions.append((how, agg, w))
     ranks: dict[tuple, list] = {c: [] for c in conditions}
     coverage: dict[tuple, list] = {c: [] for c in conditions}
     promoted_lengths: dict[tuple, list] = {c: [] for c in conditions}
+    gold_lengths: list = []   # length of each question's gold document, for the dose-response check
 
     for n, item in enumerate(items, 1):
         gold = {sharpness.document_key(g) for g in item["gold"]}
@@ -245,6 +258,7 @@ def main() -> None:  # pragma: no cover
         ranks[("armsum", "-", None)].append(fusion_weight.gold_rank(armsum_order, gold))
 
         document_lengths = doc_lengths_of(retriever)
+        gold_lengths.append(max((document_lengths[g] for g in gold if g in document_lengths), default=None))
         promoted_lengths[("armsum", "-", None)].extend(
             document_lengths[d] for d in armsum_order[:20] if d in document_lengths)
         promoted_lengths[("rrf", "max", None)].extend(
@@ -257,7 +271,7 @@ def main() -> None:  # pragma: no cover
             vec_norm = dict(zip(vec_keys, normalize([vec_raw[k] for k in vec_keys], how)))
             for w in WEIGHTS:
                 fused = fuse_scores(kw_norm, vec_norm, w)
-                for agg in ("max", "sum", "mean", "count"):
+                for agg in ("max", "sum", "top2", "top3", "top5", "mean", "count"):
                     ordered = aggregate(fused, chunk_document, agg)
                     ranks[(how, agg, w)].append(fusion_weight.gold_rank(ordered, gold))
                     promoted_lengths[(how, agg, w)].extend(
@@ -327,10 +341,42 @@ def main() -> None:  # pragma: no cover
     print("\n  A ratio near 1.0 means the condition is not selecting on length. A `sum` rule that scored")
     print("  well *and* promoted much longer documents would be the case to distrust.")
 
+    # Dose-response: does `sum`'s advantage over the shipped rule grow with how long the gold document is?
+    # The mechanism says it must — `sum` and `max` can only differ where a document yields several matching
+    # chunks — so a flat profile across length would refute the explanation even while the overall number
+    # stands. This is a within-corpus replication and is stronger than a second corpus of the same kind:
+    # a monotone trend across four buckets is much harder to obtain by chance than one group difference.
     out = pathlib.Path(__file__).parent / f"score_fusion_{corpus}.json"
     out.write_text(json.dumps({"corpus": corpus, "depth": depth, "n": total, "rows": rows}, indent=1),
                    encoding="utf-8")
     print(f"\n  wrote {out}")
+
+    for challenger in (("minmax", "sum", 0.5), ("minmax", "top3", 0.5)):
+        dose_response(challenger, ranks, baseline, gold_lengths)
+
+
+def dose_response(challenger, ranks, baseline, gold_lengths) -> None:  # pragma: no cover
+    if challenger in ranks and gold_lengths:
+        paired = [(length, b, c) for length, b, c in zip(gold_lengths, baseline, ranks[challenger])
+                  if length is not None]
+        paired.sort(key=lambda row: row[0])
+        n_buckets = 4
+        size = max(1, len(paired) // n_buckets)
+        print(f"\n  does the `sum` advantage grow with gold-document length? ({challenger[0]}/sum/"
+              f"{challenger[2]}, n={len(paired)})")
+        print(f"  {'gold length':>22} {'n':>4} {'baseline@20':>12} {'sum@20':>8} {'delta':>7}")
+        for b in range(n_buckets):
+            lo = b * size
+            hi = len(paired) if b == n_buckets - 1 else (b + 1) * size
+            bucket = paired[lo:hi]
+            if not bucket:
+                continue
+            base_hits = sum(1 for _length, r, _c in bucket if r and r <= 20) / len(bucket)
+            chal_hits = sum(1 for _length, _r, c in bucket if c and c <= 20) / len(bucket)
+            print(f"  {bucket[0][0]:>10,}-{bucket[-1][0]:>10,} {len(bucket):>4} "
+                  f"{base_hits:>11.1%} {chal_hits:>8.1%} {chal_hits - base_hits:>+7.1%}")
+        print("\n  The mechanism predicts a rising delta. A flat profile would refute the explanation even")
+        print("  if the overall gain survives, and would mean the effect is something else wearing its name.")
 
 
 if __name__ == "__main__":

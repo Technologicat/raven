@@ -1191,6 +1191,356 @@
       "gold_titles": [
         "Supercritical speed stability of the trivial equilibrium of an axially-moving string on an elastic foundation"
       ]
+    },
+    {
+      "kind": "focused",
+      "question": "What higher-level quantitative techniques are most reliable for analyzing complex technical problems and optimizing practical designs?",
+      "gold": [
+        "Kreyszig1993.bib"
+      ],
+      "gold_titles": [
+        "Advanced Engineering Mathematics"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How do you derive closed-form analytical expressions for the natural resonant frequencies of rectangular panels made from materials with perpendicular directional stiffness?",
+      "gold": [
+        "XingLiu2009b.bib"
+      ],
+      "gold_titles": [
+        "New exact solutions for free vibrations of thin orthotropic rectangular plates"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can I determine the natural frequencies of an axially moving filament supported by a springy foundation while accounting for fluid-induced inertia and viscous resistance?",
+      "gold": [
+        "JJTechNoteString2-2010.bib"
+      ],
+      "gold_titles": [
+        "Analytical free vibration solution of a travelling string including elastic foundation and external viscosity terms, with surrounding fluid modeled by an added-mass type approximation with explicitly determined coefficients"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does moisture content influence the time-dependent deformation and internal stresses in continuously moving paper sheets during a printing press operation?",
+      "gold": [
+        "Lif2006.bib"
+      ],
+      "gold_titles": [
+        "Hygro-viscoelastic stress analysis in paper web offset printing"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does the time-dependent motion of longitudinally transported flat panels trigger spatially confined buckling?",
+      "gold": [
+        "Tuovinen2010presentation.bib"
+      ],
+      "gold_titles": [
+        "Dynamics and Localized Instability of Axially Moving Plates"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does the numerical stability of difference grids, collocation spectral approaches, and projection spectral techniques compare for time-evolving problems?",
+      "gold": [
+        "tadmor-saofpafaftp1987.bib"
+      ],
+      "gold_titles": [
+        "Stability Analysis of Finite-Difference, Pseudospectral and Fourier-Galerkin Approximations for Time-dependent Problems"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does surrounding fluid alter the dynamic response of a flat, four-sided structure?",
+      "gold": [
+        "kerboua.bib"
+      ],
+      "gold_titles": [
+        "Vibration analysis of rectangular plates coupled with fluid"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What numerical method based on discretizing the domain is best suited for analyzing fluid motion?",
+      "gold": [
+        "DoneaHuerta2003book.bib"
+      ],
+      "gold_titles": [
+        "Finite Element Methods for Flow Problems"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does surrounding fluid coupling affect the stability limits of a traveling sheet?",
+      "gold": [
+        "JeronenSaksaTuovinenBanichukNeittaanmaki2011-MIT.bib"
+      ],
+      "gold_titles": [
+        "On the Moving Web Dynamics Under Stability Considerations Including Interaction with Surrounding Fluid"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How have analytical models for multi-layered flat and curved structural components developed over time?",
+      "gold": [
+        "PiskunovRasskazov2002.bib"
+      ],
+      "gold_titles": [
+        "Evolution Of The Theory Of Laminated Plates And Shells"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How do slight lags in energy dissipation affect the stability of basic dynamic oscillators?",
+      "gold": [
+        "DatkoYou1991.bib"
+      ],
+      "gold_titles": [
+        "Some second-order vibrating systems cannot tolerate small time delays in their damping"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How do standard display tools compare when trying to communicate prediction error margins in computational models?",
+      "gold": [
+        "AertsClarkeKeuper2003.bib"
+      ],
+      "gold_titles": [
+        "Testing Popular Visualization Techniques for Representing Model Uncertainty"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does time-dependent material deformation influence the transient dynamics of webs undergoing speed variations in web processing machinery?",
+      "gold": [
+        "GuanHighTree1998.bib"
+      ],
+      "gold_titles": [
+        "Viscoelastic Effects in Modeling Web Handling Systems: Unsteady-State Analysis"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How do the natural frequencies of a rigidly supported flat sheet change when it is made from a material that combines elasticity with internal damping and its thickness follows an exponential gradient in two perpendicular directions?",
+      "gold": [
+        "GuptaKhannaGupta2009.bib"
+      ],
+      "gold_titles": [
+        "FREE VIBRATION OF CLAMPED VISCO-ELASTIC RECTANGULAR PLATE HAVING BI-DIRECTION EXPONENTIALLY THICKNESS VARIATIONS"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How do two basic types of path-dependent loading trigger structural instability?",
+      "gold": [
+        "KrechetnikovMarsden2006.bib"
+      ],
+      "gold_titles": [
+        "On destabilizing effects of two fundamental non-conservative forces"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can the vibrations of a traveling sheet be analyzed when it is immersed in a non-viscous fluid?",
+      "gold": [
+        "BanichukNeittaanmaki2008-2.bib"
+      ],
+      "gold_titles": [
+        "On application of the Galerkin Method and Perturbation Techniques for Vibration Analysis of a Moving Web Submerged into Ideal Fluid"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can the time-dependent oscillation magnitude of a moving flexible belt be modeled when the material exhibits history-dependent stress-strain behavior?",
+      "gold": [
+        "FungHuangChen1997.bib"
+      ],
+      "gold_titles": [
+        "THE TRANSIENT AMPLITUDE OF THE VISCOELASTIC TRAVELLING STRING: AN INTEGRAL CONSTITUTIVE LAW"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How do variable dependencies impact the efficiency of sampling methods that divide a population into distinct subgroups?",
+      "gold": [
+        "VorechovskyNovak2003.bib"
+      ],
+      "gold_titles": [
+        "Statistical correlation in stratified sampling"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How to display uncertainty in geo-referenced value maps using recursive spatial partitioning?",
+      "gold": [
+        "KardosMooreBenwell2003.bib"
+      ],
+      "gold_titles": [
+        "Visualising Uncertainty in Spatially-Referenced Attribute Data using Hierarchical Spatial Data Structures"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does steady longitudinal transport alter the transverse oscillations of a tensioned flexible line?",
+      "gold": [
+        "ArchibaldEmslie1958.bib"
+      ],
+      "gold_titles": [
+        "The vibration of a string having a uniform motion along its length"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does varying tension affect the non-linear oscillations of a moving viscoelastic belt?",
+      "gold": [
+        "Marynowski2004.bib"
+      ],
+      "gold_titles": [
+        "Non-linear vibrations of an axially moving viscoelastic web with time-dependent tension"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does paper deform in three dimensions when stretched?",
+      "gold": [
+        "GottschingBaumgarten1976.bib"
+      ],
+      "gold_titles": [
+        "Triaxial Deformation of Paper Under Tensile Load"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What frameworks provide a systematic way to handle trade-offs among several competing objectives?",
+      "gold": [
+        "ChankongHaimes1983.bib"
+      ],
+      "gold_titles": [
+        "Multiobjective Decision Making Theory and Methodology"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does a traveling web behave when it undergoes unforced, repeating vibrations influenced by geometric nonlinearities?",
+      "gold": [
+        "ThurmanMote1969.bib"
+      ],
+      "gold_titles": [
+        "Free, Periodic, Nonlinear Oscillation of an Axially Moving Strip"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What reasoning supports the view that faith in a supernatural creator is a cognitive error rather than a rational conclusion?",
+      "gold": [
+        "Dawkins2006.bib"
+      ],
+      "gold_titles": [
+        "The God Delusion"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How effective is an experimental design technique that refines point placement by relocating samples to the average position of their assigned sub-domain when building approximate models?",
+      "gold": [
+        "RomeroBurkardtGunzburgerPetersonKrishnamurthy2003.bib"
+      ],
+      "gold_titles": [
+        "Initial Application and Evaluation of a Promising New Sampling method for Response Surface Generation: Centroidal Voronoi Tessellation"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How do time-dependent material properties and energy dissipation affect the complex vibration patterns of a flexible thread that travels continuously along a straight path?",
+      "gold": [
+        "ZhangChen2005.bib"
+      ],
+      "gold_titles": [
+        "Nonlinear dynamical analysis of axially moving viscoelastic strings"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Which computational methods are best for predicting complex fluid motion in water infrastructure projects?",
+      "gold": [
+        "Rodi1984.bib"
+      ],
+      "gold_titles": [
+        "Turbulence Models and Their Application in Hydraulics"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How to generate stratified random samples with prescribed dependence?",
+      "gold": [
+        "Owen1994.bib"
+      ],
+      "gold_titles": [
+        "Controlling Correlations in Latin Hypercube Samples"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How are grid-free numerical methods applied to solve fluid flow problems?",
+      "gold": [
+        "Katz2009.bib"
+      ],
+      "gold_titles": [
+        "Meshless methods for computational fluid dynamics"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can pore suction be derived from thermodynamic principles during the dehydration of porous media?",
+      "gold": [
+        "LampinenToivonen1984.bib"
+      ],
+      "gold_titles": [
+        "Application of a Thermodynamic Theory to Determine Capillary Pressure and Other Fundamental Material Properties Affecting the Drying Process"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What is the modified differential equation for wave propagation in a translating substrate?",
+      "gold": [
+        "Miranker1960.bib"
+      ],
+      "gold_titles": [
+        "The wave equation in a medium in motion"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How to characterize shear behavior of anisotropic sheets by loading at an angle and using speckle interferometry?",
+      "gold": [
+        "Seo1999.bib"
+      ],
+      "gold_titles": [
+        "Determination of in-plane shear properties by an off-axis tension method and laser speckle photography"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Is there a concise reference for solving equations of degree three and four?",
+      "gold": [
+        "JJTechNoteQuartic.bib"
+      ],
+      "gold_titles": [
+        "A quick reference document for solving cubic and quartic polynomials"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What assorted analytical techniques are used to derive exact solutions for problems involving longitudinally moving elastic strings and structural beams?",
+      "gold": [
+        "JJTechNoteOddsAndEnds-2010.bib"
+      ],
+      "gold_titles": [
+        "Odds and ends concerning analytical handling of axially travelling string and beam problems"
+      ]
     }
   ]
 }

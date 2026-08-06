@@ -141,11 +141,45 @@ small fraction. Fiction fails the second (19 documents), banichuk and both abstr
 (one to three chunks). That is a happy constraint rather than an awkward one, because "many long documents"
 is exactly Librarian's target case — a researcher's folder of PDFs.
 
-**A stronger and cheaper test exists inside the corpus already built.** Split the 1268 fulltext papers by
-length and ask whether `sum`'s advantage *grows with document length*. Under the proposed mechanism it must:
-near zero for the shortest papers, largest for the longest. A dose-response relationship across the corpus
-is considerably harder to obtain by chance than a single group difference, and it needs no new data, no
-downloads and no re-indexing. Run this before going looking for a second corpus.
+#### Run 2026-08-06: the dose-response test refutes the mechanism
+
+Rather than seek a second corpus, split the 1268 fulltext papers by gold-document length and ask whether
+`sum`'s advantage *grows* with length. Under "accumulate evidence across positions" it must: near zero for
+the shortest papers, largest for the longest. It does the opposite.
+
+| gold length (chars) | n | baseline @20 | `sum` @20 | delta | `top3` delta |
+|---|---|---|---|---|---|
+| 18,891 – 52,396 | 73 | 80.8% | 89.0% | **+8.2** | **+9.6** |
+| 52,584 – 72,137 | 73 | 86.3% | 90.4% | +4.1 | +5.5 |
+| 72,877 – 108,010 | 73 | 89.0% | 91.8% | +2.7 | +2.7 |
+| 108,699 – 477,090 | 76 | 85.5% | 82.9% | **−2.6** | **−3.9** |
+
+**Monotonically decreasing, and negative on the longest quartile.** The proposed mechanism is refuted. The
+aggregate +3.1 points is a *mixture* — a large gain on short papers minus a loss on long ones — which means
+it depends on this corpus's length distribution and would not transfer to a collection weighted
+differently. That is precisely the failure a second corpus of the same kind would have hidden, and it is
+the argument for preferring the within-corpus test.
+
+**Bounding the accumulation does not rescue it.** `top-N` sums only a document's best N chunks, so `max` is
+N=1 and `sum` is N=∞; the two failure ends suggested an optimum between them. Measured, `top3` scores
+88.8% at @20 (19 gained, 9 lost, p=0.087, MRR 0.641 against the baseline's 0.581) — the best cell in the
+grid — but its length profile is the *same shape, slightly amplified*. So the loss on long documents is not
+caused by unbounded summing.
+
+**What can honestly be said**, and it is less than this morning:
+
+- The *family* of multi-chunk rules — `sum`, `top2`, `top3`, `top5` — all land at 87.8–88.8% with 16–19
+  gained against 8–9 lost, where `max` (= top-1) sits at 86.4%. "Accumulate more than one chunk; the exact
+  N barely matters" is the robust form. `top3` being best is a winner picked from 42 cells and should not
+  be quoted as such.
+- The gain is real on short-to-medium documents and reverses on long ones. **It should not ship as a
+  blanket default on this evidence.**
+- No verified explanation replaces the refuted one. A plausible story — that a question written from an
+  abstract has its answer concentrated in one place in a long paper, so `max` is right there, while
+  accumulation promotes other long papers matching diffusely — is *only* a story, and this investigation
+  has spent the day demonstrating what those are worth.
+- The shape suggests the rule may want to be length-dependent, which is the same "no configuration is best
+  independent of the data" conclusion this file keeps reaching. That is a hypothesis, not a plan.
 
 **The length confound was checked rather than argued away, and it acquits `sum`.** The worry is that
 summing rewards documents with more chunks, i.e. longer ones, so the gain could be a length prior wearing
