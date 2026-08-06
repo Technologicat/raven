@@ -3520,6 +3520,53 @@ its default full-width span, which would have to be sized to the text.
 
 Raised by Juha (2026-08-04), asking whether the fetched-page chip should open on click.
 
+## spaCy silently runs on CPU even when configured for GPU
+
+`raven-server`'s `natlang` module is configured `{"device_string": "gpu"}`, `deviceinfo.validate`
+resolves that to `"cuda:0"`, and `nlptools.load_spacy_pipeline` duly takes its GPU branch and calls
+`spacy.require_gpu()`. That call fails, the `except` catches it, logs a warning, and falls back to
+`require_cpu()`. Everything downstream then reports the *configured* device, so nothing on screen says
+the tokenizer is on the CPU.
+
+Root cause is a loader-path gap, not a missing package. thinc probes GPU support with `import cupy;
+import cupy.cublas; import cupyx`, and the middle one raises `ImportError: libcublas.so.12: cannot open
+shared object file`. The library is present — torch ships it at
+`.venv/lib/python3.12/site-packages/nvidia/cublas/lib/libcublas.so.12` — but that directory is not on
+`LD_LIBRARY_PATH`, which is unset. Confirmed by putting it there: `thinc.compat.has_cupy` and
+`has_cupy_gpu` both flip to `True`.
+
+Note `import cupy` alone *succeeds*, so a check written the obvious way ("is cupy installed?") reports
+that everything is fine. Only the submodule import fails.
+
+**It is not a CUDA version mismatch**, which is the first thing this looks like: torch is
+`2.11.0+cu128` and the installed `cupy-cuda12x` matches it, deliberately — Raven stays on CUDA 12.8 so
+it runs against 12.x drivers, whatever the driver supports. Worth stating because the next reader will
+otherwise spend the time on it, as this one nearly did.
+
+One loose end while in there: both `nvidia-cublas-cu12 12.8.4.1` and a CUDA-13 `nvidia-cublas 13.1.0.3`
+are installed. Only the `.so.12` files appear under `nvidia/cublas/lib/`, so the 13 package is not what
+is being found, but an unused CUDA-13 library sitting in a CUDA-12 environment is worth explaining or
+removing before it explains itself at a worse moment.
+
+Two things wanted, and the second matters more than the first:
+
+- **A fix.** Prepending torch's bundled nvidia lib directories to the loader path is the direct route;
+  doing it from inside Python needs a `ctypes.CDLL` preload of the `.so` before cupy is imported, since
+  `LD_LIBRARY_PATH` is read at process start. Worth checking first whether `cupy-cuda12x` installed
+  against the system CUDA sidesteps it entirely.
+- **A louder failure.** A performance-relevant silent fallback should be visible where the device is
+  reported, not only in a log line nobody reads. The module banner prints the *configured* device; it
+  should print the one in use.
+
+Unknown, and worth measuring before treating this as a performance bug: how much `en_core_web_sm`
+actually gains from GPU. It is a small CNN pipeline, and spaCy's GPU benefit is largest for transformer
+pipelines. The measured cost through the server was 0.09 s/chunk, which for a 53000-chunk corpus is
+~80 minutes of tokenization — enough that a 2x would be worth having, but the 2x is assumed, not
+measured.
+
+Discovered while asking whether the tokenizer was the indexing bottleneck (it was not — that was pypdf).
+Raised by Juha (2026-08-06).
+
 ## Indexing a large corpus is silent for minutes, and reads as a hang
 
 `raven-indexer` on a 1268-document fulltext corpus printed one document's progress, then nothing for

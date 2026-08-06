@@ -48,6 +48,43 @@ def instant_polls(monkeypatch):
     monkeypatch.setattr(indexer, "POLL_SECONDS", 0.0)
 
 
+@pytest.fixture
+def pending_work(monkeypatch):
+    """Script `hybridir.has_pending_work`, the module-wide "anything queued?" signal.
+
+    Returns a setter. Defaults to no pending work, which is what the tests that predate this signal
+    assume — they drive `is_indexing` alone.
+    """
+    sequence = iter(())
+
+    def has_pending_work():
+        return next(sequence, False)
+
+    monkeypatch.setattr(indexer.hybridir, "has_pending_work", has_pending_work)
+
+    def script(values):
+        nonlocal sequence
+        sequence = iter(values)
+
+    return script
+
+
+def test_queued_ingest_work_counts_as_busy_even_when_no_commit_is_running(instant_polls, pending_work):
+    """The bug this prevents, met in the wild on a 1268-PDF corpus (2026-08-06).
+
+    `is_indexing()` is True only *inside* `commit()`, so it reads False for the whole ingest phase while
+    documents are being read and their text extracted — minutes, for a large corpus. A wait that watched
+    only that signal returned after the settle window, the CLI printed "1 document indexed" and exited,
+    and the ~1267 still-queued ingest tasks died against a shut-down executor. Silent, and it looked
+    like success.
+    """
+    pending_work([True] * 4)  # ingest queued, nothing committing yet
+    fake = _fake_retriever([])  # is_indexing() False throughout
+    indexer.wait_for_indexing(fake)
+    # Must outlast the pending work, not stop at the first quiet sample of it.
+    assert fake.polls == 4 + indexer.SETTLED_POLLS
+
+
 def test_an_already_quiet_retriever_still_takes_the_full_settle_window(instant_polls):
     """The startup window: quiet does not mean finished, so one quiet sample must not end the wait."""
     fake = _fake_retriever([])

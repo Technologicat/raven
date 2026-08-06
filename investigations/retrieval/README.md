@@ -605,6 +605,51 @@ It also strikes a claim this file and brief 09 both carried: that going deeper "
 recall@k is monotone in k. Monotone within one retrieval, yes. Across sweep depths, no — and nothing about
 the notation warns you, which is why it survived being written down twice.
 
+## The reranker does not work off the shelf (2026-08-06)
+
+`rerank.py hydrogen --depth 100 --device cuda`, `cross-encoder/ms-marco-MiniLM-L6-v2`, 99 on-corpus
+questions, one retrieval scored twice so the only difference is the ordering:
+
+| | @1 | @5 | @10 | @20 | MRR |
+|---|---|---|---|---|---|
+| retrieval only | 38.4% | 57.6% | 67.7% | 74.7% | 0.471 |
+| + reranked (top 100) | 26.3% | 46.5% | 54.5% | 64.6% | 0.358 |
+
+22 questions moved up, **42 moved down**, 35 unchanged. This is not a small negative — it is a third of
+the MRR. Latency was never the constraint: 144 ms median for 100 candidates on the 4090, and 532 ms on
+CPU under full load, so both deployment options were affordable and neither is worth having.
+
+**Two mechanical explanations were checked and eliminated**, because a result this bad is more often a
+bug than a finding:
+
+- *Sign error.* The model scores an obviously relevant passage +8.24 and an irrelevant one −11.43, so
+  higher is better and `rerank` sorts the right way.
+- *Truncation.* `max_seq_length` is 512 tokens, and hybridir merges contiguous chunks before returning,
+  so candidates could have been arriving pre-cut. Measured over 500 real candidates: median 299 tokens,
+  p75 431, and only **9.8%** exceed 512. Not the cause.
+
+So the reordering itself is worse. Two explanations remain, and they are distinguishable:
+
+- **Domain mismatch.** MS MARCO is short, keyword-ish web queries against web passages. These are long
+  analytical questions against scientific abstracts — a distribution the model never saw. Testable by
+  swapping in a reranker trained on something else.
+- **The metric favours the incumbent.** Gold is "the document the question was written from", so the
+  question shares vocabulary with its source abstract by construction. That is the best possible case
+  for BM25, and half of the retrieval baseline is BM25. A reranker that is better at *semantic*
+  relevance would surface an equally good document and be scored wrong for it — the known-item
+  limitation this file already records, arriving as a concrete cost rather than a caveat.
+
+The second is the more uncomfortable possibility, because it says the baseline is partly an artifact of
+how the questions were made, and it would not show up as a bad number anywhere else. Judged retrieval on
+a corpus in a native area is what separates them, which is the same instrument the "judging needs a
+corpus in a native area" section above asks for.
+
+**If length does become a problem later** (it is not now, but a fulltext corpus will have longer merged
+spans): rerank the chunks *before* `merge_contiguous_spans` rather than after. That removes the
+truncation risk by construction, and may help independently — a merged span is a longer, more diluted
+unit, and the reranker is scoring relevance to a whole passage rather than to the part that matched.
+Juha's suggestion, 2026-08-06.
+
 ## What the set has decided so far
 
 - **2026-08-05 (superseded the same day — see the arXiv section above) — "per collection" means calibrated

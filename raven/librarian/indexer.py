@@ -91,14 +91,22 @@ def wait_for_indexing(retriever: hybridir.HybridIR,
     `on_progress`: called with the current progress string each time it changes. `None` to stay silent.
 
     There is no "indexing finished" event to await — the apps that use `hybridir` never need one, because
-    they keep running. Hence polling `is_indexing`, and hence `SETTLED_POLLS`: a single quiet sample can
-    just as well mean the background rescan has not started yet.
+    they keep running. Hence polling, and hence `SETTLED_POLLS`: a single quiet sample can just as well
+    mean the background rescan has not started yet.
+
+    **Busy means "any pending work", not "currently committing".** `is_indexing` alone is the wrong
+    predicate and fails in the worst possible direction: it reports whether the retriever is inside
+    `commit()`, which is False throughout the ingest phase while documents are being read and their text
+    extracted. On a corpus of 1268 PDFs that phase runs for minutes, so a waiter watching only
+    `is_indexing` sees a quiet start, returns, and lets the caller exit — reporting success while
+    hundreds of documents are still queued, and leaving them to die against a shut-down executor. Hence
+    also `has_pending_work`, which covers the ingest queue.
     """
     last = ""
     settled = 0
     while settled < SETTLED_POLLS:
         time.sleep(POLL_SECONDS)
-        busy = retriever.is_indexing()
+        busy = retriever.is_indexing() or hybridir.has_pending_work()
         report = retriever.get_indexing_progress_text()
         if on_progress is not None and report and report != last:
             on_progress(report)

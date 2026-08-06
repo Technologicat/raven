@@ -1286,6 +1286,23 @@ def init(executor):
         raise
 
 
+def has_pending_work() -> bool:
+    """Whether any document ingest or index commit is queued or running, module-wide.
+
+    Complements `HybridIR.is_indexing`, which answers a narrower question — whether *that instance* is
+    inside `commit()` — and is therefore False during the ingest phase, when documents are being read
+    and their text extracted. A batch client that waits on `is_indexing` alone will conclude that a
+    corpus of a thousand PDFs is finished a few seconds after starting, because the first commit has not
+    been scheduled yet and reading them all takes minutes.
+
+    Module-wide rather than per-instance because the task managers are: `init` builds one "ingest" and
+    one "commit" manager for the module, shared by every `HybridIR`. A process driving two indexes at
+    once cannot use this to tell them apart, which is fine for its intended caller (`raven-indexer`,
+    one index per run) and is why the docstring says so rather than implying otherwise.
+    """
+    return any(manager.has_tasks() for manager in task_managers.values())
+
+
 def shutdown(wait: bool = True) -> None:
     """Cancel any in-flight RAG indexing and ingestion tasks.
 
