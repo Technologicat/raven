@@ -1101,6 +1101,2094 @@
       "gold_titles": [
         "Increased biological hydrogen production by deletion of hydrogen-uptake system in photosynthetic bacteria"
       ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does polystyrene particle size differentiate the impact on hydrogen versus methane generation in anaerobic sludge reactors, and why do finer particles suppress hydrogen output while coarser ones enhance it?",
+      "gold": [
+        "WOS000859381000001.bib"
+      ],
+      "gold_titles": [
+        "Polystyrene microplastics and nanoplastics distinctively affect anaerobic sludge treatment for hydrogen and methane production"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What is the projected cost per kilogram for hydrogen derived from a system that merges fusion thermal power with the gasification of lignocellulosic and municipal waste streams?",
+      "gold": [
+        "WOS000583654200001.bib"
+      ],
+      "gold_titles": [
+        "Techno-economic analysis of hydrogen production from the nuclear fusion-biomass hybrid system"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What operating temperature and steam-to-waste ratio maximizes hydrogen recovery in a simulated municipal gasification process?",
+      "gold": [
+        "WOS000844431000001.bib"
+      ],
+      "gold_titles": [
+        "Municipal solid waste gasification to produce hydrogen: Integrated simulation model and performance analysis"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does supporting chromium-palladium nanoparticles on an amine-functionalized beta-cyclodextrin derivative influence hydrogen generation from formic acid decomposition in the absence of additives?",
+      "gold": [
+        "WOS000474501500036.bib"
+      ],
+      "gold_titles": [
+        "Enhancing formic acid dehydrogenation for hydrogen production with the metal/organic interface"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What is the optimal mass fraction of a carbon material featuring mixed sp and sp2 hybridization when combined with nickel sulfide in a rod-like morphology to maximize photocatalytic hydrogen generation?",
+      "gold": [
+        "WOS000891249100007.bib"
+      ],
+      "gold_titles": [
+        "Graphdiyne(CnH2n-2) based NiS S-scheme heterojunction for efficient photocatalytic hydrogen production"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What are the reusability performance and catalytic turnover frequency of bimetallic platinum-silver nanoparticles produced via plant-mediated synthesis for hydrogen generation?",
+      "gold": [
+        "WOS001023524200001.bib"
+      ],
+      "gold_titles": [
+        "Biogenic platinum-based bimetallic nanoparticles: Synthesis, characterization, antimicrobial activity and hydrogen evolution"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How do nickel, rhodium, and ruthenium promoters compare regarding stability and hydrogen yield when deposited on a metallurgical slag-derived oxide support for the steam reforming of glycerol?",
+      "gold": [
+        "WOS000691826600003.bib"
+      ],
+      "gold_titles": [
+        "A comparative study on the performance of M (Rh, Ru, Ni)-promoted metallurgical waste driven catalysts for H2 production by glycerol steam reforming"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does mechanical agitation influence light availability for algal cells and the resulting hydrogen yield compared to static cultures?",
+      "gold": [
+        "WOS000325442600011.bib"
+      ],
+      "gold_titles": [
+        "Effects of fluid and light dynamics on H2 production in a mechanically stirred photobioreactor"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What conversion rates and hydrogen generation characteristics are observed during the mechanochemical regeneration of sodium borohydride from magnesium hydride and hydrated sodium metaborate under ambient conditions?",
+      "gold": [
+        "WOS000403548200049.bib"
+      ],
+      "gold_titles": [
+        "Hydrolysis and regeneration of sodium borohydride (NaBH4) - A combination of hydrogen production and storage"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What are the optimized thermodynamic efficiency and financial costs of coupling a steam turbine loop with an electrochemical splitting device to capture exhaust heat from hybrid gas-steam power facilities for hydrogen generation?",
+      "gold": [
+        "WOS000825885400001.bib"
+      ],
+      "gold_titles": [
+        "A novel hydrogen production system to storage the waste thermal energy of power plants"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Which combination of advanced fission systems, thermochemical water-splitting cycles, and hydrogen conversion and distribution technologies constitutes the essential toolkit for implementing a model where nuclear plants generate hydrogen to supply electricity grids and industrial markets?",
+      "gold": [
+        "WOS000226004800001.bib"
+      ],
+      "gold_titles": [
+        "Nuclear-hydrogen power"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does adjusting the proportion of alkaline additive to fermentation byproduct affect hydrogen yield and selectivity during thermal decomposition, and what explains the lowered energy threshold?",
+      "gold": [
+        "WOS000558598300020.bib"
+      ],
+      "gold_titles": [
+        "Alkaline pyrolysis of anaerobic digestion residue with selective hydrogen production"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does adjusting the ratio of molybdenum-oxygen to molybdenum-nitrogen bonds at the interface of a dioxide-nitride heterostructure affect hydrogen desorption rates to enable industrial-scale current densities?",
+      "gold": [
+        "WOS001109141700001.bib"
+      ],
+      "gold_titles": [
+        "Tailoring the Mo-N/Mo-O configuration in MoO2/Mo2N heterostructure for ampere-level current density hydrogen production"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does coupling a molecular nickel complex with a MOF-derived transition-metal-doped sulfide composite improve charge separation and hydrogen generation under visible illumination?",
+      "gold": [
+        "WOS000860468500002.bib"
+      ],
+      "gold_titles": [
+        "Nanoarchitectonics of hierarchical FeCdS-CdS nanorods and Ni-Salens for high-efficiency photocatalytic hydrogen production"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does incorporating copper-decorated carbon nanotubes improve charge separation and hydrogen evolution in planar-defect cadmium zinc sulfide under visible light?",
+      "gold": [
+        "WOS000369960300037.bib"
+      ],
+      "gold_titles": [
+        "Enhanced photocatalytic activity over Cd0.5Zn0.5S with stacking fault structure combined with Cu<SUP>2+</SUP> modified carbon nanotubes"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What approaches replace water oxidation at the anode to cut energy demand or generate power during electrochemical hydrogen synthesis?",
+      "gold": [
+        "WOS000934368400001.bib"
+      ],
+      "gold_titles": [
+        "Innovative Electrochemical Strategies for Hydrogen Production: From Electricity Input to Electricity Output"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does cobalt modification of molybdenum carbide supported on carbon influence formic acid conversion to hydrogen at temperatures between 100 and 150 degrees Celsius compared to iron or nickel modifications?",
+      "gold": [
+        "WOS000549493600007.bib"
+      ],
+      "gold_titles": [
+        "Low Temperature H2 Production from Formic Acid Aqueous Solution Catalyzed on Metal Doped Mo2C"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What modeling refinements are required to accurately predict the behavior of unmediated solar-driven water-splitting setups, and how does direct electrical linking between solar modules and electrolysis units impact overall generation efficiency?",
+      "gold": [
+        "WOS000426225000037.bib"
+      ],
+      "gold_titles": [
+        "Experiment and simulation of electrolytic hydrogen it production: Case study of photovoltaic-electrolyzer direct connection"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Does a mutated iron-iron hydrogenase variant demonstrate increased oxygen resistance and maintained hydrogen output when localized to the chloroplast of a green microalga?",
+      "gold": [
+        "WOS000582322100023.bib"
+      ],
+      "gold_titles": [
+        "Engineered clostridial [FeFe]-hydrogenase shows improved O2 tolerance in <i>Chlamydomonas reinhardtii</i>"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does circulating the gas phase collected above the liquid in a biological reactor processing winery wastewater influence hydrogen output and the suppression of hydrogen-consuming bacteria that produce acetate?",
+      "gold": [
+        "WOS000499336700001.bib"
+      ],
+      "gold_titles": [
+        "Biohydrogen production from winery effluents: control of the homoacetogenesis through the headspace gas recirculation"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What is the effect of square-profile ceramic inserts on the specific hydrogen production rate of Clostridium butyricum in a continuous column reactor using sucrose?",
+      "gold": [
+        "WOS000261543400017.bib"
+      ],
+      "gold_titles": [
+        "Enhancing hydrogen production of <i>Clostridium butyricum</i> using a column reactor with square-structured ceramic fittings"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What catalytic strategies are outlined for converting excess glycerol into hydrogen, 1,2-propanediol, acrolein, and glycerol carbonate, particularly regarding the process that uses urea?",
+      "gold": [
+        "WOS000459412700002.bib"
+      ],
+      "gold_titles": [
+        "Sustainable Process for the Synthesis of Value-Added Products Using Glycerol as a Useful Raw Material"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Can carbon matrices doped with nitrogen yield near-total hydrogen selectivity during plasma-driven ammonia cracking under mild thermal conditions?",
+      "gold": [
+        "WOS000851109100001.bib"
+      ],
+      "gold_titles": [
+        "Non-Thermal Ammonia Decomposition for Hydrogen Production over Carbon Films under Low-Temperature Plasma-In-Situ FTIR Studies"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Does the identity of the metal center, specifically comparing palladium and platinum, govern whether visible-light-driven hydrogen evolution occurs via a stable molecular pathway or through the generation of metallic aggregates?",
+      "gold": [
+        "WOS000354190800008.bib"
+      ],
+      "gold_titles": [
+        "Palladium versus Platinum: The Metal in the Catalytic Center of a Molecular Photocatalyst Determines the Mechanism of the Hydrogen Production with Visible Light"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How do shear conditions and acidity levels differentially govern the kinetics and final accumulation of hydrogen from grain waste?",
+      "gold": [
+        "WOS000255603600014.bib"
+      ],
+      "gold_titles": [
+        "Pilot study of the influence of stirring and pH on anaerobes converting high-solid organic wastes to hydrogen"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What reactor configurations and solar thermal testbeds have been used to advance heat-driven routes for producing hydrogen and synthesis gas?",
+      "gold": [
+        "WOS000401395000072.bib"
+      ],
+      "gold_titles": [
+        "An overview of the solar thermochemical processes for hydrogen and syngas production: Reactors, and facilities"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does aligning the work functions of a bimetallic alloy and an oxygen-deficient oxide support accelerate interfacial hydrogen migration to enable simultaneous hydrogen production and alcohol oxidation?",
+      "gold": [
+        "WOS001032902100001.bib"
+      ],
+      "gold_titles": [
+        "Concurrent alloying and vacancy engineering for intensifying hydrogen spillover towards alcohol-water co-electrolysis"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What heat input and thermal management parameters are required to design a reactor that gasifies plant-based organic matter into hydrogen using extremely hot steam produced by nuclear reactors?",
+      "gold": [
+        "WOS000249989900069.bib"
+      ],
+      "gold_titles": [
+        "Hydrogen production from biomass using high temperature nuclear heat"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Which combination of copper oxidation states results in the maximum hydrogen output during the photocatalytic processing of cellulose using a titania-based catalyst?",
+      "gold": [
+        "WOS000955566300001.bib"
+      ],
+      "gold_titles": [
+        "H2 production by cellulose photoreforming with TiO2-Cu photocatalysts bearing different Cu species"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does confining photosystem I and platinum nanoparticles within a porous glass scaffold affect the system's ability to evolve hydrogen gas in the presence of oxygen?",
+      "gold": [
+        "WOS000385244900007.bib"
+      ],
+      "gold_titles": [
+        "Light-induced hydrogen production by photosystem I-Pt nanoparticle conjugates immobilized in porous glass plate nanopores"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What are the primary limitations and optimization requirements for III-V alloys, stacked silicon cells, and dye-based solar cells in the context of hydrogen generation from water?",
+      "gold": [
+        "WOS000341465800024.bib"
+      ],
+      "gold_titles": [
+        "Photovoltaic devices in hydrogen production"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What is the annual hydrogen and electricity yield from reforming methane produced from municipal and vineyard solid residues in a major Brazilian wine region, and how much carbon is avoided?",
+      "gold": [
+        "WOS000651257700006.bib"
+      ],
+      "gold_titles": [
+        "A pioneering study of biomethane and hydrogen production from the wine industry in Brazil: Pollutant emissions, electricity generation and urban bus fleet supply"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How do the concentration and polarity of oxygenated solvents influence hydrogen evolution rates on titanium dioxide-supported metals, and do nickel versus gold variants yield comparable results?",
+      "gold": [
+        "WOS000452578700004.bib"
+      ],
+      "gold_titles": [
+        "Performance comparison of Ni/TiO2 and Au/TiO2 photocatalysts for H2 production in different alcohol-water mixtures"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does the hydrogen generation rate of titanium dioxide compare when using a co-catalyst composed of nickel nitride and trace amounts of gold versus a standard platinum-based system?",
+      "gold": [
+        "WOS000522737500001.bib"
+      ],
+      "gold_titles": [
+        "Ultra-low Loading of Au Clusters on Nickel Nitride Efficiently Boosts Photocatalytic Hydrogen Production with Titanium Dioxide"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What optimization techniques involving nutrient composition, environmental conditions, and light exposure can increase hydrogen output in photosynthetic non-sulfur bacteria, and does combining these approaches offer better results than using them individually?",
+      "gold": [
+        "WOS000911393800005.bib"
+      ],
+      "gold_titles": [
+        "Advanced Optimization Strategies to Enhance Photo-fermentative Biohydrogen Production by Non-Sulfur Purple Bacteria"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How do carbon nanomaterials structurally and electronically enhance photoactive semiconductors for solar-driven hydrogen generation?",
+      "gold": [
+        "WOS000379888200004.bib"
+      ],
+      "gold_titles": [
+        "Carbon-based H2-production photocatalytic materials"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does aluminum incorporation boost hydrogen evolution in strontium titanate photocatalysts by localizing photogenerated holes near the valence maximum without narrowing the absorption edge, and does a potassium chloride flux offer a lower-cost synthesis pathway?",
+      "gold": [
+        "WOS000895517100001.bib"
+      ],
+      "gold_titles": [
+        "Effects of Al Doping on Hydrogen Production Efficiency upon Photostimulated Water Splitting on SrTiO3 Nanoparticles"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What hydrogen evolution rate is observed for a nanocomposite containing 10 wt% black phosphorus on crystalline carbon nitride derived from heptazine units?",
+      "gold": [
+        "WOS000938417800001.bib"
+      ],
+      "gold_titles": [
+        "Designing Black Phosphorus and Heptazine-Based Crystalline Carbon Nitride Composites for Photocatalytic Water Splitting"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does adjusting the solvothermal reaction duration for a polymer-backed graphene framework loaded with cadmium sulfide affect its bandgap characteristics and visible-spectrum hydrogen generation performance?",
+      "gold": [
+        "WOS000364247100082.bib"
+      ],
+      "gold_titles": [
+        "Polymer supported graphene-CdS composite catalyst with enhanced photocatalytic hydrogen production from water splitting under visible light"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does vertical versus horizontal packing arrangement in a downward-flow packed column influence hydrogen yields and the selection of hydrogen-producing microbes?",
+      "gold": [
+        "WOS000965790400001.bib"
+      ],
+      "gold_titles": [
+        "Hydrodynamic design of down-flow packed bed reactor regulated the biohydrogen production and microbial enrichment"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does the amount of titanium substituted for vanadium in a disulfide layer affect its efficiency in splitting water under conditions of high versus low hydrogen adsorption?",
+      "gold": [
+        "WOS000366347600004.bib"
+      ],
+      "gold_titles": [
+        "Effect of Doping on Hydrogen Evolution Reaction of Vanadium Disulfide Monolayer"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What anode material and solution pH maximize the fraction of electrical energy converted to hydrogen during glucose electrolysis at roughly one volt?",
+      "gold": [
+        "WOS000309043200009.bib"
+      ],
+      "gold_titles": [
+        "Optimal experimental conditions for hydrogen production using low voltage electrooxidation of organic wastewater feedstock"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does a nitrogen-containing carbon shell on a molybdenum oxide base facilitate charge migration and increase visible-light hydrogen generation when combined with a sulfide semiconductor?",
+      "gold": [
+        "WOS000923124400001.bib"
+      ],
+      "gold_titles": [
+        "N-doped C-coated MoO2/ZnIn2S4 heterojunction for efficient photocatalytic hydrogen production"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What temperature, steam proportion, and liquid flow rate optimize hydrogen recovery during the catalytic reforming of the water-rich byproduct from rapidly heated biomass?",
+      "gold": [
+        "WOS000294933600020.bib"
+      ],
+      "gold_titles": [
+        "Hydrogen production from the aqueous phase derived from fast pyrolysis of biomass"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What optimal water concentration, starting acidity, and substrate ratios maximize hydrogen recovery when co-processing kitchen refuse and wastewater treatment sludge?",
+      "gold": [
+        "WOS000499741900074.bib"
+      ],
+      "gold_titles": [
+        "Statistical Key Factor Optimization of Conditions for Biohydrogen Production from Sewage Sludge and Food Waste by Anaerobic Codigestion"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What hydrogen molar yield is achieved by coupling a dark-fermenting marine green alga with a marine photosynthetic bacterium that utilizes excreted organic acids under an alternating illumination cycle?",
+      "gold": [
+        "WOSA1992HW66400015.bib"
+      ],
+      "gold_titles": [
+        "STABLY SUSTAINED HYDROGEN-PRODUCTION WITH HIGH MOLAR YIELD THROUGH A COMBINATION OF A MARINE GREEN-ALGA AND A PHOTOSYNTHETIC BACTERIUM"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How do operating temperature, carbon catalyst type, and contact time influence hydrogen concentration and yield decline during methane splitting in a fluidized carbon bed?",
+      "gold": [
+        "WOS000236507000005.bib"
+      ],
+      "gold_titles": [
+        "Production of hydrogen by thermal decomposition of methane in a fluidized-bed reactor - Effects of catalyst, temperature, and residence time"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Which organic compound, evaluated among alcohols, amines, and carboxylic acids, achieves the maximum hydrogen evolution rate when utilized with a binary copper sulfide-nickel oxide material under sunlight?",
+      "gold": [
+        "WOS000625460600002.bib"
+      ],
+      "gold_titles": [
+        "Solar hydrogen generation from organic substance using earth abundant CuS-NiO heterojunction semiconductor photocatalyst"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does introducing minimal oxygen during corn-based biomass fermentation affect biohydrogen yield and volatile fatty acid tolerance compared to strictly anoxic processing?",
+      "gold": [
+        "WOS000373552100006.bib"
+      ],
+      "gold_titles": [
+        "Comparison of micro-aerobic and anaerobic fermentative hydrogen production from corn straw"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Which silica-supported transition metal (nickel, cobalt, or copper) yields the highest hydrogen output and favors carbon dioxide over carbon monoxide during the high-temperature reaction of glycerol with water vapor?",
+      "gold": [
+        "WOS000391801300151.bib"
+      ],
+      "gold_titles": [
+        "Effect of Active Metal Supported on SiO2 for Selective Hydrogen Production from the Glycerol Steam Reforming Reaction"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What thermal efficiency does a self-heating cylindrical methane reformer achieve when supplying hydrogen at two normal cubic meters per hour?",
+      "gold": [
+        "WOS000365367200012.bib"
+      ],
+      "gold_titles": [
+        "Study on an integrated natural gas fuel processor for 2-kW solid oxide fuel cell"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Which central metal ion produces the highest photocatalytic turnover metrics for generating molecular hydrogen when coordinated to a conjugated nitrogen-donor ligand in a basic aqueous-organic mixture?",
+      "gold": [
+        "WOS001081803700001.bib"
+      ],
+      "gold_titles": [
+        "Abnormal synergistic behavior of metal chelates of 1,10-phenanthroline scaffold for enhancing hydrogen evolution from water"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can genetic modifications that increase hydrogenase abundance and adjust pigment levels be used to enhance light utilization and hydrogen yields in photosynthetic cultures?",
+      "gold": [
+        "WOS000081185800013.bib"
+      ],
+      "gold_titles": [
+        "Biotechnological hydrogen production: research for efficient light energy conversion"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How have the productivity and durability of light-driven biological hydrogen synthesis improved for marine algal strains and bacterial phototrophs?",
+      "gold": [
+        "WOSA1995QA76400001.bib"
+      ],
+      "gold_titles": [
+        "HYDROGEN-PRODUCTION BY BIOPHOTOLYSIS BASED ON MICROALGAL PHOTOSYNTHESIS"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "At what hydrogen ion concentration does copper manganese oxide cease to function as a photocatalyst for hydrogen generation?",
+      "gold": [
+        "WOS000179718900004.bib"
+      ],
+      "gold_titles": [
+        "CuMnO2, a novel hydrogen photoevolution catalyst"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What internal electron transfer between the constituent elements lowers the energy barrier for immediate, room-temperature hydrogen generation in a rare-earth telluride compound?",
+      "gold": [
+        "WOS000996471400001.bib"
+      ],
+      "gold_titles": [
+        "Spontaneous hydrogen production using gadolinium telluride"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How do platinum and nickel catalysts differ regarding hydrogen purity versus alcohol conversion efficiency when processing renewable alcohols in a liquid water medium?",
+      "gold": [
+        "WOS000356045700005.bib"
+      ],
+      "gold_titles": [
+        "Progress in the aqueous-phase reforming of different biomass-derived alcohols for hydrogen production"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does a needle-to-mesh electrode arrangement in pulsed discharge influence hydrogen recovery and energy efficiency during ethanol decomposition?",
+      "gold": [
+        "WOS000415768400013.bib"
+      ],
+      "gold_titles": [
+        "Hydrogen production from ethanol decomposition by pulsed discharge with needle-net configurations"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What optimal temperature, pressure, and steam-to-carbon ratio combinations maximize hydrogen yield and purity in sorption-coupled autothermal reforming and standard steam methane reforming, and how do these operating parameters interact based on a statistical experimental design approach?",
+      "gold": [
+        "WOS001040219000001.bib"
+      ],
+      "gold_titles": [
+        "Probing into the interactions among operating variables in blue hydrogen production: A new approach via design of experiments (DoE)"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does water depth influence hydrogen accumulation from irradiated aluminosilicate adsorbents, and under what thermal and radiation exposure conditions does austenitic steel avoid rapid surface damage in high-salinity storage vessels?",
+      "gold": [
+        "WOS000337966000019.bib"
+      ],
+      "gold_titles": [
+        "Characterization and storage of radioactive zeolite waste"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can organic-rich wastewater from palm oil processing be converted into renewable gaseous fuels using anaerobic microbial pathways?",
+      "gold": [
+        "WOS000437084300043.bib"
+      ],
+      "gold_titles": [
+        "Palm oil mill effluent (POME) as raw material for biohydrogen and methane production via dark fermentation"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What thermodynamic conversion rates and hourly hydrogen yield result from integrating a concentrated solar thermal field with a wind generator to drive a halogen-based thermal water-splitting cycle for simultaneous power, heat, and compressed fuel production?",
+      "gold": [
+        "WOS000454382200008.bib"
+      ],
+      "gold_titles": [
+        "Development and assessment of a solar, wind and hydrogen hybrid trigeneration system"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What is the maximum hydrogen leak rate that a ventilation system can support to prevent flammable cloud accumulation in an alkaline electrolysis housing?",
+      "gold": [
+        "WOS001013682600001.bib"
+      ],
+      "gold_titles": [
+        "Simulation and risk assessment of hydrogen leakage in hydrogen production container"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How do rhodium nanoclusters anchored to concave nitrogen-doped carbon supports enable sub-volt hydrogen generation in alkaline electrolysis?",
+      "gold": [
+        "WOS000488322900050.bib"
+      ],
+      "gold_titles": [
+        "0.2 V Electrolysis Voltage-Driven Alkaline Hydrogen Production with Nitrogen-Doped Carbon Nanobowl-Supported Ultrafine Rh Nanoparticles of 1.4 nm"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How do hydrogen output volumes and generation expenses compare for solid oxide and proton exchange membrane electrolyzers when coupled to a steam turbine operating on cement plant exhaust heat?",
+      "gold": [
+        "WOS000935294800001.bib"
+      ],
+      "gold_titles": [
+        "Assessment of hydrogen production from waste heat using hybrid systems of Rankine cycle with proton exchange membrane/solid oxide electrolyzer"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How do changes in operating and ambient temperatures influence the second-law efficiency and thermodynamic losses during hydrogen generation in a copper-chlorine water splitting process?",
+      "gold": [
+        "WOS000261543400007.bib"
+      ],
+      "gold_titles": [
+        "Energy and exergy assessments of the hydrogen production step of a copper-chlorine thermochemical water splitting cycle driven by nuclear-based heat"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What is the cumulative hydrogen output per gram of volatile solids obtained from Chlorella microalgae via a two-stage conversion route that integrates solid-state fermentation with dark fermentation?",
+      "gold": [
+        "WOS000457662600004.bib"
+      ],
+      "gold_titles": [
+        "A sequential process of anaerobic solid-state fermentation followed by dark fermentation for bio-hydrogen production from <i>Chlorella</i> sp."
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does blending methane or ethane with argon in the discharge medium affect hydrogen generation and light hydrocarbon co-production during catalyst-free thermal decomposition of heavy fuel residues?",
+      "gold": [
+        "WOS000345803900011.bib"
+      ],
+      "gold_titles": [
+        "Effect of microwave plasma torch on the pyrolysis fuel oil in the presence of methane and ethane to increase hydrogen production"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What impact does substituting manure with bovine digestive fluid as an inoculum have on hydrogen yields and microbial communities when processing dairy and livestock residues?",
+      "gold": [
+        "WOS000501881200001.bib"
+      ],
+      "gold_titles": [
+        "Bio-Hydrogen Production From Buffalo Waste With Rumen Inoculum and Metagenomic Characterization of Bacterial and Archaeal Community"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How do thermal and electrochemical water splitting processes compare for hydrogen generation in a combined nuclear and solar facility with reversible electrochemical storage?",
+      "gold": [
+        "WOS000361413600078.bib"
+      ],
+      "gold_titles": [
+        "Investigation of an integrated hydrogen production system based on nuclear and renewable energy sources: Comparative evaluation of hydrogen production options with a regenerative fuel cell system"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Which regions of Algeria yield the highest yearly hydrogen output when pairing a copper-chlorine thermochemical process with parabolic mirror collectors, and how does localized solar heat capture influence the system's daily generation rate?",
+      "gold": [
+        "WOS000426225000038.bib"
+      ],
+      "gold_titles": [
+        "Performance analyses of Cu-Cl hydrogen production integrated solar parabolic trough collector system under Algerian climate"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Which mathematical frameworks best reconcile simplified kinetic assumptions with the coupled transport and biochemical processes in membrane-integrated fermentation systems designed for hydrogen recovery from liquid waste?",
+      "gold": [
+        "WOS000969534800001.bib"
+      ],
+      "gold_titles": [
+        "Biocatalytic membrane reactor modeling for fermentative hydrogen production from wastewater: A review"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does the hydrogen output from methanol electrolysis scale with power consumption when driven by solar arrays in different Algerian locations?",
+      "gold": [
+        "WOS000401385300009.bib"
+      ],
+      "gold_titles": [
+        "Hydrogen production by methanol aqueous electrolysis using photovoltaic energy: Algerian potential"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does varying the concentration of sulfuric acid-treated red macroalgae broth affect the concurrent detoxification of inhibitory furan derivatives and molecular hydrogen generation in a coupled immobilized microbial system?",
+      "gold": [
+        "WOS000363046900039.bib"
+      ],
+      "gold_titles": [
+        "Simultaneous removal of 5-hydroxy methyl furfural (5-HMF) and hydrogen production from acid (H2SO4) pretreated red-algal hydrolysate via hybrid immobilized cells"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Which transition metal yields the highest hydrogen output when supported on industrial combustion residue during the aqueous breakdown of an amine-based boron compound?",
+      "gold": [
+        "WOS000524128500024.bib"
+      ],
+      "gold_titles": [
+        "Fly ash as catalyst support material in the hydrolysis of ethylenediamine bisborane for hydrogen production: The use of coal-fired power plant waste"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does improving structural order and surface hydrophilicity in benzobisthiazole porous networks affect visible light driven hydrogen generation rates?",
+      "gold": [
+        "WOS000906164000001.bib"
+      ],
+      "gold_titles": [
+        "Highly crystalline and water-wettable benzobisthiazole-based covalent organic frameworks for enhanced photocatalytic hydrogen production"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does coupling Photosystem I-targeted illumination with oxygen-suppressing Chlamydomonas mutants and cyclic dark-light exposure affect the timeframe and output of algal hydrogen generation?",
+      "gold": [
+        "WOS000330910400023.bib"
+      ],
+      "gold_titles": [
+        "Effects of implementing PSI-light on hydrogen production via biophotolysis in <i>Chlamydomonas reinhardtii</i> mutant strains"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does the daily hydrogen output change when switching between pure power generation, compressed gas, liquid fuel, and hybrid modes in a helical fusion reactor?",
+      "gold": [
+        "WOS000268012700190.bib"
+      ],
+      "gold_titles": [
+        "Study on hydrogen production from steam electrolysis in LHD-type power reactor FFHR"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Which regions in Algeria are best suited for a hybrid facility combining solar thermal collectors and photovoltaic arrays to supply the heat and power needed for steam electrolysis hydrogen production?",
+      "gold": [
+        "WOS000289331800049.bib"
+      ],
+      "gold_titles": [
+        "Feasibility study for hydrogen production using hybrid solar power in Algeria"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Which temperature, steam-to-feed ratio, and vessel dimensions produce the highest hydrogen purity and yield when simulating glycerol reforming?",
+      "gold": [
+        "WOS000513987300011.bib"
+      ],
+      "gold_titles": [
+        "Application of aspen plus to renewable hydrogen production from glycerol by steam reforming"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does maintaining cold storage conditions for mixed kitchen scraps enriched with fermented vegetables prevent lactic acid bacteria dominance and ensure consistent hydrogen output in continuous anaerobic bioreactors?",
+      "gold": [
+        "WOS000250031300012.bib"
+      ],
+      "gold_titles": [
+        "Process stability and microbial community structure in anaerobic hydrogen-producing microflora from food waste containing kimchi"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What are the impacts on methane conversion and hydrogen generation when a steam reformer is combined with chemical looping combustion and hydrogen-selective membranes?",
+      "gold": [
+        "WOS000330100000036.bib"
+      ],
+      "gold_titles": [
+        "Enhancement of Hydrogen Production and Carbon Dioxide Capturing in a Novel Methane Steam Reformer Coupled with Chemical Looping Combustion and Assisted by Hydrogen Perm-Selective Membranes"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How do simulation results for a membrane-integrated reactor compare to a traditional design in terms of methanol conversion and hydrogen purity during steam reforming?",
+      "gold": [
+        "WOS000221287900018.bib"
+      ],
+      "gold_titles": [
+        "Hydrogen recovery from methanol steam reforming in a dense membrane reactor: Simulation study"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What unresolved issues and recommended next steps for biohydrogen research were highlighted in the overview of the Pushchino conference proceedings?",
+      "gold": [
+        "WOS000401889800062.bib"
+      ],
+      "gold_titles": [
+        "An introduction to the special issue section on \"The 7th International Conference on Photosynthesis and Hydrogen Energy Production in Honor of Nathan Nelson and T. Nejat Veziroglu, 19-25 June 2016, Pushchino, Russia\""
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does sulfadiazine exposure impact hydrogen yields during the anaerobic treatment of sewage sludge, and is the observed reduction linked to the impairment of pyruvate conversion?",
+      "gold": [
+        "WOS000816934700010.bib"
+      ],
+      "gold_titles": [
+        "Sulfadiazine inhibits hydrogen production during sludge anaerobic fermentation by affecting pyruvate decarboxylation"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Which cerium-containing mixed oxide compositions effectively produce hydrogen in a three-stage thermal water-splitting sequence that employs an alkaline hydroxide activation step?",
+      "gold": [
+        "WOS000267674000017.bib"
+      ],
+      "gold_titles": [
+        "Hydrogen production from mixed cerium oxides via three-step water-splitting cycles"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Which biogas conversion route, steam versus autothermal, yields superior thermodynamic efficiency for integrated hydrogen, power, and heat generation at standalone dispensing facilities?",
+      "gold": [
+        "WOS000579393800032.bib"
+      ],
+      "gold_titles": [
+        "Green hydrogen production plants via biogas steam and autothermal reforming processes: energy and exergy analyses"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What combination of initial carbon substrate concentration, buffering agent strength, and relative bacterial inoculum ratios maximizes hydrogen gas production in a one-step mixed culture setup?",
+      "gold": [
+        "WOS000399623500015.bib"
+      ],
+      "gold_titles": [
+        "Hydrogen production by co-cultures of <i>Clostridium butyricum</i> and <i>Rhodospeudomonas palustris</i>: Optimization of yield using response surface methodology"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What structural features allow a single-atom copper embedded zirconium coordination polymer sandwiched by zinc indium sulfide sheets to spatially isolate oxidation and reduction zones while boosting clean fuel synthesis from contaminated water using pollutants instead of auxiliary chemicals?",
+      "gold": [
+        "WOS001053887000001.bib"
+      ],
+      "gold_titles": [
+        "Cu atoms on UiO-66-NH2/ZnIn2S4 nanosheets enhance photocatalytic performance for recovering hydrogen energy from organic wastewater treatment"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What causes performance degradation in a dye-sensitized nickel oxide electrode incorporating a ruthenium light harvester covalently attached to a cobalt catalyst bearing dioxime ligands?",
+      "gold": [
+        "WOS000713052700019.bib"
+      ],
+      "gold_titles": [
+        "Hydrogen Production at a NiO Photocathode Based on a Ruthenium Dye-Cobalt Diimine Dioxime Catalyst Assembly: Insights from Advanced Spectroscopy and Post-operando Characterization"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can integrated high-pressure aqueous conversion systems be optimized to generate hydrogen from wet wastewater residues while overcoming equipment degradation and solid buildup?",
+      "gold": [
+        "WOS000342530000080.bib"
+      ],
+      "gold_titles": [
+        "Hydrothermal gasification of sewage sludge and model compounds for renewable hydrogen production: A review"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What control strategy enables a wind-powered electrolysis facility to support grid stability by splitting frequency regulation signals between its hydrogen production units and short-term storage?",
+      "gold": [
+        "WOS000887068600001.bib"
+      ],
+      "gold_titles": [
+        "Research on the Primary Frequency Regulation Control Strategy of a Wind Storage Hydrogen-Generating Power Station"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What is the estimated cost range for hydrogen produced by a small wind system connected to the grid if excess electricity is exported?",
+      "gold": [
+        "WOS000283977100003.bib"
+      ],
+      "gold_titles": [
+        "Hydrogen generation from small-scale wind-powered electrolysis system in different power matching modes"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does incorporating ultrafine platinum particles into a silver vanadate and nitrogen-doped carbon matrix affect internal electron migration and solar water splitting yields?",
+      "gold": [
+        "WOS001032746700001.bib"
+      ],
+      "gold_titles": [
+        "Pt quantum dots-coupled AgVO3/g-C3N4 Z-scheme photocatalyst for efficient sunlight-driven hydrogen production"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does increasing solar irradiance impact the second-law efficiency and hydrogen yield of a multi-output facility that employs a trough-shaped solar concentrator to operate an organic fluid heat engine, which supplies power to a water-splitting unit while the system also delivers cooling?",
+      "gold": [
+        "WOS000429399500037.bib"
+      ],
+      "gold_titles": [
+        "Thermodynamic assessment of modified Organic Rankine Cycle integrated with parabolic trough collector for hydrogen production"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What overall energy and exergy efficiencies are achieved by an integrated wind-driven plant that simultaneously produces hydrogen and synthesizes methanol using captured industrial carbon dioxide?",
+      "gold": [
+        "WOS000537646100012.bib"
+      ],
+      "gold_titles": [
+        "Evaluation of a wind energy based system for co-generation of hydrogen and methanol production"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does an electrolyte-free electrochemical water splitting system internally route electrons to produce hydrogen while co-generating electricity and heat?",
+      "gold": [
+        "WOS000224134300015.bib"
+      ],
+      "gold_titles": [
+        "Production of hydrogen, obtaining electric and thermal energy by water dissociation method"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can insights from hydrogen turnover in natural, hydrogen-rich subterranean ecosystems inform the assessment of microbial-related risks in human-made underground facilities?",
+      "gold": [
+        "WOS000460169900016.bib"
+      ],
+      "gold_titles": [
+        "Subsurface Microbial Hydrogen Cycling: Natural Occurrence and Implications for Industry"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does the presence of gold nanostructures on alloyed cadmium zinc sulfide nanowires influence solar-mimicking proton reduction rates through plasmonic coupling, particularly when benchmarked against binary zinc or cadmium sulfide nanowires?",
+      "gold": [
+        "WOS000504828100061.bib"
+      ],
+      "gold_titles": [
+        "Photocatalytic enhancement of hydrogen production in water splitting under simulated solar light by band gap engineering and localized surface plasmon resonance of ZnxCd1-xS nanowires decorated by Au nanoparticles"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Which catalyst and reaction parameters are considered optimal for generating hydrogen from biodiesel byproduct glycerol using steam-assisted catalytic conversion?",
+      "gold": [
+        "WOS000482434100001.bib"
+      ],
+      "gold_titles": [
+        "A review of steam reforming of glycerol"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How much hydrogen per gram of silicon carbide is generated through repeated thermal cycling in a methanol-assisted water splitting setup?",
+      "gold": [
+        "WOS000663799600003.bib"
+      ],
+      "gold_titles": [
+        "Pyroelectric hydrogen production performance of silicon carbide"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What hydrogen yield per glucose mole is achieved by employing a bio-electrochemical setup to prevent methanogenic hydrogen consumption in sulfate-reducing cultures?",
+      "gold": [
+        "WOS000611858100010.bib"
+      ],
+      "gold_titles": [
+        "Intensified hydrogen yield using hydrogenase rich sulfate-reducing bacteria in bio-electrochemical system"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What improvement in visible-light-driven hydrogen generation does platinum-doped zinc oxide nanospheres exhibit compared to pure zinc oxide when prepared by a sol-gel method employing a quaternary ammonium surfactant?",
+      "gold": [
+        "WOS000469849300003.bib"
+      ],
+      "gold_titles": [
+        "Decoration of zinc oxide nanospheres by platinum nanoparticles driven visible light for hydrogen evolution"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Can the hydrogen generated from the reforming of the glycerol byproduct satisfy the demand for the hydrothermal removal of oxygen from triglycerides?",
+      "gold": [
+        "WOS000647474900001.bib"
+      ],
+      "gold_titles": [
+        "Catalytic deoxygenation of triglyceride into drop-in fuel under hydrothermal condition with the help of in-situ hydrogen production by APR of glycerol by-produced"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How do operating conditions impact the thermodynamic efficiency of a syngas-fed redox cycle designed for the simultaneous generation of electricity, hydrogen, and thermal energy?",
+      "gold": [
+        "WOS000414879400095.bib"
+      ],
+      "gold_titles": [
+        "Thermodynamic analysis of a dual power-hydrogen production system based on chemical-looping combustion"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What strategies are used to tailor carbon-based materials for the selective electrochemical synthesis of hydrogen peroxide?",
+      "gold": [
+        "WOS000909794600003.bib"
+      ],
+      "gold_titles": [
+        "Recent Progress on Carbonaceous Material Engineering for Electrochemical Hydrogen Peroxide Generation"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How do reaction temperature, channel pressure, and steam-to-ethanol ratio influence hydrogen recovery and purity when using a dual-metal ceria catalyst in a palladium-silver membrane system for ethanol conversion?",
+      "gold": [
+        "WOS000308675900021.bib"
+      ],
+      "gold_titles": [
+        "Hydrogen production from ethanol over Pd-Rh/CeO2 with a metallic membrane reactor"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How do biological and thermal conversion techniques compare in terms of process complexity, operational speed, and economic feasibility for hydrogen generation from food waste?",
+      "gold": [
+        "WOS000667556600001.bib"
+      ],
+      "gold_titles": [
+        "Biochemical and Thermochemical Routes of H2 Production from Food Waste: A Comparative Review"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does the reversible evolution of iron within a zinc-aluminum spinel lattice resolve the conflict between high hydrogen yield and cyclic stability in chemical looping applications?",
+      "gold": [
+        "WOS000577845200008.bib"
+      ],
+      "gold_titles": [
+        "Improved hydrogen production with 100% fuel conversion through the redox cycle of ZnFeAlOx oxygen carrier in chemical looping scheme"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does integrating a reforming unit with a coal gasifier affect the syngas composition ratio and the overall cost-effectiveness of hydrogen generation from low-rank feedstocks?",
+      "gold": [
+        "WOS000704946900012.bib"
+      ],
+      "gold_titles": [
+        "Production of Hydrogen from Low Rank Coal Using Process Integration Framework between Syngas Production Processes: Techno-Economic Analysis"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Which physical conditioning method most effectively maximizes hydrogen and methane yields during the anaerobic digestion of moon jellyfish?",
+      "gold": [
+        "WOS000311005500040.bib"
+      ],
+      "gold_titles": [
+        "Biogas production from moon jellyfish (<i>Aurelia aurita</i>) using of the anaerobic digestion"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What carbon nanotube loading maximizes the visible-light-driven hydrogen generation rate in a catalyst hybrid comprising carbon nanotubes, titanium dioxide, and a zinc-containing porphyrin component?",
+      "gold": [
+        "WOS000310770900061.bib"
+      ],
+      "gold_titles": [
+        "Synthesis and Performance for Hydrogen Production of Carbon Nanotubes-ZnTHPP-TiO2 Nanocomposite Catalyst"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does adjusting the daily organic substrate input influence molar hydrogen output and generation speed in an upflow anaerobic fixed-media reactor, and does incorporating a biomass retention compartment enhance performance at moderate feed levels?",
+      "gold": [
+        "WOS000338710500051.bib"
+      ],
+      "gold_titles": [
+        "Impact of organic loading rate on biohydrogen production in an up-flow anaerobic packed bed reactor (UAnPBR)"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What volumetric hydrogen output and activation energy characterize a cerium-modified cobalt-lanthanum-boron catalyst during borohydride decomposition, and what open-circuit potential is achieved when the generated gas powers a proton exchange membrane fuel cell?",
+      "gold": [
+        "WOS000718631400013.bib"
+      ],
+      "gold_titles": [
+        "Investigation of the kinetic properties of Co-La-Ce-B catalyst for sodium borohydride solutions to generate hydrogen for polymer electrolyte membrane fuel cell"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does the reversible transformation between sodium carbonate and hydroxide species in supercritical water establish a regenerative catalytic loop that enhances both catalyst resilience and hydrogen output in coal gasification?",
+      "gold": [
+        "WOS000320287900017.bib"
+      ],
+      "gold_titles": [
+        "Effect of supercritical water on the stability and activity of alkaline carbonate catalysts in coal gasification"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "At what emission pricing threshold does thermal methane decomposition become the most affordable clean hydrogen route compared to renewable electrolysis and fossil reforming with carbon capture?",
+      "gold": [
+        "WOS000425563200002.bib"
+      ],
+      "gold_titles": [
+        "Hydrogen production using methane: Techno-economics of decarbonizing fuels and chemicals"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What copper loading maximizes hydrogen output and minimizes carbon monoxide in a nickel-alumina catalyst during ethanol conversion?",
+      "gold": [
+        "WOS000242821500075.bib"
+      ],
+      "gold_titles": [
+        "Hydrogen production by auto-thermal reforming of ethanol over Ni/-γ-Al2O3 catalysts:: Effect of second metal addition"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What hydrogen generation rates and overall pollutant removal efficiencies are achieved when optimizing a two-stage system that pairs high-temperature microbial fermentation with bio-electrochemical cells for treating starch manufacturing runoff?",
+      "gold": [
+        "WOS001004324400001.bib"
+      ],
+      "gold_titles": [
+        "Maximization of Energy Recovery from Starch Processing Wastewater by Thermophilic Dark Fermentation Coupled with Microbial fuel Cell Technology"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What combination of applied voltage, processing time, and initial feedstock concentration maximizes both hydrogen yield and purity during the electrolytic treatment of discarded meals?",
+      "gold": [
+        "WOS000436225600006.bib"
+      ],
+      "gold_titles": [
+        "Hydrogen gas production from food wastes by electrohydrolysis using a statical design approach"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Which clay-supported dual-metal oxide provides the most stable hydrogen production during alternating reduction with hydrogen or carbon monoxide and steam oxidation in a fluidized reactor?",
+      "gold": [
+        "WOS000247263200031.bib"
+      ],
+      "gold_titles": [
+        "Hydrogen production in fluidized bed by chemical-looping cycle"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "By what means does the inclusion of chitosan in an immobilization matrix alleviate ammonium-induced suppression of biohydrogen generation by anoxygenic phototrophic bacteria?",
+      "gold": [
+        "WOS000084737600010.bib"
+      ],
+      "gold_titles": [
+        "Entrapment of <i>Rhodobacter sphaeroides</i> RV in cationic polymer/agar gels for hydrogen production in the presence of NH4<SUP>+</SUP>"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What internal electron donor and cultivation cycling strategy enable sustained hydrogen output in Plectonema boryanum when direct photolytic water breakdown is absent?",
+      "gold": [
+        "WOS000276252600019.bib"
+      ],
+      "gold_titles": [
+        "Hydrogen Generation Through Indirect Biophotolysis in Batch Cultures of the Nonheterocystous Nitrogen-Fixing Cyanobacterium Plectonema boryanum"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What salinity thresholds trigger inhibition and define the peak yield for fermentative hydrogen generation from seaweed carbohydrates using Vibrio tritonius?",
+      "gold": [
+        "WOS000464918100006.bib"
+      ],
+      "gold_titles": [
+        "Understanding the NaCl-dependent behavior of hydrogen production of a marine bacterium, <i>Vibrio tritonius</i>"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What structural and electronic characteristics make alloys, dichalcogenides, layered double hydroxides, and single-atom catalysts effective for water electrolysis, and what outstanding issues must be resolved to advance this field?",
+      "gold": [
+        "WOS000818050700001.bib"
+      ],
+      "gold_titles": [
+        "High performance transition metal-based electrocatalysts for green hydrogen production"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What is the maximum efficiency improvement possible by substantially reducing the air flow at the oxygen electrode of a high-temperature solid oxide electrolyzer?",
+      "gold": [
+        "WOS000652293400001.bib"
+      ],
+      "gold_titles": [
+        "Airflow Management in Solid Oxide Electrolyzer (SOE) Operation: Performance Analysis"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How do single versus combined metal supplements influence metabolic pathway regulation and production costs in glucose-fed microbial systems for hydrogen generation?",
+      "gold": [
+        "WOS001013043300001.bib"
+      ],
+      "gold_titles": [
+        "Metal additives for boosting hydrogen production in anaerobic fermentation: Focus on the change of gene expression and cost analysis"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What electrical and thermal power inputs are required to produce one kilogram per second of hydrogen in a hydrogen chloride splitting system that maintains constant temperatures across its reaction stages?",
+      "gold": [
+        "WOS000497599200010.bib"
+      ],
+      "gold_titles": [
+        "Two-step hydrogen chloride cycle for sustainable hydrogen production: An energy and exergy assessment"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What hydrogen output and optimal air-fuel balance can be achieved by thermally processing ammonia inside a spark-ignition engine cylinder?",
+      "gold": [
+        "WOS001141646900001.bib"
+      ],
+      "gold_titles": [
+        "In-cylinder thermochemical fuel reforming for high efficiency in ammonia spark-ignited engines through hydrogen generation from fuel-rich operations"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What pretreatment and initial concentration maximize hydrogen yield from fresh cyanobacterial biomass when comparing dark fermentation by external microbes to endogenous pathways?",
+      "gold": [
+        "WOS000303952300021.bib"
+      ],
+      "gold_titles": [
+        "Comparison between heterofermentation and autofermentation in hydrogen production from <i>Arthrospira</i> (<i>Spirulina</i>) <i>platensis</i> wet biomass"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What is the relative contribution of structural material fabrication compared to fuel generation to the total water burden of hydrogen-powered vehicles?",
+      "gold": [
+        "WOS000790510400012.bib"
+      ],
+      "gold_titles": [
+        "Comparative water footprint assessment of fuel cell electric vehicles and compressed natural gas vehicles"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Which sludge conditioning and feedstock dosing strategy most rapidly establishes operational readiness and maximizes hydrogen yield in high-temperature anaerobic reactors?",
+      "gold": [
+        "WOS000896769000003.bib"
+      ],
+      "gold_titles": [
+        "Thermophilic dark fermentation fast start-up of hydrogen production with substrate concentration regulation and moderate pretreatment inoculum"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does hydrogen production per kilogram of biomass compare between pine pellets and peanut hull pellets at a pilot scale?",
+      "gold": [
+        "WOS000275841100015.bib"
+      ],
+      "gold_titles": [
+        "STEAM PYROLYSIS AND CATALYTIC STEAM REFORMING OF BIOMASS FOR HYDROGEN AND BIOCHAR PRODUCTION"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does incorporating dysprosium-doped yttrium orthovanadate into a titanium dioxide nanofiber network affect solar-driven hydrogen generation rates and charge separation efficiency?",
+      "gold": [
+        "WOS000504318900013.bib"
+      ],
+      "gold_titles": [
+        "Preparation of Dy<SUP>3+</SUP>-doped YVO4/TiO2 Composite Nanofibers with Three-dimensional Net-like Structure and Enhanced Photocatalytic Activity for Hydrogen Evolution"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How do the type, dosage, and preparation method of foreign elements influence the visible-light response and hydrogen evolution efficiency of titanium dioxide nanoparticles?",
+      "gold": [
+        "WOS000593743300001.bib"
+      ],
+      "gold_titles": [
+        "A review and recent advances in solar-to-hydrogen energy conversion based on photocatalytic water splitting over doped-TiO2 nanoparticles"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What is the enhancement factor for hydrogen evolution from a nickel ferrite-copper oxide mixture containing equal mass fractions of each oxide compared to the separate pure phases under visible light?",
+      "gold": [
+        "WOS000916931100003.bib"
+      ],
+      "gold_titles": [
+        "Study of NiFe2O4/Cu2O p-n heterojunctions for hydrogen production by photocatalytic water splitting with visible light"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What operating temperature and liquid residence time in a continuous three-phase bioreactor best optimizes the selective production of hydrogen gas versus diol compounds from waste glycerol?",
+      "gold": [
+        "WOS000684810200001.bib"
+      ],
+      "gold_titles": [
+        "One waste and two products: choosing the best operational temperature and hydraulic retention time to recover hydrogen or 1,3-propanediol from glycerol fermentation"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Which conditioning method, acid-only, thermal-only, or a dual acid-heat treatment, produces the maximum hydrogen yield from brewery wastewater sludge?",
+      "gold": [
+        "WOS000319232500076.bib"
+      ],
+      "gold_titles": [
+        "Effect of acid, heat and combined acid-heat pretreatments of anaerobic sludge on hydrogen production by anaerobic mixed cultures"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does dielectric-heating controlled crystal geometry of L-type aluminosilicates influence the thermodynamic hydrogen yield of rhodium-nickel dual catalysts during steam-free and oxidative biogas conversion?",
+      "gold": [
+        "WOS000331900100011.bib"
+      ],
+      "gold_titles": [
+        "Microwave Synthesis of LTL Zeolites with Tunable Size and Morphology: An Optimal Support for Metal-Catalyzed Hydrogen Production from Biogas Reforming Processes"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Can liquid effluents from microbial hydrogen fermentation be utilized as a sustainable substitute for phosphorus-solubilizing agricultural amendments?",
+      "gold": [
+        "WOS000322052800012.bib"
+      ],
+      "gold_titles": [
+        "Liquid waste from bio-hydrogen production - A commercially attractive alternative for phosphate solubilizing bio-fertilizer"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "According to a multi-criteria decision model incorporating expert judgments and fuzzy uncertainty, which hydrogen generation technique offers the greatest overall sustainability when decomposing marine sulfide sources?",
+      "gold": [
+        "WOS000740450500003.bib"
+      ],
+      "gold_titles": [
+        "Assessment of hydrogen production methods via integrated MCDM approach under uncertainty"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What cell voltage is required to sustain hydrogen generation at 100 milliamperes per square centimeter when the anodic oxygen release is replaced by the oxidative breakdown of simple sugars using a timber-derived porous carbon electrode?",
+      "gold": [
+        "WOS000985169100001.bib"
+      ],
+      "gold_titles": [
+        "Wood-Derived, Monolithic Chainmail Electrocatalyst for Biomass-Assisted Hydrogen Production"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "Which catalysts and synthesis methods yield the highest efficiency for transforming methane, methanol, ethanol, and liquid hydrocarbons into hydrogen through thermal and oxidative pathways for use in fuel cells?",
+      "gold": [
+        "WOS000417079400057.bib"
+      ],
+      "gold_titles": [
+        "Advances in reforming and partial oxidation of hydrocarbons for hydrogen production and fuel cell applications"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does the pH of the lactic acid medium affect the hydrogen generation rate of a ternary photocatalyst system composed of cadmium sulfide, molybdenum disulfide, and nickel sulfide?",
+      "gold": [
+        "WOS000458344900069.bib"
+      ],
+      "gold_titles": [
+        "Hydrothermal synthesis of MoS2-NiS/CdS with enhanced photocatalytic hydrogen production activity and stability"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What is the influence of increased renewable energy deployment on the pace of future hydrogen output under scenarios characterized by nuclear power limits, dedicated hydrogen strategies, and mandates to mix renewable gas with urban fuel networks?",
+      "gold": [
+        "WOS000908513900001.bib"
+      ],
+      "gold_titles": [
+        "Renewable Energy Pathways toward Accelerating Hydrogen Fuel Production: Evidence from Global Hydrogen Modeling"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How does a four-agitator configuration with a peripheral heating ring affect biohydrogen production yield and substrate uniformity?",
+      "gold": [
+        "WOS000292809900005.bib"
+      ],
+      "gold_titles": [
+        "Preliminary study for the simulation and coupling and hydrodynamic thermal profiles for hydrogen production biorreactor"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "By what factor does the hydrogen evolution activity increase when a nickel-based heterojunction partner is combined with graphitic carbon nitride?",
+      "gold": [
+        "WOS001007930700001.bib"
+      ],
+      "gold_titles": [
+        "Efficient photocatalytic H2 production of g-C3N4 using nickel (II) functional complex as promoter"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What palladium concentration maximizes hydrogen generation and oxygen evolution in a cerium-chromium oxide under field-assisted conditions, and what structural distortion induced by the dopant accounts for the enhanced reaction speeds?",
+      "gold": [
+        "WOS000431807100011.bib"
+      ],
+      "gold_titles": [
+        "Hydrogen Production by Water Decomposition through Redox Reaction of Ce-based Metal Oxide Systems in Electric Field"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What combination of electrolysis duration, applied potential, and catalyst loading yields the highest hydrogen output for Ni/Cu-coated nickel foam electrodes?",
+      "gold": [
+        "WOS000860742300005.bib"
+      ],
+      "gold_titles": [
+        "Prediction and optimization of the process of generating green hydrogen by electrocatalysis: A study using response surface methodology"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "How can China advance its green hydrogen sector to meet its long-term emission reduction goals despite current supply chain vulnerabilities and regulatory complexities?",
+      "gold": [
+        "WOS001028478800001.bib"
+      ],
+      "gold_titles": [
+        "Current Development Status, Policy Support and Promotion Path of China's Green Hydrogen Industries under the Target of Carbon Emission Peaking and Carbon Neutrality"
+      ]
+    },
+    {
+      "kind": "focused",
+      "question": "What initial ratio of two anaerobic bacteria maximizes hydrogen yield from biodiesel-derived glycerol without chemical reductants, and what fermentation byproducts are generated?",
+      "gold": [
+        "WOS000418915800004.bib"
+      ],
+      "gold_titles": [
+        "Hydrogen production from biodiesel industry waste by using a co-culture of <i>Enterobacter aerogenes</i> and <i>Clostridium butyricum</i>"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I’ve been looking at how we can boost biohydrogen yields by physically waking up the microbial inoculum, like using low-frequency sound waves on sewage sludge to kickstart their enzyme activity and cut down on startup delays. Then there’s the photocatalytic angle, where tweaking the nanoparticle size and surface chemistry of modified titanium dioxide changes how efficiently water-methanol mixtures split into gas under light. Meanwhile, I’m trying to figure out how to keep anaerobic digesters running smoothly when processing household food scraps, especially since the leftover liquid tends to accumulate inhibitors over time. If I wanted to maintain consistent gas output across multiple fermentation runs by reusing that leftover liquid, what exact thermal conditioning protocol actually stabilizes the microbial community without crashing the reactor?",
+      "gold": [
+        "WOS000593732600017.bib"
+      ],
+      "gold_titles": [
+        "Robust operation through effluent recycling for hydrogen production from the organic fraction of municipal solid waste"
+      ],
+      "distractors": [
+        "WOS000462617900001.bib",
+        "WOS000326056600104.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I’m currently weighing how various hydrogen generation strategies intersect, starting with those light-activated oxide-carbon composites that accelerate water splitting by minimizing charge recombination. At the same time, I’m looking at macro-scale designs that pair concentrated solar thermal systems with high-temperature electrochemical converters to balance production costs with grid storage needs. Shifting to chemical pathways, I’m also tracking how copper-based porous lattices and their thermally treated derivatives can rapidly break down borohydride solutions into clean gas. Since I’m focusing on that chemical route, which exact copper framework achieved the best methanol-enhanced gas release metrics in your findings?",
+      "gold": [
+        "WOS000501653500040.bib"
+      ],
+      "gold_titles": [
+        "Metal-organic frameworks (MOFs) and MOFs-derived CuO@C for hydrogen generation from sodium borohydride"
+      ],
+      "distractors": [
+        "WOS001063148500001.bib",
+        "WOS001039460300001.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I've been trying to reconcile how different hydrogen generation routes handle their feedstock limitations, starting with biological systems that rely on complex carbohydrate breakdown. Meanwhile, chemical reforming processes are being optimized to strip sulfur from natural gas while simultaneously capturing carbon as a liquid solvent rather than a greenhouse gas. I also keep returning to photocatalytic setups that use light to split alcohols, though finding the exact metal oxide balance to sustain peak activity remains a persistent challenge. With these engineering and material science approaches in mind, I need to understand the actual microbial mechanics driving the biological pathway. Specifically, how does the proportion of primary carbohydrate degraders relative to secondary gas-producing bacteria respond when we halve the hydraulic retention time in a continuous granular bed?",
+      "gold": [
+        "WOS000260755600040.bib"
+      ],
+      "gold_titles": [
+        "Microbial community structure of a starch-feeding fermentative hydrogen production reactor operated under different incubation conditions"
+      ],
+      "distractors": [
+        "WOS000252513100059.bib",
+        "WOS000414596300021.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I’ve been weighing up how the thermal decomposition of mixed plastics with transition metal additives compares to recent efforts in engineering light-responsive semiconductor composites for water splitting. Both pathways are intriguing, yet they still leave me wondering how we could reliably drive membrane electrolyzers without leaning on the conventional electrical grid. I keep circling back to the idea of coupling renewable electricity directly with proton-exchange systems, but I need concrete performance benchmarks to see if they are actually viable. What are the exact electrolysis efficiency figures and total hydrogen recovery rates when the setup runs directly off amorphous silicon solar panels?",
+      "gold": [
+        "WOS000275048400008.bib"
+      ],
+      "gold_titles": [
+        "Hydrogen Production by Water Electrolysis Using Photovoltaic Solar Module"
+      ],
+      "distractors": [
+        "WOS000498752900033.bib",
+        "WOS000289259500032.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I'm evaluating the cost and viability analysis for decarbonizing mobility, particularly how a national blend of generation technologies balances immediate fossil dependence against long-term renewable goals. That macro view brings me to biological conversion processes where specific bacterial strains are optimized in batch operations to extract hydrogen from agricultural residues while minimizing environmental impact. On the other hand, when considering direct solar-to-fuel conversion via chemical catalysts, the design of the molecular light absorber is paramount for driving the reduction reaction efficiently. I'm specifically interested in whether expanding the metal core from a single center to a paired structure enhances photon capture and boosts the overall yield of hydrogen evolution compared to single-site analogs. Could you clarify the exact ratio of absorption intensity increase observed for the dinuclear species relative to their mononuclear counterparts, and identify which dinuclear complex delivered the maximum turnover number in the photocatalytic hydrogen generation tests?",
+      "gold": [
+        "WOS000337074700037.bib"
+      ],
+      "gold_titles": [
+        "Dinuclear Iridium(III) Complexes Containing Bibenzimidazole and Their Application to Water Photoreduction"
+      ],
+      "distractors": [
+        "WOS000076113600009.bib",
+        "WOS000506575800075.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I have been tracking how wind and solar arrays can directly feed electrolytic cells, while also reviewing lab experiments that use external magnetic fields to speed up bubble release in parallel electrode setups. It seems that tweaking the plate spacing and electrolyte concentration really boosts output, yet scaling those gains still hinges on how well the power generation hardware aligns with the chemical reaction surfaces. That is exactly where the broader bottleneck sits: figuring out how to seamlessly pair diverse renewable generators with optimized catalytic layers to streamline the entire conversion chain. Based on that comprehensive review, which specific sunlight-driven system layouts does it propose for designing the physical interface between multi-source energy harvesters and electrochemical reaction sites?",
+      "gold": [
+        "WOS000875543500002.bib"
+      ],
+      "gold_titles": [
+        "Solar-Powered Environmentally Friendly Hydrogen Production: Advanced Technologies for Sunlight-Electricity-Hydrogen Nexus"
+      ],
+      "distractors": [
+        "WOS000917651700001.bib",
+        "WOS000379559100016.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I’m trying to map out several alternative energy pathways right now, starting with electrically driven water splitting at elevated temperatures and moving over to microbial fuel generation from agricultural runoff. One recent fermentation study showed that adding plant-derived catalysts to palm processing waste drastically shortens startup times and doubles gas output. Meanwhile, I’ve been reviewing electrochemical setups that use sunlight to synthesize oxidants directly at treatment facilities, avoiding the hazards of chemical transport. To tie these ideas together, I need a concrete benchmark for that elevated-temperature electrolysis approach, but I’m stuck on the economic threshold. What specific carbon dioxide pricing does your model indicate would make that method financially viable against standard natural gas reforming?",
+      "gold": [
+        "WOS000659384500005.bib"
+      ],
+      "gold_titles": [
+        "Economic and environmental competitiveness of high temperature electrolysis for hydrogen production"
+      ],
+      "distractors": [
+        "WOS000418317100011.bib",
+        "WOS000230257100004.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I've been reviewing the thermodynamic optimization of methanol reforming to ensure high purity hydrogen for fuel cells while minimizing byproducts, and I'm also looking at how mid-temperature solar setups can drive that same reforming process efficiently. It got me thinking about alternative feedstocks; specifically, how we might valorize waste streams from ammonia synthesis. I recall a study on using selective membranes to extract hydrogen from ammonia purge gases, where the reactor design and operating conditions seem critical for maximizing recovery and reducing emissions. I need to verify the operational details for that membrane approach: specifically, how do variations in temperature, pressure, and sweep gas flow influence the quantity of hydrogen passing through the membrane when treating ammonia plant exhaust?",
+      "gold": [
+        "WOS000269393900021.bib"
+      ],
+      "gold_titles": [
+        "Production of hydrogen from purge gases of ammonia plants in a catalytic hydrogen-permselective membrane reactor"
+      ],
+      "distractors": [
+        "WOS000286073500008.bib",
+        "WOS000471087500003.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I'm comparing strategies for valorizing crude glycerol from biodiesel manufacturing, noting that one assessment highlights a favorable energy balance for converting it into lipids, whereas producing hydrogen, biogas, or ethanol appears to consume more energy than it yields. Another perspective focuses on a chemical looping process within a membrane microreactor, where the model evaluates how increasing temperature impacts the permeate flux differently than the total hydrogen output, and suggests that enhancing membrane permeability and the surface-to-volume ratio could improve performance. Shifting to the biological route, there is a demonstration that a mixed bacterial population can ferment the raw substrate without being hindered by contaminants, utilizing a metabolic pathway that yields acetate and butyrate to generate hydrogen, but I need to confirm the precise details of that microbial system. What specific bacterial genus predominates in this enriched culture, and is ethanol observed as a co-product of the fermentation?",
+      "gold": [
+        "WOS000309024700019.bib"
+      ],
+      "gold_titles": [
+        "Bioconversion of crude glycerol from biodiesel production to hydrogen"
+      ],
+      "distractors": [
+        "WOS000394634900026.bib",
+        "WOS000371367300021.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I’ve been trying to connect how we can optimize solar-driven fuel generation by simply adjusting the physical behavior of solid particles in water, particularly when using glycerol waste as a reactant. That approach naturally overlaps with broader energy discussions, like the financial strategies for nuclear plants that treat hydrogen output as a flexible asset, allowing operators to pivot between gas sales and electricity generation based on shifting market prices. I’m also keeping in mind the recent developments with aluminum-based slurries that release gas through hydrolysis while leaving behind solid byproducts capable of storing industrial heat. Given all these different pathways to clean fuel, I need to clarify the exact formulation details for the photocatalytic setup. What specific proportion of the nanosphere to nanoplate morphologies in the binary silver oxide–titanium dioxide suspension maximizes colloidal stability and continuous hydrogen evolution without chemical additives?",
+      "gold": [
+        "WOS000538426900001.bib"
+      ],
+      "gold_titles": [
+        "Improving Glycerol Photoreforming Hydrogen Production Over Ag2O-TiO2 Catalysts by Enhanced Colloidal Dispersion Stability"
+      ],
+      "distractors": [
+        "WOS000260561400033.bib",
+        "WOS000987125300001.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I'm comparing hydrogen production strategies, ranging from a two-step biological treatment of whey byproduct to photochemical methods involving electron migration between titanium dioxide crystal forms and spin-assisted cells based on gold-doped zinc oxide nanorods under polarized light. These advanced material approaches focus on manipulating charge carriers and plasmonic effects to drive water splitting, whereas the biological route depends on optimizing operational parameters to convert waste into fuel gases. What substrate feeding intensity maximizes the hydrogen generation capacity per reactor volume in the primary stage while maintaining near-total organic removal across the entire setup?",
+      "gold": [
+        "WOS000343867900042.bib"
+      ],
+      "gold_titles": [
+        "Continuous Biohydrogen and Biomethane Production from Whey Permeate in a Two-Stage Fermentation Process"
+      ],
+      "distractors": [
+        "WOS000536133800004.bib",
+        "WOS000579967200013.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I’ve been reviewing how marine wave turbines paired with seawater electrolyzers could supply coastal regions with clean gas, while simultaneously analyzing truck-based logistics and storage trade-offs across Western European markets. That downstream infrastructure puzzle naturally leads me to consider upstream generation methods that bypass water splitting entirely, particularly those leveraging oleaginous microorganisms. By optimizing the mechanical and chemical breakdown of algal biomass before applying high-temperature thermal conversion, we might achieve a more energy-efficient pathway. Based on that approach, which exact pairing of alkaline thermal conditioning and ultrasonic solvent extraction delivers the maximum lipid yield for steam reforming?",
+      "gold": [
+        "WOS000472814700010.bib"
+      ],
+      "gold_titles": [
+        "Production of H2 by steam reforming in schizochytrium algae oil of cell disruption and extraction via ultrasound method"
+      ],
+      "distractors": [
+        "WOS000394842700096.bib",
+        "WOS000615056900001.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I’ve been comparing different pathways for clean fuel generation, starting with those composite semiconductor systems that simultaneously clean water and release gas under sunlight by efficiently separating charge carriers. That photochemical approach really parallels membrane-based electrolysis setups where ion-conducting barriers continuously strip away oxygen to bypass thermodynamic roadblocks. I’m also curious how enzymatic fermentation stacks up when we tweak the nutrient medium with simple carboxylates, since shifting the chemical balance appears to redirect metabolic electron flow. Specifically, how does adding exogenous formate at varying acidity levels change the glucose-to-hydrogen conversion efficiency and the intracellular concentration of hydrogen-carrying cofactors in Enterobacter aerogenes?",
+      "gold": [
+        "WOS000229640700005.bib"
+      ],
+      "gold_titles": [
+        "Effects of formate on fermentative hydrogen production by enterobacter aerogenes"
+      ],
+      "distractors": [
+        "WOS000456789000065.bib",
+        "WOS001050713600001.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I have been tracking how various hydrogen generation routes are being refined, starting with photoelectrochemical cells where coating semiconductors helps suppress charge recombination and boost solar conversion. I then looked at thermochemical cycles that rely on carbon catalysts derived from wood, where optimizing pore size and carbon purity directly improves the thermal breakdown of hydrogen iodide. Alongside these material optimizations, I am also weighing the practical challenges of deploying such facilities alongside nuclear reactors, particularly how to manage gas release risks. Given that intersection of chemistry and plant layout, how does the study mathematically model the combustion boundaries of escaping gas under different operational parameters to define the minimum safe separation distance?",
+      "gold": [
+        "WOS000556366300012.bib"
+      ],
+      "gold_titles": [
+        "Dispersion and behavior of hydrogen for the safety design of hydrogen production plant attached with nuclear power plant"
+      ],
+      "distractors": [
+        "WOS000300132100007.bib",
+        "WOS000288102700020.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I've been comparing the diverse approaches to hydrogen generation across engineering and biological domains, starting with a massive industrial setup that couples a pressurized nuclear reactor with a water-splitting chemical loop based on copper and chlorine, plus hardware to squeeze the output gas. That heavy machinery contrasts sharply with microbe-driven electrolysis platforms that aim to clean industrial waste streams while simultaneously generating value-added chemicals, though these biological processes still struggle with the transition to commercial deployment. On the biological side, there's also the fascinating work on single-celled algae that utilize internal enzymes to ferment carbon sources and release hydrogen gas when oxygen levels drop during dark periods. It's striking how the efficiency metrics vary so dramatically between these thermochemical, electrochemical, and enzymatic pathways, prompting me to look for concrete performance data on the most complex integrated design. What are the reported energy and exergy efficiencies for the integrated facility that combines the nuclear heat source with the copper-chlorine chemical loop and gas compression unit?",
+      "gold": [
+        "WOS000400227000048.bib"
+      ],
+      "gold_titles": [
+        "Performance analysis of a supercritical water-cooled nuclear reactor integrated with a combined cycle, a Cu-Cl thermochemical cycle and a hydrogen compression system"
+      ],
+      "distractors": [
+        "WOS000781827800001.bib",
+        "WOS000288863000004.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I’ve been looking into how engineered microorganisms are being scaled up for cleaner gas synthesis, as well as newer methods that use high-frequency electromagnetic fields to break apart frozen hydrocarbon structures at ambient pressure. It’s clear that regardless of the generation route, all these approaches struggle with the same core issue: matching variable output to shifting consumption patterns without wasting resources during off-peak hours. That brings me back to how we can best coordinate renewable-driven synthesis with existing thermal infrastructure while maintaining real-time operational efficiency. Specifically, how does the day-ahead optimization model balance computational tractability when scheduling thermal generators alongside fluctuating renewable sources, and what precise percentage decrease in total grid operating expenses does it report after validation on a standard test system?",
+      "gold": [
+        "WOS000594695600003.bib"
+      ],
+      "gold_titles": [
+        "Optimal dispatching of power grid integrating wind-hydrogen systems"
+      ],
+      "distractors": [
+        "WOS000325389900003.bib",
+        "WOS000311196800019.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I’ve been reviewing how different approaches are being taken to scale up hydrogen generation, from optimizing biological treatment processes to integrating hybrid renewable grids. One recent study looked at tweaking enzyme ratios in wastewater digesters to boost simultaneous hydrogen and ethanol yields, while another examined how coupling wind, solar, and thermal sources with fuel cells can stabilize output and cut emissions. Meanwhile, I’m trying to figure out which geographic and economic factors actually matter most when picking a location for a dedicated wind-powered electrolysis facility. Could you walk me through the specific multi-criteria weighting framework you used to balance technical, environmental, and proximity-to-infrastructure constraints for that siting analysis?",
+      "gold": [
+        "WOS000881251600013.bib"
+      ],
+      "gold_titles": [
+        "Locating wind farm for power and hydrogen production based on Geographic information system and multi-criteria decision making method: An application"
+      ],
+      "distractors": [
+        "WOS000584510900087.bib",
+        "WOS000989214900001.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I've been looking into how we can shift hydrogen manufacturing away from carbon-intensive routes, especially since current methods still rely heavily on fossil fuels and face significant emission concerns. There's a lot of discussion around using intermittent renewables like wind, but the output seems to fluctuate wildly depending on seasonal patterns and infrastructure details like turbine height, which complicates consistent supply. Meanwhile, electrolysis technologies are promising for scalability, yet they still need breakthroughs in materials and manufacturing to hit the cost targets required to compete with established methane-based processes. On the other hand, converting solid biomass resources offers a low-carbon alternative that could drastically reduce energy demand and greenhouse gas release compared to traditional coal gasification, provided we optimize processing conditions and logistics. Given these environmental advantages, what specific percentage reduction in greenhouse gas emissions does the biomass-to-hydrogen pathway achieve when compared to the coal-to-hydrogen process?",
+      "gold": [
+        "WOS000509791500094.bib"
+      ],
+      "gold_titles": [
+        "Life cycle energy consumption and GHG emissions of biomass-to-hydrogen process in comparison with coal-to-hydrogen process"
+      ],
+      "distractors": [
+        "WOS000267562100031.bib",
+        "WOS000502137600004.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I’ve been comparing different routes for generating clean fuel, starting with chemical catalysts that dissolve plant biomass in custom solvents at gentle temperatures. Then I shifted to microbial consortia that also break down woody materials but need careful tuning of nitrogen sources and alkaline additives to keep enzyme activity high. Moving further toward fully mixed communities operating at extreme heat, the natural thermodynamics clearly push the reaction toward gas production rather than methane. To make that high-temperature system viable, I need to trace back which operational tweaks were tested during the initial phase to stop methanogens from taking over while boosting the desired gas output. Specifically, what startup strategy or hydraulic modification did the study use to prevent methanogenesis in the reactor while maximizing the overall hydrogen yield?",
+      "gold": [
+        "WOS000237445000008.bib"
+      ],
+      "gold_titles": [
+        "Biohydrogen production in granular up-flow anaerobic sludge blanket (UASB) reactors with mixed cultures under hyper-thermophilic temperature (70°C)"
+      ],
+      "distractors": [
+        "WOS000634519900021.bib",
+        "WOS000275999800033.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I’ve been reviewing several alternative routes for clean fuel generation, starting with how light-driven catalysts loaded with precious metals can efficiently process biodiesel byproducts at the bench scale. I’ve also been looking at the thermal breakdown of hardy algae strains, which produces hydrogen-rich gas and valuable oils when subjected to specific catalytic heating regimes. While those laboratory and pilot approaches demonstrate impressive conversion rates, I’m trying to understand how to bridge the gap between experimental setups and grid-scale renewable integration. That brings my focus to large-scale power generation projects that aim to replace fossil-based manufacturing while stabilizing electricity networks. Given the technical and financial constraints of deploying wind energy in western China, what specific electrolyzer configurations and operating modes are required to achieve production costs below two dollars per kilogram while minimizing grid curtailment?",
+      "gold": [
+        "WOS000648577100003.bib"
+      ],
+      "gold_titles": [
+        "Economic and technological feasibility of using power-to-hydrogen technology under higher wind penetration in China"
+      ],
+      "distractors": [
+        "WOS000462079900041.bib",
+        "WOS000788984400001.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I have been reviewing how manipulating internal pressure in microbial electrolysis reactors can significantly boost hydrogen recovery while temporarily suppressing competing microbial pathways. That concept naturally leads me to consider solar-driven thermal reforming of biomass feedstocks, particularly how fine-tuning metal catalyst loading alters the delicate balance between localized heating and electron transfer. Both of those biological and photothermal routes are promising, yet they make me question how we should weigh their ecological footprints against industrial-scale nuclear systems that drive copper-chloro thermochemical water splitting cycles. While I understand that building the facilities and sourcing initial materials tends to dominate the overall burden more than daily operations do, I need to verify which specific segment actually carries the heaviest weight across standardized impact metrics. According to the CML-2001 framework, does the initial facility construction and nuclear component manufacturing outweigh the routine operational emissions in determining the total environmental footprint?",
+      "gold": [
+        "WOS000278693700005.bib"
+      ],
+      "gold_titles": [
+        "Life Cycle Assessment of Hydrogen Production Using Nuclear Energy: An Application Based on Thermochemical Water Splitting"
+      ],
+      "distractors": [
+        "WOS000445313200002.bib",
+        "WOS000799074000011.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I have been exploring how to redirect biological waste breakdown toward valuable acids and gaseous fuels rather than letting methanogens dominate the output. That biological angle actually complements recent studies on isolating robust microbial cultures from agricultural drainage to generate clean fuel under mild conditions. Yet when I shift my attention to purely thermal methods, a compelling economic debate emerges regarding whether heating natural gas inside a liquid metal bath can realistically compete with established reforming techniques when carbon pricing and solid residue markets are factored in. It makes me wonder how the financial viability of those high-temperature reactors would shift if we could drop the operating temperature significantly while maintaining decent feedstock conversion rates. Specifically, what is the precise carbon tax value in dollars per metric ton that would allow the standard high-temperature liquid metal configuration to match the production costs of conventional reforming?",
+      "gold": [
+        "WOS000405244800001.bib"
+      ],
+      "gold_titles": [
+        "Techno-Economic Analysis of Methane Pyrolysis in Molten Metals: Decarbonizing Natural Gas"
+      ],
+      "distractors": [
+        "WOS000405251500008.bib",
+        "WOS000618542600004.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I'm mulling over a collection of hydrogen generation strategies, starting with a biological route where household refuse undergoes sequential fermentation to yield both hydrogen and methane, with the second stage outperforming single-phase controls and the hydrogen output responding strongly to pH adjustments and methane sparging. The focus then shifts to inorganic semiconductors, specifically those nanoscale metal compounds that leverage size-dependent electronic behaviors to harvest sunlight for water splitting, alongside a composite material study that modifies a polymeric semiconductor with an oxide to degrade oxygenated organic pollutants while evolving gas through enhanced charge separation. The biological method seems to depend heavily on hydraulic timing and shifting ratios between different carboxylic acids to drive the pathway, whereas the photochemical approaches are optimizing surface sites and band structures to minimize electron-hole recombination. It's interesting how the operational parameters in the bio-reactor are so sensitive to the liquid phase composition and gas injection, while the catalytic systems rely on solid-state interface engineering to improve efficiency. I wonder if the gas-phase interventions in the biological system could offer insights for reactor design in other contexts, but I need to verify the specific performance metrics of that bio-process. Specifically, by what factor does sparging the hydrogen reactor with methane increase the hydrogen yield?",
+      "gold": [
+        "WOS000238788000014.bib"
+      ],
+      "gold_titles": [
+        "Hydrogen and methane production from household solid waste in the two-stage fermentation process"
+      ],
+      "distractors": [
+        "WOS000737791500001.bib",
+        "WOS000687479400001.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I’ve been comparing recent work on solid-state catalysts for releasing hydrogen from metal-hydride complexes with biological approaches that extract energy from industrial waste streams. It’s interesting how both fields are trying to optimize gas production, but one relies on inorganic surfaces while the other depends on microbial metabolism in low-value processing loops. That contrast makes me think about completely different anaerobic settings where sulfur and carbon cycles overlap, like waterlogged soils that naturally emit methylated sulfur gases alongside methane. I’m especially curious about which specific chemical precursors supply the carbon needed to transform dissolved sulfide into those airborne molecules, and how sudden nutrient runoff shifts those emission rates. Based on your sediment incubations, what specific organic precursors supplied the methyl groups, and which chemical pathway primarily drove sulfide conversion across the freshwater sites?",
+      "gold": [
+        "WOSA1997YK70900018.bib"
+      ],
+      "gold_titles": [
+        "Formation of dimethyl sulfide and methanethiol in anoxic freshwater sediments"
+      ],
+      "distractors": [
+        "WOS000490030000039.bib",
+        "WOS000362553400018.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I've been reviewing recent advances in solar-driven water splitting, particularly how coupling titanium dioxide with carbon nanomaterials or engineering ultrathin aluminum-based organic frameworks can drastically improve electron mobility and catalytic turnover. While those light-driven methods rely on semiconductor bandgaps and surface area expansion, I'm also considering how bio-electrochemical setups might offer a more sustainable pathway by leveraging microbial metabolism alongside modified electrode architectures. Combining conductive carbon networks with porous metal substrates in these microbial reactors seems promising for overcoming sluggish reaction kinetics and boosting gas output without relying on expensive noble metals. At an applied potential of 0.8 volts, what exact hydrogen yield per mole of acetate does this composite cathode achieve, and how does its energy conversion efficiency compare to conventional platinum-based systems under similar bias conditions?",
+      "gold": [
+        "WOS000372558500018.bib"
+      ],
+      "gold_titles": [
+        "Enhanced hydrogen production in microbial electrolysis cell with 3D self-assembly nickel foam-graphene cathode"
+      ],
+      "distractors": [
+        "WOS000771784000022.bib",
+        "WOS000403381300095.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I’ve been weighing how different pretreatment strategies impact the overall viability of converting plant matter into clean fuel, especially when comparing chemical washes that strip out metallic catalysts before thermal breakdown. It makes me wonder how those same sustainability metrics would shift if we prioritized biological pathways over thermal ones, since some assessments still rank gasification as the most balanced option across economic and environmental scales. Meanwhile, I keep coming back to the challenge of balancing nutrient profiles in fermentation feeds, since protein-heavy strains tend to stall hydrogen output unless we dilute them with carbohydrate-dense alternatives. If we blend high-protein microscopic strains with carbohydrate-rich seaweed after a mild acid soak, what specific carbon-to-nitrogen ratio maximizes the hydrogen output per unit of dry weight?",
+      "gold": [
+        "WOS000369727400016.bib"
+      ],
+      "gold_titles": [
+        "Production of hydrogen, ethanol and volatile fatty acids through co-fermentation of macro- and micro-algae"
+      ],
+      "distractors": [
+        "WOS000322562800007.bib",
+        "WOS000861163100001.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I’ve been tracing how grid-scale wind and solar farms are being paired with pumped storage and electrolyzers to absorb intermittent power and convert it into storable hydrogen. That large-scale integration strategy aligns well with recent reviews on membrane-based reactors, which focus on manipulating thermodynamic equilibrium and operating pressures to simultaneously boost hydrogen purity and reaction yields. Yet when I pivot to decentralized, portable power applications, the chemistry shifts entirely toward liquid hydrogen carriers like ammonia borane rather than traditional water splitting. I’m particularly interested in how heterogeneous transition metal alloys distributed across conductive porous substrates might solve the rapid degradation and sluggish kinetics that typically limit these chemical release systems. Specifically, how quickly does the nickel-cobalt nanorod structure on copper foam release gas during ammonia borane hydrolysis, how well does it retain its morphology and activity over multiple runs, and what role does a highly alkaline environment play in amplifying the output?",
+      "gold": [
+        "WOS000631388900001.bib"
+      ],
+      "gold_titles": [
+        "NiCo Nanorod Array Supported on Copper Foam as a High-Performance Catalyst for Hydrogen Production From Ammonia Borane"
+      ],
+      "distractors": [
+        "WOS001114587500001.bib",
+        "WOS001088597900001.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I’ve been weighing the thermodynamic limits of multi-stage fermentation setups where recycling reactor outputs and reclaiming waste heat can meaningfully improve overall energy recovery. At the same time, I am tracking how adjusting trace metals like molybdenum and iron directly modulates nitrogenase and hydrogenase gene activity in phototrophic bacteria. Alongside those aqueous approaches, I am currently evaluating how thermal conditioning of plant",
+      "gold": [
+        "WOS000227745700014.bib"
+      ],
+      "gold_titles": [
+        "Factors affecting hydrogen production from food wastes by <i>Clostridium</i>-rich composts"
+      ],
+      "distractors": [
+        "WOS000285234300010.bib",
+        "WOS000240524800019.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I’ve been reviewing recent advances in clean gas generation, ranging from catalytic membrane reactors that operate at significantly reduced temperatures to boost methane conversion, to microbial systems that simultaneously detoxify agricultural runoff while generating fuel. While these biological and thermochemical pathways offer impressive sustainability metrics, they all depend on tightly integrated process networks where a single equipment failure can quickly cascade into major operational hazards. That reality makes predictive safety monitoring and fault isolation just as critical as optimizing the core reaction chemistry. I’m curious how modern computational frameworks leverage evolutionary algorithms and neural architectures to uncover hidden variable dependencies and diagnose system breakdowns without relying on extensive physical trial-and-error. Specifically, how does this graph-based fault mapping technique perform when identifying non-linear process interactions within a simulated thermochemical water-splitting facility compared to conventional diagnostic tools?",
+      "gold": [
+        "WOS000346541600024.bib"
+      ],
+      "gold_titles": [
+        "Simulation-based fault propagation analysis-Application on hydrogen production plant"
+      ],
+      "distractors": [
+        "WOS000441854300038.bib",
+        "WOS000496193800007.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I've been reviewing the landscape of hydrogen generation methods, ranging from sustainable reactor designs utilizing zinc indium sulfide with hole-consuming additives to biological processes where nitrate is employed to suppress the activity of methane-producing microbes in aggregated microbial communities. These diverse approaches underscore the critical need to control charge behavior and product outcomes, which brings me to the engineering of complex semiconductor interfaces for light-driven fuel synthesis. I am particularly interested in the architecture that combines rhenium disulfide and molybdenum disulfide with cadmium sulfide to achieve superior catalytic performance. My current focus is determining how the inclusion of rhenium influences the charge transport route within this specific ternary assembly to drive the remarkable boost in hydrogen output. What specific mechanism governs the role of rhenium in establishing the bidirectional electron transfer network within the MoS2/ReS2@CdS heterostructure that leads to this enhanced photocatalytic efficiency?",
+      "gold": [
+        "WOS000709950700004.bib"
+      ],
+      "gold_titles": [
+        "Promotion effect of rhenium on MoS2/ReS2@CdS nanostructures for photocatalytic hydrogen production"
+      ],
+      "distractors": [
+        "WOS000869357900001.bib",
+        "WOS000236636800031.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I've been comparing strategies for compact hydrogen generation, particularly how different methods handle thermal constraints and reactant selectivity across various fuel sources. There's a thermodynamic assessment of steam-based conversion for methanol, ethanol, and methane intended for integrated transport applications that maps out distinct temperature windows where the efficiency of recovering waste energy peaks for each compound. In contrast, other research explores driving methanol processing at significantly reduced temperatures by coupling electrocatalysis with the reforming step, which accelerates dehydrogenation and water-gas shift dynamics while maintaining high product purity without intense heating. Meanwhile, catalyst engineering efforts are focusing on optimizing surface adsorption characteristics for hydrogen evolution in alkaline environments, sometimes integrating urea oxidation to balance the electrochemical circuit. It makes me think about whether the efficiency boundaries identified for the thermal processing of alcohols could serve as benchmarks for evaluating the thermal management required in these hybrid systems, or if the catalyst modifications used for urea splitting might influence the intermediate species distribution during the low-temperature alcohol conversion. What are the specific temperature values identified in the analysis where the system attains peak efficiency for steam reforming methanol, ethanol, and methane?",
+      "gold": [
+        "WOS000684993200011.bib"
+      ],
+      "gold_titles": [
+        "Thermochemical waste-heat recuperation as on-board hydrogen production technology"
+      ],
+      "distractors": [
+        "WOS001141284500001.bib",
+        "WOS001074605900001.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I’ve been weighing how hydrogen fuel cell buses stack up against battery and diesel options in terms of lifecycle emissions and overall energy costs, which naturally makes me think about decarbonizing heavy manufacturing too. If we shift steel production away from coal and toward direct reduction using green hydrogen, the entire regional supply chain structure will need to adapt to new energy inputs. Both transportation and industrial applications ultimately depend on scalable hydrogen generation that avoids costly air separation or direct fossil combustion. I’m especially drawn to reactor designs that use solid materials to shuttle oxygen between cycles, keeping the thermal load balanced without external heating. Since that approach relies heavily on the redox properties of the solid medium, which specific carrier materials currently show the most promising combination of reduction speed, structural resilience, and environmental safety?",
+      "gold": [
+        "WOS000377328700006.bib"
+      ],
+      "gold_titles": [
+        "Recent developments in oxygen carrier materials for hydrogen production via chemical looping processes"
+      ],
+      "distractors": [
+        "WOS000683351800013.bib",
+        "WOS000967704800001.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I’ve been weighing how engineered semiconductor composites enhance light-driven hydrogen evolution against machine-learning approaches that optimize multi-product fuel cell plants for cost and resource yield. Those materials and system-level studies really highlight a gap in how we track the actual upstream material flows for alternative biomass conversion routes. I’m trying to piece together how researchers build out the baseline accounting for intermediate processing steps before they can properly evaluate the environmental trade-offs. Could you explain whether the syngas purification stage uses simulated process data or lab measurements, and how the catalyst synthesis emissions were calculated for the overall inventory?",
+      "gold": [
+        "WOS000689356400012.bib"
+      ],
+      "gold_titles": [
+        "Life cycle inventory data for power production from sugarcane press-mud"
+      ],
+      "distractors": [
+        "WOS000502040600107.bib",
+        "WOS001041142900001.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I've been reviewing how molecular dynamics can predict hydrogen yields from modified bacterial enzymes, which seems like a promising angle for sustainable fuel generation compared to the off-grid fuel cell chargers designed to support stranded electric vehicles. However, my current focus remains on the aviation sector, where the challenge shifts from biological synthesis or ground-based assistance to evaluating the broader feasibility of zero-emission flight. I need to dig into the technical strategies that address the unique hurdles of using this gas in the sky, particularly regarding how it is produced, stored, and integrated into the plane's architecture. Based on the analysis of these feasibility aspects, what specific propulsion layouts and airframe designs are examined to determine if hydrogen is a viable energy carrier for near-future air transport?",
+      "gold": [
+        "WOS000320688900004.bib"
+      ],
+      "gold_titles": [
+        "Hydrogen powered aircraft : The future of air transport"
+      ],
+      "distractors": [
+        "WOS000922287800001.bib",
+        "WOS000271136300010.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I’ve been trying to reconcile how we optimize thermal thresholds for thermochemical cycles using modified iron compounds with the operational trade-offs of alkaline electrolysis systems powered by renewables. It’s striking how both approaches ultimately hinge on managing diffusion barriers to improve gas output, which naturally leads me to consider similar transport limitations in severe accident scenarios. When molten reactor core material suddenly contacts residual coolant at the bottom of a containment vessel, the competing pathways for oxygen penetration and vapor-phase escape become the dominant factors controlling gas generation. I’m wondering how the current computational frameworks handle those competing transport mechanisms across different melt pool configurations. Based on the latest simulations, do the existing models establish a definitive maximum yield for additional core oxidation within the lower head, or does the uncertainty remain too broad to set a firm ceiling?",
+      "gold": [
+        "WOSA1992LL87600003.bib"
+      ],
+      "gold_titles": [
+        "A REVIEW OF HYDROGEN-PRODUCTION DURING MELT/WATER INTERACTION IN LWRS"
+      ],
+      "distractors": [
+        "WOS000696636800002.bib",
+        "WOS000261115300015.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I’ve been comparing biological routes that convert agricultural waste into fuel despite high ammonia levels with analytical models that track gaseous impurities across reforming and electrolysis setups. Those purity tracking methods seem just as critical as the production side, especially when ensuring the final gas meets strict fuel cell standards. At the same time, I’m trying to wrap my head around how high-temperature thermochemical loops manage their internal energy losses, particularly when breaking down sulfuric acid in a closed cycle. Based on the simulation results, what specific impact does raising the operating pressure have on the exergy efficiency of that acid decomposition reactor?",
+      "gold": [
+        "WOS000330921800006.bib"
+      ],
+      "gold_titles": [
+        "Exergy analysis of a simulation of the sulfuric acid decomposition process of the SI cycle for nuclear hydrogen production"
+      ],
+      "distractors": [
+        "WOS000438005200022.bib",
+        "WOS000659193500006.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I’ve been reviewing how supercritical water reactors handle food waste, particularly how adding simple carbonates really improves efficiency while suppressing carbon monoxide. That naturally leads me to the microgravity propulsion experiments where we’re using capillary vanes and centrifugal forces to manage aluminum-water reactions, even though stray metal particles keep interfering with gas collection. It’s making me pivot toward solid feedstock processing in pressurized fluidized systems, where we’re swapping out different nickel-based supports to see how they handle steam-driven breakdowns. Given all these approaches, which specific nickel-loaded material actually achieves the highest tar elimination and char breakdown rates while maximizing hydrogen yields?",
+      "gold": [
+        "WOS000452200900005.bib"
+      ],
+      "gold_titles": [
+        "Experimental Study on Catalytic Biomass Gasification in a Bubbling Fluidized Bed"
+      ],
+      "distractors": [
+        "WOS000417739700007.bib",
+        "WOS000381320400023.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I've been reviewing how researchers handle carbon buildup when reforming heavy bio-oil derivatives, and how regenerating deactivated nickel catalysts keeps the process viable. I'm also looking at thermally coupled systems that use selective membranes to pull dimethyl ether and methyl formate out of methanol feeds, which significantly boosts overall conversion. When we strip away the co-product separation and catalyst cycling to focus purely on methanol steam reforming, the real bottleneck becomes managing heat transfer and internal flow patterns. Given that, what operating strategy should be followed to balance hydrogen yield against production rate, and how exactly does the baffled internal architecture improve temperature uniformity and reactant contact time compared to a standard tubular design?",
+      "gold": [
+        "WOS001024610200001.bib"
+      ],
+      "gold_titles": [
+        "Baffled-type thermochemical reactor for high-efficient hydrogen production by methanol steam reforming"
+      ],
+      "distractors": [
+        "WOS000288772900012.bib",
+        "WOS000366225700059.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I’ve been weighing the trade-offs in current research, like how those inexpensive iron-carbon nanorod electrodes are lowering electrical demands for microbial electrolysis, and how adjusted recirculation rates are being used to prevent ammonia toxicity in two-stage food waste digesters. While those biological pathways are clever, they still face scalability limits that push me to look at purely thermochemical alternatives. Coupling direct steam splitting with advanced fission reactors could theoretically sidestep organic feedstock bottlenecks and achieve much higher thermal efficiencies. I just need to verify whether the ceramic tube prototypes actually maintain stable performance under those extreme conditions. Specifically, what hourly gas output in standard liters did your ceramic membrane stack generate when operating at eight hundred degrees Celsius?",
+      "gold": [
+        "WOS000254598500061.bib"
+      ],
+      "gold_titles": [
+        "Hydrogen production by high temperature electrolysis with nuclear reactor"
+      ],
+      "distractors": [
+        "WOS000318050400015.bib",
+        "WOS000343781100004.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I’ve been tracing how various organic residues and clean power sources might feed into sustainable gas generation, starting with analyses of regional microbial pools in palm mill wastewater to see which native cultures naturally steer metabolism toward butyrate accumulation. That biological focus naturally leads to the larger conversation about utility-scale water splitting, particularly data highlighting how photovoltaic arrays can beat wind turbines on both throughput and price in arid zones. At the same time, I’m weighing how well we could close the loop by tackling cellulose-rich municipal refuse through a paired biological-electrical route. I’m trying to pin down which precise input levels actually maximize the gas output in those hybrid setups before we scale anything up. What was the exact starting biomass loading that drove the peak hydrogen rates when breaking down acid-digested paper pulp in that two-step fermentation and electrolysis process?",
+      "gold": [
+        "WOS000376695800035.bib"
+      ],
+      "gold_titles": [
+        "Hydrogen gas production from waste paper by sequential dark fermentation and electrohydrolysis"
+      ],
+      "distractors": [
+        "WOS000754310700001.bib",
+        "WOS001114029100001.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I’ve been comparing how different research groups are tackling sustainable fuel synthesis lately. One team showed that decorating sulfide heterostructures with zero-dimensional phosphorus nanocrystals can dramatically speed up electron transfer for visible-light water splitting. Another analysis takes a macroeconomic view, weighing the life-cycle expenses and emission reductions across a dozen generation methods, and concludes that while hydrocarbon pyrolysis offers a cheap short-term route, its climate benefits depend entirely on controlling upstream leaks and solid carbon markets. I’m also fascinated by high-temperature thermal systems that use concentrated sunlight to drive multi-step redox cycles, since they bypass electricity altogether and can simultaneously harvest nanocarbon byproducts. Given the reactor design challenges, how does the numerical modeling in your proposed solar setup specifically account for and mitigate the buildup of carbon deposits on the transparent aperture during continuous hydrocarbon decomposition?",
+      "gold": [
+        "WOS000278655800008.bib"
+      ],
+      "gold_titles": [
+        "Cleaner pathways of hydrogen, carbon nano-materials and metals production via solar thermal processing"
+      ],
+      "distractors": [
+        "WOS000518579100009.bib",
+        "WOS000457194500003.bib"
+      ]
+    },
+    {
+      "kind": "rambling",
+      "question": "I’ve been comparing recent approaches to clean gas generation, starting with how engineered transition-metal oxide interfaces are being tuned to accelerate water splitting in alkaline solutions. That electrochemical strategy stands in stark contrast to the biological pathways I’m also tracking, where researchers are optimizing light-driven reactors by carefully dosing specific amino acids and leveraging microbial mats to redirect cellular energy toward gas output. At the same time, I’m trying to piece together how dark fermentation processes depend heavily on the initial microbial source and whether keeping acidity steady throughout the run actually matters more than just setting it at the start. Since those methodological details aren’t covered elsewhere in my notes, could you clarify whether maintaining a constant acidity level during the entire fermentation cycle is strictly required for high yields, and which specific bacterial genera were identified as either promoting or inhibiting the reaction?",
+      "gold": [
+        "WOS000234868600007.bib"
+      ],
+      "gold_titles": [
+        "Effect of inoculum conditioning on hydrogen fermentation and pH effect on bacterial community relevant to hydrogen production"
+      ],
+      "distractors": [
+        "WOS000541071900001.bib",
+        "WOS000466249700056.bib"
+      ]
     }
   ]
 }

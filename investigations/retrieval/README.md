@@ -1160,6 +1160,46 @@ matters, so this is a candidate cleanly killed rather than one to chase. (The tw
 at once — granularity and merging — so nothing here attributes the MRR shift to either alone; it did not
 need attributing, because it does not cash.)
 
+###### Retracted at n=293: `K=10` was noise, and the growth caught it before it shipped
+
+The hydrogen set was grown from 99 to 293 questions the same afternoon (`make_questions.py --append`), and
+re-swept. **The `K` finding does not survive.**
+
+| | n=99 | n=293 |
+|---|---|---|
+| `K=60 → K=10` at `w=0.5`, gold within top 20 | 4 gained, 1 lost | **11 gained, 10 lost** |
+| p | 0.375 | **1.000** |
+
+At n=99 it read as a consistent direction across three corpora, 9:2 pooled at p=0.065 — suggestive enough
+that it was written up as the leading candidate to ship. At triple the sample it is a coin flip. Nothing
+about the smaller sample was wrong; it simply could not tell, and the direction it happened to show was
+the direction that made a story.
+
+**This is the growth paying for itself within the hour**, and it is worth recording as the concrete return
+on a boring instrument change: the alternative was shipping a constant on the strength of a 9:2 split, and
+then having no idea why nothing improved.
+
+**What the larger sample says instead, and it is more useful.** Read across the `K` columns at `w=0.5`,
+recall@20 runs 72.7 / 73.0 / 73.4 / 73.7 / 73.0 / 70.0 for `K` = 1, 3, 10, 30, 60, 120 — flat until it
+falls off at 120. Read down the weight column at `K=60`, it runs 60.8 / 63.1 / 65.9 / 68.9 / 71.3 / **73.0**
+/ 72.7 / 71.3 / 68.6 / 66.6 / 65.2 for `w` = 0.0 … 1.0. So:
+
+- **`K` barely matters for recall.** It moves MRR and leaves membership of the top 20 alone.
+- **The weight matters a great deal, and `0.5` is already right on this corpus** — a clean inverted U,
+  peaking at the shipped value, with the single-arm ends **12.2 and 7.8 points worse**. That is stronger
+  evidence for fusion than n=99 gave, and it means the *default* needs no change here.
+
+**And a pattern across the day's two candidate changes.** Document-level fusion moved MRR by +0.03 without
+moving recall@20; smaller `K` does the same. MRR is a head-weighted mean, so it registers reordering within
+the head — and we ship `k=50`, where what reaches the model is *membership*, not order within it. **On this
+harness, an MRR-only improvement is not an improvement.** Worth applying to the next candidate before
+running the paired test, not after.
+
+What is *not* retracted is the corpus-dependence of the weight, which rests on banichuk and fiction — both
+still at n=99, and both due the same treatment before anything is concluded from them. The knob itself
+stands on the shape above regardless: the ends of that curve are 8 to 12 points from the peak, so a user
+whose corpus wants a different weight has a lot to gain, and no measured signal picks it for them.
+
 **A caveat that applies to the whole grid, stated before it can be forgotten.** The winning *cell* was
 chosen on the same questions it is scored on, which is exactly how p75-of-probes and the 0.45 constant went
 wrong earlier in this investigation. What is defensible here is the two comparisons named as hypotheses
