@@ -3575,23 +3575,27 @@ and a commit that is being repeatedly deferred could say so.
 Not a correctness bug and not on the 0.2.8 path, hence deferred. Worth doing before anyone else points a
 large corpus at this and kills it at the four-minute mark, concluding it is broken.
 
-**Second, separable question in the same code: the ingest pool's width is a CPU default doing disk work.**
+**Second, separable question in the same code: the ingest pool's concurrency is nominal.**
 `hybridir.setup` builds a bare `concurrent.futures.ThreadPoolExecutor()` when the caller passes none, so
-the width is Python's default `min(32, cpu_count + 4)` — 32 on this machine. Bounded, then, and not the
-1268-way fan-out it looked like from the thread count (the rest are ChromaDB and tokenizer pools).
+the width is Python's default `min(cpu_count + 4, 32)` — 32 on this machine. `py-spy dump` shows every
+one of those workers inside `pypdf.extract_text`.
 
-`py-spy dump` shows every one of those workers inside `pypdf.extract_text`, so ingest is genuinely
-CPU-bound and 32 is a defensible number *for the CPU part*. What it is not tuned for is the disk: 32
-workers each streaming a different PDF is 32 interleaved sequential reads, which is the access pattern a
-spinning disk handles worst. On the SSD this was measured on it costs nothing; on an HDD it would be
-much slower than reading the same files one at a time, and HDDs are not going away while SSD prices are
-where they are.
+**`pypdf` is pure Python — zero compiled extensions (6.14.2, checked).** So it holds the GIL for the
+whole extraction, and 32 workers are 32 threads taking turns. Measured on the 1268-PDF corpus: **109%
+CPU across 148 threads**, i.e. one core's worth on a 28-core machine, and about 33 minutes to extract
+what ~1.5 s/document serially predicts. The pool buys nothing here.
 
-Wanted, if anyone picks this up: decide the ingest width deliberately rather than inheriting it, and
-consider making it configurable. Worth measuring on an actual HDD before choosing a number — the premise
-above is sound but the size of the effect is not measured, and a guessed constant is how the current one
-got here.
+This also retires the concern that prompted this note — that 32 concurrent reads would thrash a spinning
+disk. They cannot: the GIL serializes them long before they reach the disk together. The defect is the
+opposite of the one suspected.
 
-Raised by Juha (2026-08-06), on seeing that the concurrency was unbounded-looking.
+The fix is a `ProcessPoolExecutor` for the extraction step specifically, which is what a pure-Python
+CPU-bound stage needs. Two things to weigh first: the extracted text has to cross a process boundary
+(cheap — it is a string, and the alternative is 30 minutes), and `hybridir` currently takes one executor
+for everything, so the ingest stage would need its own rather than sharing. Worth measuring the
+achievable speedup on a subset before committing to the restructuring; a 28-core machine suggests a lot
+of headroom, but pypdf's per-document cost varies enormously with the PDF.
+
+Raised by Juha (2026-08-06), asking why the indexer was still on its first document after half an hour.
 
 Discovered while indexing the arXiv AI fulltext corpus for the retrieval investigation (2026-08-06).
