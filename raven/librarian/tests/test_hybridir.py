@@ -222,6 +222,25 @@ class TestResultStructure:
         assert len(report.vector_results) == len(report.vector_distances)
         assert len(results) > 0
 
+    def test_an_empty_index_still_returns_the_pair_when_extra_info_was_asked_for(self, tmp_path):
+        # An empty index is an ordinary state, not an error: `HybridIR` creates its datastore directory
+        # rather than rejecting a path that does not exist yet, so anyone who mistypes a `--db-dir` gets
+        # one of these. Returning a bare list here would raise `ValueError: not enough values to unpack`
+        # at the call site — a report about the caller's tuple, naming nothing about the empty corpus.
+        empty = hybridir.HybridIR(datastore_base_dir=tmp_path / "empty",
+                                  embedding_model_name="sentence-transformers/multi-qa-mpnet-base-cos-v1",
+                                  local_model_loader_fallback=True)
+        assert not empty.documents  # guard: if this ever indexes something, the test stops testing
+
+        results, report = empty.query("ai agents", k=5, return_extra_info=True)
+        assert results == []
+        assert report.keyword_results == []
+        assert report.vector_results == []
+        assert len(report.per_query) == 1  # the whole query, `multi_query` being off
+        assert report.per_query[0].candidate_keyword_scores == []
+
+        assert empty.query("ai agents", k=5) == []  # and the plain shape is unchanged
+
     def test_extra_info_shape(self, retriever):
         results, report = retriever.query("ai agents", k=5, return_extra_info=True)
         assert isinstance(results, list)

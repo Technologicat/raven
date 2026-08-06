@@ -1126,6 +1126,20 @@ class HybridIR:
         with self.datastore_lock:
             if not self.documents:
                 logger.info("HybridIR.query: No documents in index, returning empty result.")
+                # Shape-preserving: a caller that asked for extra info gets the pair it unpacks, with an
+                # empty report, rather than a bare list that raises at the unpacking site. An empty index
+                # is an ordinary state — a fresh datastore, or a `--db-dir` pointed at a directory that
+                # does not exist yet, which `HybridIR` creates rather than rejects — so the caller most
+                # likely to meet this is one that has not noticed anything is wrong yet.
+                if return_extra_info:
+                    return [], envcls(keyword_results=[],
+                                      keyword_scores=[],
+                                      vector_results=[],
+                                      vector_distances=[],
+                                      per_query=[envcls(text=text,
+                                                        candidate_keyword_scores=[],
+                                                        candidate_vector_distances=[])
+                                                 for text in query_texts])
                 return []
             if self._keyword_retriever is None:
                 assert False  # we should have `self._keyword_retriever` as soon as we have at least one document
