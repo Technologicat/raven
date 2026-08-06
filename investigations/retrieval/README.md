@@ -572,6 +572,31 @@ to hydrogen-production engineering than fan fiction is — would explain it equa
 confounded on the present evidence and the mechanism is *not* established. What would separate them: score
 the generic questions and the specific ones separately against an unrelated index.
 
+## Corpus state: the arXiv fulltext index (as of 2026-08-06 evening)
+
+**A build was in progress when the session ended** — `raven-indexer` on `electra`, indexing
+`00_stuff/datasets/ai_papers/fulltext` into `~/.config/raven/llmclient/rag_index_arxiv_fulltext`, at
+894/1262 documents and 112182 chunks after ~58 minutes. It runs unattended; it does not need a session.
+
+Check these before trusting it for the fulltext-vs-abstract comparison:
+
+- **It reached 1262 documents**, not fewer. The failure mode this build already hit once was
+  `raven-indexer` reporting success after a single document (fixed, and pinned by a regression test) —
+  the tell was the ChromaDB chunk count stuck at 42.
+- **Which 6 of the 1268 dropped out.** The corpus was assembled with 1268 symlinks and the indexer is
+  working through 1262, so six documents failed extraction or came back empty. They are unlikely to
+  matter for the comparison, but an unexplained shortfall in a corpus built specifically to be
+  document-for-document comparable is worth one grep of the log before it is quoted in a result.
+- **Expect ~150000 chunks**, from ~118 chunks per document — the abstract side is 2596, so the fulltext
+  corpus is about 58x larger and `k=200` sits at 0.13% of it, comfortably inside the regime where
+  recall@k means something.
+
+**Naming inconsistency, deliberately not fixed yet.** The other corpora keep their documents at
+`~/.config/raven/llmclient/documents_<name>` beside their index; this one's documents live in the repo's
+`00_stuff` tree with only the index in the standard place. Moving them would strand every path already
+committed to the index, so it costs a full re-index (~70 minutes). Worth doing when the corpus is next
+rebuilt for another reason, not on its own account.
+
 ## The recall curve, 2026-08-06: the reranker is cleared, and depth turns out not to be a truncation
 
 One sweep per corpus at `k=200`, read with `recall_curve.py`. The design consequences live in brief 09;
