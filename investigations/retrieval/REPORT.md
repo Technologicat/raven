@@ -461,10 +461,11 @@ also the only route to broad-question retrieval on the collection sizes Raven is
 
 Stage 3 says of the broad-question case: *"That is not a retrieval problem. The selection was already made,
 by a person, on the map. Ranking two hundred hand-picked documents and keeping the top five would discard
-ninety percent of what the user deliberately chose."* That was reasoned from the workflow in 2024. Tonight's
-measurement reaches the same place from the retrieval side — a broad question over 12k documents retrieves
-24.3% of its relevant set at k=200, and the next doubling is unaffordable on prefill. Two independent routes
-to "stop trying to retrieve this".
+ninety percent of what the user deliberately chose."* The document is from this week, but the stage 3 idea
+dates to 2024 and the reasoning is from the workflow rather than from any measurement. Tonight's result
+reaches the same place from the retrieval side — a broad question over 12k documents retrieves 24.3% of its
+relevant set at k=200, and the next doubling is unaffordable on prefill. Two independent routes to "stop
+trying to retrieve this".
 
 So there are two answers to the broad question, and they are complements rather than rivals: **stratified
 retrieval** (needs clustering) for when the user has not selected anything, and **map-and-reduce over a
@@ -486,10 +487,36 @@ Worth stating together, because it changes the cost case rather than merely addi
 4. **Token budget** — summaries instead of full text at high `k`, which is directly valuable now that
    prefill is the measured constraint on `k`.
 
-The blocker is the same in every case and has a known shape: summarizing a whole corpus at import is
-hours-to-days and was disqualified for that reason, while summarizing **lazily, over what is actually looked
-at**, bounds the cost by usage. That is what stage 3 needs anyway, so the four uses share one piece of work
-and one fix.
+**But "summarize lazily" does not save the retrieval cases, and the numbers are now measured** (Juha,
+2026-08-06). Tonight's question generation ran at **27 s per item** with an *abstract-sized* prompt and a
+short output. A fulltext paper is ~95k characters — roughly 24k tokens, so ~5 s of prefill before any
+generation — putting a real summary at 15–20 s per document. Therefore:
+
+| case | documents | lazy cost | verdict |
+|---|---|---|---|
+| retrieval, per query at `k=50` | 50 | **12–17 min** | broken, not slow |
+| stage 3, per selection | ~200 | ~1 hour | **fine** — it is already designed as a batch job with progress, cancellation and resumption |
+
+So the four uses split cleanly. **Stage 3 can be lazy; retrieval cannot.** Anything a query touches has to
+be precomputed, which puts summarization back where it was disqualified — an indexing step over the whole
+corpus — and makes *speed* the deliverable rather than an optimization to do afterwards.
+
+Where the speed has to come from, since the constraint is generation throughput rather than prefill:
+
+- **A small dedicated model, not the chat LLM.** The summarizer does not need a 35B MoE. This is the
+  `raven-server` three-layer pattern's natural shape — a served module with its own model, sized for the
+  job.
+- **Batching, i.e. concurrency > 1.** Single-stream generation is the whole problem; throughput scales
+  with batch size on the same card. The chat path runs at concurrency 1 by necessity, an indexing pass
+  does not.
+- **Skip what is already a summary.** An abstract *is* one — so the abstract corpora need no summarization
+  at all, and the scope collapses to fulltext. For a scientific PDF there is a stronger shortcut still:
+  the abstract is *inside the document*, so "summarize this paper" is often "extract its abstract", which
+  is nearly free and better than a generated summary.
+- **Cap the output.** Summary length is a setting; generation time is linear in it.
+
+That last pair matters most for the corpus sizes here: it is the difference between summarizing 12k
+documents and summarizing the ~1.3k that actually need it.
 
 **One caveat on the metric, which cuts against the synthesis numbers specifically.** Set recall asks
 whether *these four* documents came back, and a broad question over a large corpus has many documents that
