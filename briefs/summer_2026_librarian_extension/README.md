@@ -189,6 +189,10 @@ Still open, in the order they are expected to be done:
      information once Docs-ON implies marking were scoped into 09 on the reasoning that its implementation
      would have to settle them. 09 stopped being that implementation, so they need a home of their own
      before anyone builds against them.
+     - **To be spec'd first thing on 2026-08-07** (decided the night before). Deliberately scheduled with
+       a clear head rather than at the end of a long session: none of it depends on remembering a result
+       from the retrieval work, so it costs nothing to defer and reads better rested. The four decisions
+       are UI-and-prompt shape, not measurement, so they do not queue behind any eval run.
 
 Then the release-prep checklist below.
 

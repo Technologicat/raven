@@ -394,31 +394,40 @@ on-corpus similarity distribution the threshold work needed.
 
 ---
 
-## 3b. Next actions, as of 2026-08-06 end of day
+## 3b. Next actions, as of 2026-08-07
 
-In order. The first group needs no GPU and no decisions; the second is the new corpus; the third is what
-the sprint's live leads still need.
+In order, and **the order was swapped from the 08-06 draft** (Juha, 2026-08-07): the new corpus goes
+first, because it runs on instruments that already exist, and the reordering experiment goes last, because
+checking it discovered that its instrument does not.
 
-**Ready to run, with one exception noted under item 1:**
+**First — bring up the ECCOMAS 2024 corpus** (`00_stuff/datasets/ECCOMAS2024`, 2520 conference abstracts):
 
-1. **Free result reordering** — no LLM, no extra pass. Settles whether the LLM-rerank question is about
-   *placement* rather than *judgment*, and any LLM version afterwards has to beat this rather than the
-   unordered baseline (§3).
+1. **Do not re-run the PDF→BibTeX extraction.** It cost **1–2 weeks of GPU time**, and the result is
+   hand-corrected and stamped golden:
+   `success_final_manually_fixed_and_added_missing_abstracts.bib`. Start from that file. The PDFs are kept
+   for provenance, not for reprocessing.
+2. `raven-burstbib` the golden `.bib` → `documents_eccomas`, `raven-indexer` → `rag_index_eccomas`, add a
+   `CORPORA` entry to `make_questions.py`, generate a question set (~300, matching the others), and run the
+   standard sweep.
+3. **The reason it is worth the setup**: at 2520 documents it sits inside the bracket where adaptive `k`
+   stops working (works at 1268, fails at 11974), so it is the direct probe of where that transition is.
+   Secondarily it is the only *dirty-provenance* corpus in the set.
 
-   **"Free" describes the technique, not the measurement, and the measurement does not exist yet**
-   (checked 2026-08-06). Reordering changes only the order the retrieved results are presented in — the
-   set is identical — so every metric in this investigation is invariant to it *by construction*: gold
-   rank, recall@k, passage coverage and the signal AUROCs all read the retrieval, and the retrieval does
-   not change. Scoring these arms means scoring what the model *answered*, which is the first
-   answer-quality question in the sprint. Nothing here does that: all 19 scripts are retrieval-side, and
-   the question sets store `gold` and `gold_titles` but no gold answer text, so there is no cheap
-   extractive check either.
+**Second — `score_fusion.py fiction`**
 
-   So the honest cost is one generation plus one judgment per question per arm, with the gold passage as
-   the reference — LLM-as-judge, on the same local backend, which also makes it the first eval here whose
-   result depends on the judge. That is a half-day of harness before any arm runs, and it is a decision
-   about what we are willing to trust rather than a build detail. Worth settling before the harness is
-   written, not during.
+4. The fourth corpus for the self-weighting hypothesis (score fusion helps when the arms are unequal).
+   Needs the passage-coverage metric, since document recall saturates at 19 documents.
+
+   *The 13 held-out stories could be indexed to make it 32*, but that is probably the wrong trade: 32
+   documents at `k=20` still saturates (62% of the corpus), so it does not fix the metric problem, while
+   indexing them destroys their current role as the *adjacent* negative group — the hardest negatives in
+   the whole set, and irreplaceable. They are also unread, so they bring no human ground truth. Keep them
+   held out; use the coverage metric.
+
+**Third — free result reordering, and it needs a harness built first**
+
+5. The experiment settles whether the LLM-rerank question is about *placement* rather than *judgment*, and
+   any LLM version afterwards has to beat this rather than the unordered baseline (§3).
 
    **Two effects compete here and the experiment has to separate them** (Juha, 2026-08-06). *Lost in the
    middle* says put the best material at the ends. But a ranked result list is best-first **by
@@ -437,28 +446,39 @@ the sprint's live leads still need.
    If (b) wins, attention placement dominates. If (c) wins, the problem was that the model could not *tell*
    the list was ranked. If (a) holds, position was never the issue.
 
-2. **`score_fusion.py fiction`** — the fourth corpus for the self-weighting hypothesis (score fusion helps
-   when the arms are unequal). Needs the passage-coverage metric, since document recall saturates at 19
-   documents.
+   **"Free" describes the technique, not the measurement, and the measurement does not exist yet**
+   (checked 2026-08-06). Reordering changes only the order the retrieved results are presented in — the
+   set is identical — so every metric in this investigation is invariant to it *by construction*: gold
+   rank, recall@k, passage coverage and the signal AUROCs all read the retrieval, and the retrieval does
+   not change. Scoring these arms means scoring what the model *answered*, which is the first
+   answer-quality question in the sprint. Nothing here does that: all 19 scripts are retrieval-side, and
+   the question sets store `gold` and `gold_titles` but no gold answer text, so there is no cheap
+   extractive check either.
 
-   *The 13 held-out stories could be indexed to make it 32*, but that is probably the wrong trade: 32
-   documents at `k=20` still saturates (62% of the corpus), so it does not fix the metric problem, while
-   indexing them destroys their current role as the *adjacent* negative group — the hardest negatives in
-   the whole set, and irreplaceable. They are also unread, so they bring no human ground truth. Keep them
-   held out; use the coverage metric.
+   So it is LLM-as-judge on the local backend, with the gold passage as reference — and therefore the
+   first result here whose value depends on a judge.
 
-**Bring up the ECCOMAS 2024 corpus** (`00_stuff/datasets/ECCOMAS2024`, 2520 conference abstracts):
+   **And the sampling makes it more expensive than one generation per arm** (Juha, 2026-08-07). Generation
+   runs at **T=1 with `min_p=0.02`**, because modern instruct models degrade at T=0 — so *the same question
+   with the same context gives a different answer each run*, and the judge is the same model under the same
+   sampler, so the grade is stochastic too. Every other measurement in this investigation is deterministic
+   given the index: retrieval returns the same ranked list every time, which is why single runs were
+   trustworthy throughout. This one is not, and cannot be made so without changing the sampler to a regime
+   the product does not use — which would measure a system we do not ship.
 
-3. **Do not re-run the PDF→BibTeX extraction.** It cost **1–2 weeks of GPU time**, and the result is
-   hand-corrected and stamped golden:
-   `success_final_manually_fixed_and_added_missing_abstracts.bib`. Start from that file. The PDFs are kept
-   for provenance, not for reprocessing.
-4. `raven-burstbib` the golden `.bib` → `documents_eccomas`, `raven-indexer` → `rag_index_eccomas`, add a
-   `CORPORA` entry to `make_questions.py`, generate a question set (~300, matching the others), and run the
-   standard sweep.
-5. **The reason it is worth the setup**: at 2520 documents it sits inside the bracket where adaptive `k`
-   stops working (works at 1268, fails at 11974), so it is the direct probe of where that transition is.
-   Secondarily it is the only *dirty-provenance* corpus in the set.
+   Consequences to design for rather than discover:
+
+   - **n samples per (question, arm)**, paired by question, comparing means. n=1 measures sampling noise.
+   - **Judge noise is separate from answer noise**, so a majority vote over an odd number of judgments per
+     answer is the cheap control — and the two multiply.
+   - **The cost is therefore n × (1 generation + j judgments) × 3 arms × ~300 questions per corpus.** At
+     n=5, j=3 that is 4500 generations and 13500 judgments for one corpus, which is an overnight run, not
+     an afternoon.
+   - **Effect size is unknown**, so n cannot be chosen honestly in advance. Run one arm pair on a subset
+     first to estimate within-question variance, then size the real run from it.
+
+   None of that is a reason not to do it. It is a reason not to start it at 10 a.m. expecting a number by
+   lunch.
 
 **What the live leads still need:**
 
