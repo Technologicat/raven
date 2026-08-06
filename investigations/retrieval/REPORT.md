@@ -477,6 +477,20 @@ conference template boilerplate, author affiliations and addresses, and any refe
 the author's own abstract body with the packaging removed — which is what makes it usable as ground truth
 rather than as a model's paraphrase of one.
 
+**ECCOMAS 2026 is expected too, and the pair is worth more than the sum.** Two editions of the same
+conference, same template, same community, two years apart, gives a **near-duplicate axis** no other corpus
+here has: the same research groups presenting successive work on the same topics. That is the case where
+retrieval has to distinguish *this* paper from its own sequel, which is both a realistic failure mode for a
+researcher's collection and untested by every set currently in use — all of which contain at most incidental
+near-duplicates. Together the two editions would also be ~5000 documents, further into the
+adaptive-`k` bracket.
+
+*Access is a governance question, not a technical one.* The abstracts are public by design, but public does
+not imply scrapable, and the hosting site's stance is unknown. The 2024 set came **from the organizers**
+directly, and Juha has a coworker on the ECCOMAS managing board — so the route to ask is short, and the
+answer may well be a bulk export, which is politer than scraping and yields cleaner data than rendering
+pages would. Ask before fetching; do not infer permission from a `robots.txt`.
+
 Which reorders the roadmap. Clustering was justified as an interface and organization feature; it is now
 also the only route to broad-question retrieval on the collection sizes Raven is built for.
 
