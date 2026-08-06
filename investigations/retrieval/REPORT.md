@@ -518,6 +518,44 @@ Where the speed has to come from, since the constraint is generation throughput 
 That last pair matters most for the corpus sizes here: it is the difference between summarizing 12k
 documents and summarizing the ~1.3k that actually need it.
 
+##### Fiction is the hard case, and the small-model path has history worth knowing
+
+Extraction beats generation wherever an author-written summary exists, which covers scientific papers.
+**Fiction has neither**: no abstract, documents that may not fit a context window (median 45k characters,
+tail to 366k), and *two* use cases rather than one — with and without spoilers, which has no standard
+solution at all.
+
+Raven tried the small-dedicated-summarizer path before, and the git history is the feasibility study
+(`git log -S summarize`). Models tried: `ArtifactAI/led_base_16384_arxiv_summarization`,
+`ArtifactAI/led_large_16384_arxiv_summarization`, `Falconsai/text_summarization`, settling on
+`Qiliang/bart-large-cnn-samsum-ChatGPT_v3` as the best of them. Sub-second on a 200-word abstract, but the
+quality at the compression ratio wanted was judged inadequate, and BART's 1024-token window forced a
+spaCy sentence-boundary splitter as a preprocessing step. The long-context LED options were on the list
+and lost on *quality*, not length.
+
+**Then the ecosystem removed the abstraction.** The module was deleted in `5bc503d` (Feb 2026) — not by
+preference: *"'summarization' task is gone from the transformers side. Major social signal that LLMs have
+eaten this use case."* The `translate` module met the same fate the same day and now loads its model
+directly, which is the working precedent in this repo for how a revival would have to be built. Some of
+the models tried are also simply gone from HF now.
+
+**One pairing was never tested, and it is the one that matches fiction.** Every LED variant tried was
+**arXiv**-tuned and evaluated on **abstracts** — doubly mismatched. A **BookSum**-tuned LED on narrative
+is a different proposition:
+[`pszemraj/led-large-book-summary`](https://huggingface.co/pszemraj/led-large-book-summary) fine-tunes
+`allenai/led-large-16384` on BookSum, which is long-form narrative — novels, plays and stories — with
+human-written abstractive summaries at paragraph, chapter and book granularity. 16,384 tokens is ~64k
+characters, so the median fiction story fits in one pass and the long tail maps onto *chapter*-level
+summarization rather than an arbitrary splitter. Siblings:
+[`led-base-book-summary`](https://huggingface.co/pszemraj/led-base-book-summary) and
+[`long-t5-tglobal-xl-16384-book-summary`](https://huggingface.co/pszemraj/long-t5-tglobal-xl-16384-book-summary).
+
+Worth an evaluation rather than a decision: the prior is that a 30B-class LLM is the only competent
+summarizer at this compression ratio, and that prior was formed on models mismatched to the task. Polished
+previous-generation tooling can beat a developing current generation, and its hardware profile favours
+local deployment — but the last time this was measured the specialized models lost, and nothing here says
+they would not lose again.
+
 **One caveat on the metric, which cuts against the synthesis numbers specifically.** Set recall asks
 whether *these four* documents came back, and a broad question over a large corpus has many documents that
 answer it equally well — so the absolute synthesis levels are a severe floor, more so than the known-item
