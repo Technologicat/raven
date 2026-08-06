@@ -16,10 +16,20 @@ between requests (`raven.papers.ratelimit`), so routing the middle step through 
 workflow polite at both ends and rude in the middle. Everything needed to close it was already here: the
 same API endpoint `raven.papers.search` calls takes an `id_list` alongside its `search_query`.
 
-**Versions are preserved**, unlike in a search. An identifier list often carries them — `raven-arxiv2id`
-emits `2410.07866v5`, having deduplicated a collection down to the newest version of each paper — and there
-the version is part of what was asked for rather than an incidental fact about when the query ran. Asking
-for two versions of one paper therefore yields two entries rather than one.
+**The version arXiv returned is recorded**, unlike in a search. This holds however the identifier was
+spelled: ask for `2410.07866v5` and the entry says v5; ask for the bare `2410.07866`, which means
+"whatever is current", and arXiv answers with v5 and the entry still says v5. The version is read off the
+*response*, so the bibliography records which revision it actually describes rather than which one you
+happened to name — and a set refreshed six months later will differ visibly instead of silently. Asking
+for two versions of one paper yields two entries rather than one.
+
+`--strip-versions` drops the suffix, which is right when the bibliography is for *citing* papers (a
+citation names a paper, and most arXiv citations carry no version) and wrong when it is a record of a
+collection. It is off by default because losing the information is not recoverable from the output.
+
+**To refresh a collection, strip versions on the way *in*, not on the way out**: `raven-arxiv2id
+--strip-versions` turns a directory of papers into a list of "give me the current version of each",
+which this tool then answers with — and records — whatever is current today.
 
 **Do not replace `id_list` with `search_query=id:...`**, however tempting it looks when arXiv is
 misbehaving. The two are not interchangeable, and arXiv's API manual is explicit about which to use and
@@ -151,8 +161,12 @@ def main(argv: list[str] | None = None) -> None:  # pragma: no cover
     ap.add_argument("-o", "--output", type=Path, default=Path("results.bib"), metavar="out.bib",
                     help="Output BibTeX file (default: results.bib). Use - for stdout.")
     ap.add_argument("--strip-versions", action="store_true", default=False,
-                    help="Record papers without their version suffix. Off by default: an identifier list "
-                         "usually names specific versions, and that is part of what was asked for.")
+                    help="Record papers without their version suffix. Off by default, because the "
+                         "version recorded is the one arXiv answered with, which says what this "
+                         "bibliography actually describes -- information the output cannot recover "
+                         "once dropped. Use it when the bibliography is for citing papers rather than "
+                         "for tracking a collection. To refresh a collection, strip versions on the "
+                         "way in instead (raven-arxiv2id --strip-versions).")
     ap.add_argument("-v", "--version", action="version", version=f"%(prog)s {__version__}")
     args = ap.parse_args(argv)
 
