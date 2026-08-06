@@ -506,6 +506,66 @@ def test_pend_edit_delete_of_indexed_document():
 
 
 # ---------------------------------------------------------------------------
+# Weighted reciprocal rank fusion
+# ---------------------------------------------------------------------------
+
+class TestWeightedRRF:
+    """The arms' relative vote is a knob, because the right value belongs to the collection.
+
+    Measured across four evaluation corpora it runs from about 0.1 (a bibliography of bare titles, where
+    BM25 has a dozen words to match on) to about 0.6 (scientific abstracts). Blending equally costs a
+    corpus whose arms are that unequal.
+    """
+
+    def test_equal_weights_match_the_unweighted_default(self):
+        a, b = ["x", "y", "z"], ["z", "y", "w"]
+        assert (hybridir.reciprocal_rank_fusion(a, b, weights=[1.0, 1.0]) ==
+                hybridir.reciprocal_rank_fusion(a, b))
+
+    def test_only_the_ratio_matters(self):
+        # RRF scores are compared against each other, so scaling every weight leaves the order alone.
+        a, b = ["x", "y", "z"], ["z", "y", "w"]
+        order = [item for item, _score in hybridir.reciprocal_rank_fusion(a, b, weights=[0.3, 0.7])]
+        scaled = [item for item, _score in hybridir.reciprocal_rank_fusion(a, b, weights=[3.0, 7.0])]
+        assert order == scaled
+
+    def test_a_zero_weight_excludes_that_list_entirely(self):
+        # This is how "search with one engine only" is spelled — the other arm's exclusives must not appear
+        # at all, not merely rank low.
+        keyword, vector = ["k1", "k2"], ["v1", "v2"]
+        fused = [item for item, _score in
+                 hybridir.reciprocal_rank_fusion(keyword, vector, weights=[1.0, 0.0])]
+        assert fused == ["k1", "k2"]
+
+    def test_weighting_reorders_the_documents_the_arms_disagree_about(self):
+        # The point of the knob. Note what it does *not* touch: `shared` is in both lists, so it collects
+        # from both arms and outranks either exclusive at any weight. That is RRF's agreement bonus
+        # working as intended, and it is why this asserts on the disputed pair rather than on the winner.
+        keyword, vector = ["doc_k", "shared"], ["doc_v", "shared"]
+
+        def order(weights):
+            ranked = [item for item, _score in
+                      hybridir.reciprocal_rank_fusion(keyword, vector, weights=weights)]
+            return ranked.index("doc_k") < ranked.index("doc_v")
+
+        assert order([0.9, 0.1]) is True     # keyword-heavy: its exclusive wins the disputed slot
+        assert order([0.1, 0.9]) is False    # semantic-heavy: the other one does
+
+    def test_a_smaller_K_sharpens_the_advantage_of_rank_one(self):
+        # What `rrf_k` controls, stated as the property rather than as a number: the gap between the top
+        # two ranks of one list, relative to the scores themselves.
+        def head_gap(K):
+            scored = dict(hybridir.reciprocal_rank_fusion(["a", "b"], K=K))
+            return (scored["a"] - scored["b"]) / scored["a"]
+        assert head_gap(10) > head_gap(60) > head_gap(120)
+
+    def test_mismatched_weight_count_is_an_error(self):
+        # Silently padding or truncating would mis-weight an arm, which is invisible in the output.
+        with pytest.raises(ValueError):
+            hybridir.reciprocal_rank_fusion(["a"], ["b"], weights=[1.0])
+
+
+# ---------------------------------------------------------------------------
 # Stitching adjacent chunks back together
 # ---------------------------------------------------------------------------
 

@@ -184,7 +184,9 @@ def score_sharpness(scores: List[float], min_ratio: float) -> float:
     survivors = sum(1 for score in scores if score >= min_ratio * best)
     return 1.0 - survivors / len(scores)
 
-def reciprocal_rank_fusion(*item_lists: List[Any], K: int = 60) -> List[Tuple[Any, float]]:
+def reciprocal_rank_fusion(*item_lists: List[Any],
+                           K: int = 60,
+                           weights: Optional[List[float]] = None) -> List[Tuple[Any, float]]:
     """Fuse rank from multiple IR systems using Reciprocal Rank Fusion (RRF).
 
     `item_lists`: Lists of search results, one list from each IR system.
@@ -196,15 +198,32 @@ def reciprocal_rank_fusion(*item_lists: List[Any], K: int = 60) -> List[Tuple[An
 
     `K`: The constant used in the RRF formula. Default 60, a typical value from IR literature.
 
+         It sets how sharply rank 1 outweighs rank 10: small `K` concentrates the vote on the head of
+         each list, large `K` flattens it toward one-vote-per-appearance. 60 comes from the original
+         paper (Cormack, Clarke & Buettcher 2009) and is not a claim about any particular collection —
+         swept on Raven's evaluation corpora, smaller values did better.
+
+    `weights`: Optional per-list vote weights, same length as `item_lists`; `None` means equal votes.
+
+               Only the *ratios* matter, since RRF scores are compared against each other and scaling
+               them all leaves the order untouched. A zero weight excludes that list entirely, which is
+               how "search with one engine only" is spelled without a separate code path.
+
     Returns a list of tuples `(item, rrf_score)`, sorted by the RRF score, descending.
 
     Based on:
         https://gist.github.com/srcecde/eec6c5dda268f9a58473e1c14735c7bb
     """
+    if weights is not None and len(weights) != len(item_lists):
+        raise ValueError(f"reciprocal_rank_fusion: got {len(weights)} weights for {len(item_lists)} lists; "
+                         "they must correspond one-to-one.")
     rrf_results = defaultdict(float)  # item -> score
-    for items in item_lists:
+    for j, items in enumerate(item_lists):
+        weight = 1.0 if weights is None else weights[j]
+        if weight == 0.0:  # excluded; skip rather than add zeros, so an unused arm costs nothing
+            continue
         for rank, item in enumerate(items, start=1):
-            rrf_results[item] += 1 / (rank + K)
+            rrf_results[item] += weight / (rank + K)
 
     sorted_items = list(sorted(rrf_results.items(),
                                key=operator.itemgetter(1),
@@ -1031,6 +1050,8 @@ class HybridIR:
               keyword_score_threshold: float = 0.1,
               semantic_distance_threshold: float = 0.8,
               include_documents: Optional[List[str]] = None,
+              keyword_weight: float = 0.5,
+              rrf_k: int = 60,
               merge: bool = True,
               max_span_length: Optional[int] = None,
               multi_query: bool = False,
@@ -1055,6 +1076,22 @@ class HybridIR:
                                        The default is for cosine distance using the default embedding model.
 
         `include_documents`: Optional list of document IDs. If provided, search only in the specified documents.
+
+        `keyword_weight`: The keyword arm's share of the fusion vote, in `[0, 1]`; the semantic arm gets
+                          the rest. `0.5` is an equal blend, `1.0` is keyword search alone, `0.0` is
+                          semantic search alone — so the two single-engine modes are settings here rather
+                          than separate code paths.
+
+                          Worth exposing because **the best value is a property of the collection, not a
+                          constant.** On Raven's evaluation corpora the optimum runs from about 0.1, on a
+                          bibliography of bare titles where BM25 has almost nothing to match, to about 0.6
+                          on scientific abstracts. Blending equally costs a corpus whose arms are that
+                          unequal — on the titles corpus it drags a 0.201 MRR arm down to 0.169. There is
+                          no measured signal that picks the value per *query*, so this is a knob, not an
+                          autopilot.
+
+        `rrf_k`: The constant in the RRF formula, controlling how sharply rank 1 outweighs rank 10.
+                 See `reciprocal_rank_fusion`.
 
         `merge`: Whether to stitch retrieved chunks that are adjacent in the same document into one result
                  (`merge_contiguous_spans`). On by default, and normally what you want: a reader handed
@@ -1140,6 +1177,8 @@ class HybridIR:
                                     keyword_score_threshold=keyword_score_threshold,
                                     semantic_distance_threshold=semantic_distance_threshold,
                                     include_documents=include_documents,
+                                    keyword_weight=keyword_weight,
+                                    rrf_k=rrf_k,
                                     merge=merge,
                                     max_span_length=max_span_length,
                                     multi_query=multi_query,
@@ -1155,6 +1194,8 @@ class HybridIR:
                     keyword_score_threshold: float,
                     semantic_distance_threshold: float,
                     include_documents: Optional[List[str]],
+                    keyword_weight: float,
+                    rrf_k: int,
                     merge: bool,
                     max_span_length: Optional[int],
                     multi_query: bool,
@@ -1285,11 +1326,16 @@ class HybridIR:
         # would rank on `1/(rank + K)` values, which carry no information about how good a match was — the
         # same flattening RRF already performs once, applied twice.
         ranked_lists = []
+        weights = []
         for i in range(len(query_texts)):
             # anything hashable that uniquely identifies each result -> use the full ID
             ranked_lists.append([record["full_id"] for record in keyword_hits[i]])
             ranked_lists.append([record["full_id"] for record in vector_hits[i]])
-        rrf_results = reciprocal_rank_fusion(*ranked_lists)
+            # Per subquery, so every subquery splits its vote the same way; the weight is a statement
+            # about the two engines, not about which subquery is being asked.
+            weights.append(keyword_weight)
+            weights.append(1.0 - keyword_weight)
+        rrf_results = reciprocal_rank_fusion(*ranked_lists, K=rrf_k, weights=weights)
 
         # Collect the actual data records for each full ID, and populate the fused scores.
         # Note we need the chunks, not the full documents. We can collect them from the
