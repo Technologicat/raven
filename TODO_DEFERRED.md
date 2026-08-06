@@ -3519,3 +3519,29 @@ state — `add_selectable` is the idiomatic ImGui answer and comes with the high
 its default full-width span, which would have to be sized to the text.
 
 Raised by Juha (2026-08-04), asking whether the fetched-page chip should open on click.
+
+## Indexing a large corpus is silent for minutes, and reads as a hang
+
+`raven-indexer` on a 1268-document fulltext corpus printed one document's progress, then nothing for
+several minutes while holding ~110% CPU. It was working correctly the whole time.
+
+The shape is by design and worth knowing before touching it. `task_managers["ingest"]` is `"concurrent"`,
+so a rescan submits every document at once and they read their PDFs in parallel; `task_managers["commit"]`
+is `"sequential"` with a one-second delayed-commit coalescer, so each finished read pushes the commit
+further out. On a big corpus the reads never settle for long enough, and the whole run therefore spends
+its first phase doing bulk PDF extraction with **no progress output at all** — the per-document progress
+belongs to the commit, which has not started.
+
+What made it read as a hang rather than as work: the last line on screen was `[1 / 1] | <file> | tokenizing
+42 / 42`, a *completed* document, and the embedded-chunk count in ChromaDB stayed flat at 42 across
+minutes of sampling. Both are consistent with a stall. The tells that it was alive: 8 PDF file descriptors
+open, and `/proc/<pid>/io` climbing through 1.33 GB.
+
+Wanted: progress during ingest — even `read 340 / 1268 documents` would do. Two smaller things noticed
+alongside, both cheap: `[1 / 1]` is ambiguous (it counts documents in *this commit*, not in the corpus),
+and a commit that is being repeatedly deferred could say so.
+
+Not a correctness bug and not on the 0.2.8 path, hence deferred. Worth doing before anyone else points a
+large corpus at this and kills it at the four-minute mark, concluding it is broken.
+
+Discovered while indexing the arXiv AI fulltext corpus for the retrieval investigation (2026-08-06).

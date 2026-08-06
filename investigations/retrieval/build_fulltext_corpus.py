@@ -140,6 +140,12 @@ def assemble(pinned: list[str], sources: list[Path], corpus_dir: Path) -> tuple[
 
     `sources` are searched in order, so a later directory cannot shadow an earlier one — put the
     authoritative stash first. Returns (linked count, still-missing identifiers).
+
+    Symlinks, because the corpus is a *view* over papers that live elsewhere: nothing is copied, and
+    the originals stay the only real files. Hard links would also avoid the copy, but a hard link is
+    indistinguishable from the original, so anything that later rewrites a file here would silently
+    rewrite the collection too. (`hybridir` grew symlink support for this; before that it resolved
+    each document path and rejected anything landing outside the indexed directory.)
     """
     corpus_dir.mkdir(parents=True, exist_ok=True)
     available: dict[str, Path] = {}

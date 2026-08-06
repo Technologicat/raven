@@ -143,6 +143,7 @@
 
 *Raven-librarian*
 
+- a document that is a symlink is now indexed instead of aborting the run. Opening a document store containing one failed outright with `'<target>' is not in the subpath of '<documents dir>'`, because each document's path was resolved through the link before being turned into an id relative to the documents directory — so a link pointing anywhere outside that directory took the whole store down with it, no document indexed. Symlinks now keep the path they were reached by, which is also the one the id is built from. This makes a document collection assemblable as a *view* over files that live elsewhere, without copying them.
 - a malformed tool-call request from the language model no longer kills the whole reply with a `TypeError`. Raven builds a report for the AI in each of these cases — a request missing its type, naming no tool, or carrying unparseable arguments — and then crashed on the way to delivering it, so none of them ever reached the AI. The report now arrives as an errored tool result, which the AI can read and act on.
 - the F8 hotkey (copy the chatlog to the clipboard) now works. It raised a `TypeError` and copied nothing; only the equivalent toolbar button worked, which is why the failure went unnoticed.
 - a language-model backend error mid-reply (e.g. a broken model prompt template) no longer fails silently — the AI turn used to vanish with no reply and no on-screen indication. The failure now appears as an assistant message naming the backend error and its reason; reroll it to retry.

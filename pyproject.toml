@@ -160,6 +160,14 @@ dev = [
     "build",
     # For validating .github/workflows/*.yml during local dev (not used at runtime).
     "pyyaml>=6.0.3",
+    # Sampling profiler that attaches to an already-running process, for the
+    # "is this hung or is it working?" question a batch job raises once it goes
+    # quiet. Needs ptrace permission: `sudo sysctl -w kernel.yama.ptrace_scope=0`,
+    # or run it under sudo.
+    #
+    # NOTE: `pdm add` rewrites this table and drops every comment in it. Add
+    # dependencies here by hand, or restore the comments afterwards.
+    "py-spy>=0.4.2",
 ]
 
 [project.optional-dependencies]

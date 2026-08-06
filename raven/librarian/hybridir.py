@@ -1346,7 +1346,9 @@ class HybridIRFileSystemEventHandler(watchdog.events.FileSystemEventHandler):
 
         Uses the `watchdog` library.
         """
-        self.docs_dir = pathlib.Path(docs_dir) if not isinstance(docs_dir, pathlib.Path) else docs_dir
+        # Canonical (not symlink-resolved) — `_make_document_id_from_path` takes each document's path
+        # relative to this, so the two must be normalized the same way or every id lookup fails.
+        self.docs_dir = common_utils.canonical_path(docs_dir)
         self.recursive = recursive
         self.retriever = retriever
         self.extractor = extractor if extractor is not None else docextract.PLAINTEXT
@@ -1414,17 +1416,14 @@ class HybridIRFileSystemEventHandler(watchdog.events.FileSystemEventHandler):
         if not task_managers:
             logger.warning("HybridIRFileSystemEventHandler._sanity_check: Module not initialized, cannot proceed.")
             return False
-        p = pathlib.Path(path) if not isinstance(path, pathlib.Path) else path
-        abspath = p.expanduser().resolve()
-        abspath = str(abspath)
+        abspath = str(common_utils.canonical_path(path))
         if not self.extractor.handles(abspath):
             logger.info(f"HybridIRFileSystemEventHandler._sanity_check: file '{abspath}': file extension not in monitored list {list(self.extractor.extensions)}, ignoring file.")
             return False
         return True
 
     def _read(self, path: Union[pathlib.Path, str]) -> Optional[str]:
-        p = pathlib.Path(path) if not isinstance(path, pathlib.Path) else path
-        abspath = p.expanduser().resolve()
+        abspath = common_utils.canonical_path(path)
         # The extractor raises on an unreadable document — a corrupt/encrypted PDF, a non-UTF-8 text file, or a
         # file that vanished between the event and this read. In a background batch ingest the right policy is to
         # skip that one file and keep going, not to let the exception abort the ingest task, so we catch here and
@@ -1443,8 +1442,7 @@ class HybridIRFileSystemEventHandler(watchdog.events.FileSystemEventHandler):
         return content.strip()
 
     def _make_task(self, kind: str, path: Union[pathlib.Path, str]) -> Callable:
-        p = pathlib.Path(path) if not isinstance(path, pathlib.Path) else path
-        abspath = p.expanduser().resolve()
+        abspath = common_utils.canonical_path(path)
         document_id = self._make_document_id_from_path(abspath)
         if kind == "add":
             def scheduled_add(task_env: envcls) -> None:
@@ -1495,8 +1493,7 @@ class HybridIRFileSystemEventHandler(watchdog.events.FileSystemEventHandler):
         Useful at app startup, since events only fire on live changes (while the app is running).
         """
         logger.info(f"HybridIRFileSystemEventHandler.rescan: Scanning '{path}' for offline changes (changes made while this app was not running).")
-        p = pathlib.Path(path) if not isinstance(path, pathlib.Path) else path
-        abspath = p.expanduser().resolve()
+        abspath = common_utils.canonical_path(path)
         found_paths = []
         for root, dirs, files in os.walk(abspath):
             if not recursive:
@@ -1504,7 +1501,7 @@ class HybridIRFileSystemEventHandler(watchdog.events.FileSystemEventHandler):
             for filename in files:
                 filepath = os.path.join(root, filename)
                 if self._sanity_check(filepath):
-                    found_paths.append(str(pathlib.Path(filepath).expanduser().resolve()))
+                    found_paths.append(str(common_utils.canonical_path(filepath)))
         plural_s = "s" if len(found_paths) != 1 else ""
         logger.info(f"HybridIRFileSystemEventHandler.rescan: Found {len(found_paths)} file{plural_s}.")
 
@@ -1631,7 +1628,7 @@ def setup(docs_dir: Union[pathlib.Path, str],
 
     # The watchdog observer can't watch a non-existent directory; without this, a fresh-install or
     # docs-dir-moved-aside startup raises FileNotFoundError from `inotify_add_watch` during `bootup()`.
-    docs_dir_path = pathlib.Path(docs_dir).expanduser().resolve()
+    docs_dir_path = common_utils.canonical_path(docs_dir)
     if not docs_dir_path.is_dir():
         logger.info(f"setup: Documents directory '{str(docs_dir_path)}' does not exist; creating it.")
         common_utils.create_directory(docs_dir_path)

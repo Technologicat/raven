@@ -1,6 +1,7 @@
 """Miscellaneous general utilities."""
 
-__all__ = ["absolutize_filename", "strip_ext", "make_cache_filename", "validate_cache_mtime", "create_directory",
+__all__ = ["absolutize_filename", "canonical_path",
+           "strip_ext", "make_cache_filename", "validate_cache_mtime", "create_directory",
            "open_file", "open_in_file_manager",
            "make_blank_index_array", "bail",
            "bibtex_header_key", "bibtex_field_value", "bibtex_unbalanced_field_names",
@@ -32,8 +33,30 @@ from . import stringmaps
 # File utilities
 
 def absolutize_filename(filename: str) -> str:
-    """Convert `filename` to an absolute filename."""
+    """Convert `filename` to an absolute filename, following symlinks.
+
+    Use when you want the *file itself*, however it was reached — deduplicating two paths that name one
+    file, or recording where something really lives. Use `canonical_path` instead when the path is an
+    identity within a directory tree, since resolving can move it out of that tree.
+    """
     return str(pathlib.Path(filename).expanduser().resolve())
+
+def canonical_path(path: Union[str, pathlib.Path]) -> pathlib.Path:
+    """Convert `path` to an absolute, lexically normalized path, **without** following symlinks.
+
+    The counterpart to `absolutize_filename`, and the right one whenever a path serves as an *identity
+    relative to some root* — a document id built as "where this sits under the documents directory", a
+    check that a file lies within a permitted tree. Resolving a symlink can relocate the path outside
+    that root, so the identity is lost and the containment check fails on exactly the arrangement it
+    was meant to allow.
+
+    Nothing is given up by not resolving: the OS follows symlinks on open and on `os.stat`, so reading
+    a file or asking its size and mtime through the unresolved path still reaches the real one.
+
+    `..` segments are removed lexically (`os.path.abspath`), so the result never escapes upward through
+    a symlinked directory the way a naive join would.
+    """
+    return pathlib.Path(os.path.abspath(pathlib.Path(path).expanduser()))
 
 def strip_ext(filename: str) -> str:
     """/foo/bar.bib -> /foo/bar"""
