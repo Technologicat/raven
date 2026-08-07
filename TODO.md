@@ -584,6 +584,23 @@ every tier, chosen on measurements rather than reputation.
 
 ### Tools
 
+- **[High]** Replace the **Tools** toggle with an **Internet** toggle, so the two switches are independent (decided 2026-08-07, for 0.2.9). Today's pair fails to be orthogonal: *Tools* governs every tool wholesale, *Documents* governs the RAG autosearch plus the document tools — so the document tools answer to both, and one combination is incoherent.
+
+  | Tools | Documents | `websearch`, `webfetch` | document tools | RAG autosearch |
+  |---|---|---|---|---|
+  | ON | ON | yes | yes | yes |
+  | ON | OFF | yes | no | no |
+  | **OFF** | **ON** | no | **no** | **yes** |
+  | OFF | OFF | no | no | no |
+
+  The third row is the tell: the user has switched documents *on* and the model still cannot search them — Raven searches on its behalf, but the AI cannot follow up. Nothing about "Tools" suggests it overrides the switch named after the thing being overridden.
+
+  The fix is that each toggle owns one group outright, and the tools already partition cleanly with nothing left over: `llmclient.document_tool_names` is `search_documents` / `fetch_document` / `list_consulted_documents`, and its complement is exactly `websearch` / `webfetch`. So **Internet** takes the complement, **Documents** keeps what it has, and the four combinations all mean something.
+
+  This also resolves the in-code marker at `scaffold.py`'s `ai_turn` — *"`tools_enabled` is a blunt hammer; maybe have also an optional tool name list for fine-grained control?"* — by group rather than by name list, which is the granularity the user actually has an opinion about.
+
+  Touches the same surfaces the Speculation removal did: `appstate` flags (rename `tools_enabled`, with a retired-flag migration; `_RETIRED_FLAGS` already exists for it), `app.py`'s checkbox and tooltip, `scaffold.ai_turn`'s parameter, `minichat`'s `!tools` command, the README's toggle section, and the F1 help card. A changelog entry too — it renames a control users know.
+
 - **[Medium]** Weather and calculator tools: both parked in brief 01 §6 and specced in `TODO_DEFERRED.md`, "Add built-in calculator and weather LLM tools". Weather via open-meteo (https://open-meteo.com/en/docs) — makes Librarian more humanlike as a "voice with internet access" (HCI is a major Raven goal). Calculator via secure eval limited to math expressions; `eval` itself is unsafe (see notes in the archived section), candidate https://github.com/danthedeckie/simpleeval.
 
 - **[Medium]** Calendar tool: get one- or three-month calendar, like the `cal` command-line utility. See Python's `calendar` module.
