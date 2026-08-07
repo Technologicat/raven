@@ -485,11 +485,12 @@ checking it discovered that its instrument does not.
 6. `sum` aggregation is length-dependent — gains on short documents, loses on the longest — so it does not
    ship as a blanket default. The open question is whether a **length-aware** rule is worth having, and
    that wants a mechanism before another grid sweep.
-7. Adaptive `k` separates on three corpora out of four and inverts on hydrogen — **not** by corpus size,
-   which ECCOMAS refuted on 2026-08-07 by separating better at 2,520 documents than arxiv-ai does at 1,268
-   (§4). The open question is whether the driver is topical density, and the experiment is a ~2,500-record
-   subsample of hydrogen: same corpus, same narrowness, size matched to ECCOMAS. Cheap, and it also
-   re-predicts hydrogen's depressed *focused* recall, which is the part no breadth story explains.
+7. Adaptive `k`'s domain of validity is **not settled, and the blocker is the metric** (§4). "Gain from k=5
+   to k=200" is not comparable across corpora, since the same `k` is 15.8% of arxiv-ai and 1.67% of
+   hydrogen; re-read at matched *fraction*, the same runs order monotonically by corpus size. Before more
+   corpora are added, re-express the sweep against a fixed fraction range. The topical-density alternative
+   is currently unsupported rather than refuted, and testing it needs a *contiguous cluster* of hydrogen
+   rather than a uniform subsample — uniform lowers size and crowding together and separates nothing.
 
 **Do not score any corpus while a question set for any corpus is being generated** — the scorers read every
 question file at startup, and two runs minutes apart have already seen different `n`.
@@ -553,30 +554,43 @@ therefore not monotone in corpus size, and "pays on small and medium collections
 paragraph immediately above — was two points read as a trend. It is retained rather than edited away,
 because the reasoning behind it was sound and only the conclusion was underdetermined.
 
-**The tell is in the focused row, which has nothing to do with the broad/narrow distinction.** A focused
-question names one document, so at k=200 it is a known-item lookup with two hundred tries. arxiv-ai answers
-it 100.0% of the time and ECCOMAS 99.6% — while **hydrogen manages 92.6%**, one known-item question in
-thirteen still missing its target. Whatever makes hydrogen hard is a property of the *corpus*, not of the
-question class, because it is already visible on the question class with no breadth in it.
+#### And then retracted the same hour: the comparison was confounded, and so was the refutation
 
-**The candidate explanation is topical density, and it is inference rather than measurement.** Hydrogen is
-11,974 Web of Science records all about hydrogen production; ECCOMAS spans the whole of computational
-mechanics and arxiv-ai the whole of AI/ML. In a narrow corpus the gold document competes with hundreds of
-near-identical ones, so a broad question's relevant set is a large fraction of everything and no
-conversational `k` samples it. Size and narrowness move together across these three corpora, which is the
-confound to name rather than to resolve by assertion.
+**Both the table above and the "gain 5→200" column compare corpora at matched `k`, across corpora whose
+sizes differ by a factor of ten.** `k=200` is 15.8% of arxiv-ai, 7.9% of ECCOMAS and 1.67% of hydrogen, so
+reading three curves at the same `k` reads them at three quite different depths. Every conclusion drawn
+from that — the original "pays small, dies large", and the refutation above — inherits the confound.
 
-**The experiment that separates them is cheap: subsample hydrogen.** Index ~2,500 of its records and re-run.
-Same corpus, same narrowness, size matched to ECCOMAS — a ratio that recovers means size, one that stays
-inverted means density. It makes a second, independent prediction worth checking in the same run: under the
-density explanation hydrogen's *focused* recall stays depressed in the subsample, while under a size
-explanation it should climb toward the other two.
+Read instead at matched *fraction* of the corpus, from the same runs, no new measurement:
 
-**What this changes for the feature.** Adaptive `k` still looks worth building, and the caveat it must ship
-with is no longer "works up to about N documents" — a number we do not have and now have reason to doubt
-exists. It is that some corpora do not separate, that the ones that do not appear to be the topically
-narrow ones, and that a *stated* threshold on document count would have been wrong on the very corpus
-bought to establish it.
+| matched fraction | arxiv-ai (1,268) | eccomas2024 (2,520) | hydrogen (11,974) |
+|---|---|---|---|
+| focused, at 1.67% | 86.6% | 94.7% | 92.6% |
+| synthesis, at 1.67% | 39.6% | 34.6% | 24.3% |
+| **synthesis / focused** | **0.46** | **0.37** | **0.26** |
+| synthesis / focused, at 0.79% | 0.32 | 0.25 | 0.21 |
+
+Two things fall out, and the first is a mistake worth keeping visible:
+
+- **The "focused row is the tell" argument is wrong.** It rested on hydrogen scoring 92.6% where the others
+  scored ~100%, and that gap is entirely an artifact of holding `k` fixed: at matched fraction hydrogen's
+  focused recall is unremarkable, *better* than arxiv-ai's. There is no known-item anomaly to explain, so
+  the topical-density hypothesis loses the evidence it was built on. It is not refuted — it is unsupported,
+  which is a different and weaker thing.
+- **At matched fraction the ordering is monotone in corpus size**, in the direction the original 08-06
+  reading claimed. So that reading survives its own refutation, on better evidence than it first had.
+
+**What is genuinely open is the metric, not the answer.** "Gain from k=5 to k=200" is not comparable across
+corpora, because it spans a different fraction range in each; a like-for-like version has to fix the
+fraction range and read `k` off it per corpus. Until the sweep is re-expressed that way, the size story is
+supported but not established, and the density story is neither.
+
+**The subsample experiment is still worth running, and its design follows from this.** A *uniform*
+subsample of hydrogen would settle nothing: it lowers document count and topical crowding together, so both
+hypotheses predict the same improvement. What discriminates is a **contiguous topical slice** — take one
+cluster of ~2,500 records rather than 2,500 scattered ones. That holds crowding roughly fixed while cutting
+size, so a recovery indicts size and a flat result indicts density. Which makes the experiment wait on
+clustering, the same prerequisite everything else in this section arrives at.
 
 #### And this promotes clustering from a nice-to-have to a prerequisite
 
