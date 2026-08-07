@@ -1,6 +1,6 @@
 # Changelog
 
-**0.2.8** (in progress):
+**0.2.8** (7 August 2026):
 
 **Added**:
 
