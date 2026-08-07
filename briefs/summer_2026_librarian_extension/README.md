@@ -28,8 +28,14 @@ for value alone.
    that used to gate it is gone. The brief's own status block carries what shipped, what was refuted, and
    what moved after it was written.
 
-Not in this list and still open: the tool-budget split (`TODO.md`, Librarian / urgent), which is a
-follow-up to 10 rather than a brief of its own.
+Not in this list, and **largely overtaken rather than open**: the tool-budget split (`TODO.md`, Librarian /
+urgent), a follow-up to 10 rather than a brief of its own. What made it urgent was that
+`max_tool_call_rounds = 5` was exhausted by gathering alone, so nine of fourteen sampled turns that reached
+the cap ended with an empty assistant message (p = 0.013). The cap went to **20** on 2026-08-04, set from
+where models actually stop — the same model rephrases nine or ten times and then gives up unprompted — so
+the failure that gave the item its priority should no longer be reachable. The *split* itself (a small cap
+for searches, a larger allowance for fetches) is still unbuilt and now looks unjustified: the runaway it
+was designed against did not survive measurement. `TODO.md` carries both halves.
 
 ## Cut 0.2.8 after 09 — and nothing else before it
 
