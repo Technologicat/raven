@@ -121,6 +121,22 @@ CORPORA = {
     # which BM25 cannot match against the hyphenated query form. And two of the 2520 records carry an
     # unbalanced brace from a mathematical fragment in the abstract, so a BibTeX parser rejects them — this
     # generator among them. Retrieval is unaffected either way, since `.bib` is ingested as plain text.
+    # A topically contiguous slice of `hydrogen`, built by `make_subcorpus.py`: the 2500 documents nearest
+    # a photocatalysis seed, which on this corpus cuts at vector distance 0.492 against a corpus median of
+    # 0.574. It exists to separate two explanations that the other corpora confound, since corpus size and
+    # topical crowding move together across all of them — this one is small *and* crowded, so a result that
+    # tracks size and a result that tracks crowding finally disagree.
+    #
+    # It needs its own questions rather than a filtered subset of hydrogen's: those were drawn from the
+    # whole corpus, so most of their gold documents are outside the ball, and a synthesis question needs
+    # all four of its gold documents inside — which essentially never happens by chance.
+    "hydrogen-photocat": {"docs_dir": pathlib.Path("~/.config/raven/llmclient/documents_hydrogen_photocat").expanduser(),
+                "out_path": HERE / "hydrogen_photocat_questions.json",
+                "sibling_topic": "photocatalytic hydrogen production",
+                "description": "a topically contiguous slice of the Web of Science hydrogen-production "
+                               "corpus — the 2500 records nearest a photocatalysis seed, so the collection "
+                               "is narrow by construction; local to the developer machine (not in this "
+                               "repository)"},
     "eccomas2024": {"docs_dir": pathlib.Path("~/.config/raven/llmclient/documents_eccomas2024").expanduser(),
                 "out_path": HERE / "eccomas2024_questions.json",
                 "sibling_topic": "computational methods in applied sciences and engineering",
