@@ -239,14 +239,31 @@ cadence is the cause. So §D and 09 are the boundary, not a moving one.
 
 Release prep, when the time comes (see also the `release` and `changelog` skills):
 
-- **Audit the `Fixed` entries.** The house rule is *"was the broken behavior present in the most recent
-  tagged release?"* — a bug born and buried inside the 0.2.8 window never reached a user and does not
-  belong in the changelog. With this much development volume, a few almost certainly slipped through
-  review.
-- **Regroup the changelog by component** within Added / Changed / Fixed. Every entry currently opens with
-  `*Raven-<app>*:` — 24 of 58 with `*Raven-librarian*:` alone — which is a heading doing prose duty. This
-  is a Raven-local rule, not a fleet one: Raven is the only project in the fleet shipping many separate
-  user-facing apps, and elsewhere the prefix would be noise.
+- ~~**Audit the `Fixed` entries.**~~ **Done 2026-08-07.** The house rule is *"was the broken behavior
+  present in the most recent tagged release?"* Two entries failed it and were removed, both for the same
+  reason — they described features that did not exist in 0.2.7, so no user upgrading could have met the
+  bug. The **UTF-16 surrogate repair** fixes text from pypdf, and 0.2.7 ingested only `.txt`/`.md`/`.rst`/
+  `.org`/`.bib`/`.tex` with no PDF path and no `docextract` module. The **export think-marker fix** repairs
+  a boundary that 0.2.7 got for free: it spoke only to oobabooga, which sent the whole reply in one channel
+  with the tags in it, and the June 2026 `reasoning_content` migration is what removed them.
+- ~~**Regroup the changelog by component**~~ — **already done**; the note described the pre-regrouping
+  state. Verified 2026-08-07: canonical component order in all three sections, `*Constellation-wide*` last
+  in each. One duplicated `*Raven-arxiv-download*` header was folded on the way past.
+
+### What is left before tagging 0.2.8 (as of 2026-08-07 afternoon)
+
+Everything else is done, so this is the whole list:
+
+1. **Bump the version.** `raven/__init__.py` reads `0.2.8-dev`; it needs `0.2.8`. Then follow the `release`
+   skill (tag format `vX.Y.Z`, CI-driven publishing, post-release version bump).
+2. **Nothing else is blocking.** CI is green on `main`. The full suite passes locally (2187, of which the
+   ~380 GUI/ML-marked ones do not run in CI). The live test passed on both branches of the toggle change:
+   startup with the retired-flag migration firing, a chat turn with Documents on, and one with Documents
+   off confirming no retrieval runs.
+
+Landed on release day and worth knowing when reading the diff: the Speculation toggle removal, the
+`get_current_time` tool, the tool-registry extraction to module level, the export think-markers, the
+server-side logging sweep, `raven-fixbib`, and the BibTeX brace recovery in the importer.
 
 ## After those three
 

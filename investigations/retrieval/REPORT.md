@@ -422,6 +422,33 @@ on-corpus similarity distribution the threshold work needed.
 
 ## 3b. Next actions, as of 2026-08-07
 
+> ### Where this stands mid-afternoon on 2026-08-07 — read this first
+>
+> ECCOMAS is done (built, indexed, 314 questions, swept — §4 carries what it said, including the retraction
+> it forced). What is *in flight* is the hydrogen photocatalysis slice, and the sequence below it:
+>
+> 1. **Running now**: `make_questions.py hydrogen-photocat`, started ~10:50, ~3 h, writing
+>    `hydrogen_photocat_questions.json`. Its corpus is already built and indexed
+>    (`documents_hydrogen_photocat`, `rag_index_hydrogen_photocat`, 2500 documents, indexed in 343 s).
+>    **Do not score any corpus while it runs** — the scorers read every question file at startup, and a
+>    half-written one is invalid JSON.
+> 2. **Then re-run the three existing corpora**: `synthesis_recall.py hydrogen`, `arxiv-ai`,
+>    `eccomas2024`. Not for new data — for *measured* fraction curves, since the script now reads its
+>    curves at a matched share of the corpus as well as at fixed `k`, and the numbers in §4's corrected
+>    table were interpolated between fixed-`k` points. Expect hydrogen to be materially slower than before:
+>    10% of 11,974 is `k=1197`, and the deepest fraction now sets the retrieval depth.
+> 3. **Then the run this was all for**: `synthesis_recall.py hydrogen-photocat`. Small *and* crowded, so
+>    it is the first corpus on which the size and density explanations disagree. Against ECCOMAS it is
+>    size-matched (2,500 vs 2,520) with the crowding different; against hydrogen it is crowding-matched
+>    with the size different. A separation that recovers indicts size; one that stays flat indicts density.
+>
+> The slice's provenance, since it will not be obvious later: built by `make_subcorpus.py` from the seed
+> query "photocatalytic water splitting hydrogen production" (Juha's choice, to avoid a random seed landing
+> on an outlier). Validated before use — the 2500-cut sits at vector distance 0.492 against a corpus median
+> of 0.574, photocatalysis is 3.3x enriched, both word forms are captured at the same rate (75.3% of
+> "photocatalysis", 69.3% of "photocatalytic"), and the unrelated clusters are excluded: 2.2% of the
+> vehicle documents against 20.9% expected by chance.
+
 In order, and **the order was swapped from the 08-06 draft** (Juha, 2026-08-07): the new corpus goes
 first, because it runs on instruments that already exist, and the reordering experiment goes last, because
 checking it discovered that its instrument does not.
