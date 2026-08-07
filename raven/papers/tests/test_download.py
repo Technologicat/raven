@@ -567,6 +567,23 @@ class TestDownloadPapers:
         assert b"%PDF" in pdfs[0].read_bytes()
         assert "2301.12345v1" in pdfs[0].name
 
+    def test_a_repeated_identifier_is_dropped_before_the_metadata_request(self, tmp_path):
+        """`raven-arxiv2bib` drops exact repeats before fetching; this used to carry them to the download
+        step, paying for a batch slot on the way."""
+        xml = _atom_response()
+        requested = []
+
+        def counting_get(url, *a, **kw):
+            if "/pdf/" not in url:
+                requested.append(kw.get("params", {}).get("id_list", ""))
+            return _mock_requests_get({"2301.12345": xml})(url, *a, **kw)
+
+        with patch.object(download_module, "RateLimiter", _NoWaitRateLimiter), \
+             patch.object(httpfetch_module.requests, "get", side_effect=counting_get):
+            download_papers(["2301.12345", "2301.12345", "2301.12345"], output_dir=str(tmp_path))
+        assert len(requested) == 1
+        assert requested[0].split(",") == ["2301.12345"]
+
     def test_the_run_is_summarized_by_outcome(self, capsys, tmp_path):
         """A rerun does almost nothing, so a bare total says nothing. The counts have to be by outcome."""
         xml = _atom_response()

@@ -438,20 +438,28 @@ def download_papers(arxiv_ids: List[str],
 
     rate_limiter = RateLimiter()
 
+    # Drop exact repeats before fetching anything, which is what `raven-arxiv2bib` does with its input and
+    # what this did not: a repeated identifier was carried all the way to the download step before being
+    # recognized, costing a slot in the metadata batch on the way. Two *spellings* of one paper are a
+    # different matter — `2301.12345` and `2301.12345v1` are the same PDF and cannot be known to be until
+    # the metadata says so — so the loop below still deduplicates on the resolved id.
+    unique_ids = list(dict.fromkeys(arxiv_ids))
+
     # Metadata for the whole run first, batched — see `get_papers_metadata`. The PDFs below still cost
     # one rate-limited request each, so this roughly halves the run rather than making it instant.
-    metadata_by_id = get_papers_metadata(arxiv_ids, batch_size=batch_size, rate_limiter=rate_limiter)
+    metadata_by_id = get_papers_metadata(unique_ids, batch_size=batch_size, rate_limiter=rate_limiter)
 
     if save_bib is not None:
-        _write_bibtex(metadata_by_id, arxiv_ids, save_bib)
+        _write_bibtex(metadata_by_id, unique_ids, save_bib)
 
     # Counted by outcome rather than by a single total, because "processed 170" answers nothing on a rerun:
     # the whole point of the skip-existing behaviour is that most of a repeat run does nothing, and the
     # number worth seeing is how much of it was actually fetched.
     tally: dict[str, int] = collections.Counter()
+    tally["duplicate identifier"] += len(arxiv_ids) - len(unique_ids)
 
     seen: set[str] = set()
-    for arxiv_id in arxiv_ids:
+    for arxiv_id in unique_ids:
         try:
             metadata = metadata_by_id.get(arxiv_id)
             if metadata is None:
