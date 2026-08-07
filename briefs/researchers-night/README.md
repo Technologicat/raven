@@ -56,15 +56,23 @@ sitting beneath it.
 
 They multiply different people, which is why both are wanted:
 
-- **Drag-and-drop is for the human**: feeding corpora in, attaching a file to check a render, driving the
-  GUI by hand — dozens of times a day, through a `FileDialog` that is currently the sole entry path.
-- **15 is for Claude.** Today, exercising Librarian's backend end-to-end means driving the GUI, which needs
-  Juha present to launch it, drag, click and watch, and which costs a focus-stealing window on a shared
-  desktop every time. A scripting surface over the scaffold turns that into something the agent can run
-  unattended — which is what makes the investigation-heavy work ahead (the markdown renderer set, the
-  turn-sequencing race, the auto-RAG-as-mistake bug) tractable rather than a queue of things that each need
-  a live session. Its part 0, lazy `api.initialize`, also removes `test_scaffold.py`'s `importorskip`, so
-  it widens what CI can run at the same time.
+- **Drag-and-drop is for the human**: feeding corpora in, attaching a file to check a render — dozens of
+  times a day, through a `FileDialog` that is currently the sole entry path. **The deferred `FileDialog`
+  improvements belong to this same category** and are wanted for the same reason: smart-case find,
+  thumbnail previews, the multi-extension filter, the per-use-site boilerplate. They are not user-facing
+  polish so much as throughput for whoever is driving the apps all day.
+- **15 is for Claude, and specifically for writing probes**, not for GUI testing — that is a separate
+  problem which a scripting surface does nothing about, and which still needs a live session.
+
+  The evidence is already in the tree: `../librarian-extension/manual_tests/` holds six scripts —
+  `rag_live_corpus.py`, `rag_tool_rescue.py`, `webfetch_live_extractors.py`,
+  `webfetch_tier2_escalation.py`, `gemma4_reasoning_roundtrip.py`, `vision_check.py` — each of which
+  reaches into Librarian's agent machinery to exercise one feature, and each of which had to arrange that
+  access for itself because the library does not offer it. That is a supported feature being asked for
+  repeatedly and answered ad-hoc every time.
+
+  So 15 is less "new capability" than "stop making every probe re-invent the entry point". Its part 0, lazy
+  `api.initialize`, also removes `test_scaffold.py`'s `importorskip`, widening what CI can run.
 
 **Not in the Researchers' Night run**, decided the same day: Hindsight memory (06) waits until after it —
 because a visitor who talks to the system once cannot observe a feature that pays off over a long-running
