@@ -422,32 +422,51 @@ on-corpus similarity distribution the threshold work needed.
 
 ## 3b. Next actions, as of 2026-08-07
 
-> ### Where this stands mid-afternoon on 2026-08-07 — read this first
+> ### Settled late on 2026-08-07: it is density, not size
 >
-> ECCOMAS is done (built, indexed, 314 questions, swept — §4 carries what it said, including the retraction
-> it forced). What is *in flight* is the hydrogen photocatalysis slice, and the sequence below it:
+> The photocatalysis slice was built to make the two explanations disagree, and it did. All four corpora
+> have now been scored at a matched *share* of the corpus, which is the comparison a matched `k` cannot
+> make. **Mean set recall, synthesis questions:**
 >
-> 1. **Running now**: `make_questions.py hydrogen-photocat`, started ~10:50, ~3 h, writing
->    `hydrogen_photocat_questions.json`. Its corpus is already built and indexed
->    (`documents_hydrogen_photocat`, `rag_index_hydrogen_photocat`, 2500 documents, indexed in 343 s).
->    **Do not score any corpus while it runs** — the scorers read every question file at startup, and a
->    half-written one is invalid JSON.
-> 2. **Then re-run the three existing corpora**: `synthesis_recall.py hydrogen`, `arxiv-ai`,
->    `eccomas2024`. Not for new data — for *measured* fraction curves, since the script now reads its
->    curves at a matched share of the corpus as well as at fixed `k`, and the numbers in §4's corrected
->    table were interpolated between fixed-`k` points. Expect hydrogen to be materially slower than before:
->    10% of 11,974 is `k=1197`, and the deepest fraction now sets the retrieval depth.
-> 3. **Then the run this was all for**: `synthesis_recall.py hydrogen-photocat`. Small *and* crowded, so
->    it is the first corpus on which the size and density explanations disagree. Against ECCOMAS it is
->    size-matched (2,500 vs 2,520) with the crowding different; against hydrogen it is crowding-matched
->    with the size different. A separation that recovers indicts size; one that stays flat indicts density.
+> | corpus | n | 0.5% | 1% | 2% | 5% | 10% |
+> |---|---:|---:|---:|---:|---:|---:|
+> | hydrogen | 11,974 | 11.2% | 21.7% | 27.0% | 41.4% | 57.9% |
+> | **hydrogen-photocat** | **2,500** | **9.3%** | **17.1%** | **27.1%** | **37.9%** | **52.9%** |
+> | eccomas2024 | 2,520 | 19.3% | 25.7% | 39.3% | 55.7% | 68.6% |
+> | arxiv-ai | 1,268 | 17.9% | 29.5% | 43.6% | 55.8% | 66.0% |
+>
+> The rule was written before the run: *"a separation that recovers indicts size; one that stays flat
+> indicts density."* Both arms answer the same way.
+>
+> - **Against hydrogen** (crowding matched, size differs 4.8x) the curve is flat — 27.1% against 27.0% at
+>   2%, and within a couple of points everywhere else. Cutting the corpus to a fifth bought nothing.
+> - **Against ECCOMAS** (size matched to within 1%, crowding differs) the gap survives intact: 27.1%
+>   against 39.3% at 2%. Two corpora of the same size, twelve points apart.
+>
+> So **size is ruled out as the explanation**, and topical crowding is what remains standing. The slice
+> carries its parent's behaviour, not its size class.
+>
+> **The focused row says the same thing more sharply**, and was not predicted: at 2% the slice reaches
+> 86.6% against hydrogen's 94.3% and ECCOMAS's 95.6% — it is the *worst* of the four on known-item
+> retrieval despite being drawn from the best-performing corpus. Crowding costs focused retrieval too,
+> which the size hypothesis has no way to produce at all.
+>
+> **The caveat, stated rather than buried:** the slice's questions were generated from the slice's own
+> documents, so question difficulty is not held constant across the comparison — a denser corpus may well
+> yield harder questions, and that is not separable from a denser corpus being harder to search. The
+> design controls the corpus, not the questions. What the result does establish is the negative, which is
+> what it was built for: 4.8x less corpus, same recall, so size is not the lever.
+>
+> Raw numbers in `synthesis_recall_{hydrogen,hydrogen-photocat,arxiv-ai,eccomas2024}.json`.
 >
 > The slice's provenance, since it will not be obvious later: built by `make_subcorpus.py` from the seed
 > query "photocatalytic water splitting hydrogen production" (Juha's choice, to avoid a random seed landing
 > on an outlier). Validated before use — the 2500-cut sits at vector distance 0.492 against a corpus median
 > of 0.574, photocatalysis is 3.3x enriched, both word forms are captured at the same rate (75.3% of
 > "photocatalysis", 69.3% of "photocatalytic"), and the unrelated clusters are excluded: 2.2% of the
-> vehicle documents against 20.9% expected by chance.
+> vehicle documents against 20.9% expected by chance. Its 319 questions took ~2 h to generate on
+> qwen3.6-35b-a3b; the scoring runs that consumed them take about a minute each, hydrogen included, so the
+> generation is the whole cost of adding a corpus.
 
 In order, and **the order was swapped from the 08-06 draft** (Juha, 2026-08-07): the new corpus goes
 first, because it runs on instruments that already exist, and the reordering experiment goes last, because
