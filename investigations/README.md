@@ -24,6 +24,7 @@ that stops the link decaying again, and it is worth keeping up even when the con
 | `anime4k-performance/` | Where the Anime4K upscaler's time goes |
 | `dpg-focus/` | Which DPG predicate means "this text field holds the caret", and what `focus_item` does to a child window |
 | `dpg-overlays/` | Why a floating overlay window must be sized to its content: it eats the mouse across its whole rect, and autosize has a silent 100 px floor |
+| `dpg-dnd/` | Whether OS-level file drag-and-drop is reachable without writing a shim per platform (it is — via the GLFW DPG already links), and the render-thread constraint that comes with it |
 
 ## Shared instruments are pointed at, not copied
 

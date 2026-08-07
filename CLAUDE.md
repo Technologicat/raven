@@ -40,7 +40,8 @@ index.
 - **`investigations/`** — things we measured, profiled or reproduced. **One directory per investigation, holding
   its write-up, its scripts and its data together**, because a measurement whose apparatus lives in another tree
   is not reproducible in practice however carefully it was written. Currently `context-injects`, `retrieval`,
-  `tool_budget`, `vram`, `tha3-performance`, `anime4k-performance`, `dpg-focus`, `dpg-overlays`.
+  `tool_budget`, `tool_refusal`, `vram`, `tha3-performance`, `anime4k-performance`, `dpg-focus`, `dpg-overlays`,
+  `dpg-dnd`.
 - **`TODO.md`** for planned work, **`TODO_DEFERRED.md`** for things noticed mid-task and set aside.
 - **`dpg-notes.md`**, **`raven-style-guide.md`** — at the root because they are consulted constantly.
 

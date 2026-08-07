@@ -1194,8 +1194,13 @@ the paths and hand off to a background task or a frame callback, as pitfall #4 a
 **Still untested**: Wayland (GLFW implements it, but that is inference, not observation), and multi-file
 drops — the signature is `(window, count, paths)` and only `count == 1` has been seen.
 
-The probe is `dnd_probe.py`; it discovers an answer rather than asserting one, so it stayed in the
-scratchpad. The feature gets tests when it is built.
+**Decided 2026-08-07 (Juha): do not gate the feature on Wayland.** There is no Wayland session here to test
+against and none to hand; X11, macOS and Windows are already three platforms, and the win is large enough
+that waiting for a fourth is the wrong trade. If it turns out not to work there, someone can file an issue.
+
+The probe and the full result are in `investigations/dpg-dnd/` — kept because it is re-runnable, which is
+what closes the Wayland question when a machine turns up. The feature gets tests of its own when it is
+built.
 
 ## Librarian's help card has no room to describe attachments
 
