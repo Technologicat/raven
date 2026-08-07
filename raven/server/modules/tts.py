@@ -173,7 +173,12 @@ def text_to_speech(voice: str,
     # Encoding then yields empty audio, and a duration of zero, which clients read as "nothing to play" —
     # so we only note it in the log, and let the normal response path below do the rest.
     if not segment_audios_s16:
-        logger.info(f"text_to_speech: nothing pronounceable in '{text}'; returning empty audio.")
+        # Described, not quoted, even though this is the failure path and the input is exactly what one
+        # wants to see. The text here is what the character was about to say, so it is the conversation.
+        # `repr` of the offending characters is the part that actually diagnoses this: what reaches here is
+        # punctuation and whitespace, and seeing *which* is enough.
+        logger.info(f"text_to_speech: nothing pronounceable in {len(text)} characters "
+                    f"({sorted(set(text))!r}); returning empty audio.")
 
     # Our output format is inspired by Kokoro-FastAPI's "/dev/captioned_speech" endpoint (June 2025),
     # but we include the phonemes too (for lipsyncing) and the audio duration.

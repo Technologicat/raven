@@ -269,7 +269,11 @@ def format_results(texts: List[str],
 
 @memoize
 def search_google(query: str, max_links: int = 10) -> Tuple[str, Dict]:
-    logger.info(f"search_google: Searching Google for {query}...")
+    # The query is the user's question in their own words, so it is counted rather than quoted; likewise
+    # the results, which say what was asked about as plainly as the query does. Diagnosing a scraper that
+    # a site's markup change has broken needs the *counts* - zero results parsed is the symptom - and
+    # anything beyond that is better asked for as a reproduction than harvested from everyone's searches.
+    logger.info(f"search_google: searching Google, {len(query)} character query, max_links {max_links}.")
     driver.get(f"https://google.com/search?hl=en&q={encodeURIComponent(query)}&num={max_links}")
     wait_for_id("res")
     debug_dump()
@@ -290,12 +294,12 @@ def search_google(query: str, max_links: int = 10) -> Tuple[str, Dict]:
     links = get_attr_by_selector(selector=".yuRUbf a", attr="href")
 
     preformatted_text, results = format_results(texts=texts, links=links)
-    logger.debug(f"search_google: Found: {preformatted_text}")
+    logger.info(f"search_google: {len(results)} result(s), {len(preformatted_text)} characters.")
     return preformatted_text, results
 
 @memoize
 def search_duckduckgo(query: str, max_links: int = 10) -> Tuple[str, Dict]:
-    logger.info(f"search_duckduckgo: Searching DuckDuckGo for {encodeURIComponent(query)}...")
+    logger.info(f"search_duckduckgo: searching DuckDuckGo, {len(query)} character query, max_links {max_links}.")
     driver.get(f"https://duckduckgo.com/?kl=wt-wt&kp=-2&kav=1&kf=-1&kac=-1&kbh=-1&ko=-1&k1=-1&kv=n&kz=-1&kat=-1&kbg=-1&kbe=0&kpsb=-1&q={query}")
     wait_for_id("web_content_wrapper")
     debug_dump()
@@ -314,7 +318,7 @@ def search_duckduckgo(query: str, max_links: int = 10) -> Tuple[str, Dict]:
     texts = get_content_by_selector('[data-result="snippet"]')
 
     preformatted_text, results = format_results(texts=texts, links=links)
-    logger.debug(f"search_duckduckgo: Found: {preformatted_text}")
+    logger.info(f"search_duckduckgo: {len(results)} result(s), {len(preformatted_text)} characters.")
     return preformatted_text, results
 
 # # StartPage. Doesn't work yet. Likely missing some magic parameters from query.

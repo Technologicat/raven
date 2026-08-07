@@ -146,7 +146,7 @@
   - Speculation existed to gate a behavior that is itself gone. With it off, a question your document database had nothing on was answered by *"No matches in document database. Please try another query."* — the language model was bypassed entirely. That could not tell a question *about your documents* from a passing general question, so it refused both, and the toggle had to be flipped every time the discussion wandered.
   - **A question your documents have nothing on is now answered anyway**, with a `[no sources retrieved]` marker below the reply. The marker reports what was *retrieved*, not whether the answer used it.
   - With **Documents off** the marker does not appear, since it would only report the switch you just set. An **attachment still counts as grounding** either way — attach a PDF with the database off and the reply is treated as grounded in it.
-  - Nothing to do if you left Speculation at its default (off): that behavior is now simply what Documents-on does. If you used to switch it on, the reply is unchanged, but you will now see the marker where you previously saw nothing. `raven-minichat`'s `!speculate` command is gone with it.
+  - Nothing to do either way. If you left Speculation at its default (off), that behavior is now simply what Documents-on does, and nothing changes. If you used to switch it on, replies are unchanged but you will now see the marker where you previously saw nothing, and the AI is reminded to stick to what was retrieved. `raven-minichat`'s `!speculate` command is gone with it.
 
 *Raven-server*
 

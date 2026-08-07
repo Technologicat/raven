@@ -169,9 +169,13 @@ def transcribe(stt_model: STTModel,
         audio = audio_resample.resample(audio, from_rate=sample_rate, to_rate=stt_model.sample_rate)
         sample_rate = stt_model.sample_rate
 
-    prompt_log = f"'{prompt}'" if prompt is not None else None
-    language_log = f"'{language}'" if language is not None else None
-    logger.info(f"transcribe: request received with prompt = {prompt_log}, language = {language_log}.")
+    # The prompt is described by length, not quoted. Raven currently passes boilerplate here, but that is a
+    # property of today's caller and not of this function: `prompt` is free text on an endpoint any client
+    # can reach, and the standard Whisper idiom for it is to pass the *previous transcript segment* for
+    # continuity across chunks - which is a recording of someone speaking, turned into text.
+    prompt_log = f"{len(prompt)} characters" if prompt is not None else "none"
+    language_log = f"'{language}'" if language is not None else "autodetect"
+    logger.info(f"transcribe: request received with prompt: {prompt_log}, language: {language_log}.")
 
     # See:
     # https://huggingface.co/docs/transformers/en/model_doc/whisper
