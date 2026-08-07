@@ -60,8 +60,8 @@ length and phrasing all match and only the topic moves. See `CORPORA` below.
 sake: prose has no abstracts to sample, so both the sampling and the prompts differ down to the bone.)
 
 Usage:
-    python make_questions.py [--append] <hydrogen|arxiv-ai> <base_url> <model> [n_focused] [n_rambling]
-                             [--synthesis N]
+    python make_questions.py [--append] <hydrogen|banichuk|arxiv-ai|eccomas> <base_url> <model>
+                             [n_focused] [n_rambling] [--synthesis N]
 
 `--append` keeps every question already in the output file and adds more from papers not yet used. That is
 the way to grow a set: the seed fixes which *papers* are drawn, not what the model says about them, so
@@ -112,6 +112,24 @@ CORPORA = {
                                 "minority of cosmology, astronomy and speculative-physics records are "
                                 "mixed in — strays from saving everything to one folder, not planted "
                                 "confounders; local to the developer machine (not in this repository)"},
+    # Reads the physical slot rather than the `documents` symlink, deliberately — see the hydrogen note
+    # above for what reading the rotating slot costs.
+    #
+    # The one corpus here with *dirty provenance*: every abstract was extracted from a free-form conference
+    # PDF by an LLM pipeline, then hand-corrected. Two consequences that are properties of the data and not
+    # defects to fix. Lost line-break hyphens leave joined words ("strainstiffening" for "strain-stiffening"),
+    # which BM25 cannot match against the hyphenated query form. And two of the 2520 records carry an
+    # unbalanced brace from a mathematical fragment in the abstract, so a BibTeX parser rejects them — this
+    # generator among them. Retrieval is unaffected either way, since `.bib` is ingested as plain text.
+    "eccomas": {"docs_dir": pathlib.Path("~/.config/raven/llmclient/documents_eccomas2024").expanduser(),
+                "out_path": HERE / "eccomas_questions.json",
+                "sibling_topic": "computational methods in applied sciences and engineering",
+                "description": "abstracts from the 9th European Congress on Computational Methods in "
+                               "Applied Sciences and Engineering (ECCOMAS Congress 2024, Lisbon), 2520 "
+                               "records supplied by the conference organizers and spanning the whole "
+                               "breadth of the field — fluid and structural mechanics, optimization, "
+                               "numerical analysis, materials; local to the developer machine (not in "
+                               "this repository)"},
 }
 
 # Fixed, so that a rerun samples the same papers and the set stays comparable across regenerations.
@@ -254,9 +272,15 @@ def load_entry(path: pathlib.Path, require_abstract: bool = True) -> dict | None
         return None
     if not library.entries:
         return None
-    fields = {field.key: field.value for field in library.entries[0].fields}
-    abstract = (fields.get("Abstract") or "").strip()
-    title = (fields.get("Title") or "").strip()
+    # Keys are lowercased because BibTeX field names are case-insensitive and the writers disagree: a Web
+    # of Science export and `raven-arxiv2bib` write `Title = {...}`, while `raven-pdf2bib` and the BibTeX
+    # literature write `title = {...}`. Matching on exact case silently yields *zero* usable records rather
+    # than failing loudly, since a record with no title is a legitimate thing to skip. `bibtex_field_value`
+    # in `raven.common.utils` has always done this; this loader had not, because the first three corpora
+    # happened to agree.
+    fields = {field.key.lower(): field.value for field in library.entries[0].fields}
+    abstract = (fields.get("abstract") or "").strip()
+    title = (fields.get("title") or "").strip()
     if not title or (require_abstract and len(abstract) < MIN_ABSTRACT_CHARS):
         return None
     # The document id HybridIR reports is the filename, which is what the labels must key on.
