@@ -2,6 +2,11 @@
 
 **Status: designed, not started. The recommendation is to build half of it.**
 
+**Scheduled 2026-08-07 (Juha): waits, unless the `raven-fixbib` half is small enough to sneak in.** The
+Researchers' Night work comes first. This brief argues that half *is* small — the function plus a flag plus
+a report, with the collection already in hand — so it is a candidate for a gap rather than a slot. The
+indexer half is not a candidate under any reading.
+
 Sits outside the numbered Librarian run because it is not Librarian work: it touches `raven.papers`
 (`raven-fixbib`) and `raven.common` (`docextract`), and its consumers are the Visualizer importer and the
 Librarian indexer equally. Corpus hygiene, not a feature of any one app.

@@ -1140,6 +1140,12 @@ Discovered during brief-03 Half-2 multimodal work (2026-07-17, flagged by Juha).
 
 ## OS drag-and-drop of files into DPG apps (cross-platform)
 
+**Priority raised to ASAP, 2026-08-07 (Juha)** — second only to the TODO triage, and ahead of the
+Researchers' Night briefs. Two reasons: the probe below collapsed the cost from "write a shim per platform"
+to "call one exported GLFW function", and it improves the two gestures an open-house visitor makes most,
+attaching a file and opening one. Tracked here rather than as a brief because at this size it does not need
+one; the design is the probe's result.
+
 DPG apps can't receive files dragged in from the OS file manager — you must go through the in-app `FileDialog`
 every time. A recurring pain point across the fleet (Juha), and it compounds the image-picker problem above:
 with no drag-and-drop, the picker is the sole entry path, so the picker has to be good. There's a Windows-only

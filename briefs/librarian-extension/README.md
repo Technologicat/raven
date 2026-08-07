@@ -281,6 +281,27 @@ orderings and both are legitimate.
 and the point of this whole ordering is to close briefs faster than new ones open. 04 and 06 remain
 unordered against each other.
 
+**Superseded 2026-08-07 (Juha), by a deadline rather than by a better argument.** With Researchers' Night
+on 26 September, the question stopped being "which of these closes fastest" and became "which of these the
+open house needs":
+
+- **06 — Hindsight memory: after Researchers' Night, and the reason is the venue rather than the
+  schedule.** Memory pays off over a long-running relationship with the system, and an open house is the
+  opposite of that: visitors arrive, talk to it once, and leave. Its effects are invisible to that audience
+  *however finished it is*, so shipping it early buys nothing the exhibit can show. This is not a demotion on
+  merit — it remains the most interesting of the three, and it is what the **team** wants in the autumn, when
+  the interaction actually is long-term and accumulated context about the work is the whole point.
+
+  Worth generalizing, because it will decide other calls the same way: **a feature whose value accrues over
+  time cannot be demonstrated in an encounter that does not.** Ask what a visitor could observe in one
+  sitting before scheduling anything into the exhibit run.
+- **04 and 05 — MCP client and lorebook: question marks.** Both genuinely useful, neither
+  open-house-critical. They go in if the Researchers' Night work lands with room to spare, which is not the
+  way to bet.
+
+So all three of these are now *behind* `../researchers-night/`, and this sprint's remaining briefs are not
+what to pick up next. Read that folder's README instead.
+
 **Amended 2026-08-05, and it bends the closure-first rule rather than fitting it.** A deferred-TODO triage
 session opened two more briefs (15 and 16) and moved one of them ahead of 05. Recorded here because the
 ordering above is the thing being changed, and because the argument is not the one this section was built on.

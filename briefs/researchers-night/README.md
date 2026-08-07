@@ -28,6 +28,30 @@ sensible axes disagree — closure rate (smallest first, so briefs shut faster t
 exhibit deadline. 16, `crt-display` and `atmospheric-dust` are the only ones the deadline actually binds;
 everything else could slip past September without anything breaking.
 
+### Decided 2026-08-07 — what Monday starts on
+
+1. **Triage `TODO.md` and `TODO_DEFERRED.md` first** (Juha, partly via claude.ai). A two-part plan: a
+   mechanical sweep for stale items against a brief Juha will supply, then a human-review pass over what
+   survives. It goes first because the pile is what makes everything after it hard to see, and because the
+   sweep's whole point is that a backlog nobody can read end to end is not a queue.
+2. **Then OS-independent file-manager drag-and-drop, ASAP.** Not in this folder and not in any brief — it
+   lives in `TODO_DEFERRED.md`, "OS drag-and-drop of files into DPG apps", with the probe and the measured
+   result in `investigations/dpg-dnd/`. It jumps the queue because the 2026-08-07 probe collapsed its cost:
+   the platform work is already inside the GLFW that DPG links, so this is wiring rather than building, and
+   it improves the two gestures an open-house visitor makes most (attach a file, open one).
+3. **Then the exhibit briefs**: 16, then `crt-display`, with `atmospheric-dust` as slack.
+
+**Not in the Researchers' Night run**, decided the same day: Hindsight memory (06) waits until after it —
+because a visitor who talks to the system once cannot observe a feature that pays off over a long-running
+relationship, at any level of completeness — and the MCP client (04) and lorebook (05) are question marks,
+useful but not open-house-critical. See `../librarian-extension/README.md`, "After those three", which
+carries the generalizable form of the memory argument: **a feature whose value accrues over time cannot be
+demonstrated in an encounter that does not.**
+
+**Ligature repair** (`../ligature-repair-brief.md`) also waits, *unless* the `raven-fixbib` half turns out
+small enough to sneak in — which the brief argues it is, being the function plus a flag plus a report. The
+indexer half is not a candidate under any reading.
+
 **Brief 17 is reserved but unwritten** — a per-document LLM pass with retry, cache, resume and progress, cut
 out of 15 because it has three users of its own and is a batch-execution primitive rather than a scripting
 surface. If it stays unwritten, 17 may end up being something else, and 15's reference to it will need
