@@ -4,8 +4,6 @@ import pytest
 
 from unpythonic.env import env
 
-from raven.librarian import llmclient
-
 
 @pytest.fixture
 def llm_settings():
@@ -33,13 +31,25 @@ def llm_settings():
                tokens_per_character=0.27,
                context_length=32768,
                backend_flavor="lmstudio",
-               # The real tool registry, not a copy of it. `setup` cannot run here — it needs a live backend
-               # to ask for the model name, the tokenizer and the sampler defaults — but the registry is
-               # module-level precisely so that this does not force the tests to retype it. A hand-copy
-               # would be free to drift, and a test that asserts something about tools the product does not
-               # have is worse than no test.
+               # A copy of the tool registry, and it has to be one: importing `llmclient` to get the real
+               # thing pulls `spacy` and `transformers` through `raven.client.api`, which CI deliberately
+               # does not install — so a module-level import here fails *collection* for this whole
+               # package, and every librarian test disappears rather than the few that need a backend.
+               # `test_llmclient` `importorskip`s for the same reason; this file cannot, because it is the
+               # conftest and everything else in the directory depends on it.
                #
-               # The entrypoints are never called (tests fake `perform_tool_calls`), so what matters is the
-               # names; the real dict supplies them and cannot disagree with itself.
-               tool_entrypoints=llmclient.TOOL_ENTRYPOINTS,
-               document_tool_names=llmclient.DOCUMENT_TOOL_NAMES)
+               # The copy is guarded rather than trusted: `TestToolRegistry.test_the_fixture_matches_the_real_registry`
+               # compares it against `llmclient.TOOL_ENTRYPOINTS` and fails if they diverge. That test skips
+               # in CI along with the rest of `test_llmclient`, which is the right place for the cost to
+               # land — drift is a thing a developer introduces while adding a tool, and they run the full
+               # suite locally, where the import works.
+               #
+               # The entrypoints are never called (tests fake `perform_tool_calls`), so the names are what
+               # matter; `None` stands in for each function.
+               tool_entrypoints={"websearch": None,
+                                 "webfetch": None,
+                                 "get_current_time": None,
+                                 "search_documents": None,
+                                 "fetch_document": None,
+                                 "list_consulted_documents": None},
+               document_tool_names=frozenset({"search_documents", "fetch_document", "list_consulted_documents"}))
