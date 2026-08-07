@@ -10,7 +10,9 @@ NOTE for oobabooga/text-generation-webui users:
 If you want to see the final prompt in instruct or chat mode, start your server in `--verbose` mode.
 """
 
-__all__ = ["list_models",
+__all__ = ["TOOLS", "TOOL_ENTRYPOINTS", "DOCUMENT_TOOL_NAMES",
+
+           "list_models",
            "test_connection",
            "detect_backend_flavor",
            "setup",
@@ -607,6 +609,106 @@ def _resolve_model_info(backend_url: str, flavor: str) -> env:
         return env(label=ids[0], model_id=ids[0], context_length=None, is_vlm=None)
     return env(label=NO_MODEL_INFO, model_id=librarian_config.llm_model, context_length=None, is_vlm=None)
 
+# --------------------------------------------------------------------------------
+# The tool registry
+#
+# Module level rather than built inside `setup`, because none of it depends on anything `setup`
+# fetches - it is three literals - while `setup` itself cannot run without a live backend to ask
+# for the model name, the tokenizer and the sampler defaults. Trapped inside it, the registry was
+# unavailable to anything that could not open a connection, so the tests kept a hand-copy and the
+# two were free to drift.
+#
+# Read, never mutated, so one shared instance across sessions is safe.
+# --------------------------------------------------------------------------------
+
+TOOLS = [
+    {"type": "function",
+     "function": {"name": "websearch",
+                  "description": "Perform a web search.",
+                  "parameters": {"type": "object",
+                                 "required": ["query"],
+                                 "properties": {"query": {"type": "string",
+                                                          "description": "The search query."}}}}},
+    {"type": "function",
+     "function": {"name": "webfetch",
+                  "description": "Retrieve a web page's main content as clean text.",
+                  "parameters": {"type": "object",
+                                 "additionalProperties": False,
+                                 "required": ["url"],
+                                 "properties": {"url": {"type": "string",
+                                                        "description": "The URL to fetch."}}}}},
+    # The per-turn clock inject presents itself as a call to this tool, so it has to be a real one: a
+    # synthetic call naming a function the model was never offered is a fiction the model can act on.
+    # That is not a guess — it is the situation the document-matches inject was in before
+    # `search_documents` existed, where the model wrote the call out as literal text and the user got
+    # that instead of an answer, roughly one turn in three on Qwen3.6-27B.
+    #
+    # Registering it is correct on those grounds alone, and deliberately *not* claimed to fix the thing
+    # that prompted the look: a 2026-08-07 trace where the model called the clock call "erroneous" on a
+    # turn about arithmetic. Read again, that complaint is about *relevance* — "get_current_time is
+    # useless for math" — not about the function being absent. The inject still arrives on every turn
+    # whether or not the turn is about time, so a model inclined to remark on that will still remark.
+    {"type": "function",
+     "function": {"name": "get_current_time",
+                  "description": "Get the current local time.",
+                  "parameters": {"type": "object",
+                                 "additionalProperties": False,
+                                 "required": [],
+                                 "properties": {}}}},
+    {"type": "function",
+     "function": {"name": "search_documents",
+                  "description": ("Search the user's local document database. Use this to look for material "
+                                  "the conversation does not already contain, or to search again with a "
+                                  "better query once you have seen what a first search returned."),
+                  "parameters": {"type": "object",
+                                 "additionalProperties": False,
+                                 "required": ["query"],
+                                 # No `k`: how many results come back is host configuration, not a model
+                                 # decision. Keeping the surface to one required string also leaves the
+                                 # fewest ways to emit a malformed call.
+                                 "properties": {"query": {"type": "string",
+                                                          "description": "Keywords or a natural-language question."}}}}},
+    {"type": "function",
+     "function": {"name": "fetch_document",
+                  "description": ("Read a document from the user's local document database, by the ID "
+                                  "reported in a search result. Use this when a search match looks "
+                                  "relevant but you need more of the document around it."),
+                  "parameters": {"type": "object",
+                                 "additionalProperties": False,
+                                 "required": ["document_id"],
+                                 "properties": {"document_id": {"type": "string",
+                                                                "description": "The document ID, as given in a search result."},
+                                                # Spans are in characters because that is the unit the search
+                                                # results report; a model left to guess would assume tokens.
+                                                "offset": {"type": "integer",
+                                                           "description": "Character offset to start reading from. Omit to start at the beginning."},
+                                                "length": {"type": "integer",
+                                                           "description": "How many characters to read. Omit to read to the end."}}}}},
+    {"type": "function",
+     "function": {"name": "list_consulted_documents",
+                  "description": ("List the documents from the user's local document database that this "
+                                  "conversation has already looked at. Use this when the discussion "
+                                  "refers back to material that is no longer written out above; the "
+                                  "list gives the IDs to read again with fetch_document."),
+                  # No parameters at all: the list is a property of the conversation, and nothing about
+                  # it is the model's to choose.
+                  "parameters": {"type": "object",
+                                 "additionalProperties": False,
+                                 "properties": {}}}}
+]
+TOOL_ENTRYPOINTS = {"websearch": websearch_wrapper,
+                    "webfetch": webfetch_wrapper,
+                    "get_current_time": get_current_time_wrapper,
+                    "search_documents": search_documents_wrapper,
+                    "fetch_document": fetch_document_wrapper,
+                    "list_consulted_documents": list_consulted_documents_wrapper}
+
+# Tools that are only offered on turns where the document database is in play. Callers gate with
+# `invoke`'s `tool_names`; see `raven.librarian.scaffold.ai_turn`, which assembles the per-turn list.
+# Named here, next to the specs, so the two cannot drift.
+DOCUMENT_TOOL_NAMES = frozenset({"search_documents", "fetch_document", "list_consulted_documents"})
+
+
 def setup(backend_url: str,
           quiet: bool = False) -> env:
     """Connect to LLM at `backend_url`.
@@ -704,104 +806,13 @@ def setup(backend_url: str,
     character_card = librarian_config.setup_character_card(template_vars)
     greeting = librarian_config.llm_greeting
 
-    # Tools (functions) to make available to the AI for tool-calling (for models that support that - as of May 2025, at least Qwen 2 or later do).
-    # These tools can be called by the LLM; see function `ai_turn` in `raven.librarian.scaffold`.
-    #
-    # For now, these are hardcoded, because Raven must provide the backends (at least an adaptor) for any tools it makes available to the LLM.
-    tools = [
-        {"type": "function",
-         "function": {"name": "websearch",
-                      "description": "Perform a web search.",
-                      "parameters": {"type": "object",
-                                     "required": ["query"],
-                                     "properties": {"query": {"type": "string",
-                                                              "description": "The search query."}}}}},
-        {"type": "function",
-         "function": {"name": "webfetch",
-                      "description": "Retrieve a web page's main content as clean text.",
-                      "parameters": {"type": "object",
-                                     "additionalProperties": False,
-                                     "required": ["url"],
-                                     "properties": {"url": {"type": "string",
-                                                            "description": "The URL to fetch."}}}}},
-        # The per-turn clock inject presents itself as a call to this tool, so it has to be a real one: a
-        # synthetic call naming a function the model was never offered is a fiction the model can act on.
-        # That is not a guess — it is the situation the document-matches inject was in before
-        # `search_documents` existed, where the model wrote the call out as literal text and the user got
-        # that instead of an answer, roughly one turn in three on Qwen3.6-27B.
-        #
-        # Registering it is correct on those grounds alone, and deliberately *not* claimed to fix the thing
-        # that prompted the look: a 2026-08-07 trace where the model called the clock call "erroneous" on a
-        # turn about arithmetic. Read again, that complaint is about *relevance* — "get_current_time is
-        # useless for math" — not about the function being absent. The inject still arrives on every turn
-        # whether or not the turn is about time, so a model inclined to remark on that will still remark.
-        {"type": "function",
-         "function": {"name": "get_current_time",
-                      "description": "Get the current local time.",
-                      "parameters": {"type": "object",
-                                     "additionalProperties": False,
-                                     "required": [],
-                                     "properties": {}}}},
-        {"type": "function",
-         "function": {"name": "search_documents",
-                      "description": ("Search the user's local document database. Use this to look for material "
-                                      "the conversation does not already contain, or to search again with a "
-                                      "better query once you have seen what a first search returned."),
-                      "parameters": {"type": "object",
-                                     "additionalProperties": False,
-                                     "required": ["query"],
-                                     # No `k`: how many results come back is host configuration, not a model
-                                     # decision. Keeping the surface to one required string also leaves the
-                                     # fewest ways to emit a malformed call.
-                                     "properties": {"query": {"type": "string",
-                                                              "description": "Keywords or a natural-language question."}}}}},
-        {"type": "function",
-         "function": {"name": "fetch_document",
-                      "description": ("Read a document from the user's local document database, by the ID "
-                                      "reported in a search result. Use this when a search match looks "
-                                      "relevant but you need more of the document around it."),
-                      "parameters": {"type": "object",
-                                     "additionalProperties": False,
-                                     "required": ["document_id"],
-                                     "properties": {"document_id": {"type": "string",
-                                                                    "description": "The document ID, as given in a search result."},
-                                                    # Spans are in characters because that is the unit the search
-                                                    # results report; a model left to guess would assume tokens.
-                                                    "offset": {"type": "integer",
-                                                               "description": "Character offset to start reading from. Omit to start at the beginning."},
-                                                    "length": {"type": "integer",
-                                                               "description": "How many characters to read. Omit to read to the end."}}}}},
-        {"type": "function",
-         "function": {"name": "list_consulted_documents",
-                      "description": ("List the documents from the user's local document database that this "
-                                      "conversation has already looked at. Use this when the discussion "
-                                      "refers back to material that is no longer written out above; the "
-                                      "list gives the IDs to read again with fetch_document."),
-                      # No parameters at all: the list is a property of the conversation, and nothing about
-                      # it is the model's to choose.
-                      "parameters": {"type": "object",
-                                     "additionalProperties": False,
-                                     "properties": {}}}}
-    ]
-    tool_entrypoints = {"websearch": websearch_wrapper,
-                        "webfetch": webfetch_wrapper,
-                        "get_current_time": get_current_time_wrapper,
-                        "search_documents": search_documents_wrapper,
-                        "fetch_document": fetch_document_wrapper,
-                        "list_consulted_documents": list_consulted_documents_wrapper}
-
-    # Tools that are only offered on turns where the document database is in play. Callers gate with
-    # `invoke`'s `tool_names`; see `raven.librarian.scaffold.ai_turn`, which assembles the per-turn list.
-    # Named here, next to the specs, so the two cannot drift.
-    document_tool_names = frozenset({"search_documents", "fetch_document", "list_consulted_documents"})
-
     # Set up the chat completion request metadata template. Tool-calling instructions are NOT injected
     # client-side: every tool-capable model new enough to matter carries them in its own chat template, and the
     # backend builds them from the `tools` field below. `invoke` provides or strips `tools` per invocation.
     request_data = {
         "stream": True,  # stream each token to the client as it is generated, for live UI updates
         "messages": [],  # chat transcript including system messages; populated per-call by `invoke`
-        "tools": tools,  # tools available for tool-calling, for models that support it
+        "tools": TOOLS,  # tools available for tool-calling, for models that support it
     }
     if request_model is not None:
         request_data["model"] = request_model  # names the model (LM Studio JIT loads it on demand); harmless elsewhere
@@ -847,9 +858,9 @@ def setup(backend_url: str,
                    character_card=character_card,
                    stopping_strings=stopping_strings,
                    greeting=greeting,
-                   tools=tools,  # for inspection
-                   tool_entrypoints=tool_entrypoints,  # for our implementation to be able to call them
-                   document_tool_names=document_tool_names,  # subset of `tools` gated on the document database
+                   tools=TOOLS,  # for inspection
+                   tool_entrypoints=TOOL_ENTRYPOINTS,  # for our implementation to be able to call them
+                   document_tool_names=DOCUMENT_TOOL_NAMES,  # subset of `TOOLS` gated on the document database
                    backend_url=backend_url,
                    request_data=request_data,
                    personas=personas)

@@ -44,6 +44,36 @@ def _set_allowlist(monkeypatch, allowlist):
     monkeypatch.setattr(llmclient.librarian_config, "webfetch_allowlist", allowlist)
 
 
+class TestToolRegistry:
+    """The three halves of the registry have to agree, and nothing checks that at runtime.
+
+    A tool advertised without an entrypoint is a promise the model will try to collect: `perform_tool_calls`
+    looks the name up, misses, and spends a round returning an error. One registered without a spec is
+    unreachable — the model is never told it exists. Neither shows up as an exception anywhere.
+    """
+
+    def test_every_advertised_tool_has_an_entrypoint(self):
+        advertised = {t["function"]["name"] for t in llmclient.TOOLS}
+        assert advertised <= set(llmclient.TOOL_ENTRYPOINTS), (
+            f"advertised with no implementation: {sorted(advertised - set(llmclient.TOOL_ENTRYPOINTS))}")
+
+    def test_every_entrypoint_is_advertised(self):
+        advertised = {t["function"]["name"] for t in llmclient.TOOLS}
+        assert set(llmclient.TOOL_ENTRYPOINTS) <= advertised, (
+            f"implemented but never offered: {sorted(set(llmclient.TOOL_ENTRYPOINTS) - advertised)}")
+
+    def test_the_document_tools_are_a_subset_of_the_registry(self):
+        """`maybe_tool_names_for_turn` computes the non-document group by subtracting this set, so a name
+        in it that is not a real tool would silently shrink nothing while looking like it gated something."""
+        assert llmclient.DOCUMENT_TOOL_NAMES <= set(llmclient.TOOL_ENTRYPOINTS)
+
+    def test_the_entrypoints_are_callable(self):
+        """The registry is module-level and shared, so a name bound to `None` by accident would surface only
+        when a model happened to call that tool."""
+        for name, function in llmclient.TOOL_ENTRYPOINTS.items():
+            assert callable(function), f"entrypoint for '{name}' is not callable: {function!r}"
+
+
 class TestWebfetchWrapperGating:
     def test_no_allowlist_fetches_anything(self, monkeypatch, fake_fetch):
         _set_allowlist(monkeypatch, None)
