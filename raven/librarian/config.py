@@ -23,7 +23,7 @@ llmclient_userdata_dir = global_config.toplevel_userdata_dir / "llmclient"
 # The two files the chat frontends persist to. Config rather than per-frontend literals because the GUI and
 # the CLI are meant to share one chat history: they did, but only because two separately written pairs of
 # filenames happened to agree, with nothing enforcing it and nothing to notice if one drifted.
-llm_datastore_file = llmclient_userdata_dir / "data.json"  # chat node datastore
+llm_datastore_file = llmclient_userdata_dir / "chat.json"  # chat node datastore
 llm_state_file = llmclient_userdata_dir / "state.json"  # important node IDs for the chat client state
 # Attachment sidecars live beside the datastore, in a directory derived from its name — see
 # `chattree.PersistentForest.sidecar_dir`.
@@ -309,7 +309,7 @@ webfetch_trust_search_results = False
 # Multimodal (image) input and storage
 #
 # When a VLM (vision-capable model) is loaded, the user can attach images to a message. Images are stored as
-# *sidecar files* in a directory next to the chat datastore JSON (`<datastore>.images/`), referenced from
+# *sidecar files* in a directory next to the chat datastore JSON (`<datastore>.sidecars/`), referenced from
 # messages by a Raven-internal `sidecar:<filename>` URL. On wire-send, `llmclient.invoke` substitutes a real
 # `data:` URL by reading the sidecar bytes. No `https://` URLs ever land in a stored datastore, so a saved
 # chat reloads without network access, survives the source page going away (link rot), and never phones home
