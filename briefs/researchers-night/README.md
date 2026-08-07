@@ -12,7 +12,7 @@ Librarian features and 11 is Visualizer, sitting side by side here because of wh
 
 | Brief | What | Status |
 |---|---|---|
-| `15_headless-agent-driver-brief.md` | A scripting surface over the scaffold — build a turn's prompt, or run a turn and report what happened | **First in the queue.** v0.2.9. Ranked on *timing*, not closure: roughly seven weeks of investigation-heavy work sit ahead of it and every one of them wants a scriptable driver |
+| `15_headless-agent-driver-brief.md` | A scripting surface over the scaffold — build a turn's prompt, or run a turn and report what happened | **First in the queue.** v0.2.9. Ranked on *timing*, not closure: roughly seven weeks of investigation-heavy work sit ahead of it and every one of them wants a scriptable driver. It is also **a power multiplier for Claude specifically** — see below |
 | `16_chat-graph-view-brief.md` | The chat tree as a graph, for the exhibit | Researchers' Night. Explanatory before navigational — the job is making "an LLM is a multiverse generator" visible. Step zero is that `XDotWidget.set_graph` has no callers and no tests |
 | `crt-display.md` | Avatar postprocessor: CRT look | Researchers' Night |
 | `atmospheric-dust.md` | Avatar postprocessor: dust | Researchers' Night, and **the schedule's slack** — lands only if time remains. Ranked behind 16 on 2026-08-05. Safe to drop: nothing depends on it, and it borrows its priority-band scheme *from* `crt-display.md` rather than the other way round |
@@ -36,10 +36,35 @@ everything else could slip past September without anything breaking.
    sweep's whole point is that a backlog nobody can read end to end is not a queue.
 2. **Then OS-independent file-manager drag-and-drop, ASAP.** Not in this folder and not in any brief — it
    lives in `TODO_DEFERRED.md`, "OS drag-and-drop of files into DPG apps", with the probe and the measured
-   result in `investigations/dpg-dnd/`. It jumps the queue because the 2026-08-07 probe collapsed its cost:
-   the platform work is already inside the GLFW that DPG links, so this is wiring rather than building, and
-   it improves the two gestures an open-house visitor makes most (attach a file, open one).
+   result in `investigations/dpg-dnd/`. Two reasons, and **the exhibit is not one of them** — by the test
+   above, a visitor in one sitting is not dragging files out of a file manager either:
+   - **The 2026-08-07 probe collapsed its cost.** The platform work is already inside the GLFW that DPG
+     links, so this is wiring rather than building.
+   - **It is a power multiplier for our own testing**, which is where the gesture actually happens dozens of
+     times a day: feeding corpora in, attaching a file to check a render, driving the GUI by hand. The
+     `FileDialog` is currently the sole entry path for all of it, which is also why that picker has
+     accumulated its own pile of deferred improvements.
 3. **Then the exhibit briefs**: 16, then `crt-display`, with `atmospheric-dust` as slack.
+
+### Two of these are power multipliers, and it is worth naming the category
+
+Drag-and-drop and **15** are not features for end users at all. They are tooling that multiplies the
+*builders'* throughput, and they are ranked accordingly rather than by user-visible value. Since review is
+the binding constraint on this project (see the root `CLAUDE.md`, "Who develops Raven"), anything that
+raises how much can be built and checked per session competes directly with feature work rather than
+sitting beneath it.
+
+They multiply different people, which is why both are wanted:
+
+- **Drag-and-drop is for the human**: feeding corpora in, attaching a file to check a render, driving the
+  GUI by hand — dozens of times a day, through a `FileDialog` that is currently the sole entry path.
+- **15 is for Claude.** Today, exercising Librarian's backend end-to-end means driving the GUI, which needs
+  Juha present to launch it, drag, click and watch, and which costs a focus-stealing window on a shared
+  desktop every time. A scripting surface over the scaffold turns that into something the agent can run
+  unattended — which is what makes the investigation-heavy work ahead (the markdown renderer set, the
+  turn-sequencing race, the auto-RAG-as-mistake bug) tractable rather than a queue of things that each need
+  a live session. Its part 0, lazy `api.initialize`, also removes `test_scaffold.py`'s `importorskip`, so
+  it widens what CI can run at the same time.
 
 **Not in the Researchers' Night run**, decided the same day: Hindsight memory (06) waits until after it —
 because a visitor who talks to the system once cannot observe a feature that pays off over a long-running
