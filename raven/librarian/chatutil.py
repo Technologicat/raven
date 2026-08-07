@@ -5,6 +5,7 @@ __all__ = ["format_message_number",
            "format_message_heading",
            "format_date_now", "format_time_now",
            "format_chatlog_datetime_now",
+           "format_message_text_for_export",
            "format_disclosure_manifest",
            "format_reminder_to_write_conversationally",
            "format_reminder_to_use_information_from_context_only",
@@ -273,6 +274,29 @@ def format_chatlog_datetime_now() -> str:
     """
     weekday, isodate, isotime = _format_isodatetime(datetime.datetime.now())
     return f"{weekday} {isodate} {isotime}"
+
+def format_message_text_for_export(message: Dict[str, Any]) -> str:
+    """Return a message's full text for export: its thinking trace, marked, followed by its visible reply.
+
+    A thinking model produces two things, and an export that runs them together is not a record of what it
+    said — a reader cannot tell which sentences were the answer and which were the model talking itself
+    towards one, and neither can a parser. The two live in separate fields (`reasoning_content` beside
+    `content`), so the distinction is not being *recovered* here; it is being carried across instead of
+    dropped on the way out.
+
+    The trace is wrapped in `<think>`/`</think>`. Synthetic in the sense that no backend sent those tags —
+    `reasoning_content` arrives as its own field — but not invented: it is the spelling this project's
+    chat logs used before the June 2026 migration moved thinking into that field, so old exports and new
+    ones read alike, and `_migration_think_block` still recognizes it.
+
+    Messages with no trace (every user message, and any reply from a non-thinking model) come back as just
+    their text, with no empty block to step over.
+    """
+    reasoning = (message.get("reasoning_content") or "").strip()
+    text = content_to_text(message.get("content"))
+    if not reasoning:
+        return text
+    return f"<think>\n{reasoning}\n</think>\n\n{text}"
 
 def format_disclosure_manifest(payloads: List[Dict[str, Any]],
                                exported_at: Optional[str] = None) -> str:

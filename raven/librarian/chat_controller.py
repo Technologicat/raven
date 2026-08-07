@@ -817,13 +817,17 @@ class DPGChatMessage:
             shift_pressed = dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)
             # Note we only add the role name when we include also the node ID.
             # Omitting the speaker's name in regular mode improves convenience for copy-pasting an existing question into the chat field (to slightly modify it before re-submitting).
+            node_payload = self.parent_view.chat_controller.datastore.get_payload(node_id)  # auto-selects active revision  TODO: later (chat editing), we need to set the revision to load
+
+            # Text from the stored payload rather than from `self.text`, so that this and the full-log export
+            # say the same thing about the same message. `self.text` is the *rendered* form: it joins the
+            # widget's paragraphs and drops their `is_thought` flag, so a thinking model's trace came out
+            # welded to its answer with nothing between them, and a reader could not tell where one ended.
             formatted_message = format_chat_message_for_clipboard(message_number=None,  # a single message copied to clipboard does not need a sequential number
                                                                   role=role,
                                                                   persona=persona,
-                                                                  text=self.text,
+                                                                  text=chatutil.format_message_text_for_export(node_payload["message"]),
                                                                   add_heading=shift_pressed)
-
-            node_payload = self.parent_view.chat_controller.datastore.get_payload(node_id)  # auto-selects active revision  TODO: later (chat editing), we need to set the revision to load
 
             # A lifted fragment travels without the document manifest the full-log export carries, so it needs
             # its own - same format, because a one-message manifest and a fifty-message one should not need two
@@ -2556,7 +2560,7 @@ class DPGLinearizedChatView:
                 message = node_payload["message"]
                 role = message["role"]
                 persona = node_payload["general_metadata"]["persona"]  # stored persona for this chat message
-                text = chatutil.content_to_text(message["content"])
+                text = chatutil.format_message_text_for_export(message)
                 formatted_message = format_chat_message_for_clipboard(message_number=message_number,
                                                                       role=role,
                                                                       persona=persona,

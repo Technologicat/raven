@@ -214,6 +214,40 @@ def _parse_front_matter(text):
     return yaml.safe_load(body)
 
 
+class TestFormatMessageTextForExport:
+    """An export that runs the thinking trace together with the reply is not a record of what was said."""
+
+    def test_the_trace_is_marked_and_precedes_the_reply(self):
+        message = {"role": "assistant",
+                   "reasoning_content": "Weigh the options. Pick one.",
+                   "content": [{"type": "text", "text": "The Golden Gate Bridge."}]}
+        out = chatutil.format_message_text_for_export(message)
+        assert out.index("<think>") < out.index("Weigh the options") < out.index("</think>")
+        assert out.index("</think>") < out.index("The Golden Gate Bridge.")
+
+    def test_a_message_without_a_trace_gets_no_empty_block(self):
+        message = {"role": "user", "content": [{"type": "text", "text": "Name one famous bridge."}]}
+        assert chatutil.format_message_text_for_export(message) == "Name one famous bridge."
+
+    def test_a_blank_trace_counts_as_none(self):
+        """A non-thinking model can leave the field present and empty; that is not a trace to mark."""
+        message = {"role": "assistant", "reasoning_content": "   \n  ",
+                   "content": [{"type": "text", "text": "Four."}]}
+        assert chatutil.format_message_text_for_export(message) == "Four."
+
+    def test_the_reply_survives_verbatim(self):
+        """The point is to add a boundary, not to touch either side of it."""
+        message = {"role": "assistant", "reasoning_content": "hmm",
+                   "content": [{"type": "text", "text": "a *markdown* reply\n\nwith paragraphs"}]}
+        out = chatutil.format_message_text_for_export(message)
+        assert out.endswith("a *markdown* reply\n\nwith paragraphs")
+
+    def test_multi_part_content_is_joined_as_content_to_text_would(self):
+        message = {"role": "tool", "content": [{"type": "text", "text": "one "},
+                                               {"type": "text", "text": "two"}]}
+        assert chatutil.format_message_text_for_export(message) == "one two"
+
+
 class TestFormatDisclosureManifest:
     def test_manifest_is_leading_yaml_front_matter(self):
         result = chatutil.format_disclosure_manifest([_payload("user")])
