@@ -312,13 +312,13 @@ documented partial-success contract (a duplicate key lands in `failed_blocks` ra
   - **[P]** Wants extraction to be deterministic and cached, or the offsets aren't stable.
   - **[X] ~~"and Article 50 export cites exactly what was seen"~~** — wrong. Article 50 here is only about
         marking AI messages as AI-generated. See §7 on the two senses of "provenance".
-  - **[D] Deferred into brief 12** (2026-08-07). The stability precondition *is* brief 12's D1 — derived text
-        living in a sidecar, which is also what makes an offset mean anything, since chunk offsets are
-        expressed in the full text's coordinate system. Building offsets first would mean building them
-        against a coordinate space that is about to move. Note two things landed since this item was
-        written that change what an offset refers to: `docs_max_result_length` now splits an over-long
-        merged span into several results covering the same text, and the fixed-window design in
-        `hybridir`'s TODO would dissolve merging altogether.
+  - **[D] Deferred into brief 12** (2026-08-07). An offset always means an offset into the document's full
+        extracted text — that is the coordinate system, and chunking, merging and splitting are all just
+        ways of choosing *which* spans to hand over, none of which move the origin. So the precondition is
+        not about result shape at all: it is that the extracted text be **the same text every time**, which
+        is brief 12's D1. Any change to extraction shifts every stored offset silently, and extraction is
+        not currently stable — the ligature repair in `TODO_DEFERRED.md` would move it the moment it lands.
+        Deterministic cached extraction first, then offsets are worth storing.
 - [ ] **[N] Consulted-docs list**: add offset and length; add "previously consulted" **for disambiguation** —
       so the model doesn't read the list as referring to the current turn. Consistency then forces the inject
       ordering: list first, then the current turn's autosearch results.

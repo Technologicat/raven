@@ -1,8 +1,13 @@
 """Speech-to-text engine (Whisper), as an in-process library.
 
-Transport concerns (HTTP upload handling, audio container decoding, tqdm
-progress reporting) live in the server wrapper at `raven.server.modules.stt`.
-Client-side remote/local dispatch lives in `raven.client.mayberemote.STT`.
+Transport concerns (HTTP upload handling, audio container decoding) live in the
+server wrapper at `raven.server.modules.stt`. Client-side remote/local dispatch
+lives in `raven.client.mayberemote.STT`.
+
+`progress_callback` is for a caller with somewhere to show progress — an app
+running a long transcription in the foreground. The server does not use it: a
+request handler serving several callers at once has no single foreground to
+draw in.
 """
 
 __all__ = ["STTModel", "load_stt_model", "transcribe"]

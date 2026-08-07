@@ -354,7 +354,6 @@ def _synthetic_tool_exchange(llm_settings: env,
 
 def _perform_injects(llm_settings: env,
                      history: List[Dict],  # mutated!
-                     speculate: bool,
                      docs_query: Optional[str],
                      docs_matches: List[Dict],
                      tool_context: env,
@@ -386,12 +385,6 @@ def _perform_injects(llm_settings: env,
 
     `history`: Linearized message history in the OpenAI format sent to the LLM.
 
-    `speculate`: If `False`, and there is context to ground an answer in, remind the LLM to base its claims
-                 about that context on the context. With nothing to ground in, the reminder is skipped -
-                 asking a model to stick to documents that were never provided is a contradiction it will
-                 dutifully try to resolve, at a cost of up to 37x the deliberation, sometimes never
-                 terminating at all.
-
     `docs_query`: The query string the document database was searched with, or `None` if it wasn't searched.
                   Reported to the model as the arguments of the synthetic search call, so that the matches
                   arrive as the answer to a legible question rather than as free-floating material.
@@ -409,7 +402,11 @@ def _perform_injects(llm_settings: env,
     # Instruction-like injects -> leading system message.
     system_injects = [chatutil.format_date_now(),
                       chatutil.format_reminder_to_write_conversationally()]
-    if not speculate and grounding_material_exists:
+    # Ask the model to base claims about the context on the context, whenever there *is* context to base
+    # them on. Skipping the reminder when there is nothing to ground in is load-bearing rather than an
+    # optimization: asking a model to stick to documents that were never provided is a contradiction it
+    # will dutifully try to resolve, at a cost of up to 37x the deliberation, sometimes never terminating.
+    if grounding_material_exists:
         system_injects.append(chatutil.format_reminder_to_use_information_from_context_only())
     if tools_are_spent:
         system_injects.append(chatutil.format_notice_that_tools_are_spent())
@@ -423,16 +420,10 @@ def _perform_injects(llm_settings: env,
                                             function_name="get_current_time",
                                             arguments={},
                                             result_text=chatutil.format_time_now())
-    if docs_matches:
-        # The synthetic call names the real tool, which is no longer a fiction: asked about something these
-        # matches do not cover, the model reaches for a second, better-aimed search, and now there is one to
-        # reach for. Before that tool existed it wrote the call out as literal text and the user got that
-        # instead of an answer, roughly one turn in three on Qwen3.6-27B.
-        data_injects.extend(_synthetic_tool_exchange(llm_settings=llm_settings,
-                                                     call_id="raven_docs",
-                                                     function_name="search_documents",
-                                                     arguments={"query": docs_query if docs_query is not None else ""},
-                                                     result_text=chatutil.format_docs_matches(docs_matches)))
+    # Order is load-bearing: the earlier conversation's documents, then this turn's search results. The two
+    # lists look alike, and whichever sits closest to the user's message reads as the answer to it — so with
+    # the consulted list last, a model could take a document it read three turns ago for something the
+    # current search just returned. Chronological order says what the wording says, and the two agree.
     consulted_documents = getattr(tool_context, "consulted_documents", None)
     if consulted_documents:
         # Pushed, not merely offered as a tool, because the model cannot detect the gap it fills. At a
@@ -444,6 +435,16 @@ def _perform_injects(llm_settings: env,
                                                      function_name="list_consulted_documents",
                                                      arguments={},
                                                      result_text=chatutil.format_consulted_documents(consulted_documents)))
+    if docs_matches:
+        # The synthetic call names the real tool, which is no longer a fiction: asked about something these
+        # matches do not cover, the model reaches for a second, better-aimed search, and now there is one to
+        # reach for. Before that tool existed it wrote the call out as literal text and the user got that
+        # instead of an answer, roughly one turn in three on Qwen3.6-27B.
+        data_injects.extend(_synthetic_tool_exchange(llm_settings=llm_settings,
+                                                     call_id="raven_docs",
+                                                     function_name="search_documents",
+                                                     arguments={"query": docs_query if docs_query is not None else ""},
+                                                     result_text=chatutil.format_docs_matches(docs_matches)))
 
     for position in range(len(history) - 1, -1, -1):
         if history[position]["role"] == "user":
@@ -711,7 +712,6 @@ def ai_turn(llm_settings: env,
             docs_enabled: bool,
             docs_query: Optional[str],
             docs_num_results: Optional[int],
-            speculate: bool,
             markup: Optional[str],
             on_docs_start: Optional[Callable],
             on_docs_done: Optional[Callable],
@@ -774,18 +774,6 @@ def ai_turn(llm_settings: env,
     `docs_num_results`: How many `docs_query` results to return, at most. Used only if `docs_query` is supplied.
 
                         If not supplied, use the default of `_search_docs`, which see.
-
-    `speculate`: Used only if `docs_query` is supplied.
-
-                 If `False`:
-
-                     If the search returns no matches, bypass the LLM, creating a no-match chat node.
-
-                     If the search returns at least one match, then remind the LLM to base its reply on the
-                     information provided in the context only. How well this works depends on the LLM used;
-                     Qwen3 2507 30B-A3B mostly seems to do fine.
-
-                 If `True`, allow the LLM to respond regardless.
 
     `markup`: Markup type to use for marking thought blocks, or `None` for no markup. One of:
         "ansi": ANSI terminal color codes.
@@ -997,7 +985,6 @@ def ai_turn(llm_settings: env,
         # Prepare the final LLM prompt, by including the temporary injects (the document search results, too).
         _perform_injects(llm_settings=llm_settings,
                          history=message_history,
-                         speculate=speculate,
                          docs_query=docs_query,
                          docs_matches=docs_matches,
                          tool_context=tool_context,
@@ -1057,16 +1044,21 @@ def ai_turn(llm_settings: env,
             payload["generation_metadata"] = {"model": out.model,
                                               "n_tokens": out.n_tokens,
                                               "dt": out.dt}
-            if not speculate:
-                # Record whether this reply had anything to stand on besides the model's own knowledge, so
-                # the GUI can say so. Only meaningful when the user asked to be told - with speculation on,
-                # the field is absent, which reads as "nothing to say" rather than as a third state.
-                #
-                # Not a guard: it does not withhold the reply. The guard it replaces could not tell a
-                # question about the documents from a general-knowledge aside, and in the default
-                # configuration answered "what is 2+2?" with "No matches in document database."
-                payload["generation_metadata"]["grounded"] = bool(tool_context.grounded or
-                                                                  _attachment_is_present(message_history))
+            # Record whether this reply had anything to stand on besides the model's own knowledge, so the
+            # GUI can say so.
+            #
+            # Only recorded when the documents are in play, and that condition is the whole content of the
+            # marker's honesty: with documents switched off, "no sources retrieved" would announce what the
+            # user just chose, and the state that is actually worth reporting - documents on, nothing came
+            # back - would be indistinguishable from it. An attachment still grounds a reply either way, so
+            # it is read regardless. Absent means "nothing to say", which beats a third state.
+            #
+            # Not a guard: it does not withhold the reply. The guard it replaces could not tell a question
+            # about the documents from a general-knowledge aside, and in the default configuration answered
+            # "what is 2+2?" with "No matches in document database."
+            attachment_grounds = _attachment_is_present(message_history)
+            if documents_available or attachment_grounds:
+                payload["generation_metadata"]["grounded"] = bool(tool_context.grounded or attachment_grounds)
             if docs_query is not None:
                 payload["retrieval"] = {"query": docs_query,
                                         "results": docs_matches}  # store RAG results in the chat node that was generated based on them, for later use (upcoming citation mechanism)
@@ -1132,7 +1124,6 @@ def retry_tool_calls(llm_settings: env,
                      tool_node_id: str,
                      tools_enabled: bool,
                      docs_enabled: bool,
-                     speculate: bool,
                      markup: Optional[str],
                      docs_num_results: Optional[int],
                      on_docs_start: Optional[Callable] = None,
@@ -1250,7 +1241,6 @@ def retry_tool_calls(llm_settings: env,
                    docs_enabled=docs_enabled,
                    docs_query=None,
                    docs_num_results=docs_num_results,
-                   speculate=speculate,
                    markup=markup,
                    on_docs_start=on_docs_start,
                    on_docs_done=on_docs_done,

@@ -32,9 +32,12 @@ from . import textfilestore
 # a flag means touching this one mapping — `load`, `save`, and the tests derive from it.
 _DEFAULT_FLAGS = {"tools_enabled": True,
                   "docs_enabled": True,
-                  "speculate_enabled": False,
                   "avatar_speech_enabled": True,
                   "avatar_subtitles_enabled": True}
+
+# Flags that used to exist, dropped from a state file on load so they do not sit there forever confusing
+# whoever reads it next. Removable once no state file in the wild still carries them.
+_RETIRED_FLAGS = ("speculate_enabled",)
 
 # --------------------------------------------------------------------------------
 # Sidecar GC configuration
@@ -253,6 +256,10 @@ def load(llm_settings: env,
         if key not in state:
             state[key] = default
             logger.info(f"load: Missing key '{key}' in '{mayberel_state_file}' (resolved to '{state_file}'), using default '{default}'")
+
+    for key in _RETIRED_FLAGS:
+        if state.pop(key, None) is not None:
+            logger.info(f"load: Dropping retired key '{key}' from '{mayberel_state_file}' (resolved to '{state_file}')")
 
     # Refresh the system prompt and AI greeting to the ones configured in `raven.librarian.config`.
     #

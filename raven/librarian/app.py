@@ -890,8 +890,6 @@ with timer() as tim:
                             app_state["tools_enabled"] = not app_state["tools_enabled"]
                         def toggle_docs_enabled():
                             app_state["docs_enabled"] = not app_state["docs_enabled"]
-                        def toggle_speculate_enabled():
-                            app_state["speculate_enabled"] = not app_state["speculate_enabled"]
                         def toggle_speech_enabled():
                             app_state["avatar_speech_enabled"] = not app_state["avatar_speech_enabled"]
                         def toggle_subtitles_enabled():
@@ -903,11 +901,7 @@ with timer() as tim:
 
                         dpg.add_checkbox(label="Documents", default_value=app_state["docs_enabled"], callback=toggle_docs_enabled, tag="docs_enabled_checkbox")
                         dpg.add_tooltip("docs_enabled_checkbox", tag="docs_enabled_tooltip")  # tag
-                        dpg.add_text("Before responding, search document database for relevant information.\nAlso lets the AI search the database itself.\n\nThe search always injects its best matches, even when the topic is not\nin the database and those matches are noise. That costs prompt-processing\ntime before each reply, so it is worth switching off while discussing\nsomething the database does not cover.", parent="docs_enabled_tooltip")  # tag
-
-                        dpg.add_checkbox(label="Speculation", default_value=app_state["speculate_enabled"], callback=toggle_speculate_enabled, tag="speculate_enabled_checkbox")
-                        dpg.add_tooltip("speculate_enabled_checkbox", tag="speculate_enabled_tooltip")  # tag
-                        dpg.add_text("ON: Let AI freely use its internal knowledge.\nOFF: Ask the AI to ground claims in the context, and mark any reply\nfor which nothing was retrieved with [no sources retrieved].\n\nEither way the AI answers; OFF only adds the marker.", parent="speculate_enabled_tooltip")  # tag
+                        dpg.add_text("Before responding, search document database for relevant information.\nAlso lets the AI search the database itself; with this off, the document\ntools are not offered at all.\n\nWhile on, the AI is asked to ground claims about your documents in what\nwas actually retrieved, and any reply that got nothing to stand on is\nmarked [no sources retrieved].\n\nThe search always injects its best matches, even when the topic is not\nin the database and those matches are noise. That costs prompt-processing\ntime before each reply, so it is worth switching off while discussing\nsomething the database does not cover.", parent="docs_enabled_tooltip")  # tag
 
                         dpg.add_checkbox(label="Speech", default_value=app_state["avatar_speech_enabled"], callback=toggle_speech_enabled, tag="speech_enabled_checkbox")
                         dpg.add_tooltip("speech_enabled_checkbox", tag="speech_enabled_tooltip")  # tag

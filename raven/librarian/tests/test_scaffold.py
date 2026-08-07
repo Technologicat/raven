@@ -156,7 +156,6 @@ def run_ai_turn(forest, llm_settings, head, *,
                 docs_enabled=True,
                 docs_query=None,
                 docs_num_results=None,
-                speculate=True,
                 markup=None,
                 **callbacks):
     """Call `scaffold.ai_turn` with `None` defaults for unspecified callbacks."""
@@ -170,7 +169,6 @@ def run_ai_turn(forest, llm_settings, head, *,
                             docs_enabled=docs_enabled,
                             docs_query=docs_query,
                             docs_num_results=docs_num_results,
-                            speculate=speculate,
                             markup=markup,
                             **cb_kwargs)
 
@@ -489,7 +487,6 @@ class TestAITurnRAG:
         final_head = run_ai_turn(forest, llm_settings, user_head,
                                  retriever=FakeRetriever(results=[]),
                                  docs_query="What is 2+2?",
-                                 speculate=False,
                                  on_llm_done=lambda nid: llm_done_calls.append(nid))
 
         assert len(invoke_called) == 1
@@ -510,12 +507,13 @@ class TestAITurnRAG:
                             lambda **kw: make_invoke_result(content="X is foo."))
         final_head = run_ai_turn(forest, llm_settings, user_head,
                                  retriever=FakeRetriever(results=[sample_rag_match()]),
-                                 docs_query="What is X?",
-                                 speculate=False)
+                                 docs_query="What is X?")
         assert forest.get_payload(final_head)["generation_metadata"]["grounded"] is True
 
-    def test_speculation_on_records_no_grounding_verdict(self, monkeypatch, llm_settings, populated_forest):
-        # Absent means "nothing to say", which beats a third state: the user did not ask to be told.
+    def test_documents_off_records_no_grounding_verdict(self, monkeypatch, llm_settings, populated_forest):
+        """With documents off there is nothing worth saying: "no sources retrieved" would only report the
+        switch the user just set, and would be indistinguishable from the case that *is* worth reporting -
+        documents on, nothing came back. Absent beats a third state."""
         forest, head = populated_forest
         user_head = scaffold.user_turn(llm_settings=llm_settings,
                                        datastore=forest,
@@ -525,11 +523,36 @@ class TestAITurnRAG:
                             lambda **kw: make_invoke_result(content="X is foo."))
         final_head = run_ai_turn(forest, llm_settings, user_head,
                                  retriever=FakeRetriever(results=[]),
-                                 docs_query="What is X?",
-                                 speculate=True)
+                                 docs_enabled=False)
         assert "grounded" not in forest.get_payload(final_head)["generation_metadata"]
 
-    def test_rag_no_match_with_speculate_invokes_llm(self, monkeypatch, llm_settings, populated_forest):
+    def test_an_attachment_grounds_a_reply_even_with_documents_off(self, monkeypatch, llm_settings, tmp_path):
+        """The documents switch governs the document database, not the whole notion of having something to
+        stand on. A user who attached a document and turned the database off has still supplied material,
+        so the verdict is recorded — and it is `True`.
+
+        Attaches the way the apps do, through `staged_files`, which needs a `PersistentForest` to hold the
+        sidecar bytes. Building the node bare and adding the attachment as a second revision would test the
+        same predicate while documenting a shape that never occurs: an attachment arrives with the message
+        it was attached to, and revisions are for edits.
+        """
+        forest = chattree.PersistentForest(
+            tmp_path / "chat.json", autosave=False,
+            sidecar_extractor=lambda p: imagestore.sidecar_refs_in_payload(p) | textfilestore.sidecar_refs_in_payload(p))
+        head = chatutil.factory_reset_datastore(forest, llm_settings)
+        doc = env(raw=b"the body of the attached document", name="paper.txt",
+                  provenance_url="file:///tmp/paper.txt", provenance_source="user_attachment")
+        user_head = scaffold.user_turn(llm_settings=llm_settings, datastore=forest,
+                                       head_node_id=head, user_message_text="What does this say?",
+                                       staged_files=[doc])
+        monkeypatch.setattr("raven.librarian.llmclient.invoke",
+                            lambda **kw: make_invoke_result(content="It says foo."))
+        final_head = run_ai_turn(forest, llm_settings, user_head,
+                                 retriever=FakeRetriever(results=[]),
+                                 docs_enabled=False)
+        assert forest.get_payload(final_head)["generation_metadata"]["grounded"] is True
+
+    def test_rag_no_match_still_invokes_the_llm(self, monkeypatch, llm_settings, populated_forest):
         forest, head = populated_forest
         user_head = scaffold.user_turn(llm_settings=llm_settings,
                                        datastore=forest,
@@ -547,8 +570,7 @@ class TestAITurnRAG:
 
         final_head = run_ai_turn(forest, llm_settings, user_head,
                                  retriever=retriever,
-                                 docs_query="What is X?",
-                                 speculate=True)
+                                 docs_query="What is X?")
         assert len(invoke_called) == 1
         assert "speculate" in chatutil.content_to_text(forest.get_payload(final_head)["message"]["content"])
 
@@ -668,7 +690,6 @@ def run_retry(forest, llm_settings, tool_node_id, *,
               retriever=None,
               tools_enabled=True,
               docs_enabled=True,
-              speculate=True,
               markup=None,
               docs_num_results=None,
               **callbacks):
@@ -680,7 +701,6 @@ def run_retry(forest, llm_settings, tool_node_id, *,
                                      tool_node_id=tool_node_id,
                                      tools_enabled=tools_enabled,
                                      docs_enabled=docs_enabled,
-                                     speculate=speculate,
                                      markup=markup,
                                      docs_num_results=docs_num_results,
                                      **cb_kwargs)
@@ -857,7 +877,7 @@ class TestPerformInjects:
     def test_injects_add_no_system_message(self, llm_settings):
         history = make_conversation(llm_settings)
         scaffold._perform_injects(llm_settings=llm_settings, history=history,
-                                  speculate=False, docs_query=None, docs_matches=[],
+                                  docs_query=None, docs_matches=[],
                                   tool_context=grounding_context())
         assert_at_most_one_leading_system_message(history)
 
@@ -866,7 +886,7 @@ class TestPerformInjects:
         # Qwen3.5 — several system messages are rejected even though all of them precede the conversation.
         history = make_conversation(llm_settings)
         scaffold._perform_injects(llm_settings=llm_settings, history=history,
-                                  speculate=False, docs_query="what is X?",
+                                  docs_query="what is X?",
                                   docs_matches=[sample_rag_match(document_id="a.txt"),
                                                 sample_rag_match(document_id="b.txt")],
                                   tool_context=grounding_context())
@@ -878,7 +898,7 @@ class TestPerformInjects:
         # reads as nothing at all.
         history = make_conversation(llm_settings)
         scaffold._perform_injects(llm_settings=llm_settings, history=history,
-                                  speculate=False, docs_query="what is X?",
+                                  docs_query="what is X?",
                                   docs_matches=[sample_rag_match(document_id="a.txt"),
                                                 sample_rag_match(document_id="b.txt")],
                                   tool_context=grounding_context())
@@ -893,7 +913,7 @@ class TestPerformInjects:
         # no call to answer, Gemma 4 ignores the material and confabulates a confident wrong answer.
         history = make_conversation(llm_settings)
         scaffold._perform_injects(llm_settings=llm_settings, history=history,
-                                  speculate=False, docs_query="what is X?",
+                                  docs_query="what is X?",
                                   docs_matches=[sample_rag_match()],
                                   tool_context=grounding_context())
         requested_call_ids = {call["id"]
@@ -909,7 +929,7 @@ class TestPerformInjects:
         # question last is what keeps the model talking to the user.
         history = make_conversation(llm_settings)
         scaffold._perform_injects(llm_settings=llm_settings, history=history,
-                                  speculate=False, docs_query="what is X?",
+                                  docs_query="what is X?",
                                   docs_matches=[sample_rag_match()],
                                   tool_context=grounding_context())
         assert history[-1]["role"] == "user"
@@ -921,7 +941,7 @@ class TestPerformInjects:
         history = make_conversation(llm_settings)
         history.append(chatutil.create_chat_message(llm_settings=llm_settings, role="assistant", text="X is"))
         scaffold._perform_injects(llm_settings=llm_settings, history=history,
-                                  speculate=False, docs_query=None, docs_matches=[],
+                                  docs_query=None, docs_matches=[],
                                   tool_context=grounding_context())
         assert_at_most_one_leading_system_message(history)
         assert history[-1]["role"] == "assistant"
@@ -932,7 +952,7 @@ class TestPerformInjects:
         # deliberation tokens, and the only one that never provoked the model into remarking on them.
         history = make_conversation(llm_settings)
         scaffold._perform_injects(llm_settings=llm_settings, history=history,
-                                  speculate=False, docs_query="what is X?",
+                                  docs_query="what is X?",
                                   docs_matches=[sample_rag_match()],
                                   tool_context=grounding_context(grounded=True))
         system_text = chatutil.content_to_text(history[0]["content"])
@@ -948,7 +968,7 @@ class TestPerformInjects:
         stored_system_message = history[0]
         stored_text = chatutil.content_to_text(stored_system_message["content"])
         scaffold._perform_injects(llm_settings=llm_settings, history=history,
-                                  speculate=False, docs_query=None, docs_matches=[],
+                                  docs_query=None, docs_matches=[],
                                   tool_context=grounding_context())
         assert chatutil.content_to_text(stored_system_message["content"]) == stored_text
 
@@ -957,7 +977,7 @@ class TestPerformInjects:
         # dutifully try to resolve — up to 37x the deliberation, and on one model, never terminating.
         history = make_conversation(llm_settings)
         scaffold._perform_injects(llm_settings=llm_settings, history=history,
-                                  speculate=False, docs_query=None, docs_matches=[],
+                                  docs_query=None, docs_matches=[],
                                   tool_context=grounding_context())
         assert "Base claims about the provided documents" not in chatutil.content_to_text(history[0]["content"])
 
@@ -968,7 +988,7 @@ class TestPerformInjects:
         history[-1]["content"].append(chatutil.text_file_content_part(url="sidecar:deadbeef.pdf", name="paper.pdf",
                                                                       source="user_attachment"))
         scaffold._perform_injects(llm_settings=llm_settings, history=history,
-                                  speculate=False, docs_query=None, docs_matches=[],
+                                  docs_query=None, docs_matches=[],
                                   tool_context=grounding_context())
         assert "Base claims about the provided documents" in chatutil.content_to_text(history[0]["content"])
 
@@ -986,7 +1006,7 @@ class TestPerformInjects:
                    chatutil.create_chat_message(llm_settings=llm_settings, role="assistant", text="It is 17 C and cloudy."),
                    chatutil.create_chat_message(llm_settings=llm_settings, role="user", text="What is the baseline drift of the Kelvin-7 microarray?")]
         scaffold._perform_injects(llm_settings=llm_settings, history=history,
-                                  speculate=False, docs_query=None, docs_matches=[],
+                                  docs_query=None, docs_matches=[],
                                   tool_context=grounding_context())
         assert "Base claims about the provided documents" not in chatutil.content_to_text(history[0]["content"])
 
@@ -998,7 +1018,7 @@ class TestPerformInjects:
         history = make_conversation(llm_settings)
         history.append(chatutil.create_chat_message(llm_settings=llm_settings, role="tool", text="Search result: X is a variable."))
         scaffold._perform_injects(llm_settings=llm_settings, history=history,
-                                  speculate=False, docs_query=None, docs_matches=[],
+                                  docs_query=None, docs_matches=[],
                                   tool_context=grounding_context(grounded=True))
         assert "Base claims about the provided documents" in chatutil.content_to_text(history[0]["content"])
 
@@ -1009,14 +1029,14 @@ class TestPerformInjects:
         history = make_conversation(llm_settings)
         history.append(chatutil.create_chat_message(llm_settings=llm_settings, role="tool", text="No matches."))
         scaffold._perform_injects(llm_settings=llm_settings, history=history,
-                                  speculate=False, docs_query=None, docs_matches=[],
+                                  docs_query=None, docs_matches=[],
                                   tool_context=grounding_context(grounded=False))
         assert "Base claims about the provided documents" not in chatutil.content_to_text(history[0]["content"])
 
     def test_speculation_on_sends_no_context_only_reminder(self, llm_settings):
         history = make_conversation(llm_settings)
         scaffold._perform_injects(llm_settings=llm_settings, history=history,
-                                  speculate=True, docs_query="what is X?",
+                                  docs_query="what is X?",
                                   docs_matches=[sample_rag_match()],
                                   tool_context=grounding_context())
         assert "Base claims about the provided documents" not in chatutil.content_to_text(history[0]["content"])
@@ -1027,7 +1047,7 @@ class TestPerformInjects:
         history = make_conversation(llm_settings)
         before = len(history)
         scaffold._perform_injects(llm_settings=llm_settings, history=history,
-                                  speculate=False, docs_query=None, docs_matches=[],
+                                  docs_query=None, docs_matches=[],
                                   tool_context=grounding_context())
 
         injected = [message for message in history[:before + 2] if message["role"] == "tool"]
@@ -1381,7 +1401,7 @@ class TestBranchGrounding:
             return make_invoke_result(content="Still foo.")
 
         monkeypatch.setattr("raven.librarian.llmclient.invoke", fake_invoke)
-        run_ai_turn(forest, llm_settings, head, retriever=FakeRetriever(), speculate=False)
+        run_ai_turn(forest, llm_settings, head, retriever=FakeRetriever())
         system_text = chatutil.content_to_text(seen["history"][0]["content"])
         assert "Base claims about the provided documents" in system_text
 

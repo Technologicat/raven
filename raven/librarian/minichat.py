@@ -199,9 +199,6 @@ def minimal_chat_client(backend_url) -> None:
             print("        !model                  - Show which model is in use")
             print("        !models                 - List all models available at connected backend")
             print("        !reroll                 - Reroll (regenerate) the latest AI response, creating a new sibling.")
-            print(f"        !speculate [True|False] - LLM speculate on/off/toggle (currently {app_state['speculate_enabled']}); used only if docs is True.")
-            print("                                  If speculate is False, try to use only RAG results to answer.")
-            print("                                  If speculate is True, let the LLM respond however it wants.")
             print(f"        !tools [True|False]     - Tool-calling on/off/toggle (currently {app_state['tools_enabled']})")
             print("        !help                   - Show this message again")
             print()
@@ -228,7 +225,6 @@ def minimal_chat_client(backend_url) -> None:
                         "!model",
                         "!models",
                         "!reroll",
-                        "!speculate",
                         "!tools"]
             def get_completions(candidates: List[str], text: str) -> List[str]:
                 """Return a list of matching completions for `text`.
@@ -263,8 +259,6 @@ def minimal_chat_client(backend_url) -> None:
                 elif buffer_content.startswith("!head"):  # in `!head` command, expecting an argument?
                     with datastore.lock:
                         candidates = list(sorted(datastore.nodes.keys()))
-                elif buffer_content.startswith("!speculate"):  # in `!speculate` command, expecting an argument?
-                    candidates = ["True", "False"]
                 elif buffer_content.startswith("!tools"):  # in `!tools` command, expecting an argument?
                     candidates = ["True", "False"]
                 else:  # anything else -> no completions
@@ -465,29 +459,6 @@ def minimal_chat_client(backend_url) -> None:
                 chat_print_history(node_id_history)
                 print()
                 return Values(action=action_proceed, docs_query=scan_history_for_docs_query(node_id_history))
-            elif user_message_text.startswith("!speculate"):  # TODO: refactor
-                split_command_text = user_message_text.split()
-                nargs = len(split_command_text) - 1
-                if nargs == 0:
-                    app_state["speculate_enabled"] = not app_state["speculate_enabled"]
-                elif nargs == 1:
-                    arg = split_command_text[-1]
-                    if arg == "True":
-                        app_state["speculate_enabled"] = True
-                    elif arg == "False":
-                        app_state["speculate_enabled"] = False
-                    else:
-                        print(f"!speculate: unrecognized argument '{arg}'; expected 'True' or 'False'.")
-                        print()
-                        return Values(action=action_next_round)
-                else:
-                    print("!speculate: wrong number of arguments; expected at most one, 'True' or 'False'.")
-                    print()
-                    return Values(action=action_next_round)
-                speculate_enabled_str = "ON" if app_state["speculate_enabled"] else "OFF"
-                print(f"LLM speculation is now {speculate_enabled_str}.")
-                print()
-                return Values(action=action_next_round)
             elif user_message_text.startswith("!tools"):  # TODO: refactor
                 split_command_text = user_message_text.split()
                 nargs = len(split_command_text) - 1
@@ -633,7 +604,6 @@ def minimal_chat_client(backend_url) -> None:
                                                 docs_enabled=app_state["docs_enabled"],
                                                 docs_query=docs_query,
                                                 docs_num_results=librarian_config.docs_num_results,
-                                                speculate=app_state["speculate_enabled"],
                                                 markup="ansi",
                                                 on_docs_start=None,
                                                 on_docs_done=None,

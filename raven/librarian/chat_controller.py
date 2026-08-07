@@ -3554,7 +3554,6 @@ class DPGChatController:
                                                             docs_enabled=self.app_state["docs_enabled"],
                                                             docs_query=docs_query,
                                                             docs_num_results=librarian_config.docs_num_results,
-                                                            speculate=self.app_state["speculate_enabled"],
                                                             markup="markdown",  # TODO: check if we actually use the `markup` argument for anything but thought blocks - those are in any case emitted as-is (and formatted at render time).
                                                             **common_callbacks)
                     else:
@@ -3564,7 +3563,6 @@ class DPGChatController:
                                                                      tool_node_id=_retry_tool_node_id,
                                                                      tools_enabled=self.app_state["tools_enabled"],
                                                                      docs_enabled=self.app_state["docs_enabled"],
-                                                                     speculate=self.app_state["speculate_enabled"],
                                                                      markup="markdown",
                                                                      docs_num_results=librarian_config.docs_num_results,
                                                                      **common_callbacks)

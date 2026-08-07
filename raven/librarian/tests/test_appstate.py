@@ -95,9 +95,28 @@ class TestLoadEmpty:
     def test_state_dict_has_all_required_keys(self, tmp_path, llm_settings):
         _, state, _, _ = _load(tmp_path, llm_settings)
         for key in ("HEAD", "new_chat_HEAD", "system_prompt_node_id",
-                    "tools_enabled", "docs_enabled", "speculate_enabled",
+                    "tools_enabled", "docs_enabled",
                     "avatar_speech_enabled", "avatar_subtitles_enabled"):
             assert key in state, f"state missing key {key!r}"
+
+    @pytest.mark.skipif(not appstate._RETIRED_FLAGS, reason="no flags are currently being retired")
+    def test_retired_flags_are_dropped_from_an_old_state_file(self, tmp_path, llm_settings):
+        """A flag that went away leaves a state file written before it did still carrying the key, and it
+        should not sit there forever confusing whoever reads the file next.
+
+        Derived from `_RETIRED_FLAGS` rather than naming a flag, like the other tests here derive from
+        `_DEFAULT_FLAGS` — that mapping is documented as the one place a flag is added or removed, and a
+        test that hardcodes one name stops covering the next one.
+        """
+        _load(tmp_path, llm_settings)  # create a state file to amend
+        state_path = tmp_path / "state.json"
+        stored = json.loads(state_path.read_text(encoding="utf-8"))
+        for key in appstate._RETIRED_FLAGS:
+            stored[key] = "whatever this flag used to hold"
+        state_path.write_text(json.dumps(stored), encoding="utf-8")
+        _, state, _, _ = _load(tmp_path, llm_settings)
+        for key in appstate._RETIRED_FLAGS:
+            assert key not in state, f"retired flag {key!r} survived the load"
 
     def test_default_flag_values(self, tmp_path, llm_settings):
         _, state, _, _ = _load(tmp_path, llm_settings)
@@ -152,7 +171,6 @@ class TestLoadWithState:
         bootstrap_state = {"new_chat_HEAD": "placeholder",
                            "tools_enabled": True,
                            "docs_enabled": True,
-                           "speculate_enabled": False,
                            "avatar_speech_enabled": True,
                            "avatar_subtitles_enabled": True}
         state_path.write_text(json.dumps(bootstrap_state), encoding="utf-8")

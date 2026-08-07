@@ -520,6 +520,7 @@ Below the avatar panel at the right, there are **mode toggles**:
   - If **ON**, allow the LLM to use the tools provided by *Librarian*.
   - If **OFF**, automatically strip tool specifications before sending the chatlog to the LLM, so that no tools are available for the LLM.
 - **Documents**
+  - This one switch governs *everything* to do with the document database: the automatic search, the AI's own document tools, the grounding reminder, and the `[no sources retrieved]` marker. With it **OFF**, the document tools are not offered to the AI at all — so it cannot reach around the switch, and a model that tries anyway gets a refusal rather than a search.
   - If **ON**, autosearch the document database each time you send a message to the AI, and inject the search results into the LLM's context.
     - The *automatic* search is rather rudimentary: the query is always the user's latest message (in the current linearized view, after sending the current message if any). The LLM's own `search_documents` tool is what covers the cases where that guess is poor — it can search again with a query it wrote after reading the first results.
     - This may make the LLM's prompt processing time much longer, especially if you have set up a high limit for the number of search results.
@@ -527,12 +528,10 @@ Below the avatar panel at the right, there are **mode toggles**:
         - Progress information for this is not available via the OpenAI-compatible web API, so it's a generic glowing indicator only.
         - See the terminal window where your LLM backend is running if you want to see the progress and processing speed.
     - This may also derail your discussion (depending on your particular LLM), if the document database does not cover the topic you are discussing with the AI.
-  - If **OFF**, do not autosearch the document database.
+  - If **OFF**, do not autosearch the document database, and do not offer the document tools.
     - This is useful when you know your topic doesn't need information from the documents you have fed into *Librarian*'s document database, for shorter processing times and less potential confusion.
-- **Speculation**
-  - An element for *defence in depth* in truthfulness. It controls how much *Librarian* tells you about where an answer came from; it never withholds the answer.
-  - If **Speculation** is **OFF**:
-    - When there is material to ground an answer in — document matches, an attachment, a tool result — remind the LLM to base its claims about that material on that material. (This reminder is not shown in the GUI.)
+  - **Truthfulness, while Documents is ON.** Two things happen, and neither ever withholds an answer — they are *defence in depth*, telling you where a reply came from rather than gating it.
+    - When there is material to ground an answer in — document matches, an attachment, a tool result — the AI is reminded to base its claims about that material on that material. (This reminder is not shown in the GUI.)
       - Spurious matches are still possible, and may trip up your LLM.
         - E.g. *"What does your knowledge base say about whether cats can jump?"* may find matches in e.g. AI research literature due to the phrase *"knowledge base"*.
         - Whether the AI notices the case where all results are spurious and don't actually contain the requested information, depends on your particular LLM.
@@ -540,8 +539,7 @@ Below the avatar panel at the right, there are **mode toggles**:
     - When **nothing** was retrieved — no document matches, no attachments, no tool results — the reply is marked **[no sources retrieved]** below the message. The AI still answers.
       - The marker reports what was *retrieved*, not whether the reply used it. A search that returns irrelevant matches still counts as retrieval, so the absence of the marker means something came back, not that the answer rests on it. Telling those apart needs either relevance-aware retrieval scores or citations from the AI itself; both are planned, neither is built.
       - Note this is the *expected* state for a general question. Nobody's document database answers *"what is 2+2?"*, so asides get the marker, and that is the marker doing its job rather than reporting a problem.
-  - If **Speculation** is **ON**, the LLM is free to respond as it wants, and no marker is shown. Anything goes!
-    - Most AI chatbots with RAG always operate like this.
+    - With **Documents OFF** the marker does not appear at all, since it would only be telling you what you just switched off. An **attachment still counts as grounding** either way: attach a PDF with the database off, and the reply is treated as grounded in it.
 - **Speech**
 - **Subtitles**
   - The **Speech** and **Subtitles** mode toggles control features of the AI avatar. See [AI avatar and voice mode](#ai-avatar-and-voice-mode).

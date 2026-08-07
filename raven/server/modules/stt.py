@@ -2,8 +2,7 @@
 
 The engine logic (model loading, token generation, Whisper-specific
 preprocessing) lives in the common layer. This module handles only the
-transport concerns: audio container decoding, config-module lookup,
-and the tqdm progress bar for server console output.
+transport concerns: audio container decoding and config-module lookup.
 """
 
 __all__ = ["init_module", "is_available", "get_info", "speech_to_text"]
@@ -18,7 +17,7 @@ from colorama import Fore, Style
 
 import torch
 
-from tqdm import tqdm
+from unpythonic import timer
 
 from ...common.audio import codec as audio_codec
 from ...common.audio.speech import stt as speech_stt
@@ -78,16 +77,19 @@ def speech_to_text(stream: BinaryIO,
                                                        target_sample_rate=_stt_model.sample_rate,
                                                        target_layout="mono")
 
-    # Log a tqdm progress bar to the server console during transcription.
-    # `leave=True` keeps the completed bar visible in the log.
-    with tqdm(desc="Transcribing", leave=True) as pbar:
-        def on_progress(current: int, total: int) -> None:
-            pbar.total = total
-            pbar.n = current
-            pbar.refresh()  # note `refresh`, not `update` — `update` also increments `n`
-        return speech_stt.transcribe(_stt_model,
+    # No progress bar. A bar is a display for one foreground job, and this is a request handler: `waitress`
+    # serves several at once, so two transcriptions would interleave their bars into nonsense, and the
+    # escape sequences land in whatever captures the server's output. What is worth knowing afterwards is
+    # how long it took relative to how much audio there was, and that is a line.
+    duration_s = len(audio_numpy) / _stt_model.sample_rate
+    logger.debug(f"speech_to_text: transcribing {duration_s:.1f}s of audio")
+    with timer() as tim:
+        text = speech_stt.transcribe(_stt_model,
                                      audio=audio_numpy,
                                      sample_rate=_stt_model.sample_rate,
                                      prompt=prompt,
-                                     language=language,
-                                     progress_callback=on_progress)
+                                     language=language)
+    # The transcript itself is not logged: it is a recording of someone speaking, turned into text.
+    logger.debug(f"speech_to_text: transcribed {duration_s:.1f}s of audio in {tim.dt:.2f}s "
+                 f"({len(text)} characters)")
+    return text
