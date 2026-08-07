@@ -3811,3 +3811,61 @@ recoverable from them. Only 3 of ECCOMAS's 2520 records are affected, so the cos
 
 Discovered while bringing up the ECCOMAS 2024 corpus, from `raven-fixbib` mis-splicing a repair — the same
 six characters make `str.splitlines()` and a newline count disagree (2026-08-07).
+
+## Source code in the document database wants its own tokenizer, not just a new file extension
+
+`.py` is plain text, LLMs read code well, and writing code is part of doing numerical science — so adding
+it to `llm_docs_exts` looks like a one-line change. It is not, and the reason is worth having measured
+rather than argued, because the failure it would ship is the quiet kind.
+
+**What the keyword index would actually hold.** `HybridIR._tokenize` lowercases, lemmatizes and drops
+English stopwords, keeping only tokens where `token.is_alpha`. Run over a function:
+
+```python
+def compute_flux_residual(self, mesh_nodes, dt=0.01):
+    """Compute the residual of the flux term."""
+    for i in range(len(mesh_nodes)):
+        if not self._converged:
+            residual += np.float32(dt) * self.jacobian_matrix[i]
+    return residual
+```
+
+it indexes exactly this:
+
+```
+['def', 'compute', 'residual', 'flux', 'term', 'residual', 'return', 'residual']
+```
+
+Every identifier is gone. `compute_flux_residual` survives as `compute`; `mesh_nodes`, `jacobian_matrix`,
+`_converged` and `np.float32` are absent altogether, because `is_alpha` rejects any token carrying an
+underscore or a digit. The control flow goes too — `if`, `for`, `in`, `not`, `while`, `from`, `and`, `or`
+are English stopwords that happen to be Python keywords. And note where the survivors came from: `flux`,
+`term` and `residual` are *docstring* words, not code.
+
+**So the feature would be docstring search wearing code search's clothes.** Ask about "the flux residual"
+and the file comes back, which reads as working. Search for a function by name and the keyword arm has
+never heard of it. The vector arm does not rescue this: it is a prose embedder, so it handles the
+docstrings passably and the code poorly.
+
+**Syntax highlighting is the least of it**, which is worth stating because it is the objection that comes
+to mind first. The RAG path never renders source to the user — chunks go into the model's context. The one
+place code would surface is a `fetch_document` result in the chat view, and there the problem is not
+missing colour but Markdown *mangling*: `**kwargs` turns bold, `_private` italic, `# comment` into a
+heading. That is already true of the `.tex` and `.bib` files the database accepts today.
+
+**What doing it properly needs**, none of which is a file-extension change: no stopword stripping and no
+lemmatization for code; identifiers split on underscore and camelCase boundaries so `jacobian_matrix` is
+findable as either word or as itself; chunking at definition boundaries rather than 1000-character windows,
+so a chunk keeps the signature its body belongs to. That is per-format ingestion behaviour, which is what
+brief 13's scopes would give a home — a corpus of code is a different *kind* of corpus, not a corpus with
+different extensions.
+
+**A footgun that arrives with the feature rather than after it:** enabling `.py` invites pointing Raven at
+a repository, and there is no `.gitignore` awareness. With `llm_docs_dir_recursive` off the user gets only
+top-level files and wonders why most of the project is missing; with it on they get `.venv/`.
+
+Meanwhile a one-off already works — attach the file to a message, or rename it `.txt`. Both feed the model
+the same text; only the search is affected. The README now says all this in user-facing terms, on the
+grounds that an honest "code is not supported" beats a feature that half-works without saying so.
+
+Raised by Juha (2026-08-07), reviewing the supported-format list.

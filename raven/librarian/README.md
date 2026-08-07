@@ -176,6 +176,10 @@ The document database accepts **plain text** documents, **PDFs**, and **office d
 
 The same list applies to files you **attach to a chat message**, and it is the same code doing the reading in both cases - so anything you can drop into the document database, you can also attach to a message, and vice versa. The full list of recognized file extensions is configured in [`raven.librarian.config`](../librarian/config.py) as `llm_docs_exts`.
 
+**Source code is deliberately not on that list**, `.py` included, even though it is plain text and the AI reads code perfectly well. The obstacle is the *search*, not the reading: the keyword half of the document database lowercases, lemmatizes and drops English stopwords, which is right for prose and wrong for code in a way that does not announce itself. Identifiers disappear (`compute_flux_residual` is indexed as `compute`; `mesh_nodes` and `jacobian_matrix` not at all, since a token containing an underscore is not a word), and so do `if`, `for`, `in`, `not`, `while` and `from`, which are English stopwords that happen to be Python keywords. What is left to search is essentially the docstrings. That would look like it worked - ask about "the flux residual" and the file comes back - right up until you searched for a function by name and got nothing. Code search needs its own tokenizer, and until it has one, saying no is the honest answer.
+
+For a one-off you can still do it: attach the file to a message, or rename it `.txt` to put it in the database. Both feed the AI the same text; only the search is affected.
+
 Everything above is read for its **text layer only**. Whatever a document says through pictures - a figure, a photograph, a typeset equation that is really an image - does not come across, and a file whose content is entirely such material imports as empty. Two common cases:
 
 - A **scanned or image-only PDF** has no text layer, so nothing is extracted and it is skipped. To import one, run it through OCR first — e.g. [`ocrmypdf`](https://github.com/ocrmypdf/OCRmyPDF) (`ocrmypdf --force-ocr input.pdf output.pdf`) — to add a text layer.
