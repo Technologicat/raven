@@ -3836,11 +3836,21 @@ it indexes exactly this:
 ['def', 'compute', 'residual', 'flux', 'term', 'residual', 'return', 'residual']
 ```
 
-Every identifier is gone. `compute_flux_residual` survives as `compute`; `mesh_nodes`, `jacobian_matrix`,
-`_converged` and `np.float32` are absent altogether, because `is_alpha` rejects any token carrying an
-underscore or a digit. The control flow goes too — `if`, `for`, `in`, `not`, `while`, `from`, `and`, `or`
-are English stopwords that happen to be Python keywords. And note where the survivors came from: `flux`,
-`term` and `residual` are *docstring* words, not code.
+**Every content token in that list came from the docstring.** Not one identifier survives: `is_alpha`
+rejects any token carrying an underscore or a digit, so `compute_flux_residual`, `mesh_nodes`,
+`jacobian_matrix`, `_converged` and `np.float32` are all absent. Checked in isolation, in case the
+signature contributed anything at all:
+
+```
+def compute_flux_residual(self, mesh_nodes):    ->  ['def']
+compute_flux_residual                           ->  []
+mesh_nodes jacobian_matrix                      ->  []
+Compute the residual of the flux term.          ->  ['compute', 'residual', 'flux', 'term']
+```
+
+So the whole signature reduces to the keyword `def`, and `compute`/`residual`/`flux`/`term` are the
+docstring's words rather than the function's name. The control flow goes the same way — `if`, `for`, `in`,
+`not`, `while`, `from`, `and`, `or` are English stopwords that happen to be Python keywords.
 
 **So the feature would be docstring search wearing code search's clothes.** Ask about "the flux residual"
 and the file comes back, which reads as working. Search for a function by name and the keyword arm has
