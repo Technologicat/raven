@@ -657,7 +657,18 @@ def result_feed(instance_id: str) -> Response:
                 else:
                     time.sleep(time_until_frame_deadline)
 
-                # Log the FPS counter in 5-second intervals.
+                # Log the FPS counter in 5-second intervals, at debug level.
+                #
+                # Debug rather than info because the avatar animates for as long as a session lasts, and
+                # three of these counters reporting every five seconds is a couple of thousand lines an
+                # hour of a log that is otherwise quiet.
+                #
+                # Kept rather than deleted, but *not* because the client cannot see this: it can, and does.
+                # The same averages go out per frame in the `X-Server-Stats` header a few lines above, and
+                # `client.avatar_renderer` reads them into its FPS counter. What the log has that the
+                # counter does not is persistence — a readout answers "how is it doing", a log answers "what
+                # was it doing ten minutes ago, when the thing I am now investigating happened". That, and
+                # being available with no client attached, or with its counter switched off.
                 time_now = time.monotonic_ns()
                 if animator.animation_running and (last_report_time is None or time_now - last_report_time > 5e9):
                     avg_send_sec = send_duration_statistics.average()
@@ -1744,7 +1755,8 @@ class Animator:
             avg_render_sec = self.render_duration_statistics.average()
             msec = round(1000 * avg_render_sec, 1)
             fps = round(1 / avg_render_sec, 1) if avg_render_sec > 0.0 else 0.0
-            logger.debug(f"render_animation_frame: render {msec:.1f}ms [{fps} FPS available]")
+            logger.debug(f"render_animation_frame (avatar instance '{self.instance_id}'): "
+                         f"render {msec:.1f}ms [{fps} FPS available]")
             self.last_report_time = time_now
 
 # --------------------------------------------------------------------------------
@@ -1851,7 +1863,8 @@ class Encoder:
                     avg_wait_sec = self.wait_duration_statistics.average()
                     wait_msec = round(1000 * avg_wait_sec, 1)
                     fps = round(1 / avg_encode_sec, 1) if avg_encode_sec > 0.0 else 0.0
-                    logger.debug(f"encoder_update: encode {msec:.1f}ms [{fps} FPS available]; "
+                    logger.debug(f"encoder_update (avatar instance '{self.instance_id}'): "
+                                 f"encode {msec:.1f}ms [{fps} FPS available]; "
                                  f"send sync wait {wait_msec:.1f}ms")
                     last_report_time = time_now
 
