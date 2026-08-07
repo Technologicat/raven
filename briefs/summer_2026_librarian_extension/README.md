@@ -250,16 +250,10 @@ Release prep, when the time comes (see also the `release` and `changelog` skills
   state. Verified 2026-08-07: canonical component order in all three sections, `*Constellation-wide*` last
   in each. One duplicated `*Raven-arxiv-download*` header was folded on the way past.
 
-### What is left before tagging 0.2.8 (as of 2026-08-07 afternoon)
+### 0.2.8 shipped, 2026-08-07
 
-Everything else is done, so this is the whole list:
-
-1. **Bump the version.** `raven/__init__.py` reads `0.2.8-dev`; it needs `0.2.8`. Then follow the `release`
-   skill (tag format `vX.Y.Z`, CI-driven publishing, post-release version bump).
-2. **Nothing else is blocking.** CI is green on `main`. The full suite passes locally (2187, of which the
-   ~380 GUI/ML-marked ones do not run in CI). The live test passed on both branches of the toggle change:
-   startup with the retired-flag migration firing, a chat turn with Documents on, and one with Documents
-   off confirming no retrieval runs.
+Tagged `v0.2.8` on `77a6d1c`, with CI green on that exact commit, and released on GitHub as *Raven 0.2.8*
+with the changelog section as its body. `main` is back on `0.2.9-dev` with a fresh changelog stub.
 
 Landed on release day and worth knowing when reading the diff: the Speculation toggle removal, the
 `get_current_time` tool, the tool-registry extraction to module level, the export think-markers, the
