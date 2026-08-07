@@ -10,7 +10,7 @@ NOTE for oobabooga/text-generation-webui users:
 If you want to see the final prompt in instruct or chat mode, start your server in `--verbose` mode.
 """
 
-__all__ = ["TOOLS", "TOOL_ENTRYPOINTS", "DOCUMENT_TOOL_NAMES",
+__all__ = ["TOOLS", "TOOL_ENTRYPOINTS", "DOCUMENT_TOOL_NAMES", "NETWORK_TOOL_NAMES",
 
            "list_models",
            "test_connection",
@@ -453,7 +453,8 @@ def fetch_document_wrapper(document_id: str,
     return (f"{header}\n\n{fitted}", {"grounding": True, "document_ids": [document_id]})
 
 def maybe_tool_names_for_turn(settings: env,
-                              documents_available: bool) -> tuple[str, ...] | None:
+                              documents_available: bool,
+                              internet_available: bool) -> tuple[str, ...] | None:
     """Which tools to offer on one AI turn, as a `tool_names` value for `invoke` (or `prefill`).
 
     Returns `None` when every registered tool is on offer. Note that `None` is the *permissive* value here,
@@ -467,9 +468,17 @@ def maybe_tool_names_for_turn(settings: env,
     the hand-written list in `setup` and is already stable — but that is a property of code elsewhere, and
     the next reader should not have to go and verify it before trusting a log line.
 
+    Each argument owns one gated group outright, and a tool in neither group is always offered:
+
     `documents_available`: whether the document database is in play this turn, i.e. the user has it switched
-                           on *and* this app has one. When it is not, the document tools are withheld;
-                           everything else (websearch, webfetch) is unaffected.
+                           on *and* this app has one. Gates `settings.document_tool_names`.
+
+    `internet_available`: whether the network-reaching tools are in play this turn. Gates
+                          `settings.network_tool_names`.
+
+    With both `False` the ungated tools are still on offer — `get_current_time` today — so the result is
+    that group rather than the empty tuple. (An empty tuple would be handled: `invoke` drops an emptied
+    `tools` field rather than sending one, since some backends reject an empty list.)
 
     Shared so that the two callers cannot disagree. `scaffold.ai_turn` uses it to build the real request,
     and the GUI's context prefill uses it to warm the KV cache — and those must produce the same list, since
@@ -477,9 +486,14 @@ def maybe_tool_names_for_turn(settings: env,
     warms a different tool list warms a prefix the real turn never sends, so the full prompt is reprocessed
     anyway, and the warm-up has cost time to achieve nothing.
     """
-    if documents_available:
+    if documents_available and internet_available:
         return None
-    return tuple(sorted(set(settings.tool_entrypoints) - set(settings.document_tool_names)))
+    withheld = set()
+    if not documents_available:
+        withheld |= set(settings.document_tool_names)
+    if not internet_available:
+        withheld |= set(settings.network_tool_names)
+    return tuple(sorted(set(settings.tool_entrypoints) - withheld))
 
 # --------------------------------------------------------------------------------
 # Utilities
@@ -703,10 +717,17 @@ TOOL_ENTRYPOINTS = {"websearch": websearch_wrapper,
                     "fetch_document": fetch_document_wrapper,
                     "list_consulted_documents": list_consulted_documents_wrapper}
 
-# Tools that are only offered on turns where the document database is in play. Callers gate with
-# `invoke`'s `tool_names`; see `raven.librarian.scaffold.ai_turn`, which assembles the per-turn list.
-# Named here, next to the specs, so the two cannot drift.
+# The two gated groups, each answering to one user-facing toggle: "Documents" and "Internet". Callers gate
+# with `invoke`'s `tool_names`; `maybe_tool_names_for_turn` assembles the per-turn list, and
+# `raven.librarian.scaffold.ai_turn` calls it. Named here, next to the specs, so the two cannot drift.
+#
+# A tool in neither group is *ungated* — always offered, because no switch claims to govern it. That is
+# `get_current_time` today, and it has to be: the clock inject is delivered on every turn regardless of
+# either toggle, as a synthetic call to this very function. Withholding the spec while still sending the
+# call would put the model back to reading a call to a function it cannot see, which is the defect
+# registering the tool exists to fix.
 DOCUMENT_TOOL_NAMES = frozenset({"search_documents", "fetch_document", "list_consulted_documents"})
+NETWORK_TOOL_NAMES = frozenset({"websearch", "webfetch"})
 
 
 def setup(backend_url: str,
@@ -761,9 +782,14 @@ def setup(backend_url: str,
 
         `document_tool_names: FrozenSet[str]`: Those tool names that search or read the document database, and so
                                                should only be offered on turns where it is in play. Callers pass a
-                                               filtered name set to `invoke`'s `tool_names`; `scaffold.ai_turn`
-                                               does this. Every tool is *registered* regardless — availability is
-                                               a per-turn question, not a per-session one.
+                                               filtered name set to `invoke`'s `tool_names`;
+                                               `maybe_tool_names_for_turn` builds it. Every tool is *registered*
+                                               regardless — availability is a per-turn question, not a
+                                               per-session one.
+
+        `network_tool_names: FrozenSet[str]`: The same, for the tools that reach the network, gated on the
+                                              user's "Internet" switch. A tool in neither set answers to no
+                                              switch and is always offered.
 
         `backend_url: str`: The `backend_url` argument, as-is.
 
@@ -861,6 +887,7 @@ def setup(backend_url: str,
                    tools=TOOLS,  # for inspection
                    tool_entrypoints=TOOL_ENTRYPOINTS,  # for our implementation to be able to call them
                    document_tool_names=DOCUMENT_TOOL_NAMES,  # subset of `TOOLS` gated on the document database
+                   network_tool_names=NETWORK_TOOL_NAMES,  # subset of `TOOLS` gated on the "Internet" switch
                    backend_url=backend_url,
                    request_data=request_data,
                    personas=personas)

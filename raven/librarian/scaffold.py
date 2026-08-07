@@ -702,12 +702,11 @@ def _perform_and_store_tool_calls(llm_settings: env,
     return head_node_id
 
 
-# TODO: `tools_enabled` is a blunt hammer; maybe have also an optional tool name list for fine-grained control?
 def ai_turn(llm_settings: env,
             datastore: chattree.Forest,
             retriever: "Optional[hybridir.HybridIR]",
             head_node_id: str,
-            tools_enabled: bool,
+            internet_enabled: bool,
             continue_: bool,
             docs_enabled: bool,
             docs_query: Optional[str],
@@ -738,8 +737,12 @@ def ai_turn(llm_settings: env,
 
     `head_node_id`: Current HEAD node of the chat. Used as the parent for the no-match message, if needed.
 
-    `tools_enabled`: Whether the LLM is allowed to use the tools available in `llmclient.setup`.
-                     This can be disabled e.g. to temporarily turn off websearch.
+    `internet_enabled`: Whether the LLM may reach the network — the user-facing "Internet" switch. Gates
+                        `llm_settings.network_tool_names` (`websearch`, `webfetch`) and nothing else.
+
+                        It and `docs_enabled` each own one group of tools outright, so the four combinations
+                        all mean something. A tool answering to neither switch — `get_current_time` — is
+                        always offered.
 
     `continue_`: If `False` (default), generate a new AI message. Most of the time, this is what you want.
                  A new chat node is created.
@@ -748,7 +751,7 @@ def ai_turn(llm_settings: env,
                  The chat node will be updated with the continued message, creating a new revision.
                  The new revision is set as active. The old revision is not removed.
 
-    `docs_enabled`: Whether the document database is in play at all this turn — the user-facing "docs on/off"
+    `docs_enabled`: Whether the document database is in play at all this turn — the user-facing "Documents"
                     switch. When `False`, no automatic search runs (whatever `docs_query` says) and the
                     document tools are not offered to the LLM.
 
@@ -955,7 +958,13 @@ def ai_turn(llm_settings: env,
 
     # Which tools to offer this turn (`None` = all of them; see the helper for why that reading is the
     # permissive one). Shared with the GUI's context prefill, which must warm the same list.
-    maybe_tool_names = llmclient.maybe_tool_names_for_turn(llm_settings, documents_available=documents_available)
+    maybe_tool_names = llmclient.maybe_tool_names_for_turn(llm_settings,
+                                                           documents_available=documents_available,
+                                                           internet_available=internet_enabled)
+    # `None` means every tool, so an empty tuple is the only "nothing on offer" case. There is none today —
+    # `get_current_time` answers to neither switch — but the budget machinery below asks "are there tools at
+    # all", and asking the list is the answer that stays true if the ungated group ever empties.
+    any_tools_available = (maybe_tool_names is None) or bool(maybe_tool_names)
 
     continue_this_message = continue_  # we need to continue at most the first message in the agent loop
     completed_tool_rounds = 0  # rounds in which tools actually ran
@@ -973,9 +982,9 @@ def ai_turn(llm_settings: env,
         # is answered with yet another tool call, whereas offering no tools leaves the model no move except
         # to reply.
         budget_spent = completed_tool_rounds >= librarian_config.max_tool_call_rounds
-        tools_offered = tools_enabled and (not budget_spent or
-                                           refused_tool_rounds < librarian_config.max_tool_call_refusal_rounds)
-        if tools_enabled and not tools_offered:
+        tools_offered = any_tools_available and (not budget_spent or
+                                                 refused_tool_rounds < librarian_config.max_tool_call_refusal_rounds)
+        if any_tools_available and not tools_offered:
             logger.info(f"ai_turn: tool-call round cap ({librarian_config.max_tool_call_rounds}) reached and "
                         f"{refused_tool_rounds} refusal round(s) did not end the turn; "
                         "requesting the final reply with no tools offered.")
@@ -991,7 +1000,7 @@ def ai_turn(llm_settings: env,
                          # Told the moment the budget runs out, not the moment the tools go away — the point
                          # of the notice is to make the doomed call unnecessary, which is too late once the
                          # model has already tried it.
-                         tools_are_spent=(tools_enabled and budget_spent))
+                         tools_are_spent=(any_tools_available and budget_spent))
 
         if on_llm_start is not None:
             on_llm_start()
@@ -1122,7 +1131,7 @@ def retry_tool_calls(llm_settings: env,
                      datastore: chattree.Forest,
                      retriever: "Optional[hybridir.HybridIR]",
                      tool_node_id: str,
-                     tools_enabled: bool,
+                     internet_enabled: bool,
                      docs_enabled: bool,
                      markup: Optional[str],
                      docs_num_results: Optional[int],
@@ -1236,7 +1245,7 @@ def retry_tool_calls(llm_settings: env,
                    datastore=datastore,
                    retriever=retriever,
                    head_node_id=head_node_id,
-                   tools_enabled=tools_enabled,
+                   internet_enabled=internet_enabled,
                    continue_=False,
                    docs_enabled=docs_enabled,
                    docs_query=None,

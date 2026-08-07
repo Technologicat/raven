@@ -151,7 +151,7 @@ _AI_TURN_CALLBACKS = ("on_docs_start", "on_docs_done",
 
 def run_ai_turn(forest, llm_settings, head, *,
                 retriever=None,
-                tools_enabled=True,
+                internet_enabled=True,
                 continue_=False,
                 docs_enabled=True,
                 docs_query=None,
@@ -164,7 +164,7 @@ def run_ai_turn(forest, llm_settings, head, *,
                             datastore=forest,
                             retriever=retriever,
                             head_node_id=head,
-                            tools_enabled=tools_enabled,
+                            internet_enabled=internet_enabled,
                             continue_=continue_,
                             docs_enabled=docs_enabled,
                             docs_query=docs_query,
@@ -688,7 +688,7 @@ class TestAITurnToolCalls:
 
 def run_retry(forest, llm_settings, tool_node_id, *,
               retriever=None,
-              tools_enabled=True,
+              internet_enabled=True,
               docs_enabled=True,
               markup=None,
               docs_num_results=None,
@@ -699,7 +699,7 @@ def run_retry(forest, llm_settings, tool_node_id, *,
                                      datastore=forest,
                                      retriever=retriever,
                                      tool_node_id=tool_node_id,
-                                     tools_enabled=tools_enabled,
+                                     internet_enabled=internet_enabled,
                                      docs_enabled=docs_enabled,
                                      markup=markup,
                                      docs_num_results=docs_num_results,
@@ -1141,6 +1141,18 @@ class TestGroundingAccumulation:
 # Per-turn tool availability (the document tools follow the document database)
 # ---------------------------------------------------------------------------
 
+def capture_tool_names(monkeypatch):
+    """Stub `llmclient.invoke` and capture the `tool_names` it was handed. Returns the dict it writes into."""
+    seen = {}
+
+    def fake_invoke(**kw):
+        seen["tool_names"] = kw.get("tool_names")
+        return make_invoke_result(content="OK")
+
+    monkeypatch.setattr("raven.librarian.llmclient.invoke", fake_invoke)
+    return seen
+
+
 class TestDocumentToolGating:
     """`docs_enabled` gates the document *tools*; `docs_query` gates the automatic *search*.
 
@@ -1150,21 +1162,11 @@ class TestDocumentToolGating:
     read as noise.
     """
 
-    def _capture_tool_names(self, monkeypatch):
-        seen = {}
-
-        def fake_invoke(**kw):
-            seen["tool_names"] = kw.get("tool_names")
-            return make_invoke_result(content="OK")
-
-        monkeypatch.setattr("raven.librarian.llmclient.invoke", fake_invoke)
-        return seen
-
     def test_documents_in_play_offers_every_tool(self, monkeypatch, llm_settings, populated_forest):
         forest, head = populated_forest
         user_head = scaffold.user_turn(llm_settings=llm_settings, datastore=forest,
                                        head_node_id=head, user_message_text="What is X?")
-        seen = self._capture_tool_names(monkeypatch)
+        seen = capture_tool_names(monkeypatch)
         run_ai_turn(forest, llm_settings, user_head,
                     retriever=FakeRetriever(results=[sample_rag_match()]),
                     docs_enabled=True, docs_query="What is X?")
@@ -1174,7 +1176,7 @@ class TestDocumentToolGating:
         forest, head = populated_forest
         user_head = scaffold.user_turn(llm_settings=llm_settings, datastore=forest,
                                        head_node_id=head, user_message_text="What is 2+2?")
-        seen = self._capture_tool_names(monkeypatch)
+        seen = capture_tool_names(monkeypatch)
         run_ai_turn(forest, llm_settings, user_head,
                     retriever=FakeRetriever(results=[sample_rag_match()]),
                     docs_enabled=False, docs_query="What is 2+2?")
@@ -1186,7 +1188,7 @@ class TestDocumentToolGating:
         forest, head = populated_forest
         user_head = scaffold.user_turn(llm_settings=llm_settings, datastore=forest,
                                        head_node_id=head, user_message_text="Hi")
-        seen = self._capture_tool_names(monkeypatch)
+        seen = capture_tool_names(monkeypatch)
         run_ai_turn(forest, llm_settings, user_head, retriever=None, docs_enabled=True)
         assert "search_documents" not in seen["tool_names"]
 
@@ -1207,10 +1209,62 @@ class TestDocumentToolGating:
         forest, head = populated_forest
         user_head = scaffold.user_turn(llm_settings=llm_settings, datastore=forest,
                                        head_node_id=head, user_message_text="Go on")
-        seen = self._capture_tool_names(monkeypatch)
+        seen = capture_tool_names(monkeypatch)
         run_ai_turn(forest, llm_settings, user_head,
                     retriever=FakeRetriever(), docs_enabled=True, docs_query=None)
         assert seen["tool_names"] is None
+
+
+class TestTheTwoSwitchesAreIndependent:
+    """Each switch owns one group of tools outright, so all four combinations mean something.
+
+    The arrangement they replaced did not: a blanket *Tools* switch sat above *Documents*, so with tools
+    off and documents on the user had switched documents on and the model still could not search them.
+
+    A tool answering to neither switch is always offered. That is `get_current_time`, and it has to be:
+    the clock inject is delivered on every turn regardless of both switches, as a synthetic call to that
+    very function, so withholding the spec would leave the model reading a call it cannot resolve.
+    """
+
+    def _offered(self, monkeypatch, llm_settings, populated_forest, *, internet, docs):
+        forest, head = populated_forest
+        user_head = scaffold.user_turn(llm_settings=llm_settings, datastore=forest,
+                                       head_node_id=head, user_message_text="What is X?")
+        seen = capture_tool_names(monkeypatch)
+        run_ai_turn(forest, llm_settings, user_head,
+                    retriever=FakeRetriever(results=[sample_rag_match()]),
+                    internet_enabled=internet, docs_enabled=docs, docs_query=None)
+        names = seen["tool_names"]
+        if names is None:  # the permissive value: every registered tool
+            return set(llm_settings.tool_entrypoints)
+        return set(names)
+
+    def test_both_on_offers_everything(self, monkeypatch, llm_settings, populated_forest):
+        offered = self._offered(monkeypatch, llm_settings, populated_forest, internet=True, docs=True)
+        assert offered == set(llm_settings.tool_entrypoints)
+
+    def test_documents_on_internet_off_still_lets_the_model_search_the_documents(self, monkeypatch, llm_settings, populated_forest):
+        """The combination the old arrangement got wrong, and the reason for this change."""
+        offered = self._offered(monkeypatch, llm_settings, populated_forest, internet=False, docs=True)
+        assert llm_settings.document_tool_names <= offered
+        assert not (llm_settings.network_tool_names & offered)
+
+    def test_internet_on_documents_off(self, monkeypatch, llm_settings, populated_forest):
+        offered = self._offered(monkeypatch, llm_settings, populated_forest, internet=True, docs=False)
+        assert llm_settings.network_tool_names <= offered
+        assert not (llm_settings.document_tool_names & offered)
+
+    def test_both_off_leaves_only_the_ungated_tools(self, monkeypatch, llm_settings, populated_forest):
+        offered = self._offered(monkeypatch, llm_settings, populated_forest, internet=False, docs=False)
+        ungated = set(llm_settings.tool_entrypoints) - set(llm_settings.document_tool_names) - set(llm_settings.network_tool_names)
+        assert offered == ungated
+
+    def test_the_clock_tool_answers_to_neither_switch(self, monkeypatch, llm_settings, populated_forest):
+        """Named explicitly, not derived: the general rule above would still pass if the clock tool were
+        quietly moved into a gated group, and that would break the inject that names it."""
+        for internet, docs in ((True, True), (True, False), (False, True), (False, False)):
+            offered = self._offered(monkeypatch, llm_settings, populated_forest, internet=internet, docs=docs)
+            assert "get_current_time" in offered, f"withheld with internet={internet}, docs={docs}"
 
 
 # ---------------------------------------------------------------------------

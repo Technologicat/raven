@@ -102,11 +102,11 @@ def minimal_chat_client(backend_url) -> None:
         datastore, app_state = appstate.load(llm_settings, datastore_file, state_file)
         print()
 
-        # Inform user about tool-calling feature state
-        tools_enabled_str = "ON" if app_state["tools_enabled"] else "OFF"
-        colorful_tools_status = colorizer.colorize(f"Tool-calling is currently {tools_enabled_str}.",
-                                                   colorizer.Style.BRIGHT)
-        print(f"{colorful_tools_status} Toggle with the `!tools` command.")
+        # Inform user whether the AI may reach the network
+        internet_enabled_str = "ON" if app_state["internet_enabled"] else "OFF"
+        colorful_internet_status = colorizer.colorize(f"Internet access (web search and page fetching) is currently {internet_enabled_str}.",
+                                                      colorizer.Style.BRIGHT)
+        print(f"{colorful_internet_status} Toggle with the `!internet` command.")
 
         # Load RAG database (it will auto-persist at app exit).
         retriever, _unused_scanner = hybridir.setup(docs_dir=docs_dir,
@@ -196,10 +196,10 @@ def minimal_chat_client(backend_url) -> None:
             print("        !dump                   - See raw contents of chat node datastore")
             print("        !head some-node-id      - Switch to another chat branch (get the node ID from `!dump`)")
             print("        !history                - Print a cleaned-up transcript of the current chat branch")
+            print(f"        !internet [True|False]  - Web search and page fetching on/off/toggle (currently {app_state['internet_enabled']})")
             print("        !model                  - Show which model is in use")
             print("        !models                 - List all models available at connected backend")
             print("        !reroll                 - Reroll (regenerate) the latest AI response, creating a new sibling.")
-            print(f"        !tools [True|False]     - Tool-calling on/off/toggle (currently {app_state['tools_enabled']})")
             print("        !help                   - Show this message again")
             print()
             print("    Press Ctrl+D to exit chat.")
@@ -222,10 +222,10 @@ def minimal_chat_client(backend_url) -> None:
                         "!head ",
                         "!help",
                         "!history",
+                        "!internet ",
                         "!model",
                         "!models",
-                        "!reroll",
-                        "!tools"]
+                        "!reroll"]
             def get_completions(candidates: List[str], text: str) -> List[str]:
                 """Return a list of matching completions for `text`.
 
@@ -259,7 +259,7 @@ def minimal_chat_client(backend_url) -> None:
                 elif buffer_content.startswith("!head"):  # in `!head` command, expecting an argument?
                     with datastore.lock:
                         candidates = list(sorted(datastore.nodes.keys()))
-                elif buffer_content.startswith("!tools"):  # in `!tools` command, expecting an argument?
+                elif buffer_content.startswith("!internet"):  # in `!internet` command, expecting an argument?
                     candidates = ["True", "False"]
                 else:  # anything else -> no completions
                     return None
@@ -459,27 +459,27 @@ def minimal_chat_client(backend_url) -> None:
                 chat_print_history(node_id_history)
                 print()
                 return Values(action=action_proceed, docs_query=scan_history_for_docs_query(node_id_history))
-            elif user_message_text.startswith("!tools"):  # TODO: refactor
+            elif user_message_text.startswith("!internet"):  # TODO: refactor
                 split_command_text = user_message_text.split()
                 nargs = len(split_command_text) - 1
                 if nargs == 0:
-                    app_state["tools_enabled"] = not app_state["tools_enabled"]
+                    app_state["internet_enabled"] = not app_state["internet_enabled"]
                 elif nargs == 1:
                     arg = split_command_text[-1]
                     if arg == "True":
-                        app_state["tools_enabled"] = True
+                        app_state["internet_enabled"] = True
                     elif arg == "False":
-                        app_state["tools_enabled"] = False
+                        app_state["internet_enabled"] = False
                     else:
-                        print(f"!tools: unrecognized argument '{arg}'; expected 'True' or 'False'.")
+                        print(f"!internet: unrecognized argument '{arg}'; expected 'True' or 'False'.")
                         print()
                         return Values(action=action_next_exchange)
                 else:
-                    print("!tools: wrong number of arguments; expected at most one, 'True' or 'False'.")
+                    print("!internet: wrong number of arguments; expected at most one, 'True' or 'False'.")
                     print()
                     return Values(action=action_next_exchange)
-                tools_enabled_str = "ON" if app_state["tools_enabled"] else "OFF"
-                print(f"Tool-calling is now {tools_enabled_str}.")
+                internet_enabled_str = "ON" if app_state["internet_enabled"] else "OFF"
+                print(f"Internet access is now {internet_enabled_str}.")
                 print()
                 return Values(action=action_next_exchange)
             elif user_message_text.startswith("!") and len(user_message_text.split("\n")) == 1:
@@ -600,7 +600,7 @@ def minimal_chat_client(backend_url) -> None:
                                                 retriever=retriever,
                                                 head_node_id=app_state["HEAD"],
                                                 continue_=False,  # continue-incomplete-message mode not supported by minichat; see `raven.librarian.app` for a GUI frontend that supports this.
-                                                tools_enabled=app_state["tools_enabled"],
+                                                internet_enabled=app_state["internet_enabled"],
                                                 docs_enabled=app_state["docs_enabled"],
                                                 docs_query=docs_query,
                                                 docs_num_results=librarian_config.docs_num_results,

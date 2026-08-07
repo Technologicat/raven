@@ -30,7 +30,7 @@ from . import textfilestore
 # expose to the user). `load` uses these to fill any missing keys from an on-disk state file;
 # `save` uses the keys to validate that the state dict has all required flags. Adding or removing
 # a flag means touching this one mapping — `load`, `save`, and the tests derive from it.
-_DEFAULT_FLAGS = {"tools_enabled": True,
+_DEFAULT_FLAGS = {"internet_enabled": True,
                   "docs_enabled": True,
                   "avatar_speech_enabled": True,
                   "avatar_subtitles_enabled": True}
@@ -38,6 +38,15 @@ _DEFAULT_FLAGS = {"tools_enabled": True,
 # Flags that used to exist, dropped from a state file on load so they do not sit there forever confusing
 # whoever reads it next. Removable once no state file in the wild still carries them.
 _RETIRED_FLAGS = ("speculate_enabled",)
+
+# Flags that were renamed, old name -> new name. The stored *value* carries across, which is the whole
+# difference from retiring one: the user's setting survives the rename. `tools_enabled` governed every tool
+# wholesale; `internet_enabled` governs the network-reaching ones, so a user who had tools off gets the
+# network off, which is the reading that keeps their intent.
+#
+# Applied before the defaults are filled in — the other order would see the new name missing, write the
+# default over it, and silently discard the setting being migrated.
+_RENAMED_FLAGS = {"tools_enabled": "internet_enabled"}
 
 # --------------------------------------------------------------------------------
 # Sidecar GC configuration
@@ -250,6 +259,18 @@ def load(llm_settings: env,
         else:
             logger.info("load: No chat nodes in datastore at '{mayberel_datastore_file}' (resolved to '{datastore_file}'). Creating new datastore, will be saved at app exit.")
             _reset_datastore_and_update_state(llm_settings, datastore, state)
+
+    # Carry renamed flags over before the defaults are filled in (see `_RENAMED_FLAGS` for why the order
+    # matters). An old name whose new name is already present is dropped rather than applied: the new one
+    # is what the app has been writing, so it is the current setting.
+    for old_key, new_key in _RENAMED_FLAGS.items():
+        if old_key in state:
+            old_value = state.pop(old_key)
+            if new_key in state:
+                logger.info(f"load: Dropping renamed key '{old_key}' from '{mayberel_state_file}' (resolved to '{state_file}'); '{new_key}' is already present")
+            else:
+                state[new_key] = old_value
+                logger.info(f"load: Renaming key '{old_key}' -> '{new_key}' in '{mayberel_state_file}' (resolved to '{state_file}'), keeping value '{old_value}'")
 
     # Set any missing app state flags to their defaults.
     for key, default in _DEFAULT_FLAGS.items():

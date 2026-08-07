@@ -52,4 +52,5 @@ def llm_settings():
                                  "search_documents": None,
                                  "fetch_document": None,
                                  "list_consulted_documents": None},
-               document_tool_names=frozenset({"search_documents", "fetch_document", "list_consulted_documents"}))
+               document_tool_names=frozenset({"search_documents", "fetch_document", "list_consulted_documents"}),
+               network_tool_names=frozenset({"websearch", "webfetch"}))

@@ -886,8 +886,8 @@ with timer() as tim:
                                       no_scrollbar=True,
                                       no_scroll_with_mouse=True):
                     with dpg.group(horizontal=True):
-                        def toggle_tools_enabled():
-                            app_state["tools_enabled"] = not app_state["tools_enabled"]
+                        def toggle_internet_enabled():
+                            app_state["internet_enabled"] = not app_state["internet_enabled"]
                         def toggle_docs_enabled():
                             app_state["docs_enabled"] = not app_state["docs_enabled"]
                         def toggle_speech_enabled():
@@ -895,9 +895,9 @@ with timer() as tim:
                         def toggle_subtitles_enabled():
                             app_state["avatar_subtitles_enabled"] = not app_state["avatar_subtitles_enabled"]
                             avatar_controller.subtitles_enabled = app_state["avatar_subtitles_enabled"]
-                        dpg.add_checkbox(label="Tools", default_value=app_state["tools_enabled"], callback=toggle_tools_enabled, tag="tools_enabled_checkbox")
-                        dpg.add_tooltip("tools_enabled_checkbox", tag="tools_enabled_tooltip")  # tag
-                        dpg.add_text("Provide tools to the AI, such as web search.", parent="tools_enabled_tooltip")  # tag
+                        dpg.add_checkbox(label="Internet", default_value=app_state["internet_enabled"], callback=toggle_internet_enabled, tag="internet_enabled_checkbox")
+                        dpg.add_tooltip("internet_enabled_checkbox", tag="internet_enabled_tooltip")  # tag
+                        dpg.add_text("Let the AI reach the internet: web search, and fetching a page it finds\nor that you link to.\n\nThis is the only switch that lets anything leave this machine on the AI's\ninitiative, so it is the one to turn off when the conversation should stay\nlocal. Your messages still go to whichever LLM backend you configured;\nthat is set in the config file, not here.\n\nWith this off, the AI can still read your document database (see next\ntoggle) and can still ask what time it is.", parent="internet_enabled_tooltip")  # tag
 
                         dpg.add_checkbox(label="Documents", default_value=app_state["docs_enabled"], callback=toggle_docs_enabled, tag="docs_enabled_checkbox")
                         dpg.add_tooltip("docs_enabled_checkbox", tag="docs_enabled_tooltip")  # tag
@@ -1280,9 +1280,9 @@ def render_help_extras(self: helpcard.HelpWindow,
     dpg_markdown.add_text(f"{self.c_hed}**Tool use** (tool-calling){self.c_end}", parent=gui_parent)
     g = dpg.add_group(horizontal=True, parent=gui_parent)
     g1 = dpg.add_group(horizontal=False, parent=g)
-    dpg_markdown.add_text(f'{self.c_txt}The AI can search the web (**websearch**), read a page it found (**webfetch**), search your document database (**search_documents**), read one of those in full (**fetch_document**), and list what this chat has consulted (**list_consulted_documents**).{self.c_end}',
+    dpg_markdown.add_text(f'{self.c_txt}The AI can search the web (**websearch**), read a page it found (**webfetch**), search your document database (**search_documents**), read one of those in full (**fetch_document**), list what this chat has consulted (**list_consulted_documents**), and ask what time it is (**get_current_time**).{self.c_end}',
                           parent=g1)
-    dpg_markdown.add_text(f'{self.c_txt}It decides for itself which to use, if any. All of them are enabled/disabled with the {self.c_end}{self.c_hig}**Tools**{self.c_end}{self.c_txt} checkbox; the three document tools additionally need {self.c_end}{self.c_hig}**Documents**{self.c_end}{self.c_txt} to be on.{self.c_end}',
+    dpg_markdown.add_text(f'{self.c_txt}It decides for itself which to use, if any. The first two need {self.c_end}{self.c_hig}**Internet**{self.c_end}{self.c_txt}, the next three need {self.c_end}{self.c_hig}**Documents**{self.c_end}{self.c_txt}, and the clock is always available. Each checkbox governs its own group, so switching one off never takes the other away.{self.c_end}',
                           parent=g1)
     dpg_markdown.add_text(f'{self.c_txt}One reply may take several rounds of tool calls, up to a configurable ceiling. A long page the AI fetches is filed as an attachment, so reading it does not bury the conversation.{self.c_end}',
                           parent=g1)

@@ -81,6 +81,19 @@ class TestToolRegistry:
             "conftest's tool_entrypoints has drifted from llmclient.TOOL_ENTRYPOINTS")
         assert llm_settings.document_tool_names == llmclient.DOCUMENT_TOOL_NAMES, (
             "conftest's document_tool_names has drifted from llmclient.DOCUMENT_TOOL_NAMES")
+        assert llm_settings.network_tool_names == llmclient.NETWORK_TOOL_NAMES, (
+            "conftest's network_tool_names has drifted from llmclient.NETWORK_TOOL_NAMES")
+
+    def test_the_gated_groups_are_disjoint(self):
+        """A tool answering to two switches would make one of them a lie, whichever way they were set."""
+        assert not (llmclient.DOCUMENT_TOOL_NAMES & llmclient.NETWORK_TOOL_NAMES)
+
+    def test_every_gated_name_is_a_registered_tool(self):
+        """A typo in either group is silent: the name gates nothing, and the tool it meant stays ungated —
+        i.e. permanently on offer, which is the failure direction that does not announce itself."""
+        registered = set(llmclient.TOOL_ENTRYPOINTS)
+        assert llmclient.DOCUMENT_TOOL_NAMES <= registered
+        assert llmclient.NETWORK_TOOL_NAMES <= registered
 
     def test_the_entrypoints_are_callable(self):
         """The registry is module-level and shared, so a name bound to `None` by accident would surface only
@@ -434,6 +447,62 @@ def _fake_stream(monkeypatch, payloads):
     datas = [p if isinstance(p, str) else json.dumps(p) for p in payloads]
     monkeypatch.setattr(llmclient.requests, "post", lambda *a, **k: _FakeResponse())
     monkeypatch.setattr(llmclient.sseclient, "SSEClient", lambda resp: _FakeSSEClient(datas))
+
+
+def _capture_request(monkeypatch, payloads):
+    """Like `_fake_stream`, but also keep the request body. Returns the dict it is written into."""
+    sent = {}
+    datas = [p if isinstance(p, str) else json.dumps(p) for p in payloads]
+
+    def fake_post(*args, **kwargs):
+        sent["json"] = kwargs["json"]
+        return _FakeResponse()
+
+    monkeypatch.setattr(llmclient.requests, "post", fake_post)
+    monkeypatch.setattr(llmclient.sseclient, "SSEClient", lambda resp: _FakeSSEClient(datas))
+    return sent
+
+
+class TestToolNamesFiltersTheRequest:
+    """`None` and an empty collection are different `tool_names` values, and both are reachable.
+
+    `None` is the permissive one — every registered tool — and an empty collection the restrictive one.
+    `invoke` keeps them apart with an `is None` test rather than a truthiness test, which is what makes an
+    empty tuple fall through to the filtering branch and reduce the spec list to nothing. Testing
+    truthiness there would invert the meaning of the restrictive value into the permissive one, silently
+    handing the model every tool on a turn where the caller asked for none.
+
+    `maybe_tool_names_for_turn` returns both values, so this is a live distinction: it answers `None` when
+    both switches are on, and a proper subset otherwise.
+    """
+
+    _SPECS = [{"type": "function", "function": {"name": "websearch"}},
+              {"type": "function", "function": {"name": "search_documents"}}]
+
+    def _send(self, monkeypatch, invoke_settings, tool_names):
+        invoke_settings.request_data = dict(invoke_settings.request_data, tools=list(self._SPECS))
+        sent = _capture_request(monkeypatch, [{"choices": [{"delta": {"content": "ok"}}]}, "[DONE]"])
+        llmclient.invoke(invoke_settings, _history("hi"), tools_enabled=True, tool_names=tool_names)
+        return sent["json"]
+
+    def test_none_offers_every_tool(self, monkeypatch, invoke_settings):
+        data = self._send(monkeypatch, invoke_settings, None)
+        assert [t["function"]["name"] for t in data["tools"]] == ["websearch", "search_documents"]
+
+    def test_an_empty_collection_offers_none(self, monkeypatch, invoke_settings):
+        data = self._send(monkeypatch, invoke_settings, ())
+        # Dropped rather than sent empty: some backends reject an empty `tools` list.
+        assert "tools" not in data
+
+    def test_a_subset_offers_exactly_that_subset(self, monkeypatch, invoke_settings):
+        data = self._send(monkeypatch, invoke_settings, ("search_documents",))
+        assert [t["function"]["name"] for t in data["tools"]] == ["search_documents"]
+
+    def test_tools_disabled_wins_over_any_tool_names(self, monkeypatch, invoke_settings):
+        invoke_settings.request_data = dict(invoke_settings.request_data, tools=list(self._SPECS))
+        sent = _capture_request(monkeypatch, [{"choices": [{"delta": {"content": "ok"}}]}, "[DONE]"])
+        llmclient.invoke(invoke_settings, _history("hi"), tools_enabled=False, tool_names=None)
+        assert "tools" not in sent["json"]
 
 
 class TestInvokeStreamRobustness:

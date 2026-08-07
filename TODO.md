@@ -584,38 +584,7 @@ every tier, chosen on measurements rather than reputation.
 
 ### Tools
 
-- **[High]** Replace the **Tools** toggle with an **Internet** toggle, so the two switches are independent (decided 2026-08-07, for 0.2.9). Today's pair fails to be orthogonal: *Tools* governs every tool wholesale, *Documents* governs the RAG autosearch plus the document tools — so the document tools answer to both, and one combination is incoherent.
-
-  | Tools | Documents | `websearch`, `webfetch` | document tools | RAG autosearch |
-  |---|---|---|---|---|
-  | ON | ON | yes | yes | yes |
-  | ON | OFF | yes | no | no |
-  | **OFF** | **ON** | no | **no** | **yes** |
-  | OFF | OFF | no | no | no |
-
-  The third row is the tell: the user has switched documents *on* and the model still cannot search them — Raven searches on its behalf, but the AI cannot follow up. Nothing about "Tools" suggests it overrides the switch named after the thing being overridden.
-
-  The fix is that each toggle owns one group outright, and the tools already partition cleanly with nothing left over: `llmclient.document_tool_names` is `search_documents` / `fetch_document` / `list_consulted_documents`, and its complement is exactly `websearch` / `webfetch`. So **Internet** takes the complement, **Documents** keeps what it has, and the four combinations all mean something.
-
-  This also resolves the in-code marker at `scaffold.py`'s `ai_turn` — *"`tools_enabled` is a blunt hammer; maybe have also an optional tool name list for fine-grained control?"* — by group rather than by name list, which is the granularity the user actually has an opinion about.
-
-  Touches the same surfaces the Speculation removal did: `appstate` flags (rename `tools_enabled`, with a retired-flag migration; `_RETIRED_FLAGS` already exists for it), `app.py`'s checkbox and tooltip, `scaffold.ai_turn`'s parameter, `minichat`'s `!tools` command, the README's toggle section, and the F1 help card. A changelog entry too — it renames a control users know.
-
-- **[Medium]** The clock inject names a tool that does not exist, and the model notices. `_perform_injects` delivers the current time as a synthetic tool exchange calling `get_current_time` — which is not in `llmclient.tool_entrypoints`, whose five real entries are `websearch`, `webfetch`, `search_documents`, `fetch_document` and `list_consulted_documents`.
-
-  **Noticed 2026-08-07** while reading a reasoning trace, which is worth separating from what the trace actually showed. Asked to name a bridge, the model reviewed its own transcript and remarked: *"the model answered the math question (which triggered a tool call erroneously in the previous turn - `get_current_time` is useless for math, but the answer `4` was provided)"*.
-
-  The first reading — that the model was confused by a call to a tool it was never offered — **does not survive a second one** (Juha). "Useless for math" is a complaint about *relevance*: a clock call turned up on an arithmetic turn and the model judged it pointless. Whether it also noticed the function is absent from its schema is not knowable from this trace. **So registering the tool should not be expected to suppress that output**, since the inject still arrives on every turn regardless of topic.
-
-  **This is the case brief 10 already measured and fixed for the sibling inject.** The comment beside the document-matches inject in `scaffold._perform_injects` records why that one names a real tool: *"The synthetic call names the real tool, which is no longer a fiction … Before that tool existed it wrote the call out as literal text and the user got that instead of an answer, roughly one turn in three on Qwen3.6-27B."* The clock inject is in the state the docs inject was in before that fix, and there is no reason to expect a different model to treat it differently.
-
-  **Decided (Juha, 2026-08-07): register the tool, for symmetry with the docs inject.** The alternative — delivering the time as a system inject beside the date — is cheaper but crosses the instructions-versus-data split `_perform_injects` is built around: instructions want obeying and join the system message, data wants reading and arrives as a tool result. The time is data, so moving it would weaken a distinction that is otherwise doing work.
-
-  The parts are small. A spec entry with no parameters, a wrapper returning what `chatutil.format_time_now` already produces so the tool and the inject cannot drift, and one line in `tool_entrypoints`. It also removes a trailing risk: a model that decides it wants the time can currently emit a call resolving to no entrypoint, spending a round on an error result.
-
-  **One cost worth weighing on timing rather than discovering afterwards:** a tool spec sits in the system block at the very front of every prompt, so adding one changes that prefix for *every* turn — a permanent per-turn token cost, and a one-time invalidation of any cached prefix. Small, but it argues for landing this with other prompt-shape work rather than alone.
-
-  Note the date is *not* affected — it already goes in as a system inject and names nothing.
+- **[Medium]** A separate toggle for MCP tools, once brief 04 lands. Different trust surface from either **Internet** or **Documents**, so it wants its own group in `llmclient` (a third alongside `NETWORK_TOOL_NAMES` and `DOCUMENT_TOOL_NAMES`) rather than being folded into one of theirs. The grouping mechanism is in place and takes one more entry; what needs deciding is whether one switch covers every MCP server or each server gets its own, which is a question about how many the user is expected to run.
 
 - **[Medium]** Weather and calculator tools: both parked in brief 01 §6 and specced in `TODO_DEFERRED.md`, "Add built-in calculator and weather LLM tools". Weather via open-meteo (https://open-meteo.com/en/docs) — makes Librarian more humanlike as a "voice with internet access" (HCI is a major Raven goal). Calculator via secure eval limited to math expressions; `eval` itself is unsafe (see notes in the archived section), candidate https://github.com/danthedeckie/simpleeval.
 

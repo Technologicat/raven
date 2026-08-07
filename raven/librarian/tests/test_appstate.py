@@ -94,9 +94,9 @@ class TestLoadEmpty:
 
     def test_state_dict_has_all_required_keys(self, tmp_path, llm_settings):
         _, state, _, _ = _load(tmp_path, llm_settings)
-        for key in ("HEAD", "new_chat_HEAD", "system_prompt_node_id",
-                    "tools_enabled", "docs_enabled",
-                    "avatar_speech_enabled", "avatar_subtitles_enabled"):
+        # The flags come from `_DEFAULT_FLAGS` rather than a second copy of the list, so that adding,
+        # dropping or renaming one cannot leave this test asserting yesterday's set.
+        for key in ("HEAD", "new_chat_HEAD", "system_prompt_node_id") + tuple(appstate._DEFAULT_FLAGS):
             assert key in state, f"state missing key {key!r}"
 
     @pytest.mark.skipif(not appstate._RETIRED_FLAGS, reason="no flags are currently being retired")
@@ -117,6 +117,46 @@ class TestLoadEmpty:
         _, state, _, _ = _load(tmp_path, llm_settings)
         for key in appstate._RETIRED_FLAGS:
             assert key not in state, f"retired flag {key!r} survived the load"
+
+    @pytest.mark.skipif(not appstate._RENAMED_FLAGS, reason="no flags are currently being renamed")
+    def test_renamed_flags_carry_their_value_over(self, tmp_path, llm_settings):
+        """A rename must keep the user's setting, which is the whole difference from retiring a flag.
+
+        The value chosen is the opposite of the new flag's default, so a migration that silently dropped
+        the old key and let the default fill in would be indistinguishable from one that worked.
+        """
+        _load(tmp_path, llm_settings)  # create a state file to amend
+        state_path = tmp_path / "state.json"
+        stored = json.loads(state_path.read_text(encoding="utf-8"))
+        for old_key, new_key in appstate._RENAMED_FLAGS.items():
+            stored.pop(new_key, None)  # an old state file has the old name and not the new one
+            stored[old_key] = not appstate._DEFAULT_FLAGS[new_key]
+        state_path.write_text(json.dumps(stored), encoding="utf-8")
+
+        _, state, _, _ = _load(tmp_path, llm_settings)
+        for old_key, new_key in appstate._RENAMED_FLAGS.items():
+            assert old_key not in state, f"old name {old_key!r} survived the load"
+            assert state[new_key] is not appstate._DEFAULT_FLAGS[new_key], f"{old_key!r} -> {new_key!r} lost the stored value"
+
+    @pytest.mark.skipif(not appstate._RENAMED_FLAGS, reason="no flags are currently being renamed")
+    def test_a_renamed_flag_does_not_overwrite_the_new_name(self, tmp_path, llm_settings):
+        """With both names present the new one wins: it is what the app has been writing, so it is current.
+
+        Reachable in the wild by running an older Raven against a state file a newer one wrote — the old
+        build re-adds the old key, and the next new build must not let that stale value win.
+        """
+        _load(tmp_path, llm_settings)
+        state_path = tmp_path / "state.json"
+        stored = json.loads(state_path.read_text(encoding="utf-8"))
+        for old_key, new_key in appstate._RENAMED_FLAGS.items():
+            stored[new_key] = appstate._DEFAULT_FLAGS[new_key]
+            stored[old_key] = not appstate._DEFAULT_FLAGS[new_key]
+        state_path.write_text(json.dumps(stored), encoding="utf-8")
+
+        _, state, _, _ = _load(tmp_path, llm_settings)
+        for old_key, new_key in appstate._RENAMED_FLAGS.items():
+            assert old_key not in state, f"old name {old_key!r} survived the load"
+            assert state[new_key] is appstate._DEFAULT_FLAGS[new_key], f"stale {old_key!r} overwrote {new_key!r}"
 
     def test_default_flag_values(self, tmp_path, llm_settings):
         _, state, _, _ = _load(tmp_path, llm_settings)
@@ -257,18 +297,19 @@ class TestGreetingRefresh:
 class TestSave:
     def test_save_then_load_roundtrips(self, tmp_path, llm_settings):
         _, state, _, state_path = _load(tmp_path, llm_settings)
-        state["tools_enabled"] = False
+        state["internet_enabled"] = False
         state["docs_enabled"] = False
         appstate.save(state_path, state)
 
         stored = json.loads(state_path.read_text(encoding="utf-8"))
-        assert stored["tools_enabled"] is False
+        assert stored["internet_enabled"] is False
         assert stored["docs_enabled"] is False
         assert stored["HEAD"] == state["HEAD"]
 
     def test_save_missing_required_key_raises(self, tmp_path, llm_settings):
         _, state, _, state_path = _load(tmp_path, llm_settings)
-        del state["tools_enabled"]
+        # Any required flag will do — what is under test is that `save` validates, not which key it caught.
+        del state[next(iter(appstate._DEFAULT_FLAGS))]
         with pytest.raises(KeyError):
             appstate.save(state_path, state)
 

@@ -52,7 +52,7 @@ Each layer only imports from layers below it. No circular dependencies.
 
 - **`cleanup_dialog.py`** — `DPGCleanupDialog`, the GUI half of the above: dry-run preview (image grid + document list, both collapsed by default), per-item and bulk rescue-to-staging, commit. Thumbnails are letterboxed into uniform tiles and decoded on a background task, into a per-dialog texture registry whose tags carry a build counter (DPG frees deleted items lazily). A downsampled image and its preserved original are shown as one entry — `cleanup.preview_cleanup` does the folding, and `SidecarEntry.archival_filename` is what the open and rescue actions act on, matching the chat log.
 
-- **`appstate.py`** — Loads/saves app state (JSON dict) + datastore (`PersistentForest`). On load: refreshes system prompt (overwrites stored version), refreshes greeting node, validates HEAD pointers, fills missing settings with defaults, migrates old formats. Recovers gracefully from partial corruption (dangling HEAD, missing keys); factory reset only if datastore is genuinely empty. State dict tracks: HEAD, toggle states (tools/docs/speculate/speech/subtitles), node IDs for system prompt and greeting.
+- **`appstate.py`** — Loads/saves app state (JSON dict) + datastore (`PersistentForest`). On load: refreshes system prompt (overwrites stored version), refreshes greeting node, validates HEAD pointers, fills missing settings with defaults, migrates old formats. Recovers gracefully from partial corruption (dangling HEAD, missing keys); factory reset only if datastore is genuinely empty. State dict tracks: HEAD, toggle states (internet/docs/speech/subtitles), node IDs for system prompt and greeting. Two migration mappings sit next to the defaults: `_RETIRED_FLAGS` drops a flag that went away, `_RENAMED_FLAGS` carries a renamed one's *value* across.
 
 - **`llmclient.py`** — Low-level LLM communication. `setup()` queries backend, builds `env` namespace with personas, tools, sampler params; detects vision capability (`model_is_vlm` tri-state — True/False/None). `invoke()` streams via SSE through a single `StreamParser` emitting typed events (content / reasoning / tool-call), detects tool calls, supports stopping strings; serializes history for the wire and resolves `sidecar:` image URLs to `data:` just before send. `perform_tool_calls()` parses tool_calls JSON, validates, dispatches to registered entrypoints. `perform_throwaway_task()` for one-shot LLM tasks (e.g. keyword extraction). `count_tokens` + `image_token_cost` for the context-fill estimate. Progress via callbacks. Built-in tools: websearch, webfetch.
 
@@ -100,7 +100,7 @@ Each layer only imports from layers below it. No circular dependencies.
 **App state**:
 ```python
 {"system_prompt_node_id": "...", "new_chat_HEAD": "...", "HEAD": "...",
- "tools_enabled": True, "docs_enabled": True, "speculate_enabled": False,
+ "internet_enabled": True, "docs_enabled": True,
  "avatar_speech_enabled": True, "avatar_subtitles_enabled": True}
 ```
 

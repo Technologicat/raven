@@ -3143,10 +3143,16 @@ class DPGChatController:
         # different list warms a prefix that turn never sends — the whole prompt gets reprocessed anyway.
         maybe_tool_names = llmclient.maybe_tool_names_for_turn(
             self.llm_settings,
-            documents_available=(self.app_state["docs_enabled"] and self.retriever is not None))
+            documents_available=(self.app_state["docs_enabled"] and self.retriever is not None),
+            internet_available=self.app_state["internet_enabled"])
         out = llmclient.prefill(self.llm_settings,
                                 history,
-                                tools_enabled=self.app_state["tools_enabled"],
+                                # All the per-group gating is in `maybe_tool_names` now, so this coarser
+                                # switch has nothing left to decide and stays on. It is not redundant at its
+                                # own layer: `ai_turn` still sets it `False` to withdraw the tools outright
+                                # when the round budget is spent — which cannot happen at prefill time,
+                                # since what is being warmed is the *first* round of the next turn.
+                                tools_enabled=True,
                                 tool_names=maybe_tool_names,
                                 datastore=self.datastore)  # resolve any sidecar: image refs so the exact prompt size counts image tokens
 
@@ -3553,7 +3559,7 @@ class DPGChatController:
                                                             datastore=self.datastore,
                                                             retriever=self.retriever,
                                                             head_node_id=self.app_state["HEAD"],
-                                                            tools_enabled=self.app_state["tools_enabled"],
+                                                            internet_enabled=self.app_state["internet_enabled"],
                                                             continue_=continue_,
                                                             docs_enabled=self.app_state["docs_enabled"],
                                                             docs_query=docs_query,
@@ -3565,7 +3571,7 @@ class DPGChatController:
                                                                      datastore=self.datastore,
                                                                      retriever=self.retriever,
                                                                      tool_node_id=_retry_tool_node_id,
-                                                                     tools_enabled=self.app_state["tools_enabled"],
+                                                                     internet_enabled=self.app_state["internet_enabled"],
                                                                      docs_enabled=self.app_state["docs_enabled"],
                                                                      markup="markdown",
                                                                      docs_num_results=librarian_config.docs_num_results,

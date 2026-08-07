@@ -2,7 +2,14 @@
 
 **0.2.9** (in progress):
 
-*No user-visible changes yet.*
+**Changed**:
+
+*Raven-librarian*
+
+- the **Tools** mode toggle is now **Internet**, and it no longer overrides **Documents**. Each switch governs one group of tools outright — *Internet* the two that reach the network (`websearch`, `webfetch`), *Documents* the three that read your document database — so all four combinations mean something. Previously *Tools* sat above both: with it off and *Documents* on, you had switched your documents on and the AI still could not search them, and nothing about a switch named "Tools" suggested it overruled the one named after the thing it was overruling.
+  - **Your setting carries over.** A stored *Tools* preference becomes the *Internet* setting on first start, which keeps the intent: the old switch governed web access too, so a user who had tools off gets the network off.
+  - `get_current_time` answers to neither switch and is always available. The current time is injected into every reply regardless of both toggles, so withholding the tool would leave the AI reading a call it could not resolve.
+  - In `raven-minichat`, `!tools` becomes `!internet`.
 
 ---
 
