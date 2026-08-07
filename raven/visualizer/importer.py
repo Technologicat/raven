@@ -128,8 +128,26 @@ def update_status_and_log(msg, *, log_indent=0):
 
 # --------------------------------------------------------------------------------
 
+def _recover_failed_block(failed_block):
+    """Try to rescue one record `bibtexparser` refused. Returns the recovered entry, or `None`.
+
+    Only ever runs on a record that has *already* failed, so nothing that currently parses can be affected
+    by it. `common_utils.bibtex_brace_repair_candidates` proposes repairs from surface syntax without
+    knowing which is right, and this is where they are decided: the parser is the oracle, the first
+    candidate that yields an entry wins, and if none does the record stays as lost as it was a moment ago.
+    Being able to check the guesses is what makes guessing safe.
+    """
+    for candidate in common_utils.bibtex_brace_repair_candidates(failed_block.raw):
+        try:
+            library = bibtex.parse_string(candidate)
+        except Exception:  # noqa: BLE001 -- a repair that breaks the parser is just a failed repair
+            continue
+        if library.entries:
+            return library.entries[0]
+    return None
+
 def _report_unparseable_records(filename, library):
-    """Warn about records `bibtexparser` refused, which are silently absent from `library.entries`.
+    """Rescue what can be rescued of the records `bibtexparser` refused, and warn about the rest.
 
     Worth its own pass because of the asymmetry it removes. A record that parses but lacks `author`, `year`
     or `title` is skipped further down with a warning naming it; a record that never became an entry at all
@@ -137,16 +155,35 @@ def _report_unparseable_records(filename, library):
     nothing downstream can miss what it never saw.
 
     The usual cause is field content that is not valid BibTeX rather than anything structural: unbalanced
-    braces inside an `Abstract` abort the parse of the whole record, title and all. So the message points
-    at the offending line, which is where a fix has to happen.
+    braces inside an `Abstract` abort the parse of the whole record, title and all. Where those braces are
+    stray literals - mathematics that reached the file through a PDF extractor, most often - escaping them
+    recovers the record whole, and it is added to `library.entries` as though it had parsed. What cannot be
+    recovered is reported as before, pointing at the offending line, which is where a fix has to happen.
+
+    Raven repairs its own reading of the file and never the file: a user's bibliography is theirs, and
+    fixing it is `raven-fixbib`'s job, which they run deliberately.
     """
     if not library.failed_blocks:
         return
-    plural_s = "s" if len(library.failed_blocks) != 1 else ""
-    logger.warning(f"parse_input_files: {len(library.failed_blocks)} record{plural_s} in {filename} could not "
+
+    recovered, lost = [], []
+    for failed_block in library.failed_blocks:
+        entry = _recover_failed_block(failed_block)
+        (recovered if entry is not None else lost).append((failed_block, entry))
+
+    for failed_block, entry in recovered:
+        library.add(entry)
+        logger.warning(f"parse_input_files: recovered record '{entry.key}' at line {failed_block.start_line} "
+                       f"of {filename} by escaping unbalanced braces in a field value. The file itself is "
+                       f"unchanged; `raven-fixbib` writes the repair back.")
+
+    if not lost:
+        return
+    plural_s = "s" if len(lost) != 1 else ""
+    logger.warning(f"parse_input_files: {len(lost)} record{plural_s} in {filename} could not "
                    f"be parsed as BibTeX, and will be missing from the dataset. Usual cause: unbalanced "
                    f"braces in a field value.")
-    for failed_block in library.failed_blocks:
+    for failed_block, _ in lost:
         # A failed block has no parsed key - that is what failing means - but its raw text still begins with
         # the `@type{key,` header line that would have provided one.
         header_line = failed_block.raw.lstrip().split("\n", 1)[0]

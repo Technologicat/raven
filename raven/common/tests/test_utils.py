@@ -632,3 +632,52 @@ class TestBibtexUnbalancedFieldNames:
         # An `Affiliation` listing one author per line is unbalanced line by line and perfectly valid.
         multiline = "@a{k,\n\tAffiliation = {First, Somewhere\nSecond, Elsewhere},\n}"
         assert utils.bibtex_unbalanced_field_names(multiline) == ["Affiliation"]
+
+
+class TestBibtexBraceRepairCandidates:
+    """The candidates are guesses; a parser decides. These pin what is proposed, and what never is."""
+
+    def test_a_stray_opener_in_running_text_is_escaped(self):
+        broken = "@a{k,\n\tAbstract = {set {0 <= rho for all rho},\n}"
+        candidates = utils.bibtex_brace_repair_candidates(broken)
+        assert candidates == ["@a{k,\n\tAbstract = {set \\{0 <= rho for all rho},\n}"]
+
+    def test_a_stray_closer_in_running_text_is_escaped_first(self):
+        # A stray literal falls between its value's opening brace and its terminator, so a surplus closer
+        # is more likely the earlier candidate — the opposite bias from a surplus opener. Both are offered;
+        # the order decides which one the oracle gets to accept.
+        broken = "@a{k,\n\tAbstract = {closing } for nothing},\n}"
+        assert utils.bibtex_brace_repair_candidates(broken)[0] == "@a{k,\n\tAbstract = {closing \\} for nothing},\n}"
+
+    def test_a_repair_changes_nothing_but_the_escapes(self):
+        broken = "@a{k,\n\tAbstract = {set {0 <= rho},\n}"
+        candidate = utils.bibtex_brace_repair_candidates(broken)[0]
+        assert candidate.replace("\\{", "{").replace("\\}", "}") == broken
+
+    def test_a_balanced_record_is_left_alone(self):
+        assert utils.bibtex_brace_repair_candidates("@a{k,\n\tYear = {2020},\n}") == []
+
+    def test_the_structural_braces_are_never_proposed(self):
+        # The header's `{`, each `Key = {` opener and the record's own closing `}` hold the record together.
+        # A naive unmatched-bracket scan blames the header first, and escaping it destroys the record.
+        broken = "@a{k,\n\tAbstract = {oops {,\n\tYear = {2020},\n}"
+        for candidate in utils.bibtex_brace_repair_candidates(broken):
+            assert candidate.startswith("@a{k,")
+            assert "\\{2020" not in candidate and "Abstract = \\{" not in candidate
+            assert candidate.endswith("\n}")
+
+    def test_a_multiline_value_does_not_confuse_the_proposal(self):
+        broken = ("@a{k,\n\tAbstract = {first line\nsecond {line\nthird line},\n\tYear = {2020},\n}")
+        assert utils.bibtex_brace_repair_candidates(broken) == [
+            "@a{k,\n\tAbstract = {first line\nsecond \\{line\nthird line},\n\tYear = {2020},\n}"]
+
+    def test_a_record_too_tangled_to_guess_at_is_declined(self):
+        # Two braces missing among many that legitimately pair up: the combinations explode, and proposing
+        # hundreds of guesses is not repair, it is brute force with a parser attached.
+        pairs = " ".join("{g%d}" % i for i in range(10))
+        broken = "@a{k,\n\tAbstract = {%s {stray {stray},\n}" % pairs
+        assert utils.bibtex_brace_repair_candidates(broken, max_candidates=10) == []
+
+    def test_the_surplus_count_sets_how_many_braces_a_candidate_escapes(self):
+        broken = "@a{k,\n\tAbstract = {a {b {c},\n}"  # two openers short of balance
+        assert all(candidate.count("\\{") == 2 for candidate in utils.bibtex_brace_repair_candidates(broken))
