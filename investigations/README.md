@@ -29,7 +29,7 @@ that stops the link decaying again, and it is worth keeping up even when the con
 ## Shared instruments are pointed at, not copied
 
 Some probes serve several investigations, or belong to a brief rather than to a study. Those stay where they
-are — currently `briefs/summer_2026_librarian_extension/manual_tests/` — and the investigation names the path.
+are — currently `briefs/librarian-extension/manual_tests/` — and the investigation names the path.
 `tool_budget/README.md` does this with `rag_live_corpus.py`, whose phase F produced its samples. Copying a
 shared instrument into every bundle that used it would trade one kind of drift for a worse one.
 

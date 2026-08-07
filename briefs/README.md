@@ -9,13 +9,36 @@ what stops "done" from being applied to something that was never going to be fin
   one as a brief would freeze decisions nobody has made yet. A sketch graduates by producing a brief, not by
   becoming one. Each carries a status line saying which parts are decided. See `design/README.md`.
 
-- **`summer_2026_librarian_extension/`** — **the current sprint.** Numbered implementation briefs for work
-  that has been decided on, with its own `README.md` for ordering and its own `done/` for closed ones. A
-  sprint folder is a working set, so it also holds a couple of unnumbered briefs and the Monday checklist.
+- **One folder per sprint**, named for its scope — currently `librarian-extension/` and
+  `researchers-night/`. Numbered implementation briefs for work that has been decided on, each folder with
+  its own `README.md` for ordering and its own `done/` for the ones that have closed. A sprint folder is a
+  working set, so it also holds unnumbered briefs and its session records.
 
 - **`done/`** — **closed briefs.** Implementation plans whose work has landed, plus session reports and code
   reviews of completed work. The test for this folder is that the document described something to *do*, and
-  it got done.
+  it got done. **A finished sprint moves here whole**, as its own directory, alongside the individual
+  closed items.
+
+### Why the grouping unit is the sprint, and not a state
+
+Briefly tried and rejected on 2026-08-07: a single `active/` folder, emptying into a single `done/`. It is
+tempting because a state name can never go stale the way `summer_2026_librarian_extension` did — the season
+was wrong by August and the scope was wrong as soon as a Visualizer brief landed in it.
+
+But it erases the sprint boundary permanently, and sprints are real: the 01–10 set is one run of
+mostly-Librarian work, and losing that grouping when it closes loses the only thing that says those briefs
+belong together. Naming a folder for its *scope* is not the same trap as naming it for a *season* — a
+finished run's name is a historical fact, and stays accurate forever. It was the open-ended name that rotted,
+because the run kept growing past its own description.
+
+So: the sprint folder is the unit for its whole life, and closing a sprint is one `git mv` into `done/`
+rather than a scatter.
+
+**The numbers group; they do not order.** They ran 01–16 in the order the briefs were *conceived*, which
+stopped matching the order they get *done* a while ago — 15 is ahead of 05 on timing rather than closure, and
+the two orderings genuinely disagree. Read a number as "which run, roughly when conceived", not as a
+position in a queue; each sprint's `README.md` carries the actual ordering and the argument for it. New
+briefs need not take a number: `ligature-repair-brief.md` sits at the top level with none.
 
 - **`reference/`** — **durable knowledge.** Documents that were never going to be "finished", because they
   describe how something *is* rather than what to build: external requirements (the EU AI Act summary),

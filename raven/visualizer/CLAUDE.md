@@ -50,7 +50,7 @@ Uses `unpythonic.dyn` for injecting status update callbacks. Progress tracked vi
 
 ## Importer Rework
 
-Planned changes to the import pipeline (Nomic-embed migration, PCA preprocessing, outlier assignment, Procrustes alignment). See `briefs/summer_2026_librarian_extension/11_visualizer-importer-rework-brief.md` for details — note its item 1 now carries an undecided fork between `nomic-embed-text-v1.5` (shared image-text space) and `v2-moe` (multilingual).
+Planned changes to the import pipeline (Nomic-embed migration, PCA preprocessing, outlier assignment, Procrustes alignment). See `briefs/researchers-night/11_visualizer-importer-rework-brief.md` for details — note its item 1 now carries an undecided fork between `nomic-embed-text-v1.5` (shared image-text space) and `v2-moe` (multilingual).
 
 ## Refactoring
 

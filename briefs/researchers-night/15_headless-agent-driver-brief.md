@@ -40,7 +40,7 @@ design; it is code that already exists in the wrong place.
 
 **The acceptance test is a set of existing scripts, not a checklist.** The probes the `TODO.md` survey
 enumerates live in two trees — the prompt-shape and wire-level ones under `investigations/context-injects/`,
-the full-turn ones under `briefs/summer_2026_librarian_extension/manual_tests/`. This work is done when
+the full-turn ones under `briefs/librarian-extension/manual_tests/`. This work is done when
 `inject_shapes`, `assembled_shape`, `absent_fact` and `rag_placement` can be rewritten against Part A without
 reaching through a private door, and `rag_live_corpus` and `rag_tool_rescue` against Part B without
 hand-rolling a branch walk.

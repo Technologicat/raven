@@ -1,6 +1,6 @@
 # Brief: `atmospheric_dust` — drifting in-air particles
 
-Target file: `briefs/summer_2026_librarian_extension/atmospheric-dust.md`
+Target file: `briefs/researchers-night/atmospheric-dust.md`
 
 ## Goal
 

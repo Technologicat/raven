@@ -429,8 +429,7 @@ class DPGChatMessage:
                 # all we can observe: retrieval reporting matches does not mean the reply used them, and
                 # against a real corpus a search nearly always returns something. Claiming "answered from
                 # general knowledge" would assert the unobservable half. (What would make the stronger claim
-                # sayable: relevance-aware retrieval scores, or the model citing its own sources. See
-                # `briefs/summer_2026_librarian_extension/09_retrieval-query-side-brief.md`.)
+                # sayable: relevance-aware retrieval scores, or the model citing its own sources.)
                 #
                 # A marker, not a warning: on a general question this state is correct and expected, since
                 # no document database answers "what is 2+2?". Hence the muted colour rather than a red one.
@@ -1086,7 +1085,7 @@ class DPGChatMessage:
         # instead (`_render_gutter_and_body`), so an ordinary tool row no longer reads as misaligned.
         #
         # NOTE: provisional placement. Brief 03 (content-parts) moves tool-result rendering into the assistant
-        # message body; when that lands, this affordance relocates there. See briefs/summer_2026_librarian_extension/.
+        # message body; when that lands, this affordance relocates there. See briefs/librarian-extension/.
         maybe_denied_host = None
         if role == "tool" and node_id is not None:
             denied_node_payload = self.parent_view.chat_controller.datastore.get_payload(node_id)

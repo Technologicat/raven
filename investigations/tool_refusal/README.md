@@ -71,7 +71,7 @@ tried and concludes "I should inform the user of this result."
 ## What this does not establish
 
 - **The scenario is one shape, and the adversarial one.** A search that cannot succeed is the failure the
-  round cap was originally added for (`briefs/summer_2026_librarian_extension/manual_tests/rag_tool_rescue.py`).
+  round cap was originally added for (`briefs/librarian-extension/manual_tests/rag_tool_rescue.py`).
   The shape that motivated the budget work — reading a list of documents one fetch at a time, so the budget
   runs out with material already in hand — is **not measured here**, and there is no reason to assume a
   model's stopping point is the same for reading as for searching.

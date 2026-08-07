@@ -19,7 +19,7 @@ Usage:
 
 The retriever finds nothing, ever, so the model is pushed into the escalation on purpose by rephrasing a
 search that cannot succeed. That is the failure the round cap was originally added for
-(`briefs/summer_2026_librarian_extension/manual_tests/rag_tool_rescue.py`), and it is deliberately the
+(`briefs/librarian-extension/manual_tests/rag_tool_rescue.py`), and it is deliberately the
 *hardest* case for the notice to land: the model is empty-handed, so it has every reason to keep trying.
 The scenario that motivated the budget work - working through a list of documents one fetch at a time,
 where the model has material in hand by the time the budget runs out - is a different shape and is not

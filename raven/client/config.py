@@ -70,8 +70,8 @@ tts_playback_audio_device = "system-default"  # OS's default, i.e. the same one 
 
 # This has NO system-default setting, as our recording backend doesn't support that.
 #
-stt_capture_audio_device = None
-# stt_capture_audio_device = "Built-in Audio Analog Stereo"
+# stt_capture_audio_device = None
+stt_capture_audio_device = "Built-in Audio Analog Stereo"
 
 # --------------------------------------------------------------------------------
 # Device settings for local-mode fallback of `MaybeRemote.*` services.

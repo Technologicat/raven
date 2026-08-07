@@ -34,7 +34,7 @@ conventions in this file look arbitrary until you know that, so they are worth s
 Four trees, sorted by what a document *is* rather than what it is about. Each has its own README; this is the
 index.
 
-- **`briefs/`** — prose. `design/` for sketches (direction clear, mechanism not), `summer_2026_librarian_extension/`
+- **`briefs/`** — prose. `design/` for sketches (direction clear, mechanism not), `active/`
   for the current sprint's numbered implementation briefs, `done/` for closed ones, `reference/` for material we
   consult but did not produce (the EU AI Act summary, the DPG keycode table, an archived style snapshot).
 - **`investigations/`** — things we measured, profiled or reproduced. **One directory per investigation, holding

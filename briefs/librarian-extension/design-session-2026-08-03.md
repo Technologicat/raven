@@ -1,5 +1,13 @@
-# Monday 2026-08-03 — pick-up checklist
+# Design session, 2026-08-03 — decisions and their routing
 
+> **Renamed 2026-08-07**, from "Monday 2026-08-03 — pick-up checklist". The date was never the problem; the
+> noun was. "Checklist" promises pending actions, so it read as stale by the Thursday of the same week,
+> while what it actually holds is a record of a session and the calls that came out of it — which is as
+> true a year later as it was on the day. The folder it lives in was renamed at the same time, from
+> `summer_2026_librarian_extension` to `librarian-extension`, and the briefs numbered 11 and up moved to a
+> second sprint folder, `researchers-night/`. Historical entries below still name the old paths, correctly,
+> as the *source* of a move; that is what they are recording.
+>
 > **Closed 2026-08-03.** A dated session artifact, not a tracker — a half-ticked list nobody opens on
 > Thursday is worse than no list. §1, §1b and §2 are done; the ticks and their notes stay, because several
 > record *how* a call was made rather than only that it was. Everything still live has a home that gets
@@ -46,7 +54,7 @@ session, revised after his corrections. Goal for Monday: thin the brief pile and
   - `TODO.md:166` — "currently a god object (~4k SLOC)", still **[High]**; largely done. The "extract the info
         panel" sub-item is closed (it is now its own module at 1518). Reduce to whatever genuinely remains.
 - [x] **[D] Add a top-level `briefs/done/`.** *Done 2026-08-03*, created by the `ai-act-article-50-summary.md`
-      move below. Only `summer_2026_librarian_extension/` had one, which is how the SLOC drift above survived
+      move below. Only `active/` had one, which is how the SLOC drift above survived
       unnoticed.
   - **Follow-up: the rest of the archival sweep.** *Done 2026-08-03* — the top level is now empty of `.md`
         except the new `README.md`. Twenty briefs went to `done/` and nine to `reference/`. The done/not-done
@@ -184,7 +192,7 @@ being renamed, so exclude those files and edit them by hand.
         preprocessing step, though: Matryoshka truncation is a fixed property of the model's training, while
         PCA is *corpus-adaptive* and item 2's stated purpose is measuring this corpus's effective
         dimensionality. They may still compose.
-  - **[P]** Worth noting the folder is named `summer_2026_librarian_extension` but is about to hold two avatar
+  - **[P]** Worth noting the folder is named `active` but is about to hold two avatar
         briefs and an importer brief. Either rename it or accept it as a sprint-by-date rather than by
         component — but decide, rather than letting the name quietly stop being true.
 - [x] **[D] `model-lineup-autumn-2026.md`**: Gemma 12B, not Qwen. *Done 2026-08-03.* The open question now

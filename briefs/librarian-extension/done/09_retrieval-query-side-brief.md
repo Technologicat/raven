@@ -52,7 +52,7 @@ were settled and two of the open leads were measured, so the summary above is co
 edited in place — it was accurate when written, and what changed is worth being able to see.
 
 - **The toggle work shipped, in 0.2.8, not after Researchers' Night.** The four inject-shape decisions
-  scoped into this brief were settled on their own (`monday-2026-08-03-checklist.md` §4): the Speculation
+  scoped into this brief were settled on their own (`design-session-2026-08-03.md` §4): the Speculation
   toggle is gone and one Documents toggle governs the autosearch, the document tools, the grounding
   reminder and the marker. The marker now keys on whether documents are in play rather than on
   speculation, which is what makes it honest about *why* it is silent. So brief 10's consumer is not
@@ -1156,7 +1156,7 @@ Two things, in this order:
 
 **Test this as part of this brief rather than after it.** The model is
 `cross-encoder/ms-marco-MiniLM-L6-v2` — 23M parameters, CPU. It is recorded in
-`monday-2026-08-03-checklist.md`, which is otherwise stale, so it is repeated here to keep it from being
+`design-session-2026-08-03.md`, which is otherwise stale, so it is repeated here to keep it from being
 lost with that file.
 
 Two things changed today that turn it from a queued idea into an experiment that can be run:

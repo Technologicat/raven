@@ -744,7 +744,7 @@ Article applies from **2 August 2026**. Raven has been available since 2024, so 
 market before that date, which means the **2 December 2026** grace period applies — but only to the 50(2)
 machine-readable marking of generated content. The rest applies from August with no grace period.
 
-The implementation is briefed: `briefs/summer_2026_librarian_extension/done/07_export-disclosure-brief.md`, which
+The implementation is briefed: `briefs/librarian-extension/done/07_export-disclosure-brief.md`, which
 scopes it to attaching system-level provenance to exported chatlogs and messages, and explicitly rules out
 building text watermarking — the robust 50(2) mark acts on the logits during sampling, and Librarian samples
 un-watermarked third-party weights through an OpenAI-compatible backend, so there is nothing post-hoc to add.
@@ -999,7 +999,7 @@ clusters, as of 2026-07-27:
   **Built 2026-07-28**, closing "RAG injects: sent in the user role as a workaround", "Fold the temporary
   context injects…" (measured, and rejected in favour of the system block plus a tool result) and "Revisit
   the 'answer from context only' reminder". Measurements in `investigations/context-injects/context-inject-shape-measurements.md`,
-  the plan they argued for in `briefs/summer_2026_librarian_extension/done/08_context-injects-brief.md`. Still
+  the plan they argued for in `briefs/librarian-extension/done/08_context-injects-brief.md`. Still
   open in this cluster: "Modernize the Librarian system prompt / character card" ("RAG: rerank retrieved
   chunks…" was measured and rejected on 2026-08-06 and is no longer open), plus the new "RAG access via
   tool-call" motivation recorded under Q11 of the
@@ -1323,7 +1323,7 @@ Extension raised by Juha (2026-07-30).
 > shape sketched below is still the right shape for *some* future model — it is the reranker specifically
 > that did not survive. **`TODO.md` no longer lists this as planned work.**
 
-**Do `briefs/summer_2026_librarian_extension/done/09_retrieval-query-side-brief.md` first.** It documents a
+**Do `briefs/librarian-extension/done/09_retrieval-query-side-brief.md` first.** It documents a
 verified finding that changes the diagnosis below: `_query_body` applies each engine's quality signal as
 an absolute cutoff *before* fusion, and `reciprocal_rank_fusion` then sums `1 / (rank + K)` over
 positions only. So the score-to-quality mapping is discarded one line before the rank that is supposed to
@@ -1775,7 +1775,7 @@ Discovered during tooltip feature session (2026-04-03).
 
 ## Avatar settings editor: custom postprocessor chain ordering
 
-**This is a GUI limitation only** — `briefs/summer_2026_librarian_extension/crt-display.md` §0 establishes that the backend has always
+**This is a GUI limitation only** — `briefs/researchers-night/crt-display.md` §0 establishes that the backend has always
 supported multiple instances at arbitrary positions: `render_into` applies the chain *positionally*, and
 `_priority` is consumed only by `get_filters` to sort the settings-editor panels. The `name` parameter on every
 caching filter exists precisely so multiple instances key their caches apart. So this item is "build the
@@ -3620,7 +3620,7 @@ for an attachment, which is a hole for user-attached documents as much as for fe
 - **Its other half is making a chat's attachments searchable**, and the two are a pair rather than competing
   designs: search locates a match and says where it sits, the reader fetches the span around it — which is
   exactly the contract `search_documents` and `fetch_document` already have. Humans Ctrl+F, then read around
-  the hit. Design sketch in `briefs/summer_2026_librarian_extension/13_corpus-scopes-and-unified-db-brief.md`,
+  the hit. Design sketch in `briefs/researchers-night/13_corpus-scopes-and-unified-db-brief.md`,
   which also notes the consequence for the tool surface: once attachments are searchable, an attachment and a
   knowledge-base document are the same kind of thing at query time, so one `read_document` covers both.
 

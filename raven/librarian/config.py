@@ -35,7 +35,8 @@ llm_state_file = llmclient_userdata_dir / "state.json"  # important node IDs for
 # Its contents will be automatically set as the Authorization field of the HTTP headers when `llmclient` starts.
 #
 # llm_backend_url = "http://localhost:5000"  # oobabooga default OAI compatible port
-llm_backend_url = "http://localhost:1234"  # LM Studio default OAI compatible port
+# llm_backend_url = "http://localhost:1234"  # LM Studio default OAI compatible port
+llm_backend_url = "http://maia.local:1234"  # XXX testing
 llm_api_key_file = llmclient_userdata_dir / "api_key.txt"  # will be used it it exists, ignored if not.
 
 # Network timeouts for talking to the LLM backend, as `(connect, read)` second pairs passed to `requests`.

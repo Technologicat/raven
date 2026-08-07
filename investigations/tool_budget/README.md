@@ -5,7 +5,7 @@ them?
 
 ## Setup
 
-`briefs/summer_2026_librarian_extension/manual_tests/rag_live_corpus.py`, phase F, against the real
+`briefs/librarian-extension/manual_tests/rag_live_corpus.py`, phase F, against the real
 document database (11974 Web of Science records on hydrogen production). Each **sample** is two AI turns:
 one asking a corpus question, then a follow-up — *"Which of those documents said that, and what else does
 it say?"* — which reliably provokes a multi-document read, since `list_consulted_documents` hands back a

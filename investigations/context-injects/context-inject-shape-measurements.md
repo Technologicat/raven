@@ -11,7 +11,7 @@ afterwards — they are the baseline any future change to the inject machinery g
 and re-running the sweep costs about an hour of GPU time.
 
 The implementation these numbers argue for is written up separately, as
-`summer_2026_librarian_extension/done/08_context-injects-brief.md`. That brief has been archived now that
+`active/done/08_context-injects-brief.md`. That brief has been archived now that
 the work has landed; this document has not, and does not.
 
 Harness: `investigations/context-injects/inject_shapes.py`. It imports the inject

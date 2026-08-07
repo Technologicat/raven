@@ -197,7 +197,7 @@ Still open, in the order they are expected to be done:
      marker, and whether the Speculation toggle still carries information once Docs-ON implies marking were
      scoped into 09 on the reasoning that its implementation would have to settle them. 09 stopped being
      that implementation, so they were orphaned.
-     - **Settled 2026-08-07, and recorded in `monday-2026-08-03-checklist.md` §4 rather than here** —
+     - **Settled 2026-08-07, and recorded in `design-session-2026-08-03.md` §4 rather than here** —
        in place, against the items themselves, so a reader following either route lands on the decision.
        In short: the Speculation toggle goes and one Documents toggle remains, with the marker made honest
        about *why* it is silent rather than a second marker being added; the offsets defer into brief 12,
@@ -211,7 +211,7 @@ Then the release-prep checklist below.
 including the whole tool loop, *round* = one iteration of the agent loop within a turn, *exchange* = user turn
 + assistant turn; the code moved and the briefs did not. The convention is now stated in
 `raven/librarian/CLAUDE.md`, which outlives this folder; the sweep's own account is in
-`monday-2026-08-03-checklist.md` §"Turn / round terminology".
+`design-session-2026-08-03.md` §"Turn / round terminology".
 
 **Not gating this release, recorded so they are not mistaken for gates:**
 
