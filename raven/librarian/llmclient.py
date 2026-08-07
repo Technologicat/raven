@@ -361,6 +361,21 @@ def label_documents(retriever: "Optional[hybridir.HybridIR]",
 CANONICAL_NOTHING_CONSULTED = ("This conversation has not looked at any documents from the knowledge base yet. "
                                "Search for some with `search_documents`.")
 
+def get_current_time_wrapper() -> str:
+    """Return the current local time.
+
+    Tool entrypoint for the LLM's `get_current_time` tool. Returns exactly what the per-turn clock inject
+    delivers, from the same formatter, so the two cannot drift into telling the model the time in two
+    different shapes — which matters more here than it would for another tool, because the inject presents
+    itself *as a call to this one*.
+
+    Why the tool exists at all, given every turn already carries the time: without it the inject names a
+    function the model was never offered, and a model reading its own transcript takes that call for its
+    own. See the note beside the spec in `setup`.
+    """
+    return chatutil.format_time_now()
+
+
 def list_consulted_documents_wrapper() -> Tuple[str, Dict]:
     """List the knowledge-base documents this conversation has already looked at, by ID.
 
@@ -709,6 +724,24 @@ def setup(backend_url: str,
                                      "required": ["url"],
                                      "properties": {"url": {"type": "string",
                                                             "description": "The URL to fetch."}}}}},
+        # The per-turn clock inject presents itself as a call to this tool, so it has to be a real one: a
+        # synthetic call naming a function the model was never offered is a fiction the model can act on.
+        # That is not a guess — it is the situation the document-matches inject was in before
+        # `search_documents` existed, where the model wrote the call out as literal text and the user got
+        # that instead of an answer, roughly one turn in three on Qwen3.6-27B.
+        #
+        # Registering it is correct on those grounds alone, and deliberately *not* claimed to fix the thing
+        # that prompted the look: a 2026-08-07 trace where the model called the clock call "erroneous" on a
+        # turn about arithmetic. Read again, that complaint is about *relevance* — "get_current_time is
+        # useless for math" — not about the function being absent. The inject still arrives on every turn
+        # whether or not the turn is about time, so a model inclined to remark on that will still remark.
+        {"type": "function",
+         "function": {"name": "get_current_time",
+                      "description": "Get the current local time.",
+                      "parameters": {"type": "object",
+                                     "additionalProperties": False,
+                                     "required": [],
+                                     "properties": {}}}},
         {"type": "function",
          "function": {"name": "search_documents",
                       "description": ("Search the user's local document database. Use this to look for material "
@@ -752,6 +785,7 @@ def setup(backend_url: str,
     ]
     tool_entrypoints = {"websearch": websearch_wrapper,
                         "webfetch": webfetch_wrapper,
+                        "get_current_time": get_current_time_wrapper,
                         "search_documents": search_documents_wrapper,
                         "fetch_document": fetch_document_wrapper,
                         "list_consulted_documents": list_consulted_documents_wrapper}

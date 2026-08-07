@@ -981,6 +981,27 @@ class TestPerformInjects:
                                   tool_context=grounding_context())
         assert "Base claims about the provided documents" not in chatutil.content_to_text(history[0]["content"])
 
+    def test_the_injects_only_ever_name_registered_tools(self, llm_settings):
+        """A synthetic tool exchange whose function is not a real tool is a fiction the model can act on.
+
+        This is the invariant the clock inject broke: it called `get_current_time`, which was in no
+        registry, for as long as it existed. The same shape cost a measured failure once already — before
+        `search_documents` was a real tool, the document-matches inject named it anyway and the model wrote
+        the call out as literal text instead of answering, roughly one turn in three.
+        """
+        history = make_conversation(llm_settings)
+        tool_context = grounding_context(grounded=True)
+        tool_context.consulted_documents = [{"document_id": "d.bib"}]  # so the consulted-list inject fires too
+        scaffold._perform_injects(llm_settings=llm_settings, history=history,
+                                  docs_query="what is X?", docs_matches=[sample_rag_match()],
+                                  tool_context=tool_context)
+        named = {call["function"]["name"]
+                 for message in history
+                 for call in (message.get("tool_calls") or [])}
+        assert named, "no synthetic tool calls were injected; this test would pass vacuously"
+        assert named <= set(llm_settings.tool_entrypoints), (
+            f"injects name tools that do not exist: {sorted(named - set(llm_settings.tool_entrypoints))}")
+
     def test_context_only_reminder_counts_an_attachment_as_context(self, llm_settings):
         # "Context" is broader than docs matches: an attached document or image is material to ground in,
         # even on a turn where the document database returned nothing.

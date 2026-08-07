@@ -36,6 +36,7 @@ def llm_settings():
                # here (tests fake `perform_tool_calls`), so the names are what matter.
                tool_entrypoints={"websearch": None,
                                  "webfetch": None,
+                                 "get_current_time": None,
                                  "search_documents": None,
                                  "fetch_document": None,
                                  "list_consulted_documents": None},
