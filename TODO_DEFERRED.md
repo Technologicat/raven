@@ -1149,6 +1149,34 @@ a general capability the apps can opt into — image attach and `FileDialog` bot
 
 Discovered during brief-03 Half-2 multimodal work (2026-07-17, flagged by Juha as a constant pain point).
 
+**Lead worth trying before building anything (2026-08-07): the per-OS work may already be done, one layer
+down.**
+
+DPG has no OS-level drop, and this was checked against the *binary* rather than the documentation, which on
+this project is often stale: in `dearpygui` 2.3.1 nothing in the public Python surface takes a dropped file,
+the handler registry offers 36 handler types and none of them is a drop handler, no such string appears in the
+extension at all, and every `drop`-named symbol DPG itself defines is ImGui's widget-to-widget DragDrop
+(`check_drop_event(mvAppItem*)`, `apply_drag_drop(mvAppItem*)`). So the absence is real and not a doc lag.
+
+But DPG statically links GLFW, *and GLFW has had cross-platform file drop since 3.1*. Read off
+`_dearpygui.so` (v2.3.1) with `nm -D --defined-only`, these are **exported dynamic symbols**, i.e. callable
+from Python via `ctypes` with no C extension of our own:
+
+- `glfwSetDropCallback` — the OS-level file-drop hook DPG never calls.
+- `_glfwInputDrop` — GLFW's internal delivery path, so the platform backends in this build do implement it.
+- `glfwGetX11Window`, `glfwGetCurrentContext` — the X11 backend is compiled in, and there is a plausible way
+  to get at the window handle `glfwSetDropCallback` needs, which DPG does not expose.
+
+So the shape may be *"call one function GLFW already ships"* rather than *"write a shim per OS"* — which is a
+different size of job entirely, and would land on Windows and macOS for free since GLFW implements those too.
+
+**Untested, and each step could sink it**: that `glfwGetCurrentContext()` returns DPG's window when called
+from the main thread after `show_viewport()` (GLFW's current context is per-thread, and DPG's render loop is
+what makes it current, so this is inference from how GLFW works rather than something observed); that DPG does
+not overwrite the callback later; that the drop actually fires under X11 and Wayland with this build; and what
+thread the callback arrives on, which decides whether it can touch DPG state directly. A ~20-line probe
+settles all of it — set the callback, drag a file onto a bare viewport, print what arrives.
+
 ## Librarian's help card has no room to describe attachments
 
 The prose was brought up to date 2026-08-04 — five tools instead of one, the real ingested file types, and
