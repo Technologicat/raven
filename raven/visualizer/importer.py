@@ -132,19 +132,13 @@ def _recover_failed_block(failed_block):
     """Try to rescue one record `bibtexparser` refused. Returns the recovered entry, or `None`.
 
     Only ever runs on a record that has *already* failed, so nothing that currently parses can be affected
-    by it. `common_utils.bibtex_brace_repair_candidates` proposes repairs from surface syntax without
-    knowing which is right, and this is where they are decided: the parser is the oracle, the first
-    candidate that yields an entry wins, and if none does the record stays as lost as it was a moment ago.
-    Being able to check the guesses is what makes guessing safe.
+    by it. `bibtex.repair_record`, which see, does the work and explains why a guess is safe to make here.
     """
-    for candidate in common_utils.bibtex_brace_repair_candidates(failed_block.raw):
-        try:
-            library = bibtex.parse_string(candidate)
-        except Exception:  # noqa: BLE001 -- a repair that breaks the parser is just a failed repair
-            continue
-        if library.entries:
-            return library.entries[0]
-    return None
+    maybe_repaired = bibtex.repair_record(failed_block.raw)
+    if maybe_repaired is None:
+        return None
+    library = bibtex.parse_string(maybe_repaired)
+    return library.entries[0] if library.entries else None
 
 def _report_unparseable_records(filename, library):
     """Rescue what can be rescued of the records `bibtexparser` refused, and warn about the rest.

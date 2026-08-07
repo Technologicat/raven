@@ -9,7 +9,7 @@ BibTeX through, so every consumer gets the same normalization.
 
 from __future__ import annotations
 
-__all__ = ["parse_file", "parse_string",
+__all__ = ["parse_file", "parse_string", "repair_record",
            "entries_to_bibtex"]
 
 import pathlib
@@ -18,6 +18,8 @@ import re
 import bibtexparser
 from bibtexparser.model import Entry, Field
 from bibtexparser import Library
+
+from ..common import utils as common_utils
 
 from . import identifiers
 
@@ -59,6 +61,41 @@ def parse_string(text: str) -> Library:
     `parse_file`, which see, for the error behaviour - it is the same.
     """
     return bibtexparser.parse_string(text, append_middleware=_reader_middleware())
+
+
+def repair_record(raw: str) -> str | None:
+    """Repair one BibTeX record `raw` that failed to parse. Returns the repaired text, or `None`.
+
+    The repair is for a record whose braces do not balance, which is what a stray `{` or `}` in a field
+    value does — mathematics arriving through a PDF extractor is the usual source. Only the offending
+    braces are escaped; the text is otherwise identical, character for character.
+
+    **This is where guessing becomes safe.** `common_utils.bibtex_brace_repair_candidates` proposes repairs
+    from surface syntax, having no way to know which is right — deciding that needs to know where each
+    field value begins and ends, which needs a parser, and a record needing repair is precisely the one no
+    parser will read. So the proposals are not trusted: each is parsed in turn, and the first that yields
+    an entry wins. The parser is the oracle. A wrong proposal fails to parse and costs nothing, which is
+    what lets the proposing side stay a heuristic.
+
+    Returning `None` means no proposal parsed, and the caller should treat the record as it did before —
+    a record that lost a field value's *terminator*, rather than gaining a stray literal, lands here, and
+    reporting it is more honest than inventing the missing brace.
+    """
+    # A rejected candidate makes `bibtexparser` log a warning, which is noise -- it is the mechanism
+    # working, not a problem. Silencing it would mean setting a level on a logger this function does not
+    # own, and `parse_input_files` runs on a background thread, so two overlapping parses could restore
+    # each other's level and leave the parser muted for the rest of the process. Not worth it for the
+    # traffic involved: candidates are generated only for a record that has already failed, and the
+    # pruning gets that down to one candidate on real data. An application that wants quiet can set the
+    # level itself, which is a decision an application gets to make and a library does not.
+    for candidate in common_utils.bibtex_brace_repair_candidates(raw):
+        try:
+            library = parse_string(candidate)
+        except Exception:  # noqa: BLE001 -- a repair that breaks the parser is just a failed repair
+            continue
+        if library.entries:
+            return candidate
+    return None
 
 
 def _entry_arxiv_id(entry, keep_version: bool) -> str:

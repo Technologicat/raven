@@ -196,6 +196,7 @@ raven-arxiv2bib = "raven.papers.arxiv2bib:main"  # arXiv IDs -> BibTeX, complete
 raven-arxiv-download = "raven.papers.download:main"
 raven-arxiv-search = "raven.papers.search:main"
 raven-burstbib = "raven.papers.burstbib:main"
+raven-fixbib = "raven.papers.fixbib:main"
 raven-dehyphenate = "raven.tools.dehyphenate:main"
 raven-csv2bib = "raven.papers.csv2bib:main"
 raven-pdf2bib = "raven.papers.pdf2bib:main"
