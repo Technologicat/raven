@@ -101,6 +101,42 @@ def mcnemar(a: list[int | None], b: list[int | None], k: int = 20) -> tuple[int,
     return (gained, lost, min(1.0, 2 * tail))
 
 
+def paired_coverage(a: list[float], b: list[float]) -> tuple[int, int, float, float]:
+    """Paired test of passage coverage between two orderings of the same retrievals.
+
+    Returns `(improved, worsened, mean_delta, p)` — the number of questions where `b` covers more of the
+    gold passage than `a` and fewer, the mean difference in coverage over *all* questions, and the
+    two-sided p over the questions where the two differ.
+
+    The companion to `mcnemar`, for the corpora where that test has nothing to work with. Document recall
+    is a coin flip per question, and on a 19-document corpus at `k=20` it comes up heads every time: every
+    condition scores 100%, every pair is concordant, and the test correctly reports that it has seen no
+    evidence. Coverage is continuous and does not saturate, so it still separates conditions there — but a
+    difference in mean coverage is not evidence on its own, which is exactly the trap this exists to close.
+
+    Questions where the two conditions cover identically are discarded, on the same reasoning `mcnemar`
+    discards concordant pairs: the conditions share the retrieval, so an agreement says nothing about the
+    difference between them and counting it only dilutes what does.
+
+    The test itself is Wilcoxon signed-rank — the paired, distribution-free one, which reads the *ranks* of
+    the differences rather than their sizes. That matters here because coverage differences are bounded,
+    lumpy (a chunk enters the top 20 or it does not) and nowhere near normal, so a paired t-test would be
+    assuming a shape the data does not have.
+    """
+    deltas = [y - x for x, y in zip(a, b)]
+    if not deltas:
+        return (0, 0, 0.0, 1.0)
+    mean_delta = sum(deltas) / len(deltas)
+    nonzero = [d for d in deltas if d != 0.0]
+    improved = sum(1 for d in nonzero if d > 0)
+    worsened = sum(1 for d in nonzero if d < 0)
+    if not nonzero:
+        return (0, 0, mean_delta, 1.0)
+    import scipy.stats  # local: only this function needs it, and the scripts around it are import-light
+    p = float(scipy.stats.wilcoxon(nonzero, alternative="two-sided", zero_method="wilcox").pvalue)
+    return (improved, worsened, mean_delta, p)
+
+
 def dedup_ids(seq) -> list[str]:
     """Document keys in first-appearance order — a document ranks where its best chunk did.
 

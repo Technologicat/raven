@@ -310,16 +310,25 @@ def main() -> None:  # pragma: no cover
     print("  test are not evidence at this sample size.")
 
     if any(coverage.values()):
-        print(f"\n  passage coverage of the top 20 chunks (n={len(coverage[conditions[0]])})")
-        print(f"  {'fusion':<9} {'aggregate':<10} {'w':>4} {'mean':>8} {'>=50%':>8} {'>=90%':>8}")
+        baseline_coverage = coverage[conditions[0]]
+        print(f"\n  passage coverage of the top 20 chunks (n={len(baseline_coverage)})")
+        print(f"  {'fusion':<9} {'aggregate':<10} {'w':>4} {'mean':>8} {'>=50%':>8} {'>=90%':>8} "
+              f"{'delta':>8} {'up':>4} {'down':>5} {'p':>7}")
         for cond in conditions:
             cov = coverage[cond]
             if not cov:
                 continue
             how, agg, w = cond
+            up, down, delta, p = fusion_weight.paired_coverage(baseline_coverage, cov)
+            marker = "  <- baseline" if cond is conditions[0] else ""
             print(f"  {how:<9} {agg:<10} {('-' if w is None else f'{w:.1f}'):>4} "
                   f"{sum(cov) / len(cov):>8.1%} {sum(1 for c in cov if c >= 0.5) / len(cov):>8.1%} "
-                  f"{sum(1 for c in cov if c >= 0.9) / len(cov):>8.1%}")
+                  f"{sum(1 for c in cov if c >= 0.9) / len(cov):>8.1%} "
+                  f"{delta:>+8.1%} {up:>4} {down:>5} {p:>7.3f}{marker}")
+        print("\n  'up'/'down' count the questions whose coverage rises or falls against the baseline, and")
+        print("  p is the Wilcoxon signed-rank test over those. This is the column to read on a corpus")
+        print("  where document recall saturates and the recall table above is all 1.000 — a mean coverage")
+        print("  difference on its own is a winner picked from as many cells as the table has rows.")
 
     # Is `sum` merely rewarding long documents? It ranks by *total* matched score, and a longer document
     # has more chunks available to contribute — so the gain could be a length prior wearing a relevance

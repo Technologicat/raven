@@ -338,6 +338,32 @@ number. Whether it does it well enough to make the knob unnecessary is the obvio
 repeatedly found to be unlike the others. Fiction is the natural fourth test (arms 0.692 against 0.814,
 moderately unequal) but its document-level recall saturates, so it would need the passage-coverage metric.
 
+#### Checked 2026-08-07, on fiction and on ECCOMAS: it does not hold up
+
+Both tests came back null, and the fiction one needed a new instrument to say so — `paired_coverage` in
+`fusion_weight.py`, Wilcoxon signed-rank over the per-question coverage differences. Without it the corpus
+could only be described, not tested: document recall is 100% in every one of 43 conditions, so `mcnemar`
+correctly reports that it has seen nothing, and mean coverage on its own is a number with no error bar.
+
+| corpus | arms | best condition by mean coverage | paired result |
+|---|---|---|---|
+| **fiction** | 0.692 / 0.814, moderately unequal | `minmax`/`top3`/0.5, **+3.6%** | **p = 0.155** — null |
+| **eccomas2024** | comparable (real abstracts) | none beats RRF at all | null, and the significant cells are *losses* |
+
+**The +3.6% is the trap this file keeps setting for itself.** It is the best of forty-three cells, it is
+the same `top3` that §"bounding the accumulation" already caught being a winner picked from forty-two, and
+under a paired test it is noise. Meanwhile the cells that *are* significant on fiction are all losses —
+`minmax`/`max`/0.7 at p = 0.008, `minmax`/`sum`/0.3 at p = 0.013, and the whole `count` family at p = 0.000
+and roughly −13 points.
+
+**So the self-weighting hypothesis rests on banichuk alone, at p = 0.077.** One corpus, marginal, and the
+odd one out by this file's own repeated finding. The mechanism above is still a good story — it may even be
+true — but it is now a good story with one weak measurement behind it and three nulls beside it, and the
+honest label for that is *unsupported*. It should not be built on without a corpus that reproduces it.
+
+The lasting result of the exercise is the instrument rather than the answer: any corpus small enough for
+document recall to saturate is now testable, which fiction was not this morning.
+
 *What this does not close:* score fusion produces a fused **value** where RRF produces a reciprocal-rank
 artifact, so the argument from *calibrated confidence* survives its failure to improve *ranking*. Those
 are separate consumers and only the first was measured. If a confidence signal is wanted later, this is
@@ -415,7 +441,10 @@ checking it discovered that its instrument does not.
 
 **Second — `score_fusion.py fiction`**
 
-4. The fourth corpus for the self-weighting hypothesis (score fusion helps when the arms are unequal).
+4. ~~The fourth corpus for the self-weighting hypothesis (score fusion helps when the arms are unequal).~~
+   **Done 2026-08-07, and null** — see §2. It needed a paired test over coverage first (`paired_coverage`),
+   since document recall saturates at 100% in all 43 conditions and `mcnemar` has nothing to read. The
+   hypothesis now rests on banichuk alone at p = 0.077, with three nulls beside it.
    Needs the passage-coverage metric, since document recall saturates at 19 documents.
 
    *The 13 held-out stories could be indexed to make it 32*, but that is probably the wrong trade: 32
@@ -587,10 +616,30 @@ supported but not established, and the density story is neither.
 
 **The subsample experiment is still worth running, and its design follows from this.** A *uniform*
 subsample of hydrogen would settle nothing: it lowers document count and topical crowding together, so both
-hypotheses predict the same improvement. What discriminates is a **contiguous topical slice** — take one
-cluster of ~2,500 records rather than 2,500 scattered ones. That holds crowding roughly fixed while cutting
-size, so a recovery indicts size and a flat result indicts density. Which makes the experiment wait on
-clustering, the same prerequisite everything else in this section arrives at.
+hypotheses predict the same improvement. What discriminates is a **contiguous topical slice** — one dense
+neighbourhood of ~2,500 records rather than 2,500 scattered ones. That holds crowding roughly fixed while
+cutting size, so a recovery indicts size and a flat result indicts density.
+
+**And it does not wait on clustering** (Juha, 2026-08-07): pick a document at random and take its ~2,500
+nearest neighbours by cosine similarity. That is a ball rather than a cluster — no cluster count to choose,
+no algorithm to tune — and it is arguably *better* for this purpose, since a ball around a seed is at least
+as crowded as the corpus average, which is the direction that makes the test stringent.
+
+Cost, since it is easy to misjudge in both directions:
+
+- **The neighbour search is free.** The embeddings are already persisted alongside the index, so this is one
+  vector against ~12,000 stored ones — a matvec, on the CPU, in milliseconds. No GPU involvement at all.
+- **Re-indexing the slice is minutes.** ECCOMAS took 5.6 minutes for 2,520 documents, and this is the same
+  size and shorter records.
+- **The question set is the whole cost, and it is the part that needs planning.** The existing hydrogen
+  questions were generated from the *full* corpus, so most of their gold documents fall outside the ball —
+  and a synthesis question needs all four of its gold documents inside, which essentially never happens by
+  chance. So the slice needs its own question set: ~3 hours of generation, i.e. an overnight run, not an
+  afternoon one.
+
+Note the last point is a general property of this harness rather than a quirk of this experiment: **a
+question set belongs to the corpus it was drawn from**, and any experiment that changes the document set
+needs new questions rather than a filtered old set.
 
 #### And this promotes clustering from a nice-to-have to a prerequisite
 
