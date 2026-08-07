@@ -1170,12 +1170,32 @@ from Python via `ctypes` with no C extension of our own:
 So the shape may be *"call one function GLFW already ships"* rather than *"write a shim per OS"* — which is a
 different size of job entirely, and would land on Windows and macOS for free since GLFW implements those too.
 
-**Untested, and each step could sink it**: that `glfwGetCurrentContext()` returns DPG's window when called
-from the main thread after `show_viewport()` (GLFW's current context is per-thread, and DPG's render loop is
-what makes it current, so this is inference from how GLFW works rather than something observed); that DPG does
-not overwrite the callback later; that the drop actually fires under X11 and Wayland with this build; and what
-thread the callback arrives on, which decides whether it can touch DPG state directly. A ~20-line probe
-settles all of it — set the callback, drag a file onto a bare viewport, print what arrives.
+**Probed 2026-08-07, and it works.** A file dragged from the file manager onto a bare DPG viewport arrived
+as its absolute path. Measured, on X11:
+
+- `glfwGetCurrentContext()`, called on the render thread after the first `render_dearpygui_frame()`, returns
+  DPG's window — the same pointer the callback later receives as its `window` argument, and
+  `glfwGetX11Window` resolves it to a real X11 window ID.
+- **DPG had no drop callback installed** (`glfwSetDropCallback` returned NULL as the previous one), so there
+  is nothing of DPG's to displace, and nothing replaced ours over ~7000 frames.
+- The path arrived complete and correctly decoded.
+
+So the shape is settled: bind `ctypes` to the already-loaded `_dearpygui.so` (it must be *that* GLFW
+instance, since it owns the window), get the handle, set the callback. No C extension, no per-OS shim, no
+patched DPG. Windows and macOS should follow for free, GLFW implementing drop on both.
+
+**The constraint to design around, measured rather than assumed: the callback runs on the render thread.**
+GLFW dispatches from `glfwPollEvents()`, which DPG calls inside `render_dearpygui_frame()`, so the callback
+thread id is identical to the render loop's. It may touch DPG state — DPG is fine with that — but it must
+not do anything that *waits for a frame*: no `split_frame`, and therefore no modal messagebox, which rules
+out the obvious "dropped an unsupported file → show an error dialog" written directly in the handler. Copy
+the paths and hand off to a background task or a frame callback, as pitfall #4 already prescribes.
+
+**Still untested**: Wayland (GLFW implements it, but that is inference, not observation), and multi-file
+drops — the signature is `(window, count, paths)` and only `count == 1` has been seen.
+
+The probe is `dnd_probe.py`; it discovers an answer rather than asserting one, so it stayed in the
+scratchpad. The feature gets tests when it is built.
 
 ## Librarian's help card has no room to describe attachments
 

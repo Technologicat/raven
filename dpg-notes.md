@@ -42,6 +42,32 @@ This means:
 - Event handlers **block each other** (single callback thread, serial execution).
 - Heavy work in a callback delays all subsequent callbacks.
 
+## GLFW callbacks are the exception: they run *on* the render thread
+
+Everything above describes DPG's own callback registry. A callback registered directly with **GLFW** does
+not go through it, and the difference is the one that matters for deadlocks.
+
+DPG statically links GLFW and exports its symbols, so a GLFW callback can be installed from Python with
+`ctypes` against the already-loaded `_dearpygui.so`. GLFW dispatches such callbacks from
+`glfwPollEvents()`, which DPG calls **inside** `render_dearpygui_frame()` — so the callback executes
+synchronously within frame processing, on the render thread.
+
+Consequences, measured 2026-08-07 by installing `glfwSetDropCallback` and dropping a file (the callback
+thread id came back identical to the render loop's):
+
+- It may touch DPG state freely, like any other thread (see "Thread architecture").
+- It must **not** call anything that waits for a frame — `split_frame()`, and therefore the modal
+  messagebox. This is the render-thread case from the `split_frame` rules below, reached by a route that
+  does not look like the render loop at all. `guiutils.split_frame` detects it and reports rather than
+  hanging, which is exactly the situation that guard exists for.
+- The fix is the usual one: capture what arrived, hand off to a background task or a frame callback.
+
+The live case is **OS-level file drag-and-drop**, which DPG does not implement at any version (checked
+against the binary, not the docs: no public API takes a dropped file, the handler registry has no drop
+handler, and DPG's own `drop`-named symbols are all ImGui's widget-to-widget DragDrop). GLFW does implement
+it, cross-platform, and installing the callback works. See `TODO_DEFERRED.md`, "OS drag-and-drop of files
+into DPG apps".
+
 ## `split_frame()` mechanism
 
 `split_frame()` waits for `frameEndedEvent`, which `Render()` signals at the
