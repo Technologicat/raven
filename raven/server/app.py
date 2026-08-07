@@ -230,6 +230,8 @@ def api_avatar_load():
         cel_streams = {celname: request.files[celname].stream
                        for celname in request.files
                        if celname not in ("file", "json")}  # add-on cels the client also sent, if any
+        logger.debug(f"api_avatar_load: base image plus {len(cel_streams)} add-on cel(s): "
+                     f"{sorted(cel_streams)}")
         instance_id = avatar.load(stream=stream,
                                   cel_streams=cel_streams)
     except Exception as exc:
@@ -270,6 +272,8 @@ def api_avatar_reload():
                        for celname in request.files
                        if celname not in ("file", "json")}  # add-on cels the client also sent, if any
 
+        logger.debug(f"api_avatar_reload: instance '{parameters['instance_id']}', base image plus "
+                     f"{len(cel_streams)} add-on cel(s): {sorted(cel_streams)}")
         avatar.reload(instance_id=parameters["instance_id"],
                       stream=stream,
                       cel_streams=cel_streams)
@@ -302,6 +306,7 @@ def api_avatar_unload():
     if "instance_id" not in data or not isinstance(data["instance_id"], str):
         abort(400, 'api_avatar_unload: "instance_id" is required')
 
+    logger.debug(f"api_avatar_unload: instance '{data['instance_id']}'")
     avatar.unload(data["instance_id"])
     return "OK"
 
@@ -334,6 +339,9 @@ def api_avatar_load_emotion_templates():
 
     instance_id = data["instance_id"]
     emotions = data.get("emotions", {})
+    logger.debug(f"api_avatar_load_emotion_templates: instance '{instance_id}', "
+                 f"{len(emotions)} template(s)" if emotions else
+                 f"api_avatar_load_emotion_templates: instance '{instance_id}', resetting to defaults")
     avatar.load_emotion_templates(instance_id, emotions)
     return "OK"
 
@@ -365,6 +373,9 @@ def api_avatar_load_animator_settings():
 
     instance_id = data["instance_id"]
     animator_settings = data.get("animator_settings", {})
+    logger.debug(f"api_avatar_load_animator_settings: instance '{instance_id}', "
+                 f"{len(animator_settings)} setting(s)" if animator_settings else
+                 f"api_avatar_load_animator_settings: instance '{instance_id}', resetting to defaults")
     avatar.load_animator_settings(instance_id, animator_settings)
     return "OK"
 
@@ -391,6 +402,7 @@ def api_avatar_start():
     if "instance_id" not in data or not isinstance(data["instance_id"], str):
         abort(400, 'api_avatar_start: "instance_id" is required')
 
+    logger.debug(f"api_avatar_start: instance '{data['instance_id']}'")
     avatar.start(data["instance_id"])
     return "OK"
 
@@ -415,6 +427,7 @@ def api_avatar_stop():
     if "instance_id" not in data or not isinstance(data["instance_id"], str):
         abort(400, 'api_avatar_stop: "instance_id" is required')
 
+    logger.debug(f"api_avatar_stop: instance '{data['instance_id']}'")
     avatar.stop(data["instance_id"])
     return "OK"
 
@@ -444,6 +457,7 @@ def api_avatar_start_talking():
     if "instance_id" not in data or not isinstance(data["instance_id"], str):
         abort(400, 'api_avatar_start_talking: "instance_id" is required')
 
+    logger.debug(f"api_avatar_start_talking: instance '{data['instance_id']}'")
     avatar.start_talking(data["instance_id"])
     return "OK"
 
@@ -473,6 +487,7 @@ def api_avatar_stop_talking():
     if "instance_id" not in data or not isinstance(data["instance_id"], str):
         abort(400, 'api_avatar_stop_talking: "instance_id" is required')
 
+    logger.debug(f"api_avatar_stop_talking: instance '{data['instance_id']}'")
     avatar.stop_talking(data["instance_id"])
     return "OK"
 
@@ -504,6 +519,9 @@ def api_avatar_set_emotion():
 
     instance_id = data["instance_id"]
     emotion_name = data["emotion_name"]
+    # The emotion name comes from the classifier's fixed label set, so it is a control value rather than
+    # anything the user wrote.
+    logger.debug(f"api_avatar_set_emotion: instance '{instance_id}', emotion '{emotion_name}'")
     avatar.set_emotion(instance_id, emotion_name)
     return "OK"
 
@@ -539,6 +557,7 @@ def api_avatar_set_overrides():
 
     instance_id = data["instance_id"]
     overrides = data.get("overrides", {})
+    logger.debug(f"api_avatar_set_overrides: instance '{instance_id}', {len(overrides)} morph(s)")
     avatar.set_overrides(instance_id, overrides)
     return "OK"
 
@@ -572,6 +591,8 @@ def api_avatar_modify_overrides():
     instance_id = data["instance_id"]
     action = data.get("action", "set")
     overrides = data.get("overrides", {})
+    logger.debug(f"api_avatar_modify_overrides: instance '{instance_id}', action '{action}', "
+                 f"{len(overrides)} morph(s)")
     avatar.modify_overrides(instance_id, action, overrides)
     return "OK"
 
@@ -594,6 +615,7 @@ def api_avatar_start_data_eyes():
     if "instance_id" not in data or not isinstance(data["instance_id"], str):
         abort(400, 'api_avatar_start_data_eyes: "instance_id" is required')
 
+    logger.debug(f"api_avatar_start_data_eyes: instance '{data['instance_id']}'")
     avatar.start_data_eyes(data["instance_id"])
     return "OK"
 
@@ -616,6 +638,7 @@ def api_avatar_stop_data_eyes():
     if "instance_id" not in data or not isinstance(data["instance_id"], str):
         abort(400, 'api_avatar_stop_data_eyes: "instance_id" is required')
 
+    logger.debug(f"api_avatar_stop_data_eyes: instance '{data['instance_id']}'")
     avatar.stop_data_eyes(data["instance_id"])
     return "OK"
 
@@ -641,6 +664,7 @@ def api_avatar_result_feed():
     """
     if not avatar.is_available():
         abort(403, "Module 'avatar' not running")
+    logger.debug(f"api_avatar_result_feed: instance '{request.args.get('instance_id')}'")
     return avatar.result_feed(instance_id=request.args.get("instance_id"))  # this will yell if the instance doesn't exist so we don't have to
 ignore_auth.append(api_avatar_result_feed)   # TODO: does this make sense?
 
@@ -680,6 +704,7 @@ def api_avatar_get_available_filters():
     """
     if not (avatar.is_available() or imagefx.is_available()):
         abort(403, "Neither of modules 'avatar' or 'imagefx' is running")
+    logger.debug("api_avatar_get_available_filters: capabilities requested")
     return jsonify({"filters": Postprocessor.get_filters()})
 
 # ----------------------------------------
@@ -708,10 +733,13 @@ def api_classify():
     if "text" not in data or not isinstance(data["text"], str):
         abort(400, 'api_classify: "text" is required and must be a string')
 
+    # The text is not logged. This endpoint is fed whatever is being said in the chat, so its input is the
+    # conversation itself; the label that comes back is from a fixed vocabulary and says nothing on its own.
+    logger.debug(f"api_classify: {len(data['text'])} characters")
     try:
-        print("Classification input:", data["text"], sep="\n")
         classification = classify.classify_text(data["text"])
-        print("Classification output:", classification, sep="\n")
+        logger.debug(f"api_classify: top label '{classification[0]['label']}'" if classification else
+                     "api_classify: no labels returned")
         gc.collect()
         return jsonify({"classification": classification})
     except Exception as exc:
@@ -734,6 +762,7 @@ def api_classify_labels():
     if not classify.is_available():
         abort(403, "Module 'classify' not running")
 
+    logger.debug("api_classify_labels: capabilities requested")
     try:
         classification = classify.classify_text("")
         labels = [x["label"] for x in classification]
@@ -765,6 +794,7 @@ def api_embeddings_info():
     """
     if not embeddings.is_available():
         abort(403, "Module 'embeddings' not running")
+    logger.debug("api_embeddings_info: capabilities requested")
     try:
         return jsonify(embeddings.get_info())
     except Exception as exc:
@@ -886,6 +916,9 @@ def api_imagefx_process():
         postprocessor_chain = parameters["filters"]
         format = parameters["format"]
 
+        # Filter names, not the image, and not the uploaded filename either -- a user's filename is theirs.
+        logger.debug(f"api_imagefx_process: format '{format}', {len(postprocessor_chain)} filter(s): "
+                     f"{[name for name, _settings in postprocessor_chain]}")
         processed_image = imagefx.process(file.stream,
                                           output_format=format,
                                           postprocessor_chain=postprocessor_chain)
@@ -938,6 +971,8 @@ def api_imagefx_upscale():
         preset = parameters["preset"]
         quality = parameters["quality"]
 
+        logger.debug(f"api_imagefx_upscale: format '{format}', target {upscaled_width}x{upscaled_height}, "
+                     f"preset '{preset}', quality '{quality}'")
         processed_image = imagefx.upscale(file.stream,
                                           output_format=format,
                                           upscaled_width=upscaled_width,
@@ -1027,6 +1062,10 @@ def api_natlang_analyze():
     if not isinstance(with_vectors, bool):
         abort(400, 'api_natlang_analyze: "with_vectors", if provided, must be a bool')
 
+    nitems = 1 if isinstance(text, str) else len(text)
+    nchars = len(text) if isinstance(text, str) else sum(len(item) for item in text)
+    logger.debug(f"api_natlang_analyze: {nitems} item{'s' if nitems != 1 else ''}, {nchars} characters, "
+                 f"pipes {pipes if pipes is not None else 'default'}, with_vectors={with_vectors}")
     try:
         return natlang.analyze(text, pipes, with_vectors=with_vectors)
     except Exception as exc:
@@ -1112,6 +1151,10 @@ def api_sanitize_dehyphenate():
         abort(400, 'api_sanitize_dehyphenate: "text" must be a string or a list of strings')
 
     try:
+        nitems = 1 if isinstance(text, str) else len(text)
+        nchars = len(text) if isinstance(text, str) else sum(len(item) for item in text)
+        logger.debug(f"api_sanitize_dehyphenate: {nitems} item{'s' if nitems != 1 else ''}, "
+                     f"{nchars} characters")
         output_text = sanitize.dehyphenate(text)
         return jsonify({"text": output_text})
     except Exception as exc:
@@ -1140,6 +1183,7 @@ def api_stt_info():
     """
     if not stt.is_available():
         abort(403, "Module 'stt' not running")
+    logger.debug("api_stt_info: capabilities requested")
     try:
         return jsonify(stt.get_info())
     except Exception as exc:
@@ -1183,6 +1227,11 @@ def api_stt_transcribe():
         prompt = parameters.get("prompt", None)
         language = parameters.get("language", None)
 
+        # Neither the audio nor the transcription is logged, and neither is `prompt`, which is free text
+        # the caller wrote to bias the decoding. A recording of someone's voice is personal data outright,
+        # and what they said is the whole content of the request.
+        logger.debug(f"api_stt_transcribe: language {language or 'autodetect'}, "
+                     f"prompt {'given' if prompt else 'none'}")
         result = stt.speech_to_text(file.stream,
                                     prompt=prompt,
                                     language=language)
@@ -1248,6 +1297,7 @@ def api_translate():
         abort(400, 'api_translate: "target_lang" must be a string')
 
     try:
+        logger.debug(f"api_translate: {len(text)} characters, {source_lang} -> {target_lang}")
         translation = translate.translate_text(text=text,
                                                source_lang=source_lang,
                                                target_lang=target_lang)
@@ -1262,6 +1312,7 @@ def api_translate():
 def _list_voices():
     if not tts.is_available():
         abort(403, "Module 'tts' not running")
+    logger.debug("_list_voices: capabilities requested")  # shared by /api/tts/list_voices and /v1/audio/voices
     try:
         return jsonify({"voices": tts.get_voices()})
     except Exception as exc:
@@ -1285,6 +1336,7 @@ def api_tts_info():
     """
     if not tts.is_available():
         abort(403, "Module 'tts' not running")
+    logger.debug("api_tts_info: capabilities requested")
     try:
         return jsonify(tts.get_info())
     except Exception as exc:
@@ -1369,6 +1421,9 @@ def api_tts_speak():
     except ValueError:
         abort(400, 'api_tts_speak: "speed", if specified, should be a number')
 
+    # The text is what the character is about to say, so it is chat content and stays out of the log.
+    logger.debug(f"api_tts_speak: {len(text)} characters, voice '{voice}', speed {speed}, format "
+                 f"'{format}', get_metadata={get_metadata}, stream={stream}")
     try:
         response = tts.text_to_speech(voice=voice,
                                       text=text,
@@ -1423,6 +1478,8 @@ def api_v1_audio_speech():
     except ValueError:
         abort(400, 'api_v1_audio_speech: "speed", if specified, should be a number')
 
+    logger.debug(f"api_v1_audio_speech: {len(text)} characters, voice '{voice}', speed {speed}, "
+                 f"format '{format}', stream={stream}")
     try:
         response = tts.text_to_speech(voice=voice,
                                       text=text,
@@ -1452,6 +1509,11 @@ def _websearch_impl():
         abort(400, '"engine", if provided, must be one of "duckduckgo", "google"')
 
     try:
+        # The query is the user's question in their own words, so its length is logged and it is not.
+        # Contrast `api_webfetch`, which does log its URL -- that is the request's identity rather than
+        # its content, and a fetch failure cannot be diagnosed without it.
+        logger.debug(f"_websearch_impl: {len(query)} character query, engine '{engine}', "
+                     f"max_links {max_links}")
         return websearch.search(query, engine=engine, max_links=max_links)
     except Exception as exc:
         traceback.print_exc()
@@ -1564,6 +1626,11 @@ def api_webfetch():
     output_format = data.get("format", "markdown")
     if output_format not in ("markdown", "text"):
         abort(400, '"format", if provided, must be one of "markdown", "text"')
+    # The URL is logged in full, which is the deliberate exception to logging shape only: it is the
+    # request's identity rather than its content, it is already visible to DNS and to the site being
+    # fetched, and a failure here cannot be diagnosed without knowing what was asked for. The page that
+    # comes back is content and is not logged.
+    logger.debug(f"api_webfetch: '{url}' as {output_format}")
     try:
         result = webfetch.fetch(url, output_format=output_format)
     except Exception as exc:

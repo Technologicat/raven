@@ -200,6 +200,45 @@ The `natlang` module is the only one that only works with Python clients. It nee
 All other modules can be used with a client written in any programming language.
 
 
+# What the server logs
+
+**The server logs the shape of a request, never its content.** Counts, lengths, byte sizes, formats,
+durations, and the names of models, voices and filters. Not the text you sent, not the audio, not the
+image. This holds at every log level, `--debug` included.
+
+Raven is local-first, and this is what that means for a component you might not run locally: the server is
+the one piece of the constellation designed to be reachable over a network, so a lab may well run one for
+a whole group. Four reasons the rule stays strict even there, where everyone using it is a colleague:
+
+- **A log's audience is not the request's audience.** Logs get attached to bug reports, pasted into chat,
+  committed to a repository, carried in a support bundle. Who *uses* the server and who eventually *reads
+  its log* are different sets of people.
+- **Debug logging gets switched on and left on.** A server sitting at debug level for a week accumulates
+  every question everyone asked, which in a research group is a record of unpublished directions and of
+  who is pursuing what — sensitive between colleagues even when nothing is secret from them.
+- **Shape usually diagnoses, and where it does not, ask.** `263 items, model 'default'` traces most
+  misbehaviour, and the error rule below covers much of the rest by naming the offending codepoint instead
+  of quoting the text around it. That will not cover everything. When it does not, the answer is to ask
+  whoever hit the bug for a minimal example — which carries the same information as a logged excerpt and
+  is *offered* rather than taken. Logging by default harvests everyone's text to debug the one case that
+  needed it.
+- **Some of it is personal data outright.** `/api/stt/transcribe` receives a recording of someone's voice.
+
+There are exactly two deliberate exceptions, both narrow:
+
+- **`/api/webfetch` logs the URL it was asked to fetch.** It is the request's identity rather than its
+  content, it is already visible to DNS and to the site being fetched, and a fetch failure cannot be
+  diagnosed without it. A **`/api/websearch` query is not** in this category — that is the user's question
+  in their own words — so those log the query's length and the number of results.
+- **An error names the defect, not the text that carried it.** Offset, length, exception type, and the
+  offending codepoint where there is one: `failed at offset 1423 of 8231, codepoint U+D835 (unpaired
+  surrogate)`. That locates a bug better than an excerpt would, and it reproduces nothing. Logging "just
+  a couple of hundred characters" of a payload that failed is the tempting version of this and is not
+  done: a document is no less private for having broken the tokenizer.
+
+If you are adding a route, this is the contract to write it against.
+
+
 # Server configuration
 
 :exclamation: *The server config file is, technically, arbitrary Python code.* :exclamation:
