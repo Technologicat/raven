@@ -107,7 +107,9 @@ Raven is configured via in-place edits to tracked `config.py` files — paths, m
 
 The specific files and the specific contents differ between dev machines; the pattern is the same everywhere — at least some config.py somewhere carries local overrides.
 
-**Implication for `git add`**: add specific files by name. **Never** `git add -A`, `git add .`, or `git add raven/`. If a commit you're working on touches one of these files coincidentally (e.g. a refactor sweeps through them), check with me before staging — there may be an unrelated local override mixed in that shouldn't be part of the commit.
+**Implication for `git add`**: add specific files by name. **Never** `git add -A`, `git add --all`, `git add .`, `git add -u`, `git add --update`, or `git add raven/`. If a commit you're working on touches one of these files coincidentally (e.g. a refactor sweeps through them), check with me before staging — there may be an unrelated local override mixed in that shouldn't be part of the commit.
+
+**`-u` belongs on that list even though it looks narrower than `-A`.** It stages only files git already tracks, which reads as the safe one — and every `config.py` here is tracked, so it sweeps up exactly the overrides this section exists to protect. It is tempting for the same reason each time: after a wide refactor it is the short way to say "the files I touched", which it is not; it means "every tracked file that differs", and the difference is invisible until it is committed. (Live case 2026-08-07: a docs restructure staged with `-u` put a personal-machine hostname into `llm_backend_url` on a public repo, and the working tree looked *clean* afterwards, which is what made it noticeable at all.) All these forms are denied in the agent's permission settings, so the failure should now be a refused command rather than a bad commit.
 
 Version is defined in `raven/__init__.py` (`__version__`), read by PDM via `[tool.pdm.version]` in `pyproject.toml`. Tag format: `vX.Y.Z`.
 
