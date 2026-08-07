@@ -29,6 +29,7 @@ __all__ = [
 import argparse
 import os
 import pathlib
+import re
 import sys
 
 import traceback
@@ -374,14 +375,21 @@ def _write_bibtex(metadata_by_id: Dict[str, Dict[str, str]],
               f"no metadata to write to '{path}'")
         return
     path = pathlib.Path(path).expanduser()
+    text = bibtex.entries_to_bibtex(entries, keep_versions=True)
     try:
-        path.write_text(bibtex.entries_to_bibtex(entries, keep_versions=True), encoding="utf-8")
+        path.write_text(text, encoding="utf-8")
     except OSError as exc:  # an unwritable path must not cost the downloads that follow
         print(f"{colorizer.colorize(CROSS, colorizer.Style.BRIGHT, colorizer.Fore.RED)} "
               f"could not write '{path}': {exc}")
         return
+    # Counted from the text rather than from `entries`, because the writer folds identifiers naming the
+    # same record into one - the same identifier typed twice, most simply. Two *versions* of a paper are
+    # not that case and stay separate, the version being part of the key here: asking for v3 and v5 is
+    # asking for both. Reporting the requested count would overstate what is in the file, which is the
+    # wrong direction for a message whose whole job is to say what was written.
+    written = len(re.findall(r"^@", text, re.MULTILINE))
     print(f"{colorizer.colorize(CHECKMARK, colorizer.Style.BRIGHT, colorizer.Fore.GREEN)} "
-          f"wrote {len(entries)} BibTeX entries to '{path}'")
+          f"wrote {written} BibTeX entries to '{path}'")
 
 
 def download_papers(arxiv_ids: List[str],
