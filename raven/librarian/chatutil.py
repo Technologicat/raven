@@ -284,10 +284,13 @@ def format_message_text_for_export(message: Dict[str, Any]) -> str:
     `content`), so the distinction is not being *recovered* here; it is being carried across instead of
     dropped on the way out.
 
-    The trace is wrapped in `<think>`/`</think>`. Synthetic in the sense that no backend sent those tags —
-    `reasoning_content` arrives as its own field — but not invented: it is the spelling this project's
-    chat logs used before the June 2026 migration moved thinking into that field, so old exports and new
-    ones read alike, and `_migration_think_block` still recognizes it.
+    The trace is wrapped in `<think>`/`</think>`. Synthetic in the sense that no backend sends those tags
+    any more — `reasoning_content` arrives as its own field — but *restoring* rather than inventing. Up to
+    v0.2.7 Raven spoke to one backend, which delivered the whole reply in one channel with the tags in it,
+    and both exports carried them through without having to try. The June 2026 migration normalized every
+    backend onto `reasoning_content`, which is the right shape for everything except these two call sites,
+    where it silently removed a boundary that had always been in the text. So this emits what a reader of
+    an older log already expects, and `_migration_think_block` still recognizes it.
 
     Messages with no trace (every user message, and any reply from a non-thinking model) come back as just
     their text, with no empty block to step over.
