@@ -206,11 +206,12 @@ Still open, in the order they are expected to be done:
 
 Then the release-prep checklist below.
 
-**Queued immediately after 09, before anything else starts:** the turn/round terminology sweep. Deferred only
-because it renames things 09 is about to edit, and doing it first would mean rewriting the brief. Confused
-terminology makes for confused developers, so it does not wait longer than that. The decision is settled —
-*turn* = one participant's contribution including the whole tool loop, *round* = one iteration of the agent
-loop within a turn, *exchange* = user turn + assistant turn — and it is the code that moves, not the briefs.
+~~**Queued immediately after 09, before anything else starts:** the turn/round terminology sweep.~~
+**Done 2026-08-07**, in that slot, immediately after the 0.2.8 tag. *turn* = one participant's contribution
+including the whole tool loop, *round* = one iteration of the agent loop within a turn, *exchange* = user turn
++ assistant turn; the code moved and the briefs did not. The convention is now stated in
+`raven/librarian/CLAUDE.md`, which outlives this folder; the sweep's own account is in
+`monday-2026-08-03-checklist.md` §"Turn / round terminology".
 
 **Not gating this release, recorded so they are not mistaken for gates:**
 

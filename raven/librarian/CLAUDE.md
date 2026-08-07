@@ -2,6 +2,21 @@
 
 ~14,600 lines across 15 modules. Clean layered design, target style for the project.
 
+## Terminology: turn, round, exchange
+
+Three words for three different things, and the code and the briefs used to disagree about which was which.
+Settled 2026-08-07; this is the authoritative statement, and the code was moved to match it.
+
+- **turn** — one participant's contribution. An assistant turn includes *the whole tool loop*: every model
+  call, tool call and tool result, up to and including the reply the user reads. `scaffold.ai_turn` and
+  `scaffold.user_turn` are named correctly under this reading, and always were.
+- **round** — one iteration of the agent loop *within* an assistant turn: model call → tool calls → results.
+  This is what `librarian_config.max_tool_call_rounds` caps.
+- **exchange** — a user turn plus the assistant turn answering it. `chat_controller.chat_exchange` runs one.
+
+The trap the old naming set: "round" meant *exchange* in the controller and *agent-loop iteration* in the
+scaffold, so the same word named two different scopes one layer apart.
+
 ## Dependency Layers (bottom → top)
 
 Line counts are as of **2026-08-03** — they drift, and a stale exact number reads more authoritative
@@ -45,7 +60,7 @@ Each layer only imports from layers below it. No circular dependencies.
 
 - **`scaffold.py`** — High-level orchestration; contains the agent loop. `user_turn()` creates the user message node (and stores any staged image attachments as sidecars, recording their provenance). `ai_turn()` runs the full AI response pipeline: linearize chat history (walk parent links from current HEAD to root) → RAG search → context injection → LLM agent loop (interleave LLM + tool calls until done) → node creation. Anti-confabulation: with speculation off, the reply records whether it had grounding material (`generation_metadata["grounded"]`), which the frontends surface as a badge — it does not withhold the reply, since the material's absence cannot distinguish a corpus question from a general-knowledge aside. Temporary context injects (RAG results, datetime, reminders) added at call time, not persisted. Rich event callbacks: `on_docs_start/done`, `on_llm_start/progress/done`, `on_tools_start/done`, `on_prompt_ready`.
 
-- **`chat_controller.py`** — GUI controller, the bridge between scaffold and DearPyGui. Classes: `DPGChatMessage` (base, thread-safe MD rendering), `DPGCompleteChatMessage` (stored nodes, with copy/reroll/continue/speak/edit/branch/delete/navigate buttons), `DPGStreamingChatMessage` (live-updating during generation), `DPGLinearizedChatView` (message container). `DPGChatController` wires everything: `chat_round()` → `user_turn()` + `ai_turn()` in background thread. Handles avatar emotion updates; delegates TTS with lipsync and subtitles to `raven.client.avatar_controller.DPGAvatarController`. Closures for button callbacks.
+- **`chat_controller.py`** — GUI controller, the bridge between scaffold and DearPyGui. Classes: `DPGChatMessage` (base, thread-safe MD rendering), `DPGCompleteChatMessage` (stored nodes, with copy/reroll/continue/speak/edit/branch/delete/navigate buttons), `DPGStreamingChatMessage` (live-updating during generation), `DPGLinearizedChatView` (message container). `DPGChatController` wires everything: `chat_exchange()` → `user_turn()` + `ai_turn()` in background thread. Handles avatar emotion updates; delegates TTS with lipsync and subtitles to `raven.client.avatar_controller.DPGAvatarController`. Closures for button callbacks.
 
 - **`app.py`** — Main GUI entry point. Two-column layout: left = chat panel + input controls, right = avatar panel + mode toggles. Bottom toolbar for global actions. Help card (F1). Startup sequence: DPG init → server/LLM connection → state load → RAG load → GUI build → event loop. Hotkeys (Enter, Ctrl+N/G/S/R/U, F1/F8/F11). Animations: pulsating indicators, button flashes. Dynamic resize handler.
 

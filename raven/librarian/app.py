@@ -299,7 +299,7 @@ logger.info(f"RAG document store loaded in {tim.dt:0.6g}s.")
 # Image attachment (composer staging)
 #
 # When a vision-capable model (VLM) is loaded, the user can attach images to the message being composed. An
-# attachment is staged in memory here until send; on send, `chat_controller.chat_round` stores each as a
+# attachment is staged in memory here until send; on send, `chat_controller.chat_exchange` stores each as a
 # datastore sidecar and the staging is cleared. The image bytes are snapshotted at attach time, so a file
 # edited or removed on disk between attach and send still sends exactly what the user picked.
 
@@ -622,14 +622,14 @@ with timer() as tim:
                             # and still sends — an empty user message is Librarian's canonical "let the AI take
                             # another turn" gesture.
                             user_message_text = dpg.get_value("chat_field").strip()  # tag
-                            # Snapshot the staged attachments and hand them off, then clear the staging. `chat_round`
+                            # Snapshot the staged attachments and hand them off, then clear the staging. `chat_exchange`
                             # stores each image (bytes and all) on a background thread from this snapshot, so clearing
                             # the strip and its textures right away can't pull the rug out from under the send.
                             outgoing_images = list(staged_images)
                             outgoing_files = list(staged_files)
-                            chat_controller.chat_round(user_message_text,
-                                                       staged_images=(outgoing_images or None),
-                                                       staged_files=(outgoing_files or None))
+                            chat_controller.chat_exchange(user_message_text,
+                                                          staged_images=(outgoing_images or None),
+                                                          staged_files=(outgoing_files or None))
                             _clear_staged_images()
                             _clear_staged_files()
                             # Clear the composer. ImGui owns the *active* (focused) multiline input's edit buffer
@@ -705,7 +705,7 @@ with timer() as tim:
 
                             # Send the message to AI
                             logger.info("stop_recording_audio_message: Sending transcribed text to AI, as the user's message.")
-                            chat_controller.chat_round(user_message_text)
+                            chat_controller.chat_exchange(user_message_text)
 
                         # Sending is the field's *own* commit action, not a global hotkey, because ImGui
                         # already owns this chord and will not hand it over. A multiline `InputText`

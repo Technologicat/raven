@@ -339,8 +339,8 @@ def minimal_chat_client(backend_url) -> None:
                                        text=text)
                     print()
 
-        action_proceed = sym("proceed")  # proceed current round as usual
-        action_next_round = sym("next_round")  # skip to start of next round (after the user entered a special command)
+        action_proceed = sym("proceed")  # proceed with the current exchange as usual
+        action_next_exchange = sym("next_exchange")  # skip to the start of the next exchange (after the user entered a special command)
 
         def user_turn() -> Values:
             # NOTE: Rudimentary approach to RAG search, using the user's latest message text as the query. (Good enough to demonstrate the functionality. Improve later.)
@@ -379,7 +379,7 @@ def minimal_chat_client(backend_url) -> None:
                 print(f"HEAD is now at '{app_state['HEAD']}'.")
                 print()
                 chat_print_history(datastore.linearize_up(app_state["HEAD"]))
-                return Values(action=action_next_round)
+                return Values(action=action_next_exchange)
             elif user_message_text.startswith("!docs"):  # TODO: refactor
                 split_command_text = user_message_text.split()
                 nargs = len(split_command_text) - 1
@@ -394,64 +394,64 @@ def minimal_chat_client(backend_url) -> None:
                     else:
                         print(f"!docs: unrecognized argument '{arg}'; expected 'True' or 'False'.")
                         print()
-                        return Values(action_next_round)
+                        return Values(action_next_exchange)
                 else:
                     print("!docs: wrong number of arguments; expected at most one, 'True' or 'False'.")
                     print()
-                    return Values(action=action_next_round)
+                    return Values(action=action_next_exchange)
                 docs_enabled_str = "ON" if app_state["docs_enabled"] else "OFF"
                 print(f"Document database is now {docs_enabled_str}.")
                 print()
-                return Values(action=action_next_round)
+                return Values(action=action_next_exchange)
             elif user_message_text == "!dump":
                 print(colorizer.colorize("Raw datastore content:", colorizer.Style.BRIGHT) + f" (current HEAD is at {app_state['HEAD']})")
                 print(colorizer.colorize("=" * 80, colorizer.Style.BRIGHT))
                 print(f"{datastore}", end="")  # -> str; also, already has the final blank line
                 print(colorizer.colorize("=" * 80, colorizer.Style.BRIGHT))
                 print()
-                return Values(action=action_next_round)
+                return Values(action=action_next_exchange)
             elif user_message_text.startswith("!head"):  # switch to another chat branch
                 try:
                     _, new_head_id = user_message_text.split()
                 except ValueError:
                     print("!head: wrong number of arguments; expected exactly one, the node ID to switch to; see `!dump` for available chat nodes.")
                     print()
-                    return Values(action=action_next_round)
+                    return Values(action=action_next_exchange)
                 if new_head_id not in datastore.nodes:
                     print(f"!head: no such chat node '{new_head_id}'; see `!dump` for available chat nodes.")
                     print()
-                    return Values(action=action_next_round)
+                    return Values(action=action_next_exchange)
                 app_state["HEAD"] = new_head_id
                 print(f"HEAD is now at '{app_state['HEAD']}'.")
                 print()
                 chat_print_history(datastore.linearize_up(app_state["HEAD"]))
-                return Values(action=action_next_round)
+                return Values(action=action_next_exchange)
             elif user_message_text == "!help":
                 chat_show_help()
-                return Values(action=action_next_round)
+                return Values(action=action_next_exchange)
             elif user_message_text == "!history":
                 print(colorizer.colorize("Chat history (cleaned up):", colorizer.Style.BRIGHT))
                 print(colorizer.colorize("=" * 80, colorizer.Style.BRIGHT))
                 chat_print_history(node_id_history)
                 print(colorizer.colorize("=" * 80, colorizer.Style.BRIGHT))
                 print()
-                return Values(action=action_next_round)
+                return Values(action=action_next_exchange)
             elif user_message_text == "!model":
                 chat_show_model_info()
-                return Values(action=action_next_round)
+                return Values(action=action_next_exchange)
             elif user_message_text == "!models":
                 chat_show_list_of_models()
-                return Values(action=action_next_round)
+                return Values(action=action_next_exchange)
             elif user_message_text == "!reroll":
                 if len(node_id_history) < 4:  # system prompt, the AI's initial greeting, the user's first message, the AI's first message.
                     print("!reroll: There is no AI message to reroll.")
                     print()
-                    return Values(action=action_next_round)
+                    return Values(action=action_next_exchange)
                 role, unused_persona, unused_text = chatutil.get_node_message_text_without_persona(datastore, node_id_history[-1])
                 if role != "assistant":
                     print("!reroll: Latest message shown is not an AI message, cannot reroll.")
                     print()
-                    return Values(action=action_next_round)
+                    return Values(action=action_next_exchange)
                 print("Rerolling latest AI response.")
                 print()
                 app_state["HEAD"] = datastore.get_parent(node_id_history[-1])
@@ -473,18 +473,18 @@ def minimal_chat_client(backend_url) -> None:
                     else:
                         print(f"!tools: unrecognized argument '{arg}'; expected 'True' or 'False'.")
                         print()
-                        return Values(action=action_next_round)
+                        return Values(action=action_next_exchange)
                 else:
                     print("!tools: wrong number of arguments; expected at most one, 'True' or 'False'.")
                     print()
-                    return Values(action=action_next_round)
+                    return Values(action=action_next_exchange)
                 tools_enabled_str = "ON" if app_state["tools_enabled"] else "OFF"
                 print(f"Tool-calling is now {tools_enabled_str}.")
                 print()
-                return Values(action=action_next_round)
+                return Values(action=action_next_exchange)
             elif user_message_text.startswith("!") and len(user_message_text.split("\n")) == 1:
                 print(f"Unrecognized command '{user_message_text}'; use `!help` for available commands.")
-                return Values(action=action_next_round)
+                return Values(action=action_next_exchange)
             # Not a special command.
 
             # Add the user's message to the chat, if non-empty.
@@ -507,7 +507,7 @@ def minimal_chat_client(backend_url) -> None:
                     # those, discussing its own instructions instead of talking to anyone.
                     print("Nothing to reply to yet; write a message first.")
                     print()
-                    return Values(action=action_next_round)
+                    return Values(action=action_next_exchange)
 
             return Values(action=action_proceed, docs_query=docs_query)
 
@@ -625,11 +625,11 @@ def minimal_chat_client(backend_url) -> None:
         # Main loop
         while True:
             user_result = user_turn()
-            if user_result["action"] is action_next_round:
+            if user_result["action"] is action_next_exchange:
                 continue
 
             ai_result = ai_turn(docs_query=user_result["docs_query"])
-            if ai_result["action"] is action_next_round:
+            if ai_result["action"] is action_next_exchange:
                 continue  # Silly, since this is the last thing in the loop, but for symmetry.
 
     except (EOFError, KeyboardInterrupt):

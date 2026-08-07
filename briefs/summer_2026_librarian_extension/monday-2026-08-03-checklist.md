@@ -233,20 +233,27 @@ being renamed, so exclude those files and edit them by hand.
 
 ### Turn / round terminology
 
-*Not started 2026-08-03: this is a code sweep gated on an unagreed [P], so it is not a doc quick win. The
-naming decision has to land first, and it renames things across the codebase, not just in prose.*
+**Done 2026-08-07**, the first item after 0.2.8 shipped. The convention now lives in
+`raven/librarian/CLAUDE.md` under "Terminology: turn, round, exchange" — checked in, next to the layer map,
+rather than in this checklist, which archives with the sprint.
 
-- [ ] **[D] Make usage consistent everywhere.** Current split:
+- [x] **[D] Make usage consistent everywhere.** Was:
   - *Briefs*: a **turn** may consist of several **rounds** when the model calls tools.
   - *Codebase* (approximately): a **round** is user+AI; an individual AI message is a **turn**; the high-level
         sequence of AI and tool messages has **no name**.
-- [ ] **[P] Recommendation: the briefs are already standard usage; change the code.**
+- [x] **[D] The briefs are already standard usage; the code moved.** (Was [P]; agreed 2026-08-04.)
   - **turn** = one participant's contribution — including the whole tool loop for an assistant turn. This is
-        what the codebase currently leaves unnamed, and brief 10's existing "tool-call round cap" already
-        assumes it.
+        what the codebase left unnamed, and brief 10's existing "tool-call round cap" already assumed it.
   - **round** = one iteration of the agent loop within a turn (model call → tool calls → results).
-  - **exchange** = user turn + assistant turn, if the pairing needs a name (this is today's code "round").
-  - Check `ai_turn` against the result — under this convention the name is already correct if it runs the loop.
+  - **exchange** = user turn + assistant turn (this was today's code "round").
+  - `ai_turn` checked against the result and already correct, as anticipated — it runs the loop.
+  - **The sweep was two identifiers, not a codebase-wide rename**, which is why it took an afternoon slot
+    rather than a day: `chat_controller.chat_round` → `chat_exchange` (plus its inner task and log prefix)
+    and `minichat`'s `action_next_round` → `action_next_exchange`. Everywhere else — `scaffold`, `config`,
+    `llmclient`, `chatutil` — was already using *round* in the agent-loop sense. The other 40-odd hits were
+    "round trip" and one "round border", which is the reason a blind rename would have been wrong.
+  - Docstring prose moved with the names, and the archived briefs deliberately did not: the decision was
+    that the code moves, so `done/03_…` still says `chat_round` as a record of what was true then.
 - [x] **[D] House term is "scaffold", not "harness"**, for Raven's own agent loop (Seth Herd influence).
       *Done 2026-08-03.* Three places had lost it, and `raven.librarian.scaffold` already exists, so the
       inconsistency was internal:

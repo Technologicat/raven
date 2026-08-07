@@ -3159,9 +3159,9 @@ class DPGChatController:
         logger.info(f"DPGChatController._context_prefill_entrypoint: exact prompt size for HEAD '{task_env.head_node_id}': {out.usage['prompt_tokens']} tokens")
         self._render_context_fill(out.usage["prompt_tokens"], is_exact=True)
 
-    def chat_round(self, user_message_text: str, staged_images: Optional[List[env]] = None,
-                   staged_files: Optional[List[env]] = None) -> None:
-        """Run a chat round (user and AI).
+    def chat_exchange(self, user_message_text: str, staged_images: Optional[List[env]] = None,
+                      staged_files: Optional[List[env]] = None) -> None:
+        """Run one exchange: the user's turn, then the AI's.
 
         `user_message_text`: What the user wrote.
 
@@ -3171,12 +3171,12 @@ class DPGChatController:
 
         `staged_images`: Images the user attached to this message, or `None`. Each entry is an `env` with `raw`
                          (image bytes), `provenance_url`, and `provenance_source` (see `scaffold.user_turn`).
-                         An attachment counts as user content: with images present, a round runs even when the
-                         text is empty (rather than being treated as "let the AI take another turn").
+                         An attachment counts as user content: with images present, an exchange runs even when
+                         the text is empty (rather than being treated as "let the AI take another turn").
 
         `staged_files`: Documents (plain text / PDF) the user attached, or `None` — the file counterpart of
-                        `staged_images` (see `scaffold.user_turn`). Also counts as user content: a round runs with
-                        attachments present even when the text is empty.
+                        `staged_images` (see `scaffold.user_turn`). Also counts as user content: an exchange runs
+                        with attachments present even when the text is empty.
 
         The RAG query (for document database search) is taken from the latest available user message:
 
@@ -3184,9 +3184,9 @@ class DPGChatController:
           - Otherwise, automatically obtained by scanning the current chat for the user's latest message.
 
         This spawns a background task to avoid hanging GUI event handlers,
-        since the typical use case is to call `chat_round` from a GUI event handler.
+        since the typical use case is to call `chat_exchange` from a GUI event handler.
         """
-        def chat_round_task(task_env: env) -> None:
+        def chat_exchange_task(task_env: env) -> None:
             if task_env.cancelled:  # while the task was in the queue
                 return
 
@@ -3206,30 +3206,30 @@ class DPGChatController:
                     # user-role content reaching the model would be our own temporary injects — so it answers
                     # those, discussing its own instructions instead of talking to anyone. A stray Enter in an
                     # untouched chat is enough to land here, so do nothing, which is what a stray Enter should do.
-                    logger.info("chat_round: empty message, nothing attached, and no user message in this chat. Nothing to continue from; ignoring.")
+                    logger.info("chat_exchange: empty message, nothing attached, and no user message in this chat. Nothing to continue from; ignoring.")
                     return
             if task_env.cancelled:  # during user turn
                 return
             self.ai_turn(docs_query=docs_query,
                          continue_=False)
-        self.task_manager.submit(chat_round_task, env())
+        self.task_manager.submit(chat_exchange_task, env())
 
     def user_turn(self, text: str, staged_images: Optional[List[env]] = None,
                   staged_files: Optional[List[env]] = None) -> str:
-        """Run the user's part of a chat round: create the user message node, update HEAD, append it to the view.
+        """Run the user's turn: create the user message node, update HEAD, append it to the view.
 
         Returns the new HEAD node id.
 
         Runs **synchronously on the caller's thread** — deliberately not as a task of its own, and deliberately
         asymmetric with `ai_turn`, which *is* task-based (see its docstring for why that one must be). The AI
-        turn that follows in the same round must observe the completed user turn (its message node as the new
+        turn that follows in the same exchange must observe the completed user turn (its message node as the new
         HEAD, its sidecar images already written, and the message already in the view); if the two ran as
         separate concurrent tasks, that ordering would be a race — invisible while the AI turn takes seconds to
         reach its first output, but wrong the instant the backend errors immediately (the AI's error message
         would append before the user's message, and could even be parented to the pre-user HEAD). So
-        `chat_round` calls this inline, then submits the AI turn.
+        `chat_exchange` calls this inline, then submits the AI turn.
 
-        Call from a background thread (as `chat_round` does), never directly from a GUI event handler — it does
+        Call from a background thread (as `chat_exchange` does), never directly from a GUI event handler — it does
         datastore and (with attachments) image work. That constraint is exactly why this needs no task of its
         own: unlike `ai_turn`, it is never invoked straight from the GUI, so there is no GUI thread to keep free.
 
@@ -3253,14 +3253,14 @@ class DPGChatController:
                 docs_query: Optional[str],
                 continue_: bool,
                 _retry_tool_node_id: Optional[str] = None) -> None:
-        """Run the AI's response part of a chat round.
+        """Run the AI's turn: the reply, including the whole tool loop.
 
         Spawns a background task (on its own `ai_turn_task_manager`) — deliberately, and deliberately asymmetric
         with `user_turn`, which runs synchronously. Three reasons this one must be tasked, none of which apply to
         `user_turn`:
           1. It is invoked *directly from GUI event handlers* — reroll, continue, and "approve denied host &
              retry" all call `ai_turn` from the DPG callback thread, which must return at once. (`user_turn` is
-             only ever called from inside `chat_round`'s task, already off the GUI thread.)
+             only ever called from inside `chat_exchange`'s task, already off the GUI thread.)
           2. It needs *independent cancellation* — the Stop button clears just `ai_turn_task_manager`
              (`stop_ai_turn`), interrupting the AI turn without disturbing any other task.
           3. It is *long-running* — LLM streaming, tool calls, web fetches — the actual reason GUI responsiveness
