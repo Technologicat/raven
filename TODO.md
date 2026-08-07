@@ -582,6 +582,26 @@ every tier, chosen on measurements rather than reputation.
   - Test `stt_transcribe_file` and `stt_transcribe_array`
 
 
+### LLM backends
+
+- **[High]** **Support Anthropic-style backends**, alongside the OpenAI-compatible ones. Raised 2026-08-07 (Juha). Two reasons, and the second is the one that outlives the first:
+
+  - **Reach.** A significant fraction of scientific users are on Claude, and today Raven cannot talk to them at all.
+  - **Brand neutrality, as a stated position.** *Bring your own backend* — the same stance Raven takes on NVIDIA versus AMD, where development happens on NVIDIA but nothing in the stack is supposed to *require* it. A local-first research tool that works with exactly one vendor's API shape has made a choice it did not mean to make, and the longer only one shape is supported the more the code quietly assumes it.
+
+  **Testable locally, which is what makes this tractable now**: LM Studio serves an Anthropic-compatible endpoint, so the whole thing can be developed and tested against a local model with no API account. (Juha is on a Max plan — Claude access there is through Claude Code, not the API.)
+
+  Where it lands in the code: `llmclient.detect_backend_flavor` already probes by *payload shape* and returns `"lmstudio"` / `"oobabooga"` / `"generic"`, and `backend_flavor` already gates request details at a handful of sites (`_resolve_model_info`, the continue flag, the sampler block). So the seam exists. What is genuinely different about the Anthropic shape, and needs designing rather than switching on:
+
+  - **`system` is a top-level request field, not a message with `role="system"`.** Raven's history is a list of role-tagged messages and the system prompt is a node in the chat tree, so the wire builder has to lift it out.
+  - **Tool calls and results are content *blocks*** (`tool_use` / `tool_result`) inside a message, rather than a separate `tool_calls` field plus `role="tool"` messages. Raven's content is already a typed-parts list, which is the right shape to map from — but `perform_tool_calls` and the streaming parser both speak the OpenAI spelling today.
+  - **The streaming event protocol is different** (`message_start` / `content_block_delta` / …, not OpenAI's `choices[].delta`). `StreamParser` is the one place that would have to grow a second dialect; it already emits typed events, so the parser changes and its consumers do not.
+  - **Thinking blocks arrive as their own content block type**, which is closer to what Raven wants than the `reasoning_content` field it normalizes to now.
+
+  The four differences above are from memory of the Anthropic Messages API, not read off the docs in the session that wrote this — check them against the current spec before designing to them, and check what LM Studio's compatibility endpoint actually implements, since a compatibility layer is free to support a subset. The claims about *Raven's* side (what `detect_backend_flavor` returns, where `backend_flavor` is consulted, that `StreamParser` emits typed events) were read from the source.
+
+  Open question worth settling before writing code: whether this is a *flavor* of the existing client or a second client behind a common interface. The flavor gates are cheap while the differences are per-field; a different streaming protocol and a different tool-call representation may be past that line.
+
 ### Tools
 
 - **[Medium]** A separate toggle for MCP tools, once brief 04 lands. Different trust surface from either **Internet** or **Documents**, so it wants its own group in `llmclient` (a third alongside `NETWORK_TOOL_NAMES` and `DOCUMENT_TOOL_NAMES`) rather than being folded into one of theirs. The grouping mechanism is in place and takes one more entry; what needs deciding is whether one switch covers every MCP server or each server gets its own, which is a question about how many the user is expected to run.
