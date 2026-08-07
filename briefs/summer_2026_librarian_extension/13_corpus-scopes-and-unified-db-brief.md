@@ -5,6 +5,24 @@ it, so that the design session has somewhere to start and the decisions already 
 re-derived. The design itself is expected to come back from a claude.ai session as a filled-in version of
 this brief.
 
+**Priority raised 2026-08-07 (Juha): "the symlink dance is becoming unbearable."** Switching corpora means
+repointing `documents` and `rag_index` by hand, and the retrieval work has been doing it several times a day
+across five collections. Brief 12 then added a third directory to the dance (`document_sidecars`), and every
+new capability that is per-corpus adds a fourth. So the cost of not having scopes now grows with the feature
+set rather than staying flat, which is what moved this up the queue.
+
+Three things now wait on it explicitly, and each is queued rather than designed around:
+
+- **Cross-corpus sidecar GC** (brief 12). Content-addressed derived text would dedup across corpora, but
+  then "is this file orphaned?" is a union query over every index that exists. A scope-aware index supplies
+  that answer instead of reconstructing it.
+- **"Autosearch off, tools still on"** — the middle setting for the Documents toggle. Incoherent until a
+  scope can inject a topic TOC, because a model cannot sensibly decide to search a corpus it knows nothing
+  about. See §4, which already says the TOC is blocked on the same work.
+- **Large-corpus retrieval.** Adaptive `k` was measured to pay below ~1.3k documents and to be dead at
+  ~12k, where a broad question's relevant set outruns any conversational `k`. The answer there is stratified
+  sampling, which needs the clustering this brief covers.
+
 **Provenance markers** are carried over from the 2026-08-01 design session and are load-bearing — the point
 of this document is that a later reader can tell what is settled from what is merely proposed:
 

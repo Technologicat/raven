@@ -302,21 +302,88 @@ documented partial-success contract (a duplicate key lands in `failed_blocks` ra
   - **As built:** the withdrawal survives as the terminator of last resort, after `max_tool_call_refusal_rounds`
         (default 1). It has to — a refusal, however well formed, cannot guarantee the model stops asking, and
         nothing else in the loop can end the turn without leaving a tool result as its last message.
+> **These four were scoped into brief 09 on the reasoning that its implementation would settle them. 09
+> closed as an experiment set instead, so they were orphaned for a day and then decided on their own
+> (2026-08-07). The decisions are recorded in place below.**
+
 - [ ] **[N] Document injects: expose offset/length** so the model can locate the truncated middle. Same for RAG
       results, so it can look around a hit.
   - **[P]** Also makes the consulted-docs list span-exact rather than document-level.
   - **[P]** Wants extraction to be deterministic and cached, or the offsets aren't stable.
   - **[X] ~~"and Article 50 export cites exactly what was seen"~~** — wrong. Article 50 here is only about
         marking AI messages as AI-generated. See §7 on the two senses of "provenance".
+  - **[D] Deferred into brief 12** (2026-08-07). The stability precondition *is* brief 12's D1 — derived text
+        living in a sidecar, which is also what makes an offset mean anything, since chunk offsets are
+        expressed in the full text's coordinate system. Building offsets first would mean building them
+        against a coordinate space that is about to move. Note two things landed since this item was
+        written that change what an offset refers to: `docs_max_result_length` now splits an over-long
+        merged span into several results covering the same text, and the fixed-window design in
+        `hybridir`'s TODO would dissolve merging altogether.
 - [ ] **[N] Consulted-docs list**: add offset and length; add "previously consulted" **for disambiguation** —
       so the model doesn't read the list as referring to the current turn. Consistency then forces the inject
       ordering: list first, then the current turn's autosearch results.
+  - **[D] Splits in two** (2026-08-07). The *wording plus ordering* half is a few lines and does not wait for
+        anything. The *offset/length* half rides with the item above, into brief 12.
 - [ ] **[N] "No sources consulted" marker — only when Docs is ON.**
 - [ ] **[N] Is the separate Speculation toggle still needed?** If Docs ON implies marking as appropriate,
       probably not.
   - **[P]** Check first: does the marker distinguish "Docs ON, nothing retrieved" from "Docs OFF, answering
         from weights"? Different epistemic states; if the marker collapses them, the toggle still carries
         information.
+  - **[D] Decided 2026-08-07: drop the Speculation toggle. One Documents toggle remains**, and these two
+        items merge, because the marker is where the answer to both lives.
+
+        The toggle's reason for existing was a *gate*: Speculation OFF skipped the LLM entirely when the
+        question matched nothing in the database. Brief 10 removed that gate in favour of marking the
+        answer, and nothing replaced the justification. Dropping it also removes a thing to explain in the
+        README and the F1 card.
+
+        **The check above was run, and the marker does collapse the two states** — but by accident of
+        implementation rather than by design. `scaffold.py` gates the `grounded` field on `if not
+        speculate`, with no reference to whether documents are on, so with speculation off the marker fires
+        identically in both states and with speculation on it never fires at all. The toggle currently
+        gates the marker's *existence*. So rather than "does the toggle still carry information", the real
+        question was "what should the marker say in each state", and it answers both items at once:
+
+        | Documents | retrieval | marker |
+        |---|---|---|
+        | ON | something came back | silent |
+        | ON | nothing came back | `[no sources retrieved]` |
+        | OFF | — | silent |
+        | either | attachment present | silent — an attachment grounds |
+
+        The Docs-OFF row is what makes this the "only when Docs is ON" item as well: with the toggle gone
+        `grounded` would be recorded on every turn, and a marker on a no-documents chat states what the user
+        just chose. No second marker — the existing one made honest about *why* it is silent.
+
+  - **[D] The toggle does two things, and only one of them was under discussion.** Besides gating the
+        marker, speculation OFF injects a "base your claims about the context on the context" reminder
+        (`scaffold.py`, `_perform_injects`). That reminder becomes unconditional-when-material-exists.
+
+        **Keep its guard exactly as it is**: the reminder is skipped when there is nothing to ground in,
+        because asking a model to stick to documents that were never provided is a contradiction it will
+        try to resolve at up to **37x the deliberation, sometimes never terminating**. That number is the
+        reason the guard exists and it must survive the refactor.
+
+        Dropping the toggle is a no-op for almost everyone: the default is `speculate_enabled: False`, so
+        "ground your claims, and mark when nothing was retrieved" is already what a default install does.
+
+  - **[D] Documents gates the tools as well as the autosearch**, and this is already how it works —
+        `scaffold.py` passes `retriever=(retriever if documents_available else None)`, whose presence is the
+        single gate the document tools read, and which fails closed: a model calling a tool that was not
+        advertised finds no retriever and gets a refusal rather than reaching around the switch. Keep it,
+        and say so in the README, which currently does not.
+
+  - **[D] "Autosearch off, but tools still available" is not built, and waits for scopes.** It is the
+        tempting middle setting — skip the per-turn retrieval that slows the chat, let the model reach for
+        documents when it decides to. But the model has no idea what is in the database, and cannot decide
+        to search a corpus it knows nothing about. The mode only becomes coherent once a scope can inject a
+        rough topic TOC into the system prompt, so it is queued behind that rather than designed now.
+
+  - **Touches, for whoever implements it:** `appstate.py` (the default), `app.py` (checkbox, callback,
+        tooltip), `scaffold.py` (the parameter, threaded through ~9 sites), `minichat.py` (the `!speculate`
+        command), plus the README and the F1 help card. Note the tooltip is *already* wrong — it says "OFF
+        only adds the marker", which omits the reminder.
 - [ ] **[N] Compaction for Researchers' Night**: interaction with attachments; always keep the first two turns.
   - **[P]** Watch the sidecar interaction — compacting away a turn that referenced an attachment leaves the
         sidecar live but unreferenced in visible history.

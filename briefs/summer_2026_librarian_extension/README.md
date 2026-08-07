@@ -183,16 +183,17 @@ Still open, in the order they are expected to be done:
    The brief's own status section says what landed; `investigations/retrieval/REPORT.md` carries the
    findings and the ready-to-run experiments. The remaining levers want clustering and a summary layer, so
    they are post-Researchers' Night.
-   - **The absorbed inject-shape decisions did not close with it**, and should not be assumed to have.
-     Document-inject offset/length, the consulted-docs list gaining offsets and a "previously consulted"
-     marker, the "no sources consulted" marker, and whether the Speculation toggle still carries
-     information once Docs-ON implies marking were scoped into 09 on the reasoning that its implementation
-     would have to settle them. 09 stopped being that implementation, so they need a home of their own
-     before anyone builds against them.
-     - **To be spec'd first thing on 2026-08-07** (decided the night before). Deliberately scheduled with
-       a clear head rather than at the end of a long session: none of it depends on remembering a result
-       from the retrieval work, so it costs nothing to defer and reads better rested. The four decisions
-       are UI-and-prompt shape, not measurement, so they do not queue behind any eval run.
+   - **The absorbed inject-shape decisions did not close with it.** Document-inject offset/length, the
+     consulted-docs list gaining offsets and a "previously consulted" marker, the "no sources consulted"
+     marker, and whether the Speculation toggle still carries information once Docs-ON implies marking were
+     scoped into 09 on the reasoning that its implementation would have to settle them. 09 stopped being
+     that implementation, so they were orphaned.
+     - **Settled 2026-08-07, and recorded in `monday-2026-08-03-checklist.md` §4 rather than here** —
+       in place, against the items themselves, so a reader following either route lands on the decision.
+       In short: the Speculation toggle goes and one Documents toggle remains, with the marker made honest
+       about *why* it is silent rather than a second marker being added; the offsets defer into brief 12,
+       whose D1 is the coordinate space they would be expressed in; and the "previously consulted" wording
+       and inject ordering split off as the small half that waits for nothing.
 
 Then the release-prep checklist below.
 

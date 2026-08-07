@@ -223,6 +223,52 @@ hashing survives as a *dedup check*; it is hash-as-filename and hash-as-primary-
 — document IDs stay path-relative, and a user who reorganizes folders pays a re-index, which is the same deal
 rsync gives them.)
 
+### Bursting is not sidecarring, and this section previously read as though it were (2026-08-07)
+
+The paragraph above is about the **burst** of a multi-record `.bib`, and it does not generalize. Two different
+mechanisms were sharing one heading:
+
+- **Burst output** — one source file explodes into per-record files that *are* the indexed documents. One
+  `.d/` directory per multi-record `.bib`, named for it, sitting beside it, browsable, legible names.
+  `foo.bib.d/smith2024.bib` belongs here and nowhere else.
+- **Derived-text sidecar** — the extracted plaintext of an indexed document, whatever format it arrived in.
+  Content-addressed, seekable, nobody browses it; its consumer is arbitrary-span fetch (D1). A PDF's or a
+  `.docx`'s extracted text has no business in anything called `.bib.d/`, and the burst records need
+  sidecars of their own like every other document.
+
+So bursting is a *source transformation* whose outputs get indexed, and sidecarring is a *cache* keyed to a
+document that is already indexed. Deciding placement for one says nothing about the other.
+
+### Where the two sidecar stores live (decided 2026-08-07)
+
+**Chat store: keep the derivation, fix the name.** The directory is computed as
+`datastore_file.with_suffix(".images")`, which is why it is `data.images/`. That derivation is load-bearing
+rather than incidental — it is what keeps two datastores' sidecars apart, and therefore what keeps the GC
+correct, since a prune against one datastore must not delete files the other still references. A fixed
+shared directory would break that quietly.
+
+So change the suffix and not the scheme: **`<datastore>.sidecars/`**. No `chat_` prefix is wanted; the
+datastore's own name is already in there. Only `images` was inaccurate, and the code has said so for a while
+(`chattree.py`: *"named `<datastore>.images/` — from when images were the only kind of attachment"*).
+
+**And rename the datastore itself: `data.json` -> `chat.json`**, which makes the sidecar directory
+`chat.sidecars/`. `data.json` says nothing about what is in it. Both renames need a migration on load;
+`chattree._upgrade` is the precedent, and `librarian_config.llm_datastore_file` is the single place the name
+is configured.
+
+**Document store: one active slot, mirroring the corpus directories.** `document_sidecars` is a symlink to
+the slot in use, with the real directories beside it — `document_sidecars_eccomas2024`,
+`document_sidecars_hydrogen`, and so on — exactly as `documents` and `rag_index` already work.
+
+This sidesteps a GC question rather than answering it. Content-addressed derived text would dedup across
+corpora, which is a real benefit for a machine holding several that overlap; but then "is this file
+orphaned?" stops being a question any one index can answer and becomes a union query over every index that
+exists. With one active slot at a time there is no cross-corpus case yet, so the per-slot arrangement is
+correct *and* cheap, and the union-aware version is not written speculatively.
+
+**Once scopes land (brief 13), `document_sidecars` becomes cross-corpus naturally** — a scope-aware index
+knows which corpora reference what, which is the union query, supplied rather than reconstructed.
+
 ## Synopsis: the author's compression, and when to generate one
 
 An abstract is to a fulltext what a figure caption is to a figure: an author-written compression. That makes
