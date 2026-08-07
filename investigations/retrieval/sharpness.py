@@ -81,7 +81,11 @@ HERE = pathlib.Path(__file__).parent
 CORPUS_QUESTIONS = {"hydrogen": HERE / "questions.json",
                     "fiction": HERE / "fiction_questions.json",
                     "arxiv-ai": HERE / "arxiv_ai_questions.json",
-                    "banichuk": HERE / "banichuk_questions.json"}
+                    "banichuk": HERE / "banichuk_questions.json",
+                    # The year is part of the name because ECCOMAS 2026 is expected, and the pair is worth
+                    # more than either alone - same conference, same format, two years apart. It also keeps
+                    # the corpus key equal to the directory suffix, so `rag_index_<corpus>` resolves.
+                    "eccomas2024": HERE / "eccomas2024_questions.json"}
 
 # Ratios to sweep. Wide and coarse: the brief is explicit that the values in circulation for `min_p`
 # sampling carry no information about what to use here, so this is a search rather than a refinement.

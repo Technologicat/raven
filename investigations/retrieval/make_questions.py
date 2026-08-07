@@ -121,8 +121,8 @@ CORPORA = {
     # which BM25 cannot match against the hyphenated query form. And two of the 2520 records carry an
     # unbalanced brace from a mathematical fragment in the abstract, so a BibTeX parser rejects them — this
     # generator among them. Retrieval is unaffected either way, since `.bib` is ingested as plain text.
-    "eccomas": {"docs_dir": pathlib.Path("~/.config/raven/llmclient/documents_eccomas2024").expanduser(),
-                "out_path": HERE / "eccomas_questions.json",
+    "eccomas2024": {"docs_dir": pathlib.Path("~/.config/raven/llmclient/documents_eccomas2024").expanduser(),
+                "out_path": HERE / "eccomas2024_questions.json",
                 "sibling_topic": "computational methods in applied sciences and engineering",
                 "description": "abstracts from the 9th European Congress on Computational Methods in "
                                "Applied Sciences and Engineering (ECCOMAS Congress 2024, Lisbon), 2520 "
