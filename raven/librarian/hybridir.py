@@ -1378,8 +1378,15 @@ class HybridIR:
         logger.info(f"HybridIR.query: retrieved chunk statistics: {len(keyword_results)} keyword match{kw_plural_s}, {len(vector_results)} semantic match{vec_plural_s}; total {len(fused_results)} unique match{fused_plural_s}; {len(merged)} result{total_plural_s} after merging contiguous spans from each document.")
 
         # Drop extra results, if there are still too many at this point.
-        plural_s = "s" if k != 1 else ""
-        logger.info(f"HybridIR.query: Returning up to {k} best result{plural_s} (out of {len(merged)} retrieved), sorted by RRF score.")
+        #
+        # Phrased as "N of M, k=K" rather than "up to K out of M": the old wording read as "50 best results
+        # out of 5 retrieved" whenever the thresholds had already cut the candidates below `k`, which is a
+        # sentence with no meaning. What the reader wants is how many are coming back and how many there
+        # were to choose from, with the cap as context rather than as the subject.
+        returned = min(k, len(merged))
+        plural_s = "s" if returned != 1 else ""
+        logger.info(f"HybridIR.query: Returning {returned} result{plural_s} of {len(merged)} retrieved "
+                    f"(cap k={k}), sorted by RRF score.")
         merged = merged[:k]
 
         logger.info("HybridIR.query: exiting. All done.")

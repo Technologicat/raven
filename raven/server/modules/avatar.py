@@ -664,7 +664,8 @@ def result_feed(instance_id: str) -> Response:
                     msec = round(1000 * avg_send_sec, 1)
                     target_msec = round(1000 * frame_duration_target_sec, 1)
                     fps = round(1 / avg_send_sec, 1) if avg_send_sec > 0.0 else 0.0
-                    logger.info(f"output: {msec:.1f}ms [{fps:.1f} FPS]; target {target_msec:.1f}ms [{animator.target_fps:.1f} FPS]")
+                    logger.debug(f"result_feed.generate (avatar instance '{instance_id}'): output {msec:.1f}ms "
+                                 f"[{fps:.1f} FPS]; target {target_msec:.1f}ms [{animator.target_fps:.1f} FPS]")
                     last_report_time = time_now
 
             else:  # first frame not yet available
@@ -1743,7 +1744,7 @@ class Animator:
             avg_render_sec = self.render_duration_statistics.average()
             msec = round(1000 * avg_render_sec, 1)
             fps = round(1 / avg_render_sec, 1) if avg_render_sec > 0.0 else 0.0
-            logger.info(f"render {msec:.1f}ms [{fps} FPS available]")
+            logger.debug(f"render_animation_frame: render {msec:.1f}ms [{fps} FPS available]")
             self.last_report_time = time_now
 
 # --------------------------------------------------------------------------------
@@ -1850,7 +1851,8 @@ class Encoder:
                     avg_wait_sec = self.wait_duration_statistics.average()
                     wait_msec = round(1000 * avg_wait_sec, 1)
                     fps = round(1 / avg_encode_sec, 1) if avg_encode_sec > 0.0 else 0.0
-                    logger.info(f"encode: {msec:.1f}ms [{fps} FPS available]; send sync wait {wait_msec:.1f}ms")
+                    logger.debug(f"encoder_update: encode {msec:.1f}ms [{fps} FPS available]; "
+                                 f"send sync wait {wait_msec:.1f}ms")
                     last_report_time = time_now
 
                 time.sleep(0.01)  # rate-limit the encoder to 100 FPS maximum (this could be adjusted later)
