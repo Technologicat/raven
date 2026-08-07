@@ -836,7 +836,7 @@ def api_embeddings_compute():
     else:
         nitems = len(sentences)
 
-    print(f"Computing vector embedding for {nitems} item{'s' if nitems != 1 else ''} with model '{model}'")
+    logger.debug(f"api_embeddings_compute: {nitems} item{'s' if nitems != 1 else ''} with model '{model}'")
     try:
         vectors = embeddings.embed_sentences(sentences, model=model)
         return jsonify({"embedding": vectors})

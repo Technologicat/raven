@@ -567,11 +567,17 @@ def load_embedder(model_name: str, device_string: str, dtype: Union[str, torch.d
     _embedders[cache_key] = embedder
     return embedder
 
-def embed_sentences(embedder: SentenceTransformer, text: Union[str, List[str]]) -> Union[List[float], List[List[float]]]:
+def embed_sentences(embedder: SentenceTransformer, text: Union[str, List[str]], show_progress_bar: bool = False) -> Union[List[float], List[List[float]]]:
     """Embed (vectorize) one or more sentences using a semantic embedding AI model.
 
     `embedder`: return value of `load_embedder`
     `text`: one (str) or more (List[str]) texts to embed
+    `show_progress_bar`: render a progress bar on the console for this call.
+
+                         Off by default, because the two callers want opposite things and only one of them
+                         owns a console to draw on. An app embedding a whole dataset in-process is the case
+                         this exists for; a server embedding one client request per call is not, and there
+                         a bar interleaves with whatever progress display the *client* is drawing.
 
     Returns a `list` for one input, a `list` of `list`s for more inputs. This is to keep the output easily JSONable
     (NumPy arrays aren't), to facilitate easily sending the data over the network.
@@ -583,7 +589,7 @@ def embed_sentences(embedder: SentenceTransformer, text: Union[str, List[str]]) 
     changes the embedder, not with whoever reads the vectors.
     """
     vectors: Union[np.array, List[np.array]] = embedder.encode(text,
-                                                               show_progress_bar=True,  # on console running this app
+                                                               show_progress_bar=show_progress_bar,
                                                                convert_to_numpy=True,
                                                                normalize_embeddings=True)
     # NumPy arrays are not JSON serializable, so convert to Python lists

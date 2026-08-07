@@ -255,8 +255,11 @@ class Embedder(MaybeRemoteService):
             vectors = api.embeddings_compute(text=text,
                                              model=self.model_name)  # -> np.array
         else:
+            # A progress bar is wanted here and not on the server: in local mode the caller is an app the
+            # user is watching, embedding a whole dataset in one call.
             vectors = nlptools.embed_sentences(embedder=self._local_model,
-                                               text=text)  # -> list, or list of lists (for easy JSONability)
+                                               text=text,
+                                               show_progress_bar=True)  # -> list, or list of lists (for easy JSONability)
             vectors = np.array(vectors)  # ...so we must convert to `np.array` ourselves
         return vectors
 
