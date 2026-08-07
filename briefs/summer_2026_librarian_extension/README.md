@@ -21,9 +21,12 @@ for value alone.
    sidecar sweep, which currently has no non-test caller, so attachments accumulate on disk.
    **Done 2026-07-30** (archived to `done/`). The sidecar sweep now has its caller, so the release blocker
    below is cleared; 09 is what 0.2.8 is still waiting on.
-3. **09 — retrieval query side** (`09_retrieval-query-side-brief.md`). Deliberately after 10 rather than
-   before it: 10 built the infrastructure that makes retrieval quality visible and actionable, and 09's
-   lever 1 plus the confidence signal are what the grounding marker has been blocked on since it shipped.
+3. ~~**09 — retrieval query side**~~ — **closed as an experiment set 2026-08-06, archived to `done/`.**
+   It was deliberately scheduled after 10, since 10 built the infrastructure that makes retrieval quality
+   visible and actionable and 09's lever 1 was what the grounding marker had been blocked on. That
+   consumer is now served: the marker keys on whether documents are in play, and the Speculation toggle
+   that used to gate it is gone. The brief's own status block carries what shipped, what was refuted, and
+   what moved after it was written.
 
 Not in this list and still open: the tool-budget split (`TODO.md`, Librarian / urgent), which is a
 follow-up to 10 rather than a brief of its own.

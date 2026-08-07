@@ -1288,7 +1288,7 @@ Extension raised by Juha (2026-07-30).
 > shape sketched below is still the right shape for *some* future model — it is the reranker specifically
 > that did not survive. **`TODO.md` no longer lists this as planned work.**
 
-**Do `briefs/summer_2026_librarian_extension/09_retrieval-query-side-brief.md` first.** It documents a
+**Do `briefs/summer_2026_librarian_extension/done/09_retrieval-query-side-brief.md` first.** It documents a
 verified finding that changes the diagnosis below: `_query_body` applies each engine's quality signal as
 an absolute cutoff *before* fusion, and `reciprocal_rank_fusion` then sums `1 / (rank + K)` over
 positions only. So the score-to-quality mapping is discarded one line before the rank that is supposed to

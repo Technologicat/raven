@@ -14,7 +14,7 @@ the *scoring* stage — so it is worth knowing what the *query* stage is current
 makes it measurable. Some of it may make reranking unnecessary at the current corpus size. That is an
 outcome, not a claim.
 
-## Status: closes for 0.2.8 as an experiment set (2026-08-06)
+## Status: closed as an experiment set (2026-08-06, archived 2026-08-07)
 
 **This brief turned out to be applied science rather than a build**, and it is worth saying so at the top,
 because the sections below are written as an implementation plan and a reader who takes them at face value
@@ -45,12 +45,33 @@ on balanced corpora, `armsum`, term coverage, and `mean` and `count` aggregation
 marker gets "the conversation left the corpus" at AUROC ≈ 1.0, and does not get a travelling absolute
 threshold, because no such threshold exists across corpora.
 
-**What carries forward, and none of it before Researchers' Night (2026-09-26):** adaptive `k` with its
-domain of validity attached (it pays below ~1.3k documents and is dead at ~12k), stratified sampling and
-therefore clustering for the large-corpus case, and a document-level summary layer — which is `VISION.md`
-stage 3 reached from the retrieval side. Two live leads at p ≈ 0.08 are described in the report rather than
-here, since both want a mechanism before another sweep. The experiments that are ready to run and need
-nothing new are in `REPORT.md` §3b.
+### Closed 2026-08-07, and three things in the block above moved
+
+Archived to `done/` on this date. The day after it was written, the four decisions this brief had absorbed
+were settled and two of the open leads were measured, so the summary above is corrected here rather than
+edited in place — it was accurate when written, and what changed is worth being able to see.
+
+- **The toggle work shipped, in 0.2.8, not after Researchers' Night.** The four inject-shape decisions
+  scoped into this brief were settled on their own (`monday-2026-08-03-checklist.md` §4): the Speculation
+  toggle is gone and one Documents toggle governs the autosearch, the document tools, the grounding
+  reminder and the marker. The marker now keys on whether documents are in play rather than on
+  speculation, which is what makes it honest about *why* it is silent. So brief 10's consumer is not
+  merely unblocked but served.
+- **Both "live leads at p ≈ 0.08" are dead.** Score fusion's self-weighting came back null on fiction
+  (best cell +3.6% coverage at p = 0.155, and every *significant* cell a loss) and null on ECCOMAS, which
+  leaves it resting on banichuk alone. Recorded as unsupported rather than refuted, and not to be built
+  on. Fiction needed a new instrument to say so — `paired_coverage`, a Wilcoxon signed-rank over
+  per-question coverage, since document recall saturates at 100% there and `mcnemar` has nothing to read.
+- **Adaptive `k`'s "pays below ~1.3k documents, dead at ~12k" is withdrawn.** ECCOMAS separates *better*
+  at 2,520 documents than arxiv-ai does at 1,268, so the effect is not monotone in size. The follow-up
+  refutation was then itself retracted — it compared corpora at matched `k` across a tenfold size range,
+  and `k=200` is 15.8% of one corpus and 1.67% of another. Read at matched *fraction* the ordering is
+  monotone in size after all, so the original claim survives on better evidence than it had; what is
+  genuinely unsettled is the metric, and `synthesis_recall.py` now measures at matched share for that
+  reason. The whole exchange is in `REPORT.md` §4, both wrong turns left standing.
+
+What still carries forward, unchanged: stratified sampling and therefore clustering, and a document-level
+summary layer — `VISION.md` stage 3 reached from the retrieval side.
 
 ## A shipped feature now depends on this (2026-07-28)
 

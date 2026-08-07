@@ -14,7 +14,7 @@ whole point of having them — a measurement nobody can repeat settles an argume
 This exists because retrieval-quality arguments are otherwise undecidable. The motivating complaint —
 *the hybrid rank does not track how good a result is* — names a ranking failure, and no amount of reading
 the code settles whether a proposed change helps. The design work it feeds is
-`briefs/summer_2026_librarian_extension/09_retrieval-query-side-brief.md`, where every lever is a
+`briefs/summer_2026_librarian_extension/done/09_retrieval-query-side-brief.md`, where every lever is a
 hypothesis about a different part of the score-vs-relevance curve this measures.
 
 ## The trick, and what it costs
