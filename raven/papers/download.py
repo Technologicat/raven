@@ -27,6 +27,7 @@ __all__ = [
 ]
 
 import argparse
+import collections
 import os
 import pathlib
 import re
@@ -444,6 +445,11 @@ def download_papers(arxiv_ids: List[str],
     if save_bib is not None:
         _write_bibtex(metadata_by_id, arxiv_ids, save_bib)
 
+    # Counted by outcome rather than by a single total, because "processed 170" answers nothing on a rerun:
+    # the whole point of the skip-existing behaviour is that most of a repeat run does nothing, and the
+    # number worth seeing is how much of it was actually fetched.
+    tally: dict[str, int] = collections.Counter()
+
     seen: set[str] = set()
     for arxiv_id in arxiv_ids:
         try:
@@ -471,25 +477,42 @@ def download_papers(arxiv_ids: List[str],
                             with open(save_path, "wb") as f:
                                 f.write(pdf_response.content)
                             print(f"{colorizer.colorize(CHECKMARK, colorizer.Style.BRIGHT, colorizer.Fore.GREEN)} {arxiv_id}{resolved_id_str} PDF saved as '{save_path}'")
+                            tally["downloaded"] += 1
                         else:
                             print(f"{colorizer.colorize(CROSS, colorizer.Style.BRIGHT, colorizer.Fore.RED)} {arxiv_id}{resolved_id_str} no PDF found")
+                            tally["no PDF available"] += 1
                     else:
                         print(f"{colorizer.colorize('-', colorizer.Style.BRIGHT, colorizer.Fore.YELLOW)} {arxiv_id}{resolved_id_str} already downloaded (by this tool) as '{save_path}'")
+                        tally["already present"] += 1
                 else:
                     idx = output_dir_existing_arxiv_ids.index(resolved_id)
                     save_path = arxiv_pdf_files_in_output_dir[idx][1]
                     print(f"{colorizer.colorize('-', colorizer.Style.BRIGHT, colorizer.Fore.YELLOW)} {arxiv_id}{resolved_id_str} already exists as '{save_path}'")
+                    tally["already present"] += 1
             else:
                 print(f"{colorizer.colorize('-', colorizer.Style.BRIGHT, colorizer.Fore.YELLOW)} {arxiv_id}{resolved_id_str} already processed (during this session), skipping")
+                tally["duplicate identifier"] += 1
         except ArxivMetadataError as e:
             # Expected user error (bad ID) — a one-line message is enough,
             # no traceback.
             print(f"{colorizer.colorize(CROSS, colorizer.Style.BRIGHT, colorizer.Fore.RED)} {arxiv_id} failed: {e}")
+            tally["failed"] += 1
         except Exception as e:
             # Unexpected (network blip, parse bug, …) — keep the traceback
             # for debugging.
             print(f"{colorizer.colorize(CROSS, colorizer.Style.BRIGHT, colorizer.Fore.RED)} {arxiv_id} failed: {type(e).__name__}: {e}")
             traceback.print_exc()
+            tally["failed"] += 1
+
+    # Ordered so the line reads as an account of the run rather than as a dictionary dump, and listing only
+    # what happened: a clean run should not have to say "0 failed" for the reader to notice that it did not.
+    summary = ", ".join(f"{tally[outcome]} {outcome}"
+                        for outcome in ("downloaded", "already present", "duplicate identifier",
+                                        "no PDF available", "failed")
+                        if tally[outcome])
+    print(f"\n{colorizer.colorize(CHECKMARK, colorizer.Style.BRIGHT, colorizer.Fore.GREEN)} "
+          f"{len(arxiv_ids)} identifier{'s' if len(arxiv_ids) != 1 else ''} processed"
+          f"{': ' + summary if summary else ''}.")
 
 
 def extract_ids_from_bib(bib_path: str) -> list[str]:

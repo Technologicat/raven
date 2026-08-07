@@ -567,6 +567,30 @@ class TestDownloadPapers:
         assert b"%PDF" in pdfs[0].read_bytes()
         assert "2301.12345v1" in pdfs[0].name
 
+    def test_the_run_is_summarized_by_outcome(self, capsys, tmp_path):
+        """A rerun does almost nothing, so a bare total says nothing. The counts have to be by outcome."""
+        xml = _atom_response()
+        with patch.object(download_module, "RateLimiter", _NoWaitRateLimiter), \
+             patch.object(httpfetch_module.requests, "get",
+                          side_effect=_mock_requests_get({"2301.12345": xml})):
+            # The same identifier twice: one download, one recognized as a repeat within the run.
+            download_papers(["2301.12345", "2301.12345"], output_dir=str(tmp_path))
+        summary = capsys.readouterr().out.strip().splitlines()[-1]
+        assert "2 identifiers processed" in summary
+        assert "1 downloaded" in summary
+        assert "1 duplicate identifier" in summary
+
+    def test_the_summary_names_only_outcomes_that_happened(self, capsys, tmp_path):
+        """A clean run should not have to say "0 failed" for the reader to see that nothing failed."""
+        xml = _atom_response()
+        with patch.object(download_module, "RateLimiter", _NoWaitRateLimiter), \
+             patch.object(httpfetch_module.requests, "get",
+                          side_effect=_mock_requests_get({"2301.12345": xml})):
+            download_papers(["2301.12345"], output_dir=str(tmp_path))
+        summary = capsys.readouterr().out.strip().splitlines()[-1]
+        assert "1 downloaded" in summary
+        assert "failed" not in summary and "duplicate" not in summary
+
     def test_skips_paper_already_in_output_dir(self, tmp_path):
         """If a PDF with the same arXiv ID already exists, don't re-download."""
         # Pre-populate with a file whose filename contains the arXiv ID
