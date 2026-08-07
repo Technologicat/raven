@@ -3,7 +3,10 @@
 Used as branching chat history for Raven's LLM client.
 """
 
-__all__ = ["Forest", "PersistentForest"]
+__all__ = ["SIDECAR_SUFFIX", "LEGACY_SIDECAR_SUFFIX",
+           "rename_datastore",
+
+           "Forest", "PersistentForest"]
 
 import logging
 logger = logging.getLogger(__name__)
@@ -708,6 +711,75 @@ class Forest:
         with self.lock:
             self.nodes.clear()
 
+# Suffix of the directory holding a datastore's attachment sidecars, derived from the datastore's own
+# filename so that two datastores in one directory cannot share a sidecar store — which is what keeps the
+# GC correct, since a prune against one must not delete files the other still references.
+SIDECAR_SUFFIX = ".sidecars"
+
+# What that suffix was before 0.2.9, from when images were the only kind of attachment. It holds documents
+# too, so the old name was inaccurate rather than merely terse. `rename_datastore` and `PersistentForest`
+# migrate it in place on load; this stays until no datastore in the wild still uses it.
+LEGACY_SIDECAR_SUFFIX = ".images"
+
+
+def rename_datastore(old_file: Union[str, pathlib.Path],
+                     new_file: Union[str, pathlib.Path]) -> bool:
+    """Rename a datastore file, taking its sidecar directory with it. Returns whether anything moved.
+
+    The pairing is the point. A sidecar directory is named after the datastore file it belongs to, so
+    moving the JSON on its own would leave every attachment behind, referenced by URLs that still resolve
+    to a filename but no longer to a file.
+
+    Does nothing (returning `False`) if `old_file` does not exist, or if `new_file` already does — this
+    never overwrites a datastore, so the worst case of calling it wrongly is that nothing happens.
+
+    Both sidecar suffixes are looked for, so a datastore that predates the `.sidecars` rename can still be
+    moved as a unit; the directory keeps whichever suffix it had, and `PersistentForest` migrates that on
+    load.
+
+    **All or nothing.** Raises whatever `pathlib.Path.rename` raises, having first put back whatever it had
+    already moved — so a caller that treats the failure as non-fatal is looking at the layout it started
+    with, not at half of one. That matters here more than it usually would: the halfway state splits the
+    datastore from its sidecars, and nothing downstream can detect that, because a sidecar directory is
+    identified by *derivation* from the datastore's name rather than by any record of where it went.
+
+    A best-effort rollback, since the undo can fail too — if it does, the exception carries the original
+    failure (the useful one) and the log carries the rest.
+    """
+    old_file = pathlib.Path(old_file).expanduser().resolve()
+    new_file = pathlib.Path(new_file).expanduser().resolve()
+    if old_file == new_file or not old_file.is_file() or new_file.exists():
+        return False
+
+    # Directories first, then the file. Either order can fail halfway, so the ordering is not what makes
+    # this safe — the rollback is; this order merely keeps the window short.
+    moved_dirs = []
+    try:
+        for suffix in (SIDECAR_SUFFIX, LEGACY_SIDECAR_SUFFIX):
+            old_dir = old_file.with_suffix(suffix)
+            new_dir = new_file.with_suffix(suffix)
+            if old_dir.is_dir() and not new_dir.exists():
+                logger.info(f"rename_datastore: Moving sidecar directory '{old_dir}' -> '{new_dir}'.")
+                old_dir.rename(new_dir)
+                moved_dirs.append((old_dir, new_dir))
+
+        logger.info(f"rename_datastore: Moving datastore '{old_file}' -> '{new_file}'.")
+        old_file.rename(new_file)
+    except OSError:
+        for old_dir, new_dir in reversed(moved_dirs):
+            try:
+                new_dir.rename(old_dir)
+            except OSError as undo_exc:
+                logger.error(f"rename_datastore: Rolling back after a failed rename, could not move "
+                             f"'{new_dir}' back to '{old_dir}'. That datastore's attachments are now under a "
+                             f"name it does not look for; moving the directory by hand fixes this. "
+                             f"Reason {type(undo_exc)}: {undo_exc}")
+            else:
+                logger.info(f"rename_datastore: Rolled back sidecar directory '{new_dir}' -> '{old_dir}'.")
+        raise
+    return True
+
+
 class PersistentForest(Forest):
     def __init__(self,
                  datastore_file: Union[str, pathlib.Path],
@@ -743,6 +815,10 @@ class PersistentForest(Forest):
         self._autosave = autosave
         self._sidecar_extractor = sidecar_extractor
 
+        # Filesystem-level migration, so it cannot live in `_upgrade` — that one migrates the loaded nodes
+        # dict and knows nothing about paths.
+        self._migrate_legacy_sidecar_dir()
+
         # Load persisted state, if any.
         self._load()
 
@@ -753,6 +829,27 @@ class PersistentForest(Forest):
         # it is always safe to persist it.
         if autosave:
             atexit.register(self.save)
+
+    def _migrate_legacy_sidecar_dir(self) -> None:
+        """Rename this datastore's `<datastore>.images/` to `<datastore>.sidecars/`, if that is what it has.
+
+        A failure here is logged and swallowed rather than raised. The attachments are then unreachable —
+        the payloads name files the app looks for under the new directory — but the app still opens, the
+        chat text is intact, and the fix is a `mv` the user can perform. Refusing to start over a directory
+        rename would be the worse trade.
+        """
+        new_dir = self.sidecar_dir
+        old_dir = new_dir.with_suffix(LEGACY_SIDECAR_SUFFIX)
+        if new_dir.exists() or not old_dir.is_dir():
+            return
+        try:
+            old_dir.rename(new_dir)
+        except OSError as exc:
+            logger.error(f"PersistentForest._migrate_legacy_sidecar_dir: Could not rename '{old_dir}' -> '{new_dir}', "
+                         f"so this datastore's attachments will not be found. Renaming it by hand fixes this. "
+                         f"Reason {type(exc)}: {exc}")
+        else:
+            logger.info(f"PersistentForest._migrate_legacy_sidecar_dir: Renamed '{old_dir}' -> '{new_dir}'.")
 
     def _get_autosave(self) -> bool:
         return self._autosave
@@ -811,9 +908,9 @@ class PersistentForest(Forest):
     # `raven.librarian.imagestore` and `raven.librarian.textfilestore`), keeping this storage layer free of
     # chat-message-schema knowledge.
     #
-    # The directory is named `<datastore>.images/` — from when images were the only kind of attachment. The name
-    # is kept because renaming it would strand the sidecars of every existing datastore; it is a directory name,
-    # not a description of the contents.
+    # The directory is `<datastore>` + `SIDECAR_SUFFIX`, derived from the datastore's filename rather than
+    # fixed, so two datastores in one directory keep their sidecars apart — which is what keeps the GC
+    # correct, since a prune against one must not delete files the other still references.
 
     # Suffix marking a sidecar's metadata sibling (`<sha256>.<ext>.meta.json`). A sidecar is named by content
     # hash, so the file carries no trace of what it is; this is where its human-readable name and stored-at
@@ -822,9 +919,9 @@ class PersistentForest(Forest):
     _SIDECAR_METADATA_SUFFIX = ".meta.json"
 
     def _get_sidecar_dir(self) -> pathlib.Path:
-        return pathlib.Path(self.datastore_file).expanduser().resolve().with_suffix(".images")
+        return pathlib.Path(self.datastore_file).expanduser().resolve().with_suffix(SIDECAR_SUFFIX)
     sidecar_dir = property(fget=_get_sidecar_dir,
-                           doc="Directory holding this datastore's attachment sidecar files: `<datastore>.images/`, alongside the JSON. Derived from `datastore_file`; created lazily on the first `store_sidecar`.")
+                           doc=f"Directory holding this datastore's attachment sidecar files: `<datastore>{SIDECAR_SUFFIX}/`, alongside the JSON. Derived from `datastore_file`; created lazily on the first `store_sidecar`.")
 
     def store_sidecar(self, data: bytes, ext: str, metadata: dict[str, Any] | None = None) -> str:
         """Store `data` as a sidecar file; return its content-hash filename `<sha256>.<ext>`.
@@ -897,7 +994,7 @@ class PersistentForest(Forest):
         description written beside the file at store time, surviving independently of the tree.
 
         The cleanup preview is what motivated it, but the larger effect is that the sidecar directory becomes
-        **self-describing**. Without these, `<datastore>.images/` is a pile of hash-named files that can only be
+        **self-describing**. Without these, the sidecar directory is a pile of hash-named files that can only be
         interpreted by loading the datastore and cross-referencing every payload. With them, anything that can
         read a directory — a person, a shell script, an agent asked to tidy up — can tell what each file is,
         where it came from and when it arrived, without Raven's help and without the datastore being present.

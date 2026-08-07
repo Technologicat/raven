@@ -93,7 +93,7 @@ More generally, for changing the direction of the conversation, the chat support
 
 It is possible to permanently forget a subtree by **deleting** it. This will also delete all messages downstream of the deleted node, and cannot be undone.
 
-The chat tree is stored (by default) in `~/.config/raven/llmclient/data.json`.
+The chat tree is stored (by default) in `~/.config/raven/llmclient/chat.json`, with any attachments beside it in `chat.sidecars/`. Upgrading from an older Raven, which called these `data.json` and `data.images/`, renames them on first start.
 
 The **SYS** node is updated each time *Librarian* starts, using the currently configured system prompt from [`raven.librarian.config`](../librarian/config.py). The node is updated in-place, via the node versioning mechanism: a new revision of the content is created, and the old one is deleted.
 

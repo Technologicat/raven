@@ -48,6 +48,34 @@ _RETIRED_FLAGS = ("speculate_enabled",)
 # default over it, and silently discard the setting being migrated.
 _RENAMED_FLAGS = {"tools_enabled": "internet_enabled"}
 
+# What the chat datastore was called before 0.2.9, when the default became `chat.json`. `load` adopts a file
+# by this name if the configured one is absent, so an existing chat history is not left behind by an upgrade.
+_LEGACY_DATASTORE_FILENAME = "data.json"
+
+
+def _looks_like_a_chat_datastore(path: pathlib.Path) -> bool:
+    """Whether `path` holds a `chattree` forest, judged by reading it rather than by its name.
+
+    The adoption in `load` is the reason this exists, and the name is why it cannot go by the name.
+    `data.json` is generic enough to belong to anything, and the file is looked for beside the *configured*
+    datastore — which a user may have pointed at a directory of their own. Renaming a stranger's `data.json`
+    into Raven's chat history would take a file away from whatever actually owned it, and the symptom would
+    be that other program's, not Raven's.
+
+    A forest on disk is a flat mapping of node ID to node, so this checks the shape: an object whose every
+    value is an object carrying a node's own bookkeeping keys. An empty object qualifies — that is an empty
+    forest, which is exactly what a fresh datastore holds.
+    """
+    try:
+        with open(path, "r", encoding="utf-8") as json_file:
+            content = json.load(json_file)
+    except (OSError, ValueError):  # unreadable, or not JSON at all
+        return False
+    if not isinstance(content, dict):
+        return False
+    return all(isinstance(node, dict) and "id" in node and "data" in node
+               for node in content.values())
+
 # --------------------------------------------------------------------------------
 # Sidecar GC configuration
 
@@ -249,6 +277,26 @@ def load(llm_settings: env,
         state = {}
     else:
         logger.info(f"load: Loaded app state from '{mayberel_state_file}' (resolved to '{state_file}').")
+
+    # Adopt a pre-0.2.9 datastore, which was called `data.json` before the default was renamed to say what
+    # is in it. Only when the configured file is absent, so this never overwrites a datastore, and it takes
+    # the sidecar directory along — moving the JSON alone would leave every attachment behind, still named
+    # by payloads that could no longer find it.
+    if not datastore_file.exists():
+        legacy_datastore_file = datastore_file.parent / _LEGACY_DATASTORE_FILENAME
+        if legacy_datastore_file.is_file() and not _looks_like_a_chat_datastore(legacy_datastore_file):
+            logger.info(f"load: '{legacy_datastore_file}' is not a chat datastore, leaving it alone.")
+            legacy_datastore_file = datastore_file  # `rename_datastore` no-ops on this, so nothing moves
+        try:
+            if chattree.rename_datastore(legacy_datastore_file, datastore_file):
+                logger.info(f"load: Adopted pre-0.2.9 datastore '{legacy_datastore_file}' as '{datastore_file}'.")
+        except OSError as exc:
+            # Not fatal: `rename_datastore` rolls back before raising, so what is on disk is the layout we
+            # started with, and the app opening on an empty chat leaves it that way. Crashing here would
+            # not improve on that, and it would make a failed *rename* look like lost history.
+            logger.error(f"load: Could not adopt pre-0.2.9 datastore '{legacy_datastore_file}' as '{datastore_file}'; "
+                         f"starting from an empty chat instead. Renaming it by hand fixes this — take its sidecar "
+                         f"directory along. Reason {type(exc)}: {exc}")
 
     # Load datastore
     datastore = chattree.PersistentForest(datastore_file, autosave=autosave,  # This autoloads; auto-persists iff autosave.

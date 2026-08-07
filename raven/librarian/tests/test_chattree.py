@@ -1,9 +1,11 @@
 """Unit tests for raven.librarian.chattree (Forest and PersistentForest)."""
 
+import json
 import pathlib
 
 import pytest
 
+from raven.librarian import chattree
 from raven.librarian.chattree import Forest, PersistentForest
 
 
@@ -661,13 +663,125 @@ def _refs_from_sidecars_list(payload):
     return set(payload.get("sidecars", []))
 
 
+def _write_datastore(path, nodes=None):
+    """Write a minimal valid datastore file, so a migration has something real to move."""
+    path.write_text(json.dumps(nodes if nodes is not None else {}), encoding="utf-8")
+    return path
+
+
+class TestLegacySidecarDirMigration:
+    """`<datastore>.images/` became `<datastore>.sidecars/`; the old name predates documents being storable.
+
+    The rename happens on load, in place. What makes it worth pinning is that getting it wrong is silent:
+    payloads reference sidecars by *filename*, so a directory left behind under the old name produces
+    attachments that resolve to a name and not to a file — visible only when someone opens an old chat.
+    """
+
+    def test_an_old_directory_is_renamed_on_load(self, tmp_path):
+        datastore_file = _write_datastore(tmp_path / "chat.json")
+        old_dir = tmp_path / ("chat" + chattree.LEGACY_SIDECAR_SUFFIX)
+        old_dir.mkdir()
+        (old_dir / "abc.png").write_bytes(b"payload")
+
+        pf = PersistentForest(datastore_file, autosave=False)
+        assert not old_dir.exists()
+        assert pf.sidecar_dir.name == "chat" + chattree.SIDECAR_SUFFIX
+        assert pf.read_sidecar("abc.png") == b"payload"  # the file came across, not just the directory
+
+    def test_a_current_directory_is_left_alone(self, tmp_path):
+        datastore_file = _write_datastore(tmp_path / "chat.json")
+        (tmp_path / ("chat" + chattree.SIDECAR_SUFFIX)).mkdir()
+        (tmp_path / ("chat" + chattree.LEGACY_SIDECAR_SUFFIX)).mkdir()
+
+        PersistentForest(datastore_file, autosave=False)
+        # Both present means someone has two directories and only one of them is ours; merging them is not
+        # this migration's business, so the current one wins and the old one is left for a human to look at.
+        assert (tmp_path / ("chat" + chattree.SIDECAR_SUFFIX)).is_dir()
+        assert (tmp_path / ("chat" + chattree.LEGACY_SIDECAR_SUFFIX)).is_dir()
+
+    def test_no_directory_at_all_is_not_an_error(self, tmp_path):
+        # The overwhelmingly common case: a fresh datastore with nothing attached yet.
+        pf = PersistentForest(_write_datastore(tmp_path / "chat.json"), autosave=False)
+        assert not pf.sidecar_dir.exists()
+
+
+class TestRenameDatastore:
+    """Renaming a datastore has to take its sidecar directory with it, or the attachments are stranded."""
+
+    def test_the_pair_moves_together(self, tmp_path):
+        old_file = _write_datastore(tmp_path / "data.json")
+        old_dir = tmp_path / ("data" + chattree.SIDECAR_SUFFIX)
+        old_dir.mkdir()
+        (old_dir / "abc.png").write_bytes(b"payload")
+
+        assert chattree.rename_datastore(old_file, tmp_path / "chat.json") is True
+        assert not old_file.exists() and not old_dir.exists()
+        assert (tmp_path / "chat.json").is_file()
+        assert (tmp_path / ("chat" + chattree.SIDECAR_SUFFIX) / "abc.png").read_bytes() == b"payload"
+
+    def test_a_legacy_sidecar_directory_moves_too(self, tmp_path):
+        # A datastore that predates *both* renames: it must survive being moved and then migrated.
+        old_file = _write_datastore(tmp_path / "data.json")
+        (tmp_path / ("data" + chattree.LEGACY_SIDECAR_SUFFIX)).mkdir()
+        (tmp_path / ("data" + chattree.LEGACY_SIDECAR_SUFFIX) / "abc.png").write_bytes(b"payload")
+
+        chattree.rename_datastore(old_file, tmp_path / "chat.json")
+        assert (tmp_path / ("chat" + chattree.LEGACY_SIDECAR_SUFFIX)).is_dir()
+        # ...and the suffix migration then completes the job on load.
+        pf = PersistentForest(tmp_path / "chat.json", autosave=False)
+        assert pf.read_sidecar("abc.png") == b"payload"
+
+    def test_an_existing_target_is_never_overwritten(self, tmp_path):
+        old_file = _write_datastore(tmp_path / "data.json", {"old": {}})
+        new_file = _write_datastore(tmp_path / "chat.json", {"new": {}})
+        assert chattree.rename_datastore(old_file, new_file) is False
+        assert json.loads(new_file.read_text(encoding="utf-8")) == {"new": {}}
+        assert old_file.is_file()
+
+    def test_a_missing_source_is_not_an_error(self, tmp_path):
+        assert chattree.rename_datastore(tmp_path / "nope.json", tmp_path / "chat.json") is False
+
+    def test_renaming_onto_itself_does_nothing(self, tmp_path):
+        same = _write_datastore(tmp_path / "chat.json")
+        assert chattree.rename_datastore(same, same) is False
+        assert same.is_file()
+
+    def test_a_failure_moving_the_file_puts_the_directory_back(self, monkeypatch, tmp_path):
+        """The halfway state is the one that silently strands attachments, so it must not survive.
+
+        A sidecar directory is found by *deriving* its name from the datastore's, with nothing recording
+        where it actually went — so a datastore left under its old name beside a directory moved to the new
+        one looks, to every later reader, like a chat whose attachments were deleted.
+        """
+        old_file = _write_datastore(tmp_path / "data.json")
+        old_dir = tmp_path / ("data" + chattree.SIDECAR_SUFFIX)
+        old_dir.mkdir()
+        (old_dir / "abc.png").write_bytes(b"payload")
+
+        real_rename = pathlib.Path.rename
+
+        def rename_but_not_the_json(self, target):
+            if self.suffix == ".json":
+                raise OSError("nope")
+            return real_rename(self, target)
+
+        monkeypatch.setattr(pathlib.Path, "rename", rename_but_not_the_json)
+
+        with pytest.raises(OSError):
+            chattree.rename_datastore(old_file, tmp_path / "chat.json")
+
+        assert old_file.is_file()
+        assert (old_dir / "abc.png").read_bytes() == b"payload"
+        assert not (tmp_path / ("chat" + chattree.SIDECAR_SUFFIX)).exists()
+
+
 class TestSidecarStorage:
     def test_store_read_roundtrip(self, tmp_path):
         pf = PersistentForest(tmp_path / "chat.json", autosave=False)
         name = pf.store_sidecar(b"hello-bytes", "png")
         assert name.endswith(".png")
         assert pf.read_sidecar(name) == b"hello-bytes"
-        assert pf.sidecar_dir.name == "chat.images"
+        assert pf.sidecar_dir.name == "chat" + chattree.SIDECAR_SUFFIX
 
     def test_store_is_content_addressed_dedup(self, tmp_path):
         pf = PersistentForest(tmp_path / "chat.json", autosave=False)

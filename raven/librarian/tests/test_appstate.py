@@ -13,7 +13,7 @@ from raven.librarian import appstate, chattree, chatutil
 # ---------------------------------------------------------------------------
 
 def _load(tmp_path, llm_settings, *,
-          datastore_name="data.json",
+          datastore_name="chat.json",
           state_name="state.json",
           state_contents=None,
           autosave=False,
@@ -40,6 +40,63 @@ def _load(tmp_path, llm_settings, *,
         datastore.save()
         appstate.save(state_path, state)
     return datastore, state, datastore_path, state_path
+
+
+# ---------------------------------------------------------------------------
+# Adopting a pre-0.2.9 datastore filename
+# ---------------------------------------------------------------------------
+
+class TestLegacyDatastoreFilenameAdoption:
+    """The chat datastore's default name became `chat.json`, so an upgraded install has its history under
+    the old one. Not adopting it would present the user with an empty chat and no indication why."""
+
+    def _seed_legacy(self, tmp_path, llm_settings):
+        """Write a `data.json` with one identifiable node, plus a sidecar, as an old install would have."""
+        legacy_path = tmp_path / appstate._LEGACY_DATASTORE_FILENAME
+        seed = chattree.PersistentForest(legacy_path, autosave=False)
+        node_id = seed.create_node(payload={"message": {"role": "system",
+                                                        "content": [{"type": "text", "text": "seeded"}],
+                                                        "tool_calls": []},
+                                            "general_metadata": {"persona": None}},
+                                   parent_id=None)
+        sidecar_name = seed.store_sidecar(b"payload", "png")
+        seed.save()
+        return legacy_path, node_id, sidecar_name
+
+    def test_an_old_datastore_is_adopted_with_its_sidecars(self, tmp_path, llm_settings):
+        legacy_path, node_id, sidecar_name = self._seed_legacy(tmp_path, llm_settings)
+        datastore, _, datastore_path, _ = _load(tmp_path, llm_settings)
+
+        assert not legacy_path.exists()
+        assert datastore_path.name == "chat.json"
+        assert node_id in datastore.nodes  # the history came across, not just an empty file
+        assert datastore.read_sidecar(sidecar_name) == b"payload"
+
+    def test_an_existing_datastore_is_not_replaced_by_an_old_one(self, tmp_path, llm_settings):
+        """Both files present means the user has already run a new build; the old one is a leftover.
+
+        Adopting it would silently roll their history back to whenever they last ran the old version. Note
+        the ordering: the new datastore has to exist *first*, or the first load simply adopts the old one,
+        which is the case above rather than this one.
+        """
+        _load(tmp_path, llm_settings)  # creates and persists chat.json
+        legacy_path, legacy_node_id, _ = self._seed_legacy(tmp_path, llm_settings)
+
+        datastore, _, _, _ = _load(tmp_path, llm_settings)
+        assert legacy_node_id not in datastore.nodes
+        assert legacy_path.is_file()  # left alone for the user to deal with, not deleted
+
+    def test_a_file_that_is_not_a_datastore_is_left_alone(self, tmp_path, llm_settings):
+        """`data.json` is a generic name, and the file is looked for beside the *configured* datastore —
+        which a user may have pointed at a directory of their own. Claiming a stranger's `data.json` would
+        take it away from whatever actually owned it, and Raven would be none the wiser."""
+        someone_elses = tmp_path / appstate._LEGACY_DATASTORE_FILENAME
+        someone_elses.write_text(json.dumps({"settings": {"theme": "dark"}}), encoding="utf-8")
+
+        datastore, _, datastore_path, _ = _load(tmp_path, llm_settings)
+        assert someone_elses.is_file()
+        assert json.loads(someone_elses.read_text(encoding="utf-8")) == {"settings": {"theme": "dark"}}
+        assert datastore_path.is_file()  # and Raven started normally, on a datastore of its own
 
 
 # ---------------------------------------------------------------------------

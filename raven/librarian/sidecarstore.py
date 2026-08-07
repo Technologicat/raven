@@ -1,7 +1,7 @@
 """Shared foundation for the Librarian's per-kind attachment sidecar stores (`imagestore`, `textfilestore`).
 
 An attachment to a chat message — an image or a document — is stored as a *sidecar file* next to the chat
-datastore JSON (content-addressed, in `<datastore>.images/`, managed by `chattree.PersistentForest`), and
+datastore JSON (content-addressed, in `<datastore>.sidecars/`, managed by `chattree.PersistentForest`), and
 referenced from the message by a Raven-internal `sidecar:<filename>` URL. Two kind-specific modules build on
 this: `imagestore` (images, resolved to `data:` URLs for the wire) and `textfilestore` (documents, resolved to
 extracted plaintext). They differ in transform, content-part shape, and wire resolution, but share the

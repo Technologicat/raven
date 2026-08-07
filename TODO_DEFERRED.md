@@ -608,7 +608,7 @@ happens to be filtered to orphans. Point the same machinery at `list_sidecar_fil
 `list_unreferenced_sidecars()` and it browses the whole sidecar directory. Two use cases, and the second is
 the one that recurs:
 
-- A human-readable view of `<datastore>.images/`, which a file manager cannot give: the grid shows titles
+- A human-readable view of `<datastore>.sidecars/`, which a file manager cannot give: the grid shows titles
   rather than SHA-256 filenames, and folds a downscaled image and its preserved original into one item.
 - *"I'm sure I attached paper X at some point, but which chat was it?"* — which the file manager cannot
   answer at all.
@@ -675,24 +675,6 @@ commit) does not belong on a browse-everything window, so the likely answer is t
 shared grid widget rather than one dialog with a filter dropdown.
 
 Raised by Juha (2026-07-29), right after the cleanup dialog landed.
-
-## The attachment sidecar directory is called `<datastore>.images/`
-
-The name dates from when images were the only kind of attachment; it now also holds PDFs and text documents,
-and will hold office formats. It reads as "this was not thought out in advance", and it costs discoverability
-for anyone poking around the datastore looking for *attachments*.
-
-`chattree.py`'s comment above `_get_sidecar_dir` argues for keeping it: renaming would strand the sidecars of
-every existing datastore, and it is a directory name rather than a description. The first half is the real
-objection, and it is answerable — a rename-if-present at load time is a small, one-shot migration. Note it
-does not fit in `_upgrade`, which migrates the loaded *nodes* dict and knows nothing about the filesystem, so
-it needs its own step in the load path (and the payloads need no change at all: `sidecar:<filename>` URLs
-name the file, not the directory).
-
-Worth doing together with the browser item above, since that one puts the directory in front of users for the
-first time.
-
-Raised by Juha (2026-07-29), while finishing brief 03.
 
 ## Move the avatar backdrop onto `image.utils.fit_cover`
 

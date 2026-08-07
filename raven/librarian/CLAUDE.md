@@ -110,14 +110,14 @@ Everything sits under `librarian_config.llmclient_userdata_dir` — `~/.config/r
 
 | Path | What |
 |---|---|
-| `data.json` | the chat node datastore (`chattree.PersistentForest`) |
-| `data.images/` | attachment sidecars for that datastore — content-addressed `<sha256>.<ext>` plus `<file>.meta.json` descriptions. Derived from the datastore filename via `with_suffix(".images")`, so it tracks whatever the datastore is called. The name is historical; it holds documents too |
+| `chat.json` | the chat node datastore (`chattree.PersistentForest`). Was `data.json` before 0.2.9; `appstate.load` adopts a file by that name if the configured one is absent *and* the file reads as a forest — the old name is generic enough that going by the name alone would claim a stranger's file |
+| `chat.sidecars/` | attachment sidecars for that datastore — content-addressed `<sha256>.<ext>` plus `<file>.meta.json` descriptions. Derived from the datastore filename via `with_suffix(chattree.SIDECAR_SUFFIX)`, so it tracks whatever the datastore is called, which is what keeps two datastores' sidecars apart and therefore the GC correct. Was `.images/`, from when images were the only attachment kind; `PersistentForest` renames it on load |
 | `state.json` | app state — HEAD, the system-prompt/greeting node IDs, toggle states |
 | `documents/` | the docs-DB drop folder (`llm_docs_dir`); files landing here are ingested into RAG |
 | `rag_index/` | the built RAG index (`llm_database_dir`) |
 | `api_key.txt` | optional; used if present |
 
-**`data.json`'s on-disk shape is a flat mapping of node ID → node, with no wrapper key.** Not `{"nodes": {...}}` — the top level *is* the node dict, even though the in-memory attribute is `PersistentForest.nodes`. Node IDs look like `gensym#forest-node:<uuid>`. Within a node, `node["data"]` maps revision → payload, so a script that wants "the message" has to pick a revision (or iterate all of them, which is what the sidecar GC mark phase does). Worth knowing before writing any ad-hoc script against the file: assuming a `"nodes"` key silently yields zero nodes rather than an error.
+**`chat.json`'s on-disk shape is a flat mapping of node ID → node, with no wrapper key.** Not `{"nodes": {...}}` — the top level *is* the node dict, even though the in-memory attribute is `PersistentForest.nodes`. Node IDs look like `gensym#forest-node:<uuid>`. Within a node, `node["data"]` maps revision → payload, so a script that wants "the message" has to pick a revision (or iterate all of them, which is what the sidecar GC mark phase does). Worth knowing before writing any ad-hoc script against the file: assuming a `"nodes"` key silently yields zero nodes rather than an error.
 
 ## Hybrid RAG
 - Semantic: ChromaDB embeddings

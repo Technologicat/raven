@@ -1,7 +1,7 @@
 """Image sidecar lifecycle for Librarian chat messages: store, resolve for the wire, and GC.
 
 When a vision-capable model is loaded, the user can attach images to a message. An attached image is stored
-as a *sidecar file* next to the chat datastore JSON (in `<datastore>.images/`, managed by
+as a *sidecar file* next to the chat datastore JSON (in `<datastore>.sidecars/`, managed by
 `chattree.PersistentForest`), and referenced from the message by a Raven-internal `sidecar:<filename>` URL. No
 `https://` URL ever lands in a stored datastore, so a saved chat reloads without network access, survives the
 source going away (link rot), and never phones home when reopened.
