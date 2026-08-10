@@ -60,6 +60,7 @@ with timer() as tim:
     from ..common.gui import helpcard
     from ..common.gui import animation as gui_animation
     from ..common.gui import messagebox
+    from ..common.gui import filedrop
     from ..vendor import DearPyGui_Markdown as dpg_markdown
     from ..vendor.file_dialog.fdialog import FileDialog
 
@@ -833,6 +834,16 @@ def main() -> int:
     dpg.set_viewport_resize_callback(_resize_gui)
     dpg.set_exit_callback(_gui_shutdown)
     dpg.show_viewport()
+
+    # Accept graph files dragged in from the file manager, same effect as the open dialog. This goes right
+    # after `show_viewport` because that call is what makes DPG's window reachable through GLFW on this
+    # thread; earlier, or from anywhere else, the handle is not there to install against.
+    filedrop.install(filedrop.make_router([filedrop.DropRule(matches=filedrop.by_extension(".xdot", ".dot", ".gv"),
+                                                             handler=lambda paths: _open_file(paths[0]),
+                                                             label="a graph file (.dot, .xdot, .gv)",
+                                                             multiple=False)],
+                                          reference_window="main_window",  # tag
+                                          what="Raven-xdot-viewer"))
 
     # Defer initial file load to a frame callback so the render loop is
     # running — this lets _show_error display modal dialogs if loading fails.
