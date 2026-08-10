@@ -34,22 +34,28 @@ everything else could slip past September without anything breaking.
    mechanical sweep for stale items against a brief Juha will supply, then a human-review pass over what
    survives. It goes first because the pile is what makes everything after it hard to see, and because the
    sweep's whole point is that a backlog nobody can read end to end is not a queue.
-2. **Then OS-independent file-manager drag-and-drop, ASAP.** Not in this folder and not in any brief — it
-   lives in `TODO_DEFERRED.md`, "OS drag-and-drop of files into DPG apps", with the probe and the measured
-   result in `investigations/dpg-dnd/`. Two reasons, and **the exhibit is not one of them** — by the test
-   above, a visitor in one sitting is not dragging files out of a file manager either:
-   - **The 2026-08-07 probe collapsed its cost.** The platform work is already inside the GLFW that DPG
-     links, so this is wiring rather than building.
+2. ~~**Then OS-independent file-manager drag-and-drop, ASAP.**~~ **Shipped 2026-08-10**, in all six GUI
+   apps, as `raven.common.gui.filedrop`. Measurements and the two probes are in `investigations/dpg-dnd/`.
+   It went in for two reasons, and **the exhibit was not one of them** — by the test above, a visitor in
+   one sitting is not dragging files out of a file manager either:
+   - **The 2026-08-07 probe collapsed its cost.** The platform work was already inside the GLFW that DPG
+     links, so this was wiring rather than building.
    - **It is a power multiplier for our own testing**, which is where the gesture actually happens dozens of
      times a day: feeding corpora in, attaching a file to check a render, driving the GUI by hand. The
-     `FileDialog` is currently the sole entry path for all of it, which is also why that picker has
-     accumulated its own pile of deferred improvements.
+     `FileDialog` was the sole entry path for all of it, which is also why that picker has accumulated its
+     own pile of deferred improvements.
+     - **The part that only shows up in use** (Juha, on the day it shipped): the file manager *holds its
+       place across app restarts*, and the dialog does not. Restarting an app twenty times to check one
+       change means re-navigating to the same folder twenty times — so the saving is not one gesture per
+       open, it is the whole navigation, every restart. That also means the `FileDialog` improvements stay
+       worth doing rather than being made redundant by this: the dialog is still the path whenever the
+       file is *not* already on screen somewhere.
 3. **Then the exhibit briefs**: 16, then `crt-display`, with `atmospheric-dust` as slack.
 
 ### Two of these are power multipliers, and it is worth naming the category
 
-Drag-and-drop and **15** are not features for end users at all. They are tooling that multiplies the
-*builders'* throughput, and they are ranked accordingly rather than by user-visible value. Since review is
+Drag-and-drop (shipped 2026-08-10) and **15** are not features for end users at all. They are tooling that
+multiplies the *builders'* throughput, and they are ranked accordingly rather than by user-visible value. Since review is
 the binding constraint on this project (see the root `CLAUDE.md`, "Who develops Raven"), anything that
 raises how much can be built and checked per session competes directly with feature work rather than
 sitting beneath it.
