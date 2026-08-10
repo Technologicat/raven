@@ -101,7 +101,9 @@ with timer() as tim:
     from ...common.gui import animation as gui_animation  # Raven's GUI animation system, nothing to do with the AI avatar.
     from ...common.gui import helpcard
     from ...common.gui import messagebox
+    from ...common.gui import filedrop
     from ...common.gui import utils as guiutils
+    from ...common.image import codec
     from ...vendor import DearPyGui_Markdown as dpg_markdown  # https://github.com/IvanNazaruk/DearPyGui-Markdown
     from ...common.hfutil import maybe_install_models
     from ...common.running_average import RunningAverage
@@ -1520,6 +1522,26 @@ dpg.set_exit_callback(shutdown)
 dpg.set_primary_window(gui_instance.window, True)  # Make this DPG "window" occupy the whole OS window (DPG "viewport").
 dpg.set_viewport_vsync(True)
 dpg.show_viewport()
+
+# Accept a character image or emotion templates dragged in from the file manager, same effect as the open
+# dialogs. Installed right after `show_viewport` because that call is what makes DPG's window reachable
+# through GLFW on this thread.
+#
+# The character rule tests for an alpha channel rather than for an image extension, because that is what the
+# loader requires — `avatarutil.torch_load_rgba_image` rejects an image without one. So a photo dropped here
+# lands in the rejection dialog naming what this app takes, instead of in a traceback from the loader.
+filedrop.install(filedrop.make_router([filedrop.DropRule(matches=filedrop.all_of(filedrop.by_extension(*codec.IMAGE_EXTENSIONS),
+                                                                                 codec.has_alpha_channel),
+                                                         handler=lambda paths: gui_instance.load_image(paths[0]),
+                                                         label="a character image (PNG with an alpha channel)",
+                                                         multiple=False),
+                                       filedrop.DropRule(matches=filedrop.by_extension(".json"),
+                                                         handler=lambda paths: gui_instance.load_json(paths[0]),
+                                                         label="emotion templates (.json)",
+                                                         multiple=False)],
+                                      reference_window="pose_editor_window",  # tag
+                                      what="Raven-avatar-pose-editor",
+                                      blocked=is_any_modal_window_visible))
 
 initialize_filedialogs()
 
