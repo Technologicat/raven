@@ -69,6 +69,21 @@ The cap comes from `kokoro` (Kokoro TTS) and its phonemizer `misaki`, which curr
 - **(a)** Kokoro/Misaki upstream expand their supported Python range — in which case we just bump `requires-python` and widen the CI matrix.
 - **(b)** If those projects look dead after a reasonable wait, we vendor both. Kokoro is the TTS engine, Misaki is its English phonemizer; together they're self-contained enough to be absorbed into `raven/vendor/` alongside `tha3/`, `DearPyGui_Markdown/`, etc.
 
+**(c)** was added 2026-08-10, and is the branch to reach for if the synthesizers move on: replace Kokoro. The
+constraint that pins us to it is *lipsync* — the avatar needs timestamped words plus per-word phonemes, from
+which timestamped phonemes interpolate linearly, and few engines expose that. There is an audio-analysis route
+to the same data from plain synthesized speech, which would make the engine choice free. So: (a) upstream
+widens, (b) we vendor, (c) we pivot the engine once something is materially better and the analysis route is
+built.
+
+**The deadline is October 2028, when Python 3.12 goes EOL** — and there are now *two* items on that clock, not
+one. Kokoro caps the Python version outright. `torchaudio` caps the *torch* version: its latest release is
+2.11.0 (2026-03-23), it skipped both torch 2.12.0 and 2.13.0 while torchvision shipped same-day with each, and
+`raven.common.audio.resample` is its only user. Decision 2026-08-10: **keep both and re-check later.** Two
+years is enough time to build an alternative from whatever parts exist then, and charting the risk in advance
+is what keeps it a plan rather than an emergency. What would make it urgent is either project going visibly
+dead, or a synthesizer worth switching to arriving first.
+
 Until one of those branches lands, **don't add `3.13`/`3.14` to the CI matrix** — it would fail at dependency resolution time. The test CI currently works around this by using `pip install -e . --no-deps` and hand-picking a minimal dependency subset for the test suite, which avoids pulling in kokoro/misaki at all. That's how the test matrix can stay lightweight even though kokoro lives in the full `[project] dependencies`.
 
 ### `source env.sh` too, not just the venv

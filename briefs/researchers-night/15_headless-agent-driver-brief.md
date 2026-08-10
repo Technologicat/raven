@@ -191,6 +191,11 @@ asks for), collect the reasoning that never reached `content`, find the reply. T
 of a turn, it is written out longhand each time, differently, and the round-versus-call distinction has been
 got wrong at least once. Returning it removes the walk and fixes the distinction in one place.
 
+**Start from `rag_live_corpus`'s copy, which is the one that gets it right.** Its `tool_calls` dict and
+`rounds` counter implement exactly the distinction settled above, and it says so in an inline comment — "a
+*round* is one assistant message asking for tools, however many it asks for". So Part B is largely lifting a
+working implementation into a returned record, not designing one; the other copies are what it should replace.
+
 Two things the record must cover that are awkward today:
 
 - **The prompt.** The wire history is reachable only through `on_prompt_ready`, so a script that wants to
