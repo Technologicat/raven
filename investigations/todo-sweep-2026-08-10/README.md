@@ -4,9 +4,11 @@
 to `TODO_DEFERRED.md`.** The triage discussion consumes this file; heading text is verbatim, so it joins
 against the deferred file and the cluster map.
 
-**Status: partial. 102 of 130 items carry a verdict**, and one more (torch/torchaudio) has been through the
-sweep and is explicitly recorded as still unchecked. The remaining 27 are unchecked, not confirmed — see
-"Coverage" below, which says plainly what that means for the discussion.
+**Status: complete. All 130 items carry a verdict**, except one (torch/torchaudio) which has been through the
+sweep and is recorded as unchecked on purpose — it needs a fresh install nobody has done.
+
+**Tally: 112 CONFIRMED, 9 STALE, 6 MOVED, 2 SUPERSEDED, 1 unchecked.** Four CONFIRMEDs carry a disposition
+rather than only a verdict (two Declined, two Waiting-on-upstream), and four pairs want merging.
 
 It is a directory rather than the single file the brief named, because it came with a script, and this repo
 keeps an artifact with what produced it.
@@ -16,6 +18,7 @@ keeps an artifact with what produced it.
 | Script | What it answers |
 |---|---|
 | `check_references.py` | Which items name a file or symbol that no longer exists anywhere in the tree. Cheap evidence for MOVED and STALE, gathered for all 130 items at once. Re-runnable; run it again before the discussion pass. |
+| `markdown_block_probe.py` | Why block-level Markdown — headings, fenced code, tables — never renders in Librarian's chat view, when the vendored renderer supports two of the three. Settles three items at once and corrects two verdicts this sweep had already recorded. |
 
 An earlier version of that script resolved bare basenames against the repo root and reported 43 items as
 broken. Nearly all were false — `config.py` and `app.py` exist in plenty of places, just not at the root.
@@ -176,6 +179,87 @@ documentation bugs rather than sweep verdicts, recorded here because this is whe
 backend is named as text-generation-webui when it is LM Studio, and the recommended model is given as
 Qwen3-VL, a line the Qwen 3.5 consolidation of the VL series into the main line has overtaken.
 
+### Batch 6 — the read-carefully set, and the sweep's largest finding
+
+The last 27, each read against the code it rests on. **26 CONFIRMED, 1 STALE** — and one of the CONFIRMEDs
+is confirmed as a *symptom* while its stated cause turns out to be wrong, which took two earlier verdicts of
+this very sweep down with it. See "Three items, one cause, and two verdicts I got wrong" below; the table
+rows are the short version.
+
+| Heading | Verdict | Evidence |
+|---|---|---|
+| Markdown ATX headings (`### ...`) don't render in the chat view | **CONFIRMED (symptom), cause wrong** | The item blames the vendored renderer for not mapping `<h1>`–`<h6>`. It does map them, and has since its initial commit: `parser.py:283` onward, `__init__.py:213` onward to `font_attributes.H1`–`H6`, consumed at `text_entities.py:49`. The real cause is in Raven's own code — see below. |
+| Fenced code block support in the Markdown renderer | **CONFIRMED, evidence corrected** | Batch 3 recorded "the vendored renderer has no fenced-code handling at all". **That was wrong**: `MessageEntityPre` exists (`parser.py:61`, `:215`), with its own attribute class and post-render machinery. The verdict survives, the reason does not. |
+| Markdown tables don't render in the chat view | **CONFIRMED, evidence half-corrected** | Batch 3's "likewise no table handling" holds for the renderer — `table` is genuinely the one block construct with no `case` — but it is not the *only* barrier, and fixing the renderer alone would not make tables appear. |
+| `SmoothScrolling` commits during construction | **CONFIRMED** | `__init__` still ends in `self.start()`. The class has since gained careful documentation of its teardown ordering, which makes the constructor's side effect *more* visible rather than less. |
+| Holding the chat view's scrollbar does not hold your place | **CONFIRMED** | No per-frame render-thread hook exists in `animation.py` (the classes are `Animator`, `Animation`, `Overlay`, `Dimmer`, `WidgetFlash`, `SmoothScrolling`, `PulsatingColor`, `ScrollEndFlasher`), so the item's stated prerequisite is unbuilt. Merges with the scroll-jump item per batch 5. |
+| The 8/3 pass: bare DPG margins should name themselves | **CONFIRMED**, not started | Its most concrete sub-task is untouched: the three per-app duplicate constants the item says "go away in this pass" are still defined at `cherrypick/config.py:23-25` and `xdot_viewer/config.py:7-8`. |
+| The subtitle translator silently drops `=` | **CONFIRMED** | Nothing in the translate path sanitizes, escapes or placeholders symbols. The item's own *mechanism* (out-of-vocabulary in the NMT model) stays unverified and needs a running server — the item says so, and this sweep does not close that gap. |
+| Updating the vendored FontAwesome means both files | **CONFIRMED** | `raven/vendor/IconsFontAwesome6.py` is untouched since the initial commit (`7711aef`, 2024-12-20), and the shipped `fa-*.ttf` live in `raven/fonts/`. Nothing has been regenerated, so the header/font sync the item measured still stands. |
+| The licensing story is accurate only in a subdirectory README | **CONFIRMED (mostly closed)** | The item ranks its three gaps "in rising order of consequence" and **the worst one is fixed**: `pyproject.toml:29` now declares the full expression `BSD-2-Clause AND AGPL-3.0-only AND MIT AND Apache-2.0 AND LGPL-3.0-or-later`, with an explicit `license-files` list and a comment explaining why it is listed rather than globbed. What remains is the two cosmetic halves — `LICENSE.md` is still bare BSD, `README.md:735` still reads only "[2-clause BSD](LICENSE.md)." |
+| FileDialog: reduce per-use-site boilerplate | **CONFIRMED** | No wrapper helpers in `common/gui/`; 16 `FileDialog(` construction sites across six apps. |
+| Librarian's help card has no room to describe attachments | **CONFIRMED** | `helpcard.py:208` is still `no_scrollbar=True`, so the shape decision the item identifies as the real question is still open. |
+| Audit unnamed lambdas | **CONFIRMED**, half-started | `namelambda` is used five times, all in `cherrypick/app.py` — which has 12 lambdas. `xdot_viewer/app.py`, the item's other named starting point, has one and it is unnamed. |
+| Consolidate remaining numpy/tensor/DPG image conversions | **CONFIRMED**, but it is a note | The four sites are unchanged, and the item already concludes that each has an intentional difference and that the remaining gain is single-source-of-truth rather than code reduction. It ends "revisit if the avatar pipeline is ever refactored" — a standing note with a trigger, which is the `Waiting on upstream` shape rather than a task. |
+| DearPyGui_Markdown inline-code background boxes are stranded | **CONFIRMED** | `text_attributes.py` still captures absolute position via `get_item_pos` at five sites, which is the mechanism the item names. |
+| Emoji support in the Markdown renderer | **CONFIRMED** | `raven/fonts/` carries Inter Tight, Open Sans and the two FontAwesome faces — no emoji font of either kind the item proposes. |
+| Librarian: in-flight AI turn bleeds into a new chat | **CONFIRMED** | No branch-identity capture anywhere in `raven/librarian/`, so neither half of the fix the item specifies has landed. |
+| Streaming thinking shows as gray for models that pre-fill `<think>` | **CONFIRMED** | The parser still starts in `_PS_TEXT` (`llmclient.py:1466`) and transitions only on an opening tag. It has since gained Gemma's channel form as an additional *open* spelling, which does not help the pre-filled case — there is still no open tag to see. |
+| webfetch local (client-side) mode | **CONFIRMED**, prerequisite verified unmet | The item makes itself conditional on a clean-room BSD Selenium driver factory. There is no `raven/common/webdriver.py`, and `server/modules/webfetch.py:298` still calls `websearch.get_driver()` — so the would-be-BSD component still routes through the AGPL module, exactly as the item describes. |
+| Render the streaming thinking trace inside a bubble from the start | **CONFIRMED** | `DPGStreamingChatMessage` (`chat_controller.py:1743`) has no thought-bubble container; the shape change on completion remains. |
+| Keyboard-layout-aware positional hotkeys across the fleet | **CONFIRMED** | WASD is hardcoded in `cherrypick/app.py`; no layout option in any config and no detection on any platform. |
+| Fleet audit: every hotkey discoverable in a tooltip + help card | **CONFIRMED** | The policy is in `raven-style-guide.md` as the item says; the per-key audit it asks for has produced no artifact. |
+| Make the Librarian chat composer text field resizable | **CONFIRMED** | `chat_field_h` is a fixed config value, applied at `app.py:737` and reconfigured at `:358`/`:361` only to make room for the attachment strip. |
+| Attach an image from a web URL (paste-URL path) | **CONFIRMED** | `paste_url` occurs only in two docstrings and one test. Nothing emits it, so the storage layer's branch is still unreachable — which is precisely the item's claim. |
+| No way for the user to attach a document from a URL | **CONFIRMED** | Same evidence, same missing pathway. **Sibling of the row above**: two items, one absent affordance, differing only in what gets fetched. Worth merging or at least cross-linking. |
+| Spreadsheets in the docs DB and attachments | **CONFIRMED** | No `.xlsx`/`.ods` handling in `docextract`. The design now lives in `briefs/spreadsheet-ingestion-brief.md`, rehomed earlier in this sweep. |
+| A fetched web page is budgeted as a user attachment | **CONFIRMED**, verified at both ends | `fetch_document_wrapper` applies the per-fetch ceiling (`budget_for_fetched_text`, called at `llmclient.py:444`); `webfetch_wrapper` never calls it and routes to the sidecar/attachment path instead. The asymmetry the item describes is exactly what the code does. |
+| A clickable chip in the chat log gives no hover cue | **CONFIRMED** | `_make_clickable` (`chat_controller.py:701`) registers a click handler; no `is_item_hovered` anywhere in the module, so there is no visual cue of either kind the item proposes. |
+| Ligature mojibake in PDF-extracted text | **CONFIRMED** | No ligature repair in `docextract` or `normalize`; `briefs/ligature-repair-brief.md` says "designed, not started". (The `ligature` hits in `common/tests/test_utils.py` are the BibTeX importer's LaTeX accents — a different problem that a grep will offer you.) |
+| Tokenization is dominated by per-call overhead | **STALE** | Done since filing. `_tokenize_many` batches (`hybridir.py:597`), `_tokenize` is now a one-element wrapper over it (`:595`), and the commit loop passes a whole batch: `self._tokenize_many([chunk["text"] for chunk in batch])` (`:955`). Filed 2026-08-06 and fixed within days — the ninth STALE, and the ninth to sit in what recent work touched. |
+
+#### Three items, one cause, and two verdicts I got wrong
+
+`markdown_block_probe.py` in this directory establishes the following, and prints it in three steps.
+
+**The chat view puts two independent barriers in front of block-level Markdown, and the renderer is behind
+both of them.**
+
+- `chat_controller._render_text` wraps every paragraph as `<font color='...'>{text}</font>` *before* handing
+  it to the renderer. With the open tag on the same line as the content, CommonMark makes the whole thing an
+  ordinary paragraph containing inline raw HTML — and an ATX heading is a block construct, which cannot occur
+  inside a paragraph. Measured: `<font color='...'>### A heading</font>` renders as
+  `<p><font ...>### A heading</font></p>`, with the `#` markers intact. That *is* the reported symptom, and
+  it is produced by Raven's own code rather than by the vendored renderer.
+- `chat_controller._render_text_paragraphs` splits the message on **single** newlines (`:1530`) and renders
+  each line as its own call, so a construct spanning lines — a fenced block, a table — cannot form even
+  before the wrapper applies.
+
+Why inline formatting looks fine throughout: `**bold**`, `*italic*` and `` `code` `` are *inline* constructs,
+and inline constructs are unaffected by both barriers. The chat view therefore renders almost everything
+correctly, which is what makes "the renderer must not support headings" the natural conclusion.
+
+**The consequences for the file are bigger than one corrected diagnosis:**
+
+- The three items are one item plus a footnote. Fixing the renderer's missing `table` case — the only genuine
+  renderer gap of the three — would change nothing visible until the chat view stops splitting and wrapping.
+- The fix is one decision, not three features: give the renderer whole blocks and colour them by some means
+  other than wrapping the source. That is worth a brief, and it is a considerably smaller job than "implement
+  headings, fenced code and tables".
+
+**And two batch-3 verdicts were reached on false evidence.** Both survive as verdicts and neither would have
+survived as reasoning. The fenced-code row said the renderer "has no fenced-code handling at all" when
+`MessageEntityPre` was right there; the table row said "likewise no table handling", which is true but not the
+operative reason. The cause in both cases was the same: I grepped for *Markdown* vocabulary (`fenced`,
+` ``` `, `code_block`) against a module that switches on *HTML tag names*, so the search could only have
+missed. A query that cannot succeed returns the same empty result as a query that legitimately finds nothing,
+and nothing distinguishes them in the output.
+
+That is the sweep's recurring lesson arriving for the fourth time — after the reference checker, the
+untested-modules check, and the two batch-4 near-misses — and this is its sharpest form: **an absence is only
+evidence if the search could have found the thing.** The rule that follows is cheap to apply: before
+concluding "X does not exist", confirm the query finds a *known* instance of the same shape.
+
 ## Raised for the discussion: webfetch and docextract disagree about running code
 
 Not a verdict, and not filed as an item — it surfaced while checking "HTML pages whose content is produced
@@ -211,44 +295,49 @@ false positives worth recording so the next run does not re-litigate them:
 
 ## Coverage, stated plainly
 
-**102 of 130 items have a verdict. 27 do not**, plus one recorded as unchecked on purpose. They were
-selected, not sampled: the ones today's and 0.2.8's work plausibly closed, everything the reference checker
-flagged, four batches chosen for being settleable by a query rather than by reading, and then every item that
-needed Juha rather than the tree. So the STALE rate here says nothing about the rest of the file, and **an
-item's absence from this table is not evidence that it holds.**
+**All 130 items were checked, so nothing here rests on sampling.** Final tally: **112 CONFIRMED, 9 STALE,
+6 MOVED, 2 SUPERSEDED, 1 unchecked** (torch/torchaudio, which needs a fresh install nobody has done).
 
-The selection bias runs the other way from what you might expect, and batches 3 and 4 sharpened the point.
-Batches 1 and 2 were picked partly *because* the items looked closeable, and produced six STALE. Batches 3
-and 4 were picked purely for being queryable, and produced **one** between them — the EU AI Act item, which
-was flagged as done by Juha rather than found by a query. So the stale items are not spread evenly through
-the file: they cluster in whatever recent work touched. A bulk "the old ones are probably stale" move in the
-triage would be backwards — of the seven STALE found so far, six sit in areas 0.2.8 or 0.2.9 changed.
+### What the 9 STALE are worth knowing about
 
-**The query-settleable set is exhausted, and so is the set that needed Juha.** What remains needs the item
-and the code read together.
+**They cluster in what recent work touched, and the triage should act on that rather than on age.** Batches 1
+and 2 were picked partly *because* the items looked closeable, and produced six. Batches 3, 4 and 6 were
+picked for being checkable — 58 items — and produced two between them. Of the nine, eight sit in areas 0.2.8
+or 0.2.9 changed, and the ninth (the EU AI Act item) was flagged by Juha rather than found by a query.
 
-Tally: 86 CONFIRMED (one halved, four carrying a disposition — two Declined, one Waiting-on-upstream, one a
-merge), 6 MOVED, 8 STALE, 2 SUPERSEDED, 1 explicitly unchecked.
+So a bulk "the March items are probably dead" move would be exactly backwards: **the old items are the ones
+that held.** 7% of the file was stale, which is low enough that the file's real problem is its length rather
+than its accuracy — and length is what a dehydration pass addresses, not a verification sweep.
 
-**Batch 5 also revised the estimate that produced it.** The split below predicted "~20 UNCHECKABLE from the
-tree — rendering bugs, races, reads-as-a-hang". That was too pessimistic by about a quarter: five of those
-items turned out to be settleable from code, because no fix had landed and *absence* is exactly what a grep
-can show. What actually needed a human was decisions and memory, which is a different category from the one
-the estimate named. Worth carrying into the read-carefully set: **"needs a running app" is a claim to test,
-not a property to assume** — the cheap check comes first, and it often answers.
+### What the sweep found besides verdicts
 
-### What is left, and what it will take
+Four structural results, worth more to the triage than most individual rows:
 
-Of the 27 unchecked, all need the item and the code read together. No shortcut; this is where the remaining
-time goes. The ones deferred so far, and why:
-- *Audit unnamed lambdas* and *Adopt dotted import style* — the counts (214 lambdas, 1052
-  `from X import Y`) mean nothing without knowing which instances the item considers wrong.
-- *Attach an image from a web URL* — staged attachments already carry a `provenance_url`, so part of it
-  may exist.
-- *The 8/3 pass: bare DPG margins should name themselves* — the named constants exist and have 21 call
-  sites, so this is partly done; the question is how many bare literals remain.
-- *The subtitle translator silently drops `=`*, *Librarian's help card has no room to describe
-  attachments*, *webfetch local (client-side) mode*, *Markdown ATX headings don't render*.
+- **Four pairs of items are one item each.** The two letter-drop reports cite the same sighting; the
+  scroll-jump remainder *is* the scrollbar-hold item; attach-an-image-from-a-URL and attach-a-document-from-a-URL
+  are one missing affordance; and ATX headings, fenced code and tables are one cause plus a footnote.
+- **Three items belong in sections that already exist** — two in `Declined`, and the composer-wrap and
+  numpy-conversion items in `Waiting on upstream`, both being standing notes with a trigger rather than tasks.
+- **Two items are partly done in ways their text does not say**: the licensing item's worst gap is closed,
+  and the 8/3 pass has its constants but not its sweep.
+- **One item's prose must survive its closure** — the ligature item's "why `normalize` must not be wired into
+  `docextract`" is a warning against a plausible wrong fix, and it is not obviously carried by the brief that
+  owns the design.
+
+### Two estimates this sweep made about itself, and both were wrong
+
+Recorded because the errors point the same way, and it is the useful direction.
+
+- **"~20 are UNCHECKABLE from the tree."** Too pessimistic by about a quarter: five of those turned out to be
+  settleable from code, because no fix had landed and absence is what a grep shows well. What actually needed
+  a human was *decisions and memory* — a different category from the one the estimate named.
+- **"~28 need the item and the code read together."** Right about the count and wrong about the value: that
+  batch produced the sweep's largest finding, because reading is the only thing that catches an item whose
+  *diagnosis* is wrong while its symptom is real. A query can only ever confirm or deny what the item already
+  believes.
+
+Both errors are the same error — assuming the item's own framing of what it would take. **The cheap check
+first, and read the item's claims as claims** rather than as the shape of the work.
 
 ## The untested-modules row, and two ways of getting it wrong
 
@@ -275,14 +364,22 @@ the documentation.
 That stale name is now fixed, along with three others, and the naming rule is written down in `CLAUDE.md`
 under "Naming and placing a test module" so the next rename does not leave the same trap.
 
-The brief predicted a meaningful STALE rate and explained why it is expected rather than embarrassing: many
-of these were filed during a period when the standing instruction was never to get sidetracked, so things
-were filed rather than fixed, and some were then fixed without the item being closed. Four of the five STALE
-findings above are exactly that shape.
+## The brief's prediction, and how it came out
 
-What is left is the per-item work: read the claim, find the code it rests on, check it. The unchecked 114
-skew old — the March–June items are where the yield should be, and none of those were touched here beyond
-what the reference checker saw.
+The brief predicted a meaningful STALE rate, and explained why that would be expected rather than
+embarrassing: many of these were filed during a period when the standing instruction was never to get
+sidetracked, so things were filed rather than fixed, and some were then fixed without the item being closed.
+Eight of the nine STALE findings are exactly that shape.
+
+**Its second prediction was wrong, and this report repeated it twice before the checking caught up.** The
+expectation was that the yield would be in the *old* items — "the March–June items are where the yield should
+be". It is not: the old items overwhelmingly held, and the closeable ones cluster in whatever 0.2.8 and
+0.2.9 touched. The intuition is a reasonable one (old items smell stale) and it is precisely backwards here,
+because staleness is caused by *work landing near an item*, not by time passing. An item nobody has gone near
+has had no opportunity to become false.
+
+Worth keeping for the next sweep on any project in the fleet: **check where the recent commits are, not where
+the old filings are.**
 
 ## Re-running
 
