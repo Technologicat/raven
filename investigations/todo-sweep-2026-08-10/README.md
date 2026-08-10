@@ -4,7 +4,7 @@
 to `TODO_DEFERRED.md`.** The triage discussion consumes this file; heading text is verbatim, so it joins
 against the deferred file and the cluster map.
 
-**Status: partial. 70 of 130 items carry a verdict.** The remainder are unchecked, not confirmed — see
+**Status: partial. 82 of 130 items carry a verdict.** The remainder are unchecked, not confirmed — see
 "Coverage" below, which says plainly what that means for the discussion.
 
 It is a directory rather than the single file the brief named, because it came with a script, and this repo
@@ -94,6 +94,7 @@ touched, which is the argument for checking rather than sampling.
 
 | Heading | Verdict | Evidence |
 |---|---|---|
+| EU AI Act Article 50 (transparency) compliance | **STALE** | Both halves shipped and the brief that scoped them is closed. `briefs/librarian-extension/done/07_export-disclosure-brief.md` has all four implementation checkpoints ticked, its §7 50(1) label is live (`librarian/app.py:1167`, always visible and not dismissable, so "at the start of the first interaction" is satisfied trivially), and 50(2) marking emits as YAML front-matter on export (`chatutil.py:306`). What the item leaves open is the 2 December 2026 grace period for *robust* 50(2) marking — which the brief rules out on the merits, not on effort: a robust mark acts on the logits during sampling, and Librarian samples un-watermarked third-party weights through an OpenAI-compatible backend, so the mark belongs upstream at the model provider. §5's exclusions (plain-`.txt` export, C2PA) are deliberate scope fences. Nothing left for Raven to act on. |
 | Make the DPG reference a skill, so it fires when it is needed | **CONFIRMED** | `~/.claude/skills/` holds seven skills; none is about DPG. |
 | Revisit `recenter_window`'s degrade-instead-of-raise policy | **CONFIRMED** | Still `required=False` at `utils.py:581`. The item asks for a decision, not a fix. |
 | GUI: hardcoded stand-ins for values DPG has no getter for | **CONFIRMED** | `DPG_WINDOW_PADDING = 8`, `DPG_FRAME_PADDING_Y = 3`, `DPG_SCROLLBAR_SIZE = 14` — still constants read off the default theme. |
@@ -115,6 +116,49 @@ touched, which is the argument for checking rather than sampling.
 | MPS (Apple Silicon) device synchronization | **CONFIRMED** | `torch.cuda.synchronize` at four sites in `cherrypick/preload.py` with no MPS equivalent. MPS *detection* exists in `deviceinfo.py`, which is what makes this easy to mis-call — the item is about synchronization. (A naive `grep mps` also matches the tail of "timesta**mps**".) |
 | Let the AI drive the constellation's own views (tools, and then voice) | **CONFIRMED** | The tool set is the six shipped in 0.2.9-dev — two network, three document, plus `get_current_time`. None touches a view. |
 
+### Batch 4 — the last of the query-settleable set
+
+Eleven more, all CONFIRMED. Two looked stale on a first query and were not, both because a *neighbouring*
+mechanism does something similar:
+
+| Heading | Verdict | Evidence |
+|---|---|---|
+| HTML pages whose content is produced by running them | **CONFIRMED** | `webfetch` does have a Selenium tier for JS-rendered pages, which is what makes this look done. Wrong path: the item is about `docextract` reading a *saved* file, and it explicitly calls fetching-the-URL-instead "a correct refusal" for the bare-shell case. Its actual ask — mining data out of a `<script>` literal in a self-contained single-file app — is unimplemented, and `docextract.py:29-30` describes the gap in its own docstring. |
+| Easy install with a chosen CUDA version (and a sensible CPU default) | **CONFIRMED** | `install_with_cuda.sh` / `install_no_cuda.sh` exist, which covers the CPU default. The item's actual ask is a CUDA-*version* choice — `-G cuda12` / `-G cuda13` — and `pyproject.toml` still has a single `cuda` extra pinned to `cu12` throughout. |
+| Librarian leaks its server-side avatar instance when it doesn't exit normally | **CONFIRMED** | No signal handling anywhere in `raven/librarian/`, so the item's mechanism (SIGTERM bypasses `atexit`, `app_shutdown` never runs) still holds. **Note the item carries its own unresolved flag** — "Contradicted 2026-08-04, and unexplained — check this before implementing the fix below" — which this sweep does not settle. |
+| Expose the docs-DB source files behind a reply's RAG citations | **CONFIRMED** | Both call sites name it as future work: `chat_controller.py:1371` and `scaffold.py:1073` ("for later use (upcoming citation mechanism)"). |
+| Visualizer's importer should read the document database, not just `.bib` files | **CONFIRMED** | `visualizer/importer.py` has no reference to the docs DB. |
+| Semantic grouping in the sidecar cleanup preview (once Nomic lands) | **CONFIRMED** | `cleanup.py:105` describes the flat-set status quo the item wants to improve. |
+| Source code in the document database wants its own tokenizer | **CONFIRMED** | `llm_docs_exts` carries no code extensions, so source files are not ingested at all — the tokenizer question is downstream of that. |
+| Audit toolbar buttons for WidgetFlash acknowledgment | **CONFIRMED** | `flash_button` is used in `raven-librarian` only (5 sites). `raven-avatar-settings-editor` alone has ~30 buttons with none. |
+| Audit typing: abstract parameter types, concrete return types | **CONFIRMED** | Abstract parameter types (`Sequence`/`Iterable`/`Mapping`) appear in a handful of modules; the sweep has not been done. |
+| Hybridir: BM25 backend migration for larger corpora | **CONFIRMED** | Still `import bm25s`. |
+| Adopt dotted import style in remaining modules | **CONFIRMED** | 325 `from ..module import name` lines outside the vendor tree. (Not all are wrong — `__init__.py` re-exports are the documented exception — so the number bounds the work rather than measuring it.) |
+
+## Raised for the discussion: webfetch and docextract disagree about running code
+
+Not a verdict, and not filed as an item — it surfaced while checking "HTML pages whose content is produced
+by running them" (Juha, 2026-08-10) and wants a decision rather than a fix.
+
+**The two paths treat the same problem with opposite caution, and the caution is pointed the wrong way
+round.** `webfetch` escalates to Selenium — a real headless browser — for a JS-rendered page at a URL the
+*AI* chose to fetch. `docextract` refuses to look inside a `<script>` element in a file the *user*
+deliberately attached, and the docs DB skips it. So the less-trusted input gets code execution, and the
+more-trusted one does not get even parsing.
+
+What makes it a discussion rather than an obvious correction:
+
+- **The two are not the same operation, though the tempting implementation makes them so.** Reading a data
+  literal out of a `<script>` element is *parsing*; the cheap way to do it — "we already have a headless
+  browser, point it at the file" — is *execution*, and that is a different risk class. A saved HTML file can
+  be adversarial in ways a research paper cannot.
+- **But webfetch already accepts that risk**, on content nobody vetted, which is the part that sings
+  off-key. Either the browser tier is acceptable and docextract is being over-careful, or it is not and
+  webfetch is the one to look at. The asymmetry is the finding; which end moves is the decision.
+- Both behaviours are deliberate and documented where they live (`server/modules/webfetch.py` for the
+  two-tier fetch, `docextract.py:29-30` for the `<script>` gap). Neither is an oversight, which is why this
+  is worth an explicit decision rather than a bug fix.
+
 ## What the reference checker flagged, and what it was worth
 
 Eleven items name something that no longer resolves. Six became the MOVED verdicts above. The other five are
@@ -126,33 +170,32 @@ false positives worth recording so the next run does not re-litigate them:
 
 ## Coverage, stated plainly
 
-**70 of 130 items have a verdict. 60 do not.** They were selected, not sampled: the ones today's and
-0.2.8's work plausibly closed, everything the reference checker flagged, and then three batches chosen for
+**82 of 130 items have a verdict. 48 do not.** They were selected, not sampled: the ones today's and
+0.2.8's work plausibly closed, everything the reference checker flagged, and then four batches chosen for
 being settleable by a query rather than by reading. So the STALE rate here says nothing about the rest of
 the file, and **an item's absence from this table is not evidence that it holds.**
 
-The selection bias runs the other way from what you might expect, and batch 3 sharpened the point. Batches 1
-and 2 were picked partly *because* the items looked closeable, and produced six STALE. Batch 3 was picked
-purely for being queryable, and produced **none**. So the stale items are not spread evenly through the
-file: they cluster in whatever recent work touched. A bulk "the old ones are probably stale" move in the
-triage would be backwards — of the six STALE found so far, five sit in areas 0.2.8 or 0.2.9 changed.
+The selection bias runs the other way from what you might expect, and batches 3 and 4 sharpened the point.
+Batches 1 and 2 were picked partly *because* the items looked closeable, and produced six STALE. Batches 3
+and 4 were picked purely for being queryable, and produced **one** between them — the EU AI Act item, which
+was flagged as done by Juha rather than found by a query. So the stale items are not spread evenly through
+the file: they cluster in whatever recent work touched. A bulk "the old ones are probably stale" move in the
+triage would be backwards — of the seven STALE found so far, six sit in areas 0.2.8 or 0.2.9 changed.
 
-Tally so far: 56 CONFIRMED (one of them halved), 6 MOVED, 6 STALE, 2 SUPERSEDED.
+**The query-settleable set is now exhausted.** What remains needs reading or a running app.
+
+Tally so far: 67 CONFIRMED (one of them halved), 6 MOVED, 7 STALE, 2 SUPERSEDED.
 
 ### What is left, and what it will take
 
-Of the 60 unchecked, roughly:
+Of the 48 unchecked, roughly:
 
-- **~15 are settleable the same way** — "does this exist yet", one query each.
-- **~25 need the item and the code read together.** No shortcut; this is where the remaining time goes.
+- **~28 need the item and the code read together.** No shortcut; this is where the remaining time goes.
   The ones deferred so far, and why:
   - *Audit unnamed lambdas* and *Adopt dotted import style* — the counts (214 lambdas, 1052
     `from X import Y`) mean nothing without knowing which instances the item considers wrong.
   - *Attach an image from a web URL* — staged attachments already carry a `provenance_url`, so part of it
     may exist.
-  - *EU AI Act Article 50 compliance* — a disclosure **does** exist (`librarian/app.py:1167` cites Article
-    50(1); `chatutil.py:306` emits AI-generated front-matter on export). Whether that satisfies the item is
-    a question about the item's scope, not about the code.
   - *The 8/3 pass: bare DPG margins should name themselves* — the named constants exist and have 21 call
     sites, so this is partly done; the question is how many bare literals remain.
   - *The subtitle translator silently drops `=`*, *Librarian's help card has no room to describe
