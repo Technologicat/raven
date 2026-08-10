@@ -843,7 +843,8 @@ def main() -> int:
                                                              label="a graph file (.dot, .xdot, .gv)",
                                                              multiple=False)],
                                           reference_window="main_window",  # tag
-                                          what="Raven-xdot-viewer"))
+                                          what="Raven-xdot-viewer",
+                                          blocked=is_any_modal_window_visible))
 
     # Defer initial file load to a frame callback so the render loop is
     # running — this lets _show_error display modal dialogs if loading fails.
