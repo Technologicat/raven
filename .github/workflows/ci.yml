@@ -67,12 +67,17 @@ jobs:
 
       - name: Install CI test dependencies
         # The list is pinned and shared with coverage.yml — see requirements-ci.txt for why both.
-        # torch/torchvision are pinned here rather than there: they come from PyTorch's own CPU
-        # wheel index, and an --index-url inside the requirements file would apply to all of it.
+        # The torch trio is pinned here rather than there: it comes from PyTorch's own CPU wheel
+        # index, and an --index-url inside the requirements file would apply to all of it.
+        #
+        # Keep these three at the versions `pyproject.toml` pins. They drifted once — CI ran torch
+        # 2.13.0 against a project pinning 2.11.0, because Dependabot cannot see pins written inline
+        # here and the manual bump touched only this file. A CI that tests undeclared versions can go
+        # green on a combination no user will ever install, which is the opposite of its job.
         run: |
           python -m pip install --upgrade pip
           pip install -r .github/workflows/requirements-ci.txt
-          pip install torch==2.13.0 torchvision==0.28.0 --index-url https://download.pytorch.org/whl/cpu
+          pip install torch==2.11.0 torchvision==0.26.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cpu
           pip install -e . --no-deps
 
       - name: Run tests

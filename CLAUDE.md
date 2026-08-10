@@ -43,6 +43,9 @@ index.
   `tool_budget`, `tool_refusal`, `vram`, `tha3-performance`, `anime4k-performance`, `dpg-focus`, `dpg-overlays`,
   `dpg-dnd`.
 - **`TODO.md`** for planned work, **`TODO_DEFERRED.md`** for things noticed mid-task and set aside.
+- **`scripts/`** — repository-maintenance tooling: scripts that check *this repo*, run by a maintainer and
+  not shipped in the wheel. Distinct from `raven/tools/`, which holds user-facing console scripts. Each is
+  indexed in `scripts/README.md` with the question it answers.
 - **`dpg-notes.md`**, **`raven-style-guide.md`** — at the root because they are consulted constantly.
 
 Two conventions worth knowing before adding to any of them:
@@ -212,6 +215,7 @@ Legacy `flake8rc` also present (used by Emacs flycheck, not by CI or CC).
 ### Workflow Rules
 
 1. **Lint after every code change**: `ruff check <changed .py files>`. Do this before review, testing, or committing. Catches unused imports and dead names early.
+2. **Run `python scripts/check_ci_imports.py` before pushing anything that adds an import or removes an `importorskip`.** CI installs a hand-picked dependency subset rather than the full tree, so a module-level import of something outside that list passes locally and fails only on push — as `sseclient` did, turning main red on a docs-only commit from a change two commits back. The script answers, in a second, which unguarded test modules would fail to *collect* in CI. A green local `pytest` cannot tell you this.
 
 ### CHANGELOG layout: group by component
 
