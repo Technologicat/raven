@@ -84,11 +84,11 @@ _help_window = None  # initialized after DPG setup
 _last_input_ns: int = 0  # monotonic_ns timestamp of last user input
 
 
-def _open_file_dialog_callback(selected_files):
-    """Callback for the file dialog. `selected_files` is a list of Path objects."""
+def _open_file_dialog_callback(selected_files: list[str]) -> None:
+    """Callback for the file dialog. `selected_files` is a list of absolute paths as `str`; empty when cancelled."""
     _app_state["widget"].input_enabled = True
     if selected_files:
-        _open_file(str(selected_files[0]))
+        _open_file(selected_files[0])
 
 
 def _show_open_dialog(*_args) -> None:

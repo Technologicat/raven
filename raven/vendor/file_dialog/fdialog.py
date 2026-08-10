@@ -124,6 +124,12 @@ class FileDialog:
             filter_list:            [str, ...], A list of different file extensions, for the user to choose in the file type filter. E.g. [".png", ".jpg"].
             file_filter:            str, The value of the file type filter when the dialog is opened, e.g. ".py".
             callback:               callable, When the OK or Cancel button is pressed, the file dialog will call this, sending the list of selected files. Upon cancel, the list is empty.
+
+                                    The argument is a `list` of `str`, each an absolute path. (Not `pathlib.Path`.)
+
+                                    Consume it before returning; do not retain it. The list handed to the callback is the
+                                    dialog's own `selected_files`, which is cleared as soon as the callback returns, so a
+                                    reference stashed for later reads as empty. Copy it if you need to keep it.
             show_dir_size:          If True, directories will be listed with the size of the directory and its sub-directories and files. Not recommended.
             allow_drag:             If True, the files and folders in the dialog act as a DPG drag source, so you can set up a drop target to accept them as drag'n'drops in your app. See source code for details.
             multi_selection:        If True, the user can select multiple files and folders by holding down Ctrl and clicking. If False, only one file/folder can be selected, and Ctrl does nothing.

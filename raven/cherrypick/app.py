@@ -447,8 +447,8 @@ def _load_current_image() -> None:
 # File dialog
 # ---------------------------------------------------------------------------
 
-def _open_file_dialog_callback(selected_files) -> None:
-    """Callback for the folder dialog."""
+def _open_file_dialog_callback(selected_files: list[str]) -> None:
+    """Callback for the folder dialog. `selected_files` is a list of absolute paths as `str`; empty when cancelled."""
     iv = _app_state["image_view"]
     grid = _app_state["grid"]
     if iv is not None:
@@ -456,7 +456,7 @@ def _open_file_dialog_callback(selected_files) -> None:
     if grid is not None:
         grid.input_enabled = True
     if selected_files:
-        _open_folder(str(selected_files[0]))
+        _open_folder(selected_files[0])
 
 
 def _show_open_dialog(*_args) -> None:
