@@ -2,22 +2,17 @@
 
 import threading
 
-import pytest
+import pytest  # noqa: F401 -- fixtures and marks below
 
-# `scaffold` transitively imports `llmclient` → `raven.client.api`, whose module-level imports include
-# `spacy` and (via the vendored Kokoro streaming writer) `av`. The CI test job installs a hand-picked
-# dependency subset that has neither, so the import fails there and this whole module is skipped.
-# Mirrors `test_hybridir.py` (importorskip on chromadb/bm25s).
-#
-# Name those two specifically rather than "the heavy stack": CI *does* install qoi, and torch (the CPU
-# wheel, which imports fine — only CUDA is absent). Listing them as reasons sent at least one reader
-# chasing dependencies that were already there.
-pytest.importorskip("raven.librarian.scaffold",
-                    reason="scaffold transitively needs the full raven-client dep stack")
+from unpythonic.env import env
 
-from unpythonic.env import env  # noqa: E402 -- after importorskip by design
+from raven.librarian import chattree, chatutil, textfilestore, imagestore, scaffold, sidecarstore
 
-from raven.librarian import chattree, chatutil, textfilestore, imagestore, scaffold, sidecarstore  # noqa: E402 -- after importorskip by design
+# This module used to open with an `importorskip` on `scaffold`, because importing it reached
+# `raven.client.api` and so required `spacy` and `av`, neither of which CI installs. `llmclient` now defers
+# that import to the two network tool wrappers, so `scaffold` imports with what CI has and these tests run
+# there. Keep it that way: an import added here that reaches the client stack silently removes this file
+# from CI again, and a skipped test looks exactly like a passing one in the summary.
 
 
 # ---------------------------------------------------------------------------

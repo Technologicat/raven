@@ -8,18 +8,19 @@ The actual fetch (`api.webfetch_fetch`, HTTP to the server) is monkeypatched.
 import json
 import logging
 
-import pytest
+import pytest  # noqa: F401 -- fixtures and marks below
 
-# llmclient transitively imports `raven.client.api`, which pulls the heavy client dep stack
-# (qoi, spaCy, the TTS stack) that the CI test job's minimal subset omits. Skip this whole module
-# when the import can't be satisfied. Mirrors test_scaffold.py's importorskip on scaffold.
-llmclient = pytest.importorskip("raven.librarian.llmclient",
-                                reason="llmclient transitively needs the full raven-client dep stack")
+from unpythonic import dyn
+from unpythonic.env import env
 
-from unpythonic import dyn  # noqa: E402 -- after importorskip by design
-from unpythonic.env import env  # noqa: E402 -- after importorskip by design
+from raven.librarian import chatutil
+from raven.librarian import llmclient
 
-from raven.librarian import chatutil  # noqa: E402 -- after importorskip by design
+# This module used to open with an `importorskip` on `llmclient`, because importing it reached
+# `raven.client.api` and so required `spacy` and `av`, neither of which CI installs. That import is now
+# deferred to the two network tool wrappers — which is also why the tests below patch
+# `llmclient._client_api` rather than `llmclient.api`. Patching through the seam is what lets this file
+# exercise the wrappers without the real client module being importable at all.
 
 
 def _history(text):
