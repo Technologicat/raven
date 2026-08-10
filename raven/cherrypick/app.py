@@ -61,6 +61,7 @@ import torch
 from ..common import deviceinfo
 from ..common.gui import utils as guiutils
 from ..common.gui import helpcard
+from ..common.gui import messagebox
 from ..common.gui import animation as gui_animation
 from ..common import utils as common_utils
 from ..vendor.file_dialog.fdialog import FileDialog
@@ -457,6 +458,33 @@ def _open_file_dialog_callback(selected_files: list[str]) -> None:
         grid.input_enabled = True
     if selected_files:
         _open_folder(selected_files[0])
+
+
+def is_open_dialog_visible() -> bool:
+    """Return whether the folder-open dialog is open.
+
+    An abstraction over `dpg.is_item_visible`, not just a call to it, because the window might not exist yet.
+    """
+    if _filedialog_open is None:
+        return False
+    return dpg.is_item_visible("cherrypick_open_dialog")  # tag
+
+
+def is_any_modal_window_visible() -> bool:
+    """Return whether *some* modal window is open.
+
+    Currently the folder-open dialog and the help card.
+
+    The messagebox term is here ahead of any caller: this app shows no messagebox today, and the
+    `messagebox` import exists for this check alone. It is deliberate rather than speculative — the failure
+    it forecloses is the one *Raven-avatar-pose-editor* actually hit, where the guard was written before the
+    app had a messagebox and nobody revisited it when the first one arrived. A modal blocks the mouse but
+    not the keyboard, so an unguarded hotkey keeps firing behind whatever is on top, and the symptom (Enter
+    both dismissing a dialog and doing something else) does not look like a missing line in this function.
+    """
+    return (is_open_dialog_visible() or
+            (_help_window is not None and _help_window.is_visible()) or
+            messagebox.is_visible())
 
 
 def _show_open_dialog(*_args) -> None:
@@ -943,10 +971,11 @@ def _on_key(sender, app_data) -> None:
     grid = _app_state["grid"]
     compare = _app_state["compare"]
 
-    # Suppress input when modal dialogs are open.
+    # Suppress input when modal dialogs are open. The `input_enabled` term is not redundant with the
+    # predicate: the image view is also disabled for non-modal reasons (grid mode, compare mode).
     if iv is not None and not iv.input_enabled:
         return
-    if _help_window is not None and _help_window.is_visible():
+    if is_any_modal_window_visible():
         return
 
     ctrl = dpg.is_key_down(dpg.mvKey_LControl) or dpg.is_key_down(dpg.mvKey_RControl)

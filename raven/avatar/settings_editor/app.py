@@ -462,10 +462,11 @@ def is_any_modal_window_visible():
     keyboard, so an app hotkey left unguarded still fires behind it — and the messagebox is the modal that
     asks questions whose answer key (Enter) is also a hotkey elsewhere.
     """
-    return (is_open_input_image_dialog_visible() or is_open_json_dialog_visible() or
+    return (is_open_input_image_dialog_visible() or is_open_backdrop_image_dialog_visible() or
+            is_open_json_dialog_visible() or
             is_animator_settings_dialog_visible() or is_save_animator_settings_dialog_visible() or
             (_help_window is not None and _help_window.is_visible()) or
-            (messagebox.modal_dialog_window_exists() and dpg.is_item_visible("modal_dialog_window")))  # tag
+            messagebox.is_visible())
 
 class PostprocessorSettingsEditorGUI:
     """Main app window for the postprocessor settings editor for `raven.avatar`."""

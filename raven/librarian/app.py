@@ -1427,7 +1427,7 @@ def is_any_modal_window_visible() -> bool:
     return (help_window.is_visible() or
             is_attach_file_dialog_visible() or
             cleanup_dialog.is_open or
-            (messagebox.modal_dialog_window_exists() and dpg.is_item_visible("modal_dialog_window")))  # tag
+            messagebox.is_visible())
 
 combobox_choice_map = None   # DPG tag or ID -> (choice_strings, callback)
 def librarian_hotkeys_callback(sender, app_data):

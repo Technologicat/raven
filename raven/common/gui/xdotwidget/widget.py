@@ -59,6 +59,7 @@ class XDotWidget(gui_animation.Animation):
                  on_hover: Optional[Callable[[Optional[str]], None]] = None,
                  on_click: Optional[Callable[[str, int], None]] = None,
                  on_open_url: Optional[Callable[[str], None]] = None,
+                 input_blocked: Optional[Callable[[], bool]] = None,
                  text_compaction_callback: Optional[Callable[[str, float], str]] = None,
                  highlight_fade_duration: float = 2.0,
                  graph_text_fonts: Optional[Sequence[Tuple[float, Union[int, str]]]] = None,
@@ -73,6 +74,17 @@ class XDotWidget(gui_animation.Animation):
         `tag`: Optional DPG tag for the widget group.
         `on_hover`: Callback when hovering changes. Receives node ID or None.
         `on_click`: Callback when a node is clicked. Receives (node_id, button).
+        `input_blocked`: Predicate answering "is something on top of me, so I should ignore input?".
+                          Consulted on every mouse event, so keep it cheap.
+
+                          The widget cannot answer this itself, which is why the app supplies it. The mouse
+                          handlers are registered globally — DPG's `handler_registry` fires them wherever
+                          the cursor happens to be — and the widget's own "is the mouse over me" test is
+                          geometric, so a dialog drawn on top is invisible to it. Without this, the click
+                          that dismisses an error dialog also lands on the graph behind it. What counts as
+                          "on top" is the app's business: a messagebox, a file dialog and a help card have
+                          nothing in common that the widget could test for. Raven's apps pass their own
+                          `is_any_modal_window_visible`.
         `text_compaction_callback`: Callback for text compaction, used while rendering,
                                      when zoomed out so far that the full label text of
                                      a node won't fit inside that node visually.
@@ -90,6 +102,7 @@ class XDotWidget(gui_animation.Animation):
         self._on_hover = on_hover
         self._on_click = on_click
         self._on_open_url = on_open_url
+        self._input_blocked = input_blocked
         self._text_compaction_callback = text_compaction_callback
         self._graph_text_fonts = graph_text_fonts
         self._mouse_wheel_zoom_factor = mouse_wheel_zoom_factor
@@ -407,6 +420,15 @@ class XDotWidget(gui_animation.Animation):
     def input_enabled(self, value: bool) -> None:
         self._input_enabled = value
 
+    def _input_allowed(self) -> bool:
+        """Whether to act on mouse input right now: input is enabled, and nothing is covering the widget.
+
+        The second condition is the app's to answer — see the `input_blocked` constructor argument.
+        """
+        if not self._input_enabled:
+            return False
+        return self._input_blocked is None or not self._input_blocked()
+
     # -------------------------------------------------------------------------
     # Public API: Viewport state
 
@@ -500,7 +522,7 @@ class XDotWidget(gui_animation.Animation):
             self._needs_render = True
 
         # Re-evaluate link highlights when modifier keys change (without mouse move)
-        if self._input_enabled:
+        if self._input_allowed():
             shift = dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)
             ctrl = dpg.is_key_down(dpg.mvKey_LControl) or dpg.is_key_down(dpg.mvKey_RControl)
             if shift != self._last_shift or ctrl != self._last_ctrl:
@@ -710,7 +732,7 @@ class XDotWidget(gui_animation.Animation):
         the hover callback. Called by `_on_mouse_move` (mouse moved) and
         by `update` (viewport moved during pan/zoom animation).
         """
-        if not self._input_enabled or not self._is_mouse_inside():
+        if not self._input_allowed() or not self._is_mouse_inside():
             # Mouse left widget or input suppressed — clear hover state.
             # Only flip `_needs_render` when something visible actually changed;
             # in the common steady-state (cursor outside, nothing to update), an
@@ -779,7 +801,7 @@ class XDotWidget(gui_animation.Animation):
         at the other end (xdottir-style navigation). Clicking elsewhere
         on the edge centers on the edge midpoint.
         """
-        if not self._input_enabled or not self._is_mouse_inside():
+        if not self._input_allowed() or not self._is_mouse_inside():
             return
         if self._graph is None:
             return
@@ -913,7 +935,7 @@ class XDotWidget(gui_animation.Animation):
 
     def _on_mouse_wheel(self, sender, app_data) -> None:
         """Handle mouse wheel for zooming."""
-        if not self._input_enabled or not self._is_mouse_inside():
+        if not self._input_allowed() or not self._is_mouse_inside():
             return
 
         delta = app_data  # positive = scroll up (zoom in)
@@ -937,7 +959,7 @@ class XDotWidget(gui_animation.Animation):
         point, not per-frame delta. We track the previous cumulative value
         and compute the per-frame increment.
         """
-        if not self._input_enabled:
+        if not self._input_allowed():
             return
         if not self._is_mouse_inside() and not self._dragging:
             return

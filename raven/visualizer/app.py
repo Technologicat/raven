@@ -147,7 +147,7 @@ def is_any_modal_window_visible():
     return (is_open_file_dialog_visible() or word_cloud.is_save_dialog_visible() or
             is_open_import_dialog_visible() or is_save_import_dialog_visible() or
             help_window.is_visible() or
-            (messagebox.modal_dialog_window_exists() and dpg.is_item_visible("modal_dialog_window")))  # tag
+            messagebox.is_visible())
 
 # Register on `app_state` so submodules (e.g. `annotation`) can call it.
 app_state.is_any_modal_window_visible = is_any_modal_window_visible

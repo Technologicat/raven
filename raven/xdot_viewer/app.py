@@ -86,7 +86,6 @@ _last_input_ns: int = 0  # monotonic_ns timestamp of last user input
 
 def _open_file_dialog_callback(selected_files: list[str]) -> None:
     """Callback for the file dialog. `selected_files` is a list of absolute paths as `str`; empty when cancelled."""
-    _app_state["widget"].input_enabled = True
     if selected_files:
         _open_file(selected_files[0])
 
@@ -94,8 +93,33 @@ def _open_file_dialog_callback(selected_files: list[str]) -> None:
 def _show_open_dialog(*_args) -> None:
     """Show the file open dialog."""
     if _filedialog_open is not None:
-        _app_state["widget"].input_enabled = False
         _filedialog_open.show_file_dialog()
+
+
+def is_open_file_dialog_visible() -> bool:
+    """Return whether the open-graph dialog is open.
+
+    An abstraction over `dpg.is_item_visible`, not just a call to it, because the window might not exist yet.
+    """
+    if _filedialog_open is None:
+        return False
+    return dpg.is_item_visible("open_file_dialog")  # tag
+
+
+def is_any_modal_window_visible() -> bool:
+    """Return whether *some* modal window is open.
+
+    Currently the help card, the open-graph dialog, and the messagebox.
+
+    One predicate serves both input devices: the keyboard handler here, and the graph widget's mouse
+    handlers, which take it as `input_blocked`. They are the same failure seen twice — a DPG modal stops
+    neither, so an unguarded handler keeps acting on the graph behind whatever is on top. Keeping it as
+    one function is what stops the two from drifting, which is how the mouse half stayed broken after the
+    keyboard half was fixed.
+    """
+    return (is_open_file_dialog_visible() or
+            (_help_window is not None and _help_window.is_visible()) or
+            messagebox.is_visible())
 
 
 def _show_error(title: str, message: str) -> None:
@@ -506,14 +530,10 @@ def _on_key(sender, app_data) -> None:
     if widget is not None and not widget.input_enabled:
         return
 
-    # Help card handles its own hotkeys (Escape to close)
-    if _help_window is not None and _help_window.is_visible():
-        return
-
-    # So does the error messagebox — and it must be guarded here too, because a DPG modal blocks the mouse
-    # but not the keyboard: without this, the Enter that dismisses an error dialog also fires whatever Enter
-    # does in the viewer behind it. (The file dialog is guarded differently, by `widget.input_enabled` above.)
-    if messagebox.modal_dialog_window_exists() and dpg.is_item_visible("modal_dialog_window"):  # tag
+    # Whatever is on top handles its own keys — the help card's Escape, the messagebox's Enter. A DPG modal
+    # blocks the mouse but not the keyboard, so without this the Enter that dismisses an error dialog also
+    # fires whatever Enter does in the viewer behind it.
+    if is_any_modal_window_visible():
         return
 
     ctrl_pressed = dpg.is_key_down(dpg.mvKey_LControl) or dpg.is_key_down(dpg.mvKey_RControl)
@@ -715,6 +735,7 @@ def main() -> int:
             on_hover=_on_hover,
             on_click=_on_click,
             on_open_url=_on_open_url,
+            input_blocked=is_any_modal_window_visible,
             highlight_fade_duration=config.HIGHLIGHT_FADE_DURATION,
             graph_text_fonts=graph_text_fonts,
             mouse_wheel_zoom_factor=config.MOUSE_WHEEL_ZOOM_FACTOR,
@@ -796,21 +817,15 @@ def main() -> int:
         dpg_markdown.add_text(f"{self.c_txt}The currently open file is polled for changes and reloaded automatically.{self.c_end}",
                               parent=g)
 
-    def _help_on_show():
-        _app_state["widget"].input_enabled = False
-
-    def _help_on_hide():
-        _app_state["widget"].input_enabled = True
-
+    # No `on_show` / `on_hide` input toggling: `is_any_modal_window_visible` asks the help card directly, so
+    # there is no second copy of the state to keep in step with it.
     global _help_window
     _help_window = helpcard.HelpWindow(hotkey_info=hotkey_info,
                                        width=config.HELP_WINDOW_W,
                                        height=config.HELP_WINDOW_H,
                                        reference_window="main_window",
                                        themes_and_fonts=themes_and_fonts,
-                                       on_render_extras=render_help_extras,
-                                       on_show=_help_on_show,
-                                       on_hide=_help_on_hide)
+                                       on_render_extras=render_help_extras)
     dpg.set_item_callback("help_button", _help_window.show)  # tag
 
     # --- Start app ---

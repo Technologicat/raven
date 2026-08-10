@@ -14,6 +14,17 @@
 - the chat datastore is now `chat.json`, with its attachments in `chat.sidecars/` beside it. They were `data.json` and `data.images/` — the first said nothing about what was in it, and the second was named when images were the only thing you could attach, which stopped being true once documents could be. **Both are renamed on first start, together**, so there is nothing to do.
   - A `data.json` is adopted only if it actually reads as a chat datastore. The name is generic enough to belong to something else entirely, and the file is looked for beside whatever datastore path you configured — so if you have pointed Raven at a directory of your own, an unrelated `data.json` there is left alone.
 
+**Fixed**:
+
+*Raven-avatar*
+
+- in the pose editor, keyboard shortcuts no longer fire behind a modal dialog. Every failed character-image or emotion load is reported through one, and the guard that suppresses hotkeys did not count it as a dialog — so the Enter that dismissed the error also did whatever Enter does in the editor behind it.
+- in the settings editor, the same guard missed the backdrop-image browser, leaving hotkeys live while it was open. The app's four other file dialogs were already covered.
+
+*Raven-xdot-viewer*
+
+- dismissing an error dialog no longer also acts on the graph behind it. The dialog floats over the canvas, so clicking its button re-centered the view on whichever node happened to sit under the pointer. 0.2.8 fixed the keyboard half of this; the mouse half was still open, because the graph's handlers are global — they fire wherever the cursor is — and decided "is the mouse over the graph?" geometrically, which cannot tell that a dialog is covering it.
+
 ---
 
 **0.2.8** (7 August 2026):

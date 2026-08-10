@@ -43,3 +43,26 @@ def test_reports_present_once_a_window_carries_the_tag(dpg_context):
     with dpg.window(tag="modal_dialog_window"):  # tag
         dpg.add_text("hello")
     assert messagebox.modal_dialog_window_exists() is True
+
+
+def test_is_visible_answers_false_rather_than_raising_when_there_is_no_dialog(dpg_context):
+    """`is_visible` is called from global mouse handlers, i.e. potentially every frame before any dialog exists.
+
+    It must therefore answer the no-dialog case itself. Asking `dpg.is_item_visible` for a tag that does not
+    resolve raises (see above), so a version that skipped the existence check would turn every mouse move in
+    a freshly started app into an exception.
+    """
+    assert messagebox.is_visible() is False
+
+
+def test_is_visible_is_false_for_a_dialog_that_exists_but_is_hidden(dpg_context):
+    """Existence is not visibility: the modal window is created once and then shown and hidden repeatedly.
+
+    `modal_dialog` builds the window on first use and `hide_item`s it on close, so after the first dialog in
+    a session the window exists forever. A check that only asked whether it exists would suppress input
+    permanently from then on.
+    """
+    with dpg.window(tag="modal_dialog_window", show=False):  # tag
+        dpg.add_text("hello")
+    assert messagebox.modal_dialog_window_exists() is True
+    assert messagebox.is_visible() is False

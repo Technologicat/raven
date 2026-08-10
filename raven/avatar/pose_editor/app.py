@@ -425,11 +425,16 @@ def is_save_all_emotions_dialog_visible():
 def is_any_modal_window_visible():
     """Return whether *some* modal window is open.
 
-    Currently these are file dialogs and the help card.
+    Currently these are file dialogs, the help card, and the messagebox.
+
+    The messagebox belongs here for the same reason as the rest: a DPG modal blocks the mouse but not the
+    keyboard, so an app hotkey left unguarded still fires behind it — and this app reports every failed
+    character or emotion load through one, so it is the modal a user meets most.
     """
     return (is_open_image_dialog_visible() or is_save_image_dialog_visible() or
             is_open_json_dialog_visible() or is_save_all_emotions_dialog_visible() or
-            (_help_window is not None and _help_window.is_visible()))
+            (_help_window is not None and _help_window.is_visible()) or
+            messagebox.is_visible())
 
 def get_slider_range(slider):
     slider_config = dpg.get_item_configuration(slider)

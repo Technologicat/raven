@@ -9,7 +9,8 @@ This module is licensed under the 2-clause BSD license, to facilitate integratio
 """
 
 __all__ = ["modal_dialog",
-           "modal_dialog_window_exists"]
+           "modal_dialog_window_exists",
+           "is_visible"]
 
 from typing import Callable, List, Optional, Union
 
@@ -40,10 +41,18 @@ def modal_dialog_window_exists():
     # `get_item_state(0)` does raise, once per call.
     return dpg.does_item_exist("modal_dialog_window")  # tag
 
+def is_visible() -> bool:
+    """Return whether a modal dialog is on screen right now.
+
+    Widgets that register *global* mouse handlers need this. DPG's `handler_registry` handlers fire
+    regardless of what is under the cursor, and a geometric "is the mouse over me" test knows nothing
+    about being covered — so without consulting this, a click on a dialog's button also lands on
+    whatever the dialog is floating over.
+    """
+    return modal_dialog_window_exists() and dpg.is_item_visible("modal_dialog_window")  # tag
+
 def modal_dialog_hotkeys_callback(sender, app_data):
-    if not modal_dialog_window_exists():
-        return
-    if not dpg.is_item_visible("modal_dialog_window"):
+    if not is_visible():
         return
     key = app_data
     if current_on_close is not None:

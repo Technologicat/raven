@@ -255,10 +255,23 @@ def main() -> int:
 
     # --- Keyboard ---
 
+    def is_any_modal_window_visible():
+        """Return whether *some* modal window is open.
+
+        Currently only the help card — this app has no file dialogs and no messagebox. The function exists
+        anyway, matching the constellation's other apps, so that the day one arrives there is a single place
+        that already answers the question. A modal blocks the mouse but not the keyboard, so a hotkey left
+        unguarded keeps firing behind whatever is on top.
+
+        A closure rather than a module-level function, because this app keeps its whole GUI state local to
+        `main`.
+        """
+        return _help_window is not None and _help_window.is_visible()
+
     def _on_key(_sender, key, *_args):
         nonlocal paused, frozen_remaining, start_time
-        # Help card handles its own Escape key; suppress other keys while visible.
-        if _help_window is not None and _help_window.is_visible():
+        # Whatever is on top handles its own keys (the help card's Escape); suppress the rest meanwhile.
+        if is_any_modal_window_visible():
             return
 
         # No shared keymap — bindings live here, and the surfaces that make them
@@ -388,7 +401,7 @@ def main() -> int:
         env(key_indent=0, key="F1", action_indent=0, action="This help card", notes=""),
         env(key_indent=0, key="F11", action_indent=0, action="Toggle fullscreen", notes=""),
     )
-    _help_window = helpcard.HelpWindow(  # noqa: F841 — read by `_on_key` closure
+    _help_window = helpcard.HelpWindow(  # noqa: F841 — read by the `is_any_modal_window_visible` and `_on_key` closures
         hotkey_info=hotkey_info,
         width=config.HELP_WINDOW_W,
         height=config.HELP_WINDOW_H,
