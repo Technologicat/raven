@@ -59,6 +59,20 @@ with timer() as tim:
 logger.info(f"Libraries loaded in {tim.dt:0.6g}s.")
 
 
+_help_window = None  # initialized after DPG setup
+
+
+def is_any_modal_window_visible() -> bool:
+    """Return whether *some* modal window is open.
+
+    Currently only the help card — this app has no file dialogs and no messagebox. The function exists
+    anyway, matching the constellation's other apps, so that the day one arrives there is a single place
+    that already answers the question. A modal blocks the mouse but not the keyboard, so a hotkey left
+    unguarded keeps firing behind whatever is on top.
+    """
+    return _help_window is not None and _help_window.is_visible()
+
+
 def _parse_duration(text: str) -> int:
     """Parse a duration string into total seconds.
 
@@ -224,7 +238,6 @@ def main() -> int:
     color_state = "normal"
     paused = False
     frozen_remaining = None  # remaining seconds snapshot when paused
-    _help_window = None  # set up after frame callbacks (below)
 
     # Compensate for trailing glyph advance width in the text rect — the
     # visible ink is narrower than `get_item_rect_size` reports, making the
@@ -254,19 +267,6 @@ def main() -> int:
                 _help_window.reposition()
 
     # --- Keyboard ---
-
-    def is_any_modal_window_visible():
-        """Return whether *some* modal window is open.
-
-        Currently only the help card — this app has no file dialogs and no messagebox. The function exists
-        anyway, matching the constellation's other apps, so that the day one arrives there is a single place
-        that already answers the question. A modal blocks the mouse but not the keyboard, so a hotkey left
-        unguarded keeps firing behind whatever is on top.
-
-        A closure rather than a module-level function, because this app keeps its whole GUI state local to
-        `main`.
-        """
-        return _help_window is not None and _help_window.is_visible()
 
     def _on_key(_sender, key, *_args):
         nonlocal paused, frozen_remaining, start_time
@@ -401,7 +401,8 @@ def main() -> int:
         env(key_indent=0, key="F1", action_indent=0, action="This help card", notes=""),
         env(key_indent=0, key="F11", action_indent=0, action="Toggle fullscreen", notes=""),
     )
-    _help_window = helpcard.HelpWindow(  # noqa: F841 — read by the `is_any_modal_window_visible` and `_on_key` closures
+    global _help_window
+    _help_window = helpcard.HelpWindow(
         hotkey_info=hotkey_info,
         width=config.HELP_WINDOW_W,
         height=config.HELP_WINDOW_H,

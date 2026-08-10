@@ -422,7 +422,7 @@ def is_save_all_emotions_dialog_visible():
 # --------------------------------------------------------------------------------
 # GUI controls
 
-def is_any_modal_window_visible():
+def is_any_modal_window_visible() -> bool:
     """Return whether *some* modal window is open.
 
     Currently these are file dialogs, the help card, and the messagebox.

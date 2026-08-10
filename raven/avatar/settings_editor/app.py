@@ -453,7 +453,7 @@ video_recorder = AvatarVideoRecorder()
 # --------------------------------------------------------------------------------
 # GUI controls
 
-def is_any_modal_window_visible():
+def is_any_modal_window_visible() -> bool:
     """Return whether *some* modal window is open.
 
     Currently these are file dialogs, the help card, and the messagebox.
