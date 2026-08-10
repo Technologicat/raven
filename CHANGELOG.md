@@ -2,6 +2,20 @@
 
 **0.2.9** (in progress):
 
+**Added**:
+
+*Constellation-wide*
+
+- **drag files straight in from the file manager.** Every GUI app now accepts a drop where it previously wanted the in-app file browser. What a drop means is whatever that app's open button already meant:
+  - *Raven-librarian*: images and documents are attached to your next message, exactly as the attach button does — mixed drops included.
+  - *Raven-visualizer*: a `.pickle` opens that dataset; `.bib` files open the importer with them already filled in as input.
+  - *Raven-cherrypick*: a folder opens it.
+  - *Raven-xdot-viewer*: a `.dot`, `.xdot` or `.gv` opens it.
+  - *Raven-avatar-pose-editor*: an image with an alpha channel loads as the character; a `.json` loads emotion templates.
+  - *Raven-avatar-settings-editor*: an image with transparency loads as the character, any other image as the backdrop, and a `.json` as animator settings. It has two image slots and a drag cannot be aimed at either — the drop only reports itself on release — so the image decides: a character is a cutout, a backdrop is a full frame.
+  - Drop something an app cannot use and it says so, naming what you dropped and what would have worked, rather than doing nothing. A drop that arrives while a dialog is open is ignored, so it cannot answer a question you are in the middle of.
+  - Works wherever the GUI toolkit's own windowing layer does: X11, macOS and Windows. Wayland is untested — please report if it does not work there.
+
 **Changed**:
 
 *Raven-librarian*
