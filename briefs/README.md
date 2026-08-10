@@ -14,6 +14,12 @@ what stops "done" from being applied to something that was never going to be fin
   its own `README.md` for ordering and its own `done/` for the ones that have closed. A sprint folder is a
   working set, so it also holds unnumbered briefs and its session records.
 
+- **One folder per one-off pass**, named for the pass and the date it was scoped — currently
+  `todo-sweep-2026-08-10/`. Same shape as a sprint folder and closes the same way, but it is not a sprint:
+  no numbered implementation briefs, and the work is a single bounded pass over something that already
+  exists rather than a run of features. The date is part of the name because the thing it describes is an
+  occasion, and occasions do not go stale the way an open-ended scope does.
+
 - **`done/`** — **closed briefs.** Implementation plans whose work has landed, plus session reports and code
   reviews of completed work. The test for this folder is that the document described something to *do*, and
   it got done. **A finished sprint moves here whole**, as its own directory, alongside the individual

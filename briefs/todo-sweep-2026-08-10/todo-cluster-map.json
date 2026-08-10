@@ -1,0 +1,172 @@
+[
+ {
+  "cluster": "hygiene-sweep",
+  "line": 344,
+  "heading": "Migrate the remaining `dpg.split_frame()` sites to the guarded `guiutils.split_frame`"
+ },
+ {
+  "cluster": "document-ingestion",
+  "line": 1033,
+  "heading": "Attachment + docs-DB: support office document formats (MS Office / LibreOffice)"
+ },
+ {
+  "cluster": "filedialog",
+  "line": 1088,
+  "heading": "FileDialog: slow open and a teardown input-dead-window on huge directories"
+ },
+ {
+  "cluster": "filedialog",
+  "line": 1102,
+  "heading": "FileDialog: smart-case the Find (search) field"
+ },
+ {
+  "cluster": "filedialog",
+  "line": 1110,
+  "heading": "FileDialog: image thumbnail previews (Lanczos'd)"
+ },
+ {
+  "cluster": "filedialog",
+  "line": 1129,
+  "heading": "FileDialog: multi-extension filter as one labelled item"
+ },
+ {
+  "cluster": "filedialog",
+  "line": 1147,
+  "heading": "FileDialog: reduce per-use-site boilerplate"
+ },
+ {
+  "cluster": "filedialog",
+  "line": 1158,
+  "heading": "OS drag-and-drop of files into DPG apps (cross-platform)"
+ },
+ {
+  "cluster": "markdown-renderer",
+  "line": 1197,
+  "heading": "`dpg_markdown` intermittently drops a single letter from rendered text"
+ },
+ {
+  "cluster": "hygiene-sweep",
+  "line": 1341,
+  "heading": "Audit fleet for dict constants that should be `frozendict`"
+ },
+ {
+  "cluster": "hygiene-sweep",
+  "line": 1536,
+  "heading": "Audit unnamed lambdas"
+ },
+ {
+  "cluster": "hygiene-sweep",
+  "line": 1577,
+  "heading": "Adopt dotted import style in remaining modules"
+ },
+ {
+  "cluster": "hygiene-sweep",
+  "line": 1689,
+  "heading": "Audit typing: abstract parameter types, concrete return types"
+ },
+ {
+  "cluster": "hygiene-sweep",
+  "line": 1695,
+  "heading": "Audit toolbar buttons for WidgetFlash acknowledgment"
+ },
+ {
+  "cluster": "markdown-renderer",
+  "line": 1885,
+  "heading": "Markdown ATX headings (`### ...`) don't render in the chat view"
+ },
+ {
+  "cluster": "markdown-renderer",
+  "line": 1904,
+  "heading": "Fenced code block (```` ``` ````) support in the Markdown renderer"
+ },
+ {
+  "cluster": "markdown-renderer",
+  "line": 1982,
+  "heading": "Markdown tables don't render in the chat view"
+ },
+ {
+  "cluster": "markdown-renderer",
+  "line": 2006,
+  "heading": "Reasoning traces with indented bullets mis-render (Markdown indented-code-block collision)"
+ },
+ {
+  "cluster": "markdown-renderer",
+  "line": 2033,
+  "heading": "DearPyGui_Markdown inline-code background boxes are stranded on dynamic reflow"
+ },
+ {
+  "cluster": "markdown-renderer",
+  "line": 2055,
+  "heading": "Emoji support in the Markdown renderer (color emoji as inline images)"
+ },
+ {
+  "cluster": "markdown-renderer",
+  "line": 2082,
+  "heading": "Super/subscript font coverage in the GUI"
+ },
+ {
+  "cluster": "markdown-renderer",
+  "line": 2201,
+  "heading": "Chat view drops a character mid-message (\"What\" renders as \" hat\")"
+ },
+ {
+  "cluster": "abnormal-exit",
+  "line": 2324,
+  "heading": "Fleet-wide: shared two-phase DPG shutdown helper + audit"
+ },
+ {
+  "cluster": "document-ingestion",
+  "line": 2585,
+  "heading": "Attach an image from a web URL (paste-URL path)"
+ },
+ {
+  "cluster": "document-ingestion",
+  "line": 2687,
+  "heading": "Same file formats in the docs DB and in chat attachments"
+ },
+ {
+  "cluster": "document-ingestion",
+  "line": 2716,
+  "heading": "Spreadsheets in the docs DB and attachments (`.xlsx`, `.ods`)"
+ },
+ {
+  "cluster": "document-ingestion",
+  "line": 2729,
+  "heading": "Text out of images, so figures work without a vision model (OCR, and SVG `<text>`)"
+ },
+ {
+  "cluster": "document-ingestion",
+  "line": 2813,
+  "heading": "Vector figures in the docs DB and attachments (`.svg`)"
+ },
+ {
+  "cluster": "document-ingestion",
+  "line": 2902,
+  "heading": "Read documents as page images, for figure- and math-heavy sources"
+ },
+ {
+  "cluster": "document-ingestion",
+  "line": 2988,
+  "heading": "No way for the user to attach a document from a URL"
+ },
+ {
+  "cluster": "document-ingestion",
+  "line": 3207,
+  "heading": "HTML pages whose content is produced by running them"
+ },
+ {
+  "cluster": "markdown-renderer",
+  "line": 3251,
+  "heading": "Rendering LaTeX equations in the chat log"
+ },
+ {
+  "cluster": "abnormal-exit",
+  "line": 3276,
+  "heading": "Librarian leaks its server-side avatar instance when it doesn't exit normally"
+ },
+ {
+  "cluster": "abnormal-exit",
+  "line": 3361,
+  "heading": "Librarian has no periodic autosave: an abnormal exit loses the whole session's chat"
+ }
+]
