@@ -11,16 +11,54 @@ Sits outside the numbered Librarian run because it is not Librarian work: it tou
 (`raven-fixbib`) and `raven.common` (`docextract`), and its consumers are the Visualizer importer and the
 Librarian indexer equally. Corpus hygiene, not a feature of any one app.
 
-The defect, its measurements and the reason `normalize` must not be wired into `docextract` are in
-`TODO_DEFERRED.md`, "Ligature mojibake in PDF-extracted text". Not repeated here; this is the design that
-came out of discussing it (2026-08-07, Juha and Claude).
+Discussed 2026-08-07 (Juha and Claude); the defect and its measurements are below, the design that came out
+of them follows.
+
+## The defect
+
+A PDF extractor can emit a font's ligature glyphs as raw control codes rather than as characters. The
+ECCOMAS 2024 bibliography carries six: five `U+001C` and one `U+001D`, and the surrounding text says plainly
+what they were meant to be — `phase-`␜`eld`, `of `␜`nite`, `the in`␝`uence`. So in that file `U+001C` is
+**fi** and `U+001D` is **fl**, which makes them the two most common ligatures in English prose rather than
+anything exotic.
+
+Prototyped 2026-08-07 against that corpus, and it separates cleanly — **every ligature site resolves to
+exactly one candidate, and every non-ligature site to none:**
+
+| codepoint | context | resolves to | corpus frequency |
+|---|---|---|---|
+| `U+000E` | `coe`␍`cients` | **ffi** → coefficients | 99 |
+| `U+001B` | `a`␍`ected`, `e`␍`ects` | **ff** → affected, effects | 60, 397 |
+| `U+001C` | `phase-`␍`eld`, ␍`nite` | **fi** → field, finite | 1230, 1932 |
+| `U+001D` | `in`␍`uence` | **fl** → influence | 235 |
+| `U+001A`, `U+0001` | after `considered`, `system`, `holds` | — | correctly rejected |
+
+Discovered while bringing up the corpus, from `raven-fixbib` mis-splicing a repair — the same six characters
+make `str.splitlines()` and a newline count disagree.
+
+### Why `normalize` must not be wired into `docextract`
+
+**The trap is that stripping the control codes looks like hygiene and is data loss.**
+`raven.common.text.normalize` deletes C0/C1 controls, and its docstring invites exactly this use ("any
+handler of untrusted retrieved text ... future PDF ingestion"). Wiring it into `docextract.extract_text` was
+tried and reverted the same hour: deletion turns *phase-field* into *phase-eld*, *finite* into *nite*,
+*influence* into *inuence* — silently, across every affected document, in text nobody will re-read.
+
+Replacing them with a space is no better. It breaks the word visibly instead of invisibly, and leaves a
+trailing hyphen that a later dehyphenation pass would then close up into the same wrong token.
+
+**So until the repair exists, `docextract` leaves the control characters alone.** They are invisible in an
+editor and they survive into the index, and that is the *better* of the available wrong answers, because the
+text is still recoverable from them. Only 3 of ECCOMAS's 2520 records are affected, so the cost of waiting is
+small — which is also the measurement behind "build the fixbib half, specify the indexer half" below.
 
 ## The shape
 
-A PDF extractor can emit a font's ligature glyphs as raw control codes. `U+001C` means **fi**, `U+001D`
-means **fl**, and so on — but only in that document's encoding, so a fixed table is a guess dressed as a
-standard. The guess is checkable the same way the BibTeX brace repair is checkable: propose each known
-ligature, and accept the one that turns the surrounding letters into a word **the corpus itself uses**.
+**The mapping is a property of the font, not of Unicode.** `U+001C` means "file separator" in general and
+"fi" only in this document's encoding, so a fixed table is a guess dressed as a standard. But the guess is
+checkable the same way the BibTeX brace repair is: propose each known ligature, and accept the one that turns
+the surrounding letters into a word **the corpus itself uses**. No external dictionary, no locale assumption,
+and the evidence comes from the same data being repaired.
 
 **The vocabulary has to come from the whole collection, and that is the constraint everything else follows
 from.** Measured against ECCOMAS 2024: built per-document it resolves 0 of 12 sites; built from the whole

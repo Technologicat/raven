@@ -3976,55 +3976,13 @@ Discovered while indexing the arXiv AI fulltext corpus for the retrieval investi
 
 *Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-08-07 · See also: `briefs/ligature-repair-brief.md`*
 
-A PDF extractor can emit a font's ligature glyphs as raw control codes rather than as characters. The
-ECCOMAS 2024 bibliography carries six: five `U+001C` and one `U+001D`, and the surrounding text says
-plainly what they were meant to be — `phase-`␜`eld`, `of `␜`nite`, `the in`␝`uence`. So in that file
-`U+001C` is **fi** and `U+001D` is **fl**, which makes them the two most common ligatures in English
-prose rather than anything exotic.
+A PDF extractor can emit a font's ligature glyphs as raw control codes, so `finite` arrives as ␜`nite`.
+Repair is designed and scheduled in `briefs/ligature-repair-brief.md`, which carries the defect, the
+measurements, and the reason `normalize` must not be wired into `docextract` — stripping the codes looks
+like hygiene and silently deletes a letter from every affected word.
 
-**The trap is that stripping them looks like hygiene and is data loss.** `raven.common.text.normalize`
-deletes C0/C1 controls, and its docstring invites exactly this use ("any handler of untrusted retrieved
-text ... future PDF ingestion"). Wiring it into `docextract.extract_text` was tried and reverted the same
-hour: deletion turns *phase-field* into *phase-eld*, *finite* into *nite*, *influence* into *inuence* —
-silently, across every affected document, in text nobody will re-read. Replacing them with a space is no
-better; it just breaks the word visibly instead of invisibly, and leaves a trailing hyphen that a later
-dehyphenation pass would then close up into the same wrong token.
-
-**The mapping is a property of the font, not of Unicode.** `U+001C` means "file separator" in general and
-"fi" only in this document's encoding, so a fixed table is a guess dressed as a standard. But the guess is
-checkable the same way the brace repair is: propose each known ligature, and accept the one that turns the
-surrounding letters into a word the corpus itself uses. No external dictionary, no locale assumption, and
-the evidence comes from the same data being repaired.
-
-Prototyped 2026-08-07 against ECCOMAS 2024, and it separates cleanly — **every ligature site resolves to
-exactly one candidate, and every non-ligature site to none:**
-
-| codepoint | context | resolves to | corpus frequency |
-|---|---|---|---|
-| `U+000E` | `coe`␍`cients` | **ffi** → coefficients | 99 |
-| `U+001B` | `a`␍`ected`, `e`␍`ects` | **ff** → affected, effects | 60, 397 |
-| `U+001C` | `phase-`␍`eld`, ␍`nite` | **fi** → field, finite | 1230, 1932 |
-| `U+001D` | `in`␍`uence` | **fl** → influence | 235 |
-| `U+001A`, `U+0001` | after `considered`, `system`, `holds` | — | correctly rejected |
-
-**The measurement that decides where this can live: the vocabulary has to come from the whole collection,
-not from the document being repaired.** Building it per-document resolves **0 of 12** sites; building it
-from the whole 5.6 MB file resolves **12 of 12**. A single conference abstract simply never happens to
-spell the damaged word correctly somewhere else in its own 1600 characters. So this cannot go in
-`docextract.extract_text`, whose whole API is one document at a time, and belongs instead wherever a
-collection is in hand — `raven-fixbib` already reads an entire `.bib`, and the indexer already walks a
-whole documents directory.
-
-Worth designing together with the inverse defect the same corpus has: hyphens *lost* at line breaks,
-leaving `strainstiffening` for *strain-stiffening*. Both are one character's worth of damage between two
-word fragments, both are checkable against corpus vocabulary, and one pass can carry both.
-
-Until then `docextract` leaves the control characters alone. They are invisible in an editor, they survive
-into the index, and that is the *better* of the available wrong answers, because the text is still
-recoverable from them. Only 3 of ECCOMAS's 2520 records are affected, so the cost of waiting is small.
-
-Discovered while bringing up the ECCOMAS 2024 corpus, from `raven-fixbib` mis-splicing a repair — the same
-six characters make `str.splitlines()` and a newline count disagree (2026-08-07).
+Recorded here only so the defect has an entry outside the brief. **The brief is the live tracker**; close
+this item when the `raven-fixbib` half lands.
 
 ## Source code in the document database wants its own tokenizer, not just a new file extension
 
