@@ -782,6 +782,60 @@ class TestPrefill:
         assert llmclient.prefill(invoke_settings, _history("hi")) is None
 
 
+class TestConfigureMatchesSetup:
+    """`setup` is `configure` plus the two queries that discover its arguments — and nothing else.
+
+    The point of the split is that a caller holding the backend's facts can build the *real* settings object
+    without a backend. That is only worth anything if the object is genuinely the same one, so this pins the
+    equality rather than the plumbing: given the same `model_info` and flavor, `configure` must reproduce
+    `setup` field for field.
+    """
+
+    def _patch_generic_backend(self, monkeypatch):
+        monkeypatch.setattr(llmclient.requests, "get", _route_get({
+            "/v1/models": {"data": [{"id": "test-model"}]},
+        }))
+        monkeypatch.setattr(llmclient.librarian_config, "llm_backend_flavor", None)
+        monkeypatch.setattr(llmclient.librarian_config, "llm_tokenizer_path", None)
+
+    def test_configure_reproduces_setup_given_the_same_facts(self, monkeypatch):
+        self._patch_generic_backend(monkeypatch)
+        from_setup = llmclient.setup("http://test-backend", quiet=True)
+
+        flavor = llmclient.detect_backend_flavor("http://test-backend")
+        model_info = llmclient._resolve_model_info("http://test-backend", flavor)
+
+        # From here on, any HTTP at all is a bug: `configure` must not contact the backend. Breaking
+        # `requests.get` outright is what distinguishes "does not need it" from "happens not to have used it".
+        def _no_http(*args, **kwargs):
+            raise AssertionError("configure() contacted the backend")
+        monkeypatch.setattr(llmclient.requests, "get", _no_http)
+        monkeypatch.setattr(llmclient.requests, "post", _no_http)
+
+        from_configure = llmclient.configure(model_info=model_info,
+                                             backend_flavor=flavor,
+                                             backend_url="http://test-backend",
+                                             quiet=True)
+
+        assert set(from_configure.keys()) == set(from_setup.keys())
+        differing = [k for k in sorted(from_setup.keys())
+                     if repr(from_setup[k]) != repr(from_configure[k])]
+        assert not differing, f"configure() diverged from setup() on: {differing}"
+
+    def test_missing_context_length_defaults_the_same_way(self, monkeypatch):
+        # A backend that reports no context window is the case the 64k default exists for, and the default
+        # has to live in `configure` — a caller synthesizing a `model_info` gets it too, or the split leaks.
+        self._patch_generic_backend(monkeypatch)
+        model_info = llmclient._resolve_model_info("http://test-backend", "generic")
+        assert model_info.context_length is None, "precondition: generic backend reports no context length"
+
+        settings = llmclient.configure(model_info=model_info,
+                                       backend_flavor="generic",
+                                       backend_url="http://test-backend",
+                                       quiet=True)
+        assert settings.context_length == 64 * 1024
+
+
 class TestSetupOutputCap:
     """The per-turn `max_tokens` cap merge in `setup` (a `None` value means 'no cap')."""
 

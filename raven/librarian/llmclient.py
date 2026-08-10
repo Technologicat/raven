@@ -16,6 +16,7 @@ __all__ = ["TOOLS", "TOOL_ENTRYPOINTS", "DOCUMENT_TOOL_NAMES", "NETWORK_TOOL_NAM
            "test_connection",
            "detect_backend_flavor",
            "setup",
+           "configure",
            "count_tokens",
            "image_token_cost",
            "count_branch_tokens",
@@ -824,8 +825,45 @@ def setup(backend_url: str,
     """
     # Identify the backend, then resolve the loaded model's identity and context window for the character card.
     # A few request/response details differ between backends (see `detect_backend_flavor`, `_resolve_model_info`).
+    #
+    # These two calls are the whole of what `setup` needs a live backend for; everything after them is
+    # `configure`, which is pure. That is the split, and it is why it is drawn here.
     backend_flavor = librarian_config.llm_backend_flavor or detect_backend_flavor(backend_url)
     model_info = _resolve_model_info(backend_url, backend_flavor)
+    return configure(model_info=model_info,
+                     backend_flavor=backend_flavor,
+                     backend_url=backend_url,
+                     quiet=quiet)
+
+
+def configure(model_info: env,
+              backend_flavor: str,
+              backend_url: str,
+              quiet: bool = False) -> env:
+    """Build the settings `env` from facts about a backend, without contacting one.
+
+    `setup` is this function plus the two network queries that discover its arguments. Everything a turn
+    needs is built here — system prompt, character card, tool tables, sampler settings, tokenizer, personas
+    — so a caller holding the facts can obtain the *real* settings object with no backend in the picture.
+
+    That is what makes it possible to build the prompt Raven would send and measure it elsewhere, which is
+    otherwise done by hand-assembling an `env` with a few plausible fields. Such a replica carries about a
+    third of the real object and a stand-in system prompt, so a probe claiming to measure "what Raven sends"
+    measures something else — the failure this split exists to remove.
+
+    `model_info`: What `_resolve_model_info` returns: an `env` with `label`, `model_id`, `context_length`
+                  and `is_vlm`. Synthesize one to configure against a hypothetical model; `context_length`
+                  may be `None`, which defaults as it does for a backend that does not report one.
+
+    `backend_flavor`: "oobabooga", "lmstudio" or "generic". Gates a few request/response details.
+
+    `backend_url`: Recorded in the settings and used by `invoke`. No request is made from here, so a
+                   configure-only caller may pass the URL it intends to use later, or a placeholder.
+
+    `quiet`: As `setup`.
+
+    Returns the same `env` as `setup`; see its docstring for the fields.
+    """
     model = model_info.label  # human-facing identity for the character card (never a guess)
     request_model = librarian_config.llm_model or model_info.model_id  # id sent in requests (LM Studio JIT), or None
 
@@ -835,7 +873,7 @@ def setup(backend_url: str,
     context_length = model_info.context_length
     if context_length is None:
         context_length = 64 * 1024
-        logger.warning(f"setup: backend '{backend_flavor}' at {backend_url} did not report a loaded context length; defaulting to {context_length} tokens.")
+        logger.warning(f"configure: backend '{backend_flavor}' at {backend_url} did not report a loaded context length; defaulting to {context_length} tokens.")
 
     user = librarian_config.llm_user_name
     char = librarian_config.llm_char_name
