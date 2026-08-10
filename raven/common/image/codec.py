@@ -10,7 +10,8 @@ need a specific channel layout (e.g. RGBA) apply a normalization step
 separately via `raven.common.image.utils.ensure_rgba`.
 """
 
-__all__ = ["IMAGE_EXTENSIONS", "encode", "decode"]
+__all__ = ["IMAGE_EXTENSIONS", "encode", "decode",
+           "has_alpha_channel", "has_transparency"]
 
 import ctypes.util
 import io
@@ -104,6 +105,43 @@ def _turbojpeg_decode(jpeg_bytes: bytes, max_size: Optional[int]) -> np.ndarray:
 
 # --------------------------------------------------------------------------------
 # Public API
+
+def has_alpha_channel(filename: Union[pathlib.Path, str]) -> bool:
+    """Whether the image file carries an alpha channel. `False` if it cannot be read as an image at all.
+
+    Reads the header only, so it stays cheap on large files.
+
+    Note this asks whether the *channel exists*, not whether anything in it is transparent — an image
+    exported as RGBA with every pixel opaque answers `True`. When the question is "was this made with
+    transparency in mind", use `has_transparency`.
+    """
+    from PIL import Image  # deferred
+    try:
+        with Image.open(filename) as pil_image:
+            return "A" in pil_image.getbands()
+    except Exception as exc:  # noqa: BLE001 -- a predicate over arbitrary user files; unreadable is an answer, not an error
+        logger.debug(f"has_alpha_channel: '{filename}' is not a readable image, {type(exc)}: {exc}")
+        return False
+
+def has_transparency(filename: Union[pathlib.Path, str]) -> bool:
+    """Whether the image file has an alpha channel *and* actually uses it. `False` if it cannot be read.
+
+    The distinction matters when routing an image to one of two destinations by whether it is a cutout. An
+    alpha channel alone does not settle that: an opaque photo saved as RGBA has one and is not a cutout, so
+    a test for the channel would misroute it. Reading the darkest alpha value settles it in one pass.
+
+    Unlike `has_alpha_channel`, this decodes the alpha channel, so it costs a full read of that band.
+    """
+    from PIL import Image  # deferred
+    try:
+        with Image.open(filename) as pil_image:
+            if "A" not in pil_image.getbands():
+                return False
+            darkest_alpha, _lightest_alpha = pil_image.getchannel("A").getextrema()
+            return darkest_alpha < 255
+    except Exception as exc:  # noqa: BLE001 -- as above
+        logger.debug(f"has_transparency: '{filename}' is not a readable image, {type(exc)}: {exc}")
+        return False
 
 def decode(source: Union[bytes, BinaryIO, pathlib.Path, str],
            max_size: Optional[int] = None) -> np.ndarray:
