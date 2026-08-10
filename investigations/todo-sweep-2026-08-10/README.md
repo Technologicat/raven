@@ -4,7 +4,8 @@
 to `TODO_DEFERRED.md`.** The triage discussion consumes this file; heading text is verbatim, so it joins
 against the deferred file and the cluster map.
 
-**Status: partial. 82 of 130 items carry a verdict.** The remainder are unchecked, not confirmed — see
+**Status: partial. 102 of 130 items carry a verdict**, and one more (torch/torchaudio) has been through the
+sweep and is explicitly recorded as still unchecked. The remaining 27 are unchecked, not confirmed — see
 "Coverage" below, which says plainly what that means for the discussion.
 
 It is a directory rather than the single file the brief named, because it came with a script, and this repo
@@ -135,6 +136,46 @@ mechanism does something similar:
 | Hybridir: BM25 backend migration for larger corpora | **CONFIRMED** | Still `import bm25s`. |
 | Adopt dotted import style in remaining modules | **CONFIRMED** | 325 `from ..module import name` lines outside the vendor tree. (Not all are wrong — `__init__.py` re-exports are the documented exception — so the number bounds the work rather than measuring it.) |
 
+### Batch 5 — the items only Juha could settle
+
+Nineteen items answered in one sitting (2026-08-10). Checking the tree first shrank the batch considerably:
+five items that looked like they needed a running app — the composer's sideways scroll, the stranded
+inline-code boxes, the turn-sequencing race, gray-not-blue streaming thinking, and the FileDialog slowdown —
+turned out to be settleable from code, because no fix had landed for any of them. What genuinely needed a
+human was **decisions and memory**, not observation.
+
+Six of the nineteen carry a *disposition* rather than only a verdict, and that is the batch's real output:
+three belong in `Declined` or `Waiting on upstream` (sections that already exist for exactly this), two want
+merging, and two were re-scoped in ways that shrink the work.
+
+| Heading | Verdict | Evidence |
+|---|---|---|
+| Chat view scroll position jumps back down while the model is writing | **CONFIRMED (remainder)**, merge | Nearly ruled STALE, and it would have been wrong. The item declares itself "Done 2026-07-30 — confirmed live" and the code agrees (`should_follow_tail`, 17 sites in `chat_controller.py`), but that covers the three *app-side* faults only. Corrected by Juha: "mostly done, but not quite — there's still the drift from ImGui itself." That remainder is the ImGui fraction-vs-absolute drift, which the sibling item *Holding the chat view's scrollbar…* already documents in full, with 288 measured samples. **Same mechanism, so the pair wants merging** — the fixed part is history, the drift is the live item. |
+| Decide the public name: "Raven" is taken | **CONFIRMED** | Open by decision. Being resolved separately; the gate ("before the first PyPI upload") is not near. |
+| Extract `raven.common` into an upstream library ("corvid") | **CONFIRMED** | Its stated gate is "a second consumer needing the toolkit". No pyan-gui yet and none on the roadmap, so the gate is unmet — the item is correctly waiting, not stalled. |
+| Triage CLAUDE.md style conventions: global vs project-specific | **STALE** | The split has been done; the fleet-wide conventions live in `~/.claude/CLAUDE.md`. **But it should not simply be deleted** — Juha's point is that CLAUDE.md files "grow without bound", so what the item should become is a recurring re-check rather than a one-off triage. Natural pairing: the dehydration pass, which is already a scheduled ritual for the same class of problem. |
+| TODO.md goes stale because nothing makes anyone visit it | **CONFIRMED**, re-scoped | Stays open, and one of its candidate directions is now ruled out: "make TODO.md items point at briefs" does not scale, because it implies generating hundreds of briefs. The problem is agreed; the mechanism is not found yet. |
+| Modernize the Librarian system prompt / character card | **CONFIRMED**, promoted | Sprint-worthy before Researchers' Night (2026-09-26) — the persona is demo-facing, and the item's design is already decided (generate the attachment-format list from `docextract.supported_extensions()`, never write it down). |
+| Colorblind-safe status signaling | **CONFIRMED**, scoped to the full audit | Not the cheap glyph-prefix-first step: the whole color-only vocabulary gets audited together (flash palette, the search-found indicator, the VU meter). |
+| Client-local avatar animator (licensing-bounded) | **CONFIRMED** → *Declined* | An AGPL server is fine for current use, so the fully-BSD-distribution motivation is not live. Move to `Declined` with that reason — the item is large and would otherwise keep looking attractive. |
+| Upgrade oobabooga and re-check Raven's ooba support | **CONFIRMED**, re-scoped | **The current backend is LM Studio**, chosen because the rest of the team uses it. Ooba remains supported-in-principle but the local install is long stale, so this is a compatibility re-validation with no user waiting on it. It also makes `CLAUDE.md`'s "LLM Backend" section wrong — see below. |
+| VLM reranking / images in the docs DB / semantic cleanup grouping | **CONFIRMED** | All three gate on the Nomic embedder migration, which is under discussion separately. |
+| `dpg_markdown` intermittently drops a single letter **+** Chat view drops a character mid-message | **CONFIRMED**, merge | **These are one item.** Both cite the same 2026-07-30 "ow can I help you today" sighting from opposite ends. Still occurring. New evidence from Juha: it is plausibly also the same fault as the hyperlink-highlight bug, whose highlight sat **one character off** from the correct position (last seen last year — so the whole family is very intermittent). That off-by-one signature matches the item's own finding that the lost character is always the first after something the pipeline consumed. Three symptoms, one suspected boundary error. |
+| torch / torchaudio CUDA version alignment on fresh installs | **UNCHECKED** | Not retested since filing; no fresh install has been done. Stays as filed — it is a documentation/install-experience item, not a code defect. |
+| raven-cherrypick: further reduce idle CPU/GPU load | **CONFIRMED** → *Declined* | ~20% of one core at 12 fps idle is good enough. Juha asked explicitly that it be *parked rather than deleted*, "to avoid spontaneously re-opening as a new issue" — which is verbatim what the `Declined` section exists to prevent. |
+| raven-cherrypick: low FPS with large images | **CONFIRMED** | Nothing done; 10–15 fps on ~5000 px-wide images stands. |
+| Preload cache: 16MP image optimization | **CONFIRMED**, wanted | Conference photos are still 16MP and still a live workflow, so the four fixes are sized for a case that actually occurs. |
+| Cherrypick: zoom-in doesn't upgrade already-cached preload neighbors | **CONFIRMED**, low | Not noticed lately, and it surfaces mainly on the same 16MP photos — so it clusters with the item above rather than standing alone. |
+| The automatic RAG search reads to the model as a mistake it made | **CONFIRMED** | Still happening. Not a quirk of the model it was first observed on. |
+| FileDialog: slow open and a teardown input-dead-window on huge directories | **CONFIRMED** | Both symptoms still present. |
+| The chat composer scrolls sideways instead of wrapping | **CONFIRMED** → *Waiting on upstream* | "Acceptable but bad." There is no fix available on our side — `add_input_text` has no `wrap`, and `no_horizontal_scroll` is worse — so what the item should record is the trigger to look again: re-check on a new ImGui/DPG release. That is precisely the `Waiting on upstream` contract. |
+| Super/subscript font coverage in the GUI | **CONFIRMED** | Visualizer still wants it. **Not demo-facing**, so it is not gated on Researchers' Night — which is the one thing about it that was unclear. |
+
+**Two `CLAUDE.md` inaccuracies surfaced while answering, both in the "LLM Backend" section.** They are
+documentation bugs rather than sweep verdicts, recorded here because this is where they were found: the
+backend is named as text-generation-webui when it is LM Studio, and the recommended model is given as
+Qwen3-VL, a line the Qwen 3.5 consolidation of the VL series into the main line has overtaken.
+
 ## Raised for the discussion: webfetch and docextract disagree about running code
 
 Not a verdict, and not filed as an item — it surfaced while checking "HTML pages whose content is produced
@@ -170,10 +211,11 @@ false positives worth recording so the next run does not re-litigate them:
 
 ## Coverage, stated plainly
 
-**82 of 130 items have a verdict. 48 do not.** They were selected, not sampled: the ones today's and
-0.2.8's work plausibly closed, everything the reference checker flagged, and then four batches chosen for
-being settleable by a query rather than by reading. So the STALE rate here says nothing about the rest of
-the file, and **an item's absence from this table is not evidence that it holds.**
+**102 of 130 items have a verdict. 27 do not**, plus one recorded as unchecked on purpose. They were
+selected, not sampled: the ones today's and 0.2.8's work plausibly closed, everything the reference checker
+flagged, four batches chosen for being settleable by a query rather than by reading, and then every item that
+needed Juha rather than the tree. So the STALE rate here says nothing about the rest of the file, and **an
+item's absence from this table is not evidence that it holds.**
 
 The selection bias runs the other way from what you might expect, and batches 3 and 4 sharpened the point.
 Batches 1 and 2 were picked partly *because* the items looked closeable, and produced six STALE. Batches 3
@@ -182,27 +224,31 @@ was flagged as done by Juha rather than found by a query. So the stale items are
 the file: they cluster in whatever recent work touched. A bulk "the old ones are probably stale" move in the
 triage would be backwards — of the seven STALE found so far, six sit in areas 0.2.8 or 0.2.9 changed.
 
-**The query-settleable set is now exhausted.** What remains needs reading or a running app.
+**The query-settleable set is exhausted, and so is the set that needed Juha.** What remains needs the item
+and the code read together.
 
-Tally so far: 67 CONFIRMED (one of them halved), 6 MOVED, 7 STALE, 2 SUPERSEDED.
+Tally: 86 CONFIRMED (one halved, four carrying a disposition — two Declined, one Waiting-on-upstream, one a
+merge), 6 MOVED, 8 STALE, 2 SUPERSEDED, 1 explicitly unchecked.
+
+**Batch 5 also revised the estimate that produced it.** The split below predicted "~20 UNCHECKABLE from the
+tree — rendering bugs, races, reads-as-a-hang". That was too pessimistic by about a quarter: five of those
+items turned out to be settleable from code, because no fix had landed and *absence* is exactly what a grep
+can show. What actually needed a human was decisions and memory, which is a different category from the one
+the estimate named. Worth carrying into the read-carefully set: **"needs a running app" is a claim to test,
+not a property to assume** — the cheap check comes first, and it often answers.
 
 ### What is left, and what it will take
 
-Of the 48 unchecked, roughly:
-
-- **~28 need the item and the code read together.** No shortcut; this is where the remaining time goes.
-  The ones deferred so far, and why:
-  - *Audit unnamed lambdas* and *Adopt dotted import style* — the counts (214 lambdas, 1052
-    `from X import Y`) mean nothing without knowing which instances the item considers wrong.
-  - *Attach an image from a web URL* — staged attachments already carry a `provenance_url`, so part of it
-    may exist.
-  - *The 8/3 pass: bare DPG margins should name themselves* — the named constants exist and have 21 call
-    sites, so this is partly done; the question is how many bare literals remain.
-  - *The subtitle translator silently drops `=`*, *Librarian's help card has no room to describe
-    attachments*, *torch / torchaudio CUDA version alignment*, *webfetch local (client-side) mode*,
-    *Markdown ATX headings don't render*.
-- **~20 are UNCHECKABLE from the tree** — rendering bugs in the Markdown widget, the turn-sequencing race,
-  "reads as a hang", colourblind-safety. These want a running app or an answer from memory.
+Of the 27 unchecked, all need the item and the code read together. No shortcut; this is where the remaining
+time goes. The ones deferred so far, and why:
+- *Audit unnamed lambdas* and *Adopt dotted import style* — the counts (214 lambdas, 1052
+  `from X import Y`) mean nothing without knowing which instances the item considers wrong.
+- *Attach an image from a web URL* — staged attachments already carry a `provenance_url`, so part of it
+  may exist.
+- *The 8/3 pass: bare DPG margins should name themselves* — the named constants exist and have 21 call
+  sites, so this is partly done; the question is how many bare literals remain.
+- *The subtitle translator silently drops `=`*, *Librarian's help card has no room to describe
+  attachments*, *webfetch local (client-side) mode*, *Markdown ATX headings don't render*.
 
 ## The untested-modules row, and two ways of getting it wrong
 

@@ -429,8 +429,14 @@ The pytest summary normally shows a handful of `DeprecationWarning`/`UserWarning
 - **`RuntimeWarning: divide by zero encountered in divide` — `raven/common/numutils.py:psi()`**: the mollifier helper computes `np.exp(-1.0 / x**m) * (x > 0.0)` and relies on the `(x > 0.0)` mask to zero the divide-by-zero. A previous attempt used `warnings.filterwarnings(..., module="__main__")` which silently failed (numpy emits the warning from its own internal module, not `__main__`). Correct fix: `with np.errstate(divide='ignore', invalid='ignore'):` — numpy's own mechanism for suppressing float-error warnings within a dynamic extent.
 
 ## LLM Backend
-Uses text-generation-webui with OpenAI-compatible API.
-Recommended model: Qwen3-VL-30B-A3B (24GB+ VRAM) or Qwen3-VL-4B (8GB VRAM).
+Any OpenAI-compatible API. **LM Studio is what the team uses**, so it is the one to assume when a question
+turns on backend behavior. text-generation-webui (oobabooga) is also supported — `llmclient` detects the
+flavor and adapts — but that path has not been re-validated against a recent ooba release, so treat its
+quirk handling as untested rather than known-good.
+
+Model choice tracks whatever Qwen currently ships: the **VL line was folded into the main line at Qwen3.5**,
+so a current Qwen3.5/3.6 release covers both text and vision, and the separate `-VL` builds are historical.
+Size follows VRAM in the usual way — a ~30B MoE wants 24 GB or more, a ~4B fits in 8 GB.
 
 ## Known Issues / TODOs
 - Visualizer: the `app.py` split has landed (see `raven/visualizer/CLAUDE.md` for the module map). What remains is ordinary tidying — `info_panel.py` at 1518 lines is the next split candidate, and `importer.py` could use stage separation — not a god-object rescue
