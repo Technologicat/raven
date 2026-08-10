@@ -230,29 +230,47 @@ discovering it later: **poll only while known-bad.** No request at all in the he
 `_resolve_model_info` (one HTTP call) on a timer only while the pill is up, stopping the moment it clears.
 The cost is bounded by the duration of a condition the user is actively fixing.
 
-### The catch: the system prompt depends on the backend
+### The catch: the system prompt depends on the backend — and probably should not
 
-**The prompt is not independent of what we just learned.** `configure` builds `system_prompt` and
+**The prompt is not independent of what the probe learns.** `configure` builds `system_prompt` and
 `character_card` from `template_vars` = (`user`, `char`, `model`, `context_length`), and the last two come
 from the backend — the card tells the model its own identity and context size. A Librarian that started
-without a backend has a prompt built from placeholders, so **connecting is not just a UI state change; the
-prompt has to be rebuilt and the stored node updated.**
+without a backend holds a card built from placeholders, so connecting is not only a UI state change.
 
-Both halves already exist:
+The mechanical repair is available: re-probe → `configure` → `appstate._refresh_system_prompt` → clear the
+pill. Note what that last step does, because it is easy to assume otherwise: it adds a revision **and
+deletes the previous one**. Deliberately — the node is refreshed on every app start, so keeping the old
+revisions would grow a pile of them, one per launch, none of which anyone wants. So the placeholder version
+is not preserved, and nothing is lost by that.
 
-- `llmclient.configure(model_info=..., ...)` produces the corrected settings, with no second round trip.
-- `appstate._refresh_system_prompt` rewrites the system-prompt node — as a *revision*, so the placeholder
-  version is preserved rather than overwritten.
+**But the better answer is probably to stop putting these two in the card at all** (Juha, 2026-08-10). The
+model name and the context length are exactly the shape of thing the *date* is, and the date was moved out
+for the same reason — the comment in `configure` says so in its own words:
 
-So the reconnect path is: re-probe → `configure` → `_refresh_system_prompt` → clear the pill. Which is the
-clearest argument so far that the Part 0 split was worth doing on its own terms: before it, "rebuild the
-prompt from new backend facts" and "go ask the backend" were the same indivisible function.
+> No date here, deliberately: this text is built once, at app start, so a date written into it goes wrong at
+> the first midnight the session survives.
 
-**Open:** what the character card should say while no model is loaded. `NO_MODEL_INFO` ("No model
-information is available") is the existing answer for an unidentifiable model and is probably right here
-too, but a card asserting a context length it does not know is a different matter — the 64k default is a
-guess, and stating a guess to the model is what `_resolve_model_info`'s "never a guess" rule exists to
-prevent.
+A model name written into a card built at app start goes wrong the moment the loaded model changes, which is
+precisely the reconnect case, and also the case of a user switching models in LM Studio mid-session without
+restarting anything. Moving both into the per-turn injects — where they are recomputed every turn anyway —
+**dissolves the reconnect problem rather than solving it**: there is no stale card to rebuild, and no node to
+rewrite. It also retires the open question of what the card should claim while nothing is loaded, since a
+turn taken with no model loaded does not happen.
+
+That is a change to what the model is told and where, so it wants measuring before it is adopted — the
+inject-shape probes in `investigations/context-injects/` are the apparatus, and they now run on real
+settings, which is what makes such a measurement trustworthy.
+
+### Raised, and not this brief's to fix: the chat log does not show the injects
+
+The chat view shows the stored conversation. It does not show the date inject, the clock tool call, the
+retrieval tool call, or the reminders — all of which are really sent, every turn. **That breaks the WYSIWYG
+promise the log otherwise makes** (Juha, 2026-08-10), and moving the model name and context length into the
+injects would put more of what the model is told behind that same curtain.
+
+Recorded here because it surfaced here. It is not part of this brief — it is a chat-view question, and
+belongs with the other chat-log work — but it should not be lost, and the TODO files are frozen pending
+their own pass.
 
 ## Explicitly out of scope
 
