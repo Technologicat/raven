@@ -103,7 +103,10 @@ afterwards. Keep the wall where it works; do not propagate it to callers it cann
 The one prerequisite, and it is import-side rather than design-side.
 
 `llmclient.py:81` calls `api.initialize(...)` at module top, so importing `llmclient` both requires the full
-`raven.client.api` chain to succeed — qoi, spaCy, Kokoro TTS — and runs the side effect. `scaffold` imports
+`raven.client.api` chain to succeed — `spacy`, and `av` via the vendored Kokoro streaming writer — and runs
+the side effect. (**Not** qoi, and **not** torch: CI installs both, torch as the CPU wheel, which imports
+fine. The original wording named those two and sent a reader chasing dependencies that were already
+present — corrected 2026-08-10, at the source in `test_scaffold.py` as well.) `scaffold` imports
 `llmclient` at module level and inherits it, which is why `test_scaffold.py` carries a `pytest.importorskip`
 and why scaffold coverage is invisible in the minimal-deps CI job.
 
@@ -115,6 +118,30 @@ side effects; `scaffold.py`'s `TYPE_CHECKING` import of `hybridir` is the model.
 
 **Falls out**: remove the `importorskip` from `test_scaffold.py`, and scaffold's ~119 statements start
 contributing to CI coverage.
+
+**Measured 2026-08-10, because this part of the plan asserts an outcome rather than a fact — and it needed
+one correction.** Moving the *call* into `setup` does not by itself remove the `importorskip`: the skip is
+caused by the module-level `from ..client import api`, not by `api.initialize(...)`. What the measurement
+settles is that deferring that one import is sufficient. Per-module, the heavy top-level packages pulled in
+by an import are:
+
+| module | pulls |
+|---|---|
+| `chatutil`, `chattree` | numpy |
+| `librarian.config` | numpy, **torch** |
+| `common.netutil` | — |
+| `client.api` | av, kokoro, pygame, qoi, sentence_transformers, **spacy**, torch, transformers |
+| `librarian.llmclient` | *exactly `client.api`'s set* |
+
+So `client.api` is the only heavy contributor beyond `config`'s torch, and torch is installed in CI. `api` is
+used in `llmclient` at three sites only — the bootup call, and inside `websearch_wrapper` and
+`webfetch_wrapper`, both of which run only when a network tool is actually invoked. Deferring the import to
+those three is therefore enough, and small.
+
+Note `librarian.config` pulls torch independently (via `common.video.colorspace`). That is not a problem to
+solve here — CI installs the CPU torch wheel, which imports fine — but it does mean "scaffold imports
+nothing heavy" will not become true, and should not be written down as the goal. The goal is that it imports
+nothing CI lacks.
 
 ## Part A — build the turn's prompt and hand it back
 

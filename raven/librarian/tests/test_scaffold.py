@@ -4,11 +4,14 @@ import threading
 
 import pytest
 
-# `scaffold` transitively imports `llmclient` → `raven.client.api`, which pulls
-# the heavy dep stack (qoi, spaCy, the TTS stack). The CI test job runs a
-# hand-picked minimal subset of dependencies; when the heavy stack is missing,
-# skip this whole module. Mirrors the pattern in `test_api.py` (importorskip on
-# qoi) and `test_hybridir.py` (importorskip on chromadb/bm25s).
+# `scaffold` transitively imports `llmclient` → `raven.client.api`, whose module-level imports include
+# `spacy` and (via the vendored Kokoro streaming writer) `av`. The CI test job installs a hand-picked
+# dependency subset that has neither, so the import fails there and this whole module is skipped.
+# Mirrors `test_hybridir.py` (importorskip on chromadb/bm25s).
+#
+# Name those two specifically rather than "the heavy stack": CI *does* install qoi, and torch (the CPU
+# wheel, which imports fine — only CUDA is absent). Listing them as reasons sent at least one reader
+# chasing dependencies that were already there.
 pytest.importorskip("raven.librarian.scaffold",
                     reason="scaffold transitively needs the full raven-client dep stack")
 
