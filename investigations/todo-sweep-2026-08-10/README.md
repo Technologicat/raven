@@ -4,7 +4,7 @@
 to `TODO_DEFERRED.md`.** The triage discussion consumes this file; heading text is verbatim, so it joins
 against the deferred file and the cluster map.
 
-**Status: partial. 30 of 130 items carry a verdict.** The remainder are unchecked, not confirmed — see
+**Status: partial. 50 of 130 items carry a verdict.** The remainder are unchecked, not confirmed — see
 "Coverage" below, which says plainly what that means for the discussion.
 
 It is a directory rather than the single file the brief named, because it came with a script, and this repo
@@ -60,6 +60,31 @@ running app, a live backend, or a human eye).
 | `replace_last_paragraph`'s `dpg.mutex()` is disabled because it hangs the app | **CONFIRMED** | `chat_controller.py:518-519` still carries the commented-out `with dpg.mutex():` and its TODO. |
 | Idle prefill fires even when the HEAD's token count is already exact | **CONFIRMED** | `_context_prefill_entrypoint` bails on cancellation, shutdown, an in-flight generation, and a moved HEAD — but has no known-exact check, which is the one the item asks for. (A neighbouring guard *does* clear a pending prefill when a real turn starts, which is a different case and easy to mistake for this one.) |
 
+### Batch 2 — items settleable by "does this exist yet?"
+
+| Heading | Verdict | Evidence |
+|---|---|---|
+| Hybridir: cover the edit-queueing layer with tests | **STALE** | `test_hybridir.py:384` onward covers `_pend_edit` collapse at unit level, which is the layer the item names. |
+| Smooth scrolling in Cherrypick too, now that Librarian has it | **CONFIRMED** | `SmoothScrolling` is used by Librarian and Visualizer; `raven/cherrypick/` does not reference it. |
+| The avatar upscaler offers bilinear and bicubic, but not Lanczos | **CONFIRMED** | `upscaler.py:36` accepts exactly `low`, `high`, `bilinear`, `bicubic`. |
+| RAG: rerank retrieved chunks and inject only the best few | **CONFIRMED** | No occurrence of "rerank" anywhere outside tests. |
+| Split `raven.common.nlptools` per backend | **CONFIRMED** | Still one module, `raven/common/nlptools.py`. |
+| Untested but test-worthy modules in `raven.common` | **CONFIRMED** | Eight remain with no test at all: `docstring_utils`, `hfutil`, `audio/player`, `audio/recorder`, `gui/helpcard`, `gui/layout_math`, `gui/vumeter`, `gui/widgetfinder`. The two the item's prose names as pending, `text/normalize` and `text/speakable`, *are* covered now. |
+| Faster PNG decoder | **CONFIRMED** | `image/codec.py` has a turbojpeg fast path for JPEG only; no `fpng`/`fpnge`/`spng`. |
+| raven-cherrypick: export image sequence (QOI→PNG batch) | **CONFIRMED** | No export path in `cherrypick/app.py`. |
+| Avatar settings editor: custom postprocessor chain ordering | **CONFIRMED** | `strip_postprocessor_chain_for_gui` documents itself as "Fixed render order"; the GUI imposes the order rather than exposing it. |
+| raven.papers user manual | **CONFIRMED** | No documentation files under `raven/papers/`. |
+| webfetch: batch-approve several denied hosts at once | **CONFIRMED** | `approve_host_for_session(host: str)` takes one host, and the button calls it once. |
+| scaffold: collect `ai_turn`'s callbacks into a single bundle object | **CONFIRMED** | The signature still threads the callbacks individually. |
+| Add built-in calculator and weather LLM tools | **CONFIRMED** | Neither exists; the only "calculator" in the tree is a running-average docstring. |
+| Reconsider the webfetch allowlist default: ship deny-by-default? | **CONFIRMED** | Ships `webfetch_allowlist = None`, which the config documents as leaving the whole constrain-mode dormant — i.e. allow-by-default. Still a decision, not a defect. |
+| Rendering LaTeX equations in the chat log | **CONFIRMED** | The only LaTeX handling is the BibTeX importer's accent decoding. |
+| Text out of images, so figures work without a vision model (OCR, SVG `<text>`) | **CONFIRMED** | No OCR anywhere; `docextract` says so itself ("OCR for those is a separate, later concern") and the GUI tells the user to run `ocrmypdf` first. |
+| Vector figures in the docs DB and attachments (`.svg`) | **CONFIRMED** | `docextract` has no SVG path. |
+| Read documents as page images, for figure- and math-heavy sources | **CONFIRMED** | No page-image ingestion path. |
+| A no-avatar mode, with the chat tree in the panel the avatar vacates | **CONFIRMED** | No such mode. |
+| A crash during ingest loses the whole run, however long it was | **CONFIRMED, with a contradiction to resolve** | The delayed-commit coalescer is still in place (`hybridir.py:1651`, "Schedule delayed commit after each add"), so the pending-edit window the item measured still exists. **But** `indexer.py:154` asserts the opposite in a comment — "The commit is per-document and the index auto-persists... Re-running resumes". Both cannot be right about the same path. Worth resolving before anyone acts on this item; not resolved here, because guessing which is stale is exactly what this sweep is for. |
+
 ## What the reference checker flagged, and what it was worth
 
 Eleven items name something that no longer resolves. Six became the MOVED verdicts above. The other five are
@@ -71,16 +96,37 @@ false positives worth recording so the next run does not re-litigate them:
 
 ## Coverage, stated plainly
 
-**30 of 130 items have a verdict. 100 do not.** They were selected, not sampled: the ones today's and
-0.2.8's work plausibly closed, everything the reference checker flagged, and then a batch chosen for being
-settleable by a query rather than by reading. So the STALE rate here says nothing about the rest of the
-file, and **an item's absence from this table is not evidence that it holds.**
+**50 of 130 items have a verdict. 80 do not.** They were selected, not sampled: the ones today's and
+0.2.8's work plausibly closed, everything the reference checker flagged, and then two batches chosen for
+being settleable by a query rather than by reading. So the STALE rate here says nothing about the rest of
+the file, and **an item's absence from this table is not evidence that it holds.**
 
 The selection bias runs the other way from what you might expect. Items were picked partly *because* they
-looked closeable, so a low STALE rate among them is meaningful: of the 30, five are STALE and one is half
-stale, against 17 that still hold. Most items that look done are not.
+looked closeable, so a low STALE rate among them is meaningful: **six of 50 are STALE and one is half
+stale.** Most items that look done are not.
 
-Tally so far: 17 CONFIRMED (one of them halved), 6 MOVED, 5 STALE, 2 SUPERSEDED.
+Tally so far: 36 CONFIRMED (one halved, one carrying an unresolved contradiction), 6 MOVED, 6 STALE,
+2 SUPERSEDED.
+
+### What is left, and what it will take
+
+Of the 80 unchecked, roughly:
+
+- **~35 are settleable the same way** — "does this exist yet", one query each.
+- **~25 need the item and the code read together.** No shortcut; this is where the remaining time goes.
+  Three were deferred out of batch 2 for exactly this reason: *Audit unnamed lambdas* and *Adopt dotted
+  import style* both have counts (214 lambdas, 1052 `from X import Y`) that mean nothing without knowing
+  which the item considers wrong, and *Attach an image from a web URL* is complicated by staged attachments
+  already carrying a `provenance_url`.
+- **~20 are UNCHECKABLE from the tree** — rendering bugs in the Markdown widget, the turn-sequencing race,
+  "reads as a hang", colourblind-safety. These want a running app or an answer from memory.
+
+## A side finding, for whoever fixes it
+
+`CLAUDE.md`'s test-coverage list names `viewport_math` among the covered `gui/` modules. There is no
+`viewport_math` module and no test for it — the module is `layout_math`, and it is one of the eight with no
+test at all. Noticed while checking the untested-modules item; not fixed here, to keep this pass to one
+subject.
 
 The brief predicted a meaningful STALE rate and explained why it is expected rather than embarrassing: many
 of these were filed during a period when the standing instruction was never to get sidetracked, so things
