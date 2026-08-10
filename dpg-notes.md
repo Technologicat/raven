@@ -65,8 +65,19 @@ thread id came back identical to the render loop's):
 The live case is **OS-level file drag-and-drop**, which DPG does not implement at any version (checked
 against the binary, not the docs: no public API takes a dropped file, the handler registry has no drop
 handler, and DPG's own `drop`-named symbols are all ImGui's widget-to-widget DragDrop). GLFW does implement
-it, cross-platform, and installing the callback works. See `TODO_DEFERRED.md`, "OS drag-and-drop of files
-into DPG apps".
+it, cross-platform, and installing the callback works. It ships as `raven.common.gui.filedrop`, which does
+exactly the hand-off above — the C callback copies the paths and queues them, and a worker runs the app's
+handler, so handlers may show dialogs.
+
+Two further facts about that route, both measured (`investigations/dpg-dnd/`):
+
+- **`show_viewport()` is what makes DPG's window the calling thread's current GLFW context** — not the
+  first rendered frame, as one might assume from needing the render loop for everything else. It is NULL
+  before that call and on every other thread, so the callback can only be installed from the render thread
+  after `show_viewport()`, and that is the uniform install site.
+- **GLFW has no drag-*hover* event** — no drag-enter, drag-over or drag-leave, only the drop itself on
+  release. So no drop target can highlight while a drag is in flight, and a UI cannot ask the user to aim
+  at one of several targets. An app with more than one destination has to decide from the dropped file.
 
 ## `split_frame()` mechanism
 

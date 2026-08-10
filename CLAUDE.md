@@ -362,7 +362,7 @@ Target ~700 lines per module as a guideline, not a hard limit — some modules c
 68 test modules as of 2026-08-03, ~1600 tests. Library and utility code is broadly covered; what is
 untested is the GUI layer and the Visualizer.
 
-- **`common/`** — numutils, smoothvalue, utils, bgtask, deviceinfo, docextract, logsetup, netutil, nlptools, readcsv, running_average, stringmaps, text_normalize, text_speakable; `audio/` (codec, resample, utils) and `audio/speech/` (tts, stt, lipsync, and a TTS→STT round trip); `image/` (codec, lanczos, utils); `video/` (colorspace, compositor, postprocessor, upscaler); `gui/` (animation, messagebox, utils, viewport_math, and all of `xdotwidget/`).
+- **`common/`** — numutils, smoothvalue, utils, bgtask, deviceinfo, docextract, logsetup, netutil, nlptools, readcsv, running_average, stringmaps, text_normalize, text_speakable; `audio/` (codec, resample, utils) and `audio/speech/` (tts, stt, lipsync, and a TTS→STT round trip); `image/` (codec, lanczos, utils); `video/` (colorspace, compositor, postprocessor, upscaler); `gui/` (animation, messagebox, utils, viewport_math, filedrop, and all of `xdotwidget/`).
 - **`librarian/`** — chattree, chatutil, hybridir, appstate, scaffold, llmclient, cleanup, imagestore, sidecarstore, textfilestore.
 - **Elsewhere** — `client/` (api, mayberemote), `papers/*`, `cherrypick/*`, `server/webfetch`, `xdot_viewer/dot_utils`.
 

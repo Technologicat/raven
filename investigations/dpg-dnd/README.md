@@ -15,9 +15,11 @@ GLFW; GLFW has had cross-platform file drop since 3.1; and the symbols are expor
 | Script | What it answers |
 |---|---|
 | `dnd_probe.py` | Whether a file dropped on a DPG viewport reaches Python, which window handle to use, whether DPG competes for the callback, and which thread it arrives on. Needs a human to do the dragging; run it, drag a file, read the terminal. |
+| `context_timing_probe.py` | At which DPG startup call `glfwGetCurrentContext()` starts returning DPG's window, and whether any other thread can see it. This is what decides where `filedrop.install` may be called. Needs no human input; maps a window for about a second. |
 
-**It is kept because it is re-runnable, not as a record of the run below.** Wayland is still unanswered and
-this is what answers it there.
+**They are kept because they are re-runnable, not as a record of the runs below.** Wayland is still
+unanswered and `dnd_probe.py` is what answers it there; `context_timing_probe.py` is what to re-run after a
+DPG upgrade, on a platform where drag-and-drop has stopped working.
 
 ## What came back
 
@@ -37,6 +39,11 @@ glfwSetDropCallback()   -> previous callback was NULL
   first `render_dearpygui_frame()`, returns DPG's window — the same pointer the callback later receives.
   This needed observing: GLFW's current context is per-thread, and nothing documents that DPG's render
   loop leaves it current on the caller's thread.
+  - **Refined 2026-08-10: it is `show_viewport()` that makes it current, not the first frame.** Measured
+    across the whole startup sequence — NULL before `create_context`, after `create_context`, after
+    `create_viewport` and after `setup_dearpygui`; non-NULL from `show_viewport()` onward; and NULL on a
+    background thread at every point. That is what makes `show_viewport()` the uniform install site for
+    every app, rather than "somewhere inside the render loop".
 - **Nothing competes for the callback.** The previous one came back NULL, so DPG never installs one, and
   ours survived ~7000 frames of resampling.
 - **The drop delivers the absolute path**, correctly decoded.
@@ -56,14 +63,28 @@ handler — deadlocks. Capture the paths, hand off to a background task or a fra
 Recorded in `dpg-notes.md` under "GLFW callbacks are the exception: they run *on* the render thread",
 because it is a general fact about GLFW callbacks rather than about drag-and-drop.
 
+## The other constraint: there is no drag-*hover* event
+
+**`glfwSetDropCallback` is the entire API, and it fires only on release.** GLFW has no drag-enter,
+drag-over or drag-leave callback — checked against the symbols DPG exports, which carry
+`glfwSetDropCallback`, `glfwSetCursorPosCallback` and `glfwSetCursorEnterCallback` and nothing for a drag
+in flight.
+
+So a drop target cannot light up while the user is dragging toward it, on any platform rather than only
+this one, and the app learns nothing until the file has already been let go. Any design that wants the
+user to *aim* at one of several targets is out; the app has to decide from what was dropped. That is what
+`raven-avatar-settings-editor` does, routing an image to the character or the backdrop slot by whether it
+has transparent pixels.
+
 ## What is still open
 
 - **Wayland.** GLFW implements it, but that is inference from GLFW's feature set, not something observed
   here. **Decided 2026-08-07 (Juha) not to gate the feature on it**: this machine has no Wayland session to
   test against, X11 / macOS / Windows are already three platforms, and if it turns out not to work someone
   can file an issue. Re-run `dnd_probe.py` under Wayland to close it.
-- **Multi-file drops.** The signature is `(window, count, paths)` and only `count == 1` has been seen.
 
-## Where the feature itself is tracked
+## Where the feature ended up
 
-`TODO_DEFERRED.md`, "OS drag-and-drop of files into DPG apps (cross-platform)".
+Shipped 2026-08-10 in `raven/common/gui/filedrop.py`, wired into all six GUI apps. **Multi-file drops are
+answered** — open when this was written, since the probe had only ever seen `count == 1`; dropping several
+BibTeX files into `raven-visualizer` and several images into `raven-librarian` both work.

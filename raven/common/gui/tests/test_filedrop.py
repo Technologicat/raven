@@ -18,7 +18,7 @@ import threading
 
 import pytest
 
-pytest.importorskip("dearpygui.dearpygui", reason="dearpygui not installed (GUI toolkit absent in CI)")
+dpg = pytest.importorskip("dearpygui.dearpygui", reason="dearpygui not installed (GUI toolkit absent in CI)")
 
 from raven.common.gui import filedrop  # noqa: E402 -- after importorskip by design
 
@@ -240,3 +240,34 @@ def test_install_refuses_off_the_render_thread():
 def test_availability_is_answerable_without_a_context():
     """`is_available` is a capability question, so it must not need a viewport — apps call it while deciding what to log."""
     assert isinstance(filedrop.is_available(), bool)
+
+
+@pytest.mark.gui
+def test_install_needs_show_viewport_and_succeeds_right_after_it():
+    """Pins *when* DPG's window becomes reachable, which is what fixes where every app installs the handler.
+
+    All six GUI apps install immediately after `dpg.show_viewport()`, on the strength of a measurement:
+    GLFW's current context is NULL through `create_context`, `create_viewport` and `setup_dearpygui`, and
+    non-NULL from `show_viewport()` on — no rendered frame required. Nothing documents that, so a DPG
+    upgrade could move it, and the symptom would be drag-and-drop silently doing nothing everywhere at
+    once. This fails instead.
+
+    Marked `gui`: `show_viewport` maps a real window and takes keyboard focus for a moment. The
+    complementary case — that installing off the render thread is refused — needs no window and is tested
+    above.
+    """
+    dpg.create_context()
+    try:
+        dpg.create_viewport(title="raven filedrop install test", width=320, height=200)
+        dpg.setup_dearpygui()
+        with dpg.window(tag="main"):  # tag
+            dpg.add_text("installing an OS file drop handler")
+        dpg.set_primary_window("main", True)  # tag
+
+        assert filedrop.install(lambda paths: None) is False, "before show_viewport there is no window to install against"
+
+        dpg.show_viewport()
+        assert filedrop.install(lambda paths: None) is True, "show_viewport must be enough; apps do not render a frame first"
+    finally:
+        filedrop.uninstall()
+        dpg.destroy_context()
