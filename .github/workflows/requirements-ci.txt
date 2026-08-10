@@ -41,6 +41,7 @@ python-pptx==1.0.2
 PyYAML==6.0.3
 qoi==0.7.2
 requests==2.34.2
+sseclient-py==1.9.0  # llmclient's SSE transport; needed since test_llmclient/test_scaffold started running here
 tqdm==4.70.0
 trafilatura==2.2.0
 unpythonic==2.2.0
