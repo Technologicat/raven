@@ -69,7 +69,9 @@ with timer() as tim:
     from ...common.gui import animation as gui_animation  # Raven's GUI animation system, nothing to do with the AI avatar.
     from ...common.gui import helpcard
     from ...common.gui import messagebox
+    from ...common.gui import filedrop
     from ...common.gui import utils as guiutils
+    from ...common.image import codec
     from ...common import bgtask
     from ...common import docstring_utils
     from ...common import utils as common_utils
@@ -1775,6 +1777,33 @@ atexit.register(app_shutdown)
 dpg.set_primary_window(gui_instance.window, True)  # Make this DPG "window" occupy the whole OS window (DPG "viewport").
 dpg.set_viewport_vsync(True)
 dpg.show_viewport()
+
+# Accept a character image, a backdrop image, or animator settings dragged in from the file manager.
+# Installed right after `show_viewport` because that call is what makes DPG's window reachable through GLFW
+# on this thread.
+#
+# This app has two image slots and GLFW gives no way to tell them apart by gesture: its drop callback fires
+# only on release, with no drag-enter/over event, so nothing can light up a drop zone while a drag is in
+# flight and there is no zone to aim at. The image itself settles it instead, and the rule order is the
+# mechanism — first match wins, so *transparency*, not merely an alpha channel, is what routes to the
+# character slot. A character is a cutout; a backdrop is a full frame, and one exported as RGBA has an alpha
+# channel with nothing transparent in it, so testing for the channel would swallow every such backdrop.
+filedrop.install(filedrop.make_router([filedrop.DropRule(matches=filedrop.all_of(filedrop.by_extension(*codec.IMAGE_EXTENSIONS),
+                                                                                 codec.has_transparency),
+                                                         handler=lambda paths: gui_instance.load_input_image(paths[0]),
+                                                         label="a character image (an image with transparency)",
+                                                         multiple=False),
+                                       filedrop.DropRule(matches=filedrop.by_extension(*codec.IMAGE_EXTENSIONS),
+                                                         handler=lambda paths: gui_instance.load_backdrop_image(paths[0]),
+                                                         label="a backdrop image (any image without transparency)",
+                                                         multiple=False),
+                                       filedrop.DropRule(matches=filedrop.by_extension(".json"),
+                                                         handler=lambda paths: gui_instance.load_animator_settings(paths[0]),
+                                                         label="animator settings (.json)",
+                                                         multiple=False)],
+                                      reference_window="avatar_settings_editor_main_window",  # tag
+                                      what="Raven-avatar-settings-editor",
+                                      blocked=is_any_modal_window_visible))
 
 initialize_filedialogs()
 
