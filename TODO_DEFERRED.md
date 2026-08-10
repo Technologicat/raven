@@ -1057,63 +1057,6 @@ clusters, as of 2026-07-27:
   coverage in the GUI" is an *atlas* problem rather than a renderer one (`fontsetup` serves both plain DPG
   text and `dpg_markdown`), but it shares the font-survey work with the emoji item's monochrome-font route.
 
-## Attachment + docs-DB: support office document formats (MS Office / LibreOffice)
-
-*Cluster: document-ingestion · Cost: ? · Gate: ? · Filed: 2026-07-18*
-
-**Mostly landed 2026-07-29** (`093c400`): `docextract` now reads word-processor documents (`.docx`, `.odt`),
-presentations (`.pptx`, `.odp`) and saved web pages (`.html`, `.htm`) alongside plain text and PDF, for both
-the attach path and the docs-DB ingester.
-
-**Spreadsheets (`.xlsx`, `.ods`) remain**, and they are the awkward ones — which is why they were left. A
-sheet is not a linear document, so "the text of a spreadsheet" is a design decision before it is an
-`openpyxl` call.
-
-The agreed first approximation (Juha, 2026-07-30): **emit Markdown tables.** One table per detected table
-region, regions delimited by at least one fully blank row or column, taken in Western reading order (left to
-right, then top to bottom). Markdown is the right target — the models are steeped in it, and `docextract`'s
-other formats already produce prose that the chat view renders as Markdown, so it needs no new convention.
-
-One substitution worth making on the sketch: **separate sheets with a heading carrying the sheet name**
-(`## Sheet: Q3 Budget`) rather than a bare `-----`. A horizontal rule says "something else starts here" and
-throws away the name, which is often the single most informative string in the file — "Assumptions" versus
-"Raw data" tells a reader, and a model, what it is looking at. Same cost, strictly more information.
-
-Then the details that decide whether the output is useful or merely plausible:
-
-- **Values, not formulas.** `openpyxl`'s `data_only=True` yields the *cached* result, which is present only if
-  a real spreadsheet application last saved the file.
-
-  The empty-cell case needs **two** things true together: the file contains formulas *and* was never saved by
-  an application that computes them. Most inputs fail one of those, which is why the expected sources look
-  safe — a report downloaded from a web dashboard is usually pure values with no formulas at all (so
-  `data_only` is moot), and a human-authored workbook has been through Excel or LibreOffice (so the cache is
-  populated). The gap is narrow: a formula-bearing file written by a library (`openpyxl`, `xlsxwriter`,
-  `pandas`) and never opened.
-
-  What makes it worth handling anyway is that the failure is **silent** — blank cells, not an exception — so
-  it surfaces as a confidently empty table rather than an error. Cheap insurance for a narrow case, not a
-  workaround for a common one: fall back to the formula text, and never emit a table that is entirely blank
-  without saying why. Confirm the behaviour against a file written by `openpyxl` itself before relying on any
-  of this.
-- **Merged cells.** Markdown cannot express a merge. `openpyxl` reports the value in the top-left cell and
-  `None` for the rest of the range; repeating the value across the merged span usually retrieves better than
-  leaving blanks, since a row then still reads as a complete record.
-- **The used range lies.** One stray cell far out to the right makes a sheet nominally enormous. Bound the
-  emitted region by actual content, and cap total output — a 50k-row sheet rendered in full is a wall of text
-  that crowds out the question being asked about it.
-- **Charts, images and pivot caches: skip.** No text to extract, and a placeholder line invites the model to
-  comment on something it cannot see.
-- **`.ods` may be nearly free.** `odfpy` is already a dependency (it backs `_extract_odf` for `.odt`/`.odp`)
-  and handles spreadsheets too, so the second format is likely a different reader over the same
-  region-detection and Markdown-emission logic. Worth structuring the code that way from the start.
-
-The legacy binary formats (`.doc`, `.ppt`) are deliberately out of scope: reading them means shelling out to
-a separate converter.
-
-Discovered during the document-attach test-drive (2026-07-18, Juha — "the software category that spends its time
-disproving the claim on the tin").
-
 ## FileDialog: slow open and a teardown input-dead-window on huge directories
 
 *Cluster: filedialog · Cost: ? · Gate: ? · Filed: 2026-07-18*
@@ -1446,7 +1389,7 @@ Discovered during Librarian↔LM Studio connectivity work (2026-07-19, Juha).
 
 ## Decide the public name: "Raven" is taken, and the project has outgrown "raven-visualizer"
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-07-14*
+*Cluster: ? · Cost: ? · Gate: before the first PyPI upload · Filed: 2026-07-14*
 
 Raven has no PyPI package, and can't easily get one under either candidate name.
 `raven` on PyPI is Sentry's old client, and the name is common enough to be crowded
@@ -1678,16 +1621,6 @@ Fleet status as of 2026-04-24: `raven/visualizer/importer.py` used to have the s
 Discovered during scaffold/appstate test work (2026-04-17).
 
 
-## torch.compile for the postprocessor
-
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-04-09*
-
-`torch.compile()` on THA3 was investigated (2026-04-09) and yields only ~6% speedup (20.3ms → 19.0ms on 3070 Ti) at the cost of 37s compilation startup. Not worth it for THA3 — the model is already lean with separable convolutions + FP16. Also hangs in the server (works in standalone; cause unresolved — possibly Triton subprocess interaction with waitress/threads).
-
-The postprocessor (`raven.common.video.postprocessor`) might benefit more from compilation (20–60 kernel launches per frame, more fusible elementwise ops). Worth investigating separately. See `investigations/tha3-performance/tha3-performance-audit.md`.
-
-Discovered during THA3 performance optimization work (2026-04-09).
-
 ## MPS (Apple Silicon) device synchronization
 
 *Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-03-30*
@@ -1816,14 +1749,6 @@ Discovered during raven-cherrypick preload performance session.
 
 
 
-## pygame pkg_resources deprecation warning
-
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-03-25*
-
-pygame 2.6.1 emits a deprecation warning: `pkg_resources is deprecated as an API` (from `pygame/pkgdata.py`). Functional but noisy. Check if a newer pygame version fixes this, or if pygame has moved to `importlib.resources`.
-
-Discovered during smoke-testing on new machine (2026-03-25). Re-checked 2026-05-06: still pygame 2.6.1 on PyPI, and `pkgdata.py` on pygame's `main` branch is unchanged.
-
 The fix isn't missing — it's queued. Last commit on pygame's `main` was 2025-10-05 (the v2.6.1 merge); nothing in ~7 months, 754 open issues. Three open PRs already replace `pkg_resources` with `importlib.resources` — #4792 (2026-03-12), #4583 and #4511 (both 2025-09-23) — plus several user-side warning reports (#4557, #4769, …). Repo is not archived, just review/merge-throughput limited. Nothing for us to do but wait for a release that picks one of those PRs up.
 
 ## raven-cherrypick: further reduce idle CPU/GPU load
@@ -1899,7 +1824,7 @@ Discovered during raven-cherrypick compare mode planning (2026-03-30).
 
 ## Extract `raven.common` into an upstream library ("corvid")
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-04-03*
+*Cluster: ? · Cost: ? · Gate: a second consumer needing the toolkit · Filed: 2026-04-03 · See also: "Decide the public name"*
 
 Raven's `common/` package has grown into a general-purpose DPG toolkit: GUI widgets (file dialog, markdown, helpcard, xdot widget, animation framework, VU meter), video/audio processing, networking utils, bgtask infrastructure. This creates a gravitational well — new apps land in Raven because the batteries are there, even when they have nothing to do with NLP/ML.
 
@@ -2558,20 +2483,6 @@ usage-calibration / idle-prefill) are the measurement substrate this would build
 
 Discovered during brief 02 (LM Studio compat) kickoff (2026-06-04).
 
-## Librarian chat input: make it multiline (Shift+Enter = newline)
-
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-06-04*
-
-The chat input (`app.py`, `dpg.add_input_text(tag="chat_field", ...)`) is single-line. This blocks
-serious usage — pasting or composing a multi-paragraph prompt (a fulltext excerpt, a structured
-question) is impractical. Make it a multiline input (`multiline=True`), with **Enter = send** and
-**Shift+Enter = newline**. The send hotkey handler already intercepts Enter; it needs to check the
-Shift modifier and insert a newline instead of sending when Shift is held (and a multiline box also
-wants a sensible default height + growth behaviour). Pairs with the eventual file-upload affordance
-(both feed larger prompts into the box).
-
-Discovered during brief 02 GUI work (2026-06-04).
-
 ## Fleet-wide: shared two-phase DPG shutdown helper + audit
 
 *Cluster: abnormal-exit · Cost: ? · Gate: ? · Filed: 2026-06-04*
@@ -2985,18 +2896,6 @@ for an image it's a caption plus the image embedding.
 
 Discovered during the plain-text/PDF interlude (2026-07-18, raised by Juha).
 
-## Drop the Intel Mac / macOS 10.x install workaround
-
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-07-18*
-
-The README has an "Install on an Intel Mac with MacOSX 10.x" section (torch 2.2.x pin + removing ChromaDB) for
-an Intel x86_64 Mac too old for modern PyTorch. That platform is now effectively dead — new Macs are Apple
-Silicon (M-series) on recent macOS. Remove the section (and stop maintaining the torch-version snippet inside it,
-which has to be kept in sync with the pinned trio in `pyproject.toml`). The general macOS caveat — remove the
-`pytorch-cu128` source so torch resolves from PyPI — stays, since that applies to *all* Macs.
-
-Discovered during the plain-text/PDF interlude (2026-07-18, Juha: a coworker's new M-series Mac on current macOS).
-
 ## Same file formats in the docs DB and in chat attachments
 
 *Cluster: document-ingestion · Cost: ? · Gate: ? · Filed: 2026-07-29*
@@ -3030,7 +2929,7 @@ Raised during the 0.2.8 release scoping (2026-07-29, Juha).
 
 ## Spreadsheets in the docs DB and attachments (`.xlsx`, `.ods`)
 
-*Cluster: document-ingestion · Cost: ? · Gate: ? · Filed: 2026-07-29*
+*Cluster: document-ingestion · Cost: ? · Gate: ? · Filed: 2026-07-29 · See also: `briefs/spreadsheet-ingestion-brief.md`*
 
 Left out of the office-formats work deliberately: a spreadsheet is a different problem class wearing the same
 file picker. Its content is tabular, so "the text of this file" is not well defined — reading a sheet row-major
@@ -4075,7 +3974,7 @@ Discovered while indexing the arXiv AI fulltext corpus for the retrieval investi
 
 ## Ligature mojibake in PDF-extracted text, and why `normalize` must not be wired into `docextract`
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-08-07*
+*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-08-07 · See also: `briefs/ligature-repair-brief.md`*
 
 A PDF extractor can emit a font's ligature glyphs as raw control codes rather than as characters. The
 ECCOMAS 2024 bibliography carries six: five `U+001C` and one `U+001D`, and the surrounding text says
@@ -4196,3 +4095,32 @@ the same text; only the search is affected. The README now says all this in user
 grounds that an honest "code is not supported" beats a feature that half-works without saying so.
 
 Raised by Juha (2026-08-07), reviewing the supported-format list.
+
+## Declined
+
+Items closed without doing. A reason is recorded so the decision stays made — an undocumented discard gets
+re-added by the next person who has the same thought.
+
+- **Librarian chat input: make it multiline (Shift+Enter = newline)** — done; `app.py` builds the composer
+  with `multiline=True`, and Ctrl+Enter sends. (Declined 2026-08-10.)
+- **torch.compile for the postprocessor** — measured and answered: ~6% on THA3 for 37s of compilation, and it
+  hung in the server. A finding rather than a task; the write-up is
+  `investigations/tha3-performance/tha3-performance-audit.md`, with `debug_torch_compile.py` beside it.
+  (Declined 2026-08-10.)
+- **Drop the Intel Mac / macOS 10.x install workaround** — that platform is being dropped rather than
+  supported; the one Mac user is on Apple Silicon. (Declined 2026-08-10.)
+- **Attachment + docs-DB: support office document formats (MS Office / LibreOffice)** — the formats it asked
+  for landed 2026-07-29 (`093c400`): word processor documents, presentations and saved web pages, on both the
+  attach path and the ingester. Spreadsheets were the remaining gap and have their own item; the design this
+  item had accumulated for them moved to `briefs/spreadsheet-ingestion-brief.md` before it was closed.
+  (Declined 2026-08-10.)
+
+## Waiting on upstream
+
+Not tasks. There is no action available on our side; what is recorded is the trigger to look again.
+
+- **pygame `pkg_resources` deprecation warning** — pygame 2.6.1 imports `pkg_resources` in its `pkgdata.py`;
+  silencing it our side would mean pinning `Setuptools<81`, which costs more than the warning. Last checked
+  2026-05-06: still 2.6.1 on PyPI, and `pkgdata.py` unchanged on pygame's `main`, so a fix is not merely
+  unreleased. Re-check on the next pygame release. Catalogued with the other upstream warning noise in
+  `CLAUDE.md`, "Upstream warning noise in `pytest raven/`".
