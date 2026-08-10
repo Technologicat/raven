@@ -159,6 +159,89 @@ machines reboot), and `briefs/design/corpus-interrogation-sketch.md`'s map stage
 building it, but it is a batch-execution primitive rather than a scripting surface, and folding it in here
 would make this brief two briefs wearing one number.
 
+## Verification pass, 2026-08-10
+
+The brief asked for its own pointers to be checked. They were, and three claims did not survive.
+
+**The pointers.** `api.initialize` is at `llmclient.py:81`, not `:79`. `llmclient.setup` is at `:733` and spans
+223 lines. `minichat`'s explicit `None`s are around `:612`, not `:628–649`. `_perform_injects` is at
+`scaffold.py:355`, called internally at `:995`.
+
+**"Seven callers outside its own module" is wrong, and it was the evidence for the central claim.** Counting
+actual call sites rather than mentions: `absent_fact.py` (1), `assembled_shape.py` (1), `test_scaffold.py`
+(16). That is three files, and sixteen of the eighteen sites are tests. `llmclient.py` and `chatutil.py`
+contain *comments* naming the function, not calls. `inject_shapes.py` and `rag_placement.py` do not call it
+either — they deliberately **reimplement** the placement, because their job is to measure candidate shapes
+*against* the one Raven uses.
+
+So the "it is already a public API" argument rests on two probes, not seven callers. **The argument survives
+on different evidence, which is stronger than what the brief cited:** both of those probes were *broken*, by
+two independent signature changes four days apart, and stayed broken silently.
+
+- `7c350a4` (2026-08-03 01:56) made `tool_context` required. The probes were relocated into
+  `investigations/` 22 minutes later without being fixed.
+- `c24c89e` (2026-08-07) removed `speculate` when the grounding marker was made honest.
+
+Each call therefore carried an unknown keyword *and* omitted a required argument. Repaired 2026-08-10
+(`198fecb`); `grounded=True` is the verified equivalent of the old `speculate=False`, since the gate went
+from `if not speculate and grounding_material_exists:` to `if grounding_material_exists:`.
+
+**The acceptance criterion names two scripts it cannot serve.** It asks that `inject_shapes`,
+`assembled_shape`, `absent_fact` and `rag_placement` become expressible against Part A. The first and last
+never reach through the private door and should not: they are the control arm, and a Part A that served them
+would be a Part A that had absorbed their job. **The criterion is the other two**, which say in their own
+docstrings that they build the history through Raven's own code "rather than reimplementing the shape".
+
+### The requirement the brief missed: a real `settings` without a backend
+
+Both Part A probes forge their own `settings = env(user=..., char=..., model="test-model", ...)` — **7 of the
+21 fields `setup` returns** — because `setup` needs a live backend. Among the forged fields is
+`system_prompt="You are a helpful assistant."`, standing in for Raven's real card-derived prompt.
+
+So `assembled_shape`'s claim to measure "what Raven actually sends" is half true: the injects are real and
+the prompt they are injected into is not. That is the brief's own thesis — a replica diverging where the
+interesting behaviour lives — one layer above where the brief was looking, and it makes a real `settings`
+object a Part A *deliverable* rather than a convenience.
+
+**The split is not local-versus-remote, which is the tempting reading and does not work.** `model` and
+`context_length` are backend-derived and then feed `template_vars`, which builds `system_prompt` and
+`character_card` — the card tells the model its own identity and context size. There is no local half that
+yields a usable settings object.
+
+The split that works is **probe, then configure**:
+
+- `setup(backend_url)` keeps its signature and behaviour: perform the two network calls
+  (`detect_backend_flavor`, `_resolve_model_info`), then delegate. Two lines of the 223 touch the network.
+- `configure(model_info, backend_flavor)` is everything else, pure, taking the backend's facts as data.
+
+A probe calls `configure` with a synthetic `model_info` and gets a settings object that is *real* — real
+system prompt, character card, tool tables, tokenizer, `request_data` template — differing from production
+only in what it was told about the model.
+
+## Decisions taken, 2026-08-10 (Juha)
+
+Answering the questions below; the list is kept for its reasoning, and these are the rulings.
+
+1. **`api.initialize` lands in `setup`.** Verified as safe: every entry point already goes through it
+   (`app`, `minichat`, `pdf2bib`, `importer`, two investigations), and the library modules that do not
+   (`scaffold`, `chat_controller`) run under one that does. The probes bypass `setup` entirely — which the
+   `configure` split above resolves, so no separate `ensure_initialized()` is needed.
+2. **The result record is a frozen dataclass.** Type-checkable, and a mistyped field fails loudly, which is
+   what a probe asserting on `rounds` needs. It is the odd one out against the codebase's `env` habit, and
+   that is accepted deliberately: this is a declared library surface, not an internal namespace.
+   **Vocabulary, fixed here because hand-rolled walks get it wrong:** a **round** is one assistant message
+   asking for tools, however many calls it asks for; a **call** is one tool invocation.
+3. **Offline by default** — the brief's own suggestion, taken. A probe that silently hits the network is the
+   more expensive mistake.
+4. *(Per-run overrides — still open, see below.)*
+5. **The surface constructs a `chattree.Forest` by default and accepts one.** In-memory, so constructing
+   costs nothing and keeps the one-liner probe a one-liner.
+6. **It lives in `raven.librarian.agent`.** The brief's warning against becoming a generic agent harness
+   stands as a constraint on the *contents*, not on the name.
+7. **The mutation goes.** The public function returns a new list; `scaffold`'s internal call site rebinds.
+   `perform_` then names a side effect that no longer exists, so the rename is forced rather than optional —
+   which is what the brief predicted would follow from settling the shape first.
+
 ## What this brief must settle before implementation
 
 1. **Where `api.initialize` lands** — `setup`, or an explicit `ensure_initialized()` for callers that do not
