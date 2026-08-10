@@ -50,8 +50,6 @@ from mcpyrate import colorizer
 from unpythonic import dyn, make_dynvar, si_prefix, sym, timer, uniqify
 from unpythonic.env import env
 
-from ..client import api
-from ..client import config as client_config
 from ..common import netutil
 from ..common import text as common_text
 
@@ -76,10 +74,32 @@ action_stop = sym("stop")  # interrupt the LLM, stop generating now
 NO_MODEL_INFO = "No model information is available"
 
 # --------------------------------------------------------------------------------
-# Module bootup
+# Talking to raven-server
+#
+# `raven.client.api` is imported where it is used rather than at module top, and there are exactly two such
+# places: the `websearch` and `webfetch` tool wrappers below. Importing it pulls `spacy` and — via the
+# vendored Kokoro streaming writer — `av`, so a module-top import made *importing* `llmclient`, and
+# therefore `scaffold`, and therefore the whole agent layer, require the full client dependency stack. A
+# probe that must boot a TTS stack to test tool-calling is a probe nobody writes.
+#
+# Note what is deliberately *not* on this list: `setup`. It reaches the LLM backend over plain `requests`
+# and never touches raven-server, so a headless run that calls `setup` and then generates without invoking
+# a network tool never loads any of this. That is the case the scripting surface is for, so it is the case
+# worth keeping cheap.
 
-api.initialize(raven_server_url=client_config.raven_server_url,
-               raven_api_key_file=client_config.raven_api_key_file)  # let it create a default executor
+
+def _client_api():
+    """Return `raven.client.api`, imported on first use and initialized.
+
+    `initialize_api` is idempotent — first settings win, later calls are logged and ignored — so an app that
+    wants its own executor (as `librarian.app` does) simply initializes at startup, before any tool can run.
+    """
+    from ..client import api  # noqa: PLC0415 -- deferred on purpose; see the note above
+    from ..client import config as client_config  # noqa: PLC0415 -- same
+    api.initialize(raven_server_url=client_config.raven_server_url,
+                   raven_api_key_file=client_config.raven_api_key_file)  # let it create a default executor
+    return api
+
 
 # ----------------------------------------
 # LLM communication setup
@@ -119,6 +139,7 @@ def websearch_wrapper(query: str,
     """
     if engine is None:
         engine = librarian_config.websearch_engine
+    api = _client_api()
     websearch_results = api.websearch_search(query,
                                              engine,
                                              librarian_config.web_num_results)  # -> {"results": preformatted_text, "data": structured_results}
@@ -228,6 +249,7 @@ def webfetch_wrapper(url: str) -> str | tuple[str, dict]:
             return (CANONICAL_NOT_ON_ALLOWLIST.format(host=(host or "(none)")),
                     {"webfetch_denied_host": host})
 
+    api = _client_api()
     result = api.webfetch_fetch(url)  # server enforces SSRF/scheme, fetches, returns {"content", "url", "spaSuspected", "title"}
     if result.get("spaSuspected"):
         logger.info(f"webfetch_wrapper: '{result.get('url', url)}' flagged spaSuspected (neither fetch tier extracted usable content).")

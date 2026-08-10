@@ -27,6 +27,19 @@ def _history(text):
     return [{"role": "user", "content": [chatutil.text_content_part(text)]}]
 
 
+class _StubClientAPI:
+    """Stands in for `raven.client.api` in the network-tool tests.
+
+    Patched over `llmclient._client_api`, which is the seam the tool wrappers reach the real module through.
+    Going through the seam rather than through the real module is what keeps this test file importable
+    without `spacy` and `av` — the two the client stack pulls in and CI does not install.
+    """
+
+    def __init__(self, **entrypoints):
+        for name, fn in entrypoints.items():
+            setattr(self, name, fn)
+
+
 @pytest.fixture
 def fake_fetch(monkeypatch):
     """Replace the HTTP fetch with a recorder; returns the list of URLs that reached the server."""
@@ -36,7 +49,7 @@ def fake_fetch(monkeypatch):
         fetched_urls.append(url)
         return {"content": f"CONTENT of {url}", "url": url, "spaSuspected": False, "title": f"TITLE of {url}"}
 
-    monkeypatch.setattr(llmclient.api, "webfetch_fetch", _fake)
+    monkeypatch.setattr(llmclient, "_client_api", lambda: _StubClientAPI(webfetch_fetch=_fake))
     return fetched_urls
 
 
@@ -313,7 +326,8 @@ class TestWebsearchWrapper:
 
     @staticmethod
     def _patch_search(monkeypatch, data):
-        monkeypatch.setattr(llmclient.api, "websearch_search", lambda *a, **k: {"data": data})
+        monkeypatch.setattr(llmclient, "_client_api",
+                            lambda: _StubClientAPI(websearch_search=lambda *a, **k: {"data": data}))
 
     def test_one_text_part_per_result_with_markdown_links(self, monkeypatch):
         self._patch_search(monkeypatch, [
@@ -349,7 +363,7 @@ class TestWebsearchWrapper:
         def fake_search(query, engine, num):
             captured["engine"] = engine
             return {"data": []}
-        monkeypatch.setattr(llmclient.api, "websearch_search", fake_search)
+        monkeypatch.setattr(llmclient, "_client_api", lambda: _StubClientAPI(websearch_search=fake_search))
         return captured
 
     def test_uses_configured_engine_by_default(self, monkeypatch):

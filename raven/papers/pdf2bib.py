@@ -33,6 +33,8 @@ from typing import Dict, List
 from unpythonic import sym, timer, ETAEstimator, maybe_open, uniqify
 from unpythonic.env import env
 
+from ..client import api
+from ..client import config as client_config
 from ..client import mayberemote
 
 from ..common import docextract
@@ -49,6 +51,17 @@ from .utils import bibtex_escape
 
 status_success = sym("success")
 status_failed = sym("failed")
+
+# This tool's whole job is to drive an LLM over the text layer of free-form conference abstracts, so it
+# always needs raven-server's client — unconditionally, unlike `visualizer.importer`, which needs it only
+# when the cluster-keyword mode is `llm`. Initialize before the `MaybeRemoteService` below, whose
+# constructor probes for the server and raises if the API is not up yet.
+#
+# It is declared here rather than inherited: this used to work only because importing `llmclient` happened
+# to initialize the API as a module-import side effect, so the dependency was real but invisible, and
+# nothing would have reported it if that import were ever reordered away.
+api.initialize(raven_server_url=client_config.raven_server_url,
+               raven_api_key_file=client_config.raven_api_key_file)  # let it create a default executor
 
 # TODO: refactor: tools shouldn't load `visualizer_config`
 dehyphenator = mayberemote.Dehyphenator(allow_local=True,

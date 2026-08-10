@@ -47,8 +47,6 @@ from unpythonic.env import env as envcls
 import bm25s  # keyword
 import chromadb  # semantic (vector)
 
-from ..client import api
-from ..client import config as client_config
 from ..client import mayberemote
 
 from ..common import bgtask
@@ -64,8 +62,17 @@ from . import config as librarian_config
 
 deviceinfo.validate(librarian_config.devices)  # modifies in-place if CPU fallback needed
 
-api.initialize(raven_server_url=client_config.raven_server_url,
-               raven_api_key_file=client_config.raven_api_key_file)  # let it create a default executor
+# `raven.client.api` must be initialized before any `mayberemote` call (the embedder and the tokenizer both
+# go through one), but initializing it *here* was actively harmful: this module is imported by every
+# Librarian entry point, so the module-top call always ran first, and `initialize_api` keeps the settings
+# from the first call only. An app asking for its own executor therefore had that request silently ignored —
+# a bug `librarian.app` had noticed and written a TODO about, at the line whose argument was being dropped.
+#
+# So it is the entry point's responsibility, as it already is for `visualizer.importer`:
+#
+#   - GUI (`raven-librarian`):  `raven.librarian.app` at startup.
+#   - CLI (`raven-minichat`):   `raven.librarian.minichat` at startup.
+#   - Indexer (`raven-indexer`): `raven.librarian.indexer.main`.
 
 # --------------------------------------------------------------------------------
 
@@ -357,6 +364,18 @@ class HybridIR:
                  chunk_size: int = 1000,
                  overlap_fraction: float = 0.25) -> None:
         """Hybrid information retrieval (IR) index, using both keyword and semantic search.
+
+        **Prerequisite: call `raven.client.api.initialize(...)` before instantiating this.** The constructor
+        builds two `MaybeRemoteService`s (the embedder and the NLP tokenizer), and each of those probes for
+        Raven-server through `api.*`, which raises `RuntimeError` if the API has not been initialized. This
+        holds even with `local_model_loader_fallback=True` — the probe is what *decides* local versus remote,
+        so it runs before any fallback can apply.
+
+        Initializing is the application's job, so that the app can pass its own executor; see
+        `raven.librarian.app`, `raven.librarian.minichat` and `raven.librarian.indexer` for the three
+        in-tree entry points that do it. This module deliberately does not initialize on import: it is
+        imported by every Librarian entry point, so a module-top call would always win the race against the
+        app's own, and `initialize_api` keeps only the settings it is given first.
 
         `datastore_base_dir`: Where to store the data (for the specific collection you're creating/loading).
                               The data is persisted automatically.

@@ -117,7 +117,7 @@ gui_resize_task_manager = bgtask.TaskManager(name="librarian_gui_resize",  # de-
                                              executor=bg)
 api.initialize(raven_server_url=client_config.raven_server_url,
                raven_api_key_file=client_config.raven_api_key_file,
-               executor=bg)  # reuse our executor for client background tasks  # TODO: there's currently a bug, because `llmclient` inits API first, with a default executor.
+               executor=bg)  # reuse our executor for client background tasks
 audio.initialize(player={"device_name": client_config.tts_playback_audio_device},
                  recorder={"device_name": client_config.stt_capture_audio_device,
                            "executor": bg})

@@ -189,6 +189,18 @@ cuda = [
 Repository = "https://github.com/Technologicat/raven"
 
 [project.scripts]
+# Entries marked `# GUI` map a window as soon as their module is imported — the DPG setup runs at module
+# level, not inside `main()`. So **do not iterate this table and import each target** to smoke-test that the
+# entry points still load: that launches seven applications on the developer's desktop, and each one takes
+# keyboard focus from whatever they were typing into. (Done once, 2026-08-10, while checking an unrelated
+# refactor; the pose editor came up before anyone could stop it.)
+#
+# A safe import check covers the unmarked entries only, and `raven-server` wants excluding from that too:
+# importing it loads ML models onto the GPU, and *running* it never returns — it serves until someone hits
+# Ctrl+C, so a script that launches it to see whether it starts will simply hang there.
+#
+# Where a real check of the GUI apps is wanted, run one under `pytest --run-gui` — and warn first; see
+# CLAUDE.md, "Live GUI testing on a shared desktop".
 raven-check-cuda = "raven.tools.check_cuda:main"
 raven-check-audio-devices = "raven.tools.check_audio_devices:main"
 raven-arxiv2id = "raven.papers.identifiers:main"
@@ -204,15 +216,15 @@ raven-qoi2png = "raven.tools.qoi2png:main"
 raven-wos2bib = "raven.papers.wos2bib:main"
 raven-indexer = "raven.librarian.indexer:main"  # build/refresh Librarian's RAG index headlessly
 raven-minichat = "raven.librarian.minichat:main"
-raven-librarian = "raven.librarian.app:main"
+raven-librarian = "raven.librarian.app:main"  # GUI
 raven-server = "raven.server.app:main"
-raven-avatar-pose-editor = "raven.avatar.pose_editor.app:main"  # AI avatar pose editor
-raven-avatar-settings-editor = "raven.avatar.settings_editor.app:main"  # AI avatar postprocessor config editor / character tester
+raven-avatar-pose-editor = "raven.avatar.pose_editor.app:main"  # GUI - AI avatar pose editor
+raven-avatar-settings-editor = "raven.avatar.settings_editor.app:main"  # GUI - AI avatar postprocessor config editor / character tester
 raven-importer = "raven.visualizer.importer_cli:main"
-raven-visualizer = "raven.visualizer.app:main"  # the main app!
-raven-xdot-viewer = "raven.xdot_viewer.app:main"  # xdot graph viewer
-raven-cherrypick = "raven.cherrypick.app:main"  # image triage tool
-raven-conference-timer = "raven.conference_timer.app:main"  # countdown timer for talks
+raven-visualizer = "raven.visualizer.app:main"  # GUI - the main app!
+raven-xdot-viewer = "raven.xdot_viewer.app:main"  # GUI - xdot graph viewer
+raven-cherrypick = "raven.cherrypick.app:main"  # GUI - image triage tool
+raven-conference-timer = "raven.conference_timer.app:main"  # GUI - countdown timer for talks
 
 [build-system]
 requires = ["pdm-backend"]

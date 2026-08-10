@@ -53,6 +53,7 @@ with timer() as tim:
     from ..common import docextract
 
     from ..client import api
+    from ..client import config as client_config
 
     from . import appstate
     from . import chatutil
@@ -83,6 +84,12 @@ def minimal_chat_client(backend_url) -> None:
 
     # Main program
     try:
+        # Initialize the raven-server client before asking it anything. `llmclient` used to do this as a
+        # module-import side effect, which meant every importer of it paid for the client dependency stack;
+        # each app that actually talks to raven-server now says so itself, as `librarian.app` already did.
+        api.initialize(raven_server_url=client_config.raven_server_url,
+                       raven_api_key_file=client_config.raven_api_key_file)  # let it create a default executor
+
         if not api.test_connection():
             print(colorizer.colorize("The LLM will NOT have access to websearch.", colorizer.Style.BRIGHT, colorizer.Fore.YELLOW))
             print()

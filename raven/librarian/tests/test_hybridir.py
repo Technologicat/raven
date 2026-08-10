@@ -142,7 +142,21 @@ DOCS = {
 # ---------------------------------------------------------------------------
 
 @pytest.fixture(scope="module")
-def retriever(tmp_path_factory):
+def client_api_initialized():
+    """Satisfy `HybridIR`'s prerequisite: `raven.client.api` initialized before instantiation.
+
+    An app does this at startup. `hybridir` used to do it as an import side effect, which meant this file
+    got it for free — and also meant the module-top call always beat the app's own, so an app asking for its
+    own executor was silently ignored. Now that the side effect is gone, the test says what it needs.
+    """
+    from raven.client import api
+    from raven.client import config as client_config
+    api.initialize(raven_server_url=client_config.raven_server_url,
+                   raven_api_key_file=client_config.raven_api_key_file)
+
+
+@pytest.fixture(scope="module")
+def retriever(tmp_path_factory, client_api_initialized):
     """A committed HybridIR instance with the test corpus indexed.
 
     Module-scoped so the embedding model is loaded only once.
@@ -223,7 +237,7 @@ class TestResultStructure:
         assert len(report.vector_results) == len(report.vector_distances)
         assert len(results) > 0
 
-    def test_an_empty_index_still_returns_the_pair_when_extra_info_was_asked_for(self, tmp_path):
+    def test_an_empty_index_still_returns_the_pair_when_extra_info_was_asked_for(self, tmp_path, client_api_initialized):
         # An empty index is an ordinary state, not an error: `HybridIR` creates its datastore directory
         # rather than rejecting a path that does not exist yet, so anyone who mistypes a `--db-dir` gets
         # one of these. Returning a bare list here would raise `ValueError: not enough values to unpack`
