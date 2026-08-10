@@ -56,8 +56,13 @@ def build(question, docs_query, matches):
                chatutil.create_chat_message(llm_settings=settings, role="user", text="I'm reviewing the hydrogen production literature this week."),
                chatutil.create_chat_message(llm_settings=settings, role="assistant", text="Happy to help - tell me what you need from it."),
                chatutil.create_chat_message(llm_settings=settings, role="user", text=question)]
-    scaffold._perform_injects(llm_settings=settings, history=history, speculate=False,
-                              docs_query=docs_query, docs_matches=matches)
+    # `grounded=True` is what the retrieval would have declared in a real turn, and it is what keeps the
+    # context-only reminder in the assembled prompt — which is one of the four shapes this probe measures.
+    tool_context = scaffold._make_tool_context(llm_settings=settings, retriever=None)
+    tool_context.grounded = True
+    scaffold._perform_injects(llm_settings=settings, history=history,
+                              docs_query=docs_query, docs_matches=matches,
+                              tool_context=tool_context)
     return llmclient._serialize_history_for_wire(settings, history, continue_=False)
 
 

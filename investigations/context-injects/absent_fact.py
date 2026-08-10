@@ -71,8 +71,14 @@ def build(variant):
                chatutil.create_chat_message(llm_settings=settings, role="user", text="I'm reviewing the hydrogen production literature this week."),
                chatutil.create_chat_message(llm_settings=settings, role="assistant", text="Happy to help - tell me what you need from it."),
                chatutil.create_chat_message(llm_settings=settings, role="user", text=QUESTION)]
-    scaffold._perform_injects(llm_settings=settings, history=history, speculate=False,
-                              docs_query="Kelvin-7 specific energy consumption", docs_matches=MATCHES)
+    # `grounded=True` is what the retrieval would have declared in a real turn: the matches are on topic,
+    # they simply do not answer the question. It keeps the context-only reminder in the prompt, which is the
+    # instruction this probe is measuring the model against.
+    tool_context = scaffold._make_tool_context(llm_settings=settings, retriever=None)
+    tool_context.grounded = True
+    scaffold._perform_injects(llm_settings=settings, history=history,
+                              docs_query="Kelvin-7 specific energy consumption", docs_matches=MATCHES,
+                              tool_context=tool_context)
     wire = llmclient._serialize_history_for_wire(settings, history, continue_=False)
 
     if variant == "as-shipped":
