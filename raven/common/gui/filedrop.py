@@ -37,7 +37,7 @@ This module is licensed under the 2-clause BSD license, to facilitate integratio
 
 __all__ = ["is_available", "install", "uninstall",
            "DropRule", "make_router",
-           "by_extension", "is_directory"]
+           "by_extension", "is_directory", "all_of"]
 
 import logging
 logger = logging.getLogger(__name__)
@@ -212,6 +212,19 @@ def is_directory(path: str) -> bool:
     """Predicate: the dropped path is a directory."""
     return os.path.isdir(path)
 
+def all_of(*predicates: Callable[[str], bool]) -> Callable[[str], bool]:
+    """Predicate combinator: match paths satisfying every one of `predicates`.
+
+    Evaluated left to right and short-circuiting, so order them cheapest first — `by_extension` before
+    anything that opens the file, which spares every unrelated dropped path a decode.
+
+    Its usual job is pairing a name test with a content test, so that "an image with transparency" cannot
+    be satisfied by some unrelated file that the imaging library merely happens to be able to open.
+    """
+    def matches(path: str) -> bool:
+        return all(predicate(path) for predicate in predicates)
+    return matches
+
 class DropRule(NamedTuple):
     """One branch of a drop router: which dropped paths it claims, what to do with them, what to call them.
 
@@ -246,6 +259,7 @@ def make_router(rules: Sequence[DropRule],
                 *,
                 reference_window: Union[str, int],
                 what: str = "This window",
+                blocked: Optional[Callable[[], bool]] = None,
                 on_rejected: Optional[Callable[[str, str], None]] = None) -> Callable[[list], None]:
     """Build a drop handler that dispatches to the first matching rule, and explains itself when it cannot.
 
@@ -261,6 +275,12 @@ def make_router(rules: Sequence[DropRule],
 
     `what`: How the rejection dialog refers to the app, e.g. `"Raven-visualizer"`. Reads as
             "<what> accepts:".
+
+    `blocked`: Optional predicate; while it answers `True`, drops are ignored. Raven's apps pass their
+               `is_any_modal_window_visible`. The OS drop targets the window, not whatever the app happens
+               to be showing inside it, so a file can land while a dialog is up — where acting on it would
+               mean answering a question the user is still in the middle of being asked. Ignored rather
+               than reported, since reporting means stacking a second modal on the first.
 
     `on_rejected`: Override the rejection reporting; receives `(title, message)`. Defaults to a modal
                    dialog. Mainly for tests, which have no viewport to center on.
@@ -278,6 +298,9 @@ def make_router(rules: Sequence[DropRule],
 
     def route(paths: list) -> None:
         if not paths:
+            return
+        if blocked is not None and blocked():
+            logger.info(f"make_router.route: a modal window is open, ignoring {len(paths)} dropped path(s)")
             return
         claimed = {}  # rule index -> matched paths, in rule order (dicts preserve insertion order)
         unmatched = []

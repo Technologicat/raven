@@ -64,6 +64,30 @@ def test_by_extension_does_not_match_a_nonexistent_path(tmp_path):
     assert not filedrop.by_extension(".bib")(str(tmp_path / "never_created.bib"))
 
 
+def test_all_of_requires_every_predicate(tmp_path):
+    png, txt = make_files(tmp_path, "a.png", "b.txt")
+    named_png = filedrop.by_extension(".png")
+    big_enough = lambda path: os.path.getsize(path) >= 0  # noqa: E731 -- a one-line stand-in for a content test
+    assert filedrop.all_of(named_png, big_enough)(png)
+    assert not filedrop.all_of(named_png, big_enough)(txt)
+
+
+def test_all_of_short_circuits_so_a_content_test_never_sees_the_wrong_file(tmp_path):
+    """Ordering is the point: the cheap name test must spare unrelated drops a decode.
+
+    The avatar apps pair `by_extension` with a predicate that opens the file, and a drop can carry anything.
+    """
+    opened = []
+    def records_being_asked(path):
+        opened.append(path)
+        return True
+    png, txt = make_files(tmp_path, "a.png", "b.txt")
+    matches = filedrop.all_of(filedrop.by_extension(".png"), records_being_asked)
+    assert matches(png)
+    assert not matches(txt)
+    assert opened == [png]  # the .txt never reached the expensive half
+
+
 def test_is_directory(tmp_path):
     d = tmp_path / "folder"
     d.mkdir()
@@ -152,6 +176,28 @@ def test_the_first_matching_rule_wins(tmp_path, collector):
     route([narrow])
     route([broad])
     assert seen == [("narrow", [narrow]), ("broad", [broad])]
+
+
+def test_a_drop_is_ignored_while_a_modal_is_open(tmp_path, collector):
+    """Not rejected — ignored. Reporting would stack a second modal on the one already asking a question.
+
+    The OS drop lands on the window, not on whatever DPG is drawing inside it, so this arrives even while a
+    file dialog has the app's attention.
+    """
+    seen = []
+    modal_open = True
+    route = filedrop.make_router([filedrop.DropRule(matches=filedrop.by_extension(".bib"),
+                                                    handler=seen.append,
+                                                    label="BibTeX files")],
+                                 reference_window="w", blocked=lambda: modal_open, on_rejected=collector)
+    paths = make_files(tmp_path, "a.bib")
+    route(paths)
+    assert seen == []
+    assert collector.rejections == []  # silence, not a dialog
+
+    modal_open = False
+    route(paths)
+    assert seen == [paths]
 
 
 def test_an_empty_drop_does_nothing(collector):
