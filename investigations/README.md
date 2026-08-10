@@ -25,6 +25,7 @@ that stops the link decaying again, and it is worth keeping up even when the con
 | `dpg-focus/` | Which DPG predicate means "this text field holds the caret", and what `focus_item` does to a child window |
 | `dpg-overlays/` | Why a floating overlay window must be sized to its content: it eats the mouse across its whole rect, and autosize has a silent 100 px floor |
 | `dpg-dnd/` | Whether OS-level file drag-and-drop is reachable without writing a shim per platform (it is — via the GLFW DPG already links), and the render-thread constraint that comes with it |
+| `todo-sweep-2026-08-10/` | Which `TODO_DEFERRED.md` items still hold against the code. Report only, and **partial** — 16 of 130 items carry a verdict; the rest are unchecked rather than confirmed. Part C of `briefs/todo-sweep-2026-08-10/` |
 
 ## Shared instruments are pointed at, not copied
 
