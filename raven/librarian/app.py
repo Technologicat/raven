@@ -67,6 +67,7 @@ with timer() as tim:
     from ..common.gui import animation as gui_animation
     from ..common.gui import helpcard
     from ..common.gui import messagebox
+    from ..common.gui import filedrop
     from ..common.gui import utils as guiutils
     from ..common.gui.vumeter import DPGVUMeter
 
@@ -1783,6 +1784,21 @@ atexit.register(app_shutdown)
 dpg.set_primary_window(main_window, True)  # Make this DPG "window" occupy the whole OS window (DPG "viewport").
 dpg.set_viewport_vsync(True)
 dpg.show_viewport()
+
+# Attach files dragged in from the file manager, exactly as the attach button does. Installed right after
+# `show_viewport` because that call is what makes DPG's window reachable through GLFW on this thread.
+#
+# One rule rather than one per kind, because a drop mixing an image and a document is a *supported* attach
+# and the router rejects drops that straddle two rules. Routing between the two kinds is `_attach_callback`'s
+# job anyway — it already does it for the file browser, including the text-only-model gate on images.
+filedrop.install(filedrop.make_router([filedrop.DropRule(matches=lambda path: (os.path.isfile(path) and
+                                                                              (imagestore.is_supported(path) or
+                                                                               docextract.is_supported(path))),
+                                                         handler=_attach_callback,
+                                                         label="images and documents")],
+                                      reference_window="librarian_main_window",  # tag
+                                      what="Raven-librarian",
+                                      blocked=is_any_modal_window_visible))
 
 # Load default animator settings from disk.
 #
