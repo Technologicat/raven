@@ -16,13 +16,18 @@ adds the import-side prerequisite, and cuts one piece out into a brief of its ow
 `TODO.md` is right and this brief has been corrected to match.
 
 **Filed in two places under different names**, which is how the poorer copy came to be the one that got
-deferred: `TODO_DEFERRED.md:1825` ("Headless scaffold mode", filed 2026-06-03) is the same work as the
-`TODO.md` entry, minus the two-entry-point split and the result record. Both close against this brief, along
-with `TODO_DEFERRED.md:1474` (lazy `api.initialize`).
+deferred: `TODO_DEFERRED.md`, *"Headless scaffold mode for `ai_turn` (scriptable agent layer)"* (filed
+2026-06-03) is the same work as the `TODO.md` entry, minus the two-entry-point split and the result record.
+Both close against this brief, along with *"Lazy `api.initialize` in `llmclient` and `hybridir`"*.
 
-**Not absorbed: `TODO_DEFERRED.md:1813`** (collect `ai_turn`'s callbacks into a bundle). It looked like a
+**Not absorbed: *"scaffold: collect `ai_turn`'s callbacks into a single bundle object"***. It looked like a
 prerequisite and is not — see the callback section below. It remains a GUI-side ergonomics cleanup, and is
 now independent of this work.
+
+Deferred items are cited by **heading text, never by line number**. The line numbers this brief originally
+carried had all three drifted by 2026-08-10, and one of them (`:1825`) had landed on a different item's real
+heading — which reads as valid and is the failure worth avoiding. The file is about to get shorter, so any
+line number written into it is already wrong.
 
 ## The problem
 
@@ -83,7 +88,7 @@ This is also the diagnosis for the `_perform_injects` problem below rather than 
 
 `ai_turn`'s mandatory callbacks are deliberate, on the fail-fast principle, and they earn that for a GUI
 client — one that forgets `on_llm_progress` is genuinely broken and should say so loudly. `minichat` passes
-eight explicit `None`s (`minichat.py:628–649`) for the same reason.
+eight explicit `None`s (`minichat.py:608–619`, in the `scaffold.ai_turn` call at `:598`) for the same reason.
 
 They earn nothing from a script that will never draw a progress bar, and the wall bites there instead: a probe
 silently rotted when brief 10 removed `on_nomatch_done`.
@@ -97,7 +102,7 @@ afterwards. Keep the wall where it works; do not propagate it to callers it cann
 
 The one prerequisite, and it is import-side rather than design-side.
 
-`llmclient.py:79` calls `api.initialize(...)` at module top, so importing `llmclient` both requires the full
+`llmclient.py:81` calls `api.initialize(...)` at module top, so importing `llmclient` both requires the full
 `raven.client.api` chain to succeed — qoi, spaCy, Kokoro TTS — and runs the side effect. `scaffold` imports
 `llmclient` at module level and inherits it, which is why `test_scaffold.py` carries a `pytest.importorskip`
 and why scaffold coverage is invisible in the minimal-deps CI job.
@@ -145,7 +150,7 @@ one. A surface offering only B would leave the prompt-shape probes still reachin
 
 ## Explicitly out of scope
 
-**The scripted backend.** `TODO_DEFERRED.md:1825` bundles a scripted backend — canned model turns, for driving
+**The scripted backend.** *"Headless scaffold mode for `ai_turn`"* bundles a scripted backend — canned model turns, for driving
 the real `ai_turn` deterministically — with the driver. Split (Juha, 2026-08-04). v1 targets a real backend,
 because that is what unblocks probes today. The scripted backend buys CI determinism and is a natural v2 once
 the driver exists to hang it off. Deferred rather than dropped.
@@ -275,7 +280,8 @@ Answering the questions below; the list is kept for its reasoning, and these are
    internal the rename largely dissolves, and if it goes then `perform_` is the wrong verb regardless, since
    it names the side effect being removed.
 
-   **The sweep includes prose.** The name appears in `raven/librarian/CLAUDE.md:24`, `TODO.md` (four places),
+   **The sweep includes prose.** The name appears in `raven/librarian/CLAUDE.md` (in the `config.py` entry of
+   the module map), `TODO.md` (four places),
    `TODO_DEFERRED.md` (two), and `investigations/context-injects/context-inject-shape-measurements.md` three
    times, including its opening sentence. That write-up is the standing explanation of why the injects are
    shaped as they are; a dead name in it sends a reader to code that no longer exists.
