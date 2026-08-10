@@ -4,7 +4,7 @@
 NOT a pytest test — it needs a running backend with a model loaded, so it lives here
 under `briefs/` rather than in the suite.
 
-`scaffold._perform_injects` inserts every RAG match at `history.insert(1, ...)`, ahead of the
+`scaffold.build_turn_prompt` inserts every RAG match at `history.insert(1, ...)`, ahead of the
 whole conversation. That placement is deliberate: it dates from Qwen 3.0, which would not engage
 with material injected late. It costs a full KV-cache prefix rebuild on every single turn, because
 the prompt's prefix changes each time the matches do.

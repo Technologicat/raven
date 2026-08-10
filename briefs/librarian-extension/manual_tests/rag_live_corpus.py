@@ -310,7 +310,7 @@ def check_live_turn(retriever, hits, notice_enabled=True, sample_index=0):
         report("F live turn", None, "no usable LLM backend")
         return
 
-    # The A/B switch. Silencing the formatter is enough: `_perform_injects` appends whatever it returns,
+    # The A/B switch. Silencing the formatter is enough: `build_turn_prompt` appends whatever it returns,
     # and an empty string adds no system line at all.
     original_notice = chatutil.format_notice_that_tools_are_spent
     if not notice_enabled:

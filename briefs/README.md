@@ -70,7 +70,7 @@ heading, so it read as valid and nothing would ever have prompted a re-check. Br
 
 `TODO_DEFERRED.md` is the worst host for a line number — it is edited constantly and is about to get
 substantially shorter, so any number written into it is already wrong. But source files drift too, and a
-symbol name (`scaffold._perform_injects`, `chat_controller._render_text`) is both stabler and more
+symbol name (`scaffold.build_turn_prompt`, `chat_controller._render_text`) is both stabler and more
 informative than a coordinate: it says *what* is being pointed at, so a reader who has to go looking can.
 
 Where a line number genuinely helps — the exact line of a subtle expression — write it *alongside* the name,

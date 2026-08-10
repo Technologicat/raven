@@ -145,6 +145,20 @@ nothing CI lacks.
 
 ## Part A — build the turn's prompt and hand it back
 
+> **Landed 2026-08-10.** `_perform_injects` is now `scaffold.build_turn_prompt`: public, in `__all__`,
+> returning a new list instead of mutating the caller's. All 19 call sites updated, and the prose sweep done
+> except the two TODO files, which are frozen pending their own brief, and the closed briefs, which are
+> historical records and are not repointed.
+>
+> **The migration paid for itself immediately, in the way the brief predicted and worse.** `absent_fact` and
+> `assembled_shape` were also moved onto `llmclient.configure`, so they build Raven's real settings instead
+> of forging seven of twenty-one fields with `system_prompt="You are a helpful assistant."`. Re-run against
+> qwen3.6-35b-a3b, two results changed at once: `absent_fact` as-shipped at T=0 went from a clean answer to
+> `finish=length` with **31726 characters of reasoning and no reply**, and `assembled_shape`'s absent-fact
+> check went from declining cleanly to emitting literal `<tool_call>` text. Both are failures those probes
+> exist to catch, and both were invisible while the prompt around the injects was a placeholder. Recorded in
+> `investigations/context-injects/README.md`; the runaway wants a look before Researchers' Night.
+
 No backend involved. This is what the prompt-shape probes want: the prompt Raven *would* send, so they can
 send it themselves and measure the backend without Raven confounding the result.
 

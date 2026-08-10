@@ -883,7 +883,7 @@ def configure(model_info: env,
     # No date here, deliberately: this text is built once, at app start, so a date written into it goes wrong
     # at the first midnight the session survives. Raven states the current date - weekday included, so that the
     # model never has to do calendar arithmetic - in the system message on every turn instead; see
-    # `scaffold._perform_injects`.
+    # `scaffold.build_turn_prompt`.
     template_vars = env(user=user,
                         char=char,
                         model=model,

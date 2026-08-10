@@ -5,9 +5,10 @@ NOT a pytest test — it needs a running backend with a model loaded, so it live
 rather than in the suite.
 
 Unlike the other probes here, this one builds its wire history through Raven's own code
-(`scaffold._perform_injects` + `llmclient._serialize_history_for_wire`) rather than reimplementing the
-shape, so it measures what Raven actually sends. That costs it the stdlib-only property the others have:
-it needs the venv, and cannot be piped to a machine that lacks one.
+(`llmclient.configure` + `scaffold.build_turn_prompt` + `llmclient._serialize_history_for_wire`) rather than
+reimplementing the shape, so it measures what Raven actually sends — settings, system prompt and character
+card included, not just the injects. That costs it the stdlib-only property the others have: it needs the
+venv, and cannot be piped to a machine that lacks one.
 
 The case is the one where retrieval is least comfortable: the documents are relevant to the *topic* but
 silent on the *question*. A model that wants more material will try to get more material — and Raven's
@@ -49,10 +50,19 @@ BASE = sys.argv[1] if len(sys.argv) > 1 else "http://localhost:1234"
 MODEL = sys.argv[2] if len(sys.argv) > 2 else "qwen3.6-27b"
 N = int(sys.argv[3]) if len(sys.argv) > 3 else 3
 
-settings = env(user="User", char="Aria", model="test-model",
-               system_prompt="You are a helpful assistant.", character_card="Name: Aria",
-               greeting="How can I help you today?",
-               personas={"user": "User", "assistant": "Aria", "system": None, "tool": None})
+# Raven's own settings, built without contacting a backend — the same object `llmclient.setup` returns, and
+# therefore the same system prompt and character card a real turn is given. This probe used to hand-assemble
+# an `env` with a handful of plausible fields and a stand-in system prompt, which quietly undercut its own
+# claim to measure what Raven sends: the injects were real and the prompt they landed in was not.
+#
+# `configure` rather than `setup` because the model under test is a command-line argument, so the card should
+# name *that* model rather than whatever the backend happens to have loaded. The context length is stated
+# rather than discovered for the same reason; nothing here measures context-length behaviour.
+settings = llmclient.configure(model_info=env(label=MODEL, model_id=MODEL,
+                                              context_length=131072, is_vlm=None),
+                               backend_flavor="generic",
+                               backend_url=BASE,
+                               quiet=True)
 
 MATCHES = [{"document_id": "abstract_001.txt", "text": "Alkaline electrolysis remains the workhorse of industrial hydrogen production.", "score": 0.6, "offset": 0},
            {"document_id": "vantaa3_stack_report.txt", "text": "The Vantaa-3 pressurized alkaline stack draws 41.7 kWh/kg under nominal load.", "score": 0.9, "offset": 0},
@@ -76,9 +86,9 @@ def build(variant):
     # instruction this probe is measuring the model against.
     tool_context = scaffold._make_tool_context(llm_settings=settings, retriever=None)
     tool_context.grounded = True
-    scaffold._perform_injects(llm_settings=settings, history=history,
-                              docs_query="Kelvin-7 specific energy consumption", docs_matches=MATCHES,
-                              tool_context=tool_context)
+    history = scaffold.build_turn_prompt(llm_settings=settings, history=history,
+                                         docs_query="Kelvin-7 specific energy consumption", docs_matches=MATCHES,
+                                         tool_context=tool_context)
     wire = llmclient._serialize_history_for_wire(settings, history, continue_=False)
 
     if variant == "as-shipped":

@@ -109,7 +109,7 @@ class FakeRetriever:
 
 
 def grounding_context(grounded=False):
-    """A tool context for direct `_perform_injects` tests. `grounded` is what a tool or the auto-search
+    """A tool context for direct `build_turn_prompt` tests. `grounded` is what a tool or the auto-search
     would have declared during the turn; see `scaffold._record_grounding`."""
     tool_context = scaffold._make_tool_context(llm_settings=None, retriever=None)
     tool_context.grounded = grounded
@@ -856,7 +856,7 @@ def make_conversation(llm_settings):
 
 
 class TestPerformInjects:
-    """`_perform_injects` builds the temporary history handed to the LLM.
+    """`build_turn_prompt` builds the temporary history handed to the LLM.
 
     Two families of invariant are pinned here.
 
@@ -874,20 +874,20 @@ class TestPerformInjects:
 
     def test_injects_add_no_system_message(self, llm_settings):
         history = make_conversation(llm_settings)
-        scaffold._perform_injects(llm_settings=llm_settings, history=history,
-                                  docs_query=None, docs_matches=[],
-                                  tool_context=grounding_context())
+        history = scaffold.build_turn_prompt(llm_settings=llm_settings, history=history,
+                                             docs_query=None, docs_matches=[],
+                                             tool_context=grounding_context())
         assert_at_most_one_leading_system_message(history)
 
     def test_rag_matches_add_no_system_message(self, llm_settings):
         # Each match used to go in as its own system message at index 1, which failed every AI turn on
         # Qwen3.5 — several system messages are rejected even though all of them precede the conversation.
         history = make_conversation(llm_settings)
-        scaffold._perform_injects(llm_settings=llm_settings, history=history,
-                                  docs_query="what is X?",
-                                  docs_matches=[sample_rag_match(document_id="a.txt"),
-                                                sample_rag_match(document_id="b.txt")],
-                                  tool_context=grounding_context())
+        history = scaffold.build_turn_prompt(llm_settings=llm_settings, history=history,
+                                             docs_query="what is X?",
+                                             docs_matches=[sample_rag_match(document_id="a.txt"),
+                                                           sample_rag_match(document_id="b.txt")],
+                                             tool_context=grounding_context())
         assert_at_most_one_leading_system_message(history)
 
     def test_rag_matches_ride_in_one_tool_message_in_corpus_order(self, llm_settings):
@@ -895,11 +895,11 @@ class TestPerformInjects:
         # than getting one each — the one-per-match form shares an id across messages, which Gemma4-E4B
         # reads as nothing at all.
         history = make_conversation(llm_settings)
-        scaffold._perform_injects(llm_settings=llm_settings, history=history,
-                                  docs_query="what is X?",
-                                  docs_matches=[sample_rag_match(document_id="a.txt"),
-                                                sample_rag_match(document_id="b.txt")],
-                                  tool_context=grounding_context())
+        history = scaffold.build_turn_prompt(llm_settings=llm_settings, history=history,
+                                             docs_query="what is X?",
+                                             docs_matches=[sample_rag_match(document_id="a.txt"),
+                                                           sample_rag_match(document_id="b.txt")],
+                                             tool_context=grounding_context())
         docs_messages = [message for message in history
                          if message["role"] == "tool" and "Knowledge-base match" in chatutil.content_to_text(message["content"])]
         assert len(docs_messages) == 1
@@ -910,10 +910,10 @@ class TestPerformInjects:
         # The synthetic assistant call is load-bearing, not decoration: handed a bare `tool` message with
         # no call to answer, Gemma 4 ignores the material and confabulates a confident wrong answer.
         history = make_conversation(llm_settings)
-        scaffold._perform_injects(llm_settings=llm_settings, history=history,
-                                  docs_query="what is X?",
-                                  docs_matches=[sample_rag_match()],
-                                  tool_context=grounding_context())
+        history = scaffold.build_turn_prompt(llm_settings=llm_settings, history=history,
+                                             docs_query="what is X?",
+                                             docs_matches=[sample_rag_match()],
+                                             tool_context=grounding_context())
         requested_call_ids = {call["id"]
                               for message in history
                               for call in message.get("tool_calls", [])}
@@ -926,10 +926,10 @@ class TestPerformInjects:
         # sometimes replies by requesting *another* search instead of answering. Leaving the user's
         # question last is what keeps the model talking to the user.
         history = make_conversation(llm_settings)
-        scaffold._perform_injects(llm_settings=llm_settings, history=history,
-                                  docs_query="what is X?",
-                                  docs_matches=[sample_rag_match()],
-                                  tool_context=grounding_context())
+        history = scaffold.build_turn_prompt(llm_settings=llm_settings, history=history,
+                                             docs_query="what is X?",
+                                             docs_matches=[sample_rag_match()],
+                                             tool_context=grounding_context())
         assert history[-1]["role"] == "user"
         assert chatutil.content_to_text(history[-1]["content"]).endswith("What is X?")
 
@@ -938,9 +938,9 @@ class TestPerformInjects:
         # incomplete message stays last, with the injects ahead of the user turn it is answering.
         history = make_conversation(llm_settings)
         history.append(chatutil.create_chat_message(llm_settings=llm_settings, role="assistant", text="X is"))
-        scaffold._perform_injects(llm_settings=llm_settings, history=history,
-                                  docs_query=None, docs_matches=[],
-                                  tool_context=grounding_context())
+        history = scaffold.build_turn_prompt(llm_settings=llm_settings, history=history,
+                                             docs_query=None, docs_matches=[],
+                                             tool_context=grounding_context())
         assert_at_most_one_leading_system_message(history)
         assert history[-1]["role"] == "assistant"
         assert history[-2]["role"] == "user"
@@ -949,10 +949,10 @@ class TestPerformInjects:
         # Instruction-like injects want the leading system block: measured the cheapest placement in
         # deliberation tokens, and the only one that never provoked the model into remarking on them.
         history = make_conversation(llm_settings)
-        scaffold._perform_injects(llm_settings=llm_settings, history=history,
-                                  docs_query="what is X?",
-                                  docs_matches=[sample_rag_match()],
-                                  tool_context=grounding_context(grounded=True))
+        history = scaffold.build_turn_prompt(llm_settings=llm_settings, history=history,
+                                             docs_query="what is X?",
+                                             docs_matches=[sample_rag_match()],
+                                             tool_context=grounding_context(grounded=True))
         system_text = chatutil.content_to_text(history[0]["content"])
         assert "You are a helpful assistant." in system_text  # the original system prompt survives
         assert "Today is" in system_text
@@ -965,18 +965,18 @@ class TestPerformInjects:
         history = make_conversation(llm_settings)
         stored_system_message = history[0]
         stored_text = chatutil.content_to_text(stored_system_message["content"])
-        scaffold._perform_injects(llm_settings=llm_settings, history=history,
-                                  docs_query=None, docs_matches=[],
-                                  tool_context=grounding_context())
+        history = scaffold.build_turn_prompt(llm_settings=llm_settings, history=history,
+                                             docs_query=None, docs_matches=[],
+                                             tool_context=grounding_context())
         assert chatutil.content_to_text(stored_system_message["content"]) == stored_text
 
     def test_context_only_reminder_is_skipped_without_context(self, llm_settings):
         # Asking a model to stick to documents that were never provided is a contradiction it will
         # dutifully try to resolve — up to 37x the deliberation, and on one model, never terminating.
         history = make_conversation(llm_settings)
-        scaffold._perform_injects(llm_settings=llm_settings, history=history,
-                                  docs_query=None, docs_matches=[],
-                                  tool_context=grounding_context())
+        history = scaffold.build_turn_prompt(llm_settings=llm_settings, history=history,
+                                             docs_query=None, docs_matches=[],
+                                             tool_context=grounding_context())
         assert "Base claims about the provided documents" not in chatutil.content_to_text(history[0]["content"])
 
     def test_the_injects_only_ever_name_registered_tools(self, llm_settings):
@@ -990,9 +990,9 @@ class TestPerformInjects:
         history = make_conversation(llm_settings)
         tool_context = grounding_context(grounded=True)
         tool_context.consulted_documents = [{"document_id": "d.bib"}]  # so the consulted-list inject fires too
-        scaffold._perform_injects(llm_settings=llm_settings, history=history,
-                                  docs_query="what is X?", docs_matches=[sample_rag_match()],
-                                  tool_context=tool_context)
+        history = scaffold.build_turn_prompt(llm_settings=llm_settings, history=history,
+                                             docs_query="what is X?", docs_matches=[sample_rag_match()],
+                                             tool_context=tool_context)
         named = {call["function"]["name"]
                  for message in history
                  for call in (message.get("tool_calls") or [])}
@@ -1006,13 +1006,13 @@ class TestPerformInjects:
         history = make_conversation(llm_settings)
         history[-1]["content"].append(chatutil.text_file_content_part(url="sidecar:deadbeef.pdf", name="paper.pdf",
                                                                       source="user_attachment"))
-        scaffold._perform_injects(llm_settings=llm_settings, history=history,
-                                  docs_query=None, docs_matches=[],
-                                  tool_context=grounding_context())
+        history = scaffold.build_turn_prompt(llm_settings=llm_settings, history=history,
+                                             docs_query=None, docs_matches=[],
+                                             tool_context=grounding_context())
         assert "Base claims about the provided documents" in chatutil.content_to_text(history[0]["content"])
 
     def test_context_only_reminder_ignores_the_shape_of_the_history(self, llm_settings):
-        # `_perform_injects` asks the turn's state, never the history's shape. Here the branch is full of
+        # `build_turn_prompt` asks the turn's state, never the history's shape. Here the branch is full of
         # `role="tool"` messages and the answer is still "nothing grounds this", because that is what was
         # declared. Reintroducing an inference from message shape — the mechanism this replaced — would
         # switch the reminder back on, which is the regression this guards.
@@ -1024,9 +1024,9 @@ class TestPerformInjects:
                    chatutil.create_chat_message(llm_settings=llm_settings, role="tool", text="Tampere: 17 C, cloudy."),
                    chatutil.create_chat_message(llm_settings=llm_settings, role="assistant", text="It is 17 C and cloudy."),
                    chatutil.create_chat_message(llm_settings=llm_settings, role="user", text="What is the baseline drift of the Kelvin-7 microarray?")]
-        scaffold._perform_injects(llm_settings=llm_settings, history=history,
-                                  docs_query=None, docs_matches=[],
-                                  tool_context=grounding_context())
+        history = scaffold.build_turn_prompt(llm_settings=llm_settings, history=history,
+                                             docs_query=None, docs_matches=[],
+                                             tool_context=grounding_context())
         assert "Base claims about the provided documents" not in chatutil.content_to_text(history[0]["content"])
 
     def test_context_only_reminder_follows_the_declaration_not_the_history(self, llm_settings):
@@ -1036,9 +1036,9 @@ class TestPerformInjects:
         # result is a perfectly well-formed tool message carrying nothing.
         history = make_conversation(llm_settings)
         history.append(chatutil.create_chat_message(llm_settings=llm_settings, role="tool", text="Search result: X is a variable."))
-        scaffold._perform_injects(llm_settings=llm_settings, history=history,
-                                  docs_query=None, docs_matches=[],
-                                  tool_context=grounding_context(grounded=True))
+        history = scaffold.build_turn_prompt(llm_settings=llm_settings, history=history,
+                                             docs_query=None, docs_matches=[],
+                                             tool_context=grounding_context(grounded=True))
         assert "Base claims about the provided documents" in chatutil.content_to_text(history[0]["content"])
 
     def test_context_only_reminder_is_skipped_when_the_tool_found_nothing(self, llm_settings):
@@ -1047,17 +1047,17 @@ class TestPerformInjects:
         # 5-37x the deliberation of sending nothing, and on one model never terminated.
         history = make_conversation(llm_settings)
         history.append(chatutil.create_chat_message(llm_settings=llm_settings, role="tool", text="No matches."))
-        scaffold._perform_injects(llm_settings=llm_settings, history=history,
-                                  docs_query=None, docs_matches=[],
-                                  tool_context=grounding_context(grounded=False))
+        history = scaffold.build_turn_prompt(llm_settings=llm_settings, history=history,
+                                             docs_query=None, docs_matches=[],
+                                             tool_context=grounding_context(grounded=False))
         assert "Base claims about the provided documents" not in chatutil.content_to_text(history[0]["content"])
 
     def test_speculation_on_sends_no_context_only_reminder(self, llm_settings):
         history = make_conversation(llm_settings)
-        scaffold._perform_injects(llm_settings=llm_settings, history=history,
-                                  docs_query="what is X?",
-                                  docs_matches=[sample_rag_match()],
-                                  tool_context=grounding_context())
+        history = scaffold.build_turn_prompt(llm_settings=llm_settings, history=history,
+                                             docs_query="what is X?",
+                                             docs_matches=[sample_rag_match()],
+                                             tool_context=grounding_context())
         assert "Base claims about the provided documents" not in chatutil.content_to_text(history[0]["content"])
 
     def test_injects_carry_no_persona_prefix(self, llm_settings):
@@ -1065,9 +1065,9 @@ class TestPerformInjects:
         # ("User: [System information: ...]") would read as the user narrating a system notice.
         history = make_conversation(llm_settings)
         before = len(history)
-        scaffold._perform_injects(llm_settings=llm_settings, history=history,
-                                  docs_query=None, docs_matches=[],
-                                  tool_context=grounding_context())
+        history = scaffold.build_turn_prompt(llm_settings=llm_settings, history=history,
+                                             docs_query=None, docs_matches=[],
+                                             tool_context=grounding_context())
 
         injected = [message for message in history[:before + 2] if message["role"] == "tool"]
         assert injected  # guard: the rest of this test is vacuous if nothing was injected

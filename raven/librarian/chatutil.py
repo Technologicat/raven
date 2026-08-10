@@ -707,7 +707,7 @@ def format_consulted_documents(entries: List[Dict[str, Any]]) -> str:
         lines.append(line)
     # "Previously" rather than "already", because this list and the current turn's search results look
     # alike, and without it the model can read a document from three turns ago as something the search just
-    # returned. The inject ordering in `scaffold._perform_injects` says the same thing by position - this
+    # returned. The inject ordering in `scaffold.build_turn_prompt` says the same thing by position - this
     # list first, then the current turn's matches - and the two are meant to agree.
     header = ("[System information: Documents from the knowledge base that this conversation consulted "
               "previously, on earlier turns. Any whose text is no longer written out above can be read "

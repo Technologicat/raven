@@ -4,7 +4,7 @@
 NOT a pytest test — it needs a running backend with a model loaded, so it lives here
 under `briefs/` rather than in the suite.
 
-Each AI turn, `scaffold._perform_injects` adds material the user never typed: the current
+Each AI turn, `scaffold.build_turn_prompt` adds material the user never typed: the current
 date and time, two behavioural reminders, and one message per RAG match. The open question
 is not *whether* to send them but in which **role** and at which **position**, and the
 candidate answers trade against each other in ways that argue equally well on paper:
@@ -119,7 +119,7 @@ def ask(base: str, model: str, messages: list[dict], think: bool = False,
 def build(shape: str, user_text: str, injects: list[str]) -> list[dict]:
     """Build a wire history placing `injects` around `user_text` according to `shape`.
 
-    This mirrors what `scaffold._perform_injects` does, with the role and position as the
+    This mirrors what `scaffold.build_turn_prompt` does, with the role and position as the
     free parameters. See the module docstring for what each shape is arguing for.
     """
     system_text = SYSTEM_PROMPT

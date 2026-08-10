@@ -1,7 +1,9 @@
 """Scaffolding for a multi-turn conversation with automatic RAG search and tool-calling."""
 
 __all__ = ["user_turn",
-           "ai_turn", "retry_tool_calls", "action_ack", "action_stop"]
+           "ai_turn", "retry_tool_calls", "action_ack", "action_stop",
+
+           "build_turn_prompt"]  # Part A of the scripting surface: the prompt a turn would send, without sending it
 
 import logging
 logger = logging.getLogger(__name__)
@@ -352,16 +354,21 @@ def _synthetic_tool_exchange(llm_settings: env,
     result_message["tool_call_id"] = call_id  # OAI spec: the linkage lives on the tool-response message
     return [call_message, result_message]
 
-def _perform_injects(llm_settings: env,
-                     history: List[Dict],  # mutated!
-                     docs_query: Optional[str],
-                     docs_matches: List[Dict],
-                     tool_context: env,
-                     tools_are_spent: bool = False) -> None:
-    """Perform the temporary injects to prepare for the AI's turn.
+def build_turn_prompt(llm_settings: env,
+                      history: List[Dict],
+                      docs_query: Optional[str],
+                      docs_matches: List[Dict],
+                      tool_context: env,
+                      tools_are_spent: bool = False) -> List[Dict]:
+    """Return the message history for the AI's turn: `history` with the temporary injects added.
 
     These are not meant to be persistent, so we don't even add them to the datastore,
     but only insert them into the temporary linearized history that is fed to the LLM.
+
+    **`history` is not modified.** A new list is returned; the caller rebinds. The message dicts themselves
+    are shared with the input, so treat the result as read-only — `chatutil.linearize_chat` hands out the
+    datastore's own dicts, and the one message this function does need to change (the leading system
+    message, which the instruction-like injects join) is *replaced* by a modified copy rather than edited.
 
     Two kinds of material go in, and they are shaped differently because they are asking for different
     things. Instructions - the reminders, and the date - want to be obeyed, so they join the leading
@@ -383,7 +390,7 @@ def _perform_injects(llm_settings: env,
     `llm_settings`: Obtain this by calling `raven.librarian.llmclient.setup` at app start time.
                     Contains (among other things) a mapping of roles to persona names.
 
-    `history`: Linearized message history in the OpenAI format sent to the LLM.
+    `history`: Linearized message history in the OpenAI format sent to the LLM. Not modified.
 
     `docs_query`: The query string the document database was searched with, or `None` if it wasn't searched.
                   Reported to the model as the arguments of the synthetic search call, so that the matches
@@ -394,6 +401,11 @@ def _perform_injects(llm_settings: env,
     `tool_context`: The turn's request context (`_make_tool_context`). Read for `grounded`, which is where
                     retrieval results and tool results report whether they actually provided material.
     """
+    # Work on our own list from here on. Everything below inserts into it, and `_add_to_system_message`
+    # replaces its leading element; doing that to the caller's list is what this function used to do, and
+    # what made it impossible to ask "what would Raven send?" without handing over a list to be altered.
+    history = list(history)
+
     # Two sources, because they are scoped differently (see `_attachment_is_present`). `grounded` is
     # *declared* by whatever produced the material; an attachment is not produced by anything, so it is
     # still found by walking the branch.
@@ -450,9 +462,11 @@ def _perform_injects(llm_settings: env,
         if history[position]["role"] == "user":
             break
     else:  # No user message to place the injects ahead of. Nothing to reply to either, so this shouldn't happen.
-        logger.warning("_perform_injects: no user message in history; appending injects at the end.")
+        logger.warning("build_turn_prompt: no user message in history; appending injects at the end.")
         position = len(history)
     history[position:position] = data_injects
+
+    return history
 
 
 def _make_tool_context(llm_settings: env,
@@ -992,15 +1006,15 @@ def ai_turn(llm_settings: env,
                                                   node_id=head_node_id)
 
         # Prepare the final LLM prompt, by including the temporary injects (the document search results, too).
-        _perform_injects(llm_settings=llm_settings,
-                         history=message_history,
-                         docs_query=docs_query,
-                         docs_matches=docs_matches,
-                         tool_context=tool_context,
-                         # Told the moment the budget runs out, not the moment the tools go away — the point
-                         # of the notice is to make the doomed call unnecessary, which is too late once the
-                         # model has already tried it.
-                         tools_are_spent=(any_tools_available and budget_spent))
+        message_history = build_turn_prompt(llm_settings=llm_settings,
+                                            history=message_history,
+                                            docs_query=docs_query,
+                                            docs_matches=docs_matches,
+                                            tool_context=tool_context,
+                                            # Told the moment the budget runs out, not the moment the tools go
+                                            # away — the point of the notice is to make the doomed call
+                                            # unnecessary, which is too late once the model has already tried it.
+                                            tools_are_spent=(any_tools_available and budget_spent))
 
         if on_llm_start is not None:
             on_llm_start()
