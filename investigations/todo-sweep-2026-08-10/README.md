@@ -69,7 +69,7 @@ running app, a live backend, or a human eye).
 | The avatar upscaler offers bilinear and bicubic, but not Lanczos | **CONFIRMED** | `upscaler.py:36` accepts exactly `low`, `high`, `bilinear`, `bicubic`. |
 | RAG: rerank retrieved chunks and inject only the best few | **CONFIRMED** | No occurrence of "rerank" anywhere outside tests. |
 | Split `raven.common.nlptools` per backend | **CONFIRMED** | Still one module, `raven/common/nlptools.py`. |
-| Untested but test-worthy modules in `raven.common` | **CONFIRMED** | Eight remain with no test at all: `docstring_utils`, `hfutil`, `audio/player`, `audio/recorder`, `gui/helpcard`, `gui/layout_math`, `gui/vumeter`, `gui/widgetfinder`. The two the item's prose names as pending, `text/normalize` and `text/speakable`, *are* covered now. |
+| Untested but test-worthy modules in `raven.common` | **CONFIRMED** | Five remain genuinely untested: `docstring_utils`, `hfutil`, `gui/helpcard`, `gui/vumeter`, `gui/widgetfinder`. (`gui/fontsetup` also matches a naive check, but is exercised through `guiutils.bootup` by `test_fontsetup.py`.) The two the item's prose names as pending, `text/normalize` and `text/speakable`, are covered. **This row was wrong twice before it was right — see below.** |
 | Faster PNG decoder | **CONFIRMED** | `image/codec.py` has a turbojpeg fast path for JPEG only; no `fpng`/`fpnge`/`spng`. |
 | raven-cherrypick: export image sequence (QOI→PNG batch) | **CONFIRMED** | No export path in `cherrypick/app.py`. |
 | Avatar settings editor: custom postprocessor chain ordering | **CONFIRMED** | `strip_postprocessor_chain_for_gui` documents itself as "Fixed render order"; the GUI imposes the order rather than exposing it. |
@@ -83,7 +83,7 @@ running app, a live backend, or a human eye).
 | Vector figures in the docs DB and attachments (`.svg`) | **CONFIRMED** | `docextract` has no SVG path. |
 | Read documents as page images, for figure- and math-heavy sources | **CONFIRMED** | No page-image ingestion path. |
 | A no-avatar mode, with the chat tree in the panel the avatar vacates | **CONFIRMED** | No such mode. |
-| A crash during ingest loses the whole run, however long it was | **CONFIRMED, with a contradiction to resolve** | The delayed-commit coalescer is still in place (`hybridir.py:1651`, "Schedule delayed commit after each add"), so the pending-edit window the item measured still exists. **But** `indexer.py:154` asserts the opposite in a comment — "The commit is per-document and the index auto-persists... Re-running resumes". Both cannot be right about the same path. Worth resolving before anyone acts on this item; not resolved here, because guessing which is stale is exactly what this sweep is for. |
+| A crash during ingest loses the whole run, however long it was | **CONFIRMED** | The delayed-commit coalescer is still in place (`hybridir.py:1651`, "Schedule delayed commit after each add"), so the pending-edit window the item measured still exists. The sweep first read `indexer.py:154` ("the commit is per-document and the index auto-persists… re-running resumes") as contradicting it. **It does not** — resolved by Juha, 2026-08-10: the CLI and GUI paths are the same, and the comment is right that *any commit that lands* leaves a valid index. The two describe different things, commit **validity** versus commit **latency**. The real mechanism is contention: on a bulk fulltext ingest the extraction workers (pypdf) starve the commit workers, so the *first* commit does not run until very late. Nothing is wrong with a landed commit; the problem is that none lands for ~40 minutes. |
 
 ## What the reference checker flagged, and what it was worth
 
@@ -105,8 +105,7 @@ The selection bias runs the other way from what you might expect. Items were pic
 looked closeable, so a low STALE rate among them is meaningful: **six of 50 are STALE and one is half
 stale.** Most items that look done are not.
 
-Tally so far: 36 CONFIRMED (one halved, one carrying an unresolved contradiction), 6 MOVED, 6 STALE,
-2 SUPERSEDED.
+Tally so far: 36 CONFIRMED (one of them halved), 6 MOVED, 6 STALE, 2 SUPERSEDED.
 
 ### What is left, and what it will take
 
@@ -121,12 +120,30 @@ Of the 80 unchecked, roughly:
 - **~20 are UNCHECKABLE from the tree** — rendering bugs in the Markdown widget, the turn-sequencing race,
   "reads as a hang", colourblind-safety. These want a running app or an answer from memory.
 
-## A side finding, for whoever fixes it
+## The untested-modules row, and two ways of getting it wrong
 
-`CLAUDE.md`'s test-coverage list names `viewport_math` among the covered `gui/` modules. There is no
-`viewport_math` module and no test for it — the module is `layout_math`, and it is one of the eight with no
-test at all. Noticed while checking the untested-modules item; not fixed here, to keep this pass to one
-subject.
+Worth recording, because both errors are the kind a checker produces confidently.
+
+**First attempt** looked for a file named `test_<module>.py` and reported eight untested modules, including
+`layout_math`. Wrong: `layout_math.py` was tested all along by `test_viewport_math.py`, named after the
+module's *previous* name. A test whose name has gone stale is invisible to a name-based check, and reads as
+a coverage gap.
+
+**Second attempt** searched test files for `import.*<module>`, and reported twenty-six untested modules. Also
+wrong, and more embarrassingly: the pattern requires `import` to come *before* the module name, so it misses
+every `from raven.common.gui.layout_math import ...` — which is the usual spelling. It flagged `numutils`,
+`smoothvalue` and the whole `xdotwidget` package, all thoroughly tested.
+
+**Third attempt** — does any test file mention the module name at all — gives five, which survives being
+checked by hand.
+
+The general lesson is the one from the reference checker earlier: **a checker's first number is a claim about
+the checker.** Both wrong answers were plausible, neither raised an error, and the first one nearly went into
+this report as a finding about `CLAUDE.md` being inaccurate. It was the *test filename* that was stale, not
+the documentation.
+
+That stale name is now fixed, along with three others, and the naming rule is written down in `CLAUDE.md`
+under "Naming and placing a test module" so the next rename does not leave the same trap.
 
 The brief predicted a meaningful STALE rate and explained why it is expected rather than embarrassing: many
 of these were filed during a period when the standing instruction was never to get sidetracked, so things

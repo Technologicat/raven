@@ -173,6 +173,32 @@ reflex is the safe one:
 
 A test that needs neither takes no marker, which is the overwhelmingly common case.
 
+### Naming and placing a test module
+
+**`test_X.py` tests the module `X.py`, and lives in the `tests/` directory of X's own package.** So
+`raven/common/text/normalize.py` is tested by `raven/common/text/tests/test_normalize.py`. Every subpackage
+carries its own `tests/` (`audio/`, `gui/`, `image/`, `text/`, `video/`, …); `raven/common/tests/` is for the
+modules sitting directly under `raven/common/`.
+
+Where one module's tests are split by aspect, **every part still names the module** — `test_download.py` and
+`test_download_metadata.py`, not `test_metadata.py`.
+
+Two kinds of test have no single module to name, and take a descriptive name instead. Both must say what they
+cover in the docstring's first line, since the filename no longer does:
+
+- **Spanning several modules** — `test_tts_stt_roundtrip.py` (TTS → resample → STT).
+- **Pinning a third-party library's behaviour**, where there is no Raven module in the picture at all —
+  `test_focus_semantics.py`, which characterizes DearPyGui's focus model.
+
+There is deliberately **no `integration` keyword** in the naming scheme. Two files out of 74 are in these
+categories, and they are not the same kind of thing — one crosses Raven modules, the other tests no Raven
+code whatsoever — so a shared keyword would assert a similarity that is not there.
+
+**The failure this prevents:** a test named after a module that no longer exists. `layout_math.py` was once
+`viewport_math.py` and its test kept the old name; a coverage audit on 2026-08-10 read that as "layout_math
+is untested", which was wrong, and would have been filed as a real gap had the file not been opened. A stale
+test name costs a re-investigation every time somebody checks, and nothing ever fails to make it visible.
+
 ### Linting
 
 ```bash
@@ -362,7 +388,7 @@ Target ~700 lines per module as a guideline, not a hard limit — some modules c
 68 test modules as of 2026-08-03, ~1600 tests. Library and utility code is broadly covered; what is
 untested is the GUI layer and the Visualizer.
 
-- **`common/`** — numutils, smoothvalue, utils, bgtask, deviceinfo, docextract, logsetup, netutil, nlptools, readcsv, running_average, stringmaps, text_normalize, text_speakable; `audio/` (codec, resample, utils) and `audio/speech/` (tts, stt, lipsync, and a TTS→STT round trip); `image/` (codec, lanczos, utils); `video/` (colorspace, compositor, postprocessor, upscaler); `gui/` (animation, messagebox, utils, viewport_math, filedrop, and all of `xdotwidget/`).
+- **`common/`** — numutils, smoothvalue, utils, bgtask, deviceinfo, docextract, logsetup, netutil, nlptools, readcsv, running_average, stringmaps; `text/` (normalize, speakable); `audio/` (codec, resample, utils) and `audio/speech/` (tts, stt, lipsync, and a TTS→STT round trip); `image/` (codec, lanczos, utils); `video/` (colorspace, compositor, postprocessor, upscaler); `gui/` (animation, fontsetup, layout_math, messagebox, utils, filedrop, and all of `xdotwidget/`).
 - **`librarian/`** — chattree, chatutil, hybridir, appstate, scaffold, llmclient, cleanup, imagestore, sidecarstore, textfilestore.
 - **Elsewhere** — `client/` (api, mayberemote), `papers/*`, `cherrypick/*`, `server/webfetch`, `xdot_viewer/dot_utils`.
 
