@@ -4,7 +4,7 @@
 to `TODO_DEFERRED.md`.** The triage discussion consumes this file; heading text is verbatim, so it joins
 against the deferred file and the cluster map.
 
-**Status: partial. 50 of 130 items carry a verdict.** The remainder are unchecked, not confirmed — see
+**Status: partial. 70 of 130 items carry a verdict.** The remainder are unchecked, not confirmed — see
 "Coverage" below, which says plainly what that means for the discussion.
 
 It is a directory rather than the single file the brief named, because it came with a script, and this repo
@@ -85,6 +85,36 @@ running app, a live backend, or a human eye).
 | A no-avatar mode, with the chat tree in the panel the avatar vacates | **CONFIRMED** | No such mode. |
 | A crash during ingest loses the whole run, however long it was | **CONFIRMED** | The delayed-commit coalescer is still in place (`hybridir.py:1651`, "Schedule delayed commit after each add"), so the pending-edit window the item measured still exists. The sweep first read `indexer.py:154` ("the commit is per-document and the index auto-persists… re-running resumes") as contradicting it. **It does not** — resolved by Juha, 2026-08-10: the CLI and GUI paths are the same, and the comment is right that *any commit that lands* leaves a valid index. The two describe different things, commit **validity** versus commit **latency**. The real mechanism is contention: on a bulk fulltext ingest the extraction workers (pypdf) starve the commit workers, so the *first* commit does not run until very late. Nothing is wrong with a landed commit; the problem is that none lands for ~40 minutes. |
 
+### Batch 3 — more "does this exist yet?", and none of it did
+
+Twenty items, twenty CONFIRMED. Worth noting as a result rather than a boring batch: batches 1 and 2 were
+picked for looking closeable and yielded six STALE; this one was picked purely for being *queryable*, and
+yielded none. The stale items are not distributed evenly through the file — they cluster in what recent work
+touched, which is the argument for checking rather than sampling.
+
+| Heading | Verdict | Evidence |
+|---|---|---|
+| Make the DPG reference a skill, so it fires when it is needed | **CONFIRMED** | `~/.claude/skills/` holds seven skills; none is about DPG. |
+| Revisit `recenter_window`'s degrade-instead-of-raise policy | **CONFIRMED** | Still `required=False` at `utils.py:581`. The item asks for a decision, not a fix. |
+| GUI: hardcoded stand-ins for values DPG has no getter for | **CONFIRMED** | `DPG_WINDOW_PADDING = 8`, `DPG_FRAME_PADDING_Y = 3`, `DPG_SCROLLBAR_SIZE = 14` — still constants read off the default theme. |
+| Web status panel: check on a long job without being at the machine | **CONFIRMED** | Nothing of the kind in the server. |
+| Browse *all* attachments in the datastore, not just the orphaned ones | **CONFIRMED** | The only attachment-enumeration path is the orphan cleanup preview. |
+| TTS reads arXiv IDs digit by digit | **CONFIRMED** | `text/speakable.py` has no arXiv handling. |
+| FileDialog: smart-case the Find (search) field | **CONFIRMED** | No smart-case logic in `fdialog.py`. |
+| FileDialog: image thumbnail previews (Lanczos'd) | **CONFIRMED** | No thumbnail path. |
+| FileDialog: multi-extension filter as one labelled item | **CONFIRMED** | `file_filter` is a single extension string; grouped filters do not exist. This is the constraint `raven-librarian`'s attach dialog works around by offering `.*`. |
+| Uniform load-on-demand for Raven-server modules | **CONFIRMED** | No lazy loading. (A naive grep for "lazy" hits only the pangram in the API examples — "the quick brown fox jumps over the lazy dog".) |
+| pillow-simd for faster PIL image processing | **CONFIRMED** | Not in `pyproject.toml`. |
+| Robust public API auditing tool | **CONFIRMED** | No such tool in `raven/tools/`. |
+| Fenced code block support in the Markdown renderer | **CONFIRMED** | The vendored renderer has no fenced-code handling at all. |
+| Markdown tables don't render in the chat view | **CONFIRMED** | Likewise no table handling. |
+| Context-window budgeting and conversation compaction (Librarian) | **CONFIRMED** | No compaction path exists. |
+| Fleet-wide: shared two-phase DPG shutdown helper + audit | **CONFIRMED** | No shared helper in `common/gui/`; each app still spells out its own teardown. |
+| Parse Gemma's inline tool-call spelling | **CONFIRMED** | Gemma appears only incidentally (its ghost `<think></think>`, its image-tiling scheme); no inline tool-call parsing. |
+| Make the canned AI greeting optional | **CONFIRMED** | `llm_greeting` is a plain string with no way to switch it off. |
+| MPS (Apple Silicon) device synchronization | **CONFIRMED** | `torch.cuda.synchronize` at four sites in `cherrypick/preload.py` with no MPS equivalent. MPS *detection* exists in `deviceinfo.py`, which is what makes this easy to mis-call — the item is about synchronization. (A naive `grep mps` also matches the tail of "timesta**mps**".) |
+| Let the AI drive the constellation's own views (tools, and then voice) | **CONFIRMED** | The tool set is the six shipped in 0.2.9-dev — two network, three document, plus `get_current_time`. None touches a view. |
+
 ## What the reference checker flagged, and what it was worth
 
 Eleven items name something that no longer resolves. Six became the MOVED verdicts above. The other five are
@@ -96,27 +126,38 @@ false positives worth recording so the next run does not re-litigate them:
 
 ## Coverage, stated plainly
 
-**50 of 130 items have a verdict. 80 do not.** They were selected, not sampled: the ones today's and
-0.2.8's work plausibly closed, everything the reference checker flagged, and then two batches chosen for
+**70 of 130 items have a verdict. 60 do not.** They were selected, not sampled: the ones today's and
+0.2.8's work plausibly closed, everything the reference checker flagged, and then three batches chosen for
 being settleable by a query rather than by reading. So the STALE rate here says nothing about the rest of
 the file, and **an item's absence from this table is not evidence that it holds.**
 
-The selection bias runs the other way from what you might expect. Items were picked partly *because* they
-looked closeable, so a low STALE rate among them is meaningful: **six of 50 are STALE and one is half
-stale.** Most items that look done are not.
+The selection bias runs the other way from what you might expect, and batch 3 sharpened the point. Batches 1
+and 2 were picked partly *because* the items looked closeable, and produced six STALE. Batch 3 was picked
+purely for being queryable, and produced **none**. So the stale items are not spread evenly through the
+file: they cluster in whatever recent work touched. A bulk "the old ones are probably stale" move in the
+triage would be backwards — of the six STALE found so far, five sit in areas 0.2.8 or 0.2.9 changed.
 
-Tally so far: 36 CONFIRMED (one of them halved), 6 MOVED, 6 STALE, 2 SUPERSEDED.
+Tally so far: 56 CONFIRMED (one of them halved), 6 MOVED, 6 STALE, 2 SUPERSEDED.
 
 ### What is left, and what it will take
 
-Of the 80 unchecked, roughly:
+Of the 60 unchecked, roughly:
 
-- **~35 are settleable the same way** — "does this exist yet", one query each.
+- **~15 are settleable the same way** — "does this exist yet", one query each.
 - **~25 need the item and the code read together.** No shortcut; this is where the remaining time goes.
-  Three were deferred out of batch 2 for exactly this reason: *Audit unnamed lambdas* and *Adopt dotted
-  import style* both have counts (214 lambdas, 1052 `from X import Y`) that mean nothing without knowing
-  which the item considers wrong, and *Attach an image from a web URL* is complicated by staged attachments
-  already carrying a `provenance_url`.
+  The ones deferred so far, and why:
+  - *Audit unnamed lambdas* and *Adopt dotted import style* — the counts (214 lambdas, 1052
+    `from X import Y`) mean nothing without knowing which instances the item considers wrong.
+  - *Attach an image from a web URL* — staged attachments already carry a `provenance_url`, so part of it
+    may exist.
+  - *EU AI Act Article 50 compliance* — a disclosure **does** exist (`librarian/app.py:1167` cites Article
+    50(1); `chatutil.py:306` emits AI-generated front-matter on export). Whether that satisfies the item is
+    a question about the item's scope, not about the code.
+  - *The 8/3 pass: bare DPG margins should name themselves* — the named constants exist and have 21 call
+    sites, so this is partly done; the question is how many bare literals remain.
+  - *The subtitle translator silently drops `=`*, *Librarian's help card has no room to describe
+    attachments*, *torch / torchaudio CUDA version alignment*, *webfetch local (client-side) mode*,
+    *Markdown ATX headings don't render*.
 - **~20 are UNCHECKABLE from the tree** — rendering bugs in the Markdown widget, the turn-sequencing race,
   "reads as a hang", colourblind-safety. These want a running app or an answer from memory.
 
