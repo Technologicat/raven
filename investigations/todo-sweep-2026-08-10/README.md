@@ -381,6 +381,44 @@ has had no opportunity to become false.
 Worth keeping for the next sweep on any project in the fleet: **check where the recent commits are, not where
 the old filings are.**
 
+## Two items that must not simply be deleted
+
+Both are cases where the verdict is right and acting on it naively destroys something. Flagged here because
+the triage works from this report, and neither is visible from the item's own text.
+
+### The ligature item is a live brief's cited source
+
+**Verdict CONFIRMED, but it is also load-bearing for `briefs/ligature-repair-brief.md`.** That brief opens by
+pointing *outward* at this item and explicitly declining to repeat it:
+
+> The defect, its measurements and the reason `normalize` must not be wired into `docextract` are in
+> `TODO_DEFERRED.md`, "Ligature mojibake in PDF-extracted text". Not repeated here; this is the design that
+> came out of discussing it.
+
+So the deferred file is currently the *only* home for three things: the measured evidence (which codepoint
+means which ligature, in which corpus), the reason a fixed table is a guess rather than a standard, and the
+warning that `normalize` deletes the control codes and thereby turns *finite* into *nite* — a wrong fix that
+looks like hygiene and was tried and reverted once already.
+
+The brief's decision to point rather than duplicate was reasonable when made, and it is unsafe now for a
+reason that has nothing to do with the brief: **a document that is pruned cannot be cited by one that is
+kept.** The fix is to move that prose into the brief before the item is closed, not to close the item and
+hope. Until that happens the item is pinned.
+
+Worth generalizing while pruning: **grep the briefs for any item heading before deleting it.** This is the
+only case the sweep found, but it is the only case anyone looked for.
+
+### The CLAUDE.md-triage item is a STALE that should be replaced, not removed
+
+**Verdict STALE — the global-vs-project split has been done.** But Juha's answer came with a rider: the
+CLAUDE.md files "grow without bound", so a periodic re-check is wanted. Deleting the item on the strength of
+the STALE verdict discards the only record of that.
+
+What it should become — a recurring growth check rather than a one-off triage — is settled; **where it lives
+is not**, and that is the open question. It is not obviously a deferred item at all: the natural pairing is
+the dehydration pass, an existing scheduled ritual for the same class of problem, which would put it in the
+fleet's global config rather than in Raven's tree. Juha is taking that decision separately (2026-08-10).
+
 ## Re-running
 
 `python investigations/todo-sweep-2026-08-10/check_references.py` regenerates the mechanical half against
