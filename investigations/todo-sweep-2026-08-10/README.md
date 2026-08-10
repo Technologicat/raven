@@ -386,10 +386,14 @@ the old filings are.**
 Both are cases where the verdict is right and acting on it naively destroys something. Flagged here because
 the triage works from this report, and neither is visible from the item's own text.
 
-### The ligature item is a live brief's cited source
+### The ligature item was a live brief's cited source — **resolved 2026-08-10**
 
-**Verdict CONFIRMED, but it is also load-bearing for `briefs/ligature-repair-brief.md`.** That brief opens by
-pointing *outward* at this item and explicitly declining to repeat it:
+**Fixed in `62b41b8`: the prose moved into `briefs/ligature-repair-brief.md`, and the deferred entry is now a
+stub pointing at the brief as the live tracker.** The item is free to close whenever the triage wants it to.
+What follows is why it was pinned, kept because the shape recurs.
+
+**Verdict CONFIRMED, and it was also load-bearing for the brief.** The brief opened by pointing *outward* at
+this item and explicitly declining to repeat it:
 
 > The defect, its measurements and the reason `normalize` must not be wired into `docextract` are in
 > `TODO_DEFERRED.md`, "Ligature mojibake in PDF-extracted text". Not repeated here; this is the design that
@@ -400,13 +404,13 @@ means which ligature, in which corpus), the reason a fixed table is a guess rath
 warning that `normalize` deletes the control codes and thereby turns *finite* into *nite* — a wrong fix that
 looks like hygiene and was tried and reverted once already.
 
-The brief's decision to point rather than duplicate was reasonable when made, and it is unsafe now for a
-reason that has nothing to do with the brief: **a document that is pruned cannot be cited by one that is
-kept.** The fix is to move that prose into the brief before the item is closed, not to close the item and
-hope. Until that happens the item is pinned.
+The brief's decision to point rather than duplicate was reasonable when made, and became unsafe for a reason
+that has nothing to do with the brief: **a document that is pruned cannot be cited by one that is kept.**
 
-Worth generalizing while pruning: **grep the briefs for any item heading before deleting it.** This is the
-only case the sweep found, but it is the only case anyone looked for.
+Worth generalizing while pruning: **grep the briefs for an item heading before deleting it.** This was the
+only case the sweep found, and also the only case anyone looked for — the check was prompted by noticing that
+the report had *asserted* the brief might not carry the prose without opening the brief to see. It did not
+carry it, and said so in as many words.
 
 ### The CLAUDE.md-triage item is a STALE that should be replaced, not removed
 
