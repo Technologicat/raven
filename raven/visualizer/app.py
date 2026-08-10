@@ -84,6 +84,7 @@ with timer() as tim:
     from ..common.gui import animation as gui_animation
     from ..common.gui import helpcard
     from ..common.gui import messagebox
+    from ..common.gui import filedrop
     from ..common.gui import utils as guiutils
 
     from .app_state import app_state  # Visualizer-wide shared state namespace (see `app_state.py`)
@@ -352,13 +353,23 @@ importer_output_file_box = box("")
 importer_action_start = sym("start")
 importer_action_stop = sym("stop")
 
+def show_importer_window():
+    """Show the BibTeX importer window, centered on the main window.
+
+    Already open: leave it alone, in the position the user gave it. Centering is for the way in, when the
+    window has no position anyone chose.
+    """
+    if dpg.is_item_visible("importer_window"):  # tag
+        return
+    dpg.show_item("importer_window")  # tag
+    guiutils.recenter_window("importer_window", reference_window=main_window)  # tag
+
 def toggle_importer_window():
     """Show/hide the BibTeX importer window."""
-    if dpg.is_item_visible("importer_window"):
-        dpg.hide_item("importer_window")
+    if dpg.is_item_visible("importer_window"):  # tag
+        dpg.hide_item("importer_window")  # tag
     else:
-        dpg.show_item("importer_window")
-        guiutils.recenter_window("importer_window", reference_window=main_window)
+        show_importer_window()
 
 def show_open_import_dialog():
     """Button callback. Show the open import file dialog, for the user to pick which BibTeX files to import."""
@@ -386,6 +397,18 @@ def is_open_import_dialog_visible():
     if filedialog_open_import is None:
         return False
     return dpg.is_item_visible("open_import_dialog")  # tag
+
+def import_bibtex_files(filenames: list[str]) -> None:
+    """Open the BibTeX importer window, with `filenames` already filled in as the input files.
+
+    This is where a drag-and-drop of BibTeX files lands. It stops short of starting the import: the importer
+    also needs an output dataset to save as, and picking that is the user's next step, so the window opens
+    ready rather than running.
+    """
+    logger.debug(f"import_bibtex_files: {len(filenames)} file(s).")
+    importer_input_files_box << list(filenames)  # our own copy — the box outlives this call
+    update_open_import_gui_table()
+    show_importer_window()
 
 def show_save_import_dialog():
     """Button callback. Show the save import file dialog, to ask the user for a filename to save the imported dataset as."""
@@ -1895,6 +1918,23 @@ importer.init(executor=app_state.bg)  # BibTeX importer
 dpg.set_primary_window(main_window, True)  # Make this DPG "window" occupy the whole OS window (DPG "viewport").
 dpg.set_viewport_vsync(True)
 dpg.show_viewport()
+
+# Accept datasets and BibTeX files dragged in from the file manager. Installed right after `show_viewport`
+# because that call is what makes DPG's window reachable through GLFW on this thread.
+#
+# The two kinds land in different places by their nature: a dataset is something to *open*, and only one can
+# be open, so several at once is an error rather than a choice. BibTeX is input to the importer, which takes
+# any number, so a dropped set opens the importer window with them already filled in.
+filedrop.install(filedrop.make_router([filedrop.DropRule(matches=filedrop.by_extension(".pickle"),
+                                                         handler=lambda paths: open_file(paths[0]),
+                                                         label="a dataset (.pickle)",
+                                                         multiple=False),
+                                       filedrop.DropRule(matches=filedrop.by_extension(".bib"),
+                                                         handler=import_bibtex_files,
+                                                         label="BibTeX files to import (.bib)")],
+                                      reference_window=main_window,
+                                      what="Raven-visualizer",
+                                      blocked=is_any_modal_window_visible))
 
 # Load the file optionally provided on the command line
 if opts.filename:
