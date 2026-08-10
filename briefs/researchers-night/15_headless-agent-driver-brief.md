@@ -261,6 +261,11 @@ That is a change to what the model is told and where, so it wants measuring befo
 inject-shape probes in `investigations/context-injects/` are the apparatus, and they now run on real
 settings, which is what makes such a measurement trustworthy.
 
+**One thing that is *not* a blocker either way**, since it looks like one: what the card should claim while
+nothing is loaded. Nothing reads it — with no model connected there is no model to mislead, and the card is
+rebuilt before any turn can be taken. So the "never state a guess to the model" rule is not in tension here
+under either design; the question is academic, and should not be allowed to hold up the choice.
+
 ### Raised, and not this brief's to fix: the chat log does not show the injects
 
 The chat view shows the stored conversation. It does not show the date inject, the clock tool call, the
