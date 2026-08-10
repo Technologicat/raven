@@ -62,6 +62,7 @@ from ..common import deviceinfo
 from ..common.gui import utils as guiutils
 from ..common.gui import helpcard
 from ..common.gui import messagebox
+from ..common.gui import filedrop
 from ..common.gui import animation as gui_animation
 from ..common import utils as common_utils
 from ..vendor.file_dialog.fdialog import FileDialog
@@ -1785,6 +1786,17 @@ def main() -> int:
     dpg.set_exit_callback(_gui_cancel_tasks)
     dpg.set_viewport_vsync(True)
     dpg.show_viewport()
+
+    # Accept an image folder dragged in from the file manager, same effect as the open dialog. Installed
+    # right after `show_viewport` because that call is what makes DPG's window reachable through GLFW on
+    # this thread.
+    filedrop.install(filedrop.make_router([filedrop.DropRule(matches=filedrop.is_directory,
+                                                             handler=lambda paths: _open_folder(paths[0]),
+                                                             label="a folder of images",
+                                                             multiple=False)],
+                                          reference_window="cherrypick_main_window",  # tag
+                                          what="Raven-cherrypick",
+                                          blocked=is_any_modal_window_visible))
 
     # Open folder from CLI argument.
     if args.folder:
