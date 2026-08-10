@@ -189,6 +189,71 @@ Two things the record must cover that are awkward today:
 **The two parts are not layers of each other**: A must not talk to a backend at all, and B is useless without
 one. A surface offering only B would leave the prompt-shape probes still reaching through the private door.
 
+## Adopted 2026-08-10: "is a model actually loaded?", and the reconnect it implies
+
+Came out of the `TODO_DEFERRED` triage — *"Librarian doesn't check that the LLM backend has a model
+loaded"*, which named `llmclient.setup` as its natural home. It lands here rather than in its own brief
+because Part 0 just built the thing it needs: `setup` is now a probe plus a pure `configure`, so "ask the
+backend what it has" and "build the prompt from that" are separate, named, and separately callable.
+
+### What the backend can tell us
+
+LM Studio's `/api/v0/models` returns `state` per model — verified live 2026-08-10: one `loaded`, nine
+`not-loaded`. **`detect_backend_flavor` already fetches that endpoint and reads `state`**, using it only to
+identify the flavor and then discarding it. ooba and generic backends have no equivalent. So this is a
+tri-state exactly like `model_is_vlm`: `True` / `False` / `None` for "cannot tell", and it belongs as a
+`loaded` field on the `model_info` env that `_resolve_model_info` returns — which keeps `configure` pure,
+since it receives backend facts as data.
+
+### Decisions (Juha, 2026-08-10)
+
+- **Librarian starts anyway, and says so.** Reachable-but-empty is recoverable in two clicks, and Librarian
+  is useful without a model — past chats, the cleanup dialog, settings. Refusing to open a window for it
+  would be the existing `sys.exit(255)` path applied to a condition that does not warrant it.
+- **Batch tools exit; `minichat` warns.** `raven-pdf2bib` and `raven-importer` can run for hours, so failing
+  at document 1 with a precise diagnosis beats discovering it mid-run. `minichat` is interactive, so it
+  behaves like Librarian and keeps the REPL.
+- **No retry mechanism is needed for generation** — one exists and is better than a poll. A send against a
+  dead or empty backend already produces an error as an AI message, and reroll retries it. That is
+  user-initiated, free when idle, and already built. What the new check buys is a *specific* message
+  instead of a generic failure.
+
+### The UX, and the one place a poll is unavoidable
+
+**Librarian has no model readout at all today**, so this needs building: a pill reading something like
+"LLM backend not connected", which turns green and announces the connection before hiding itself
+(`dpg.hide_item`, per the usual pattern).
+
+That is where the "no polling" answer runs out. Reroll covers *generation*, because the user acts. Nothing
+makes a pill go green on its own. So the resolution is asymmetric, and worth stating as the rule rather than
+discovering it later: **poll only while known-bad.** No request at all in the healthy state; a cheap
+`_resolve_model_info` (one HTTP call) on a timer only while the pill is up, stopping the moment it clears.
+The cost is bounded by the duration of a condition the user is actively fixing.
+
+### The catch: the system prompt depends on the backend
+
+**The prompt is not independent of what we just learned.** `configure` builds `system_prompt` and
+`character_card` from `template_vars` = (`user`, `char`, `model`, `context_length`), and the last two come
+from the backend — the card tells the model its own identity and context size. A Librarian that started
+without a backend has a prompt built from placeholders, so **connecting is not just a UI state change; the
+prompt has to be rebuilt and the stored node updated.**
+
+Both halves already exist:
+
+- `llmclient.configure(model_info=..., ...)` produces the corrected settings, with no second round trip.
+- `appstate._refresh_system_prompt` rewrites the system-prompt node — as a *revision*, so the placeholder
+  version is preserved rather than overwritten.
+
+So the reconnect path is: re-probe → `configure` → `_refresh_system_prompt` → clear the pill. Which is the
+clearest argument so far that the Part 0 split was worth doing on its own terms: before it, "rebuild the
+prompt from new backend facts" and "go ask the backend" were the same indivisible function.
+
+**Open:** what the character card should say while no model is loaded. `NO_MODEL_INFO` ("No model
+information is available") is the existing answer for an unidentifiable model and is probably right here
+too, but a card asserting a context length it does not know is a different matter — the 64k default is a
+guess, and stating a guess to the model is what `_resolve_model_info`'s "never a guess" rule exists to
+prevent.
+
 ## Explicitly out of scope
 
 **The scripted backend.** *"Headless scaffold mode for `ai_turn`"* bundles a scripted backend — canned model turns, for driving
