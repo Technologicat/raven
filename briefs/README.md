@@ -14,7 +14,7 @@ what stops "done" from being applied to something that was never going to be fin
   its own `README.md` for ordering and its own `done/` for the ones that have closed. A sprint folder is a
   working set, so it also holds unnumbered briefs and its session records.
 
-- **One folder per one-off pass** — currently `todo-sweep-2026-08-10/`. It is a folder because the pass
+- **One folder per one-off pass** — the worked example is `done/todo-sweep-2026-08-10/`. It is a folder because the pass
   arrived as several files that belong together, which is the same reason anything else here gets one. It
   is not a sprint: no numbered implementation briefs, and the work is a single bounded pass over something
   that already exists rather than a run of features. Name it for the pass and the date it was scoped, and
@@ -57,6 +57,37 @@ briefs need not take a number: `ligature-repair-brief.md` sits at the top level 
 
 The `reference/` split exists because filing the AI Act summary under `done/` was a category error: it is a
 description of a regulation, and regulations do not get finished.
+
+## Citing code and TODO items: by name, not by line number
+
+**Cite a heading, a symbol or a function name. Not `file.md:1825`.** Audited across the open briefs on
+2026-08-10, after brief 15 was found carrying three `TODO_DEFERRED.md` line numbers that had all drifted.
+
+The failure is not that a pointer breaks. A broken pointer announces itself. **The dangerous case is the one
+that still resolves**: brief 15's `TODO_DEFERRED.md:1825` had come to rest on a different item's real
+heading, so it read as valid and nothing would ever have prompted a re-check. Brief 16 had four citations to
+`TODO.md:480` for an item that now sits at `:504`, on a line that is blank.
+
+`TODO_DEFERRED.md` is the worst host for a line number — it is edited constantly and is about to get
+substantially shorter, so any number written into it is already wrong. But source files drift too, and a
+symbol name (`scaffold._perform_injects`, `chat_controller._render_text`) is both stabler and more
+informative than a coordinate: it says *what* is being pointed at, so a reader who has to go looking can.
+
+Where a line number genuinely helps — the exact line of a subtle expression — write it *alongside* the name,
+so the name still works when the number stops.
+
+### The exception: dated session records are not maintained, they are closed
+
+A document like `design-session-2026-08-03.md` records what was true on a date. Its citations were correct
+when written, and **repointing them falsifies the record** — the same reason `investigations/` keeps
+measurements as they were made. Two consequences:
+
+- Do not repoint them. A stale line number in a dated record is not a defect; it is the record aging, which
+  is what records do.
+- **They belong in `done/`**, which this README already says holds session reports of completed work. Leaving
+  one in a sprint's working set invites exactly the maintenance it must not receive.
+
+So an audit of citations should skip them, and the audit script should be pointed at the live briefs only.
 
 A folder here may be a **bundle** rather than a single file, when a document has apparatus: `done/` holds
 `dpg-markdown-bullet/` (the write-up plus the script that reproduces the bug) and `visualizer-refactoring/`

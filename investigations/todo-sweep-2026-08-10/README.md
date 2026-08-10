@@ -1,6 +1,6 @@
 # TODO_DEFERRED verification sweep, 2026-08-10
 
-**Part C of `briefs/todo-sweep-2026-08-10/todo-mechanical-pass.md`. Report only — nothing here was applied
+**Part C of `briefs/done/todo-sweep-2026-08-10/todo-mechanical-pass.md`. Report only — nothing here was applied
 to `TODO_DEFERRED.md`.** The triage discussion consumes this file; heading text is verbatim, so it joins
 against the deferred file and the cluster map.
 

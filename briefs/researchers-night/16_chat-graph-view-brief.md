@@ -15,7 +15,7 @@ scheme *from* `crt-display.md` §0, so the dependency runs dust → crt. Nothing
 dropping it leaves both `crt` and this brief intact — which is what makes it a sound last item rather than an
 overcommitted one.
 
-**Closes on landing**: `TODO.md:480` ("Nonlinear chat view / chat graph editor"), the placeholder button at
+**Closes on landing**: `TODO.md`, *"Nonlinear chat view / chat graph editor"*, the placeholder button at
 `app.py:1083`, and `raven/librarian/README.md:377` / `:588` / `:590`.
 
 (An earlier draft also listed one of the help card's two "This is a tech demo" disclaimers, on the grounds
@@ -27,7 +27,7 @@ every branch and the GUI can reach none of them. It just no longer has a sentenc
 
 Two entries are stale in the same direction:
 
-- **`TODO.md:480` says Librarian must generate `.xdot` code.** It does not. `XDotWidget.set_graph(graph:
+- **The `TODO.md` item says Librarian must generate `.xdot` code.** It does not. `XDotWidget.set_graph(graph:
   Graph)` takes a `Graph` directly, and `Node(x, y, w, h, ...)` / `Edge(src, dst, points, shapes)` take
   explicit geometry. The graph is built in memory. No text format, no re-parse, and no DOT escaping applied
   to chat content.
@@ -80,7 +80,7 @@ serializer and aimed at the same decay.
 
 ## The framing that shapes v1: explanatory before navigational
 
-`TODO.md:480` frames this as navigation — "jump to chat node by ID". The demo wants explanation: making
+The `TODO.md` item frames this as navigation — "jump to chat node by ID". The demo wants explanation: making
 "an LLM is a multiverse generator" visible to a general audience who have never seen one.
 
 Both are wanted, and where they pull apart v1 follows the demo. Two interactions carry the explanatory
@@ -150,7 +150,7 @@ splitting point. The fan-out shape says the guess is right, and this view alread
 level deserves special treatment — recency ordering, possibly timestamps — and this brief closes that item
 too.
 
-**Depth limiting** is recorded as a hard constraint (`TODO.md:480`: the full tree will not render at
+**Depth limiting** is recorded as a hard constraint (the `TODO.md` item: the full tree will not render at
 interactive FPS). For the demo case it is less pressing than that suggests, since walk-up conversations are
 short. The accumulated forest is what is large, and scoping to the tree containing HEAD plus windowed
 siblings is what handles it.

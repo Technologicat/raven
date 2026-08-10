@@ -191,6 +191,17 @@ Each call therefore carried an unknown keyword *and* omitted a required argument
 (`198fecb`); `grounded=True` is the verified equivalent of the old `speculate=False`, since the gate went
 from `if not speculate and grounding_material_exists:` to `if grounding_material_exists:`.
 
+**Both then re-run live against qwen3.6-35b-a3b (LM Studio, IQ4_NL_XL, 128 Ki) and both still measure what
+they were written to measure.** `assembled_shape` passes all four checks — the planted figure is used, the
+absent fact is declined with documents present, an unrelated question is answered plainly, and the injected
+clock is believed. `absent_fact` reports **0 of 6** attempts to search again, across its three variants at
+both T=0 and T=1. So the repair restored the probes rather than merely satisfying the signature.
+
+One caveat found in the running: `assembled_shape`'s date check tests for `today.isoformat()` in the reply
+and the model answered "Monday, August 10, 2026", so a correct answer prints as `CHECK` rather than `OK`.
+The probe under-reports its own success, and the prose form is what the inject deliberately supplies —
+weekday included, so the model never does calendar arithmetic.
+
 **The acceptance criterion names two scripts it cannot serve.** It asks that `inject_shapes`,
 `assembled_shape`, `absent_fact` and `rag_placement` become expressible against Part A. The first and last
 never reach through the private door and should not: they are the control arm, and a Part A that served them
@@ -238,7 +249,22 @@ Answering the questions below; the list is kept for its reasoning, and these are
    asking for tools, however many calls it asks for; a **call** is one tool invocation.
 3. **Offline by default** — the brief's own suggestion, taken. A probe that silently hits the network is the
    more expensive mistake.
-4. *(Per-run overrides — still open, see below.)*
+4. **Per-run overrides become fields on `settings`.** The thing being overridden today is a module-global
+   `chatutil` formatter, monkeypatched by `rag_live_corpus` to run its control arm. Of the three candidates —
+   thread an override dict through `run_turn`, wrap the call in a context manager, or promote the knob to
+   `settings` — the third is the one that matches the standard the rest of the project sets: `settings` is
+   already precisely "what this run is configured as", and it is what `configure` builds. The other two leave
+   the value in a module global and add a mechanism for reaching around it.
+
+   **The cost is honest and belongs in the estimate: this is an audit, not a field.** Which module-globals
+   deserve promotion is a larger question than one probe's control arm, and the answer is not "all of them" —
+   a constant that no run would ever vary stays a constant. The test is whether two runs of the same code
+   could reasonably want different values. Formatters that shape what the model is told qualify; buffer sizes
+   and cache paths do not.
+
+   Corollary worth stating, since it is the reason this is worth the audit: **a probe monkeypatching a module
+   global is a design signal, not a probe smell.** It is how the codebase currently says "this should have
+   been configurable", and each instance is a candidate found by someone who needed it.
 5. **The surface constructs a `chattree.Forest` by default and accepts one.** In-memory, so constructing
    costs nothing and keeps the one-liner probe a one-liner.
 6. **It lives in `raven.librarian.agent`.** The brief's warning against becoming a generic agent harness
