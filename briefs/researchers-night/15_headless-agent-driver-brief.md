@@ -145,10 +145,24 @@ nothing CI lacks.
 
 ## Part A — build the turn's prompt and hand it back
 
-> **Landed 2026-08-10.** `_perform_injects` is now `scaffold.build_turn_prompt`: public, in `__all__`,
-> returning a new list instead of mutating the caller's. All 19 call sites updated, and the prose sweep done
-> except the two TODO files, which are frozen pending their own brief, and the closed briefs, which are
-> historical records and are not repointed.
+> **Partly landed 2026-08-10 — the acceptance criterion is not yet met.** `_perform_injects` is now
+> `scaffold.build_turn_prompt`: public, in `__all__`, returning a new list instead of mutating the caller's.
+> All 19 call sites updated, and the prose sweep done except the two TODO files, which are frozen pending
+> their own brief, and the closed briefs, which are historical records and are not repointed.
+>
+> **What remains, found by doing what this brief says and reading the actual scripts.** Both Part A probes
+> still reach through a private door — twice each, and the first is the one that matters:
+>
+> - **`scaffold._make_tool_context`.** `build_turn_prompt` *requires* a `tool_context`, and the only way to
+>   construct one is a private function. So the public entry point cannot be called without a private call,
+>   which makes "public" nominal. This has to be exported for Part A to mean anything.
+> - **`llmclient._serialize_history_for_wire`.** Part A exists so a probe can take the prompt Raven would
+>   send and *send it itself*; the wire form is what gets sent, so this is on the path by construction, not
+>   incidentally. Whether it becomes public as-is or gets a narrower public wrapper is the open question —
+>   its `datastore=` parameter for resolving `sidecar:` image URLs is more than a prompt-shape probe needs.
+>
+> `inject_shapes` and `rag_placement` are already clean, and always were: they build their own candidate
+> shapes on purpose, which is why the criterion should never have named them (recorded above).
 >
 > **The migration paid for itself immediately, in the way the brief predicted and worse.** `absent_fact` and
 > `assembled_shape` were also moved onto `llmclient.configure`, so they build Raven's real settings instead
@@ -273,9 +287,19 @@ retrieval tool call, or the reminders — all of which are really sent, every tu
 promise the log otherwise makes** (Juha, 2026-08-10), and moving the model name and context length into the
 injects would put more of what the model is told behind that same curtain.
 
-Recorded here because it surfaced here. It is not part of this brief — it is a chat-view question, and
-belongs with the other chat-log work — but it should not be lost, and the TODO files are frozen pending
-their own pass.
+**In scope for this brief after all** (Juha, 2026-08-10). The first reading filed it as a chat-view question
+to be handed off, and that was the wrong cut: the injects are precisely what Part A makes addressable. Once
+`build_turn_prompt` returns the assembled history, "show the user what was actually sent" is a *reader* of
+the same function the probes read, not a separate excavation into the render path. A brief whose whole
+subject is making the turn's prompt inspectable programmatically should not stop one step short of making it
+inspectable to the person the log is shown to.
+
+It is also the counterweight to the change above. Moving the model name and context length into the injects
+improves correctness and, on today's chat view, hides two more things the model is told — so the two want
+deciding together rather than in sequence.
+
+Juha is taking the item itself to the TODO triage so it is recorded there as well; this note is the scoping
+decision, not the item.
 
 ## Explicitly out of scope
 
