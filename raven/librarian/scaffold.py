@@ -90,10 +90,10 @@ def user_turn(llm_settings: env,
         from . import textfilestore  # deferred: only pulls docextract/pypdf when a document is actually attached
         for staged in staged_files:
             result = textfilestore.store_file_as_sidecar(datastore=datastore,
-                                                     file_source=staged.raw,
-                                                     name=staged.name,
-                                                     provenance_url=staged.provenance_url,
-                                                     provenance_source=staged.provenance_source)
+                                                         file_source=staged.raw,
+                                                         name=staged.name,
+                                                         provenance_url=staged.provenance_url,
+                                                         provenance_source=staged.provenance_source)
             message["content"].append(result.part)
             sidecar_metadata_by_filename[result.filename] = result.sidecar_metadata
 
@@ -601,15 +601,15 @@ def _attachmentify_tool_result(datastore: chattree.Forest,
     name = _document_display_name(document)
     try:
         result = textfilestore.store_file_as_sidecar(datastore=datastore,
-                                                    file_source=text.encode("utf-8"),
-                                                    # The extension decides how the text is extracted back out
-                                                    # later; the server hands us markdown, which `docextract`
-                                                    # reads verbatim. The name carries no extension of its own
-                                                    # (a page title may contain anything at all).
-                                                    name=f"{name}.md",
-                                                    provenance_url=document["url"],
-                                                    provenance_source="tool_result",
-                                                    content_type="text/markdown")
+                                                     file_source=text.encode("utf-8"),
+                                                     # The extension decides how the text is extracted back out
+                                                     # later; the server hands us markdown, which `docextract`
+                                                     # reads verbatim. The name carries no extension of its own
+                                                     # (a page title may contain anything at all).
+                                                     name=f"{name}.md",
+                                                     provenance_url=document["url"],
+                                                     provenance_source="tool_result",
+                                                     content_type="text/markdown")
     except Exception as exc:  # noqa: BLE001 -- a failed store must not lose the tool result
         logger.warning(f"_attachmentify_tool_result: could not store '{name}' as a sidecar, leaving it inline: {type(exc)}: {exc}")
         return {}

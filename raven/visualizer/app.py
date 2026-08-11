@@ -809,10 +809,10 @@ with timer() as tim:
             with dpg.group(tag="info_and_help"):
                 # Title
                 with dpg.child_window(tag="item_information_header",
-                                        width=gui_config.info_panel_w,
-                                        height=gui_config.info_panel_header_h,
-                                        no_scrollbar=True,  # we want to hide the "hello"
-                                        no_scroll_with_mouse=True):
+                                      width=gui_config.info_panel_w,
+                                      height=gui_config.info_panel_header_h,
+                                      no_scrollbar=True,  # we want to hide the "hello"
+                                      no_scroll_with_mouse=True):
                     with dpg.group(horizontal=True, tag="item_information_header_group"):
                         # Copy report to clipboard button
                         # The callback function is bound in `info_panel.build_window()`.

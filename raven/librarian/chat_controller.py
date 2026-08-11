@@ -1599,10 +1599,10 @@ class DPGCompleteChatMessage(DPGChatMessage):
             actions = dpg.add_group(horizontal=True, parent=cluster)
 
             self._add_action_button(parent=actions,
-                                        icon=fa.ICON_IMAGE,
-                                        tooltip_text="Show full-size image\n(the saved copy, in the chat data folder)",
-                                        ok_message="Opened image",
-                                        action=open_saved_copy)
+                                    icon=fa.ICON_IMAGE,
+                                    tooltip_text="Show full-size image\n(the saved copy, in the chat data folder)",
+                                    ok_message="Opened image",
+                                    action=open_saved_copy)
             if source_openable:
                 source_tooltip = f"Open original source\n{urllib.parse.unquote(source_url)}"
             elif source_url.startswith("data:"):
@@ -1610,16 +1610,16 @@ class DPGCompleteChatMessage(DPGChatMessage):
             else:
                 source_tooltip = "Open original source — unavailable\n(no source location was recorded)"
             self._add_action_button(parent=actions,
-                                        icon=fa.ICON_LINK,
-                                        tooltip_text=source_tooltip,
-                                        ok_message="Opened source",
-                                        enabled=source_openable,
-                                        action=lambda: _open_source_url(source_url))
+                                    icon=fa.ICON_LINK,
+                                    tooltip_text=source_tooltip,
+                                    ok_message="Opened source",
+                                    enabled=source_openable,
+                                    action=lambda: _open_source_url(source_url))
             self._add_action_button(parent=actions,
-                                        icon=fa.ICON_FOLDER_OPEN,
-                                        tooltip_text="Open the image folder\n(where attached images are stored)",
-                                        ok_message="Opened folder",
-                                        action=lambda: common_utils.open_in_file_manager(datastore.sidecar_dir))
+                                    icon=fa.ICON_FOLDER_OPEN,
+                                    tooltip_text="Open the image folder\n(where attached images are stored)",
+                                    ok_message="Opened folder",
+                                    action=lambda: common_utils.open_in_file_manager(datastore.sidecar_dir))
 
     def _render_text_file_part(self, part: Dict[str, Any], sidecars_meta: Dict[str, Any]) -> None:
         """Render one `text_file` content-part: an inline file chip plus a per-document provenance cluster.
@@ -1653,25 +1653,25 @@ class DPGCompleteChatMessage(DPGChatMessage):
             # sidecar IS the original) in the OS default app. "Open source" targets the recorded provenance
             # URL, disabled when nothing is openable. "Open folder" reveals the sidecar dir.
             self._add_action_button(parent=row,
-                                        icon=fa.ICON_FILE_LINES,
-                                        tooltip_text="Show the attached document\n(the saved copy, in the chat data folder)",
-                                        ok_message="Opened document",
-                                        action=open_saved_copy)
+                                    icon=fa.ICON_FILE_LINES,
+                                    tooltip_text="Show the attached document\n(the saved copy, in the chat data folder)",
+                                    ok_message="Opened document",
+                                    action=open_saved_copy)
             if source_openable:
                 source_tooltip = f"Open original source\n{urllib.parse.unquote(source_url)}"
             else:
                 source_tooltip = "Open original source — unavailable\n(no source location was recorded)"
             self._add_action_button(parent=row,
-                                        icon=fa.ICON_LINK,
-                                        tooltip_text=source_tooltip,
-                                        ok_message="Opened source",
-                                        enabled=source_openable,
-                                        action=lambda: _open_source_url(source_url))
+                                    icon=fa.ICON_LINK,
+                                    tooltip_text=source_tooltip,
+                                    ok_message="Opened source",
+                                    enabled=source_openable,
+                                    action=lambda: _open_source_url(source_url))
             self._add_action_button(parent=row,
-                                        icon=fa.ICON_FOLDER_OPEN,
-                                        tooltip_text="Open the attachments folder\n(where attached files are stored)",
-                                        ok_message="Opened folder",
-                                        action=lambda: common_utils.open_in_file_manager(datastore.sidecar_dir))
+                                    icon=fa.ICON_FOLDER_OPEN,
+                                    tooltip_text="Open the attachments folder\n(where attached files are stored)",
+                                    ok_message="Opened folder",
+                                    action=lambda: common_utils.open_in_file_manager(datastore.sidecar_dir))
 
             name_id = dpg.add_text(name, parent=row)
             # A name is text, so unlike a thumbnail it does not advertise itself as clickable. The tooltip is
@@ -1905,9 +1905,9 @@ class DPGLinearizedChatView:
                                                          callback=jump_to_latest_callback)
             # Cached and shared by key, so asking for the same face at the same size twice costs nothing.
             _, jump_to_latest_font = guiutils.load_extra_font(themes_and_fonts=themes_and_fonts,
-                                                             font_size=gui_config.font_size,
-                                                             font_basename=_JUMP_TO_LATEST_FONT_BASENAME,
-                                                             variant=_JUMP_TO_LATEST_FONT_VARIANT)
+                                                              font_size=gui_config.font_size,
+                                                              font_basename=_JUMP_TO_LATEST_FONT_BASENAME,
+                                                              variant=_JUMP_TO_LATEST_FONT_VARIANT)
             dpg.bind_item_font(self._jump_to_latest_button, jump_to_latest_font)
 
         self._scroll_end_flasher = gui_animation.ScrollEndFlasher(target=gui_parent,

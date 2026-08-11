@@ -450,8 +450,8 @@ def _payload_with_refs(image_url=None, text_file_url=None, original_sidecar=None
 class TestSidecarRefsInPayload:
     def test_collects_image_document_and_preserved_original(self):
         refs = appstate.sidecar_refs_in_payload(_payload_with_refs(image_url="sidecar:img.png",
-                                                                  text_file_url="sidecar:doc.pdf",
-                                                                  original_sidecar="orig.png"))
+                                                                   text_file_url="sidecar:doc.pdf",
+                                                                   original_sidecar="orig.png"))
         assert refs == {"img.png", "doc.pdf", "orig.png"}
 
     def test_documents_alone_are_seen(self):
@@ -502,7 +502,7 @@ class TestLoadConfiguresSidecarGC:
         document = datastore.store_sidecar(b"document bytes", "pdf")
         orphan = datastore.store_sidecar(b"orphan bytes", "png")
         datastore.create_node(_payload_with_refs(image_url=f"sidecar:{image}",
-                                                text_file_url=f"sidecar:{document}"),
+                                                 text_file_url=f"sidecar:{document}"),
                               parent_id=state["HEAD"])
 
         assert datastore.prune_unreferenced_sidecars() == [orphan]

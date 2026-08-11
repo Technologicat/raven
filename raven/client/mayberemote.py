@@ -719,7 +719,7 @@ class Postprocessor(MaybeRemoteService):
         from ..common.image import utils as imageutils  # deferred: heavy to import when not needed
         image = imageutils.ensure_rgba(image)
         tensor = torch.from_numpy(image).permute(2, 0, 1).to(dtype=self._local_model.dtype,
-                                                              device=self._local_model.device)
+                                                             device=self._local_model.device)
         with self._local_lock:
             self._local_model.chain = filters
             self._local_model.render_into(tensor)
@@ -790,7 +790,7 @@ class Upscaler(MaybeRemoteService):
         from ..common.image import utils as imageutils  # deferred: heavy to import when not needed
         image = imageutils.ensure_rgba(image)
         tensor = torch.from_numpy(image).permute(2, 0, 1).to(dtype=self.dtype,
-                                                              device=self.device_string)
+                                                             device=self.device_string)
         # Fetch-or-construct the appropriate `_LocalUpscaler` for this config.
         # Serialized so concurrent callers with the same novel config don't race
         # to construct parallel copies.
@@ -799,11 +799,11 @@ class Upscaler(MaybeRemoteService):
             if key not in self._local_model:
                 logger.info(f"Upscaler.upscale: constructing new _LocalUpscaler for {key}")
                 self._local_model[key] = _LocalUpscaler(device=self.device_string,
-                                                         dtype=self.dtype,
-                                                         upscaled_width=upscaled_width,
-                                                         upscaled_height=upscaled_height,
-                                                         preset=preset,
-                                                         quality=quality)
+                                                        dtype=self.dtype,
+                                                        upscaled_width=upscaled_width,
+                                                        upscaled_height=upscaled_height,
+                                                        preset=preset,
+                                                        quality=quality)
             upscaler = self._local_model[key]
         upscaled = upscaler.upscale(tensor)
         return upscaled.clamp(0.0, 1.0).permute(1, 2, 0).cpu().numpy().astype(np.float32)

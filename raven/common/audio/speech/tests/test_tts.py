@@ -306,10 +306,10 @@ class TestDecode:
 
     def test_empty_bytes_returns_empty_ttsresult(self):
         encoded = speech_datatypes.EncodedTTSResult(audio_bytes=b"",
-                                              audio_format="mp3",
-                                              sample_rate=speech_tts.SAMPLE_RATE,
-                                              duration=0.0,
-                                              word_metadata=[])
+                                                    audio_format="mp3",
+                                                    sample_rate=speech_tts.SAMPLE_RATE,
+                                                    duration=0.0,
+                                                    word_metadata=[])
         result = speech_tts.decode(encoded)
         assert isinstance(result, speech_datatypes.TTSResult)
         assert result.audio.dtype == np.float32
@@ -320,9 +320,9 @@ class TestDecode:
 
     def test_empty_bytes_preserves_none_metadata(self):
         encoded = speech_datatypes.EncodedTTSResult(audio_bytes=b"",
-                                              audio_format="mp3",
-                                              sample_rate=speech_tts.SAMPLE_RATE,
-                                              duration=0.0,
-                                              word_metadata=None)
+                                                    audio_format="mp3",
+                                                    sample_rate=speech_tts.SAMPLE_RATE,
+                                                    duration=0.0,
+                                                    word_metadata=None)
         result = speech_tts.decode(encoded)
         assert result.word_metadata is None

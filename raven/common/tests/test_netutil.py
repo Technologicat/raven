@@ -180,7 +180,7 @@ class TestMultipartExtractor:
         # Content-Encoding / Content-Language and other Content-* headers are
         # transport details — explicitly not surfaced via extra_headers.
         stream = iter([_build_part(b"x", extra_headers={"Content-Encoding": "identity",
-                                                         "X-Keep": "me"})])
+                                                        "X-Keep": "me"})])
         gen = netutil.multipart_x_mixed_replace_payload_extractor(stream, BOUNDARY, "image/jpeg")
         _mime, headers, _payload = next(gen)
         assert "content-encoding" not in headers

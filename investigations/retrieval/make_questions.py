@@ -131,21 +131,21 @@ CORPORA = {
     # whole corpus, so most of their gold documents are outside the ball, and a synthesis question needs
     # all four of its gold documents inside — which essentially never happens by chance.
     "hydrogen-photocat": {"docs_dir": pathlib.Path("~/.config/raven/llmclient/documents_hydrogen_photocat").expanduser(),
-                "out_path": HERE / "hydrogen_photocat_questions.json",
-                "sibling_topic": "photocatalytic hydrogen production",
-                "description": "a topically contiguous slice of the Web of Science hydrogen-production "
-                               "corpus — the 2500 records nearest a photocatalysis seed, so the collection "
-                               "is narrow by construction; local to the developer machine (not in this "
-                               "repository)"},
+                          "out_path": HERE / "hydrogen_photocat_questions.json",
+                          "sibling_topic": "photocatalytic hydrogen production",
+                          "description": "a topically contiguous slice of the Web of Science hydrogen-production "
+                                         "corpus — the 2500 records nearest a photocatalysis seed, so the collection "
+                                         "is narrow by construction; local to the developer machine (not in this "
+                                         "repository)"},
     "eccomas2024": {"docs_dir": pathlib.Path("~/.config/raven/llmclient/documents_eccomas2024").expanduser(),
-                "out_path": HERE / "eccomas2024_questions.json",
-                "sibling_topic": "computational methods in applied sciences and engineering",
-                "description": "abstracts from the 9th European Congress on Computational Methods in "
-                               "Applied Sciences and Engineering (ECCOMAS Congress 2024, Lisbon), 2520 "
-                               "records supplied by the conference organizers and spanning the whole "
-                               "breadth of the field — fluid and structural mechanics, optimization, "
-                               "numerical analysis, materials; local to the developer machine (not in "
-                               "this repository)"},
+                    "out_path": HERE / "eccomas2024_questions.json",
+                    "sibling_topic": "computational methods in applied sciences and engineering",
+                    "description": "abstracts from the 9th European Congress on Computational Methods in "
+                                   "Applied Sciences and Engineering (ECCOMAS Congress 2024, Lisbon), 2520 "
+                                   "records supplied by the conference organizers and spanning the whole "
+                                   "breadth of the field — fluid and structural mechanics, optimization, "
+                                   "numerical analysis, materials; local to the developer machine (not in "
+                                   "this repository)"},
 }
 
 # Fixed, so that a rerun samples the same papers and the set stays comparable across regenerations.

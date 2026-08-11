@@ -490,7 +490,7 @@ class ImageView:
         if not self.has_image:
             return
         z, cx, cy = guiutils.compute_zoom_to_fit(self._img_w, self._img_h,
-                                                  self._view_w, self._view_h)
+                                                 self._view_w, self._view_h)
         if self._zoom_fit_cap:
             z = min(z, 1.0)
         self._zoom = z

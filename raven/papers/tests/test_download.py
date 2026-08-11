@@ -670,7 +670,7 @@ class TestDownloadPapers:
         assert titles == {"First", "Second"}
         # Versions are kept: a download names a specific version, and the bibliography should say which.
         assert {e.fields_dict["eprint"].value for e in library.entries} == {"2301.00001v1",
-                                                                           "2301.00002v1"}
+                                                                            "2301.00002v1"}
 
     def test_save_bib_records_papers_already_present(self, tmp_path):
         """The bibliography describes the set that was asked for, not the subset that was missing."""

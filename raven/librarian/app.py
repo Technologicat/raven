@@ -1792,8 +1792,8 @@ dpg.show_viewport()
 # and the router rejects drops that straddle two rules. Routing between the two kinds is `_attach_callback`'s
 # job anyway — it already does it for the file browser, including the text-only-model gate on images.
 filedrop.install(filedrop.make_router([filedrop.DropRule(matches=lambda path: (os.path.isfile(path) and
-                                                                              (imagestore.is_supported(path) or
-                                                                               docextract.is_supported(path))),
+                                                                               (imagestore.is_supported(path) or
+                                                                                docextract.is_supported(path))),
                                                          handler=_attach_callback,
                                                          label="images and documents")],
                                       reference_window="librarian_main_window",  # tag

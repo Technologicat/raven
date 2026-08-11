@@ -183,7 +183,7 @@ def transcribe(stt_model: STTModel,
     # Parameters of `transformers.models.whisper.generation_whisper.WhisperGenerationMixin.generate`
     # Parameters of `transformers.models.whisper.modeling_whisper.WhisperForConditionalGeneration.forward` (some are passed here by `generate`)
     kwargs = {  # "max_new_tokens": 448,  # Whisper maximum - better to just use the default, since we don't know the number of "special start tokens", or the number of overlap tokens in long-form transcription.
-              "return_timestamps": True,  # Needed for long-form transcription. To actually return them, may also need `return_dict=True`? (see the `forward` method mentioned above)
+              "return_timestamps": True,  # Needed for long-form transcription. To actually return them, may also need `return_dict=True`? (see the `forward` method mentioned above)  # noqa: E126 -- the entries align under `{`; the first is merely commented out, and re-enabling it must not require reindenting the block
               "compression_ratio_threshold": 1.35,  # zlib compression ratio threshold (in token space)
               "temperature": (0.0, 0.2, 0.4, 0.6, 0.8, 1.0),
               "logprob_threshold": -1.0,

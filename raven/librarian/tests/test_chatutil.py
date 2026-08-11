@@ -317,7 +317,7 @@ class TestFormatDisclosureManifest:
 
     def test_exported_at_is_reproduced_verbatim_when_given(self):
         manifest = _parse_front_matter(chatutil.format_disclosure_manifest([_payload("user")],
-                                                                            exported_at="2026-07-29T14:23:11+03:00"))
+                                                                           exported_at="2026-07-29T14:23:11+03:00"))
         assert manifest["exported_at"] == "2026-07-29T14:23:11+03:00"
 
 

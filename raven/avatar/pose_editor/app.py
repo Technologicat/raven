@@ -257,14 +257,14 @@ def initialize_filedialogs():  # called at app startup
                                        allow_drag=False,
                                        default_path=cwd)
     filedialog_open_json = FileDialog(title="Open emotion temmplates",
-                                       tag="open_json_dialog",
-                                       callback=_open_json_callback,
-                                       modal=True,
-                                       filter_list=[".json"],
-                                       file_filter=".json",
-                                       multi_selection=False,
-                                       allow_drag=False,
-                                       default_path=pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "emotions")).expanduser().resolve())
+                                      tag="open_json_dialog",
+                                      callback=_open_json_callback,
+                                      modal=True,
+                                      filter_list=[".json"],
+                                      file_filter=".json",
+                                      multi_selection=False,
+                                      allow_drag=False,
+                                      default_path=pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "emotions")).expanduser().resolve())
     filedialog_save_all_emotions = FileDialog(title="Save all emotion templates",
                                               tag="save_all_emotions_dialog",
                                               callback=_save_all_emotions_callback,

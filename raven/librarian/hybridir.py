@@ -1278,7 +1278,7 @@ class HybridIR:
             logger.info("HybridIR.query: keyword search")
             # Here we always search all documents; we filter afterward, if needed.
             raw_keyword_results, raw_keyword_scores = keyword_retriever.retrieve(query_tokens,  # list of list of tokens (outer list = one element per query; runs them all in one pass)
-                                                                                  k=keyword_k)
+                                                                                 k=keyword_k)
 
             # Vector search
             self._query_progress_text = "Semantic search…"

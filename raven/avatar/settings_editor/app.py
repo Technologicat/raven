@@ -200,14 +200,14 @@ def initialize_filedialogs():  # called at app startup
                                                 allow_drag=False,
                                                 default_path=pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "backdrops")).expanduser().resolve())
     filedialog_open_json = FileDialog(title="Open emotion templates",
-                                       tag="open_json_dialog",
-                                       callback=_open_json_callback,
-                                       modal=True,
-                                       filter_list=[".json"],
-                                       file_filter=".json",
-                                       multi_selection=False,
-                                       allow_drag=False,
-                                       default_path=pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "emotions")).expanduser().resolve())
+                                      tag="open_json_dialog",
+                                      callback=_open_json_callback,
+                                      modal=True,
+                                      filter_list=[".json"],
+                                      file_filter=".json",
+                                      multi_selection=False,
+                                      allow_drag=False,
+                                      default_path=pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "emotions")).expanduser().resolve())
     filedialog_open_animator_settings = FileDialog(title="Open animator settings",
                                                    tag="open_animator_settings_dialog",
                                                    callback=_open_animator_settings_callback,

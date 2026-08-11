@@ -44,8 +44,8 @@ _EDGE_HIT_RADIUS_PX = 10  # detection radius in screen pixels
 
 
 def _point_to_segment_dist_sq(px: float, py: float,
-                               x1: float, y1: float,
-                               x2: float, y2: float) -> float:
+                              x1: float, y1: float,
+                              x2: float, y2: float) -> float:
     """Squared distance from point (px, py) to line segment (x1,y1)-(x2,y2)."""
     dx = x2 - x1
     dy = y2 - y1
@@ -65,8 +65,8 @@ def _check_polyline_dist(px: float, py: float,
     """Check if (px, py) is within radius of any segment in a polyline."""
     for i in range(len(points) - 1):
         if _point_to_segment_dist_sq(px, py,
-                                      points[i][0], points[i][1],
-                                      points[i + 1][0], points[i + 1][1]) <= radius_sq:
+                                     points[i][0], points[i][1],
+                                     points[i + 1][0], points[i + 1][1]) <= radius_sq:
             return True
     return False
 

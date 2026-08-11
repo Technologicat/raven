@@ -130,8 +130,8 @@ def _detect_preload_budget() -> int:
         budget = max(config.PRELOAD_RAM_BUDGET_MIN_MB,
                      min(budget, config.PRELOAD_RAM_BUDGET_MAX_MB))
         logger.info("main: preload cache budget (system RAM) %d MB "
-                     "(%.0f MB available, %.0f%% fraction)",
-                     budget, avail_mb, config.PRELOAD_RAM_FRACTION * 100)
+                    "(%.0f MB available, %.0f%% fraction)",
+                    budget, avail_mb, config.PRELOAD_RAM_FRACTION * 100)
         return budget
     except Exception as exc:
         logger.warning("main: RAM detection failed (%s), "

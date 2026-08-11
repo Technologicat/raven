@@ -1078,8 +1078,8 @@ class TestSerializeHistoryForWire:
                                                       provenance_url="https://example.com/page",
                                                       provenance_source="tool_result")
         attached = textfilestore.store_file_as_sidecar(ds, body, name="paper.txt",
-                                                      provenance_url="file:///tmp/paper.txt",
-                                                      provenance_source="user_attachment")
+                                                       provenance_url="file:///tmp/paper.txt",
+                                                       provenance_source="user_attachment")
         history = [{"role": "tool", "content": [chatutil.text_content_part("(excerpt)"), fetched.part]},
                    {"role": "user", "content": [chatutil.text_content_part("and read this"), attached.part]}]
         out = llmclient.serialize_history_for_wire(self.settings, history, continue_=False, datastore=ds)
@@ -1156,8 +1156,8 @@ class TestSerializeHistoryForWire:
         datastore = chattree.PersistentForest(tmp_path / "chat.json", autosave=False,
                                               sidecar_extractor=textfilestore.sidecar_refs_in_payload)
         stored = textfilestore.store_file_as_sidecar(datastore, body, name=name,
-                                                 provenance_url=f"file:///{name}",
-                                                 provenance_source="user_attachment")
+                                                     provenance_url=f"file:///{name}",
+                                                     provenance_source="user_attachment")
         return datastore, stored.part
 
     def test_text_file_folded_into_message_text(self, tmp_path):

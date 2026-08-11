@@ -215,13 +215,13 @@ class TestFormatBibtexAuthors:
 
     def test_two_authors(self):
         authors = [_make_name_parts(last=["Knuth"]),
-                    _make_name_parts(last=["Lamport"])]
+                   _make_name_parts(last=["Lamport"])]
         assert utils.format_bibtex_authors(authors) == "Knuth and Lamport"
 
     def test_three_authors_et_al(self):
         authors = [_make_name_parts(last=["Knuth"]),
-                    _make_name_parts(last=["Lamport"]),
-                    _make_name_parts(last=["Dijkstra"])]
+                   _make_name_parts(last=["Lamport"]),
+                   _make_name_parts(last=["Dijkstra"])]
         assert utils.format_bibtex_authors(authors) == "Knuth et al."
 
     def test_empty_list(self):

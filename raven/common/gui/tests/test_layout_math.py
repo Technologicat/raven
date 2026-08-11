@@ -5,7 +5,7 @@ These functions are pure math — no DPG dependency.
 
 from raven.common.tests import approx
 from raven.common.gui.layout_math import (screen_to_content, content_to_screen,
-                                           zoom_keep_point, compute_zoom_to_fit)
+                                          zoom_keep_point, compute_zoom_to_fit)
 
 
 # ---------------------------------------------------------------------------
@@ -84,17 +84,17 @@ class TestZoomKeepPoint:
 
         # Content coord at (sx, sy) before zoom.
         gx_before, gy_before = screen_to_content(sx, sy, pan_cx, pan_cy,
-                                                  old_zoom, view_w, view_h)
+                                                 old_zoom, view_w, view_h)
 
         # New pan after zoom.
         new_pan_cx, new_pan_cy = zoom_keep_point(old_zoom, new_zoom,
-                                                  sx, sy,
-                                                  pan_cx, pan_cy,
-                                                  view_w, view_h)
+                                                 sx, sy,
+                                                 pan_cx, pan_cy,
+                                                 view_w, view_h)
 
         # Content coord at (sx, sy) after zoom with new pan.
         gx_after, gy_after = screen_to_content(sx, sy, new_pan_cx, new_pan_cy,
-                                                new_zoom, view_w, view_h)
+                                               new_zoom, view_w, view_h)
 
         assert approx(gx_before, gx_after, tol=0.001)
         assert approx(gy_before, gy_after, tol=0.001)
@@ -105,9 +105,9 @@ class TestZoomKeepPoint:
         view_w, view_h = 100, 100
         # Screen center = (50, 50)
         new_pan_cx, new_pan_cy = zoom_keep_point(1.0, 2.0,
-                                                  50, 50,
-                                                  pan_cx, pan_cy,
-                                                  view_w, view_h)
+                                                 50, 50,
+                                                 pan_cx, pan_cy,
+                                                 view_w, view_h)
         assert approx(new_pan_cx, pan_cx, tol=0.001)
         assert approx(new_pan_cy, pan_cy, tol=0.001)
 
@@ -118,13 +118,13 @@ class TestZoomKeepPoint:
         sx, sy = 400, 300
 
         gx_before, gy_before = screen_to_content(sx, sy, pan_cx, pan_cy,
-                                                  2.0, view_w, view_h)
+                                                 2.0, view_w, view_h)
         new_pan_cx, new_pan_cy = zoom_keep_point(2.0, 0.5,
-                                                  sx, sy,
-                                                  pan_cx, pan_cy,
-                                                  view_w, view_h)
+                                                 sx, sy,
+                                                 pan_cx, pan_cy,
+                                                 view_w, view_h)
         gx_after, gy_after = screen_to_content(sx, sy, new_pan_cx, new_pan_cy,
-                                                0.5, view_w, view_h)
+                                               0.5, view_w, view_h)
 
         assert approx(gx_before, gx_after, tol=0.001)
         assert approx(gy_before, gy_after, tol=0.001)

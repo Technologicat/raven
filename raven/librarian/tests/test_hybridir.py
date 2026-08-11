@@ -163,8 +163,8 @@ def retriever(tmp_path_factory, client_api_initialized):
     """
     datastore_dir = tmp_path_factory.mktemp("hybridir_test")
     ret = hybridir.HybridIR(datastore_base_dir=datastore_dir,
-                             embedding_model_name="sentence-transformers/multi-qa-mpnet-base-cos-v1",
-                             local_model_loader_fallback=True)
+                            embedding_model_name="sentence-transformers/multi-qa-mpnet-base-cos-v1",
+                            local_model_loader_fallback=True)
     for doc_id, doc_text in DOCS.items():
         ret.add(document_id=doc_id, path="<test>", text=doc_text)
     ret.commit()
