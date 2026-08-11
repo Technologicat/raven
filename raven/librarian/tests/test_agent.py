@@ -424,6 +424,36 @@ class TestTurn:
         assert [message["role"] for message in bare] == ["user"]
         assert [message["role"] for message in in_character] == ["system", "assistant", "user"]
 
+    def test_the_bare_models_stored_reply_is_not_spoken_by_anyone(self, monkeypatch, llm_settings):
+        # The persona prefix is part of the character, so it goes with it. `reply` is stripped either way,
+        # which is what hid this: the text a parser reads is the *stored* one, and a caller that saves the
+        # chat, or reads a node itself, gets whatever went in there.
+        monkeypatch.setattr("raven.librarian.llmclient.invoke",
+                            lambda **kw: make_invoke_result(content="raven, corvid"))
+        persona = llm_settings.personas["assistant"]
+
+        bare = agent.turn(llm_settings, "Extract the keywords.", use_character_card=False, tools_enabled=False)
+        in_character = agent.turn(llm_settings, "Extract the keywords.", tools_enabled=False)
+
+        def stored_text(record):
+            return chatutil.content_to_text(record.datastore.get_payload(record.head_node_id)["message"]["content"])
+
+        assert stored_text(bare) == "raven, corvid"
+        assert stored_text(in_character) == f"{persona}: raven, corvid"
+
+    def test_a_bare_turns_backend_failure_is_not_spoken_by_anyone_either(self, monkeypatch, llm_settings):
+        # The failure notice is Raven's own text, materialized as an assistant message -- and on a bare turn
+        # it is the one message a batch is most likely to read, since that is the case it re-runs.
+        def failing_invoke(**kw):
+            raise RuntimeError("backend went away")
+        monkeypatch.setattr("raven.librarian.llmclient.invoke", failing_invoke)
+
+        record = agent.turn(llm_settings, "Extract the keywords.", use_character_card=False, tools_enabled=False)
+
+        stored = chatutil.content_to_text(record.datastore.get_payload(record.head_node_id)["message"]["content"])
+        assert record.generation is None
+        assert not stored.startswith(f"{llm_settings.personas['assistant']}:")
+
     def test_character_independent_instructions_survive_the_character(self, monkeypatch, llm_settings):
         # `system_prompt` is the half of the configuration that holds whatever character the model wears,
         # so a deployment that fills it keeps it in both settings. Raven ships it empty, which is the only
