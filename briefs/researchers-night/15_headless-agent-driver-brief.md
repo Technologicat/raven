@@ -468,8 +468,34 @@ nontrivial task the two bundles can therefore reach different answers, and **lit
 nontrivial and is one of Librarian's points**. So "who is doing the extraction" is a question the user may
 legitimately want to answer either way, per run.
 
-That makes the shape of the API the thing to settle first — plausibly a mode rather than a pile of
-booleans — and the ten call sites wait for it. Converting them today would have swapped one accidental
+#### The shape: `use_persona`, with tools left orthogonal (Juha, 2026-08-11)
+
+One boolean, because the bundle is one question — *who does the job* — and the tool switches stay
+independent of it, since offering the internet or the documents is a per-use-site choice that has nothing
+to do with which character is asking.
+
+| | `use_persona=True` | `use_persona=False` |
+|---|---|---|
+| system message | the character card | none at all |
+| greeting node | yes | no |
+| `"<char>: "` prefix on messages | yes | no |
+| date, conversational reminder | yes | no |
+| clock (synthetic `get_current_time`) | when tools are offered | no |
+| internet / documents / tools | per use site | per use site |
+
+**Two facts found while checking that this cuts cleanly, both of which shape it:**
+
+- **`setup_system_prompt` returns the empty string, as shipped.** Every word of Raven's system message is
+  the character card. So there is no "the real system prompt, minus the persona" — the thing an earlier
+  version of this section wanted to keep does not exist, and `use_persona=False` therefore means *no system
+  message at all*. Which is what "bare Qwen" meant anyway; the point is that it falls out rather than being
+  chosen.
+- **The instruction injects have to go with the persona, or one gets synthesized.**
+  `_add_to_system_message` *inserts* a leading system message when the history has none, so leaving the
+  unconditional date inject on would hand the bare model a system message containing nothing but the date.
+  A stray shape nobody would design.
+
+That makes the shape of the API settled, and the ten call sites wait on building it. Converting them today would have swapped one accidental
 in-between for another, adding a conversational-writing instruction to a pipeline whose output
 `raven-pdf2bib` parses.
 
