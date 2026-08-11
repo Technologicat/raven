@@ -396,9 +396,28 @@ one. A surface offering only B would leave the prompt-shape probes still reachin
 Three items, and **only the first is ordered by a dependency** — the rest is a judgement about value, stated
 as such so that a later reader can overrule it without having to work out whether something would break.
 
-1. **`perform_throwaway_task` moves to `agent` and is renamed.** Genuinely blocked: whether it *widens* into
-   the surface or *dissolves* into a one-liner over it depends on the shape Part B lands, and the name
-   should follow what it turns out to be. See the section on it below.
+1. **`perform_throwaway_task` moves to `agent` and is renamed.** **Unblocked 2026-08-11 — Part B landed, and
+   the answer is that it dissolves**, but not until the surface grows two things. Read against the code
+   rather than guessed: its first four lines are `agent.turn`'s one-liner path exactly (`chattree.Forest()`
+   → `factory_reset_datastore` → user node → `linearize_chat`), and what remains differs in three ways, of
+   which only two matter.
+
+   - **It passes `tools_enabled=False`, and the surface cannot say that.** `internet_enabled=False,
+     docs_enabled=False` still offers `get_current_time`, since it answers to neither switch —
+     `maybe_tool_names_for_turn` returns the ungated group rather than an empty tuple. A one-shot with no
+     tools at all therefore needs a way to withdraw them, and that is a real addition rather than a spelling.
+   - **All ten call sites pass a progress callback**, each with its own symbol (`*`, `A`, `a`, `T`, `K`,
+     `p`, and four `.`), so the dots on a `raven-pdf2bib` run say *which stage* is working. This is the one
+     genuine counter-example to "the surface takes no callbacks": streaming progress is the single thing a
+     returned record cannot express, because it is over by the time the record exists. The callback wall
+     argument was about *event* callbacks a script will never draw; a progress spinner is not that, and the
+     brief should not be read as having ruled it out.
+   - Its `(raw_output_text, scrubbed_output_text)` return does *not* matter: `raw` exists only to
+     reassemble an inline `<think>…</think>` from a time when reasoning was not separated. The record
+     carries `reply` and `reasoning` as separate fields, which is the same information in better shape.
+
+   So: add a no-tools switch, decide the progress question, and the ten call sites become
+   `agent.<name>(...)` returning a record. See the section on it below for the naming.
 2. **The "is a model loaded?" check.** Blocked by nothing, and lopsided: the *check* is cheap — the state is
    already in the `/api/v0/models` response `detect_backend_flavor` fetches and discards — while **the pill
    that shows it is a UX problem**, and that is the half that will take the time. The sketch below settles
@@ -411,9 +430,14 @@ as such so that a later reader can overrule it without having to work out whethe
    because it can run while something else is being written. It is what turns the two anecdotes recorded
    there into a result.
 
-Also outstanding, and outside this brief: the chat view's follow-tail bug, diagnosed in
-`investigations/follow-tail-drift/`. Demo-critical in its own right — it makes a streaming reply scroll out
-of view, which is exactly when someone is watching.
+**Fixed 2026-08-11, and no longer outstanding:** the chat view's follow-tail bug, written up end to end in
+`investigations/follow-tail-drift/` — symptom, the two dead ends, the causal fix, and why it was
+intermittent.
+
+**Not this brief's, and no action needed:** rasterizing a PDF's pages so a VLM can read them. It belongs
+with the off-diagonal cells of the import matrix — OCR text out of an image, and a page range of a PDF as
+images — which `TODO_DEFERRED.md` already carries as one item. It will surface when that is tackled;
+recorded here only so the page-image use case above does not read as though it were waiting on this brief.
 
 ## Adopted 2026-08-10: "is a model actually loaded?", and the reconnect it implies
 
@@ -733,12 +757,13 @@ instruction, and then calls `invoke`. That is scaffold-shaped work. Its ten call
 and sit in two files — `papers/pdf2bib.py` (eight) and `visualizer/importer.py` (two) — both of which are
 scripts driving an LLM with no chat in the picture, which is precisely what `agent` is for.
 
-**What is not settled is what it becomes, and that should follow Part B rather than precede it.** Moving it
-unchanged is the one option to reject: it relocates the limitation and leaves two one-shot paths. The real
-choice is whether it *widens* — gaining the optional datastore, so that a throwaway task can carry an
-attachment, which is the narrow fix `TODO.md` asks for — or *dissolves* into a documented one-liner over the
-new surface, with the name going away. Which is right depends on whether a one-shot no-tools call is
-genuinely a one-liner once the surface exists, and that is not knowable until it does.
+**Settled 2026-08-11: it dissolves.** The question was whether it *widens* — gaining the optional datastore,
+so a throwaway task can carry an attachment, which is the narrow fix `TODO.md` asks for — or *dissolves*
+into a one-liner over the new surface with the name going away. Widening is now moot: `agent.turn` already
+takes attachments, in memory as well as on disk, so the thing that would have been added is present. What
+is left of `perform_throwaway_task` is the two gaps listed in the queue above (no way to withdraw all
+tools; ten callers wanting a progress symbol), and neither is a reason to keep a second one-shot path — they
+are the price of retiring it. Moving it unchanged remains the one option to reject.
 
 Either way the ten call sites change shape, since they currently unpack `Tuple[str, str]` and the surface
 returns a record. Two files, first-party, greppable.
