@@ -670,8 +670,11 @@ byte-identical text and match. ("Template" here means only that the text may con
 `{model}` — Juha.) A deployment that *does* embed one gets a new root per distinct value, which is the
 honest outcome rather than a failure: the text really is different.
 
-Not scoped here: what happens to a chat whose card no longer exists, and whether the roots need any pruning
-at all.
+**No pruning, and nothing to decide about orphans** (Juha, 2026-08-11). Chats held under an older system
+prompt stay valid as another tree in the forest — which is what a forest is for, and the datastore has been
+one all along. So the card a chat was rooted at does not disappear from under it, and the question of what
+to do when it has is one this design does not raise. An old root that never acquired a chat is a different
+matter and already handled: the cleanup dialog's existing unreachable-node sweep is what collects it.
 
 #### Raised while doing the above, and not settled: the character card is carrying character-independent text
 
