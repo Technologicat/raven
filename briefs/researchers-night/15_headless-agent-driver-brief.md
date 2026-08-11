@@ -219,19 +219,34 @@ change may not be so kind. Declaring it, naming it, and documenting the returned
 
 ## Part B — run the turn and tell me what happened
 
-> **Not started as of 2026-08-11, and it is what comes next.** Both of the "awkward today" items below have
-> since been dealt with elsewhere, so what is left is the record itself:
+> **Landed 2026-08-11.** `raven.librarian.agent` is `TurnRecord` (frozen dataclass), `turn` (run one, get
+> one back) and `describe_turn` (build one by walking a branch). `turn` calls the real `scaffold.ai_turn`
+> rather than reimplementing the loop, passing `on_prompt_ready` to itself so the record carries the wire
+> histories — one per model call, `prompts[-1]` being the one that produced the reply.
 >
-> - *Per-run overrides* landed as `settings.formatters` (see the decisions section). `rag_live_corpus` no
->   longer monkeypatches; it assigns to its own settings object.
-> - *The prompt* is reachable without a callback: `scaffold.build_turn_prompt` returns the assembled history
->   and `llmclient.serialize_history_for_wire` gives its wire form, both public since Part A. The record
->   should carry it, but no longer has to catch it through `on_prompt_ready`.
+> Both acceptance scripts are rewritten against it and both got shorter by more than the record's own size:
+> `rag_tool_rescue`'s `run_once` went from a datastore, a factory reset, a `user_turn`, a fifteen-argument
+> `ai_turn` and a branch walk to three lines, and `rag_live_corpus`'s phase F lost its `_ai_turn` closure
+> and both of its walks. `rag_tool_rescue` was also *broken* — it still passed `tools_enabled=` and
+> `speculate=`, retired by `37bf3c7` and `c24c89e` — so the same silent rot Part A found in the
+> prompt-shape probes had reached the full-turn ones too. Rewriting them onto the surface is what fixes it
+> for good: a probe that no longer names fifteen parameters cannot be broken by the fifteenth changing.
 >
-> So the work is: lift `rag_live_corpus`'s branch walk into a frozen dataclass (decision 2), returned by the
-> turn. Entry point for reading it: `briefs/librarian-extension/manual_tests/rag_live_corpus.py`, its
-> `tool_calls` dict and `rounds` counter, which are the copy that gets the round-versus-call distinction
-> right.
+> **Three things the implementation settled that the brief did not ask about:**
+>
+> - **`reply` strips the persona prefix**, as both frontends do at render time (`Aria: ` is part of how a
+>   message is stored, not part of what was said). Every hand-rolled walk read the stored form and so
+>   reported the prefix; the record reports what a person reads, and `messages[-1]` still has the raw form.
+> - **The turn's span stops at the head it started from.** Every existing walk ran to the root, which on a
+>   multi-turn chat totals every turn on the branch — against a cap that is per-turn. `describe_turn` takes
+>   `since_node_id` and `turn` passes it, so the counts answer the question the cap is asked. The 24
+>   recorded `tool_budget` samples were rechecked per turn and are unaffected (their first turn called
+>   nothing); noted in that investigation's README so it is not re-derived.
+> - **Attachments need a file-backed datastore**, since a sidecar is a file beside it and the in-memory
+>   default has nowhere to put one. `staged_images`/`staged_files` pass through to `user_turn` and are
+>   refused up front rather than failing inside `imagestore` partway through the turn.
+>
+> What is *not* here, deliberately: the scripted backend (already out of scope, below), and any callback.
 
 **A turn returns what happened, not a node id.** Every probe re-implements the same branch walk afterwards:
 count the tool nodes by name, count the *rounds* (an assistant message asking for tools, however many calls it

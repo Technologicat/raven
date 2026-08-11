@@ -18,7 +18,7 @@ Phases, cheapest first, each printing PASS / FAIL / SKIP:
     C  tools       `search_documents` and `fetch_document` through their real entrypoints and tool context
     D  labels      `label_documents` over real search hits: how many get a title rather than an ID alone
     E  budget      where `fetch_document` starts refusing as the conversation fills the window
-    F  live turn   a real `ai_turn` against the real retriever, and whether the provenance list comes back
+    F  live turn   a real turn against the real retriever, and whether the provenance list comes back
                    (repeatable: the failure it hunts turns up in some runs and not others)
 
 Phases A–E need no LLM backend at all. Only F does.
@@ -51,7 +51,7 @@ from unpythonic.env import env
 
 from raven.common import docextract
 
-from raven.librarian import chattree, chatutil, config as librarian_config, hybridir, llmclient, scaffold
+from raven.librarian import agent, chattree, chatutil, config as librarian_config, hybridir, llmclient, scaffold
 
 BASE = sys.argv[1] if len(sys.argv) > 1 else librarian_config.llm_backend_url
 MODEL = sys.argv[2] if len(sys.argv) > 2 else None
@@ -254,24 +254,6 @@ def connect():
     return llm_settings
 
 
-def _ai_turn(llm_settings, datastore, retriever, head, question):
-    """One AI turn with every callback off, capturing the wire history that was actually sent."""
-    seen = {}
-
-    def on_prompt_ready(history):
-        seen["history"] = history
-
-    final = scaffold.ai_turn(llm_settings=llm_settings, datastore=datastore, retriever=retriever,
-                             head_node_id=head, tools_enabled=True, continue_=False,
-                             docs_enabled=True, docs_query=question, docs_num_results=None,
-                             speculate=False, markup=None,
-                             on_docs_start=None, on_docs_done=None, on_prompt_ready=on_prompt_ready,
-                             on_llm_start=None, on_llm_progress=None, on_llm_done=None,
-                             on_tools_start=None, on_call_lowlevel_start=None,
-                             on_call_lowlevel_done=None, on_tool_done=None, on_tools_done=None)
-    return final, seen.get("history", [])
-
-
 def _append_result(record):
     """Append one sample to the results file, flushed immediately.
 
@@ -301,6 +283,11 @@ def check_live_turn(retriever, hits, notice_enabled=True, sample_index=0):
     Two, because the second is where the interesting thing happens. The automatic search's matches are
     injected for one turn and dropped, so at turn two the material is gone and only the IDs survive — which
     is exactly what `list_consulted_documents` is for. A single-turn probe cannot see it at all.
+
+    Everything below is read off the second turn's `agent.TurnRecord`, so the round and call counts are
+    that turn's own — which is the scope `max_tool_call_rounds` caps, and therefore the scope worth
+    comparing it against. The walk this replaces went to the root and reported both turns together; see
+    `investigations/tool_budget/README.md` for why the samples already recorded are unaffected.
     """
     if not hits:
         report("F live turn", None, "no matches to ask about")
@@ -322,86 +309,58 @@ def check_live_turn(retriever, hits, notice_enabled=True, sample_index=0):
         # to whatever this probe thought to summarize tonight. These runs are slow enough that throwing the
         # evidence away and re-running would be the expensive mistake.
         datastore = _make_datastore(sample_index, notice_enabled)
-        head = chatutil.factory_reset_datastore(datastore, llm_settings)
-        head = scaffold.user_turn(llm_settings=llm_settings, datastore=datastore,
-                                  head_node_id=head, user_message_text=QUERIES[0])
-        head, _ = _ai_turn(llm_settings, datastore, retriever, head, QUERIES[0])
+        first = agent.turn(llm_settings, QUERIES[0], datastore=datastore, retriever=retriever,
+                           internet_enabled=True)
 
         follow_up = "Which of those documents said that, and what else does it say?"
-        head = scaffold.user_turn(llm_settings=llm_settings, datastore=datastore,
-                                  head_node_id=head, user_message_text=follow_up)
-        final, history = _ai_turn(llm_settings, datastore, retriever, head, follow_up)
+        record = agent.turn(llm_settings, follow_up, datastore=datastore, retriever=retriever,
+                            head_node_id=first.head_node_id, internet_enabled=True)
     finally:
         if isinstance(datastore, chattree.PersistentForest):
             datastore.save()
 
-    wire = "\n".join(chatutil.content_to_text(message.get("content")) for message in history)
+    wire = "\n".join(chatutil.content_to_text(message.get("content")) for message in record.prompts[-1])
     listed = "consulted" in wire
-    reply = chatutil.content_to_text(datastore.get_payload(final)["message"]["content"])
-    leaked = bool(re.search(r"<tool_call>|<function=", reply))
+    leaked = bool(re.search(r"<tool_call>|<function=", record.reply))
 
-    # Walk the branch the second turn built. The shape matters as much as the counts: an empty reply is
-    # ambiguous on its own (a model that said nothing, a reply that went out as reasoning, or a turn that
-    # ended on a tool node), and those want different fixes.
-    tool_calls = {}
-    rounds = {"n": 0}
+    # The shape matters as much as the counts: an empty reply is ambiguous on its own (a model that said
+    # nothing, a reply that went out as reasoning, or a turn that ended on a tool node), and those want
+    # different fixes. `record.messages` is the turn's own span, oldest first.
     shape = []
-    node_id = final
-    while node_id is not None:
-        payload = datastore.get_payload(node_id)
-        message = payload["message"]
-        role = message["role"]
-        if role == "tool":
-            name = payload.get("generation_metadata", {}).get("function_name", "?")
-            tool_calls[name] = tool_calls.get(name, 0) + 1
+    for message in record.messages:
         n_requested = len(message.get("tool_calls") or [])
-        if n_requested:
-            rounds["n"] += 1  # a *round* is one assistant message asking for tools, however many it asks for
-        shape.append(f"{role}"
+        shape.append(f"{message['role']}"
                      f"(text {len(chatutil.content_to_text(message.get('content')))}"
                      f", reasoning {len(message.get('reasoning_content') or '')}"
                      + (f", requested {n_requested}" if n_requested else "") + ")")
-        node_id = datastore.get_parent(node_id)
-    shape.reverse()
 
-    final_payload = datastore.get_payload(final)
-    generation_metadata = final_payload.get("generation_metadata") or {}
-    report("F live turn", not leaked and bool(reply.strip()),
-           f"{rounds['n']} tool rounds (cap {librarian_config.max_tool_call_rounds}), "
-           f"calls {tool_calls or 'none'}; provenance list injected: {'yes' if listed else 'NO'}; "
+    report("F live turn", not leaked and bool(record.reply.strip()),
+           f"{record.rounds} tool rounds (cap {librarian_config.max_tool_call_rounds}), "
+           f"calls {dict(record.tool_calls) or 'none'}; provenance list injected: {'yes' if listed else 'NO'}; "
            f"literal tool-call text leaked: {'YES' if leaked else 'no'}; "
-           f"final node status {generation_metadata.get('status', '?')}, "
-           f"grounded {generation_metadata.get('grounded', '(not recorded)')}; "
-           f"reply: {' '.join(reply.split())[:160]!r}")
+           f"grounded {record.grounded if record.grounded is not None else '(not recorded)'}; "
+           f"reply: {' '.join(record.reply.split())[:160]!r}")
     print("    branch: " + " -> ".join(shape[-8:]))
 
     # When the reply is empty, what the model *did* emit is the whole story. Identical reasoning across
     # rounds means a loop (the cap doing its job); a one-off means something else stopped the generation.
-    reasonings = []
-    node_id = final
-    while node_id is not None:
-        payload = datastore.get_payload(node_id)
-        if payload["message"]["role"] == "assistant":
-            reasonings.append(payload["message"].get("reasoning_content") or "")
-        node_id = datastore.get_parent(node_id)
-    reasonings = [reasoning for reasoning in reversed(reasonings) if reasoning]
-    if reasonings:
-        distinct = len(set(reasonings))
-        print(f"    {len(reasonings)} assistant turns emitted reasoning, {distinct} distinct")
-        print(f"    last reasoning: {' '.join(reasonings[-1].split())[:400]!r}")
+    if record.reasoning:
+        distinct = len(set(record.reasoning))
+        print(f"    {len(record.reasoning)} assistant turns emitted reasoning, {distinct} distinct")
+        print(f"    last reasoning: {' '.join(record.reasoning[-1].split())[:400]!r}")
 
     _append_result({"sample": sample_index,
                     "notice": notice_enabled,
                     "model": llm_settings.model,
-                    "answered": bool(reply.strip()),
+                    "answered": bool(record.reply.strip()),
                     "leaked": leaked,
-                    "rounds": rounds["n"],
+                    "rounds": record.rounds,
                     "cap": librarian_config.max_tool_call_rounds,
-                    "calls": tool_calls,
+                    "calls": dict(record.tool_calls),
                     "provenance_list_injected": listed,
-                    "reasoning_turns": len(reasonings),
-                    "reasoning_distinct": len(set(reasonings)),
-                    "reply_characters": len(reply)})
+                    "reasoning_turns": len(record.reasoning),
+                    "reasoning_distinct": len(set(record.reasoning)),
+                    "reply_characters": len(record.reply)})
 
 
 # --------------------------------------------------------------------------------

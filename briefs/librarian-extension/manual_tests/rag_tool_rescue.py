@@ -11,11 +11,11 @@ could call. The corpus and the question here are deliberately *identical* to tha
 are comparable: same three hydrogen-electrolysis matches, same question about a stack they never mention.
 
 What differs is everything below the question. `absent_fact.py` hand-builds one wire history and posts it
-once; this drives the real `scaffold.ai_turn`, so the whole path is under test — the tool is advertised by
-`llmclient.setup`, dispatched through `perform_tool_calls`, answered by `search_documents_wrapper` reading
-the retriever out of `dyn.tool_context`, and fed back into the loop as a real `role="tool"` node. Nothing
-here is faked except the retriever, because retrieval *quality* is not what is being measured and a stub
-keeps this probe independent of raven-server.
+once; this drives the real agent loop through `raven.librarian.agent.turn`, so the whole path is under
+test — the tool is advertised by `llmclient.setup`, dispatched through `perform_tool_calls`, answered by
+`search_documents_wrapper` reading the retriever out of `dyn.tool_context`, and fed back into the loop as a
+real `role="tool"` node. Nothing here is faked except the retriever, because retrieval *quality* is not what
+is being measured and a stub keeps this probe independent of raven-server.
 
 Two scenarios, because the tool can help in two different ways and only one of them is a rescue:
 
@@ -26,10 +26,11 @@ Two scenarios, because the tool can help in two different ways and only one of t
 
 Read both numbers per sample, not just the verdict:
 
-    called       how many real `search_documents` nodes appeared — the behaviour `absent_fact.py` could
-                 only watch leak out as literal text. Doubles as the round count for this tool, so a run
-                 that sits at the cap means the model is rephrasing rather than concluding, which is a
-                 wording problem and not a loop problem.
+    called       how many `search_documents` *calls* the model made — the behaviour `absent_fact.py` could
+                 only watch leak out as literal text. The round count is `record.rounds`, and it is the one
+                 to compare against the cap: a run sitting at the cap means the model is rephrasing rather
+                 than concluding, which is a wording problem and not a loop problem. The two coincide only
+                 while the model asks for one search per message, which is why they are counted separately.
     leaked       did `<tool_call>` text survive into the reply anyway? This should be zero; anything else
                  means the tool is present but the model is not finding it.
 
@@ -69,7 +70,7 @@ answer". The gate below asks the second one.
 import re
 import sys
 
-from raven.librarian import chattree, chatutil, config as librarian_config, llmclient, scaffold
+from raven.librarian import agent, chatutil, config as librarian_config, llmclient
 
 BASE = sys.argv[1] if len(sys.argv) > 1 else librarian_config.llm_backend_url
 MODEL = sys.argv[2] if len(sys.argv) > 2 else None
@@ -138,38 +139,16 @@ def connect():
 
 def run_once(llm_settings, fact_is_findable):
     """One full AI turn against the live backend. Returns what the turn did, not what it said."""
-    datastore = chattree.Forest()
-    head = chatutil.factory_reset_datastore(datastore, llm_settings)
-    head = scaffold.user_turn(llm_settings=llm_settings, datastore=datastore,
-                              head_node_id=head, user_message_text=QUESTION)
-
     retriever = StubRetriever(fact_is_findable=fact_is_findable)
-    final = scaffold.ai_turn(llm_settings=llm_settings, datastore=datastore, retriever=retriever,
-                             head_node_id=head, tools_enabled=True, continue_=False,
-                             docs_enabled=True, docs_query=QUESTION, docs_num_results=None,
-                             speculate=False, markup=None,
-                             on_docs_start=None, on_docs_done=None, on_prompt_ready=None,
-                             on_llm_start=None, on_llm_progress=None, on_llm_done=None,
-                             on_tools_start=None,
-                             on_call_lowlevel_start=None, on_call_lowlevel_done=None,
-                             on_tool_done=None, on_tools_done=None)
-
-    # Walk the branch the turn built. Tool nodes are the evidence the model actually used the tool; the
-    # literal-text check is the failure mode this whole exercise exists to retire.
-    searches = 0
-    node_id = final
-    while node_id is not None:
-        payload = datastore.get_payload(node_id)
-        message = payload["message"]
-        if message["role"] == "tool" and payload.get("generation_metadata", {}).get("function_name") == "search_documents":
-            searches += 1
-        node_id = datastore.get_parent(node_id)
-
-    reply = chatutil.content_to_text(datastore.get_payload(final)["message"]["content"])
-    return {"searches": searches,
-            "leaked": bool(re.search(r"<tool_call>|<function=", reply)),
+    # The network tools are on offer as well, which is not this probe's subject but is the loadout the
+    # numbers in the docstring were measured under: withdrawing them now would change what they compare to.
+    # `agent.turn` starts its own in-memory chat and searches with the user's words, as the apps do.
+    record = agent.turn(llm_settings, QUESTION, retriever=retriever, internet_enabled=True)
+    return {"searches": record.tool_calls.get("search_documents", 0),  # the calls, not the rounds
+            "rounds": record.rounds,  # ...which are these, and it is these the cap counts
+            "leaked": bool(re.search(r"<tool_call>|<function=", record.reply)),
             "queries": retriever.queries[1:],  # the model's own, excluding the automatic first pass
-            "reply": " ".join(reply.split())}
+            "reply": " ".join(record.reply.split())}
 
 
 def main():
@@ -186,7 +165,8 @@ def main():
             got = run_once(llm_settings, fact_is_findable=(scenario == "findable"))
             used_the_tool += bool(got["searches"])
             leaked += got["leaked"]
-            print(f"  [{i + 1}] called={got['searches']}  leaked={'YES' if got['leaked'] else 'no'}")
+            print(f"  [{i + 1}] called={got['searches']} in {got['rounds']} round(s) "
+                  f"(cap {librarian_config.max_tool_call_rounds})  leaked={'YES' if got['leaked'] else 'no'}")
             if got["queries"]:
                 print(f"      its own queries: {got['queries']}")
             print(f"      reply: {got['reply'][:200]!r}")

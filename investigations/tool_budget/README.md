@@ -42,6 +42,17 @@ cap-reaching turns the sign reverses (1 of 5 with, 4 of 9 without), which is noi
 out claiming even a directional benefit. It is kept because it costs one line and addresses a mechanism
 observed directly in the reasoning traces, not because it was shown to work.
 
+### The round count is per turn, and was checked rather than assumed (2026-08-11)
+
+The probe now reads its numbers from `agent.TurnRecord`, whose span is **one turn** — where the hand-rolled
+walk it replaces went all the way to the root, so its `rounds` totalled *both* turns of a sample while the
+cap it is compared against is per-turn. The table above would not survive that, if the first turn had ever
+called a tool.
+
+It did not, in any of the 24: recounting the saved forests per turn with `agent.describe_turn` gives 0
+rounds for turn one and exactly the logged number for turn two, every sample. So the counts are unchanged,
+the table stands as measured, and samples appended by a later run pool with these.
+
 ## What this does not establish
 
 The cap-reaching turns and the others are not randomly assigned — a turn reaches the cap because the model
