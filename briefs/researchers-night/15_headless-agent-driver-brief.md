@@ -311,6 +311,16 @@ It is also the counterweight to the change above. Moving the model name and cont
 improves correctness and, on today's chat view, hides two more things the model is told — so the two want
 deciding together rather than in sequence.
 
+**That objection is now spent (2026-08-11).** Both are already injected, just at a different moment: they are
+`{model}` and `{context_length}` in the character-card template, substituted by `configure` at app start. What
+made them visible was never that they are authored rather than injected — it is that the substitution happens
+*before* the node is stored, and the log renders stored nodes. The per-turn injects were invisible for the
+mirror-image reason.
+
+So moving them changes which mechanism carries them, and the display follows automatically: the chat view
+renders whatever `build_system_injects` returns. The remaining argument for the move is the one it always
+was — a backend reconnect can change both, and a value baked in at start is then stale.
+
 Juha is taking the item itself to the TODO triage so it is recorded there as well; this note is the scoping
 decision, not the item.
 

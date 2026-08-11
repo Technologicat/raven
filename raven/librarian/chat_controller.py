@@ -736,9 +736,16 @@ class DPGChatMessage:
         help, because the wrong position was already displayed.
 
         So the replacement is built *first*, into a fresh container inserted where the old one is, and the
-        old container is deleted only once the new one is standing. Content only ever grows during the
-        build, so there is nothing to clamp; the one shrink left happens after everything is laid out, where
-        `hold_scroll_across_rebuild`'s instant correction covers it in a single frame.
+        old container is deleted only once the new one is standing.
+
+        That container is built **hidden**, and shown in the same frame the old one is deleted. Built
+        visible, it contributes its height while it fills, so the panel carries both copies for the several
+        frames the markdown takes — and everything below the insertion point slides down and back. That is
+        invisible for a short message low in the log and pronounced for a long one near the top, which is
+        exactly where the system prompt sits. Hidden, the two height changes land in one frame and cancel.
+
+        Nothing in `build` reads back a size or waits for a frame, and the text wrap width comes from the
+        *panel* rather than from this container, so laying out unseen produces the same result.
 
         This is the same technique as the Visualizer's double-buffered info panel, applied per *message*
         rather than per panel — and the difference in scope is the point rather than an inconsistency. There
@@ -760,8 +767,10 @@ class DPGChatMessage:
             self.gui_uuid = str(uuid.uuid4())
             self.gui_container_group = dpg.add_group(tag=f"chat_item_container_group_{self.gui_uuid}",
                                                      parent=self.gui_parent,
-                                                     before=old_container)  # exactly where the old one sits
+                                                     before=old_container,  # exactly where the old one sits
+                                                     show=False)  # ...but contributing no height until it is finished
             self.build()
+            dpg.show_item(self.gui_container_group)
             for registry in old_registries:  # not under the container group; see `_make_clickable`
                 with guiutils.nonexistent_ok():
                     dpg.delete_item(registry)
