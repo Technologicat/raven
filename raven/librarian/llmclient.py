@@ -1032,10 +1032,15 @@ def configure(model_info: env,
     # at the first midnight the session survives. Raven states the current date - weekday included, so that the
     # model never has to do calendar arithmetic - in the system message on every turn instead; see
     # `scaffold.build_turn_prompt`.
+    #
+    # `model` and `context_length` are here but are unused by what Raven ships, for the same reason one step
+    # weaker: they are stable within a session rather than within a day, and not even that if the user loads
+    # a different model or the app reconnects to a backend that was down. They are stated per turn as well.
+    # The config file says so at the slots that receive them, which is where someone writing prose looks.
     template_vars = env(user=user,
                         char=char,
                         model=model,
-                        context_length=context_length)  # loaded context window, for the card to tell the model its real size
+                        context_length=context_length)
     system_prompt = librarian_config.setup_system_prompt(template_vars)
     character_card = librarian_config.setup_character_card(template_vars)
     user_card = librarian_config.setup_user_card(template_vars)

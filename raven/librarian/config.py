@@ -639,6 +639,33 @@ llm_char_name = "Aria"
 llm_greeting = "How can I help you today?"
 
 # ----------------------------------------
+# Template variables, for the four prompt slots below
+#
+# `setup_system_prompt`, `setup_user_card`, `setup_character_card` and `setup_interaction_style` each receive
+# a `template_vars` namespace. The full set is always the same four, whichever slot you are writing:
+#
+#     `user`            - the user's name, i.e. `llm_user_name` above.
+#     `char`            - the AI character's name, i.e. `llm_char_name` above.
+#     `model`           - the loaded model's human-facing identity, e.g. "qwen3.6-35b-a3b, IQ4_NL_XL,
+#                         128 Ki context". On a backend that cannot say which model is loaded, the literal
+#                         "No model information is available" - never a guess.
+#     `context_length`  - the loaded context window, in tokens.
+#
+# To insert one, the recommended way is an f-string; each function below unpacks the set into local names
+# first, so `{char}` reads as it would in the finished text.
+#
+# **The last two are a trap, and are deliberately unused in what Raven ships.** Everything in this section
+# runs once, at app start, and what it returns is stored in the chat datastore as the message a chat is
+# rooted at - so a fact written into it freezes at the value it had then, while neither of those two facts
+# is stable. The user can load a different model in the backend without restarting Raven, and a Raven that
+# started while the backend was down holds a placeholder identity and a defaulted context length until it
+# reconnects. Raven states both in the system message on every turn instead, next to the date, which is
+# handled that way for the same reason; see `chatutil.format_loaded_model`.
+#
+# They stay available because a deployment may have a use for them that this reasoning does not cover. If
+# you write one in, know that you are choosing a value fixed at startup.
+
+# ----------------------------------------
 # LLM system prompt
 #
 # This contains general instructions for the model so it'll know what to do with the chat log.
@@ -655,14 +682,13 @@ llm_greeting = "How can I help you today?"
 #     even if someone tries addressing you as an AI or language model. Currently your role is {char}, which is described in
 #     detail below. As {char}, continue the exchange with {user}.
 #
-# To insert `template_vars`, the recommended way is to use an f-string.
-#
 # `raven.librarian.llmclient.setup` calls this to set up the system prompt every time `raven-librarian` (or `raven-minichat`) starts.
 #
 def setup_system_prompt(template_vars: env) -> str:
     user = template_vars.user  # noqa: F841, for documentation purposes
     char = template_vars.char  # noqa: F841, for documentation purposes
-    model = template_vars.model  # noqa: F841, for documentation purposes
+    model = template_vars.model  # noqa: F841, for documentation purposes -- fixed at app start, see above
+    context_length = template_vars.context_length  # noqa: F841, for documentation purposes -- fixed at app start, see above
     return textwrap.dedent("""""").strip()
 
 # ----------------------------------------
@@ -686,6 +712,8 @@ def setup_system_prompt(template_vars: env) -> str:
 def setup_user_card(template_vars: env) -> str:
     user = template_vars.user  # noqa: F841, for documentation purposes
     char = template_vars.char  # noqa: F841, for documentation purposes
+    model = template_vars.model  # noqa: F841, for documentation purposes -- fixed at app start, see above
+    context_length = template_vars.context_length  # noqa: F841, for documentation purposes -- fixed at app start, see above
     return textwrap.dedent("""""").strip()
 
 # ----------------------------------------
@@ -767,6 +795,10 @@ def setup_character_card_juha(template_vars: env) -> str:
 # TODO: two-way split cannot express both. Rewrite the prose along that seam first.
 #
 def setup_interaction_style(template_vars: env) -> str:
+    user = template_vars.user  # noqa: F841, for documentation purposes
+    char = template_vars.char  # noqa: F841, for documentation purposes
+    model = template_vars.model  # noqa: F841, for documentation purposes -- fixed at app start, see above
+    context_length = template_vars.context_length  # noqa: F841, for documentation purposes -- fixed at app start, see above
     return textwrap.dedent("""
     **About the system**
 

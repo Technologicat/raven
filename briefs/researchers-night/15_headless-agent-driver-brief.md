@@ -679,8 +679,23 @@ on exactly that case. Nothing is broken right now, because the refresh-in-place 
 ever one root — which is why the gap has never shown.
 
 So the storage change carries a GUI prerequisite: roots are siblings of each other in a forest, which is
-`get_all_root_nodes()` and already exists, and the sibling walk plus whatever gates the navigation buttons
-have to accept it. Worth settling as part of that pass rather than discovering it after the storage lands.
+`get_all_root_nodes()` and already exists. **The change belongs in `chattree` rather than in the
+controller** (Juha) — "a root's siblings are the other roots" is a statement about the forest, and
+`get_siblings` is where the current definition denying it lives.
+
+**And that is the whole of it: the controller needs no change for navigation.** Checked on Juha's prompt,
+because the button gating was the obvious place for a second root test to hide. There is none —
+`prev_enabled` and `next_enabled` are computed from `get_siblings`' return alone (`this_node_index`, and
+`len(siblings)`, reached only after the index is known non-`None`), and the six callbacks are wired from the
+same result. So a `get_siblings` that answers for roots lights the arrows up by itself. The delete gate
+below is the only place in the controller that tests root-ness directly.
+
+**Noted and deliberately not acted on: `get_all_root_nodes` is a linear scan** (Juha, 2026-08-11), and the
+multi-root design calls it from more places than the single-root one did. We are a few orders of magnitude
+from where that bites — one root per distinct card text, against a node dict holding a chat history — so
+this is the case the Zen has a line about. Recorded so that a later reader meeting a slow cleanup on a large
+datastore knows the shape of the answer (an index of roots, maintained by `create_node`/`delete_node`)
+rather than rediscovering the scan.
 
 **Deleting a card is gated the same way, and for a reason that stops applying** (Juha, 2026-08-11).
 `chat_controller`'s `delete_enabled` excludes any node in `system_prompt_node_ids` — which is
