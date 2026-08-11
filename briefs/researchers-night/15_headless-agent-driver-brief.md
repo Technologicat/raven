@@ -248,6 +248,74 @@ change may not be so kind. Declaring it, naming it, and documenting the returned
 >
 > What is *not* here, deliberately: the scripted backend (already out of scope, below), and any callback.
 
+### Open: should an in-memory chat be able to carry attachments? (raised 2026-08-11)
+
+`agent.turn` currently refuses them on a `chattree.Forest` and asks for a `PersistentForest`, because the
+sidecar store is defined on the latter. The question is whether that is essential or incidental — a sidecar
+is content-addressed bytes plus a description, and nothing about the *concept* needs a filesystem.
+
+**Checked, and the two attachment kinds do not answer the same way**, which is what makes this a design
+session rather than a small change:
+
+- **Images would work in memory today.** `imagestore` touches the store only through `store_sidecar` and
+  `read_sidecar`, both of which are bytes in, bytes out. `sidecar_url_to_data_url` builds a `data:` URL
+  from those bytes and needs no path.
+- **Documents would not.** `textfilestore.sidecar_to_text` calls `datastore.sidecar_path(filename)` and
+  hands it to `docextract.extract_text`, which is path-based for every format it supports (PDF, docx,
+  pptx, ODF, HTML, and plain text alike). An in-memory store would have to materialize a temp file per
+  read — which is most of what a file-backed store already does, for a worse guarantee.
+
+Everything else that wants a real path is either GUI ("open the saved copy", "show it in the file manager")
+or maintenance (`cleanup`'s `stat().st_size`, `appstate`'s existence check), and none of it is in a
+script's way.
+
+So the options are: leave the refusal (the error names the fix, and the fix is one argument); give `Forest`
+a bytes-backed store and let documents materialize a temp file on read; or push a bytes interface down into
+`docextract`, which is the clean version and the largest.
+
+**Two use cases decide it, and they pull in different directions** (Juha, 2026-08-11). Both are one
+throwaway turn per item, in a batch, whose output is text — which is what makes them scripting rather than
+chat, and why the refusal is in their way at all:
+
+- **A VLM pass over page images.** Rasterize a paper's pages, hand each to the model, get back what is on
+  it — a modern VLM reads an equation photograph into LaTeX, so this is a conversion pipeline and not a
+  demo. The bytes are generated in memory and nobody wants them afterwards. Under the refusal, a 40-page
+  paper means a `PersistentForest` plus 40 content-addressed files to sweep.
+- **"Here is a fulltext PDF, what does it say about XXX?"** The document is *already a file*, usually one
+  of a stash the script is iterating over. Under the refusal, asking one question about each paper copies
+  the entire corpus into a sidecar store — megabytes per item, duplicating what is already on disk and
+  already durable.
+
+  Distinct from the RAG path, which is the other way to ask this: `raven-indexer` chunks a corpus and the
+  retrieval brings back passages. Attaching folds the *whole* document in, which is what a large context
+  window is for and what "what does it say about XXX" wants when the answer is spread across the paper.
+
+**So the fix is not one mechanism.** Images want bytes with no file anywhere — a bytes-backed store on
+`Forest` serves them outright, since `imagestore` never asks for a path. Documents want the opposite: the
+file exists, `sidecar_to_text` needs a path, and there already is one — so what that case wants is to
+attach *by path without copying*, and a bytes store would have it write a temp file reconstructed from a
+file it just read. Content-addressing earns its keep when the chat must outlive the original; a throwaway
+scripted turn has nothing to outlive.
+
+Still not decided here: it is a `chattree` change and belongs with a look at that module. But the shape to
+weigh is those two mechanisms, not one store with an awkward half.
+
+**Two things these need that are separate from the sidecar question**, so that neither gets folded into it
+by mistake:
+
+- **Nothing in Raven rasterizes a PDF page.** `docextract._extract_pdf` reads the text layer through
+  `pypdf`; there is no `pymupdf`, `pdf2image` or poppler anywhere in the tree or in `pyproject.toml`
+  (checked). Page images have to come from somewhere, and that is a dependency decision. The fulltext case
+  needs none of this — `docextract` already reads a PDF.
+- **The batch mechanics are brief 17**, the per-document LLM pass already scoped out of this brief — retry,
+  cache, resume, progress. Both of these are precisely its shape, and it now has two more prospective
+  users.
+
+**Landed meanwhile, since it was one check and this is what made it visible:** `agent.turn` refuses
+`staged_images` when `llm_settings.model_is_vlm is False`. Librarian's attach button has always done this;
+a script had nothing, so a page-image batch against a text-only model would have paid for every call and
+got an answer about nothing. `None` still passes — it means the backend did not say.
+
 **A turn returns what happened, not a node id.** Every probe re-implements the same branch walk afterwards:
 count the tool nodes by name, count the *rounds* (an assistant message asking for tools, however many calls it
 asks for), collect the reasoning that never reached `content`, find the reply. That walk is the actual result

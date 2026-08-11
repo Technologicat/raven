@@ -18,6 +18,10 @@ This is a programming library and not a product: what it offers is programmatic 
 corpus, chattree and provenance machinery. It is deliberately not a generic agent harness — no plugin
 system, no workflow DSL, no orchestration layer.
 
+`turn`'s docstring carries worked examples. The *executable* ones are in
+`raven/librarian/tests/test_agent.py`, which is the better place to look for a pattern this docstring does
+not cover: it drives the real loop against a faked backend, so every example in it is one CI runs.
+
 Two properties worth knowing before scripting against it:
 
   - **The network is off by default.** `internet_enabled=False`, so `websearch` and `webfetch` are not
@@ -245,6 +249,11 @@ def turn(llm_settings: env,
                                      file beside the datastore, and the in-memory default has nowhere to
                                      put it. Refused up front rather than partway through storing.
 
+                                     `staged_images` additionally needs a model that accepts image input,
+                                     and is refused when `llm_settings.model_is_vlm` says otherwise —
+                                     `False` only, since `None` means the backend did not say. A document
+                                     needs no such capability: its text is folded into the prompt.
+
     `datastore`: Where the conversation lives. `None` (default) builds a throwaway `chattree.Forest`, which
                  is in-memory and costs nothing. Pass a `chattree.PersistentForest` to keep the run: the
                  whole conversation then lands on disk in Raven's own format — every message, the reasoning
@@ -290,6 +299,13 @@ def turn(llm_settings: env,
     if (staged_images or staged_files) and not hasattr(datastore, "store_sidecar"):
         raise ValueError("agent.turn: attachments need a datastore with a sidecar store — a "
                          "`chattree.PersistentForest`, not the in-memory `Forest` this defaults to.")
+    if staged_images and llm_settings.model_is_vlm is False:
+        # Only on a confirmed `False`: the tri-state's `None` is "the backend does not say", and refusing
+        # on that would block every backend that reports nothing. Librarian's attach button reads it the
+        # same way. A batch feeding page images to a text-only model would otherwise pay for every call
+        # and get an answer about nothing.
+        raise ValueError("agent.turn: this model does not accept image input, so `staged_images` cannot "
+                         "be used with it. Documents (`staged_files`) work with any model.")
     if head_node_id is None:
         if datastore.nodes:
             raise ValueError("agent.turn: `head_node_id` is required for a datastore that already has "

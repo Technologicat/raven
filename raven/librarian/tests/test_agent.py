@@ -169,6 +169,32 @@ class TestTurn:
         # ...and the conversation is still there, which is the point of refusing.
         assert datastore.get_payload(first.head_node_id)["message"]["role"] == "assistant"
 
+    def test_an_attached_document_reaches_the_wire(self, monkeypatch, llm_settings, tmp_path):
+        # The scripted counterpart of dragging a file into the chat. A document has no native wire form:
+        # it is stored verbatim as a sidecar, and its text is folded into the message at wire-build time --
+        # which is what lets any model use one, vision capability or not. So the assertion that matters is
+        # about the prompt, not about the node.
+        from unpythonic.env import env  # noqa: PLC0415 -- only the attachment tests build a staged entry
+
+        def fake_invoke(**kw):
+            kw["on_prompt_ready"](llmclient.serialize_history_for_wire(kw["settings"], kw["history"],
+                                                                       continue_=kw["continue_"],
+                                                                       datastore=kw["datastore"]))
+            return make_invoke_result(content="It says the stack draws 47.2 kWh/kg.")
+        monkeypatch.setattr("raven.librarian.llmclient.invoke", fake_invoke)
+
+        staged = env(raw=b"The Kelvin-7 stack recorded 47.2 kWh/kg at nominal load.",
+                     name="kelvin7.txt", provenance_url=None, provenance_source="user_attachment")
+        datastore = chattree.PersistentForest(tmp_path / "chat.json")
+
+        record = agent.turn(llm_settings, "What does this say?", staged_files=[staged],
+                            datastore=datastore)
+
+        wire = "\n".join(chatutil.content_to_text(message.get("content")) for message in record.prompts[-1])
+        assert "47.2 kWh/kg" in wire
+        # ...and it is a stored attachment rather than pasted text: the sidecar is on disk, content-addressed.
+        assert datastore.list_sidecar_files()
+
     def test_attaching_to_an_in_memory_datastore_is_refused_up_front(self, llm_settings):
         # The sidecar store is a directory beside the datastore file, so `chattree.Forest` has none — and
         # the default datastore *is* a `Forest`. Without the guard this fails inside `imagestore`, on a
@@ -178,6 +204,25 @@ class TestTurn:
         staged = env(raw=b"not really a png", provenance_url=None, provenance_source="user_attachment")
         with pytest.raises(ValueError):
             agent.turn(llm_settings, "What is in this image?", staged_images=[staged])
+
+    def test_images_are_refused_on_a_model_that_cannot_see_them(self, llm_settings, tmp_path):
+        # A batch feeding page images to a text-only model would pay for every call and get an answer about
+        # nothing. Librarian's attach button already refuses this; a script had nothing.
+        from unpythonic.env import env  # noqa: PLC0415 -- only the attachment tests build a staged entry
+
+        staged = env(raw=b"not really a png", provenance_url=None, provenance_source="user_attachment")
+        datastore = chattree.PersistentForest(tmp_path / "chat.json")
+
+        llm_settings.model_is_vlm = False
+        with pytest.raises(ValueError):
+            agent.turn(llm_settings, "What is in this image?", staged_images=[staged], datastore=datastore)
+
+        # `None` is "the backend did not say", not "no" -- refusing on it would block every backend that
+        # reports nothing, so it must get past the guard. (It fails later, on the fake image bytes.)
+        llm_settings.model_is_vlm = None
+        with pytest.raises(Exception) as excinfo:
+            agent.turn(llm_settings, "What is in this image?", staged_images=[staged], datastore=datastore)
+        assert "image input" not in str(excinfo.value)
 
     def test_a_second_turn_continues_from_the_first_record(self, monkeypatch, llm_settings):
         # The record carries the datastore as well as the head, so a script that looks at the answer before
