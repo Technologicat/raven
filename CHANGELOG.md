@@ -4,6 +4,13 @@
 
 **Added**:
 
+*Raven-librarian*
+
+- **`raven.librarian.agent`, a scripting surface over the agent loop** — for driving Librarian's engine from your own Python, with your document corpus, the branching chat tree and the tool-calling all in play. `agent.turn(...)` runs one assistant turn and hands back a `TurnRecord` saying what it did: the reply, the reasoning the model emitted but did not send, how many tool rounds it took and which tools it called how often, whether the reply had retrieved material to stand on, and the prompts actually put on the wire. The one-liner form needs nothing but settings and a question; pass a `chattree.PersistentForest` and the whole conversation is kept on disk in Raven's own format.
+  - Two defaults differ from the app on purpose. The network tools are **off** unless asked for, because a script's tool calls are real ones and nobody is watching. The automatic document search runs only when you supply a retriever.
+  - No callbacks: what the GUI receives as fifteen events, a script gets as the returned record.
+  - `agent.describe_turn(...)` builds the same record from a stored conversation, so a batch that saved its chats can be analyzed afterwards without hand-rolling a tree walk.
+
 *Constellation-wide*
 
 - **drag files straight in from the file manager.** Every GUI app now accepts a drop where it previously wanted the in-app file browser. What a drop means is whatever that app's open button already meant:
