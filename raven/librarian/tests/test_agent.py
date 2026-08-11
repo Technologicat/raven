@@ -179,15 +179,18 @@ class TestTurn:
         with pytest.raises(ValueError):
             agent.turn(llm_settings, "What is in this image?", staged_images=[staged])
 
-    def test_a_second_turn_continues_from_the_first_record_head(self, monkeypatch, llm_settings):
+    def test_a_second_turn_continues_from_the_first_record(self, monkeypatch, llm_settings):
+        # The record carries the datastore as well as the head, so a script that looks at the answer before
+        # deciding what to ask next can continue -- including from the one-liner form, whose datastore it
+        # never named and would otherwise have no way back to.
         replies = iter([make_invoke_result(content="First answer."),
                         make_invoke_result(content="Second answer.")])
         monkeypatch.setattr("raven.librarian.llmclient.invoke", lambda **kw: next(replies))
-        datastore = chattree.Forest()
 
-        first = agent.turn(llm_settings, "First question?", datastore=datastore)
-        second = agent.turn(llm_settings, "Second question?", datastore=datastore,
+        first = agent.turn(llm_settings, "First question?")
+        second = agent.turn(llm_settings, "Second question?", datastore=first.datastore,
                             head_node_id=first.head_node_id)
+        datastore = first.datastore
 
         assert first.reply == "First answer."
         assert second.reply == "Second answer."
@@ -197,6 +200,22 @@ class TestTurn:
         assert [message["role"] for message in chatutil.linearize_chat(datastore=datastore,
                                                                       node_id=second.head_node_id)] == \
             ["system", "assistant", "user", "assistant", "user", "assistant"]
+
+    def test_running_the_same_head_again_branches_rather_than_appends(self, monkeypatch, llm_settings):
+        # What the GUI calls reroll, and what a script sampling one turn several times needs: no user
+        # message, and a head that already has a reply under it. The chat is a tree, so the second answer
+        # is a sibling of the first and both survive.
+        replies = iter([make_invoke_result(content="One answer."),
+                        make_invoke_result(content="Another answer.")])
+        monkeypatch.setattr("raven.librarian.llmclient.invoke", lambda **kw: next(replies))
+
+        first = agent.turn(llm_settings, "Question?")
+        asked_at = first.datastore.get_parent(first.node_ids[0])  # the user's message
+        again = agent.turn(llm_settings, datastore=first.datastore, head_node_id=asked_at)
+
+        assert first.reply == "One answer."
+        assert again.reply == "Another answer."
+        assert set(first.datastore.get_children(asked_at)) == {first.head_node_id, again.head_node_id}
 
     def test_a_tool_round_is_one_round_and_its_calls_are_counted_by_name(self, monkeypatch, llm_settings):
         responses = iter([make_invoke_result(content="",
@@ -310,7 +329,7 @@ class TestTheSurfaceIsDeclared:
 
     def test_the_record_names_what_a_probe_asserts_on(self):
         fields = {field.name for field in dataclasses.fields(agent.TurnRecord)}
-        assert fields == {"head_node_id", "node_ids", "messages", "reply", "reasoning",
+        assert fields == {"datastore", "head_node_id", "node_ids", "messages", "reply", "reasoning",
                           "rounds", "tool_calls", "grounded", "prompts"}
 
     def test_the_record_is_frozen(self, llm_settings):

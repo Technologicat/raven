@@ -67,7 +67,18 @@ class TurnRecord:
 
     Fields:
 
+    `datastore`: The chat this turn happened in. Carried so the record is a complete handle on where the
+                 conversation now stands: `turn(..., datastore=record.datastore,
+                 head_node_id=record.head_node_id)` continues it, whether or not the caller was the one who
+                 built the datastore — the one-liner form builds its own, and without this there would be
+                 no way back to it.
+
     `head_node_id`: The chat node the turn ended on — pass it as the next turn's `head_node_id`.
+
+                    Any *other* node of the same datastore works there too, which is what makes this a
+                    branching chat rather than a transcript: continuing from a node this turn passed
+                    through leaves the branch just taken intact beside the new one, so a script can try
+                    several continuations of the same prefix and keep them all.
 
     `node_ids`: The nodes this turn added, oldest first, ending with `head_node_id`.
 
@@ -101,6 +112,7 @@ class TurnRecord:
                attachments are resolved — what a script asserting on "what was actually sent" needs.
                Empty when the record was reconstructed from a stored branch, which cannot know it.
     """
+    datastore: chattree.Forest
     head_node_id: str
     node_ids: tuple[str, ...]
     messages: tuple[dict, ...]
@@ -166,7 +178,8 @@ def describe_turn(datastore: chattree.Forest,
         reply = ""
     grounded = (payloads[-1].get("generation_metadata") or {}).get("grounded") if payloads else None
 
-    return TurnRecord(head_node_id=head_node_id,
+    return TurnRecord(datastore=datastore,
+                      head_node_id=head_node_id,
                       node_ids=tuple(node_ids),
                       messages=tuple(messages),
                       reply=reply,
@@ -196,12 +209,28 @@ def turn(llm_settings: env,
 
         record = agent.turn(llm_settings, "What is the Kelvin-7 stack's energy consumption?")
 
-    A multi-turn script threads the datastore and the head through:
+    A script that wants to look at the answer before deciding what to ask next continues from the record,
+    which carries both halves of where the conversation stands:
 
-        datastore = chattree.Forest()
+        record = agent.turn(llm_settings, "What is the Kelvin-7 stack's energy consumption?",
+                            retriever=retriever)
+        if not record.tool_calls:
+            record = agent.turn(llm_settings, "Please search the documents before answering.",
+                                datastore=record.datastore, head_node_id=record.head_node_id,
+                                retriever=retriever)
+
+    Branching works the same way, since any node of that datastore is a valid `head_node_id`: asking a
+    second question from `record.node_ids[0]` rather than from `record.head_node_id` grows a sibling branch
+    and leaves the first one intact, so several continuations of one prefix can be compared afterwards.
+
+    To keep the whole thing, build the datastore yourself and make it file-backed — that is also what
+    attaching anything requires:
+
+        datastore = chattree.PersistentForest(path)
         record = agent.turn(llm_settings, "First question", datastore=datastore, retriever=retriever)
         record = agent.turn(llm_settings, "Follow-up", datastore=datastore,
                             head_node_id=record.head_node_id, retriever=retriever)
+        datastore.save()
 
     `llm_settings`: From `llmclient.setup` (which asks the backend what it has) or `llmclient.configure`
                     (which is told). This is also where per-run overrides live — see `settings.formatters`.
