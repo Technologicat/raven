@@ -38,9 +38,10 @@ the runaway belongs to the *as-shipped* wording instead — three of four sample
 `closing-note` answers cleanly in 0 of 3. Treat the paragraph above as the 27B result it is.
 
 Raven ships one inject wording to a fleet, so the sweep that settles this has to run across it rather than
-on whichever model happens to be loaded: 35b-a3b on the workstation, 4B and 9B on the road. A wording that
-is clean on a 35B MoE and pathological on a 4B is exactly the case worth finding, and the 4B is the
-cheapest arm to run.
+on whichever model happens to be loaded: 35b-a3b, 27B, and 9B and 4B for smaller machines. The arms are set
+by what a user may plausibly run, not by which model we prefer - 27B is off *our* workstation because
+35b-a3b tested better, which is a preference and not a support boundary. A wording that is clean on a 35B
+MoE and pathological on a 4B is exactly the case worth finding, and the 4B is the cheapest arm to run.
 
 **Three samples per arm at T=0, not one.** Identical requests produced 2484, 30757 and 29684 characters of
 reasoning in the same run: greedy decoding is deterministic given identical numerics, and a GPU does not

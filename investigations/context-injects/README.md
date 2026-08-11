@@ -79,12 +79,17 @@ rejection was measured on Qwen3.6-27B, where `closing-note` was the variant burn
 T=0. On 35B-A3B it is clean and as-shipped is the one that burns. So the rejection rationale is
 model-specific, and it was never re-checked against the models actually in service.
 
-**Which is plural, and that is the real requirement here.** Raven runs a fleet, not a model: Qwen3.6-35b-a3b
-on the workstation when the eGPU is attached, Qwen3.5 at 4B and 9B on the road, with 27B present but retired
-in favour of 35b-a3b. An inject wording is shipped to all of them, so "which wording is best" is only
-answerable across the fleet — and a variant that is clean on a 35B MoE and pathological on a 4B is the
-failure mode this whole directory exists to catch. The 4B is also the cheapest arm to run, which makes
-skipping it the wrong economy.
+**Which is plural, and that is the real requirement here.** An inject wording ships to every model Raven
+supports, so "which wording is best" is only answerable across the supported set — and a variant that is
+clean on a 35B MoE and pathological on a 4B is the failure mode this whole directory exists to catch.
+
+The arms are therefore the tiers in `../../briefs/reference/model-lineup-autumn-2026.md`, which is the
+authority on what those are: Qwen3.5-4B, Qwen3.5-9B, and both 24 GB options, Qwen3.6-27B dense and
+Qwen3.6-35B-A3B. **Set the arms by what a user may plausibly run, not by what is loaded here.** The dense 27B
+suits hardware the MoE does not, so a user choosing it is an ordinary case; that we run 35b-a3b at this desk
+because it tested better is a preference, not a support boundary. A model quietly dropped from the sweep is
+a model the shipped wording is no longer known to work on. The 4B is also the cheapest arm, which makes
+skipping it the wrong economy twice over.
 
 Do not read the two tables against each other for anything finer. Between the 27B nine-sample runs and
 these, the model, the samplers and the surrounding prompt all changed; only the internal comparisons within
