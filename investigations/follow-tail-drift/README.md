@@ -127,24 +127,46 @@ back to the end, and it works. So there is no second defect here. There is one b
 That matters for where to look: the question is never "how do we get out of this state" but "how did we
 conclude the reader had scrolled when they had not".
 
-## Why the obvious signal is not available, and what is
+## There is no scroll event to consult, and the docstring already says so
 
-The app *does* maintain an authoritative "a human scrolled" counter, `_user_scroll_generation`, bumped by
-`_set_y_scroll(user_initiated=True)`. `should_follow_tail` does not consult it, and cannot be simply
-rewritten to: **a mouse wheel never reaches `_set_y_scroll`.** ImGui scrolls the panel itself, so the app
-never sees it. Inferring the reader's intent from position drift is the workaround for that blindness, and
-the false positives are what the workaround costs.
+`should_follow_tail` explains why it infers intent from position rather than from events: "of the three ways
+this panel moves - scrollbar drag, mouse wheel, navigation keys - the drag is handled inside ImGui and
+raises nothing we could hook". The wheel is the same. `_user_scroll_generation` is authoritative only for
+the third way, the one that goes through `_set_y_scroll`, so consulting it would miss both of the others.
 
-Two ways to get a real signal, and they compose:
+**Two ideas that do not survive contact with that**, recorded because they are the ones that suggest
+themselves:
 
-- **The wheel handler already exists.** `app.py` registers `add_mouse_wheel_handler` (and mouse-move, and
-  click) - currently only to stamp a timestamp for the idle throttle. Bumping the user-scroll signal there
-  as well would give the discriminator directly: drift with no wheel or click in the recent past is ours,
-  drift just after one is theirs. It over-attributes, since the handler is global to the viewport and fires
-  over any panel - which is the safe direction, because it fails toward honouring the reader.
-- **The position itself is a tell.** With the intent flag set, a position sitting exactly on an *earlier*
-  maximum means the content grew under us. A wheel scroll lands where the wheel left it, which has no
-  reason to be a previous maximum to the pixel - as 4816 was here.
+- *Bump the user-scroll signal from the input handlers `app.py` already registers.* Weaker than it looks,
+  though not dead. The handlers are viewport-global, but `guiutils.is_mouse_inside_widget` can narrow a
+  wheel event to the chat panel, which makes **the wheel case precise**: a wheel event with the pointer over
+  the panel is a reader scrolling it, and nothing else is. The drag is the hard half - it raises nothing to
+  hook at all, so it would have to be reconstructed from a click inside the panel plus subsequent motion,
+  and the mouse-move handler fires on any pointer motion anywhere. Worth having for the wheel; not a
+  complete answer on its own.
+- *Bias the ambiguous case toward the reader.* There is no such direction. Deciding "theirs" stops
+  following, which abandons a reader who is watching the stream; deciding "ours" keeps following, which
+  drags back a reader who scrolled away. Both are the reader. The test has to be accurate rather than
+  conservative, which is why this is worth diagnosing properly instead of tuning.
+
+## What is actually broken, in the docstring's own words
+
+The same docstring names this failure exactly:
+
+> The comparison is only as good as the record it compares against, which is why `scroll_view` waits for its
+> command to actually land rather than assuming it did. A command still in flight leaves the position
+> disagreeing with the record, which is indistinguishable here from the user having scrolled.
+
+That is the bug, and the mitigation does not reach the case: `scroll_view` waits for its own call to land,
+but scrolling is *animated*, so `SmoothScrolling` goes on writing a new commanded value every frame after
+`scroll_view` has returned. The record therefore runs ahead of the position by design, for as many frames as
+the decay lasts, and the animation slack that was meant to cover that has already faded to zero by the end
+of it (see above).
+
+So the record and the position are being compared at moments when they are *guaranteed* to disagree. A fix
+wants to compare the position against what the animation has actually had time to apply - its trajectory -
+rather than against its most recent write. The position sitting exactly on an earlier maximum, as 4816 was
+here, is the observable form of that: it is a value we wrote, not one a reader would land on.
 
 ## Why this is worth fixing before a demo
 
