@@ -243,6 +243,27 @@ Two things the record must cover that are awkward today:
 **The two parts are not layers of each other**: A must not talk to a backend at all, and B is useless without
 one. A surface offering only B would leave the prompt-shape probes still reaching through the private door.
 
+### What queues behind Part B (2026-08-11)
+
+Three items, and **only the first is ordered by a dependency** — the rest is a judgement about value, stated
+as such so that a later reader can overrule it without having to work out whether something would break.
+
+1. **`perform_throwaway_task` moves to `agent` and is renamed.** Genuinely blocked: whether it *widens* into
+   the surface or *dissolves* into a one-liner over it depends on the shape Part B lands, and the name
+   should follow what it turns out to be. See the section on it below.
+2. **The "is a model loaded?" check.** Designed here and not built; blocked by nothing. Second because it is
+   small and because a wrong answer is visible to a user at the worst moment — the first message of a
+   session, against a backend with nothing loaded.
+3. **The variant sweep across the model fleet.** Blocked by nothing either, and needs no code: four arms,
+   three or more samples each, per
+   `investigations/context-injects/README.md`. Last because it costs backend time rather than attention, and
+   because it can run while something else is being written. It is what turns the two anecdotes recorded
+   there into a result.
+
+Also outstanding, and outside this brief: the chat view's follow-tail bug, diagnosed in
+`investigations/follow-tail-drift/`. Demo-critical in its own right — it makes a streaming reply scroll out
+of view, which is exactly when someone is watching.
+
 ## Adopted 2026-08-10: "is a model actually loaded?", and the reconnect it implies
 
 Came out of the `TODO_DEFERRED` triage — *"Librarian doesn't check that the LLM backend has a model
