@@ -277,6 +277,12 @@ def format_loaded_model(model: str, context_length: int) -> str:
 
     `context_length`: The loaded context window in tokens, i.e. `settings.context_length`.
     """
+    # TODO: On LM Studio this says the context size twice, in two units - its model label is rich
+    # TODO: ("qwen3.6-35b-a3b, IQ4_NL_XL, 128 Ki context"), so the sentence that follows repeats it in
+    # TODO: tokens. ooba's label is a bare GGUF filename with no size in it, which is why the sentence is
+    # TODO: there at all. A backend-agnostic fix would have to either parse the label or stop composing it
+    # TODO: in `_resolve_model_info` and carry the parts separately; neither is worth doing before something
+    # TODO: needs the parts. Harmless meanwhile - the two agree.
     return f'[System information: The loaded model is "{model}". The length of its context window is {context_length} tokens.]'
 
 def format_time_now() -> str:

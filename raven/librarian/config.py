@@ -747,6 +747,25 @@ def setup_character_card_juha(template_vars: env) -> str:
 # Raven states both in the system message on every turn instead, next to the date, which is out for exactly
 # the same reason; see `chatutil.format_loaded_model` and `scaffold.build_system_injects`.
 #
+# TODO: The character-agnostic parts of this belong in the system prompt, not in the character card.
+# TODO: This function is called from the character cards below, so everything it returns is stored as
+# TODO: *character* text - but "the knowledge cutoff is around 2024", "you are running on a private, local
+# TODO: system", the memory limits and the two data sources hold whoever is answering. That is the split
+# TODO: the system prompt exists for.
+# TODO:
+# TODO: Two things make it more than a move, which is why it is a marker rather than a change:
+# TODO:
+# TODO:   - The prose cannot go across as it stands. It is three kinds of thing at once - facts about the
+# TODO:     deployment, conversational manner ("be polite", "use Markdown", "report your train of thought"),
+# TODO:     and the two backend facts already moved out - and only the first is character-agnostic.
+# TODO:   - A turn taken with `use_character_card=False` currently gets no system message at all, because
+# TODO:     `setup_system_prompt` ships empty. Filling that slot with the manner instructions would hand
+# TODO:     them back to the batch extraction tools, whose output is parsed rather than read, and which
+# TODO:     withhold the character precisely to be rid of them.
+# TODO:
+# TODO: So "character-agnostic" and "wanted on every turn" turn out to be different questions, and the
+# TODO: two-way split cannot express both. Rewrite the prose along that seam first.
+#
 def setup_interaction_style(template_vars: env) -> str:
     return textwrap.dedent("""
     **About the system**
