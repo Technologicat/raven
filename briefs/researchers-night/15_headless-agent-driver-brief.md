@@ -100,6 +100,17 @@ afterwards. Keep the wall where it works; do not propagate it to callers it cann
 
 ## Part 0 — lazy `api.initialize` in `llmclient`
 
+> **Landed 2026-08-10.** `api.initialize` moved out of module scope into `_client_api()`, called on first use
+> by the two network tool wrappers. The four apps that need the client stack initialize it explicitly
+> (Librarian, minichat, `pdf2bib`, and Visualizer in its LLM keyword mode), which is the honest form: an app
+> declares what it will use. The description below is of the state *before* that, and its `llmclient.py:81`
+> pointer no longer resolves.
+>
+> The dividend was larger than the item: importing `llmclient` no longer drags in `spacy`, `transformers` or
+> `av`, so `test_scaffold` runs in CI instead of being skipped there, and `llmclient.configure` can be called
+> from a test. `raven/librarian/tests/conftest.py` still carries a comment claiming the opposite — it was
+> written when that was true, and its fixture could now use the real `configure`.
+
 The one prerequisite, and it is import-side rather than design-side.
 
 `llmclient.py:81` calls `api.initialize(...)` at module top, so importing `llmclient` both requires the full
@@ -192,6 +203,20 @@ session (`tools_are_spent`) and its callers survived only because the parameter 
 change may not be so kind. Declaring it, naming it, and documenting the returned shape *is* most of Part A.
 
 ## Part B — run the turn and tell me what happened
+
+> **Not started as of 2026-08-11, and it is what comes next.** Both of the "awkward today" items below have
+> since been dealt with elsewhere, so what is left is the record itself:
+>
+> - *Per-run overrides* landed as `settings.formatters` (see the decisions section). `rag_live_corpus` no
+>   longer monkeypatches; it assigns to its own settings object.
+> - *The prompt* is reachable without a callback: `scaffold.build_turn_prompt` returns the assembled history
+>   and `llmclient.serialize_history_for_wire` gives its wire form, both public since Part A. The record
+>   should carry it, but no longer has to catch it through `on_prompt_ready`.
+>
+> So the work is: lift `rag_live_corpus`'s branch walk into a frozen dataclass (decision 2), returned by the
+> turn. Entry point for reading it: `briefs/librarian-extension/manual_tests/rag_live_corpus.py`, its
+> `tool_calls` dict and `rounds` counter, which are the copy that gets the round-versus-call distinction
+> right.
 
 **A turn returns what happened, not a node id.** Every probe re-implements the same branch walk afterwards:
 count the tool nodes by name, count the *rounds* (an assistant message asking for tools, however many calls it
