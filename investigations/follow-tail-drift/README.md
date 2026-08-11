@@ -82,11 +82,11 @@ measurement of 43 samples in 857 reading as user scrolls at 51-78 px drift, whic
 was introduced to absorb. What is left is the tail of the same problem, where the absorber has already
 faded out.
 
-## The failure latches, which is the part that matters
+## One bad sample costs the whole message
 
-A second occurrence in the same session settled this, and it is the more important finding: **the refusal is
-an absorbing state.** Two runs are distinguishable by the value they froze at - `4894` (which recovered when
-the message finalized) and `4863` (which never did).
+A second occurrence in the same session showed what a single false refusal actually costs: **it persists for
+the rest of the reply.** Two runs are distinguishable by the value they froze at - `4894` (which recovered
+when the message finalized) and `4863` (which never did).
 
 Across the four seconds of the second run, `settled_gap` climbs monotonically - 52, 78, 104, … 780 px, in
 steps of 26, one wrapped line per streamed update - while **the drift stays fixed at 47 px**. That pairing is
@@ -102,8 +102,10 @@ Both terms of `follow = at_end or (commanded_was_to_end and undisturbed)` are th
 rest of the message. The only exit is the reader scrolling to the end by hand, which is exactly the recovery
 that was observed the first time and absent the second.
 
-That reframes the severity. It is not a blip that costs a frame; it is a state the view cannot leave, and
-whether the message end rescues it is a matter of which sample the finalize path happens to take.
+That reframes the severity rather than the diagnosis. A false refusal is not a lost frame: it costs every
+remaining line of the reply, and whether the message end rescues it is a matter of which sample the finalize
+path happens to take. The persistence itself is correct behaviour - see below - so the whole cost lands on
+getting the entry right.
 
 The moment of capture, with the numbers that name every term:
 
@@ -115,17 +117,34 @@ The moment of capture, with the numbers that name every term:
 | drift | \|4816 − 4863\| = **47** against a 40 px tolerance |
 | animation slack | **0.0**, the animation having all but converged (5 px short of its target) |
 
-## Two fixes, and they are not alternatives
+## The latch is the feature; only the entry is the bug
 
-- **Stop it latching.** Whatever else is true, a state that cannot be left is wrong. Re-sampling the
-  commanded position while not following, or letting `at_end` be judged against the maximum *at the time of
-  the last command* rather than the current one, would let it recover on its own.
-- **Stop it triggering.** The drift is the residue of our own animation, so the expectation is what is
-  wrong: with the intent flag set, a position sitting exactly on an *earlier* maximum means the content grew
-  under us, not that somebody scrolled.
+Considered and rejected (Juha, 2026-08-11): making the refusal self-recovering. Not following **must**
+persist - a reader who scrolls up to re-read something mid-reply has to stay where they put themselves, and
+that is the entire intention this machinery serves. The exit is the same gesture in both cases, scrolling
+back to the end, and it works. So there is no second defect here. There is one bug, entered spuriously.
 
-The first is the safety net and the second is the cause. Doing only the second leaves a latch behind for the
-next unanticipated trigger to find.
+That matters for where to look: the question is never "how do we get out of this state" but "how did we
+conclude the reader had scrolled when they had not".
+
+## Why the obvious signal is not available, and what is
+
+The app *does* maintain an authoritative "a human scrolled" counter, `_user_scroll_generation`, bumped by
+`_set_y_scroll(user_initiated=True)`. `should_follow_tail` does not consult it, and cannot be simply
+rewritten to: **a mouse wheel never reaches `_set_y_scroll`.** ImGui scrolls the panel itself, so the app
+never sees it. Inferring the reader's intent from position drift is the workaround for that blindness, and
+the false positives are what the workaround costs.
+
+Two ways to get a real signal, and they compose:
+
+- **The wheel handler already exists.** `app.py` registers `add_mouse_wheel_handler` (and mouse-move, and
+  click) - currently only to stamp a timestamp for the idle throttle. Bumping the user-scroll signal there
+  as well would give the discriminator directly: drift with no wheel or click in the recent past is ours,
+  drift just after one is theirs. It over-attributes, since the handler is global to the viewport and fires
+  over any panel - which is the safe direction, because it fails toward honouring the reader.
+- **The position itself is a tell.** With the intent flag set, a position sitting exactly on an *earlier*
+  maximum means the content grew under us. A wheel scroll lands where the wheel left it, which has no
+  reason to be a previous maximum to the pixel - as 4816 was here.
 
 ## Why this is worth fixing before a demo
 
