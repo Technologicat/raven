@@ -462,16 +462,15 @@ genuinely a one-liner once the surface exists, and that is not knowable until it
 Either way the ten call sites change shape, since they currently unpack `Tuple[str, str]` and the surface
 returns a record. Two files, first-party, greppable.
 
-**And the name should not survive the move.** "Throwaway" describes what becomes of the chat state, which is
-a distinction only an app that *has* a chat can draw; a script never had one to throw away, so the word names
-an absence the caller never experienced. "Perform a task" then says nothing a reader did not already know
-from it being an LLM call.
+**The name is worth revisiting in the move, but not for the reason it might look.** "Throwaway" is doing a
+real job: it says the invocation is one-off, which is the property a caller most needs to know. The weak
+half is "perform a task", which says nothing that "it is an LLM call" did not already say. So the target is
+a shorter name that keeps the one-off sense, rather than a rewrite that discards it.
 
-Proposal: **`agent.ask`**. It is the plain verb for what happens — you ask, you get an answer — and it pairs
-with whatever Part B's full-loop entry point ends up called (`agent.turn` reads well against it). The two
-then differ in the way they actually differ: `ask` is one shot with no tools and no history, `turn` is the
-agent loop with a record of what it did. Not settled; the alternative worth weighing is a name carrying the
-"one shot" explicitly, at the cost of length.
+Direction (not settled): a single descriptive word, paired with whatever Part B's full-loop entry point is
+called, so the two read as the contrast they are — one shot with no tools and no history, versus the agent
+loop with a record of what it did. `agent.ask` against `agent.turn` is one such pair, and its weakness is
+exactly the one above in reverse: `ask` is short and plain but carries no hint that it is one-off.
 
 ## What this brief must settle before implementation
 

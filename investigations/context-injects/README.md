@@ -77,12 +77,20 @@ separate cleanly — roughly 2.5k when it answers, roughly 30k when it does not,
 **This inverts the reason `closing-note` was rejected — on a different model, which is the catch.** That
 rejection was measured on Qwen3.6-27B, where `closing-note` was the variant burning 29000 characters at
 T=0. On 35B-A3B it is clean and as-shipped is the one that burns. So the rejection rationale is
-model-specific and was never re-checked against the model now in use.
+model-specific, and it was never re-checked against the models actually in service.
+
+**Which is plural, and that is the real requirement here.** Raven runs a fleet, not a model: Qwen3.6-35b-a3b
+on the workstation when the eGPU is attached, Qwen3.5 at 4B and 9B on the road, with 27B present but retired
+in favour of 35b-a3b. An inject wording is shipped to all of them, so "which wording is best" is only
+answerable across the fleet — and a variant that is clean on a 35B MoE and pathological on a 4B is the
+failure mode this whole directory exists to catch. The 4B is also the cheapest arm to run, which makes
+skipping it the wrong economy.
 
 Do not read the two tables against each other for anything finer. Between the 27B nine-sample runs and
 these, the model, the samplers and the surrounding prompt all changed; only the internal comparisons within
-each table are controlled. What is warranted is a re-run of the full variant sweep on the current model
-before the shipped wording is defended on the strength of the old numbers.
+each table are controlled. What is warranted before the shipped wording is defended on the strength of the
+old numbers: the full variant sweep, three or more samples per arm, across the fleet rather than on one
+member of it.
 
 Raw output: `absent_fact-2026-08-11.txt` (`.txt` rather than `.log`, which `.gitignore` excludes).
 
