@@ -394,7 +394,8 @@ def build_turn_prompt(llm_settings: env,
                       docs_query: Optional[str],
                       docs_matches: List[Dict],
                       tool_context: env,
-                      tools_are_spent: bool = False) -> List[Dict]:
+                      tools_are_spent: bool = False,
+                      tools_enabled: bool = True) -> List[Dict]:
     """Return the message history for the AI's turn: `history` with the temporary injects added.
 
     These are not meant to be persistent, so we don't even add them to the datastore,
@@ -435,6 +436,12 @@ def build_turn_prompt(llm_settings: env,
 
     `tool_context`: The turn's request context (`make_tool_context`). Read for `grounded`, which is where
                     retrieval results and tool results report whether they actually provided material.
+
+    `tools_are_spent`: Whether this turn has used its tool-call budget; adds the notice saying so.
+
+    `tools_enabled`: Whether the turn offers the model any tools. `False` also withholds the clock, which is
+                     delivered as a synthetic call to `get_current_time` — see the comment at that inject
+                     for why the two travel together in both directions.
     """
     # Work on our own list from here on. Everything below inserts into it, and `_add_to_system_message`
     # replaces its leading element; doing that to the caller's list is what this function used to do, and
@@ -457,11 +464,19 @@ def build_turn_prompt(llm_settings: env,
     formatters = llm_settings.formatters
 
     # Data-like injects -> synthetic tool calls, placed just before the user's latest message.
-    data_injects = _synthetic_tool_exchange(llm_settings=llm_settings,
-                                            call_id="raven_clock",
-                                            function_name="get_current_time",
-                                            arguments={},
-                                            result_text=formatters.time_now())
+    #
+    # The clock goes in only when tools are on offer, and the two are tied both ways. Normally
+    # `get_current_time` is offered whatever the group switches say, *because* the time is injected as a
+    # call to it and a history calling an undeclared tool is a shape models handle badly. Withdraw every
+    # tool and the same reasoning runs backwards: staging a call to a tool that now does not exist is the
+    # confusing shape rather than the safe one. A one-shot scripted job also rarely wants the time at all.
+    data_injects = []
+    if tools_enabled:
+        data_injects.extend(_synthetic_tool_exchange(llm_settings=llm_settings,
+                                                     call_id="raven_clock",
+                                                     function_name="get_current_time",
+                                                     arguments={},
+                                                     result_text=formatters.time_now()))
     # Order is load-bearing: the earlier conversation's documents, then this turn's search results. The two
     # lists look alike, and whichever sits closest to the user's message reads as the answer to it — so with
     # the consulted list last, a model could take a document it read three turns ago for something the
@@ -772,7 +787,8 @@ def ai_turn(llm_settings: env,
             on_call_lowlevel_done: Optional[Callable],
             on_tool_done: Optional[Callable],
             on_tools_done: Optional[Callable],
-            tool_context: Optional[env] = None) -> str:
+            tool_context: Optional[env] = None,
+            tools_enabled: bool = True) -> str:
     """AI's turn: LLM generation interleaved with tool responses, until there are no tool calls in the LLM's latest reply.
 
     This continues the current branch with as many chat nodes as needed: one for each LLM response, and one for each tool call.
@@ -952,6 +968,27 @@ def ai_turn(llm_settings: env,
                     handing control back here, and its result must keep counting toward this turn's
                     accumulated state rather than being forgotten at the handover.
 
+    `tools_enabled`: Whether to offer the LLM any tools at all. `True` (default) is the normal agent loop,
+                     with `internet_enabled` and `docs_enabled` deciding which groups are on offer.
+
+                     `False` withdraws every tool, which those two switches cannot express between them:
+                     `get_current_time` answers to neither, so it is offered even with both off. A turn with
+                     no tools cannot ask for one, so the agent loop runs exactly once — which is what a
+                     one-shot scripted completion wants.
+
+                     A blanket switch like this was removed from here once, when the user-facing "Tools"
+                     toggle was replaced by the two group switches — on the grounds that a GUI user is never
+                     served by one, since it overruled the switch named after the thing it overruled. That
+                     reasoning is about a *toggle a person operates*, and it still holds: nothing here is
+                     reachable from the GUI. What this parameter says is what kind of call the caller is
+                     making, which is a thing only a caller can know.
+
+                     Deliberately a boolean rather than the tool-name list the old marker wished for. A list
+                     would decide the same question as the group switches by a second route, and two
+                     mechanisms disagreeing about which tools are on offer is the incoherence those switches
+                     were introduced to end. Spelled as `llmclient.invoke`'s parameter of the same name and
+                     meaning, which it feeds.
+
     Returns the new HEAD node ID (i.e. the last chat node that was just added).
     """
     # Sanity check
@@ -1013,7 +1050,11 @@ def ai_turn(llm_settings: env,
     # `None` means every tool, so an empty tuple is the only "nothing on offer" case. There is none today —
     # `get_current_time` answers to neither switch — but the budget machinery below asks "are there tools at
     # all", and asking the list is the answer that stays true if the ungated group ever empties.
-    any_tools_available = (maybe_tool_names is None) or bool(maybe_tool_names)
+    #
+    # `tools_enabled` sits above both group switches rather than beside them, which is why it can say what
+    # they cannot: with documents and internet both off, `get_current_time` is still offered, so there is no
+    # combination of the two that means "no tools at all".
+    any_tools_available = tools_enabled and ((maybe_tool_names is None) or bool(maybe_tool_names))
 
     continue_this_message = continue_  # we need to continue at most the first message in the agent loop
     completed_tool_rounds = 0  # rounds in which tools actually ran
@@ -1049,7 +1090,8 @@ def ai_turn(llm_settings: env,
                                             # Told the moment the budget runs out, not the moment the tools go
                                             # away — the point of the notice is to make the doomed call
                                             # unnecessary, which is too late once the model has already tried it.
-                                            tools_are_spent=(any_tools_available and budget_spent))
+                                            tools_are_spent=(any_tools_available and budget_spent),
+                                            tools_enabled=tools_enabled)
 
         if on_llm_start is not None:
             on_llm_start()

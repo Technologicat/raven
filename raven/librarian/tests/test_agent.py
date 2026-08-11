@@ -361,6 +361,61 @@ class TestTurn:
         assert set(llm_settings.network_tool_names).isdisjoint(default_offer)
         assert set(llm_settings.network_tool_names).issubset(explicit_offer)
 
+    def test_no_tools_at_all_is_expressible(self, monkeypatch, llm_settings):
+        # The one-shot shape: a scripted text task where the model does a job rather than investigating.
+        # The two group switches cannot say this between them, which is the whole reason for the third.
+        offered = []
+
+        def fake_invoke(**kw):
+            offered.append((kw["tools_enabled"], kw["tool_names"]))
+            return make_invoke_result(content="Extracted keywords: raven, corvid.")
+        monkeypatch.setattr("raven.librarian.llmclient.invoke", fake_invoke)
+
+        agent.turn(llm_settings, "Extract the keywords.", tools_enabled=False)
+        agent.turn(llm_settings, "Extract the keywords.", internet_enabled=False, docs_enabled=False)
+
+        without_tools, both_switches_off = offered
+        assert without_tools[0] is False
+        # ...whereas switching both groups off still leaves the ungated clock on offer, which is exactly
+        # what a one-shot caller must be able to withdraw.
+        assert both_switches_off[0] is True
+        assert "get_current_time" in both_switches_off[1]
+
+    def test_a_one_shot_turn_stages_no_call_to_a_tool_it_did_not_declare(self, monkeypatch, llm_settings):
+        # The clock arrives as a synthetic `get_current_time` exchange, which is safe only while that tool
+        # is actually on offer. Withdraw every tool and the staged call refers to something that does not
+        # exist -- a shape models handle badly, and a scripted job rarely wants the time anyway.
+        prompts = []
+
+        def fake_invoke(**kw):
+            prompts.append(llmclient.serialize_history_for_wire(kw["settings"], kw["history"],
+                                                                continue_=kw["continue_"]))
+            return make_invoke_result(content="Keywords: raven, corvid.")
+        monkeypatch.setattr("raven.librarian.llmclient.invoke", fake_invoke)
+
+        agent.turn(llm_settings, "Extract the keywords.", tools_enabled=False)
+        agent.turn(llm_settings, "Extract the keywords.")
+
+        one_shot, ordinary = prompts
+        assert not any(message.get("tool_calls") for message in one_shot)
+        # System prompt, the character's greeting, the instruction -- the shape a throwaway task has always
+        # had, now with nothing staged in front of the user's message.
+        assert [message["role"] for message in one_shot] == ["system", "assistant", "user"]
+        # ...where an ordinary turn stages it, because there the tool is real.
+        assert any(message.get("tool_calls") for message in ordinary)
+
+    def test_progress_is_reported_while_the_model_streams(self, monkeypatch, llm_settings):
+        # The single callback this surface takes. A batch of several hundred documents on a local model is
+        # otherwise an hour of silence, which reads exactly like a hang.
+        seen = []
+        monkeypatch.setattr("raven.librarian.llmclient.invoke",
+                            lambda **kw: seen.append(kw["on_progress"]) or make_invoke_result(content="Hi."))
+
+        handler = lambda event: None  # noqa: E731 -- a sentinel to identify, not to call
+        agent.turn(llm_settings, "Hello?", on_progress=handler)
+
+        assert seen == [handler]
+
     def test_the_automatic_search_uses_the_users_own_words_by_default(self, monkeypatch, llm_settings):
         monkeypatch.setattr("raven.librarian.llmclient.invoke",
                             lambda **kw: make_invoke_result(content="Hi."))

@@ -416,8 +416,45 @@ as such so that a later reader can overrule it without having to work out whethe
      reassemble an inline `<think>…</think>` from a time when reasoning was not separated. The record
      carries `reply` and `reasoning` as separate fields, which is the same information in better shape.
 
-   So: add a no-tools switch, decide the progress question, and the ten call sites become
-   `agent.<name>(...)` returning a record. See the section on it below for the naming.
+   **Both landed 2026-08-11**, and the conversion of the ten call sites is what remains — held back for the
+   reason below rather than for effort.
+
+   - `tools_enabled` on `scaffold.ai_turn` and `agent.turn`, sitting *above* the two group switches. A
+     blanket switch was removed from `ai_turn` once, when the user-facing "Tools" toggle became the two
+     group switches; the grounds were that a GUI user is never served by one, and that still holds, since
+     nothing here is reachable from the GUI. It is a boolean rather than the tool-name list the old marker
+     wished for, because a list would decide the same question as the group switches by a second route.
+   - `on_progress` on `agent.turn`, the one callback the surface takes. Streaming progress is the single
+     thing a record cannot carry, and an hour of silence on a local model is indistinguishable from a hang.
+   - **And a bug the switch would otherwise have introduced** (Juha): the clock is delivered as a synthetic
+     call to `get_current_time`, unconditionally. With every tool withdrawn, that stages a call to a tool
+     the request does not declare — the shape models handle badly, and the reason the clock tool is normally
+     offered whatever the switches say. So `tools_enabled=False` withholds the clock too. A scripted job
+     rarely wants the time in any case.
+
+#### Before the ten call sites move: what the same-system-prompt intuition is worth today
+
+`perform_throwaway_task` runs its task under Librarian's own system prompt, character card and greeting,
+and that is deliberate: **it was measured to improve results on the models current in 2025** (Juha). The
+question the migration raises is which parts of that still earn their place, because the bundle has aged
+unevenly:
+
+- **A real system prompt rather than a stub** — still right, and Part A found the same thing from the other
+  side: a probe forging `system_prompt="You are a helpful assistant."` measures a replica of Raven.
+- **The character card and persona** — being the assistant character adds nothing to keyword extraction,
+  and its conversational styling is the opposite of what a parsed output wants.
+- **The greeting node**, which is what makes the exchange a chat at all.
+- **The per-turn injects**, which *did not exist in this form* when the choice was made. `date_now` is
+  harmless; **`reminder_to_write_conversationally` is the sharp one** — it instructs chat prose in a task
+  whose output `raven-pdf2bib` parses. This is the real delta between the two paths now that the clock is
+  handled, and it is why the conversion is not a drop-in.
+
+**Settle it by measurement rather than by intuition — anyone's.** What made the 2025 choice good was that
+it was measured, and the apparatus for redoing it is exactly what this brief just built: `agent.turn` with
+`tools_enabled=False`, a `TurnRecord` per document, and a stash of real PDFs. Four arms — full injects, no
+conversational reminder, no injects, and a bare prompt — scored on whether the extracted BibTeX parses and
+is correct. Until that runs, converting the ten call sites would change what a working pipeline sends on
+the strength of a guess about which half of a year-old finding survived.
 2. **The "is a model loaded?" check.** Blocked by nothing, and lopsided: the *check* is cheap — the state is
    already in the `/api/v0/models` response `detect_backend_flavor` fetches and discards — while **the pill
    that shows it is a UX problem**, and that is the half that will take the time. The sketch below settles

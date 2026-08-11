@@ -6,8 +6,10 @@ walk it then has to write itself: count the tool nodes by name, count the rounds
 never reached `content`, find the reply. That walk is the actual result of a turn, and every probe that has
 needed it has written it out longhand, differently.
 
-So this module is the same loop with the events turned inside out: no callbacks at all, and a `TurnRecord`
-describing what the turn did. The loop itself is not reimplemented — `turn` calls `ai_turn` and reads the
+So this module is the same loop with the events turned inside out: a `TurnRecord` describing what the turn
+did, in place of the fifteen callbacks a frontend receives. The one that survives as a callback is
+`on_progress`, because streaming progress is the single thing a record cannot carry — it is over by the
+time the record exists. The loop itself is not reimplemented — `turn` calls `ai_turn` and reads the
 branch afterwards, which is what makes it the same behaviour rather than a replica of it.
 
 Vocabulary, because hand-rolled walks get this wrong: a **round** is one assistant message asking for tools,
@@ -53,7 +55,7 @@ logger = logging.getLogger(__name__)
 
 import dataclasses
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING
 
 from unpythonic import sym
@@ -228,8 +230,10 @@ def turn(llm_settings: env,
          datastore: chattree.Forest | None = None,
          head_node_id: str | None = None,
          retriever: "hybridir.HybridIR | None" = None,
+         tools_enabled: bool = True,
          internet_enabled: bool = False,
          docs_enabled: bool = True,
+         on_progress: Callable | None = None,
          docs_query: str | None | sym = from_user_message,
          docs_num_results: int | None = None,
          continue_: bool = False,
@@ -343,6 +347,14 @@ def turn(llm_settings: env,
                  measured). `None` means no documents: no automatic search, and the document tools are not
                  offered.
 
+    `tools_enabled`: Whether to offer any tools at all. `False` makes this a one-shot completion: with no
+                     tools to ask for, the agent loop runs exactly once. That is the shape a scripted
+                     text-processing task wants — extract these keywords, summarize this abstract — where
+                     the model is doing a job rather than conducting an investigation.
+
+                     The two switches below cannot express it between them, since `get_current_time` answers
+                     to neither and is offered even with both off.
+
     `internet_enabled`: Whether `websearch` and `webfetch` are offered. **`False` by default**, unlike the
                         apps — a run with tools enabled performs *real* calls, and a probe that reaches the
                         network without having asked to is the more expensive mistake.
@@ -354,6 +366,19 @@ def turn(llm_settings: env,
                   there is a `retriever`, which is what the apps do. `None` runs no automatic search while
                   still offering the document tools — the shape a continuation turn has, and the control
                   arm for measuring what the automatic search is worth.
+
+    `on_progress`: Called while the model streams, with a typed event — see `llmclient.invoke`'s
+                   `on_progress`, which this becomes. `None` (default) is silence.
+
+                   **The one callback this surface takes, and the exception is principled rather than
+                   grudging.** Every other event a frontend receives is in the returned record, which is
+                   strictly better for a script: it arrives complete and can be asserted on. Progress is the
+                   one thing that cannot work that way, because it is over by the time the record exists.
+                   A batch of several hundred documents on a local model is an hour of silence otherwise,
+                   which is indistinguishable from a hang.
+
+                   `llmclient.make_console_progress_handler` is the ready-made one for a CLI, and taking a
+                   different symbol per stage is what makes a long run's output readable.
 
     `docs_num_results`: How many matches the automatic search returns, at most. `None` takes the default.
 
@@ -403,6 +428,7 @@ def turn(llm_settings: env,
                                      datastore=datastore,
                                      retriever=retriever,
                                      head_node_id=head_node_id,
+                                     tools_enabled=tools_enabled,
                                      internet_enabled=internet_enabled,
                                      continue_=continue_,
                                      docs_enabled=docs_enabled,
@@ -411,7 +437,7 @@ def turn(llm_settings: env,
                                      markup=markup,
                                      on_docs_start=None, on_docs_done=None,
                                      on_prompt_ready=prompts.append,
-                                     on_llm_start=None, on_llm_progress=None, on_llm_done=None,
+                                     on_llm_start=None, on_llm_progress=on_progress, on_llm_done=None,
                                      on_tools_start=None,
                                      on_call_lowlevel_start=None, on_call_lowlevel_done=None,
                                      on_tool_done=None, on_tools_done=None)
