@@ -7,6 +7,7 @@ This module is shared between `minichat` (command-line app) and `app` (Raven-lib
 
 __all__ = ["sidecar_refs_in_payload",
            "load", "save",
+           "refresh_system_prompt",
            "backfill_sidecar_metadata"]
 
 import logging
@@ -122,12 +123,16 @@ def _get_system_prompt_node_id(datastore: chattree.Forest) -> str:
     logger.info(f"_get_system_prompt_node_id: System prompt node ID is '{root_node_ids[0]}'.")
     return root_node_ids[0]
 
-def _refresh_system_prompt(llm_settings: env,
-                           datastore: chattree.Forest,
-                           state: Dict) -> None:
+def refresh_system_prompt(llm_settings: env,
+                          datastore: chattree.Forest,
+                          state: Dict) -> None:
     """Refresh the system prompt in the datastore (to the one currently produced by `llmclient`).
 
     A new revision is created on the system prompt node, and the previous revision is deleted.
+
+    `load` calls this, and so does a caller that has just changed what `llm_settings` says — notably
+    `llmclient.reconnect`, after which the stored card names a model that is no longer the one loaded, and
+    states a context length that was a default standing in for one.
 
     NOTE: This is an evil mutating function that writes to `datastore`. The write happens in-memory;
     if `datastore` is a `PersistentForest`, it persists the changes at app exit.
@@ -162,7 +167,7 @@ def _refresh_greeting(llm_settings: env,
     NOTE: This is an evil mutating function that updates `state` (and possibly writes to `datastore`).
 
     NOTE: This uses `state["system_prompt_node_id"]`, so that needs to be up to date first.
-          The app state loader calls `_refresh_system_prompt` first, ensuring proper initialization.
+          The app state loader calls `refresh_system_prompt` first, ensuring proper initialization.
 
     `llm_settings`: LLM client settings; this is the return value of `llmclient.setup`.
 
@@ -340,11 +345,11 @@ def load(llm_settings: env,
     #     - Otherwise a new node is created with the configured AI greeting text (and due to OAI-compatible chatlog format, starting the message content with the AI character name)
     #     - Refreshing the AI greeting sets `state["new_chat_HEAD"]` (always to a valid node, so we don't need to validate it here).
     #
-    _refresh_system_prompt(llm_settings,
-                           datastore,
-                           state)
+    refresh_system_prompt(llm_settings,
+                          datastore,
+                          state)
 
-    # Migrate the datastore to the current format BEFORE anything reads message content. `_refresh_system_prompt`
+    # Migrate the datastore to the current format BEFORE anything reads message content. `refresh_system_prompt`
     # above only overwrites the system prompt node (it does not read content), and it sets
     # `state["system_prompt_node_id"]`, which `upgrade_datastore` needs. `_refresh_greeting` below, however,
     # compares stored greeting content via `chatutil.content_to_text`, which assumes the content-parts format;

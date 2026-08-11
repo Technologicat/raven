@@ -3,7 +3,7 @@
 __all__ = ["format_message_number",
            "format_persona",
            "format_message_heading",
-           "format_date_now", "format_time_now",
+           "format_date_now", "format_loaded_model", "format_time_now",
            "format_chatlog_datetime_now",
            "format_message_text_for_export",
            "format_disclosure_manifest",
@@ -14,7 +14,7 @@ __all__ = ["format_message_number",
            "format_docs_match", "format_docs_matches",
            "document_label", "excerpt", "format_consulted_documents",
 
-           "default_formatters",  # the eight above that the model reads, as a namespace for `settings`
+           "default_formatters",  # the nine above that the model reads, as a namespace for `settings`
 
            "make_timestamp",
            "text_content_part",
@@ -261,6 +261,23 @@ def format_date_now() -> str:
     """
     weekday, isodate, isotime = _format_isodatetime(datetime.datetime.now())
     return f"[System information: Today is {weekday}, {isodate} (in ISO format).]"
+
+def format_loaded_model(model: str, context_length: int) -> str:
+    """Return the text content of a dynamic system message stating which model is loaded, and how much
+    context it has.
+
+    This is for a dynamic injection, and it is one for the same reason the date is. Both are facts that were
+    true when the app started and need not be true now: the user can load a different model in the backend
+    without restarting anything, and a reconnect after the backend was down replaces a placeholder identity
+    and a defaulted context length with real ones. Written into the configured prompt text - which is built
+    once, at app start, and stored in the chat datastore as the message the chat is rooted at - either fact
+    becomes a confident falsehood the model has no way to question.
+
+    `model`: The human-facing model identity, i.e. `settings.model`.
+
+    `context_length`: The loaded context window in tokens, i.e. `settings.context_length`.
+    """
+    return f'[System information: The loaded model is "{model}". The length of its context window is {context_length} tokens.]'
 
 def format_time_now() -> str:
     """Return the text content of a dynamic system message containing the current local time.
@@ -721,7 +738,7 @@ def format_consulted_documents(entries: List[Dict[str, Any]]) -> str:
 def default_formatters() -> env:
     """The model-facing formatters, as a namespace, for `settings.formatters`.
 
-    These eight are the ones whose output reaches the LLM: the per-turn injects, the two tool notices, and
+    These nine are the ones whose output reaches the LLM: the per-turn injects, the two tool notices, and
     the two tool results that are text rather than data. Everything else named `format_*` here writes for
     the chat log or an export, where the reader is a person and a run has no reason to vary it.
 
@@ -733,6 +750,7 @@ def default_formatters() -> env:
     The names drop the `format_` prefix, the namespace having said it already.
     """
     return env(date_now=format_date_now,
+               loaded_model=format_loaded_model,
                time_now=format_time_now,
                reminder_to_write_conversationally=format_reminder_to_write_conversationally,
                reminder_to_use_information_from_context_only=format_reminder_to_use_information_from_context_only,

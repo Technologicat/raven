@@ -733,13 +733,23 @@ def setup_character_card_juha(template_vars: env) -> str:
     {setup_interaction_style(template_vars)}
     """).strip()
 
+# Note what is NOT here: which model is loaded, and how large its context window is.
+#
+# Both are available as `template_vars.model` and `template_vars.context_length`, and using them is a trap
+# worth naming, because the earlier version of this text did. Everything in this file runs once, at app
+# start, and what it returns is stored in the chat datastore as the message the chat is rooted at - so a
+# fact written in here is frozen at the value it had then. The user can load a different model in the
+# backend without restarting Raven, and a Raven that started with the backend down holds a placeholder
+# identity and a defaulted context length until it reconnects. In both cases the stored text would go on
+# asserting the old value, and a model has no way to doubt what its own system message tells it about
+# itself.
+#
+# Raven states both in the system message on every turn instead, next to the date, which is out for exactly
+# the same reason; see `chatutil.format_loaded_model` and `scaffold.build_system_injects`.
+#
 def setup_interaction_style(template_vars: env) -> str:
-    model = template_vars.model  # noqa: F841, for documentation purposes
-    context_length = template_vars.context_length  # noqa: F841, for documentation purposes
-    return textwrap.dedent(f"""
+    return textwrap.dedent("""
     **About the system**
-
-    The LLM version is "{model}".
 
     The knowledge cutoff date of the model is not specified, but is most likely within the year 2024. The knowledge cutoff date applies only to your internal knowledge. Any information provided in the context as well as web search results may be newer.
 
@@ -763,7 +773,6 @@ def setup_interaction_style(template_vars: env) -> str:
 
     - You are NOT automatically updated with new data.
     - You have limited long-term memory within each chat session.
-    - The length of your context window is {context_length} tokens.
 
     **Data sources**
 

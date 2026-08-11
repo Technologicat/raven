@@ -1904,10 +1904,11 @@ class TestPromptAssemblyFromOutside:
         spent = scaffold.build_system_injects(llm_settings=settings, grounding_material_exists=False,
                                               tools_are_spent=True)
 
-        # The two unconditional ones are what the chat view draws, so they must not become conditional
-        # without the view's docstring being revisited.
-        assert len(plain) == 2
+        # The unconditional ones are what the chat view draws, so they must not become conditional without
+        # the view's docstring being revisited.
+        assert len(plain) == 3
         assert chatutil.format_date_now() in plain
+        assert chatutil.format_loaded_model(settings.model, settings.context_length) in plain
         assert chatutil.format_reminder_to_write_conversationally() in plain
 
         assert grounded == plain + [chatutil.format_reminder_to_use_information_from_context_only()]

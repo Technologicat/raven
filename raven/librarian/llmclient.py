@@ -17,6 +17,11 @@ __all__ = ["TOOLS", "TOOL_ENTRYPOINTS", "DOCUMENT_TOOL_NAMES", "NETWORK_TOOL_NAM
            "detect_backend_flavor",
            "setup",
            "configure",
+
+           # For frontends that open a window whether or not a backend answers
+           "connect", "reconnect", "backend_status",
+           "backend_unreachable", "backend_has_no_model", "backend_ready",
+
            "count_tokens",
            "image_token_cost",
            "count_branch_tokens",
@@ -832,6 +837,11 @@ def setup(backend_url: str,
                                            is running. The frontends show a definite `False`; `None` is not a
                                            fault and is not shown.
 
+        `backend_is_reachable: bool`: Whether anything answered at `backend_url` when these settings were
+                                      built. Always `True` from `setup`, which cannot return otherwise;
+                                      `False` from `connect` when the backend was down. Read it through
+                                      `backend_status`, which folds it together with `model_is_loaded`.
+
         `backend_supports_continue: bool`: Whether the backend supports continuing an existing assistant message
                                            (ooba does, via an explicit flag; lmstudio/generic don't).
 
@@ -892,10 +902,85 @@ def setup(backend_url: str,
                      quiet=quiet)
 
 
+# What a backend that cannot be reached has told us about itself: nothing.
+_UNREACHABLE_MODEL_INFO = env(label=NO_MODEL_INFO, model_id=None, context_length=None, is_vlm=None, loaded=False)
+
+backend_unreachable = sym("backend_unreachable")
+backend_has_no_model = sym("backend_has_no_model")
+backend_ready = sym("backend_ready")
+
+def connect(backend_url: str, quiet: bool = False) -> env:
+    """`setup`, but a backend that cannot be reached yields settings instead of an exception.
+
+    For the interactive frontends, which open a window either way: past chats, the cleanup dialog and the
+    settings are all useful with no model in sight, and a user who started the LLM server second is one
+    click from fixing it. Batch tools want the opposite and should keep calling `setup` — failing at
+    document 1 with a precise diagnosis beats discovering it at document 2400.
+
+    The settings come back fully formed and usable; what they cannot contain is anything only the backend
+    knows, so the character card names no model and states the default context length. `backend_status`
+    reports which of the three states this is, and `reconnect` replaces the placeholders once there is
+    something to ask.
+    """
+    try:
+        return setup(backend_url, quiet=quiet)
+    except requests.exceptions.RequestException as exc:
+        logger.warning(f"connect: no LLM backend at {backend_url}; continuing without one. Reason {type(exc)}: {exc}")
+        if not quiet:
+            print(colorizer.colorize(f"Cannot connect to LLM backend at {backend_url}.",
+                                     colorizer.Style.BRIGHT, colorizer.Fore.RED) + " Is the LLM server running?")
+        return configure(model_info=_UNREACHABLE_MODEL_INFO,
+                         backend_flavor=librarian_config.llm_backend_flavor or "generic",
+                         backend_url=backend_url,
+                         quiet=quiet,
+                         backend_is_reachable=False)
+
+def backend_status(settings: env) -> sym:
+    """Return which of the three states `settings` describes.
+
+    `backend_unreachable`: nothing answered at the URL. Is the server running, is the URL right?
+
+    `backend_has_no_model`: the backend answered, and has nothing resident to answer *with*. Load a model.
+
+    `backend_ready`: as far as can be told, a turn would work. Includes the backends that do not report
+                     whether a model is loaded, since "cannot tell" is not a fault to report — see
+                     `_resolve_model_info`.
+
+    The three are worth distinguishing rather than collapsing into "not working": the user meets all of them
+    at the same moment, having done nothing wrong, and what they should do about it differs.
+    """
+    if not settings.backend_is_reachable:
+        return backend_unreachable
+    if settings.model_is_loaded is False:
+        return backend_has_no_model
+    return backend_ready
+
+def reconnect(settings: env, quiet: bool = True) -> sym:
+    """Re-probe the backend and bring `settings` up to date, returning the new `backend_status`.
+
+    Mutating rather than returning a new object, because every consumer — the chat controller, the app
+    state, whatever a script is holding — already has this one, and handing back a replacement would leave
+    them all on the old.
+
+    What changes is everything the backend has a say in: which model is loaded, its context window, whether
+    it can see images, and therefore the character card, which tells the model its own identity and size. So
+    a caller holding a *stored* copy of that card has one more step to take — `appstate.refresh_system_prompt`
+    rewrites the node the chat is rooted at.
+
+    The token-per-character calibration `invoke` accumulates is reset along with the rest, which is what a
+    changed model wants: the old figure describes a tokenizer that is no longer in the picture.
+    """
+    fresh = connect(settings.backend_url, quiet=quiet)
+    for name in fresh:
+        settings[name] = fresh[name]
+    return backend_status(settings)
+
+
 def configure(model_info: env,
               backend_flavor: str,
               backend_url: str,
-              quiet: bool = False) -> env:
+              quiet: bool = False,
+              backend_is_reachable: bool = True) -> env:
     """Build the settings `env` from facts about a backend, without contacting one.
 
     `setup` is this function plus the two network queries that discover its arguments. Everything a turn
@@ -919,6 +1004,11 @@ def configure(model_info: env,
                    configure-only caller may pass the URL it intends to use later, or a placeholder.
 
     `quiet`: As `setup`.
+
+    `backend_is_reachable`: Whether anything answered at `backend_url`. `True` for every caller that has
+                            actually spoken to a backend, which is why it defaults that way; `connect`
+                            passes `False` when it could not, so that the placeholder settings it returns
+                            say what they are rather than looking like a backend reporting nothing.
 
     Returns the same `env` as `setup`; see its docstring for the fields.
     """
@@ -997,6 +1087,7 @@ def configure(model_info: env,
                    context_length=context_length,  # loaded context window in tokens (backend-reported, or the 64k default)
                    model_is_vlm=model_info.is_vlm,  # whether the loaded model accepts image input: True/False, or None if unknown (gates image attach)
                    model_is_loaded=model_info.loaded,  # whether the backend has a model resident: True/False, or None if unknown (drives the backend-status readout)
+                   backend_is_reachable=backend_is_reachable,  # whether anything answered at `backend_url`; see `backend_status`
                    backend_supports_continue=(backend_flavor == "oobabooga"),  # ooba has an explicit continue flag; others don't
                    tokenizer=tokenizer,  # local HF tokenizer for exact counts, or None (see `count_tokens`)
                    tokens_per_character=_DEFAULT_TOKENS_PER_CHARACTER,  # estimate-path calibration; refined from usage in `invoke`

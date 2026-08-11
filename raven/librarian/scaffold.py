@@ -388,6 +388,7 @@ def build_system_injects(llm_settings: env,
     """
     formatters = llm_settings.formatters
     injects = [formatters.date_now(),
+               formatters.loaded_model(llm_settings.model, llm_settings.context_length),
                formatters.reminder_to_write_conversationally()]
     if grounding_material_exists:
         injects.append(formatters.reminder_to_use_information_from_context_only())

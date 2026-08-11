@@ -639,6 +639,66 @@ That is a change to what the model is told and where, so it wants measuring befo
 inject-shape probes in `investigations/context-injects/` are the apparatus, and they now run on real
 settings, which is what makes such a measurement trustworthy.
 
+#### And the storage side is open too: keep the old cards, one per variety (Juha, 2026-08-11)
+
+The refresh-and-delete above is not a design to be worked around; it was **cooked up quickly for the first
+demo, autumn 2025**, and it is open. The shape worth having instead: **the datastore keeps every distinct
+system card, one per variety**, and a refresh happens when the *template* changes rather than on every app
+start.
+
+That follows from the same cut as the paragraphs above, applied to storage instead of to the prompt: an
+inject's value has no business in the persistent datastore. Once the model name and the context length are
+injects, what is left in the card is what the user wrote — which changes when they change it, and not
+otherwise. A chat is then rooted at the card it was actually held under, and an old chat keeps its own
+rather than silently acquiring today's.
+
+Note what it retires. The reconnect problem exists because the stored card holds two facts the backend
+supplies; move those out and there is nothing stale to rewrite, so `appstate.refresh_system_prompt` stops
+being part of reconnect. **Today's implementation therefore does the mechanical repair on purpose** — it is
+correct under the current storage design and costs one call. It is not an argument for keeping that design.
+
+**The machinery for it is already in `appstate`, one level down** (Juha, 2026-08-11). `_refresh_greeting`
+does exactly this for greetings: it scans the greeting nodes under the system prompt node, reuses the one
+whose stored text equals the currently configured greeting, and creates a node only when none matches. So a
+chat keeps the greeting it was actually held under, and switching characters back and forth costs no nodes.
+`_get_system_prompt_node_id` already tolerates several roots — it picks the first and logs the rest — so
+generalizing is a transplant of that match-by-content loop one level up, not a new mechanism.
+
+What makes content-equality a sound key is the inject move above: once no placeholder resolves to a backend
+fact, a card's text is determined by the configuration alone, so two runs of an unedited config produce
+byte-identical text and match. ("Template" here means only that the text may contain placeholders such as
+`{model}` — Juha.) A deployment that *does* embed one gets a new root per distinct value, which is the
+honest outcome rather than a failure: the text really is different.
+
+Not scoped here: what happens to a chat whose card no longer exists, and whether the roots need any pruning
+at all.
+
+#### Raised while doing the above, and not settled: the character card is carrying character-independent text
+
+`setup_interaction_style` — "About the system", "Interaction tips", "Known limitations", "Data sources" — is
+called from `setup_character_card_aria` and its sibling, so all of it is stored as *character* text. Almost
+none of it is about a character (Juha, 2026-08-11): the knowledge cutoff, "you are running on a private,
+local system", the memory limits and the two data sources hold whoever is answering. By the SillyTavern
+split this file is modelled on, that belongs in the system prompt.
+
+**But moving it wholesale collides with the bundle decided earlier today.** `use_character_card=False` gives
+a bare model no system message at all *because* `setup_system_prompt` ships empty; fill that slot with this
+block and `raven-pdf2bib`'s extraction steps get "Use Markdown for formatting when helpful" and "take a deep
+breath, and think step by step. Report your train of thought" back — the instructions the conversion removed
+this morning, for outputs that are parsed.
+
+So the block does not move as a unit. It is three kinds of thing at once:
+
+- **facts about the deployment** — knowledge cutoff, local system, memory limits, the two data sources.
+  Character-independent, and the natural contents of the system prompt.
+- **conversational manner** — polite, honest, Markdown, think step by step, be diverse. Not about *Aria*
+  specifically, but about being a conversational assistant at all, which is what the bare bundle withholds.
+- **the two backend facts**, already moved out to the injects.
+
+Which suggests the split wants three levels rather than two, or a third bundle switch. Undecided, and worth
+noting that a bare one-shot extraction wants none of the first two either — so "character-independent" and
+"wanted on every turn" are not the same predicate, and the current two-way split conflates them.
+
 **One thing that is *not* a blocker either way**, since it looks like one: what the card should claim while
 nothing is loaded. Nothing reads it — with no model connected there is no model to mislead, and the card is
 rebuilt before any turn can be taken. So the "never state a guess to the model" rule is not in tension here
