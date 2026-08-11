@@ -65,7 +65,16 @@ gui_config = librarian_config.gui_config  # shorthand, this is used a lot
 # message: `dpg.set_y_scroll` is applied by the render loop, so a position sampled before the next frame can
 # still report the pre-scroll value, leaving a gap the size of whatever was just added. Too large, and
 # scrolling up a line or two from the end still counts as being at the end, so the arrow keys look broken.
-_PIN_TOLERANCE_PX = 2 * gui_config.font_size  # two lines of text
+#
+# It is worth knowing that this is *not* two lines of text, though it reads as if it were: `font_size` is the
+# glyph size, while a rendered line also carries the item spacing, and the chat panel measures 26 px per line
+# against a font size of 20. So the value allows about one and a half lines. Deliberately left as it is:
+# widening it to a true two lines would have covered both refusals recorded in
+# `investigations/follow-tail-drift/`, but those had a cause, which is fixed where it happens instead — a
+# bound that hides a defect is worth less than the defect being gone, and this one is squeezed from the other
+# side by the arrow keys. If the cause recurs, this is the knob, and a real line height has to be *measured*
+# rather than derived: the ratio to the font size is set by the theme's spacing and is not a constant.
+_PIN_TOLERANCE_PX = 2 * gui_config.font_size  # about one and a half lines; see below
 
 # A refusal to follow, within this many tolerances of the end, is reported at INFO as a near miss: that is the
 # shape a wrong refusal takes, and the logged numbers say which comparison let it through.

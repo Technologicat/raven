@@ -429,3 +429,28 @@ class TestCommandedScrollBox:
         """Visualizer passes none; the setter must not require one."""
         animation_ = _scroll(scroll_target, commanded_y_scroll=None)
         animation_._set_y_scroll(42)  # must not raise
+
+    def test_giving_up_records_where_the_panel_actually_is(self, scroll_target):
+        """A request past the end is clamped by DPG, so the position never reaches what we wrote.
+
+        The animation waits for it, times out, and stops. What it must not do is leave the box holding a
+        value the panel never took: `should_follow_tail` compares the two and reads the difference as the
+        reader having scrolled — and nothing is left running to correct it, because the timeout *is* the
+        animation giving up. That is what made the chat view stop following a streaming reply for the rest of
+        the message; see `investigations/follow-tail-drift/`.
+        """
+        commanded = box(0)
+        animation_ = animation.animator.add(_scroll(scroll_target,
+                                                    target_y_scroll=99999,  # far past the end: DPG will clamp
+                                                    commanded_y_scroll=commanded))
+
+        for _ in range(40):  # the timeout is a handful of frames; this is slack, not a wait
+            animation.animator.render_frame()
+            if animation_ not in animation.animator._animations:
+                break
+        else:
+            pytest.fail("the animation never gave up, so the timeout branch under test did not run")
+
+        actual = dpg.get_y_scroll(scroll_target)
+        assert unbox(commanded) == actual, "the box still holds a position the panel never reached"
+        assert unbox(commanded) != 99999, "precondition: DPG must have clamped the request, or this proves nothing"

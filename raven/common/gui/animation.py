@@ -19,7 +19,7 @@ from typing import Callable, Optional, Tuple, Union
 
 from unpythonic import box, sym
 
-from ..smoothvalue import SmoothInt
+from ..smoothvalue import SmoothInt, CALIBRATION_FPS
 
 import dearpygui.dearpygui as dpg
 
@@ -761,7 +761,7 @@ class SmoothScrolling(Animation):
                     # Advance the interpolation by one frame.
                     # Use DPG's averaged frame rate for dt (more stable than wall-clock delta).
                     fps = dpg.get_frame_rate()
-                    dt = 1.0 / fps if fps > 0 else 1.0 / SmoothInt.CALIBRATION_FPS
+                    dt = 1.0 / fps if fps > 0 else 1.0 / CALIBRATION_FPS  # `get_frame_rate` reads 0 until its average has samples, i.e. at startup
                     still_animating = self._sv.update(dt=dt)
                     new_y_scroll = self._sv.current
                     self.last_step = abs(new_y_scroll - current_y_scroll)  # how far this frame moved the view; see the attribute's note in `__init__`
@@ -785,7 +785,17 @@ class SmoothScrolling(Animation):
                 # Timeout waiting for DPG to update the position? -> probably end of scrollbar (but shouldn't happen now that `scroll_info_panel_to_position` clamps the value to the max allowed by the scrollbar)
                 elif self.update_pending_frames >= update_pending_threshold:
                     action = action_finish
-                    logger.debug(f"SmoothScrolling.render_frame: frame {dpg.get_frame_count()}: instance for '{self.target_child_window}': timeout waiting for scrollbar to update its scroll position (target position past end of scrollbar?)")
+                    logger.info(f"SmoothScrolling.render_frame: frame {dpg.get_frame_count()}: instance for '{self.target_child_window}': timeout waiting for the scrollbar to reach the position we wrote ({self.prev_frame_new_y_scroll}); it is at {current_y_scroll}, target was {self.target_y_scroll}. DPG clamps a write to the scrollable range as it stands, so this is what a request past the end looks like. Giving up and recording where it actually is.")
+                    # Record where the panel *is*, not where we asked it to go. Leaving the record on an
+                    # unreachable value is not cosmetic: a caller comparing the two - `should_follow_tail`
+                    # does - reads the difference as the user having scrolled, and there is nothing left
+                    # running to correct it afterwards, because this branch is the animation giving up.
+                    # Observed rather than predicted, deliberately: `get_y_scroll_max` cannot be trusted at
+                    # the moment of a write (it reads 0 before layout), so the position DPG reports here is
+                    # the only reliable statement of what the write achieved.
+                    # See `investigations/follow-tail-drift/`.
+                    if self.commanded_y_scroll is not None:
+                        self.commanded_y_scroll << current_y_scroll
                     if self.flasher is not None:
                         self.flasher.show(where="bottom")
 
