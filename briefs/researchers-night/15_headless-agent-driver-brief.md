@@ -682,6 +682,16 @@ So the storage change carries a GUI prerequisite: roots are siblings of each oth
 `get_all_root_nodes()` and already exists, and the sibling walk plus whatever gates the navigation buttons
 have to accept it. Worth settling as part of that pass rather than discovering it after the storage lands.
 
+**Deleting a card is gated the same way, and for a reason that stops applying** (Juha, 2026-08-11).
+`chat_controller`'s `delete_enabled` excludes any node in `system_prompt_node_ids` — which is
+`get_all_root_nodes()`, so the gate is on being a root at all, not on being *the* root. Today that is right:
+one root, and deleting it takes the entire datastore with it. Under several, deleting a card should be
+allowed whenever it is not the one currently configured, and taking its subtree along is the correct reading
+rather than a side effect — those chats are the ones held under it. So the predicate becomes **"not the
+currently configured system prompt node"** (Juha), which is `state["system_prompt_node_id"]` and already
+tracked. Note it degenerates to today's behaviour rather than replacing it: with one root, that root *is*
+the configured one. Same pass as the sibling walk.
+
 **No pruning, and nothing to decide about orphans** (Juha, 2026-08-11). Chats held under an older system
 prompt stay valid as another tree in the forest — which is what a forest is for, and the datastore has been
 one all along. So the card a chat was rooted at does not disappear from under it, and the question of what
@@ -700,8 +710,8 @@ sites, and it must land with the storage change rather than after it.
 Which retires an earlier note here: an old card that never acquired a chat is then *not* collected by that
 sweep, since a root is reachable by construction. It costs one node and no attachments, and reclaiming it
 would need a rule about which roots are still wanted — a different question from reachability, and not one
-worth raising for a node apiece. A user who wants one gone can delete it in the GUI (Juha), which is the
-right place for a judgement about what is still wanted.
+worth raising for a node apiece. A user who wants one gone deletes it in the GUI (Juha) — which is the right
+place for a judgement about what is still wanted, and which is why the delete gate above has to admit it.
 
 #### Raised while doing the above, and not settled: the character card is carrying character-independent text
 
