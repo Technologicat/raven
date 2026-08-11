@@ -314,6 +314,28 @@ deciding together rather than in sequence.
 Juha is taking the item itself to the TODO triage so it is recorded there as well; this note is the scoping
 decision, not the item.
 
+#### Done 2026-08-11: the system message shows its injects
+
+`scaffold.build_system_injects` was split out of `build_turn_prompt`, and the chat view renders its result
+under the stored system prompt. One call, two readers — the prompt is built from it and the log displays it,
+so the two cannot drift into the log claiming one thing while the wire carries another. Pinned by
+`test_the_injects_the_view_shows_are_the_ones_the_prompt_carries`.
+
+Two properties of the display worth knowing, both consequences of what the system-prompt node already is:
+
+- **It is live, not recorded.** `appstate` overwrites the stored system prompt at every app start rather
+  than keeping a revision per session, so that node has never been a record of a past turn. What is shown
+  is what the *next* turn will send.
+- **Which makes a midnight rollover visible**, and it is handled rather than documented away: a session
+  left open past midnight would send the new date while the log showed the old one — the very divergence
+  this is meant to remove. `DPGChatController.refresh_system_injects_if_stale` compares the drawn injects
+  against a fresh call and redraws through `rebuild_in_place` when they differ. It runs at the start of a
+  turn, so the display and the wire change together. Between turns the display can lag a rollover; nothing
+  is being sent then.
+
+Only the unconditional injects are shown. The two conditional ones are not knowable before the turn runs,
+and a line appearing and vanishing between rebuilds would read as instability rather than as information.
+
 #### What to show, and the two exceptions (Juha, 2026-08-11)
 
 Show the system prompt as it is actually sent — the date, and the model name and context length once those
@@ -472,8 +494,10 @@ Answering the questions below; the list is kept for its reasoning, and these are
 
    - **`default_formatters()` returns a fresh namespace per call**, so an override belongs to one settings
      object. A shared one would leak an experiment's arm into every other run in the process, which is the
-     failure being removed. `test_configure_reproduces_setup_given_the_same_facts` compares settings field
-     by field and caught this immediately, because `repr(env)` leads with the object's address.
+     failure being removed. This surfaced through `test_configure_reproduces_setup_given_the_same_facts`,
+     which was comparing settings field by field *as reprs* — and `repr(env)` leads with the object's own
+     address, so an env-valued field can never match itself across two calls. `env.__eq__` compares
+     contents and gets it right; the test now compares values.
    - **Tool entrypoints reach formatters through `dyn.tool_context`, and fall back to the defaults.** A tool
      context legitimately carries `llm_settings=None` — the documented shape for a caller not running tools
      that need settings — and two entrypoints format their result without otherwise wanting settings. The

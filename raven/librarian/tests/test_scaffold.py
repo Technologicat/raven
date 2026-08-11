@@ -1877,6 +1877,41 @@ class TestPromptAssemblyFromOutside:
         assert notice in chatutil.content_to_text(with_notice[0]["content"])
         assert notice not in chatutil.content_to_text(without[0]["content"])
 
+    def test_the_injects_the_view_shows_are_the_ones_the_prompt_carries(self, monkeypatch):
+        # The point of `build_system_injects` existing separately: the chat view renders its result, and the
+        # prompt is built from the same call. Re-deriving the wording in the GUI would be two sources of
+        # truth for text the model actually reads, and they would drift silently — the log claiming one
+        # thing while the wire carried another is precisely the gap this closes.
+        settings = self._settings(monkeypatch)
+        history = [chatutil.create_chat_message(llm_settings=settings, role="system", text="STORED PROMPT"),
+                   chatutil.create_chat_message(llm_settings=settings, role="user", text="Hello?")]
+        tool_context = scaffold.make_tool_context(llm_settings=settings, retriever=None)
+        prompt = scaffold.build_turn_prompt(llm_settings=settings, history=history,
+                                            docs_query=None, docs_matches=[], tool_context=tool_context)
+
+        system_text = chatutil.content_to_text(prompt[0]["content"])
+        shown = scaffold.build_system_injects(llm_settings=settings, grounding_material_exists=False)
+        assert shown  # the view has something to show at all
+        for inject_text in shown:
+            assert inject_text in system_text
+        assert "STORED PROMPT" in system_text  # the injects are appended to the stored prompt, not instead of it
+
+    def test_which_injects_are_conditional(self, monkeypatch):
+        settings = self._settings(monkeypatch)
+        plain = scaffold.build_system_injects(llm_settings=settings, grounding_material_exists=False)
+        grounded = scaffold.build_system_injects(llm_settings=settings, grounding_material_exists=True)
+        spent = scaffold.build_system_injects(llm_settings=settings, grounding_material_exists=False,
+                                              tools_are_spent=True)
+
+        # The two unconditional ones are what the chat view draws, so they must not become conditional
+        # without the view's docstring being revisited.
+        assert len(plain) == 2
+        assert chatutil.format_date_now() in plain
+        assert chatutil.format_reminder_to_write_conversationally() in plain
+
+        assert grounded == plain + [chatutil.format_reminder_to_use_information_from_context_only()]
+        assert spent == plain + [chatutil.format_notice_that_tools_are_spent()]
+
     def test_building_the_prompt_leaves_the_caller_s_history_alone(self, monkeypatch):
         # The reason the mutating version could not be the public one: a caller asking "what would Raven
         # send?" would have had to hand over a list to be altered, and then read its own variable back.

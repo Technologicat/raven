@@ -4,7 +4,8 @@ __all__ = ["user_turn",
            "ai_turn", "retry_tool_calls", "action_ack", "action_stop",
 
            # For scripting: the prompt a turn would send, without sending it
-           "build_turn_prompt", "make_tool_context"]
+           "build_turn_prompt", "make_tool_context",
+           "build_system_injects"]  # also what the chat view shows, so the log matches what is sent
 
 import logging
 logger = logging.getLogger(__name__)
@@ -355,6 +356,39 @@ def _synthetic_tool_exchange(llm_settings: env,
     result_message["tool_call_id"] = call_id  # OAI spec: the linkage lives on the tool-response message
     return [call_message, result_message]
 
+def build_system_injects(llm_settings: env,
+                         grounding_material_exists: bool,
+                         tools_are_spent: bool = False) -> List[str]:
+    """The instruction-like texts this turn appends to the leading system message.
+
+    Split out of `build_turn_prompt` so that the chat view can show them. The log's promise is that it shows
+    what was said, and these are said every turn while appearing nowhere in it - so the view needs the same
+    list the prompt is built from, and getting it by re-deriving the wording in the GUI would be two sources
+    of truth for text the model actually reads.
+
+    The two flags are what makes an inject conditional, and neither is a property of the conversation
+    alone - which is why they are arguments rather than something this function could work out:
+
+    `grounding_material_exists`: whether anything gave the model material to answer *from* this turn:
+                                 retrieval results, a tool result that declared grounding, or an attachment
+                                 on the branch. Adds the reminder to base claims about the provided
+                                 documents on them. Sent with nothing to ground in, that reminder is a
+                                 self-contradiction the model tries to resolve, at up to 37x the
+                                 deliberation and sometimes without terminating - so the condition is
+                                 load-bearing rather than an optimization.
+
+    `tools_are_spent`: whether the turn has used its tool-call budget, so the model should answer from what
+                       it already has rather than reaching for another call it will not get.
+    """
+    formatters = llm_settings.formatters
+    injects = [formatters.date_now(),
+               formatters.reminder_to_write_conversationally()]
+    if grounding_material_exists:
+        injects.append(formatters.reminder_to_use_information_from_context_only())
+    if tools_are_spent:
+        injects.append(formatters.notice_that_tools_are_spent())
+    return injects
+
 def build_turn_prompt(llm_settings: env,
                       history: List[Dict],
                       docs_query: Optional[str],
@@ -412,23 +446,15 @@ def build_turn_prompt(llm_settings: env,
     # still found by walking the branch.
     grounding_material_exists = tool_context.grounded or _attachment_is_present(history)
 
-    # Instruction-like injects -> leading system message. Through `llm_settings.formatters` rather than
-    # `chatutil` directly, which changes nothing in ordinary use - the defaults are `chatutil`'s own. It is
-    # for experiments that A/B a wording, which previously had to assign to a module global.
-    formatters = llm_settings.formatters
-    system_injects = [formatters.date_now(),
-                      formatters.reminder_to_write_conversationally()]
-    # Ask the model to base claims about the context on the context, whenever there *is* context to base
-    # them on. Skipping the reminder when there is nothing to ground in is load-bearing rather than an
-    # optimization: asking a model to stick to documents that were never provided is a contradiction it
-    # will dutifully try to resolve, at a cost of up to 37x the deliberation, sometimes never terminating.
-    if grounding_material_exists:
-        system_injects.append(formatters.reminder_to_use_information_from_context_only())
-    if tools_are_spent:
-        system_injects.append(formatters.notice_that_tools_are_spent())
     _add_to_system_message(llm_settings=llm_settings,
                            history=history,
-                           texts=system_injects)
+                           texts=build_system_injects(llm_settings=llm_settings,
+                                                      grounding_material_exists=grounding_material_exists,
+                                                      tools_are_spent=tools_are_spent))
+
+    # The data-like injects below go into synthetic tool exchanges of their own, not into the system
+    # message; see `_add_to_system_message` for why the split is not a stylistic one.
+    formatters = llm_settings.formatters
 
     # Data-like injects -> synthetic tool calls, placed just before the user's latest message.
     data_injects = _synthetic_tool_exchange(llm_settings=llm_settings,

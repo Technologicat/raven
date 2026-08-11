@@ -246,6 +246,7 @@ class DPGChatMessage:
         self.persona = None  # populated by `build`
         self.paragraphs = []  # [{"text": ..., "rendered": True}, ...]
         self.paragraphs_lock = threading.RLock()
+        self.rendered_system_injects = None  # system message only: the per-turn injects as last drawn
         self.node_id = None  # populated by `build`
         self.gui_text_group = None  # populated by `build`
         self.gui_button_callbacks = {}  # {name0: callable0, ...} - to trigger button features programmatically
@@ -1360,6 +1361,9 @@ class DPGCompleteChatMessage(DPGChatMessage):
             # The jump-back link still has to exist, or the navigation pair is one-way from this message.
             self._render_gutter_and_body(texts=[], document_body=None, answered_call_id=answered_call_id)
 
+        if role == "system":
+            self._render_system_injects()
+
         # A document the AI fetched from the local knowledge base gets the same handles as an attached one.
         # It is *not* an attachment — the file is already the user's, sitting in the documents folder, and
         # copying it into the sidecar store would archive a second copy of something that cannot go away.
@@ -1508,6 +1512,45 @@ class DPGCompleteChatMessage(DPGChatMessage):
             finally:
                 self.gui_text_group = outer_group
                 self.text_indent_w = outer_indent
+
+    def _render_system_injects(self) -> None:
+        """Append the per-turn system injects to a rendered system message, so the log shows what is sent.
+
+        The chat log's promise is that it shows what was said, and these are said on every turn while
+        appearing nowhere in it: the date, and the standing reminder about how to write.
+        `scaffold.build_turn_prompt` folds them into the leading system message at send time and never
+        stores them, so the node holds the standing prompt while the model reads that prompt *plus this*.
+
+        Shown live rather than recorded, which matches what this node already is: `appstate` overwrites the
+        stored system prompt at every app start instead of keeping a revision per session, so it has never
+        been a record of a past turn. What is shown is therefore what the *next* turn will send. On a
+        session running past midnight the date here catches up at the next view rebuild, while an earlier
+        turn in the same log really did send yesterday's - the node cannot express that, and does not try.
+
+        Two further injects are conditional on turn state - whether anything grounded the answer, whether
+        the tool budget ran out - and are left out. Neither is knowable before the turn runs, and a line
+        that came and went between rebuilds would read as instability rather than as information.
+
+        The synthetic tool exchanges are deliberately not shown either, each for its own reason: the
+        clock's call is staged for the model's benefit and would only raise the question of who made a call
+        the user never saw, and retrieval runs at `k=50`, so its results would bury the conversation they
+        were fetched to support.
+        """
+        llm_settings = self.parent_view.chat_controller.llm_settings
+        if llm_settings is None:  # no backend connected yet; there is no settings object to ask
+            return
+        # `grounding_material_exists=False` selects exactly the unconditional injects; see above.
+        injects = scaffold.build_system_injects(llm_settings=llm_settings,
+                                                grounding_material_exists=False)
+        if not injects:
+            return
+        # What was drawn, so `DPGChatController.refresh_system_injects_if_stale` can tell whether it still
+        # matches what a request would carry. Comparing the texts rather than just the date also catches an
+        # experiment that swapped a formatter mid-session.
+        self.rendered_system_injects = list(injects)
+        self.add_paragraph("*Added to every request, not stored:*", is_thought=False)
+        for inject_text in injects:
+            self.add_paragraph(inject_text, is_thought=False)
 
     def _render_text_paragraphs(self, text: str) -> None:
         """Render one text content-part: split into paragraphs and add them.
@@ -3084,6 +3127,33 @@ class DPGChatController:
         with guiutils.nonexistent_ok():  # the readout widget may vanish under a shutdown race (background prefill caller)
             dpg.set_value("context_fill_text", f"{prefix}{percent}%  ({count} / {context_length})")  # tag
 
+    def refresh_system_injects_if_stale(self) -> None:
+        """Redraw the system message if the injects it shows no longer match what a request would carry.
+
+        The system message displays the per-turn injects live (see
+        `DPGCompleteChatMessage._render_system_injects`), and one of them is the date. A session left open
+        across midnight would otherwise send the new date on the wire while the log still showed the old
+        one - the exact divergence that displaying them at all is meant to remove.
+
+        Called at the start of a turn, which is when the wire value is recomputed, so the two change
+        together. Between turns the display can lag a rollover; nothing is being sent then, and the next
+        turn or view rebuild corrects it.
+        """
+        if self.llm_settings is None:
+            return
+        with self.current_chat_history_lock:
+            if not self.current_chat_history:
+                return
+            message = self.current_chat_history[0]  # the system prompt is the branch root
+            if message.rendered_system_injects is None:  # not a system message, or drawn before connecting
+                return
+            current = scaffold.build_system_injects(llm_settings=self.llm_settings,
+                                                    grounding_material_exists=False)
+            if current == message.rendered_system_injects:
+                return
+            logger.info("DPGChatController.refresh_system_injects_if_stale: system injects changed since they were drawn (most likely the date rolled over); redrawing the system message.")
+            message.rebuild_in_place()
+
     def update_context_fill_indicator(self) -> None:
         """Refresh the bottom-toolbar context-fill readout: the current chat's token size vs the loaded window.
 
@@ -3552,6 +3622,9 @@ class DPGChatController:
                                         on_call_lowlevel_done=on_call_lowlevel_done,
                                         on_tool_done=on_tool_done,
                                         on_tools_done=on_tools_done)
+                # The turn is about to recompute the injects for the wire; keep the log's copy in step, so a
+                # session that ran past midnight does not show yesterday's date beside today's request.
+                self.refresh_system_injects_if_stale()
                 with self.avatar_controller.idle_override(config=self.avatar_record):
                     if _retry_tool_node_id is None:
                         new_head_node_id = scaffold.ai_turn(llm_settings=self.llm_settings,
