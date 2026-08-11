@@ -13,8 +13,11 @@ we last commanded (to_end=True, drift tolerance=40px including 0.0px of animatio
 not follow.
 ```
 
-Raw excerpts: `near-miss-2026-08-11.txt` (the run that recovered) and `latched-2026-08-11.txt` (the one that
-did not).
+Raw excerpts: `near-miss-2026-08-11.txt` (the run that recovered), `latched-2026-08-11.txt` (the one that did
+not), and `fixed-2026-08-11.txt` (the trigger firing after the fix, with nothing following it).
+
+**Fixed 2026-08-11**, confirmed in the log and in the view — the chat panel followed the reply as expected
+(Juha). See the last section.
 
 ## What the numbers say
 
@@ -215,6 +218,35 @@ a target, which is the `scroll_animation is None` branch - but the animation's l
 not its target (4868), and an animation that *completes* writes its target exactly. So it ended without
 completing: cancelled, retargeted, or timed out on `update_pending_frames`. Which of those it was decides
 whether the fix belongs in the check or in the animation's teardown.
+
+## Fixed and confirmed, 2026-08-11
+
+The cause is inside `SmoothScrolling`, and the earlier sections circle it without naming it. In smooth mode
+the animation advances only once DPG reports the position it was last given - but DPG clamps a write to the
+scrollable range *as it stands*, so a scroll aimed at the end that lands a frame before the content grows is
+clamped short, and that equality can never hold. The animation waits four frames, times out, and stops,
+leaving `commanded_y_scroll` holding a value the panel never took. Everything above follows from that: the
+frozen record, the drift that never changes, the slack that is zero because the animation is gone.
+
+The fix is one line of intent: on timing out, record the position DPG reports rather than the one we asked
+for. Observed rather than predicted - see the dead end above for why predicting it does not work.
+
+**Confirmed live.** Three turns, 162 scroll commands, the trigger firing three times and no refusal:
+
+| wrote | panel reached | gap | before the fix |
+|---|---|---|---|
+| 3557 | 3540 | 17 px | inside the 40 px tolerance - survives |
+| 4394 | 4346 | **48 px** | **over tolerance - would have latched** |
+| 4956 | 4918 | 38 px | inside the tolerance - survives |
+
+That last column is also the explanation of the intermittency, which nothing before had accounted for: the
+clamp gap varies with timing, and the old code failed only when it happened to land above the tolerance. The
+two recorded failures measured 46 and 47 px, a hair over 40. A 48 came up in this run and produced nothing,
+because the record now agrees with the panel whatever the gap was.
+
+It also settles the tolerance question raised above: with the record correct, the drift is zero regardless
+of how large the clamp was, so widening `_PIN_TOLERANCE_PX` is unnecessary. Its comment has been corrected
+where it stands, since "two lines of text" was wrong independently of this.
 
 ## Why this is worth fixing before a demo
 

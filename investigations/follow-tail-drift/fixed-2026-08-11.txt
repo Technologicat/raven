@@ -1,0 +1,8 @@
+After the fix: the trigger firing three times across three turns, with no refusal following.
+Compare the gap (written minus reached) against the 40 px tolerance the old code compared drift to.
+
+2026-08-11 12:30:06,743 INFO raven.common.gui.animation: SmoothScrolling.render_frame: frame 6347: instance for 'chat_panel': timeout waiting for the scrollbar to reach the position we wrote (3557); it is at 3540.0, target was 3592.0. DPG clamps a write to the scrollable range as it stands, so this is what a request past the end looks like. Giving up and recording where it actually is.
+2026-08-11 12:30:12,218 INFO raven.common.gui.animation: SmoothScrolling.render_frame: frame 7004: instance for 'chat_panel': timeout waiting for the scrollbar to reach the position we wrote (4394); it is at 4346.0, target was 4450.0. DPG clamps a write to the scrollable range as it stands, so this is what a request past the end looks like. Giving up and recording where it actually is.
+2026-08-11 12:30:15,684 INFO raven.common.gui.animation: SmoothScrolling.render_frame: frame 7420: instance for 'chat_panel': timeout waiting for the scrollbar to reach the position we wrote (4956); it is at 4918.0, target was 4970.0. DPG clamps a write to the scrollable range as it stands, so this is what a request past the end looks like. Giving up and recording where it actually is.
+
+NEAR MISS lines in this run: 0
