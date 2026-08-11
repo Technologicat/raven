@@ -685,8 +685,22 @@ have to accept it. Worth settling as part of that pass rather than discovering i
 **No pruning, and nothing to decide about orphans** (Juha, 2026-08-11). Chats held under an older system
 prompt stay valid as another tree in the forest — which is what a forest is for, and the datastore has been
 one all along. So the card a chat was rooted at does not disappear from under it, and the question of what
-to do when it has is one this design does not raise. An old root that never acquired a chat is a different
-matter and already handled: the cleanup dialog's existing unreachable-node sweep is what collects it.
+to do when it has is one this design does not raise.
+
+**Unreachable nodes stay eligible for pruning — but "reachable" has to become "reachable from *any* root"**
+(Juha, 2026-08-11), and this one is a data-loss hazard rather than a nicety. `list_unreachable_nodes(*roots)`
+and `prune_unreachable_nodes(*roots)` already take as many roots as they are given; it is the callers that
+narrow it. Both frontends pass exactly one — `app.py`'s `_cleanup_roots` returns
+`(app_state["system_prompt_node_id"],)`, which is `get_all_root_nodes()[0]`, and `minichat`'s shutdown prune
+walks up from `new_chat_HEAD` to the same single node. Under multiple roots that declares every chat under
+every *other* card unreachable, and the cleanup dialog deletes it. Nothing is wrong today, for the same
+reason as the sibling gap: there is only ever one root. The fix is `get_all_root_nodes()` at both call
+sites, and it must land with the storage change rather than after it.
+
+Which retires an earlier note here: an old card that never acquired a chat is then *not* collected by that
+sweep, since a root is reachable by construction. It costs one node and no attachments, and reclaiming it
+would need a rule about which roots are still wanted — a different question from reachability, and not one
+worth raising for a node apiece.
 
 #### Raised while doing the above, and not settled: the character card is carrying character-independent text
 
