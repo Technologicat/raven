@@ -479,8 +479,10 @@ class TestSurrogateRepair:
         p = tmp_path / "paper.txt"
         p.write_text("placeholder", encoding="utf-8")
         monkeypatch.setitem(docextract._EXTRACTORS, ".txt",
-                            lambda _path: "the matrix " + chr(0xD835) + chr(0xDC34) + " is singular")
+                            lambda _source, _label: "the matrix " + chr(0xD835) + chr(0xDC34) + " is singular")
         assert docextract.extract_text(p) == "the matrix \U0001D434 is singular"
+        # The funnel is shared, so the in-memory entry point gets the same guarantee from the same code.
+        assert docextract.extract_text_from_bytes(b"placeholder", "paper.txt") == "the matrix \U0001D434 is singular"
 
 
 # ---------------------------------------------------------------------------
@@ -526,3 +528,55 @@ class TestExtractor:
     def test_restricting_is_idempotent(self):
         once = docextract.ALL_FORMATS.restricted_to([".pdf", ".txt"])
         assert once.restricted_to(once.extensions).extensions == once.extensions
+
+
+# ---------------------------------------------------------------------------
+# `extract_text_from_bytes` — the same readers, without a file
+# ---------------------------------------------------------------------------
+
+class TestExtractFromBytes:
+    """A document that never becomes a file: a chat attachment, a fetch, anything held in memory.
+
+    The readers are the same ones, so these do not re-assert per-format extraction — the tests above do
+    that. What is asserted here is that the two entry points agree, which is the property that would break
+    if a library upgrade stopped accepting a stream. That failure would otherwise show up only in whichever
+    caller had moved off paths.
+    """
+
+    @pytest.mark.parametrize("name, raw", [("notes.txt", "Plain and indexable".encode("utf-8")),
+                                           ("paper.pdf", make_minimal_pdf("Hello from a PDF")),
+                                           ("report.docx", make_docx(["First para", "Second para"])),
+                                           ("deck.pptx", make_pptx([{"text": ["Slide one"]}])),
+                                           ("thesis.odt", make_odt([("p", "A paragraph")])),
+                                           ("talk.odp", make_odp([["Slide text"]])),
+                                           ("page.html", b"<html><body><article><p>"
+                                                         + b"Readable body text. " * 20
+                                                         + b"</p></article></body></html>")])
+    def test_bytes_and_path_agree(self, tmp_path, name, raw):
+        path = tmp_path / name
+        path.write_bytes(raw)
+        assert docextract.extract_text_from_bytes(raw, name) == docextract.extract_text(path)
+
+    def test_the_name_selects_the_reader(self):
+        # Bytes do not announce their format, so the name is load-bearing rather than cosmetic: the same
+        # bytes read as a PDF and as plain text give different answers, and only one of them is right.
+        raw = make_minimal_pdf("Hello from a PDF")
+        assert docextract.extract_text_from_bytes(raw, "paper.pdf") == "Hello from a PDF"
+        assert docextract.extract_text_from_bytes(raw, "paper.txt") != "Hello from a PDF"
+
+    def test_an_unknown_extension_reads_as_plain_text(self):
+        assert docextract.extract_text_from_bytes(b"just some text", "mystery.qqq") == "just some text"
+
+    def test_nothing_is_looked_up_on_disk(self, tmp_path):
+        # No `FileNotFoundError` half of the contract here: the name need not exist anywhere, which is the
+        # point -- there is no file.
+        assert docextract.extract_text_from_bytes(b"content", str(tmp_path / "never" / "written.txt")) == "content"
+
+    def test_an_unparseable_document_raises_and_names_itself(self):
+        with pytest.raises(docextract.DocumentExtractionError) as excinfo:
+            docextract.extract_text_from_bytes(b"this is not a PDF at all", "broken.pdf")
+        assert "broken.pdf" in str(excinfo.value)
+
+    def test_empty_but_valid_returns_none(self):
+        assert docextract.extract_text_from_bytes(b"   \n  ", "blank.txt") is None
+        assert docextract.extract_text_from_bytes(make_textless_pdf(), "scanned.pdf") is None

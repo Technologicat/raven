@@ -41,13 +41,14 @@ __all__ = ["DocumentExtractionError",
            "supported_extensions",
            "is_supported",
            "repair_surrogates",
-           "extract_text",
+           "extract_text", "extract_text_from_bytes",
            "Extractor",
            "PLAINTEXT", "ALL_FORMATS"]
 
+import io
 import logging
 import pathlib
-from typing import Any, Callable, Iterable, Iterator
+from typing import Any, BinaryIO, Callable, Iterable, Iterator
 
 import docx
 import docx.table
@@ -79,28 +80,33 @@ class DocumentExtractionError(Exception):
 _PLAINTEXT_EXTS = (".txt", ".md", ".rst", ".org", ".bib", ".tex")
 
 
-def _extract_plaintext(path: pathlib.Path) -> str:
+# Every extractor below takes an open binary stream and a `label` naming where it came from — a path for a
+# file, the original filename for an attachment held in memory. The label is used only in messages and log
+# lines; nothing dispatches on it. This is what lets one backend serve both entry points, and it costs
+# nothing, because every library underneath reads a stream (verified: pypdf, python-docx, python-pptx,
+# odfpy and trafilatura all accept one).
+def _extract_plaintext(source: BinaryIO, label: str) -> str:
     try:
-        return path.read_text(encoding="utf-8")
+        return source.read().decode("utf-8")
     except UnicodeDecodeError as exc:
-        raise DocumentExtractionError(f"extract_text: '{path}' is not valid UTF-8 text.") from exc
+        raise DocumentExtractionError(f"extract_text: '{label}' is not valid UTF-8 text.") from exc
 
 
-def _extract_pdf(path: pathlib.Path) -> str:
+def _extract_pdf(source: BinaryIO, label: str) -> str:
     # Force the whole page list up front so encryption/corruption errors (which pypdf raises lazily on page
     # access) surface here, as one clean `DocumentExtractionError`, rather than mid-iteration below.
     try:
-        reader = pypdf.PdfReader(path)
+        reader = pypdf.PdfReader(source)
         pages = list(reader.pages)
     except Exception as exc:  # noqa: BLE001 -- pypdf raises many types on malformed/encrypted input; normalize them
-        raise DocumentExtractionError(f"extract_text: '{path}' could not be read as a PDF: "
+        raise DocumentExtractionError(f"extract_text: '{label}' could not be read as a PDF: "
                                       f"{type(exc).__name__}: {exc}") from exc
     chunks = []
     for page_number, page in enumerate(pages):
         try:
             chunks.append(page.extract_text())
         except Exception as exc:  # noqa: BLE001 -- one unreadable page must not lose the rest of the document
-            logger.warning(f"extract_text: '{path}': skipping unreadable page {page_number}: "
+            logger.warning(f"extract_text: '{label}': skipping unreadable page {page_number}: "
                            f"{type(exc).__name__}: {exc}")
     return "\n".join(chunks)
 
@@ -126,13 +132,13 @@ def _docx_content_text(container: Any) -> str:
     return "\n".join(chunks)
 
 
-def _extract_docx(path: pathlib.Path) -> str:
+def _extract_docx(source: BinaryIO, label: str) -> str:
     # Headers, footers and comments are deliberately not collected: they repeat on every page or annotate rather
     # than state, so folding them into the body text mostly adds boilerplate for a retrieval index to match on.
     try:
-        return _docx_content_text(docx.Document(str(path)))
+        return _docx_content_text(docx.Document(source))
     except Exception as exc:  # noqa: BLE001 -- python-docx surfaces malformed input as several unrelated types
-        raise DocumentExtractionError(f"extract_text: '{path}' could not be read as a Word document: "
+        raise DocumentExtractionError(f"extract_text: '{label}' could not be read as a Word document: "
                                       f"{type(exc).__name__}: {exc}") from exc
 
 
@@ -153,9 +159,9 @@ def _pptx_shapes_text(shapes: Iterable[Any]) -> str:
     return "\n".join(chunk for chunk in chunks if chunk)
 
 
-def _extract_pptx(path: pathlib.Path) -> str:
+def _extract_pptx(source: BinaryIO, label: str) -> str:
     try:
-        presentation = pptx.Presentation(str(path))
+        presentation = pptx.Presentation(source)
         chunks = []
         for slide in presentation.slides:
             chunks.append(_pptx_shapes_text(slide.shapes))
@@ -166,7 +172,7 @@ def _extract_pptx(path: pathlib.Path) -> str:
                 chunks.append(slide.notes_slide.notes_text_frame.text)
         return "\n".join(chunk for chunk in chunks if chunk)
     except Exception as exc:  # noqa: BLE001 -- python-pptx surfaces malformed input as several unrelated types
-        raise DocumentExtractionError(f"extract_text: '{path}' could not be read as a PowerPoint presentation: "
+        raise DocumentExtractionError(f"extract_text: '{label}' could not be read as a PowerPoint presentation: "
                                       f"{type(exc).__name__}: {exc}") from exc
 
 
@@ -189,14 +195,14 @@ def _odf_paragraphs(node: Any) -> Iterator[Any]:
             yield from _odf_paragraphs(child)
 
 
-def _extract_odf(path: pathlib.Path) -> str:
+def _extract_odf(source: BinaryIO, label: str) -> str:
     # One reader for both OpenDocument formats we accept: a text document and a presentation differ in how the
     # body is structured, but a walk that only looks for paragraphs does not have to care which it is holding.
     try:
-        document = odf.opendocument.load(str(path))
+        document = odf.opendocument.load(source)
         return "\n".join(odf.teletype.extractText(paragraph) for paragraph in _odf_paragraphs(document.body))
     except Exception as exc:  # noqa: BLE001 -- odfpy surfaces malformed input as several unrelated types
-        raise DocumentExtractionError(f"extract_text: '{path}' could not be read as an OpenDocument file: "
+        raise DocumentExtractionError(f"extract_text: '{label}' could not be read as an OpenDocument file: "
                                       f"{type(exc).__name__}: {exc}") from exc
 
 
@@ -215,7 +221,7 @@ def _extract_odf(path: pathlib.Path) -> str:
 _HTML_CONTENT_SELECTION_MIN_RETENTION = 0.5
 
 
-def _extract_html(path: pathlib.Path) -> str:
+def _extract_html(source: BinaryIO, label: str) -> str:
     # `trafilatura` is imported here rather than at module level because it costs about 0.3 s — three times the
     # whole office stack put together — and most sessions never open an HTML document. `raven.server.modules
     # .webfetch` defers it at its use site for the same reason, and this is the same extractor doing the same
@@ -225,7 +231,7 @@ def _extract_html(path: pathlib.Path) -> str:
     # Handed over as bytes, not text: an HTML file declares its own encoding in a meta tag or an XML
     # declaration, and a page saved off the web is about as likely to be Latin-1 as UTF-8. Decoding it ourselves
     # would mean either guessing or raising on a file that is perfectly well-formed and says so in its header.
-    raw = path.read_bytes()
+    raw = source.read()
     try:
         # Markdown rather than bare text, so headings, lists and tables survive as structure the chunker can see
         # — the document database already accepts Markdown as an input format, so nothing downstream is
@@ -243,14 +249,14 @@ def _extract_html(path: pathlib.Path) -> str:
             # articles — flat and complete beats shapely and truncated, but it is the worse of the two.
             per_article = _extract_html_articles(trafilatura, raw)
             recovered = per_article if len(per_article) >= len(body) else ""
-            logger.info(f"_extract_html: '{path}': content selection kept {len(body)} of {len(whole_page)} "
+            logger.info(f"_extract_html: '{label}': content selection kept {len(body)} of {len(whole_page)} "
                         f"characters, which reads as truncation rather than boilerplate removal; "
                         f"{'re-extracting per article' if recovered else 'falling back to whole-page text'}.")
             body = recovered or whole_page
 
         title = _html_title(trafilatura, raw)
     except Exception as exc:  # noqa: BLE001 -- trafilatura surfaces malformed input as several unrelated types
-        raise DocumentExtractionError(f"extract_text: '{path}' could not be read as an HTML document: "
+        raise DocumentExtractionError(f"extract_text: '{label}' could not be read as an HTML document: "
                                       f"{type(exc).__name__}: {exc}") from exc
 
     # Readability extraction keeps the article's own headings but drops `<title>`, which on a saved page is
@@ -376,21 +382,49 @@ def repair_surrogates(text: str) -> str:
         return text.encode("utf-16", "surrogatepass").decode("utf-16", "ignore")
 
 
+def _extract(source: BinaryIO, name: str, label: str) -> str | None:
+    """Dispatch on `name`'s extension, extract, and apply the tail both entry points share.
+
+    `name` decides the format and `label` names the source in messages. They are the same string for a
+    file and differ for anything else — a downloaded document whose URL is worth reporting, say.
+    """
+    # Plain text for the known text extensions, and as a defensive fallback for anything else (the ingester
+    # filters by extension upstream, so an unknown suffix reaching here is already an unusual case).
+    extract = _EXTRACTORS.get(pathlib.Path(name).suffix.lower(), _extract_plaintext)
+    text = extract(source, label).strip()
+    # Every extractor funnels through here, which is the point: a backend that hands back undecoded UTF-16
+    # is a property of that backend, not of the caller, and every consumer downstream assumes valid text.
+    repaired = repair_surrogates(text)
+    if repaired != text:
+        logger.warning(f"extract_text: '{label}' extracted with UTF-16 surrogates in the text; repaired.")
+    return repaired or None
+
+
 def extract_text(path: str | pathlib.Path) -> str | None:
     """Extract indexable plaintext from a document file. See the module docstring for the full contract."""
     p = pathlib.Path(path).expanduser()
     if not p.exists():
         raise FileNotFoundError(f"extract_text: no such file: '{p}'")
-    # Plain text for the known text extensions, and as a defensive fallback for anything else (the ingester
-    # filters by extension upstream, so an unknown suffix reaching here is already an unusual case).
-    extract = _EXTRACTORS.get(p.suffix.lower(), _extract_plaintext)
-    text = extract(p).strip()
-    # Every extractor funnels through here, which is the point: a backend that hands back undecoded UTF-16
-    # is a property of that backend, not of the caller, and every consumer downstream assumes valid text.
-    repaired = repair_surrogates(text)
-    if repaired != text:
-        logger.warning(f"extract_text: '{p}' extracted with UTF-16 surrogates in the text; repaired.")
-    return repaired or None
+    with open(p, "rb") as source:
+        return _extract(source, name=p.name, label=str(p))
+
+
+def extract_text_from_bytes(raw: bytes, name: str) -> str | None:
+    """Extract indexable plaintext from a document held in memory. Same contract, minus `FileNotFoundError`.
+
+    `raw`: The document's bytes.
+
+    `name`: What the document is called — the original filename, or anything else carrying the right
+            extension. **This is what selects the reader**, since bytes do not announce their format, and
+            it is also what names the document in any error. A name with no recognized extension is read as
+            plain text, as an unrecognized file is.
+
+    For a document that never becomes a file: an attachment held in a chat, a fetch that came off the
+    network, a page rendered in memory. Writing it to a temp file first would work — every reader here
+    happily takes a path — but that is a filesystem round trip to satisfy an interface rather than a need,
+    and one that has to be cleaned up afterwards on every path including the failing ones.
+    """
+    return _extract(io.BytesIO(raw), name=name, label=name)
 
 
 class Extractor:

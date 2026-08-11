@@ -114,18 +114,20 @@ def store_file_as_sidecar(datastore: chattree.PersistentForest,
 def sidecar_to_text(datastore: chattree.PersistentForest, url: str) -> str:
     """Resolve a stored `sidecar:<filename>` document URL to its extracted plaintext, memoized by filename.
 
-    Reads the sidecar file and extracts its text via `raven.common.docextract`, which decides what each format
-    means — plain text verbatim, a PDF's text layer, an office document's prose and tables, an HTML page's
-    readable content. Used by `llmclient.invoke` to fold an attached document into the outgoing message text.
+    Reads the sidecar's bytes and extracts its text via `raven.common.docextract`, which decides what each
+    format means — plain text verbatim, a PDF's text layer, an office document's prose and tables, an HTML
+    page's readable content. Used by `llmclient.invoke` to fold an attached document into the outgoing message text.
     An extraction failure or an empty document degrades to a short bracketed placeholder rather than raising, so
     a single unreadable attachment can never break the LLM call.
     """
     filename = sidecarstore.sidecar_filename_from_url(url, caller="sidecar_to_text")
     if filename in _extracted_text_cache:
         return _extracted_text_cache[filename]
-    path = datastore.sidecar_path(filename)
     try:
-        text = docextract.extract_text(path)
+        # By bytes rather than by path: the extension of the content-addressed name still selects the
+        # reader, and asking the store for the bytes is the narrower requirement — a store that can hand
+        # them over needs no filesystem, which is what an attachment to an in-memory chat would want.
+        text = docextract.extract_text_from_bytes(datastore.read_sidecar(filename), filename)
     except Exception as exc:  # noqa: BLE001 -- wire-build must never crash on one unreadable attachment
         logger.warning(f"sidecar_to_text: could not extract text from sidecar '{filename}': {type(exc)}: {exc}")
         text = None

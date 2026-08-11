@@ -260,10 +260,16 @@ session rather than a small change:
 - **Images would work in memory today.** `imagestore` touches the store only through `store_sidecar` and
   `read_sidecar`, both of which are bytes in, bytes out. `sidecar_url_to_data_url` builds a `data:` URL
   from those bytes and needs no path.
-- **Documents would not.** `textfilestore.sidecar_to_text` calls `datastore.sidecar_path(filename)` and
-  hands it to `docextract.extract_text`, which is path-based for every format it supports (PDF, docx,
-  pptx, ODF, HTML, and plain text alike). An in-memory store would have to materialize a temp file per
-  read — which is most of what a file-backed store already does, for a worse guarantee.
+- **Documents would not, and the reason turned out to be wrong** (corrected 2026-08-11). The first reading
+  said `docextract` is "path-based for every format", which described the signatures rather than any
+  constraint: `pypdf`, `python-docx`, `python-pptx`, `odfpy` and `trafilatura` all read a stream, checked
+  by feeding each one a `BytesIO`. The path-basedness was `docextract`'s own choice.
+
+  So it was changed instead of worked around. `docextract.extract_text_from_bytes(raw, name)` is the
+  in-memory entry point — the name selects the reader, since bytes do not announce their format — and
+  `extract_text(path)` is now the thin one, opening the file and delegating. `sidecar_to_text` reads bytes
+  and no longer asks for a path. **Both attachment kinds are therefore bytes-only at the store boundary**,
+  which is the asymmetry gone.
 
 Everything else that wants a real path is either GUI ("open the saved copy", "show it in the file manager")
 or maintenance (`cleanup`'s `stat().st_size`, `appstate`'s existence check), and none of it is in a
@@ -290,15 +296,34 @@ chat, and why the refusal is in their way at all:
   retrieval brings back passages. Attaching folds the *whole* document in, which is what a large context
   window is for and what "what does it say about XXX" wants when the answer is spread across the paper.
 
-**So the fix is not one mechanism.** Images want bytes with no file anywhere — a bytes-backed store on
-`Forest` serves them outright, since `imagestore` never asks for a path. Documents want the opposite: the
-file exists, `sidecar_to_text` needs a path, and there already is one — so what that case wants is to
-attach *by path without copying*, and a bytes store would have it write a temp file reconstructed from a
-file it just read. Content-addressing earns its keep when the chat must outlive the original; a throwaway
-scripted turn has nothing to outlive.
+**So one mechanism does serve both**, which the earlier reading of this section denied: with `docextract`
+taking bytes, every consumer of the sidecar store on the *read* side wants bytes and nothing else. A
+bytes-backed sidecar store on `Forest` would make both attachment kinds work in an in-memory chat, with no
+temp file anywhere and no second mechanism.
 
-Still not decided here: it is a `chattree` change and belongs with a look at that module. But the shape to
-weigh is those two mechanisms, not one store with an awkward half.
+**What remains is the `chattree` half.** `PersistentForest` exposes eight sidecar members, and they do not
+all move up: `read_sidecar`, `store_sidecar`, `list_sidecar_files` and the metadata pair are bytes-and-dicts
+and would; `sidecar_path` and `sidecar_dir` return paths and cannot, and they have real callers —
+`cleanup` stats a file for its size, `chat_controller` opens one in the desktop's file manager.
+
+### Decisions (Juha, 2026-08-11)
+
+- **The sidecar store moves up to `Forest`, backed by a dict**, with `PersistentForest` overriding the
+  members that touch the filesystem. One store, both attachment kinds, no temp files.
+- **`sidecar_path` and `sidecar_dir` are present-and-raising on the in-memory store**, with an error saying
+  what to use instead. Absent would be the other option and is worse: `hasattr` then becomes the way to ask
+  a question the type already answers, and every caller that wants a real file grows a branch.
+- **`cleanup` stops asking for a path in order to get a size.** A sidecar's size is `len` of its bytes on
+  either backend, so this becomes a store member rather than a `stat()` at the call site — which also
+  removes one of `sidecar_path`'s two non-GUI callers. The remaining GUI ones are reached only from a
+  running Librarian, which always has a file-backed datastore.
+- **An in-memory store still wants a `sidecar_extractor`**, and arguably more than a file-backed one: its
+  sidecars occupy RAM for the life of the process, and nothing else ever reclaims them. A long batch
+  attaching a page image per item is exactly where that matters.
+
+Worth knowing while doing it: **the GC already fails safe** without an extractor
+(`prune_unreferenced_sidecars` logs and deletes nothing), so a partially wired store cannot lose
+attachments.
 
 **Two things these need that are separate from the sidecar question**, so that neither gets folded into it
 by mistake:
