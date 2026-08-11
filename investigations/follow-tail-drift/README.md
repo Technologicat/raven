@@ -13,7 +13,8 @@ we last commanded (to_end=True, drift tolerance=40px including 0.0px of animatio
 not follow.
 ```
 
-Raw excerpt: `near-miss-2026-08-11.txt`.
+Raw excerpts: `near-miss-2026-08-11.txt` (the run that recovered) and `latched-2026-08-11.txt` (the one that
+did not).
 
 ## What the numbers say
 
@@ -80,6 +81,51 @@ This is also not the first pass over this ground: the comment beside the slack r
 measurement of 43 samples in 857 reading as user scrolls at 51-78 px drift, which is what the slack term
 was introduced to absorb. What is left is the tail of the same problem, where the absorber has already
 faded out.
+
+## The failure latches, which is the part that matters
+
+A second occurrence in the same session settled this, and it is the more important finding: **the refusal is
+an absorbing state.** Two runs are distinguishable by the value they froze at - `4894` (which recovered when
+the message finalized) and `4863` (which never did).
+
+Across the four seconds of the second run, `settled_gap` climbs monotonically - 52, 78, 104, … 780 px, in
+steps of 26, one wrapped line per streamed update - while **the drift stays fixed at 47 px**. That pairing is
+the whole story:
+
+- Once `follow` is false, nothing commands a scroll. There are **zero scroll commands** in the log between
+  the first refusal and the last, four seconds and several hundred pixels later.
+- So `_commanded_y_scroll` stays 4863 and the position stays 4816, and `drift` is 47 forever. `undisturbed`
+  can never become true again.
+- And `settled_gap` only grows, so `at_end` can never become true either.
+
+Both terms of `follow = at_end or (commanded_was_to_end and undisturbed)` are therefore pinned false for the
+rest of the message. The only exit is the reader scrolling to the end by hand, which is exactly the recovery
+that was observed the first time and absent the second.
+
+That reframes the severity. It is not a blip that costs a frame; it is a state the view cannot leave, and
+whether the message end rescues it is a matter of which sample the finalize path happens to take.
+
+The moment of capture, with the numbers that name every term:
+
+| | |
+|---|---|
+| content grows | 4816 → 4868 (two lines at once) |
+| commanded | 4868 by `scroll_view`; the animation had written **4863** when the check ran |
+| actual position | **4816**, the previous maximum - the write had not landed |
+| drift | \|4816 − 4863\| = **47** against a 40 px tolerance |
+| animation slack | **0.0**, the animation having all but converged (5 px short of its target) |
+
+## Two fixes, and they are not alternatives
+
+- **Stop it latching.** Whatever else is true, a state that cannot be left is wrong. Re-sampling the
+  commanded position while not following, or letting `at_end` be judged against the maximum *at the time of
+  the last command* rather than the current one, would let it recover on its own.
+- **Stop it triggering.** The drift is the residue of our own animation, so the expectation is what is
+  wrong: with the intent flag set, a position sitting exactly on an *earlier* maximum means the content grew
+  under us, not that somebody scrolled.
+
+The first is the safety net and the second is the cause. Doing only the second leaves a latch behind for the
+next unanticipated trigger to find.
 
 ## Why this is worth fixing before a demo
 
