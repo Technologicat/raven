@@ -182,6 +182,40 @@ wants to compare the position against what the animation has actually had time t
 rather than against its most recent write. The position sitting exactly on an earlier maximum, as 4816 was
 here, is the observable form of that: it is a value we wrote, not one a reader would land on.
 
+## Attempted 2026-08-11, and what it turned up
+
+**A dead end, recorded so nobody walks it twice.** The obvious fix is to record what DPG *will* adopt rather
+than what was asked for - clamp the value written into `commanded_y_scroll` by the scrollable range, inside
+`SmoothScrolling._set_y_scroll`, where the box and `dpg.set_y_scroll` are written together. It fails on the
+query: `dpg.get_y_scroll_max` returns `0.0` when the panel has not been laid out, so the box records `0`
+while the panel sits elsewhere, which reads as an enormous user scroll. That is the same bug by a worse
+route, and `test_every_written_position_reaches_the_box` catches it immediately. Any fix of this shape needs
+a maximum it can trust, and the write site does not have one.
+
+**A real defect found on the way, independent of the above.** The tolerance is
+
+```python
+_PIN_TOLERANCE_PX = 2 * gui_config.font_size  # two lines of text
+```
+
+with `font_size = 20`, so 40 px. **A rendered line is 26 px**, measured from the log: each streamed update
+grows the content by 26, or 52 for two lines. So the constant that says "two lines of text" is worth about
+one and a half, and both observed drifts - 46 and 47 px - fall in the gap between what it allows and what
+two lines actually are. `font_size` is the glyph size; the line box also carries the item spacing.
+
+That is a genuine bug in the constant, and widening it to a real two lines would have prevented both
+observed instances. **It is not obviously safe to widen on its own**, which is why it is recorded rather than
+applied: the comment above it warns that too large a bound makes a deliberate one- or two-line scroll away
+from the end still count as being at the end, so the arrow keys look broken. Deciding that needs the app, not
+arithmetic.
+
+**And the question flagged earlier is now the blocker**, as expected: whether `scroll_animation` was retired
+or merely converged. The evidence says retired - `settled_gap` was computed from `y_scroll` rather than from
+a target, which is the `scroll_animation is None` branch - but the animation's last written value (4863) is
+not its target (4868), and an animation that *completes* writes its target exactly. So it ended without
+completing: cancelled, retargeted, or timed out on `update_pending_frames`. Which of those it was decides
+whether the fix belongs in the check or in the animation's teardown.
+
 ## Why this is worth fixing before a demo
 
 The failure is silent and reads as the app being broken: the reply scrolls out of view while the model is
