@@ -314,6 +314,30 @@ deciding together rather than in sequence.
 Juha is taking the item itself to the TODO triage so it is recorded there as well; this note is the scoping
 decision, not the item.
 
+#### What to show, and the two exceptions (Juha, 2026-08-11)
+
+Show the system prompt as it is actually sent — the date, and the model name and context length once those
+move into the injects. Two things stay hidden, for reasons particular to each:
+
+- **The clock's synthetic tool call.** The turn presents the time *as if* the model had called
+  `get_current_time`, and that framing exists for the model's benefit; shown to a user it only raises the
+  question of who made a call they did not see. The *time* is worth showing, the staged call is not.
+- **The retrieval results.** `k=50` was adopted as the strongest single retrieval-quality lever, so the
+  matches are long by design and would bury the conversation they are supporting.
+
+Both are exceptions to WYSIWYG rather than refinements of it, which is the honest way to hold them: the log
+is faithful except here, and here is where a reader should be told there is more underneath.
+
+#### Record the outputs, not the settings that produced them
+
+Noted while making the formatters overridable, since it constrains Part B's record. `settings` cannot be
+snapshotted as data — it holds callables (`tool_entrypoints`, now `formatters`) and a live tokenizer — and
+an A/B arm's override is typically a lambda with no name worth recording. Nothing serializes settings today
+and nothing should start.
+
+What answers "what was in force?" is the assembled prompt, which Part B's record already carries and which
+this section wants to display. The two uses want the same artifact, so build it once.
+
 ## Explicitly out of scope
 
 **The scripted backend.** *"Headless scaffold mode for `ai_turn`"* bundles a scripted backend — canned model turns, for driving
@@ -431,6 +455,30 @@ Answering the questions below; the list is kept for its reasoning, and these are
    Corollary worth stating, since it is the reason this is worth the audit: **a probe monkeypatching a module
    global is a design signal, not a probe smell.** It is how the codebase currently says "this should have
    been configurable", and each instance is a candidate found by someone who needed it.
+
+   **Done 2026-08-11. The audit's answer is eight formatters, and they went into one namespace.**
+   `settings.formatters`, built by `chatutil.default_formatters()` and set by `configure`. The eight are the
+   ones whose output reaches the model: `date_now`, `time_now`, the two reminders, the two tools-are-spent
+   notices, `docs_matches`, `consulted_documents`. Six further `format_*` functions in `chatutil` write for
+   the chat log or an export, where the reader is a person and no run would vary them, and they stayed put.
+
+   A namespace rather than eight fields on `settings`: the group has one meaning worth naming, `settings`
+   already carries twenty-two fields, and an override then reads
+   `settings.formatters.notice_that_tools_are_spent = lambda: ""` — the same shape as the monkeypatch it
+   replaces, without the global mutation or the `finally` that put it back. The names drop the `format_`
+   prefix, which the namespace has already said.
+
+   Two details the implementation forced, both worth knowing before extending this:
+
+   - **`default_formatters()` returns a fresh namespace per call**, so an override belongs to one settings
+     object. A shared one would leak an experiment's arm into every other run in the process, which is the
+     failure being removed. `test_configure_reproduces_setup_given_the_same_facts` compares settings field
+     by field and caught this immediately, because `repr(env)` leads with the object's address.
+   - **Tool entrypoints reach formatters through `dyn.tool_context`, and fall back to the defaults.** A tool
+     context legitimately carries `llm_settings=None` — the documented shape for a caller not running tools
+     that need settings — and two entrypoints format their result without otherwise wanting settings. The
+     fallback keeps those working rather than making formatters the reason a probe needs a full settings
+     object.
 5. **The surface constructs a `chattree.Forest` by default and accepts one.** In-memory, so constructing
    costs nothing and keeps the one-liner probe a one-liner.
 6. **It lives in `raven.librarian.agent`.** The brief's warning against becoming a generic agent harness

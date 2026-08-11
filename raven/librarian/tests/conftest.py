@@ -4,6 +4,8 @@ import pytest
 
 from unpythonic.env import env
 
+from raven.librarian import chatutil
+
 
 @pytest.fixture
 def llm_settings():
@@ -53,4 +55,7 @@ def llm_settings():
                                  "fetch_document": None,
                                  "list_consulted_documents": None},
                document_tool_names=frozenset({"search_documents", "fetch_document", "list_consulted_documents"}),
-               network_tool_names=frozenset({"websearch", "webfetch"}))
+               network_tool_names=frozenset({"websearch", "webfetch"}),
+               # The real thing, not a copy: `chatutil` is already imported here (it needs no backend and
+               # no ML stack), so there is nothing to forge and nothing to drift.
+               formatters=chatutil.default_formatters())

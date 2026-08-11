@@ -13,6 +13,9 @@ __all__ = ["format_message_number",
            "format_error_that_tools_are_spent",
            "format_docs_match", "format_docs_matches",
            "document_label", "excerpt", "format_consulted_documents",
+
+           "default_formatters",  # the eight above that the model reads, as a namespace for `settings`
+
            "make_timestamp",
            "text_content_part",
            "image_content_part",
@@ -713,6 +716,30 @@ def format_consulted_documents(entries: List[Dict[str, Any]]) -> str:
               "previously, on earlier turns. Any whose text is no longer written out above can be read "
               "again with `fetch_document`, by the ID shown.]")
     return f"{header}\n\n" + "\n".join(lines)
+
+
+def default_formatters() -> env:
+    """The model-facing formatters, as a namespace, for `settings.formatters`.
+
+    These eight are the ones whose output reaches the LLM: the per-turn injects, the two tool notices, and
+    the two tool results that are text rather than data. Everything else named `format_*` here writes for
+    the chat log or an export, where the reader is a person and a run has no reason to vary it.
+
+    They live on `settings` for the sake of experiments that A/B a wording, which is the only thing that
+    wants them to vary - ordinary use never touches them, and gets exactly the functions below. The
+    alternative an experiment had before was assigning to a global in this module, which is process-wide
+    and therefore shared with any concurrent turn; a settings field belongs to the one run.
+
+    The names drop the `format_` prefix, the namespace having said it already.
+    """
+    return env(date_now=format_date_now,
+               time_now=format_time_now,
+               reminder_to_write_conversationally=format_reminder_to_write_conversationally,
+               reminder_to_use_information_from_context_only=format_reminder_to_use_information_from_context_only,
+               notice_that_tools_are_spent=format_notice_that_tools_are_spent,
+               error_that_tools_are_spent=format_error_that_tools_are_spent,
+               docs_matches=format_docs_matches,
+               consulted_documents=format_consulted_documents)
 
 
 # --------------------------------------------------------------------------------

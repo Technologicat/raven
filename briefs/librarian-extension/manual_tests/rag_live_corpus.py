@@ -311,10 +311,10 @@ def check_live_turn(retriever, hits, notice_enabled=True, sample_index=0):
         return
 
     # The A/B switch. Silencing the formatter is enough: `build_turn_prompt` appends whatever it returns,
-    # and an empty string adds no system line at all.
-    original_notice = chatutil.format_notice_that_tools_are_spent
+    # and an empty string adds no system line at all. The override is a field on this run's own settings,
+    # so nothing process-wide changes and there is no original to put back.
     if not notice_enabled:
-        chatutil.format_notice_that_tools_are_spent = lambda: ""
+        llm_settings.formatters.notice_that_tools_are_spent = lambda: ""
     try:
         # A `PersistentForest` rather than an in-memory `Forest`, when there is somewhere to put it. The
         # whole conversation is then on disk in Raven's own format - every message, the reasoning that
@@ -332,7 +332,6 @@ def check_live_turn(retriever, hits, notice_enabled=True, sample_index=0):
                                   head_node_id=head, user_message_text=follow_up)
         final, history = _ai_turn(llm_settings, datastore, retriever, head, follow_up)
     finally:
-        chatutil.format_notice_that_tools_are_spent = original_notice
         if isinstance(datastore, chattree.PersistentForest):
             datastore.save()
 

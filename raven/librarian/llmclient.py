@@ -179,7 +179,9 @@ def websearch_wrapper(query: str,
 # Keep this to a single `dyn.tool_context` env that grows fields over time — one request-context
 # object, never a scatter of dyn vars.
 #
-# Fields currently carried (and the entrypoint that reads each):
+# What the context carries, and why each field is there, is documented where it is built:
+# `scaffold.make_tool_context`. Listing the fields here as well only produced a list that fell behind it.
+# The one worth repeating is the security-relevant one:
 #   webfetch_allowed_hosts : frozenset[str]  — hosts auto-allowed for this turn (URLs the user typed,
 #                                              plus, if `webfetch_trust_search_results`, this turn's
 #                                              websearch-result hosts). Read by `webfetch_wrapper`.
@@ -188,6 +190,20 @@ def websearch_wrapper(query: str,
 # The process-wide default (an empty env) means a thread that never entered a `dyn.let` — e.g. a
 # direct unit-test call of an entrypoint — still reads a valid, empty context instead of erroring.
 make_dynvar(tool_context=env())
+
+def _formatters() -> env:
+    """The turn's model-facing formatters, from `dyn.tool_context`, falling back to the defaults.
+
+    Entrypoints reach `settings` only through the tool context, and that context legitimately carries no
+    settings at all: `scaffold.make_tool_context(llm_settings=None, ...)` is the documented shape for a
+    caller that is not going to run a tool needing them. Two entrypoints here format their result without
+    otherwise wanting settings, and they worked in that shape before formatters became overridable; falling
+    back keeps them working rather than making them the reason a probe needs a full settings object.
+    """
+    settings = getattr(dyn.tool_context, "llm_settings", None)
+    if settings is None or "formatters" not in settings:
+        return chatutil.default_formatters()
+    return settings.formatters
 
 # Canonical user-facing string for an allowlist refusal — the client-side counterpart to the
 # server-side SSRF / scheme / SPA strings in `raven.server.modules.webfetch`. Pre-templated so the
@@ -319,7 +335,7 @@ def search_documents_wrapper(query: str) -> Tuple[Union[str, List[Dict]], Dict]:
     logger.info(f"search_documents_wrapper: {len(matches)} match{plural_s} for '{query}'.")
     if not matches:
         return (CANONICAL_NO_DOCUMENT_MATCHES, {"grounding": False, "docs_query": query})
-    return (chatutil.format_docs_matches(matches),
+    return (_formatters().docs_matches(matches),
             {"grounding": True,
              "docs_query": query,
              "document_ids": list(uniqify(match["document_id"] for match in matches))})
@@ -400,7 +416,7 @@ def get_current_time_wrapper() -> str:
     function the model was never offered, and a model reading its own transcript takes that call for its
     own. See the note beside the spec in `setup`.
     """
-    return chatutil.format_time_now()
+    return _formatters().time_now()
 
 
 def list_consulted_documents_wrapper() -> Tuple[str, Dict]:
@@ -425,7 +441,7 @@ def list_consulted_documents_wrapper() -> Tuple[str, Dict]:
         logger.info("list_consulted_documents_wrapper: nothing consulted on this branch yet.")
         return (CANONICAL_NOTHING_CONSULTED, {"grounding": False})
     logger.info(f"list_consulted_documents_wrapper: {len(entries)} document(s).")
-    return (chatutil.format_consulted_documents(entries), {"grounding": False})
+    return (_formatters().consulted_documents(entries), {"grounding": False})
 
 def fetch_document_wrapper(document_id: str,
                            offset: Optional[int] = None,
@@ -952,7 +968,8 @@ def configure(model_info: env,
                    network_tool_names=NETWORK_TOOL_NAMES,  # subset of `TOOLS` gated on the "Internet" switch
                    backend_url=backend_url,
                    request_data=request_data,
-                   personas=personas)
+                   personas=personas,
+                   formatters=chatutil.default_formatters())  # per-run overridable; see its docstring
 
     if not quiet:
         # API key already loaded during module bootup; here, we just inform the user.

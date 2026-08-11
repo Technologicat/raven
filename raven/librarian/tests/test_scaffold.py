@@ -1839,6 +1839,44 @@ class TestPromptAssemblyFromOutside:
         assert [message["role"] for message in wire] == ["system", "assistant", "tool", "user"]
         assert json.dumps(wire)  # a prompt that cannot be serialized cannot be sent
 
+    def test_a_run_can_override_an_inject_without_touching_the_module(self, monkeypatch):
+        # The reason `formatters` is a settings field: an A/B of a wording used to mean assigning to a
+        # `chatutil` global and putting it back in a `finally`, which is process-wide and therefore shared
+        # with every concurrent turn.
+        settings = self._settings(monkeypatch)
+        history = [chatutil.create_chat_message(llm_settings=settings, role="user", text="Hello?")]
+        tool_context = scaffold.make_tool_context(llm_settings=settings, retriever=None)
+
+        settings.formatters.reminder_to_write_conversationally = lambda: "SENTINEL-WORDING"
+        prompt = scaffold.build_turn_prompt(llm_settings=settings, history=history,
+                                            docs_query=None, docs_matches=[], tool_context=tool_context)
+
+        system_text = chatutil.content_to_text(prompt[0]["content"])
+        assert "SENTINEL-WORDING" in system_text
+        assert chatutil.format_reminder_to_write_conversationally() not in system_text
+        # The module is untouched, so a second settings object still gets the shipped wording.
+        assert chatutil.default_formatters().reminder_to_write_conversationally() != "SENTINEL-WORDING"
+
+    def test_silencing_an_inject_removes_its_line_entirely(self, monkeypatch):
+        # `rag_live_corpus` runs its control arm this way, and it works because `_add_to_system_message`
+        # appends whatever it is given: an empty string contributes no line rather than a blank one.
+        settings = self._settings(monkeypatch)
+        history = [chatutil.create_chat_message(llm_settings=settings, role="user", text="Hello?")]
+        tool_context = scaffold.make_tool_context(llm_settings=settings, retriever=None)
+        tool_context.grounded = True  # so the context-only reminder is in play at all
+
+        with_notice = scaffold.build_turn_prompt(llm_settings=settings, history=history, docs_query=None,
+                                                 docs_matches=[], tool_context=tool_context,
+                                                 tools_are_spent=True)
+        settings.formatters.notice_that_tools_are_spent = lambda: ""
+        without = scaffold.build_turn_prompt(llm_settings=settings, history=history, docs_query=None,
+                                             docs_matches=[], tool_context=tool_context,
+                                             tools_are_spent=True)
+
+        notice = chatutil.format_notice_that_tools_are_spent()
+        assert notice in chatutil.content_to_text(with_notice[0]["content"])
+        assert notice not in chatutil.content_to_text(without[0]["content"])
+
     def test_building_the_prompt_leaves_the_caller_s_history_alone(self, monkeypatch):
         # The reason the mutating version could not be the public one: a caller asking "what would Raven
         # send?" would have had to hand over a list to be altered, and then read its own variable back.

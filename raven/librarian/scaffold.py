@@ -412,17 +412,20 @@ def build_turn_prompt(llm_settings: env,
     # still found by walking the branch.
     grounding_material_exists = tool_context.grounded or _attachment_is_present(history)
 
-    # Instruction-like injects -> leading system message.
-    system_injects = [chatutil.format_date_now(),
-                      chatutil.format_reminder_to_write_conversationally()]
+    # Instruction-like injects -> leading system message. Through `llm_settings.formatters` rather than
+    # `chatutil` directly, which changes nothing in ordinary use - the defaults are `chatutil`'s own. It is
+    # for experiments that A/B a wording, which previously had to assign to a module global.
+    formatters = llm_settings.formatters
+    system_injects = [formatters.date_now(),
+                      formatters.reminder_to_write_conversationally()]
     # Ask the model to base claims about the context on the context, whenever there *is* context to base
     # them on. Skipping the reminder when there is nothing to ground in is load-bearing rather than an
     # optimization: asking a model to stick to documents that were never provided is a contradiction it
     # will dutifully try to resolve, at a cost of up to 37x the deliberation, sometimes never terminating.
     if grounding_material_exists:
-        system_injects.append(chatutil.format_reminder_to_use_information_from_context_only())
+        system_injects.append(formatters.reminder_to_use_information_from_context_only())
     if tools_are_spent:
-        system_injects.append(chatutil.format_notice_that_tools_are_spent())
+        system_injects.append(formatters.notice_that_tools_are_spent())
     _add_to_system_message(llm_settings=llm_settings,
                            history=history,
                            texts=system_injects)
@@ -432,7 +435,7 @@ def build_turn_prompt(llm_settings: env,
                                             call_id="raven_clock",
                                             function_name="get_current_time",
                                             arguments={},
-                                            result_text=chatutil.format_time_now())
+                                            result_text=formatters.time_now())
     # Order is load-bearing: the earlier conversation's documents, then this turn's search results. The two
     # lists look alike, and whichever sits closest to the user's message reads as the answer to it — so with
     # the consulted list last, a model could take a document it read three turns ago for something the
@@ -447,7 +450,7 @@ def build_turn_prompt(llm_settings: env,
                                                      call_id="raven_consulted",
                                                      function_name="list_consulted_documents",
                                                      arguments={},
-                                                     result_text=chatutil.format_consulted_documents(consulted_documents)))
+                                                     result_text=formatters.consulted_documents(consulted_documents)))
     if docs_matches:
         # The synthetic call names the real tool, which is no longer a fiction: asked about something these
         # matches do not cover, the model reaches for a second, better-aimed search, and now there is one to
@@ -457,7 +460,7 @@ def build_turn_prompt(llm_settings: env,
                                                      call_id="raven_docs",
                                                      function_name="search_documents",
                                                      arguments={"query": docs_query if docs_query is not None else ""},
-                                                     result_text=chatutil.format_docs_matches(docs_matches)))
+                                                     result_text=formatters.docs_matches(docs_matches)))
 
     for position in range(len(history) - 1, -1, -1):
         if history[position]["role"] == "user":
@@ -1117,7 +1120,7 @@ def ai_turn(llm_settings: env,
                                                          assistant_message=out.data,
                                                          parent_node_id=head_node_id,
                                                          tool_context=tool_context,
-                                                         maybe_refusal_text=(chatutil.format_error_that_tools_are_spent() if budget_spent else None),
+                                                         maybe_refusal_text=(llm_settings.formatters.error_that_tools_are_spent() if budget_spent else None),
                                                          on_tools_start=on_tools_start,
                                                          on_call_lowlevel_start=on_call_lowlevel_start,
                                                          on_call_lowlevel_done=on_call_lowlevel_done,

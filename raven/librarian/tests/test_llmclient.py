@@ -818,8 +818,18 @@ class TestConfigureMatchesSetup:
                                              quiet=True)
 
         assert set(from_configure.keys()) == set(from_setup.keys())
+
+        def _comparable(value):
+            # `repr(env)` leads with the object's own address, so two envs with identical contents never
+            # compare equal by repr. `settings.formatters` is one, and deliberately a fresh env per
+            # `configure` call — a shared one would make an override on this run visible to every other.
+            # Compare what it holds instead.
+            if isinstance(value, env):
+                return {k: repr(value[k]) for k in sorted(value.keys())}
+            return repr(value)
+
         differing = [k for k in sorted(from_setup.keys())
-                     if repr(from_setup[k]) != repr(from_configure[k])]
+                     if _comparable(from_setup[k]) != _comparable(from_configure[k])]
         assert not differing, f"configure() diverged from setup() on: {differing}"
 
     def test_missing_context_length_defaults_the_same_way(self, monkeypatch):
