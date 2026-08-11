@@ -60,6 +60,12 @@ Two conventions worth knowing before adding to any of them:
 
 ## Build and Development
 
+**The supported platforms are Linux, macOS, and Windows.** Development happens on Linux, so the other two
+are reached only through CI and through the people running them — which makes a platform-specific CI
+failure a report from a real user's environment rather than a curiosity to be waived. The test matrix
+covers all three for that reason. (A Windows-only crash on 2026-08-11 turned out to be a latent mistake
+that Linux and macOS had simply tolerated, which is the usual shape of these.)
+
 Uses PDM with `pdm-backend`. **Python 3.11–3.12** (see `pyproject.toml`: `requires-python = "<3.13,>=3.11"`). Optional CUDA extras via `pdm install -G cuda`.
 
 ### Why the 3.12 upper cap
