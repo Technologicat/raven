@@ -670,6 +670,18 @@ byte-identical text and match. ("Template" here means only that the text may con
 `{model}` — Juha.) A deployment that *does* embed one gets a new root per distinct value, which is the
 honest outcome rather than a failure: the text really is different.
 
+**And the roots have to be reachable from the GUI, which they are not today** (Juha, 2026-08-11). The way
+to reach a chat under another card is branch-browsing on the system prompt message — the same arrows that
+walk sibling replies — so the multi-root design is only usable if those work at the top of the tree.
+Checked: they do not. `chattree.get_siblings` returns `(None, None)` for a root *by definition* ("a root node
+is defined as having no siblings", its docstring), and `chat_controller._navigate_to_sibling` returns `None`
+on exactly that case. Nothing is broken right now, because the refresh-in-place design means there is only
+ever one root — which is why the gap has never shown.
+
+So the storage change carries a GUI prerequisite: roots are siblings of each other in a forest, which is
+`get_all_root_nodes()` and already exists, and the sibling walk plus whatever gates the navigation buttons
+have to accept it. Worth settling as part of that pass rather than discovering it after the storage lands.
+
 **No pruning, and nothing to decide about orphans** (Juha, 2026-08-11). Chats held under an older system
 prompt stay valid as another tree in the forest — which is what a forest is for, and the datastore has been
 one all along. So the card a chat was rooted at does not disappear from under it, and the question of what
