@@ -18,6 +18,14 @@ This is a programming library and not a product: what it offers is programmatic 
 corpus, chattree and provenance machinery. It is deliberately not a generic agent harness — no plugin
 system, no workflow DSL, no orchestration layer.
 
+**Nothing here overwrites anything, and that is worth knowing up front**, because a scripting surface over
+an LLM is usually built on a transcript, where a retry has nowhere to put the attempt it replaces. The
+chat is a tree. A retry, a reroll, or a second phrasing of the same question is a new branch off the same
+parent, so the failed attempt and the one that worked are both in the chat afterwards — as are all four
+samples of a turn that was sampled four times, side by side under the message that prompted them. Nothing
+has to be switched on for that, and there is no separate place for the run's history to live: a batch's
+whole record of what it did is a chat, openable in Librarian and readable by a person.
+
 `turn`'s docstring carries worked examples. The *executable* ones are in
 `raven/librarian/tests/test_agent.py`, which is the better place to look for a pattern this docstring does
 not cover: it drives the real loop against a faked backend, so every example in it is one CI runs.
@@ -111,6 +119,13 @@ class TurnRecord:
                 for "not recorded", which is what a turn with the documents switched off and no attachment
                 stores. Not a verdict on the reply's accuracy — it says whether anything was retrieved.
 
+    `generation`: The final reply's generation metadata — `model`, `n_tokens`, `dt` — or **`None` when
+                  Raven wrote that message rather than the model.** A turn never raises on a backend
+                  failure: it materializes the failure as an assistant message, which is right for a person
+                  (it is visible and rerollable) and a trap for an unattended batch, where a dead backend
+                  otherwise yields a run of plausible-looking replies that all say the same thing. This is
+                  the field that distinguishes them, and it is the one to check before trusting a batch.
+
     `prompts`: The wire histories actually sent, one per model call, so `prompts[-1]` is the one that
                produced `reply`. This is the assembled prompt including the per-turn injects, after
                attachments are resolved — what a script asserting on "what was actually sent" needs.
@@ -125,6 +140,7 @@ class TurnRecord:
     rounds: int
     tool_calls: Mapping[str, int]
     grounded: bool | None
+    generation: dict | None
     prompts: tuple[list[dict], ...]
 
 
@@ -171,7 +187,8 @@ def describe_turn(datastore: chattree.Forest,
         if message["role"] == "assistant" and message.get("reasoning_content"):
             reasoning.append(message["reasoning_content"])
 
-    if messages and messages[-1]["role"] == "assistant":
+    ended_on_a_reply = bool(messages) and messages[-1]["role"] == "assistant"
+    if ended_on_a_reply:
         # The persona prefix comes off, as it does in both frontends: it is part of how the message is
         # stored, not part of what was said. The *stored* persona rather than the session's, since a chat
         # can hold nodes generated under a different character.
@@ -180,7 +197,10 @@ def describe_turn(datastore: chattree.Forest,
             text=chatutil.content_to_text(messages[-1]["content"]))
     else:
         reply = ""
-    grounded = (payloads[-1].get("generation_metadata") or {}).get("grounded") if payloads else None
+    # `None` rather than `{}` when there is none: a message Raven authored has no generation to describe,
+    # and that absence is what a batch reads to tell it from a real reply.
+    generation = payloads[-1].get("generation_metadata") if ended_on_a_reply else None
+    grounded = (generation or {}).get("grounded")
 
     return TurnRecord(datastore=datastore,
                       head_node_id=head_node_id,
@@ -191,6 +211,7 @@ def describe_turn(datastore: chattree.Forest,
                       rounds=rounds,
                       tool_calls=tool_calls,
                       grounded=grounded,
+                      generation=generation,
                       prompts=tuple(prompts))
 
 
@@ -227,8 +248,50 @@ def turn(llm_settings: env,
     second question from `record.node_ids[0]` rather than from `record.head_node_id` grows a sibling branch
     and leaves the first one intact, so several continuations of one prefix can be compared afterwards.
 
-    To keep the whole thing, build the datastore yourself and make it file-backed — that is also what
-    attaching anything requires:
+    To interrogate the corpus you actually indexed, from the chat you actually use. One question is
+    something to type into Librarian; two hundred of them out of a file is what this is for:
+
+        llm_settings = llmclient.setup()
+        datastore, state = appstate.load(llm_settings,
+                                         librarian_config.llm_datastore_file,
+                                         librarian_config.llm_state_file,
+                                         autosave=False)
+        retriever, _scanner = hybridir.setup(...)  # over the configured docs dir and index; see its docstring
+        for question in questions:
+            record = agent.turn(llm_settings, question, datastore=datastore,
+                                head_node_id=state["new_chat_HEAD"], retriever=retriever)
+            write_result(question, record.reply, record.grounded, dict(record.tool_calls))
+
+    Four things in that loop are the point of writing it this way:
+
+      - **`appstate.load`, rather than a `chattree.PersistentForest` over the configured path.** It
+        validates the stored HEAD, refreshes the system prompt and greeting, migrates older formats, and
+        wires the sidecar reader the attachment GC needs — none of which a bare constructor does.
+      - **`autosave=False`**, so an interrogation run writes nothing. `datastore.save()` keeps it if you
+        want it kept, but only when Librarian is not open on the same file: of two writers, the one who
+        saved first loses.
+      - **`state["new_chat_HEAD"]` — the greeting — and not `state["HEAD"]`.** Every question then branches
+        off the same point, so question 2 is not answered in the context of question 1's reply, and none of
+        them lands on top of the conversation the user was in the middle of. All the threads are in the one
+        chat, which is what the tree is for: open Librarian afterwards and they are there to read.
+      - **The retriever is opened once**, outside the loop. Opening it loads the index and the embedding
+        model, which is the expensive part and is not per-question.
+
+    Such a run is an overnight job on a local model, which is unattended, and two things follow that are
+    easy to leave until the morning after:
+
+      - **Write each result as it finishes, and make the results file the ledger.** Its length is then the
+        count already done, so re-running the same command continues instead of starting over. A batch that
+        dies at question 140 should contribute its first 139 rather than nothing.
+      - **Record `record.generation is None` per question, and re-run those.** A turn does not raise when
+        the backend fails — the failure arrives as an assistant message. Overnight, a backend that stopped
+        answering at question 12 yields 188 replies that read like replies, and a run that looks complete.
+        That predicate is what says the model did not write one, so the morning's second pass can be over
+        the failures alone rather than over everything. Re-running a question grows a new branch beside the
+        failed attempt rather than replacing it, so what went wrong stays readable in the chat.
+
+    To keep a run without touching the real chat, build the datastore yourself and make it file-backed —
+    that is also what attaching anything requires:
 
         datastore = chattree.PersistentForest(path)
         record = agent.turn(llm_settings, "First question", datastore=datastore, retriever=retriever)

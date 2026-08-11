@@ -246,6 +246,30 @@ class TestTurn:
                                                                       node_id=second.head_node_id)] == \
             ["system", "assistant", "user", "assistant", "user", "assistant"]
 
+    def test_a_backend_failure_is_a_reply_the_model_did_not_write(self, monkeypatch, llm_settings):
+        # A turn never raises on a backend failure -- it materializes one as an assistant message, which is
+        # right for a person (visible, rerollable) and a trap for an unattended batch: a dead backend
+        # yields a run of plausible-looking replies. `generation is None` is the only thing that
+        # distinguishes them, so a retry pass is written against it.
+        def failing_invoke(**kw):
+            raise RuntimeError("backend went away")
+        monkeypatch.setattr("raven.librarian.llmclient.invoke", failing_invoke)
+
+        failed = agent.turn(llm_settings, "Question?")
+        assert failed.generation is None
+        assert failed.reply  # ...and it reads like a reply, which is the whole hazard
+
+        # The retry: same question, from the same point, once the backend is back. The failed attempt stays
+        # in the chat as a sibling rather than being overwritten.
+        monkeypatch.setattr("raven.librarian.llmclient.invoke",
+                            lambda **kw: make_invoke_result(content="Answer.", model="test-model"))
+        asked_at = failed.datastore.get_parent(failed.node_ids[0])
+        retried = agent.turn(llm_settings, datastore=failed.datastore, head_node_id=asked_at)
+
+        assert retried.generation["model"] == "test-model"
+        assert retried.reply == "Answer."
+        assert len(failed.datastore.get_children(asked_at)) == 2
+
     def test_running_the_same_head_again_branches_rather_than_appends(self, monkeypatch, llm_settings):
         # What the GUI calls reroll, and what a script sampling one turn several times needs: no user
         # message, and a head that already has a reply under it. The chat is a tree, so the second answer
@@ -375,7 +399,7 @@ class TestTheSurfaceIsDeclared:
     def test_the_record_names_what_a_probe_asserts_on(self):
         fields = {field.name for field in dataclasses.fields(agent.TurnRecord)}
         assert fields == {"datastore", "head_node_id", "node_ids", "messages", "reply", "reasoning",
-                          "rounds", "tool_calls", "grounded", "prompts"}
+                          "rounds", "tool_calls", "grounded", "generation", "prompts"}
 
     def test_the_record_is_frozen(self, llm_settings):
         forest = chattree.Forest()
