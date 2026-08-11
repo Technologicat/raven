@@ -265,19 +265,22 @@ comment describes it as squeezed from both sides: that is two constraints on one
 would let the drift floor drop to a few pixels — making genuine small scrolls easier to detect — while
 `at_end` keeps whatever the keyboard needs. Worth doing; not done, and it wants the app.
 
-### The unit error has a third site
+### The unit is used as a proxy in three places, and it is consistently low
 
-`DPGLinearizedChatView.scroll_lines` moves `delta_lines * gui_config.font_size`, and its docstring says a
-line is taken as `font_size`, "matching `_PIN_TOLERANCE_PX`'s own 'two lines of text'". Both halves of that
-rest on the same wrong equivalence: **a rendered line is 26 px against a font size of 20**, so the arrow keys
-under-scroll by about a quarter of a line per press.
+`font_size` stands in for the line height in `_PIN_TOLERANCE_PX`, in `DPGLinearizedChatView.scroll_lines`
+(`delta_lines * gui_config.font_size`), and in `_SCROLL_LINES_PER_ARROW`. It is low by about a quarter — a
+rendered line measures 26 px against a font size of 20 — so the arrow keys move about 3.8 lines where the
+constant says 5, and the tolerance allows about 1.5 lines where its comment says 2.
 
-Its stated argument does not hold either. It reasons that the per-keypress step must clear the tolerance or
-the next arriving chunk undoes it — but the step is one `font_size` (20) against a tolerance of two (40), so
-a single press has never cleared it. That is the "a single Up is usually undone during a reply" behaviour
-described a few hundred lines above, arrived at from the other direction and not connected to this.
+**Nothing breaks, because the error is consistent.** The design argument the two share is that the
+per-keypress step must clear the follow-tail floor or a streaming chunk would undo it, and that holds on the
+ratio rather than on the unit: five font-sizes against two is 100 px against 40, a 2.5x margin, and both
+scale together with the font. The comment beside `_SCROLL_LINES_PER_ARROW` states this correctly.
 
-Fixing the unit here is a behaviour change to a keyboard gesture, so it is recorded rather than applied.
+So this is cosmetic — the constants do not mean quite what they say — and worth knowing mainly because
+`_PIN_TOLERANCE_PX`'s share of it was implicated in the bug above, where 46 and 47 px of drift exceeded a
+bound that was supposed to be worth two lines. That is moot now the drift is zero. Recorded rather than
+applied: changing the unit would move a keyboard gesture, and the margin that makes it work is unaffected.
 
 The failure is silent and reads as the app being broken: the reply scrolls out of view while the model is
 writing, which is precisely when a viewer is watching it. The recovery - a jump to the end at finalize - is
