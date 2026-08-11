@@ -127,27 +127,35 @@ back to the end, and it works. So there is no second defect here. There is one b
 That matters for where to look: the question is never "how do we get out of this state" but "how did we
 conclude the reader had scrolled when they had not".
 
-## There is no scroll event to consult, and the docstring already says so
+## No scroll event — but the *input* is hookable, which is the way out
 
 `should_follow_tail` explains why it infers intent from position rather than from events: "of the three ways
 this panel moves - scrollbar drag, mouse wheel, navigation keys - the drag is handled inside ImGui and
-raises nothing we could hook". The wheel is the same. `_user_scroll_generation` is authoritative only for
-the third way, the one that goes through `_set_y_scroll`, so consulting it would miss both of the others.
+raises nothing we could hook". True of the **scroll**, and that is what the sentence is about.
+`_user_scroll_generation` is authoritative only for the third way, the one going through `_set_y_scroll`, so
+consulting it alone would miss the other two.
 
-**Two ideas that do not survive contact with that**, recorded because they are the ones that suggest
-themselves:
+**But the gesture that caused the scroll is fully visible** (Juha, 2026-08-11), and that is a different
+question from seeing the scroll. DPG exposes `add_mouse_down_handler`, `add_mouse_drag_handler` (with a
+button filter and a movement threshold) and `add_mouse_release_handler` alongside the wheel and move
+handlers already registered in `app.py`, plus `is_mouse_button_down` and `is_mouse_button_dragging` as
+queries. `guiutils.is_mouse_inside_widget` narrows any of them to the chat panel, whose position and size
+are known.
 
-- *Bump the user-scroll signal from the input handlers `app.py` already registers.* Weaker than it looks,
-  though not dead. The handlers are viewport-global, but `guiutils.is_mouse_inside_widget` can narrow a
-  wheel event to the chat panel, which makes **the wheel case precise**: a wheel event with the pointer over
-  the panel is a reader scrolling it, and nothing else is. The drag is the hard half - it raises nothing to
-  hook at all, so it would have to be reconstructed from a click inside the panel plus subsequent motion,
-  and the mouse-move handler fires on any pointer motion anywhere. Worth having for the wheel; not a
-  complete answer on its own.
-- *Bias the ambiguous case toward the reader.* There is no such direction. Deciding "theirs" stops
-  following, which abandons a reader who is watching the stream; deciding "ours" keeps following, which
-  drags back a reader who scrolled away. Both are the reader. The test has to be accurate rather than
-  conservative, which is why this is worth diagnosing properly instead of tuning.
+So both blind paths can be caught positively, at the input rather than at the scroll:
+
+- **Wheel:** a wheel event with the pointer over the chat panel is a reader scrolling it, and nothing else
+  is. Exact.
+- **Scrollbar drag:** a left button held with the pointer inside the panel, dragging. The scrollbar occupies
+  a known strip at the panel's right edge, so the test can be as tight as wanted.
+
+That turns "did the reader scroll?" from an inference about position into an observation about input, which
+is what the whole difficulty here has been.
+
+**One idea that does not survive**, recorded because it suggests itself: *bias the ambiguous case toward the
+reader.* There is no such direction. Deciding "theirs" stops following, which abandons a reader watching the
+stream; deciding "ours" keeps following, which drags back a reader who scrolled away. Both are the reader,
+so the test has to be accurate rather than conservative.
 
 ## What is actually broken, in the docstring's own words
 
