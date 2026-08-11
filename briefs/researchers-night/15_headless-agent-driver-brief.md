@@ -101,7 +101,9 @@ afterwards. Keep the wall where it works; do not propagate it to callers it cann
 ## Part 0 — lazy `api.initialize` in `llmclient`
 
 > **Landed 2026-08-10.** `api.initialize` moved out of module scope into `_client_api()`, called on first use
-> by the two network tool wrappers. The four apps that need the client stack initialize it explicitly
+> by the only two things in `llmclient` that reach the server — `websearch_wrapper` and `webfetch_wrapper`,
+> the tool entrypoints for the model's `websearch` and `webfetch`. The four apps that need the client stack
+> initialize it explicitly
 > (Librarian, minichat, `pdf2bib`, and Visualizer in its LLM keyword mode), which is the honest form: an app
 > declares what it will use. The description below is of the state *before* that, and its `llmclient.py:81`
 > pointer no longer resolves.
