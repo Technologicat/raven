@@ -73,7 +73,7 @@ N = int(sys.argv[3]) if len(sys.argv) > 3 else 3
 # name *that* model rather than whatever the backend happens to have loaded. The context length is stated
 # rather than discovered for the same reason; nothing here measures context-length behaviour.
 settings = llmclient.configure(model_info=env(label=MODEL, model_id=MODEL,
-                                              context_length=131072, is_vlm=None),
+                                              context_length=131072, is_vlm=None, loaded=None),
                                backend_flavor="generic",
                                backend_url=BASE,
                                quiet=True)

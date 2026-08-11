@@ -35,7 +35,8 @@ def llm_settings(monkeypatch):
     return llmclient.configure(model_info=env(label="test-model",
                                               model_id="test-model",
                                               context_length=32768,
-                                              is_vlm=None),  # "cannot tell", as a backend that does not report it gives
+                                              is_vlm=None,  # "cannot tell", as a backend that does not report it gives
+                                              loaded=True),  # a test that gets as far as a turn is testing one against a backend that could answer
                                backend_flavor="lmstudio",
                                backend_url="http://test-backend",
                                quiet=True)

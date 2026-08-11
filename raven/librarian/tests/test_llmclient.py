@@ -648,6 +648,63 @@ class TestModelInfoResolution:
         assert info.label == llmclient.NO_MODEL_INFO
         assert info.context_length is None
 
+    def test_whether_a_model_is_loaded_is_a_tristate(self, monkeypatch):
+        # The three answers a frontend has to tell apart. `None` is "cannot tell" and must not be shown as a
+        # fault: ooba and generic backends report nothing to go on, and calling that "no model loaded" would
+        # put a permanent warning in front of every user of either.
+        monkeypatch.setattr(llmclient.librarian_config, "llm_model", None)
+
+        monkeypatch.setattr(llmclient.requests, "get", _route_get({
+            "/api/v0/models": {"data": [{"id": "a", "state": "loaded"}]}}))
+        assert llmclient._resolve_model_info("http://x", "lmstudio").loaded is True
+
+        monkeypatch.setattr(llmclient.requests, "get", _route_get({
+            "/api/v0/models": {"data": [{"id": "a", "state": "not-loaded"}]}}))
+        assert llmclient._resolve_model_info("http://x", "lmstudio").loaded is False
+
+        monkeypatch.setattr(llmclient.requests, "get", _route_get({
+            "/v1/internal/model/info": {"model_name": "Qwen3-4B.gguf"}}))
+        assert llmclient._resolve_model_info("http://x", "oobabooga").loaded is True
+
+        # A generic backend's model list says what it *has*, which is not what is resident -- LM Studio's
+        # own list would read as "loaded" by that test with nothing running at all.
+        monkeypatch.setattr(llmclient.requests, "get", _route_get({
+            "/v1/models": {"data": [{"id": "the-only-model"}]}}))
+        assert llmclient._resolve_model_info("http://x", "generic").loaded is None
+
+    def test_oobabooga_says_nothing_is_loaded_with_the_string_None(self, monkeypatch):
+        # ooba's own `list_models_openai_format` tests `model_name != 'None'` before deciding it has a model
+        # to list, so the sentinel is a string rather than a null. Taken from its source; there is no ooba
+        # instance here to confirm it against, which is also true of the whole ooba path.
+        monkeypatch.setattr(llmclient.requests, "get", _route_get({
+            "/v1/internal/model/info": {"model_name": "None"}}))
+        info = llmclient._resolve_model_info("http://x", "oobabooga")
+        assert info.loaded is False
+        assert info.label == llmclient.NO_MODEL_INFO  # ...and it is not reported as a model called "None"
+        assert info.model_id is None
+
+    def test_a_missing_capability_field_is_cannot_tell_not_cannot_see(self, monkeypatch):
+        # `is_vlm=False` hard-refuses image attachment, so it must mean the backend said so. Every record
+        # LM Studio returns carries `type`; a record without one has not answered the question.
+        monkeypatch.setattr(llmclient.requests, "get", _route_get({
+            "/api/v0/models": {"data": [{"id": "a", "state": "loaded"}]}}))
+        assert llmclient._resolve_model_info("http://x", "lmstudio").is_vlm is None
+
+        monkeypatch.setattr(llmclient.requests, "get", _route_get({
+            "/api/v0/models": {"data": [{"id": "a", "state": "loaded", "type": "llm"}]}}))
+        assert llmclient._resolve_model_info("http://x", "lmstudio").is_vlm is False
+
+    def test_naming_a_model_does_not_make_it_resident(self, monkeypatch):
+        # LM Studio's JIT loads on demand, so a configured model name is a request the backend will *try* to
+        # honor - and it fails outright when the model does not fit in the free VRAM. So the name settles
+        # what a request would ask for, not whether the backend can answer now.
+        monkeypatch.setattr(llmclient.requests, "get", _route_get({
+            "/api/v0/models": {"data": [{"id": "a", "state": "not-loaded"}]}}))
+        monkeypatch.setattr(llmclient.librarian_config, "llm_model", "qwen3.6-35b-a3b")
+        info = llmclient._resolve_model_info("http://x", "lmstudio")
+        assert info.label == "qwen3.6-35b-a3b"
+        assert info.loaded is False
+
 
 # ---------------------------------------------------------------------------
 # Token counting tiers + usage calibration (brief 02 §7)

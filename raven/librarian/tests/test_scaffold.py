@@ -1811,7 +1811,8 @@ class TestPromptAssemblyFromOutside:
         return llmclient.configure(model_info=env(label="test-model",
                                                   model_id="test-model",
                                                   context_length=32768,
-                                                  is_vlm=False),
+                                                  is_vlm=False,
+                                                  loaded=True),
                                    backend_flavor="lmstudio",
                                    backend_url="http://localhost:1234",
                                    quiet=True)

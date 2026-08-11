@@ -58,7 +58,7 @@ def settings_for(model):
     stated rather than discovered; nothing here measures context-length behaviour.
     """
     return llmclient.configure(model_info=env(label=model, model_id=model,
-                                              context_length=131072, is_vlm=None),
+                                              context_length=131072, is_vlm=None, loaded=None),
                                backend_flavor="generic",
                                backend_url=BASE,
                                quiet=True)

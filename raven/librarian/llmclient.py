@@ -630,16 +630,28 @@ def _resolve_model_info(backend_url: str, flavor: str) -> env:
                 reports it (LM Studio flags this via the model record's `type == "vlm"`), or `None` when it
                 can't be determined (ooba / generic expose no capability field). Gates the image-attach UI: a
                 definite `False` hard-refuses attachment; `None` allows it and lets the backend reject.
+      `loaded`: whether the backend currently has a model resident and ready to answer, as the same tri-state.
+                LM Studio says so per model (`state`); ooba reports the string "None" as its model name when
+                it has nothing. Both are therefore `True`/`False`. A generic backend lists models it *has*,
+                which says nothing about what is resident, so there it is `None` — "cannot tell", which must
+                not be shown to the user as a fault. Reachable-but-empty is otherwise invisible until the
+                first message of a session fails, which is the worst moment to discover it.
     """
     if flavor == "oobabooga":
         # ooba reports the GGUF filename (fine — the model can interpret `name-size-quant.gguf` itself) but
         # not the active context length here; the latter falls through to the default in `setup`. It exposes no
         # VLM-capability flag either, so `is_vlm` is unknown (`None`).
         model_name = requests.get(f"{backend_url}/v1/internal/model/info", headers=headers, verify=False, timeout=librarian_config.llm_network_timeout).json().get("model_name")
-        return env(label=model_name or NO_MODEL_INFO,
-                   model_id=model_name,
+        # ooba reports "nothing loaded" as the *string* "None" in this field, which is the check its own
+        # `list_models_openai_format` makes before deciding whether it has a model to list at all. So the
+        # test below is ooba's test, not a guess at one - but it is read from its source rather than
+        # observed, since there is no ooba instance here to try it against.
+        model_is_loaded = bool(model_name) and model_name != "None"
+        return env(label=model_name if model_is_loaded else NO_MODEL_INFO,
+                   model_id=model_name if model_is_loaded else None,
                    context_length=None,
-                   is_vlm=None)
+                   is_vlm=None,
+                   loaded=model_is_loaded)
     if flavor == "lmstudio":
         # `/api/v0/models` lists all downloaded models; exactly the `state == "loaded"` one is resident under
         # JIT, and only that record carries `loaded_context_length`. The record's `type` field is `"vlm"` for
@@ -648,21 +660,32 @@ def _resolve_model_info(backend_url: str, flavor: str) -> env:
         loaded = [m for m in models if m.get("state") == "loaded"]
         if loaded:
             record = loaded[0]
+            # A record with no `type` at all is "cannot tell", not "cannot see": a bare `== "vlm"` would
+            # hard-refuse image attachment on the strength of a field that was never there. Every record
+            # this LM Studio returns carries one, so this is the shape of the answer rather than a
+            # workaround for an observed gap.
+            maybe_model_type = record.get("type")
             return env(label=_format_lmstudio_model_label(record),
                        model_id=record.get("id"),
                        context_length=record.get("loaded_context_length"),
-                       is_vlm=(record.get("type") == "vlm"))
+                       is_vlm=(maybe_model_type == "vlm") if maybe_model_type is not None else None,
+                       loaded=True)
         # JIT idle: nothing resident right now. If the user named a model, trust that; else say so honestly.
         # Nothing loaded means no capability record to read, so `is_vlm` is unknown either way.
+        #
+        # `loaded=False` even when the user named a model: naming one says which model a request would ask
+        # for, not that the backend can answer right now. JIT does load on demand, so this state often
+        # resolves itself - but it also fails outright when the named model does not fit in what is free,
+        # and telling the user which of those they are in is the whole point of reporting it.
         if librarian_config.llm_model:
-            return env(label=librarian_config.llm_model, model_id=librarian_config.llm_model, context_length=None, is_vlm=None)
-        return env(label=NO_MODEL_INFO, model_id=None, context_length=None, is_vlm=None)
+            return env(label=librarian_config.llm_model, model_id=librarian_config.llm_model, context_length=None, is_vlm=None, loaded=False)
+        return env(label=NO_MODEL_INFO, model_id=None, context_length=None, is_vlm=None, loaded=False)
     # generic: best-effort from the standard list; never guess identity, and no capability field to read.
     ids = [m.get("id") for m in requests.get(f"{backend_url}/v1/models", headers=headers, verify=False, timeout=librarian_config.llm_network_timeout).json().get("data", [])]
     ids = [model_id for model_id in ids if model_id]
     if len(ids) == 1:
-        return env(label=ids[0], model_id=ids[0], context_length=None, is_vlm=None)
-    return env(label=NO_MODEL_INFO, model_id=librarian_config.llm_model, context_length=None, is_vlm=None)
+        return env(label=ids[0], model_id=ids[0], context_length=None, is_vlm=None, loaded=None)
+    return env(label=NO_MODEL_INFO, model_id=librarian_config.llm_model, context_length=None, is_vlm=None, loaded=None)
 
 # --------------------------------------------------------------------------------
 # The tool registry
@@ -803,6 +826,12 @@ def setup(backend_url: str,
                                         The image-attach UI gates on this: a definite `False` refuses attachment
                                         with a clear message; `None` allows it and lets the backend reject.
 
+        `model_is_loaded: Optional[bool]`: Whether the backend has a model resident and ready to answer, as the
+                                           same tri-state — `True` / `False` on LM Studio and ooba, `None` on a
+                                           generic backend, whose model list says what it has rather than what
+                                           is running. The frontends show a definite `False`; `None` is not a
+                                           fault and is not shown.
+
         `backend_supports_continue: bool`: Whether the backend supports continuing an existing assistant message
                                            (ooba does, via an explicit flag; lmstudio/generic don't).
 
@@ -878,9 +907,11 @@ def configure(model_info: env,
     third of the real object and a stand-in system prompt, so a probe claiming to measure "what Raven sends"
     measures something else — the failure this split exists to remove.
 
-    `model_info`: What `_resolve_model_info` returns: an `env` with `label`, `model_id`, `context_length`
-                  and `is_vlm`. Synthesize one to configure against a hypothetical model; `context_length`
-                  may be `None`, which defaults as it does for a backend that does not report one.
+    `model_info`: What `_resolve_model_info` returns: an `env` with `label`, `model_id`, `context_length`,
+                  `is_vlm` and `loaded`. Synthesize one to configure against a hypothetical model;
+                  `context_length` may be `None`, which defaults as it does for a backend that does not
+                  report one, and `is_vlm`/`loaded` may be `None`, which is how a backend that reports
+                  neither is represented.
 
     `backend_flavor`: "oobabooga", "lmstudio" or "generic". Gates a few request/response details.
 
@@ -965,6 +996,7 @@ def configure(model_info: env,
                    backend_flavor=backend_flavor,
                    context_length=context_length,  # loaded context window in tokens (backend-reported, or the 64k default)
                    model_is_vlm=model_info.is_vlm,  # whether the loaded model accepts image input: True/False, or None if unknown (gates image attach)
+                   model_is_loaded=model_info.loaded,  # whether the backend has a model resident: True/False, or None if unknown (drives the backend-status readout)
                    backend_supports_continue=(backend_flavor == "oobabooga"),  # ooba has an explicit continue flag; others don't
                    tokenizer=tokenizer,  # local HF tokenizer for exact counts, or None (see `count_tokens`)
                    tokens_per_character=_DEFAULT_TOKENS_PER_CHARACTER,  # estimate-path calibration; refined from usage in `invoke`
