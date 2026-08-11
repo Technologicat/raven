@@ -572,6 +572,20 @@ discovering it later: **poll only while known-bad.** No request at all in the he
 `_resolve_model_info` (one HTTP call) on a timer only while the pill is up, stopping the moment it clears.
 The cost is bounded by the duration of a condition the user is actively fixing.
 
+**It reports the unreachable backend as well, not only the reachable-but-empty one** (Juha, 2026-08-11).
+The two are one question — *can this thing answer?* — and the user meets them identically: at the first
+message of a session, having done nothing wrong. Splitting them across a pill and a startup log line would
+mean the more common failure is the one with no readout.
+
+That makes it three states rather than two, and they want distinct wording, because the fix differs and the
+user can act on the difference: *not reachable* (is the backend running? is the URL right?), *reachable,
+nothing loaded* (load a model), and connected. The check is as cheap as the one already sketched —
+`llmclient.test_connection` distinguishes the first from the second two, and it is already called at
+startup, with its answer currently spent on a log line and a `sys.exit(255)` in the batch tools.
+
+Poll-only-while-known-bad covers all three unchanged: both bad states are conditions the user is actively
+fixing, and both clear the same way.
+
 ### The catch: the system prompt depends on the backend — and probably should not
 
 **The prompt is not independent of what the probe learns.** `configure` builds `system_prompt` and
