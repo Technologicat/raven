@@ -85,11 +85,11 @@ clean on a 35B MoE and pathological on a 4B is the failure mode this whole direc
 
 The arms are therefore the tiers in `../../briefs/reference/model-lineup-autumn-2026.md`, which is the
 authority on what those are: Qwen3.5-4B, Qwen3.5-9B, and both 24 GB options, Qwen3.6-27B dense and
-Qwen3.6-35B-A3B. **Set the arms by what a user may plausibly run, not by what is loaded here.** The dense 27B
-suits hardware the MoE does not, so a user choosing it is an ordinary case; that we run 35b-a3b at this desk
-because it tested better is a preference, not a support boundary. A model quietly dropped from the sweep is
-a model the shipped wording is no longer known to work on. The 4B is also the cheapest arm, which makes
-skipping it the wrong economy twice over.
+Qwen3.6-35B-A3B. **Set the arms by what a user may plausibly run, not by what is loaded here.** The two 24 GB
+options are alternatives at the *same* tier, not one superseding the other — dense against MoE, at 18.54 and
+20.40 GB — so choosing between them is a preference, and ours (35b-a3b, because it tested better) narrows
+nothing. A model quietly dropped from the sweep is a model the shipped wording is no longer known to work
+on. The 4B is also the cheapest arm, which makes skipping it the wrong economy twice over.
 
 Do not read the two tables against each other for anything finer. Between the 27B nine-sample runs and
 these, the model, the samplers and the surrounding prompt all changed; only the internal comparisons within
