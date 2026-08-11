@@ -248,7 +248,36 @@ It also settles the tolerance question raised above: with the record correct, th
 of how large the clamp was, so widening `_PIN_TOLERANCE_PX` is unnecessary. Its comment has been corrected
 where it stands, since "two lines of text" was wrong independently of this.
 
-## Why this is worth fixing before a demo
+## Is the tolerance still needed? (asked 2026-08-11, not acted on)
+
+Yes, but less of it, and it is now doing two jobs that want different sizes.
+
+- **`at_end`** — "is the reader effectively at the end?" Needs a tolerance for rounding at minimum, and its
+  size is what decides how large a deliberate scroll must be to escape follow-mode. This is the arrow-key
+  constraint, and it is unaffected by the fix.
+- **`undisturbed`** — "did the reader move the position?" This is the one the fix changed. The large drift
+  source is gone, and what remains is the documented one-frame window where `_set_y_scroll` has written the
+  box but DPG has not applied it — which `animation_slack` already covers while an animation runs. So the
+  floor this needs is now near rounding error rather than 40 px.
+
+The two share `_PIN_TOLERANCE_PX` because they used to need the same large value, which is exactly why the
+comment describes it as squeezed from both sides: that is two constraints on one number. Splitting them
+would let the drift floor drop to a few pixels — making genuine small scrolls easier to detect — while
+`at_end` keeps whatever the keyboard needs. Worth doing; not done, and it wants the app.
+
+### The unit error has a third site
+
+`DPGLinearizedChatView.scroll_lines` moves `delta_lines * gui_config.font_size`, and its docstring says a
+line is taken as `font_size`, "matching `_PIN_TOLERANCE_PX`'s own 'two lines of text'". Both halves of that
+rest on the same wrong equivalence: **a rendered line is 26 px against a font size of 20**, so the arrow keys
+under-scroll by about a quarter of a line per press.
+
+Its stated argument does not hold either. It reasons that the per-keypress step must clear the tolerance or
+the next arriving chunk undoes it — but the step is one `font_size` (20) against a tolerance of two (40), so
+a single press has never cleared it. That is the "a single Up is usually undone during a reply" behaviour
+described a few hundred lines above, arrived at from the other direction and not connected to this.
+
+Fixing the unit here is a behaviour change to a keyboard gesture, so it is recorded rather than applied.
 
 The failure is silent and reads as the app being broken: the reply scrolls out of view while the model is
 writing, which is precisely when a viewer is watching it. The recovery - a jump to the end at finalize - is
