@@ -3,7 +3,8 @@
 __all__ = ["user_turn",
            "ai_turn", "retry_tool_calls", "action_ack", "action_stop",
 
-           "build_turn_prompt"]  # Part A of the scripting surface: the prompt a turn would send, without sending it
+           # For scripting: the prompt a turn would send, without sending it
+           "build_turn_prompt", "make_tool_context"]
 
 import logging
 logger = logging.getLogger(__name__)
@@ -398,7 +399,7 @@ def build_turn_prompt(llm_settings: env,
 
     `docs_matches`: Docs search matches returned by `HybridIR` (see `_search_docs`).
 
-    `tool_context`: The turn's request context (`_make_tool_context`). Read for `grounded`, which is where
+    `tool_context`: The turn's request context (`make_tool_context`). Read for `grounded`, which is where
                     retrieval results and tool results report whether they actually provided material.
     """
     # Work on our own list from here on. Everything below inserts into it, and `_add_to_system_message`
@@ -469,9 +470,13 @@ def build_turn_prompt(llm_settings: env,
     return history
 
 
-def _make_tool_context(llm_settings: env,
-                       retriever: "Optional[hybridir.HybridIR]") -> env:
+def make_tool_context(llm_settings: Optional[env],
+                      retriever: "Optional[hybridir.HybridIR]") -> env:
     """Create the per-turn tool-call request context (the `dyn.tool_context` payload).
+
+    `build_turn_prompt` requires one of these, so a script asking "what would Raven send?" needs this too;
+    passing `None` for both arguments gives the plain shape that question usually wants - no retriever, no
+    tools that size themselves against the context window.
 
     One env per AI turn, not per tool round, because two kinds of field live here and only one of them is
     per-round:
@@ -490,7 +495,8 @@ def _make_tool_context(llm_settings: env,
 
     `llm_settings`: Needed by tools that have to reason about the context window - `fetch_document` sizes
                     what it returns against what is left of it. Carried here rather than closed over,
-                    because an entrypoint is called with the model's arguments and nothing else.
+                    because an entrypoint is called with the model's arguments and nothing else. `None` is
+                    allowed, and means no tool that needs it may run; nothing else reads it.
 
     `retriever`: The document-database retriever the document tools search, or `None` if this app has no
                  document database. The tools are duck-typed against `.query(...)`; see the module header
@@ -566,7 +572,7 @@ def _attachmentify_tool_result(datastore: chattree.Forest,
     regression rather than a tidying. It also means a tool that returns a document opts in by saying so.
 
     The model reads the same bytes either way. A `text_file` part is folded back into the message text at
-    wire-build (`llmclient._serialize_history_for_wire`), so what changes is the chat log and the datastore
+    wire-build (`llmclient.serialize_history_for_wire`), so what changes is the chat log and the datastore
     JSON, not the conversation — which is the property that makes this safe to do behind the user's back.
     Two things do change for the better: the fetched text is now content-addressed on disk, so it survives
     the page going away, and it is sized against the context window along with every other attachment
@@ -635,7 +641,7 @@ def _perform_and_store_tool_calls(llm_settings: env,
     so the per-turn request-context binding (`dyn.tool_context`), the `perform_tool_calls` dispatch, and
     the result→`generation_metadata` mapping all live in exactly one place.
 
-    `tool_context`: The turn's request context, from `_make_tool_context` (which see for what belongs in
+    `tool_context`: The turn's request context, from `make_tool_context` (which see for what belongs in
                     it and why it outlives a single round). Bound to `dyn.tool_context` for the dynamic
                     extent of the dispatch — the request-context pattern (cf. Racket's `parameterize`,
                     Flask's `g`). Entrypoints that need it read `dyn.tool_context`; see the field registry
@@ -912,7 +918,7 @@ def ai_turn(llm_settings: env,
                      This is meant as an optional UI hook to show that tool calls have finished processing.
 
     `tool_context`: Not for application code, which should leave this at `None` so that the turn gets a
-                    fresh context (see `_make_tool_context`). It exists for callers that are *continuing*
+                    fresh context (see `make_tool_context`). It exists for callers that are *continuing*
                     a turn already in progress — `retry_tool_calls` runs a tool call of its own before
                     handing control back here, and its result must keep counting toward this turn's
                     accumulated state rather than being forgotten at the handover.
@@ -952,8 +958,8 @@ def ai_turn(llm_settings: env,
         # The retriever goes in only when the documents are actually in play, so that its presence is the
         # single gate the document tools read. Fails closed: a model that calls a tool we did not advertise
         # finds no retriever there and gets a refusal, rather than reaching around the user's switch.
-        tool_context = _make_tool_context(llm_settings=llm_settings,
-                                          retriever=(retriever if documents_available else None))
+        tool_context = make_tool_context(llm_settings=llm_settings,
+                                         retriever=(retriever if documents_available else None))
         # Material an earlier turn's tools brought in is still sitting in the context, so it still grounds.
         tool_context.grounded = _branch_grounding_is_present(datastore, head_node_id)
     if docs_matches:  # the auto-search grounds this turn as much as a tool call would
@@ -1225,8 +1231,8 @@ def retry_tool_calls(llm_settings: env,
     synthetic_message = {**assistant_message, "tool_calls": calls_to_rerun}
     # Handed to `ai_turn` below, so the re-run call's grounding carries across the handover instead of being
     # forgotten. Same gate as `ai_turn` applies: no retriever in the context unless the documents are in play.
-    tool_context = _make_tool_context(llm_settings=llm_settings,
-                                      retriever=(retriever if docs_enabled else None))
+    tool_context = make_tool_context(llm_settings=llm_settings,
+                                     retriever=(retriever if docs_enabled else None))
     if docs_enabled:  # the re-run call may be, or may lead to, a `list_consulted_documents`
         tool_context.consulted_documents = llmclient.label_documents(
             retriever,

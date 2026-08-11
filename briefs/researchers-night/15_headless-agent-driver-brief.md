@@ -145,33 +145,41 @@ nothing CI lacks.
 
 ## Part A — build the turn's prompt and hand it back
 
-> **Partly landed 2026-08-10 — the acceptance criterion is not yet met.** `_perform_injects` is now
-> `scaffold.build_turn_prompt`: public, in `__all__`, returning a new list instead of mutating the caller's.
-> All 19 call sites updated, and the prose sweep done except the two TODO files, which are frozen pending
-> their own brief, and the closed briefs, which are historical records and are not repointed.
+> **Landed 2026-08-11.** `_perform_injects` is `scaffold.build_turn_prompt`: public, in `__all__`, returning
+> a new list instead of mutating the caller's. The two private doors it still reached through are public too:
+> `scaffold.make_tool_context` (`build_turn_prompt` requires a tool context, so while only a private function
+> could build one the public entry point could not be called without a private call, and "public" was
+> nominal) and `llmclient.serialize_history_for_wire`. The latter went public as-is rather than behind a
+> narrower wrapper: its `datastore=` is already optional and defaults to `None`, which is the no-attachments
+> case a prompt-shape probe has, and a caller with a real chat needs the full function anyway — so a wrapper
+> would have been a second name serving only the case the default already serves.
 >
-> **What remains, found by doing what this brief says and reading the actual scripts.** Both Part A probes
-> still reach through a private door — twice each, and the first is the one that matters:
->
-> - **`scaffold._make_tool_context`.** `build_turn_prompt` *requires* a `tool_context`, and the only way to
->   construct one is a private function. So the public entry point cannot be called without a private call,
->   which makes "public" nominal. This has to be exported for Part A to mean anything.
-> - **`llmclient._serialize_history_for_wire`.** Part A exists so a probe can take the prompt Raven would
->   send and *send it itself*; the wire form is what gets sent, so this is on the path by construction, not
->   incidentally. Whether it becomes public as-is or gets a narrower public wrapper is the open question —
->   its `datastore=` parameter for resolving `sidecar:` image URLs is more than a prompt-shape probe needs.
+> **The criterion is checked by a test, not by inspection.** `TestPromptAssemblyFromOutside` in
+> `test_scaffold.py` asserts the four names are in their modules' `__all__` and drives the whole path —
+> `configure` → `make_tool_context` → `build_turn_prompt` → `serialize_history_for_wire` — with no backend.
+> Re-privatizing any of them is not a signature change, so nothing else would have failed.
 >
 > `inject_shapes` and `rag_placement` are already clean, and always were: they build their own candidate
 > shapes on purpose, which is why the criterion should never have named them (recorded above).
 >
-> **The migration paid for itself immediately, in the way the brief predicted and worse.** `absent_fact` and
-> `assembled_shape` were also moved onto `llmclient.configure`, so they build Raven's real settings instead
-> of forging seven of twenty-one fields with `system_prompt="You are a helpful assistant."`. Re-run against
-> qwen3.6-35b-a3b, two results changed at once: `absent_fact` as-shipped at T=0 went from a clean answer to
-> `finish=length` with **31726 characters of reasoning and no reply**, and `assembled_shape`'s absent-fact
-> check went from declining cleanly to emitting literal `<tool_call>` text. Both are failures those probes
-> exist to catch, and both were invisible while the prompt around the injects was a placeholder. Recorded in
-> `investigations/context-injects/README.md`; the runaway wants a look before Researchers' Night.
+> **The prose sweep is complete, including the frozen TODO files.** Renaming a symbol inside body text moves
+> no heading, and headings staying put is what the freeze is protecting while triage runs elsewhere — checked
+> by line and heading counts before and after. The closed briefs under `librarian-extension/done/` keep the
+> old name: they are historical records and are not repointed.
+>
+> **The migration made the probes measure Raven.** `absent_fact` and `assembled_shape` were also moved onto
+> `llmclient.configure`, so they build Raven's real settings instead of forging seven of twenty-one fields
+> with `system_prompt="You are a helpful assistant."`. That is the durable gain, independent of any single
+> run's output.
+>
+> Re-run once against qwen3.6-35b-a3b, two outputs differed from the forged-settings runs: `absent_fact`
+> as-shipped returned `finish=length` with 31726 characters of reasoning and no reply, and
+> `assembled_shape`'s absent-fact check emitted literal `<tool_call>` text instead of declining cleanly.
+> **This is one sample per arm at T=0, which is not evidence that the real prompt causes either.** Sampling
+> is stochastic and T=0 is not a setting these models are good at; a different system prompt yielding a
+> different output is the expected behaviour of the system, not a finding. What would make it one: several
+> runs per arm at realistic sampling (T=1, `min_p=0.02`), which is cheap and has not been done. Recorded in
+> `investigations/context-injects/README.md`.
 
 No backend involved. This is what the prompt-shape probes want: the prompt Raven *would* send, so they can
 send it themselves and measure the backend without Raven confounding the result.

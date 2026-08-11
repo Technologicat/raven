@@ -1,5 +1,6 @@
 """Unit tests for raven.librarian.scaffold (user_turn, ai_turn)."""
 
+import copy
 import threading
 
 import pytest  # noqa: F401 -- fixtures and marks below
@@ -111,7 +112,7 @@ class FakeRetriever:
 def grounding_context(grounded=False):
     """A tool context for direct `build_turn_prompt` tests. `grounded` is what a tool or the auto-search
     would have declared during the turn; see `scaffold._record_grounding`."""
-    tool_context = scaffold._make_tool_context(llm_settings=None, retriever=None)
+    tool_context = scaffold.make_tool_context(llm_settings=None, retriever=None)
     tool_context.grounded = grounded
     return tool_context
 
@@ -1096,39 +1097,39 @@ class TestGroundingAccumulation:
     """
 
     def test_successful_nonempty_result_grounds_by_default(self):
-        tool_context = scaffold._make_tool_context(llm_settings=None, retriever=None)
+        tool_context = scaffold.make_tool_context(llm_settings=None, retriever=None)
         scaffold._record_grounding(tool_context, make_tool_record("Kelvin-7 drifts 0.3 K/h."))
         assert tool_context.grounded
 
     def test_failed_call_does_not_ground(self):
-        tool_context = scaffold._make_tool_context(llm_settings=None, retriever=None)
+        tool_context = scaffold.make_tool_context(llm_settings=None, retriever=None)
         scaffold._record_grounding(tool_context, make_tool_record("Tool call failed.", status="error"))
         assert not tool_context.grounded
 
     def test_empty_result_does_not_ground(self):
         # A search that found nothing is the case the whole mechanism exists for: it is a perfectly
         # well-formed tool message carrying no material at all.
-        tool_context = scaffold._make_tool_context(llm_settings=None, retriever=None)
+        tool_context = scaffold.make_tool_context(llm_settings=None, retriever=None)
         scaffold._record_grounding(tool_context, make_tool_record("   \n  "))
         assert not tool_context.grounded
 
     def test_declaration_overrides_the_default(self):
         # webfetch's allowlist refusal is the live example: non-empty, successful, grounds nothing.
-        tool_context = scaffold._make_tool_context(llm_settings=None, retriever=None)
+        tool_context = scaffold.make_tool_context(llm_settings=None, retriever=None)
         scaffold._record_grounding(tool_context,
                                    make_tool_record("The host example.com is not on the configured allowlist.",
                                                     tool_metadata={"grounding": False}))
         assert not tool_context.grounded
 
     def test_declaration_can_ground_an_empty_looking_result(self):
-        tool_context = scaffold._make_tool_context(llm_settings=None, retriever=None)
+        tool_context = scaffold.make_tool_context(llm_settings=None, retriever=None)
         scaffold._record_grounding(tool_context, make_tool_record("", tool_metadata={"grounding": True}))
         assert tool_context.grounded
 
     def test_grounding_is_monotonic_within_a_turn(self):
         # A tool call in round 1 must still count in round 3 - which is why the context is per-turn and
         # not per-round. A later empty search cannot un-ground what an earlier one found.
-        tool_context = scaffold._make_tool_context(llm_settings=None, retriever=None)
+        tool_context = scaffold.make_tool_context(llm_settings=None, retriever=None)
         scaffold._record_grounding(tool_context, make_tool_record("Found it."))
         scaffold._record_grounding(tool_context, make_tool_record(""))
         scaffold._record_grounding(tool_context, make_tool_record("failed", status="error"))
@@ -1780,9 +1781,71 @@ class TestToolResultAttachments:
         forest, head = self._forest(tmp_path, llm_settings)
         payload = self._run_one_fetch(monkeypatch, llm_settings, forest, head,
                                       make_fetch_response(self.LONG_DOCUMENT))
-        wire = llmclient._serialize_history_for_wire(llm_settings, [payload["message"]],
-                                                     continue_=False, datastore=forest)
+        wire = llmclient.serialize_history_for_wire(llm_settings, [payload["message"]],
+                                                    continue_=False, datastore=forest)
         wire_text = chatutil.content_to_text(wire[0]["content"])
         assert "[Attached file: example.com - A Paper.md]" in wire_text
         body = self.LONG_DOCUMENT.split("-----\n\n")[1].strip()  # extraction strips trailing whitespace
         assert body in wire_text  # the body, in full — nothing was lost by storing it out of line
+
+
+# ---------------------------------------------------------------------------
+# Assembling a turn's prompt from outside, with no backend
+# ---------------------------------------------------------------------------
+
+class TestPromptAssemblyFromOutside:
+    """Spans `scaffold` and `llmclient`: the public path from settings to a wire-ready prompt.
+
+    A script measuring what Raven sends needs the real settings object, the turn's assembled prompt, and
+    the wire form of it — with no backend anywhere, so that what is measured afterwards is the backend and
+    not Raven. Every function on that path was private at some point, and this is what pins them public:
+    adding a leading underscore back is not a signature change, so it breaks such a script silently and no
+    other test would notice.
+    """
+
+    def _settings(self, monkeypatch):
+        from raven.librarian import llmclient
+        # An exact-count tokenizer is a local file or a HF repo id, either of which makes this test depend on
+        # the machine it runs on. The estimate path needs no files and is not what any of this is about.
+        monkeypatch.setattr("raven.librarian.config.llm_tokenizer_path", None)
+        return llmclient.configure(model_info=env(label="test-model",
+                                                  model_id="test-model",
+                                                  context_length=32768,
+                                                  is_vlm=False),
+                                   backend_flavor="lmstudio",
+                                   backend_url="http://localhost:1234",
+                                   quiet=True)
+
+    def test_the_whole_path_is_public(self):
+        from raven.librarian import llmclient
+        assert "configure" in llmclient.__all__
+        assert "serialize_history_for_wire" in llmclient.__all__
+        assert "build_turn_prompt" in scaffold.__all__
+        assert "make_tool_context" in scaffold.__all__
+
+    def test_a_script_can_build_the_prompt_a_turn_would_send(self, monkeypatch):
+        import json
+        from raven.librarian import llmclient
+        settings = self._settings(monkeypatch)
+        history = [chatutil.create_chat_message(llm_settings=settings, role="system", text=settings.system_prompt),
+                   chatutil.create_chat_message(llm_settings=settings, role="user", text="Hello?")]
+        tool_context = scaffold.make_tool_context(llm_settings=settings, retriever=None)
+        prompt = scaffold.build_turn_prompt(llm_settings=settings, history=history,
+                                            docs_query=None, docs_matches=[], tool_context=tool_context)
+        wire = llmclient.serialize_history_for_wire(settings, prompt, continue_=False)
+
+        # The injects land as a synthetic tool exchange ahead of the user's message; that shape is asserted
+        # in detail by the `build_turn_prompt` tests above. Here it only has to survive to the wire.
+        assert [message["role"] for message in wire] == ["system", "assistant", "tool", "user"]
+        assert json.dumps(wire)  # a prompt that cannot be serialized cannot be sent
+
+    def test_building_the_prompt_leaves_the_caller_s_history_alone(self, monkeypatch):
+        # The reason the mutating version could not be the public one: a caller asking "what would Raven
+        # send?" would have had to hand over a list to be altered, and then read its own variable back.
+        settings = self._settings(monkeypatch)
+        history = [chatutil.create_chat_message(llm_settings=settings, role="user", text="Hello?")]
+        before = copy.deepcopy(history)
+        tool_context = scaffold.make_tool_context(llm_settings=settings, retriever=None)
+        scaffold.build_turn_prompt(llm_settings=settings, history=history,
+                                   docs_query=None, docs_matches=[], tool_context=tool_context)
+        assert history == before

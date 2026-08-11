@@ -3733,7 +3733,7 @@ they must agree exactly or the context-fill readout drifts away from what is act
 
 - `count_branch_tokens` walks stored *payloads*, so it can read `general_metadata["sidecars"][f]["source"]`
   and tell a `"tool_result"` attachment from a `"user_attachment"` one.
-- `_serialize_history_for_wire` receives bare messages from `chatutil.linearize_chat`, which carry no
+- `serialize_history_for_wire` receives bare messages from `chatutil.linearize_chat`, which carry no
   `general_metadata` at all — so it cannot.
 
 So the discriminator has to live in the `text_file` content part itself: a `source` field alongside `url`
@@ -3761,7 +3761,7 @@ v1 — bound what is *sent*, not what is *stored*:
   reader.
 - **Why not unify the two walks instead?** Asked 2026-08-05, and it points at something real: the boundary
   where a payload is flattened to a bare message is drawn one step too early. `chatutil.linearize_chat` drops
-  `general_metadata`, and `_serialize_history_for_wire` is the last place that could still have used it. But
+  `general_metadata`, and `serialize_history_for_wire` is the last place that could still have used it. But
   unifying is not the v1 move — `perform_throwaway_task` builds a synthetic history with no datastore behind
   it at all, so the wire builder must keep accepting bare messages, and a function taking either shape is
   worse than the duplication. The part-level `source` is not a workaround for that refactor: a message's

@@ -157,7 +157,7 @@ def check_tools(retriever, hits):
     if not hits:
         report("C tools", None, "no matches to work from")
         return
-    tool_context = scaffold._make_tool_context(llm_settings=None, retriever=retriever)
+    tool_context = scaffold.make_tool_context(llm_settings=None, retriever=retriever)
     document_id = hits[0]["document_id"]
     with dyn.let(tool_context=tool_context):
         search_output, search_metadata = llmclient.search_documents_wrapper(QUERIES[0])
@@ -221,7 +221,7 @@ def check_budget(retriever, hits):
     served, refused = [], []
     for fill in (0.0, 0.25, 0.5, 0.7, 0.9):
         used_tokens = int(fill * settings.context_length)
-        tool_context = scaffold._make_tool_context(llm_settings=settings, retriever=retriever)
+        tool_context = scaffold.make_tool_context(llm_settings=settings, retriever=retriever)
         tool_context.used_tokens = used_tokens
         with dyn.let(tool_context=tool_context):
             output, metadata = llmclient.fetch_document_wrapper(document_id)

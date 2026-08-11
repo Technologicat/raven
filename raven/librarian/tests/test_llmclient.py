@@ -1045,7 +1045,7 @@ class TestInvokeTypedEvents:
 
 
 # ---------------------------------------------------------------------------
-# _serialize_history_for_wire: text scrub + image-part preservation + sidecar resolution
+# serialize_history_for_wire: text scrub + image-part preservation + sidecar resolution
 # ---------------------------------------------------------------------------
 
 class TestSerializeHistoryForWire:
@@ -1057,12 +1057,12 @@ class TestSerializeHistoryForWire:
 
     def test_text_only_message_scrubbed_to_single_text_part(self):
         history = _history("hello there")
-        out = llmclient._serialize_history_for_wire(self.settings, history, continue_=False)
+        out = llmclient.serialize_history_for_wire(self.settings, history, continue_=False)
         assert out[0]["content"] == [chatutil.text_content_part("U: hello there")]  # persona-prefixed, one text part
 
     def test_input_history_not_mutated(self):
         history = _history("hello")
-        llmclient._serialize_history_for_wire(self.settings, history, continue_=False)
+        llmclient.serialize_history_for_wire(self.settings, history, continue_=False)
         assert history[0]["content"] == [chatutil.text_content_part("hello")]  # deep-copied; original untouched
 
     def test_a_fetched_page_is_ceilinged_where_an_attachment_is_not(self, tmp_path, monkeypatch):
@@ -1082,7 +1082,7 @@ class TestSerializeHistoryForWire:
                                                       provenance_source="user_attachment")
         history = [{"role": "tool", "content": [chatutil.text_content_part("(excerpt)"), fetched.part]},
                    {"role": "user", "content": [chatutil.text_content_part("and read this"), attached.part]}]
-        out = llmclient._serialize_history_for_wire(self.settings, history, continue_=False, datastore=ds)
+        out = llmclient.serialize_history_for_wire(self.settings, history, continue_=False, datastore=ds)
 
         fetched_block, attached_block = out[0]["content"][0]["text"], out[1]["content"][0]["text"]
         assert "characters omitted" in fetched_block  # ceilinged: a hunch does not get the whole window
@@ -1109,7 +1109,7 @@ class TestSerializeHistoryForWire:
         # endpoint before the ratio; neither is available here, so pin it to the estimate path.
         settings = env(**self.settings, tokenizer=None, backend_flavor="lmstudio")
         counted, _is_exact = llmclient.count_branch_tokens(settings, ds, node_id)
-        wire = llmclient._serialize_history_for_wire(settings, [message], continue_=False, datastore=ds)
+        wire = llmclient.serialize_history_for_wire(settings, [message], continue_=False, datastore=ds)
         wire_characters = sum(len(part["text"]) for part in wire[0]["content"] if part["type"] == "text")
 
         # The readout counts the same fitted attachment text the wire carries; the small residual is the
@@ -1125,7 +1125,7 @@ class TestSerializeHistoryForWire:
 
         history = [{"role": "user", "content": [chatutil.text_content_part("what is this?"),
                                                 chatutil.image_content_part(f"sidecar:{filename}")]}]
-        out = llmclient._serialize_history_for_wire(self.settings, history, continue_=False, datastore=ds)
+        out = llmclient.serialize_history_for_wire(self.settings, history, continue_=False, datastore=ds)
 
         parts = out[0]["content"]
         assert parts[0] == chatutil.text_content_part("U: what is this?")
@@ -1139,13 +1139,13 @@ class TestSerializeHistoryForWire:
     def test_image_part_passes_through_without_datastore(self):
         history = [{"role": "user", "content": [chatutil.text_content_part("x"),
                                                 {"type": "image_url", "image_url": {"url": "sidecar:abc.png"}}]}]
-        out = llmclient._serialize_history_for_wire(self.settings, history, continue_=False, datastore=None)
+        out = llmclient.serialize_history_for_wire(self.settings, history, continue_=False, datastore=None)
         assert out[0]["content"][1]["image_url"]["url"] == "sidecar:abc.png"  # unresolved, but preserved
 
     def test_continue_leaves_last_message_untouched(self):
         history = [{"role": "user", "content": [chatutil.text_content_part("q")]},
                    {"role": "assistant", "content": [chatutil.text_content_part("partial ans")]}]
-        out = llmclient._serialize_history_for_wire(self.settings, history, continue_=True)
+        out = llmclient.serialize_history_for_wire(self.settings, history, continue_=True)
         assert out[0]["content"] == [chatutil.text_content_part("U: q")]  # scrubbed
         assert out[1]["content"] == [chatutil.text_content_part("partial ans")]  # last message untouched
 
@@ -1164,8 +1164,8 @@ class TestSerializeHistoryForWire:
         datastore, file_part = self._datastore_with_file(tmp_path, b"the attached document body")
         history = [{"role": "user",
                     "content": [chatutil.text_content_part("What does the spec say?"), file_part]}]
-        wire = llmclient._serialize_history_for_wire(self.settings, history,
-                                                     continue_=False, datastore=datastore)
+        wire = llmclient.serialize_history_for_wire(self.settings, history,
+                                                    continue_=False, datastore=datastore)
         assert len(wire) == 1
         parts = wire[0]["content"]
         assert all(p["type"] == "text" for p in parts)  # no text_file part survives onto the wire
@@ -1180,8 +1180,8 @@ class TestSerializeHistoryForWire:
                     "content": [chatutil.text_content_part("hello"), file_part]}]
         # No datastore -> the sidecar can't be resolved, so the document is not folded (the throwaway/prefill
         # callers that pass no datastore carry no attachments in practice).
-        wire = llmclient._serialize_history_for_wire(self.settings, history,
-                                                     continue_=False, datastore=None)
+        wire = llmclient.serialize_history_for_wire(self.settings, history,
+                                                    continue_=False, datastore=None)
         text = "".join(p["text"] for p in wire[0]["content"])
         assert "hello" in text
         assert "secret body" not in text
@@ -1191,8 +1191,8 @@ class TestSerializeHistoryForWire:
         datastore, file_part = self._datastore_with_file(tmp_path, b"A" * 200000, name="huge.txt")
         history = [{"role": "user",
                     "content": [chatutil.text_content_part("summarize this"), file_part]}]
-        wire = llmclient._serialize_history_for_wire(self.settings, history,
-                                                     continue_=False, datastore=datastore)
+        wire = llmclient.serialize_history_for_wire(self.settings, history,
+                                                    continue_=False, datastore=datastore)
         text = "".join(p["text"] for p in wire[0]["content"])
         assert len(text) < 40000  # fits the window it is going into
         assert "characters omitted" in text  # and says where the missing part was
@@ -1205,8 +1205,8 @@ class TestSerializeHistoryForWire:
         history = [{"role": "user", "content": [chatutil.text_content_part("C" * 40000)]},
                    {"role": "user",
                     "content": [chatutil.text_content_part("and this too"), file_part]}]
-        wire = llmclient._serialize_history_for_wire(self.settings, history,
-                                                     continue_=False, datastore=datastore)
+        wire = llmclient.serialize_history_for_wire(self.settings, history,
+                                                    continue_=False, datastore=datastore)
         text = "".join(p["text"] for p in wire[1]["content"])
         assert "late.txt" in text
         assert "no room left" in text

@@ -95,7 +95,7 @@ Each layer only imports from layers below it. No circular dependencies.
  "generation_metadata": {"model": "...", "n_tokens": N, "dt": secs, "status": "success"|"error"},
  "retrieval": {"query": "...", "results": [...]}}
 ```
-`content` is always a parts list post-migration (a legacy string is upgraded once, at load). `general_metadata["sidecars"]` records provenance for attached images and documents, keyed by sidecar filename; `image_url` parts reference an image sidecar and `text_file` parts a document sidecar, both by `sidecar:<filename>` URL. An `image_url` is resolved to a `data:` URL on the wire (VLM-only); a `text_file` has no native wire form — its extracted text is folded into the message's text part at wire-build (`llmclient._serialize_history_for_wire`), so any model can use it.
+`content` is always a parts list post-migration (a legacy string is upgraded once, at load). `general_metadata["sidecars"]` records provenance for attached images and documents, keyed by sidecar filename; `image_url` parts reference an image sidecar and `text_file` parts a document sidecar, both by `sidecar:<filename>` URL. An `image_url` is resolved to a `data:` URL on the wire (VLM-only); a `text_file` has no native wire form — its extracted text is folded into the message's text part at wire-build (`llmclient.serialize_history_for_wire`), so any model can use it.
 
 **App state**:
 ```python

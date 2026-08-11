@@ -5,7 +5,7 @@ NOT a pytest test — it needs a running backend with a model loaded, so it live
 rather than in the suite.
 
 Unlike the other probes here, this one builds its wire history through Raven's own code
-(`llmclient.configure` + `scaffold.build_turn_prompt` + `llmclient._serialize_history_for_wire`) rather than
+(`llmclient.configure` + `scaffold.build_turn_prompt` + `llmclient.serialize_history_for_wire`) rather than
 reimplementing the shape, so it measures what Raven actually sends — settings, system prompt and character
 card included, not just the injects. That costs it the stdlib-only property the others have: it needs the
 venv, and cannot be piped to a machine that lacks one.
@@ -84,12 +84,12 @@ def build(variant):
     # `grounded=True` is what the retrieval would have declared in a real turn: the matches are on topic,
     # they simply do not answer the question. It keeps the context-only reminder in the prompt, which is the
     # instruction this probe is measuring the model against.
-    tool_context = scaffold._make_tool_context(llm_settings=settings, retriever=None)
+    tool_context = scaffold.make_tool_context(llm_settings=settings, retriever=None)
     tool_context.grounded = True
     history = scaffold.build_turn_prompt(llm_settings=settings, history=history,
                                          docs_query="Kelvin-7 specific energy consumption", docs_matches=MATCHES,
                                          tool_context=tool_context)
-    wire = llmclient._serialize_history_for_wire(settings, history, continue_=False)
+    wire = llmclient.serialize_history_for_wire(settings, history, continue_=False)
 
     if variant == "as-shipped":
         return wire

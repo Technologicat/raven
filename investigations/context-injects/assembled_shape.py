@@ -6,7 +6,7 @@ rather than in the suite.
 
 The other probes here hand-build a wire history to compare candidate shapes. This one does the opposite:
 it builds the history through Raven's own code (`llmclient.configure` + `scaffold.build_turn_prompt` +
-`llmclient._serialize_history_for_wire`) and asks whether the shapes that *won* the sweep still deliver
+`llmclient.serialize_history_for_wire`) and asks whether the shapes that *won* the sweep still deliver
 once assembled together. A shape can measure well in isolation and interact badly in company — the date
 inject, the clock tool call and the retrieval tool call all land in the same turn.
 
@@ -73,12 +73,12 @@ def build(settings, question, docs_query, matches):
                chatutil.create_chat_message(llm_settings=settings, role="user", text=question)]
     # `grounded=True` is what the retrieval would have declared in a real turn, and it is what keeps the
     # context-only reminder in the assembled prompt — which is one of the four shapes this probe measures.
-    tool_context = scaffold._make_tool_context(llm_settings=settings, retriever=None)
+    tool_context = scaffold.make_tool_context(llm_settings=settings, retriever=None)
     tool_context.grounded = True
     history = scaffold.build_turn_prompt(llm_settings=settings, history=history,
                                          docs_query=docs_query, docs_matches=matches,
                                          tool_context=tool_context)
-    return llmclient._serialize_history_for_wire(settings, history, continue_=False)
+    return llmclient.serialize_history_for_wire(settings, history, continue_=False)
 
 
 def ask(model, messages, max_tokens=8000):

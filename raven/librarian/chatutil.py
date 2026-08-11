@@ -97,7 +97,7 @@ def text_file_content_part(url: str, name: str, source: str) -> Dict[str, Any]:
     (`"user_attachment"`, `"tool_result"`, ...). The same value is recorded in the sidecar provenance, and this
     is a deliberate second copy rather than a redundancy: how much of the window a document may occupy depends
     on who asked for it — a paper the user attached says *read this*, a page the model fetched on a hunch does
-    not — and `llmclient._serialize_history_for_wire` decides that from bare messages, which carry no
+    not — and `llmclient.serialize_history_for_wire` decides that from bare messages, which carry no
     `general_metadata` and so cannot reach the provenance. Keeping it on the part is also the right shape on its
     own: what a message means on the wire should not depend on metadata travelling separately.
     """

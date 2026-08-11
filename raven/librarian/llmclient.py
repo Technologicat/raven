@@ -27,6 +27,8 @@ __all__ = ["TOOLS", "TOOL_ENTRYPOINTS", "DOCUMENT_TOOL_NAMES", "NETWORK_TOOL_NAM
            "fit_attachments_to_context",
 
            "StreamParser",
+           # For scripting: the wire form of what a turn would send
+           "serialize_history_for_wire",
            "invoke", "prefill", "action_ack", "action_stop",
            "perform_throwaway_task", "make_console_progress_handler",
            "perform_tool_calls",
@@ -1247,7 +1249,7 @@ def _share_characters(wanted: List[int],
     the inputs permutes the outputs and changes nothing else. That is the right shape for an allocation
     anyway — an attachment's share should not depend on where it happens to sit in the list — and it is what
     lets two callers walk the same attachments in opposite directions (`count_branch_tokens` from the head
-    up, `_serialize_history_for_wire` from the root down) and arrive at the same numbers.
+    up, `serialize_history_for_wire` from the root down) and arrive at the same numbers.
     """
     allowances = [0] * len(wanted)
     if budget <= 0:
@@ -1278,7 +1280,7 @@ def attachment_budget_kind(part: Dict[str, Any]) -> str:
 
     The single place that maps a provenance `source` onto a budget policy, so that the two readers of the
     attachment budget cannot disagree about it. `count_branch_tokens` (the GUI's context-fill readout) and
-    `_serialize_history_for_wire` (what is actually sent) walk the same attachments from opposite ends, and
+    `serialize_history_for_wire` (what is actually sent) walk the same attachments from opposite ends, and
     a divergence here would show up as a readout that drifts away from the request it claims to describe.
 
     A classification rather than an equality test, because the vocabulary is open: `sidecarstore.base_provenance`
@@ -1622,11 +1624,11 @@ class StreamParser:
 # --------------------------------------------------------------------------------
 # The most important function - call LLM, parse result
 
-def _serialize_history_for_wire(settings: env,
-                                history: List[Dict],
-                                *,
-                                continue_: bool,
-                                datastore: Optional[chattree.PersistentForest] = None) -> List[Dict]:
+def serialize_history_for_wire(settings: env,
+                               history: List[Dict],
+                               *,
+                               continue_: bool,
+                               datastore: Optional[chattree.PersistentForest] = None) -> List[Dict]:
     """Return a wire-ready deep copy of `history`: text scrubbed, image parts preserved and sidecar-resolved.
 
     Per-message transform, applied to every message (or all but the last when `continue_`):
@@ -1661,6 +1663,10 @@ def _serialize_history_for_wire(settings: env,
 
     `continue_`: when `True`, the last message (the AI message being continued) is left exactly as-is — neither
                  scrubbed nor image/document-resolved (assistant continuations carry no attachments).
+
+    `datastore`: the chat's `PersistentForest`, needed only to resolve the `sidecar:` URLs of attachments.
+                 A history with no attachments — which is what a script assembling a prompt from
+                 `scaffold.build_turn_prompt` usually has — needs none, and the default is therefore `None`.
     """
     history = copy.deepcopy(history)
     end_idx = -1 if continue_ else None  # Don't touch the current AI message when continuing; else process all.
@@ -1839,11 +1845,14 @@ def invoke(settings: env,
                   prompt size and warm the backend KV cache without producing a real reply. `None` (default) keeps
                   the configured cap.
 
-    `datastore`: The chat's `chattree.PersistentForest`, needed only when messages carry image attachments:
-                 image parts are stored as `sidecar:<filename>` references, and the wire copy resolves them to
-                 `data:` URLs by reading the sidecar files (see `_serialize_history_for_wire`). `None` (default)
-                 is correct for text-only callers (throwaway tasks); sidecar URLs then pass through unresolved,
-                 which is harmless because such callers carry no image parts.
+    `datastore`: The chat's `chattree.PersistentForest`, needed only when messages carry attachments: image
+                 and document parts are stored as `sidecar:<filename>` references, and the wire copy resolves
+                 them by reading the sidecar files (see `serialize_history_for_wire`). `None` (default) is
+                 correct exactly when the history carries no such reference — which is the case for
+                 `perform_throwaway_task`, whose instruction is a plain string with nowhere to put one.
+                 Pass the datastore whenever the history might carry attachments: an unresolved reference
+                 travels verbatim, so the model receives the literal text `sidecar:<filename>` in place of
+                 the attachment, and nothing reports that it happened.
 
     Returns an `unpythonic.env.env` WITHOUT adding the LLM's reply to `history`.
 
@@ -1863,8 +1872,8 @@ def invoke(settings: env,
     """
     data = copy.deepcopy(settings.request_data)
 
-    # Normalize message content for resend (see `_serialize_history_for_wire`).
-    history = _serialize_history_for_wire(settings, history, continue_=continue_, datastore=datastore)
+    # Normalize message content for resend (see `serialize_history_for_wire`).
+    history = serialize_history_for_wire(settings, history, continue_=continue_, datastore=datastore)
 
     # Held, not logged: on a refusal this is the diagnosis (see `_describe_strict_template_violations`).
     template_violations = _describe_strict_template_violations(history)
