@@ -30,7 +30,7 @@ __all__ = ["TOOLS", "TOOL_ENTRYPOINTS", "DOCUMENT_TOOL_NAMES", "NETWORK_TOOL_NAM
            # For scripting: the wire form of what a turn would send
            "serialize_history_for_wire",
            "invoke", "prefill", "action_ack", "action_stop",
-           "perform_throwaway_task", "make_console_progress_handler",
+           "make_console_progress_handler",
            "perform_tool_calls",
            "approve_host_for_session"]
 
@@ -1876,8 +1876,8 @@ def invoke(settings: env,
     `datastore`: The chat's `chattree.PersistentForest`, needed only when messages carry attachments: image
                  and document parts are stored as `sidecar:<filename>` references, and the wire copy resolves
                  them by reading the sidecar files (see `serialize_history_for_wire`). `None` (default) is
-                 correct exactly when the history carries no such reference — which is the case for
-                 `perform_throwaway_task`, whose instruction is a plain string with nowhere to put one.
+                 correct exactly when the history carries no such reference — which is the case for a
+                 history built entirely out of plain strings, with nowhere to put one.
                  Pass the datastore whenever the history might carry attachments: an unresolved reference
                  travels verbatim, so the model receives the literal text `sidecar:<filename>` in place of
                  the attachment, and nothing reports that it happened.
@@ -2177,80 +2177,13 @@ def prefill(settings: env,
         return None
 
 # --------------------------------------------------------------------------------
-# Agentic workflow utility
-
-def perform_throwaway_task(llm_settings: env,
-                           instruction: str,
-                           on_progress: Callable = None) -> Tuple[str, str]:
-    """Perform a throwaway task on the LLM.
-
-    That is, behave as if the user sent `instruction` in chat mode as the first and only message
-    (after the system prompt and the AI's initial greeting).
-
-    This facilitates old-style agentic workflows, where the tool-running loop is a hardcoded script.
-    This way of interacting with an LLM is also known as the "workflow" LLM agent pattern.
-
-    (Contrast modern LLM agent style, which lets the LLM decide which tools to run,
-     as well as when to finish.)
-
-    `llm_settings`: Obtain this by calling `raven.librarian.llmclient.setup` at app start time.
-
-                    The task will use the system prompt and AI character as configured
-                    in `llm_settings`.
-
-    `instruction`: The user prompt. Task specification and input data for the LLM.
-                   This is what the user would type in as a message to an LLM chat app.
-
-    `on_progress`: Passed to `invoke`, which see.
-
-    Returns the tuple `(raw_output_text, scrubbed_output_text)`, where:
-
-         `scrubbed_output_text` is the LLM's final response to the task,
-                                ready for feeding into the rest of your
-                                text processing pipeline.
-
-         `raw_output_text` contains the thinking trace, too (if running on
-                           a thinking model). Useful for debugging/logging.
-    """
-    # Start with an empty chat history (non-persistent) with just the system prompt,
-    # and the AI's initial greeting, as currently configured in `llm_settings`.
-    datastore = chattree.Forest()
-    root_node_id = chatutil.factory_reset_datastore(datastore, llm_settings)
-
-    # Add `instruction` as the user's first message.
-    request_node_id = datastore.create_node(payload=chatutil.create_payload(llm_settings=llm_settings,
-                                                                            message=chatutil.create_chat_message(llm_settings=llm_settings,
-                                                                                                                 role="user",
-                                                                                                                 text=instruction)),
-                                            parent_id=root_node_id)
-
-    # Linearize and run.
-    history = chatutil.linearize_chat(datastore, request_node_id)
-    out = invoke(llm_settings,
-                 history,
-                 on_progress=on_progress,
-                 tools_enabled=False)
-
-    # Postprocess the AI's response.
-    #
-    # `invoke` now returns think-free `content` with the thinking trace separated into `reasoning_content`.
-    # Reassemble the inline `<think>...</think>` form for `raw_output_text` to keep the
-    # debugging/logging contract; the scrubbed final answer comes from the already-think-free content.
-    content = chatutil.content_to_text(out.data["content"])
-    reasoning = out.data.get("reasoning_content") or ""
-    raw_output_text = f"<think>{reasoning}</think>\n{content}" if reasoning else content
-    scrubbed_output_text = chatutil.scrub(persona=llm_settings.personas.get("assistant", None),
-                                          text=content,
-                                          thoughts_mode="discard",
-                                          markup=None,
-                                          add_persona=False)
-    return raw_output_text, scrubbed_output_text
+# Console progress indicator
 
 def make_console_progress_handler(progress_symbol: str) -> Callable:
     """Make an `on_progress` function that prints `progress_symbol` to `sys.stderr` every 10 chunks.
 
     The returned function works as an `on_progress` event handler in `invoke` and in
-    `perform_throwaway_task`, which see.
+    `raven.librarian.agent.turn`, which see.
 
     Note that this is a convenience function for a common use case with command-line apps,
     where it can be important to show that the LLM is writing (i.e. that the backend has

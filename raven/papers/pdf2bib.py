@@ -40,6 +40,8 @@ from ..client import mayberemote
 from ..common import docextract
 from ..common import utils as common_utils
 
+from ..librarian import agent
+from ..librarian import chatutil
 from ..librarian import config as librarian_config
 from ..librarian import llmclient
 from ..visualizer import config as visualizer_config
@@ -70,6 +72,39 @@ dehyphenator = mayberemote.Dehyphenator(allow_local=True,
 
 # --------------------------------------------------------------------------------
 # Utilities
+
+def full_output_trace(record: agent.TurnRecord) -> str:
+    """Format everything the LLM wrote in one extraction step, for the error report.
+
+    When a step comes back empty, the reason is usually in the thinking trace - typically the model
+    overthought until it ran out of token budget, leaving nothing to say. So the trace is what the report
+    needs, and the final answer comes after it for context.
+
+    The layout is the one Librarian's export buttons produce, so a trace in an error report and a trace in
+    an exported chat read the same way.
+    """
+    return "\n\n".join(chatutil.format_message_text_for_export(message) for message in record.messages)
+
+def extract(llm_settings: env,
+            instruction: str,
+            progress_symbol: str) -> agent.TurnRecord:
+    """Run one extraction step on the LLM, and return the resulting `agent.TurnRecord`.
+
+    `instruction`: The complete prompt: what to extract, followed by the text to extract it from.
+
+    `progress_symbol`: Printed to stderr as the LLM writes, so that a run of several thousand PDFs shows
+                       which step is working. See `llmclient.make_console_progress_handler`.
+
+    The step runs without a character and without tools: every prompt here asks for a plain-text answer
+    that this module then parses, whereas the character card asks for Markdown, for a reported train of
+    thought, and for conversational prose. Each prompt states its own role and procedure, so what the card
+    would contribute is exactly the part that would have to be undone afterwards.
+    """
+    return agent.turn(llm_settings,
+                      instruction,
+                      use_character_card=False,
+                      tools_enabled=False,
+                      on_progress=llmclient.make_console_progress_handler(progress_symbol))
 
 def setup_prompts(llm_settings: env,
                   n_retries: int,
@@ -352,9 +387,8 @@ def setup_prompts(llm_settings: env,
         # answers = collections.Counter()
         # for _ in range(3):
         #     print(_ + 1, end="", file=sys.stderr)
-        #     raw_output_text, scrubbed_output_text = llmclient.perform_throwaway_task(llm_settings,
-        #                                                                              instruction=f"{prompt_check_authorlist}\n\n{text}",
-        #                                                                              on_progress=llmclient.make_console_progress_handler("*"))
+        #     record = extract(llm_settings, f"{prompt_check_authorlist}\n\n{text}", "*")
+        #     scrubbed_output_text = record.reply
         #     has_author_list = scrubbed_output_text[-20:].split()[-1].strip().upper()  # Last word of output, in uppercase.
         #     has_author_list = has_author_list.translate(str.maketrans('', '', string.punctuation))  # Strip punctuation, in case of spurious formatting.
         #     answers[has_author_list] += 1
@@ -377,9 +411,8 @@ def setup_prompts(llm_settings: env,
         #         logger.info(f"Input file '{unique_id}': LLM returned unknown author list detection result '{has_author_list}', should be 'YES' or 'NO'; manual check recommended.")
 
         for retry in range(n_retries):
-            raw_output_text_1, scrubbed_output_text_1 = llmclient.perform_throwaway_task(llm_settings,
-                                                                                         instruction=f"{prompt_get_authors}\n-----\n\n{text}",
-                                                                                         on_progress=llmclient.make_console_progress_handler("A"))
+            record_1 = extract(llm_settings, f"{prompt_get_authors}\n-----\n\n{text}", "A")
+            scrubbed_output_text_1 = record_1.reply
             logger.debug(f"\n        EXTRACT AUTHORS    : {scrubbed_output_text_1}")
             if scrubbed_output_text_1.strip() != "":
                 break
@@ -388,7 +421,7 @@ def setup_prompts(llm_settings: env,
             error_msg = "EXTRACT AUTHORS: Author list empty after retries exhausted; giving up."
             logger.warning(error_msg)
             error_info.write(f"{error_msg}\n")
-            error_info.write(f"Full LLM output trace for step EXTRACT AUTHORS:\n{'-' * 80}\n{raw_output_text_1}\n{'-' * 80}\n")
+            error_info.write(f"Full LLM output trace for step EXTRACT AUTHORS:\n{'-' * 80}\n{full_output_trace(record_1)}\n{'-' * 80}\n")
             return status_failed, error_info.getvalue(), ""
 
         # Usually the output is correct, but sometimes:
@@ -399,9 +432,8 @@ def setup_prompts(llm_settings: env,
 
         # Here the LLM (Qwen3 2507) sometimes gets stuck overthinking.
         for retry in range(n_retries):
-            raw_output_text_2, scrubbed_output_text_2 = llmclient.perform_throwaway_task(llm_settings,
-                                                                                         instruction=prompt_drop_author_affiliations.format(author_names=scrubbed_output_text_1),
-                                                                                         on_progress=llmclient.make_console_progress_handler("a"))
+            record_2 = extract(llm_settings, prompt_drop_author_affiliations.format(author_names=scrubbed_output_text_1), "a")
+            scrubbed_output_text_2 = record_2.reply
             logger.debug(f"\n        DROP AFFILIATIONS  : {scrubbed_output_text_2}")
             if scrubbed_output_text_2.strip() != "":
                 break
@@ -410,14 +442,13 @@ def setup_prompts(llm_settings: env,
             error_msg = "DROP AFFILIATIONS: Author list empty after retries exhausted; giving up."
             logger.warning(error_msg)
             error_info.write(f"{error_msg}\n")
-            error_info.write(f"Full LLM output trace for step EXTRACT AUTHORS:\n{'-' * 80}\n{raw_output_text_1}\n{'-' * 80}\n")
-            error_info.write(f"Full LLM output trace for step DROP AFFILIATIONS:\n{'-' * 80}\n{raw_output_text_2}\n{'-' * 80}\n")
+            error_info.write(f"Full LLM output trace for step EXTRACT AUTHORS:\n{'-' * 80}\n{full_output_trace(record_1)}\n{'-' * 80}\n")
+            error_info.write(f"Full LLM output trace for step DROP AFFILIATIONS:\n{'-' * 80}\n{full_output_trace(record_2)}\n{'-' * 80}\n")
             return status_failed, error_info.getvalue(), ""
 
         for retry in range(n_retries):
-            raw_output_text_3, scrubbed_output_text_3 = llmclient.perform_throwaway_task(llm_settings,
-                                                                                         instruction=prompt_reformat_author_separators.format(author_names=scrubbed_output_text_2),
-                                                                                         on_progress=llmclient.make_console_progress_handler("."))
+            record_3 = extract(llm_settings, prompt_reformat_author_separators.format(author_names=scrubbed_output_text_2), ".")
+            scrubbed_output_text_3 = record_3.reply
             logger.debug(f"\n        REFORMAT SEPARATORS: {scrubbed_output_text_3}")
             if scrubbed_output_text_3.strip() != "":
                 break
@@ -426,9 +457,9 @@ def setup_prompts(llm_settings: env,
             error_msg = "REFORMAT SEPARATORS: Author list empty after retries exhausted; giving up."
             logger.warning(error_msg)
             error_info.write(f"{error_msg}\n")
-            error_info.write(f"Full LLM output trace for step EXTRACT AUTHORS:\n{'-' * 80}\n{raw_output_text_1}\n{'-' * 80}\n")
-            error_info.write(f"Full LLM output trace for step DROP AFFILIATIONS:\n{'-' * 80}\n{raw_output_text_2}\n{'-' * 80}\n")
-            error_info.write(f"Full LLM output trace for step REFORMAT SEPARATORS:\n{'-' * 80}\n{raw_output_text_3}\n{'-' * 80}\n")
+            error_info.write(f"Full LLM output trace for step EXTRACT AUTHORS:\n{'-' * 80}\n{full_output_trace(record_1)}\n{'-' * 80}\n")
+            error_info.write(f"Full LLM output trace for step DROP AFFILIATIONS:\n{'-' * 80}\n{full_output_trace(record_2)}\n{'-' * 80}\n")
+            error_info.write(f"Full LLM output trace for step REFORMAT SEPARATORS:\n{'-' * 80}\n{full_output_trace(record_3)}\n{'-' * 80}\n")
             return status_failed, error_info.getvalue(), ""
 
         if scrubbed_output_text_3.endswith("and"):  # Remove spurious "and" with one author. Can happen especially if, in the original abstract, a comma follows the single author name.
@@ -455,9 +486,9 @@ def setup_prompts(llm_settings: env,
             error_info.write(f"Final result for step EXTRACT AUTHORS: {scrubbed_output_text_1}\n")
             error_info.write(f"Final result for step DROP AFFILIATIONS: {scrubbed_output_text_2}\n")
             error_info.write(f"Final result for step REFORMAT SEPARATORS: {scrubbed_output_text_3}\n")
-            error_info.write(f"Full LLM output trace for step EXTRACT AUTHORS:\n{'-' * 80}\n{raw_output_text_1}\n{'-' * 80}\n")
-            error_info.write(f"Full LLM output trace for step DROP AFFILIATIONS:\n{'-' * 80}\n{raw_output_text_2}\n{'-' * 80}\n")
-            error_info.write(f"Full LLM output trace for step REFORMAT SEPARATORS:\n{'-' * 80}\n{raw_output_text_3}\n{'-' * 80}\n")
+            error_info.write(f"Full LLM output trace for step EXTRACT AUTHORS:\n{'-' * 80}\n{full_output_trace(record_1)}\n{'-' * 80}\n")
+            error_info.write(f"Full LLM output trace for step DROP AFFILIATIONS:\n{'-' * 80}\n{full_output_trace(record_2)}\n{'-' * 80}\n")
+            error_info.write(f"Full LLM output trace for step REFORMAT SEPARATORS:\n{'-' * 80}\n{full_output_trace(record_3)}\n{'-' * 80}\n")
             status = status_failed
 
         # No author should be listed more than once.
@@ -471,9 +502,9 @@ def setup_prompts(llm_settings: env,
             error_info.write(f"Final result for step EXTRACT AUTHORS: {scrubbed_output_text_1}\n")
             error_info.write(f"Final result for step DROP AFFILIATIONS: {scrubbed_output_text_2}\n")
             error_info.write(f"Final result for step REFORMAT SEPARATORS: {scrubbed_output_text_3}\n")
-            error_info.write(f"Full LLM output trace for step EXTRACT AUTHORS:\n{'-' * 80}\n{raw_output_text_1}\n{'-' * 80}\n")
-            error_info.write(f"Full LLM output trace for step DROP AFFILIATIONS:\n{'-' * 80}\n{raw_output_text_2}\n{'-' * 80}\n")
-            error_info.write(f"Full LLM output trace for step REFORMAT SEPARATORS:\n{'-' * 80}\n{raw_output_text_3}\n{'-' * 80}\n")
+            error_info.write(f"Full LLM output trace for step EXTRACT AUTHORS:\n{'-' * 80}\n{full_output_trace(record_1)}\n{'-' * 80}\n")
+            error_info.write(f"Full LLM output trace for step DROP AFFILIATIONS:\n{'-' * 80}\n{full_output_trace(record_2)}\n{'-' * 80}\n")
+            error_info.write(f"Full LLM output trace for step REFORMAT SEPARATORS:\n{'-' * 80}\n{full_output_trace(record_3)}\n{'-' * 80}\n")
             status = status_failed
 
         # Add missing periods for abbreviated first and middle names. Sometimes these drop out during the LLM correction passes.
@@ -543,9 +574,9 @@ def setup_prompts(llm_settings: env,
                             error_info.write(f"Final result for step EXTRACT AUTHORS: {scrubbed_output_text_1}\n")
                             error_info.write(f"Final result for step DROP AFFILIATIONS: {scrubbed_output_text_2}\n")
                             error_info.write(f"Final result for step REFORMAT SEPARATORS: {scrubbed_output_text_3}\n")
-                            error_info.write(f"Full LLM output trace for step EXTRACT AUTHORS:\n{'-' * 80}\n{raw_output_text_1}\n{'-' * 80}\n")
-                            error_info.write(f"Full LLM output trace for step DROP AFFILIATIONS:\n{'-' * 80}\n{raw_output_text_2}\n{'-' * 80}\n")
-                            error_info.write(f"Full LLM output trace for step REFORMAT SEPARATORS:\n{'-' * 80}\n{raw_output_text_3}\n{'-' * 80}\n")
+                            error_info.write(f"Full LLM output trace for step EXTRACT AUTHORS:\n{'-' * 80}\n{full_output_trace(record_1)}\n{'-' * 80}\n")
+                            error_info.write(f"Full LLM output trace for step DROP AFFILIATIONS:\n{'-' * 80}\n{full_output_trace(record_2)}\n{'-' * 80}\n")
+                            error_info.write(f"Full LLM output trace for step REFORMAT SEPARATORS:\n{'-' * 80}\n{full_output_trace(record_3)}\n{'-' * 80}\n")
                             format_warning_logged = True
                             status = status_failed
                             break
@@ -577,9 +608,9 @@ def setup_prompts(llm_settings: env,
                         error_info.write(f"Final result for step EXTRACT AUTHORS: {scrubbed_output_text_1}\n")
                         error_info.write(f"Final result for step DROP AFFILIATIONS: {scrubbed_output_text_2}\n")
                         error_info.write(f"Final result for step REFORMAT SEPARATORS: {scrubbed_output_text_3}\n")
-                        error_info.write(f"Full LLM output trace for step EXTRACT AUTHORS:\n{'-' * 80}\n{raw_output_text_1}\n{'-' * 80}\n")
-                        error_info.write(f"Full LLM output trace for step DROP AFFILIATIONS:\n{'-' * 80}\n{raw_output_text_2}\n{'-' * 80}\n")
-                        error_info.write(f"Full LLM output trace for step REFORMAT SEPARATORS:\n{'-' * 80}\n{raw_output_text_3}\n{'-' * 80}\n")
+                        error_info.write(f"Full LLM output trace for step EXTRACT AUTHORS:\n{'-' * 80}\n{full_output_trace(record_1)}\n{'-' * 80}\n")
+                        error_info.write(f"Full LLM output trace for step DROP AFFILIATIONS:\n{'-' * 80}\n{full_output_trace(record_2)}\n{'-' * 80}\n")
+                        error_info.write(f"Full LLM output trace for step REFORMAT SEPARATORS:\n{'-' * 80}\n{full_output_trace(record_3)}\n{'-' * 80}\n")
                         llm_warning_logged = True
                         status = status_failed
                         break
@@ -607,9 +638,8 @@ def setup_prompts(llm_settings: env,
         error_info = io.StringIO()
         text = strip_postamble(text)
 
-        raw_output_text, scrubbed_output_text = llmclient.perform_throwaway_task(llm_settings,
-                                                                                 instruction=f"{prompt_get_title}\n-----\n\n{text}",
-                                                                                 on_progress=llmclient.make_console_progress_handler("T"))
+        record = extract(llm_settings, f"{prompt_get_title}\n-----\n\n{text}", "T")
+        scrubbed_output_text = record.reply
         logger.debug(f"\n        original : {scrubbed_output_text}")
 
         title = scrubbed_output_text.strip()
@@ -619,7 +649,7 @@ def setup_prompts(llm_settings: env,
             error_msg = f"Input file '{unique_id}': LLM returned empty title; manual check recommended."
             logger.warning(error_msg)
             error_info.write(f"{error_msg}\n")
-            error_info.write(f"Full LLM output trace for EXTRACT TITLE:\n{'-' * 80}\n{raw_output_text}\n{'-' * 80}\n")
+            error_info.write(f"Full LLM output trace for EXTRACT TITLE:\n{'-' * 80}\n{full_output_trace(record)}\n{'-' * 80}\n")
         else:
             # Strip spurious period
             while title[-1] == ".":
@@ -640,7 +670,7 @@ def setup_prompts(llm_settings: env,
                 logger.warning(error_msg)
                 error_info.write(f"{error_msg}\n")
                 error_info.write(f"Final result for EXTRACT TITLE: {scrubbed_output_text}\n")
-                error_info.write(f"Full LLM output trace for EXTRACT TITLE:\n{'-' * 80}\n{raw_output_text}\n{'-' * 80}\n")
+                error_info.write(f"Full LLM output trace for EXTRACT TITLE:\n{'-' * 80}\n{full_output_trace(record)}\n{'-' * 80}\n")
                 status = status_failed
 
             logger.debug(f"\n        formatted: {title}")
@@ -681,9 +711,8 @@ def setup_prompts(llm_settings: env,
             keywords = None  # No keywords provided
         else:
             for retry in range(n_retries):
-                raw_output_text, scrubbed_output_text = llmclient.perform_throwaway_task(llm_settings,
-                                                                                         instruction=f"{prompt_get_keywords}\n-----\n\n{text}",
-                                                                                         on_progress=llmclient.make_console_progress_handler("K"))
+                record = extract(llm_settings, f"{prompt_get_keywords}\n-----\n\n{text}", "K")
+                scrubbed_output_text = record.reply
                 logger.debug(f"\n        original : {scrubbed_output_text}")
 
                 # Remove spurious heading and surrounding whitespace
@@ -699,7 +728,7 @@ def setup_prompts(llm_settings: env,
                 error_msg = f"Input file '{unique_id}': Keywords empty after retries exhausted; giving up."
                 logger.warning(error_msg)
                 error_info.write(f"{error_msg}\n")
-                error_info.write(f"Full LLM output trace for EXTRACT KEYWORDS:\n{'-' * 80}\n{raw_output_text}\n")
+                error_info.write(f"Full LLM output trace for EXTRACT KEYWORDS:\n{'-' * 80}\n{full_output_trace(record)}\n")
                 return status_failed, error_info.getvalue(), ""
 
             # Strip spurious period(s) at end
@@ -717,7 +746,7 @@ def setup_prompts(llm_settings: env,
                 logger.warning(error_msg)
                 error_info.write(f"{error_msg}\n")
                 error_info.write(f"Final result for EXTRACT KEYWORDS:\n{'-' * 80}\n{scrubbed_output_text}\n")
-                error_info.write(f"Full LLM output trace for EXTRACT KEYWORDS:\n{'-' * 80}\n{raw_output_text}\n")
+                error_info.write(f"Full LLM output trace for EXTRACT KEYWORDS:\n{'-' * 80}\n{full_output_trace(record)}\n")
                 status = status_failed
             keywords = list(keywords_counter.keys())
 
@@ -735,7 +764,7 @@ def setup_prompts(llm_settings: env,
                     logger.warning(error_msg)
                     error_info.write(f"{error_msg}\n")
                     error_info.write(f"Final result for EXTRACT KEYWORDS:\n{'-' * 80}\n{scrubbed_output_text}\n")
-                    error_info.write(f"Full LLM output trace for EXTRACT KEYWORDS:\n{'-' * 80}\n{raw_output_text}\n")
+                    error_info.write(f"Full LLM output trace for EXTRACT KEYWORDS:\n{'-' * 80}\n{full_output_trace(record)}\n")
                     status = status_failed
                     break
 
@@ -781,10 +810,8 @@ def setup_prompts(llm_settings: env,
         text = strip_postamble(text)
 
         for retry in range(n_retries):
-            raw_output_text, scrubbed_output_text = llmclient.perform_throwaway_task(llm_settings,
-                                                                                     instruction=f"{prompt_get_abstract}\n-----\n\n{text}",
-                                                                                     on_progress=llmclient.make_console_progress_handler("."))
-            abstract = scrubbed_output_text.strip()
+            record = extract(llm_settings, f"{prompt_get_abstract}\n-----\n\n{text}", ".")
+            abstract = record.reply.strip()
 
             if abstract:
                 break
@@ -793,7 +820,7 @@ def setup_prompts(llm_settings: env,
             error_msg = f"Input file '{unique_id}': Abstract empty after retries exhausted; giving up."
             logger.warning(error_msg)
             error_info.write(f"{error_msg}\n")
-            error_info.write(f"Full LLM output trace for EXTRACT ABSTRACT:\n{'-' * 80}\n{raw_output_text}\n")
+            error_info.write(f"Full LLM output trace for EXTRACT ABSTRACT:\n{'-' * 80}\n{full_output_trace(record)}\n")
             return status_failed, error_info.getvalue(), ""
 
         abstract = dehyphenator.dehyphenate(abstract)
@@ -864,10 +891,8 @@ def process_one(llm_settings: env,
             elif data_kind == "prompt":
                 # To keep things simple, we use a single-turn conversation for querying the LLM.
                 # Note this typically causes a full prompt rescan for every query.
-                raw_output_text, scrubbed_output_text = llmclient.perform_throwaway_task(llm_settings,
-                                                                                         instruction=f"{data}\n-----\n\n{text}",
-                                                                                         on_progress=llmclient.make_console_progress_handler("p"))  # "p" for "prompt mode"
-                bibtex_entry.write(f"    {field_key} = {{{bibtex_escape(scrubbed_output_text)}}},\n")
+                record = extract(llm_settings, f"{data}\n-----\n\n{text}", "p")  # "p" for "prompt mode"
+                bibtex_entry.write(f"    {field_key} = {{{bibtex_escape(record.reply)}}},\n")
                 field_status = status_success
             elif data_kind == "function":
                 field_status, field_error_info, function_output = data(unique_id, text)

@@ -49,6 +49,7 @@ from . import config as visualizer_config
 
 if visualizer_config.clusters_keyword_method == "llm" or visualizer_config.summarize:
     logger.info("LLM backend needed (for cluster keywords and/or summarization). Setting up connection.")
+    from ..librarian import agent
     from ..librarian import config as librarian_config
     from ..librarian import llmclient
     llm_backend_url = librarian_config.llm_backend_url
@@ -874,12 +875,21 @@ def collect_cluster_keywords(vis_data, n_vis_clusters, all_keywords, max_vis_kw=
 
             logger.info(f"        LLM prompt for cluster #{cluster_id}:\n{prompt}")
 
-            # Ask the LLM to provide keywords
-            raw_output_text, scrubbed_output_text = llmclient.perform_throwaway_task(llm_settings,
-                                                                                     instruction=prompt,
-                                                                                     on_progress=llmclient.make_console_progress_handler("."))
+            # Ask the LLM to provide keywords.
+            #
+            # No character and no tools: the output is a comma-separated list this function then splits,
+            # and the character card asks for Markdown, a reported train of thought, and conversational
+            # prose - all of which have to be undone before the result can be parsed. The prompt above
+            # says who is doing what.
+            record = agent.turn(llm_settings,
+                                prompt,
+                                use_character_card=False,
+                                tools_enabled=False,
+                                on_progress=llmclient.make_console_progress_handler("."))
+            scrubbed_output_text = record.reply
 
-            logger.info(f"        LLM output (raw) for cluster #{cluster_id}:\n{raw_output_text}")
+            for reasoning in record.reasoning:
+                logger.info(f"        LLM thoughts for cluster #{cluster_id}:\n{reasoning}")
             logger.info(f"        LLM output (final answer) for cluster #{cluster_id}:\n{scrubbed_output_text}")
 
             # TODO: wrap this in a retry mechanism (up to 3 times?)
@@ -927,11 +937,17 @@ def summarize(input_data):
                     entry_text = f"Title: {entry.title}\n\nAbstract: {entry.abstract}"
                     prompt = f"{visualizer_config.summarize_llm_prompt}\n-----\n\n{entry_text}"
 
-                    raw_output_text, scrubbed_output_text = llmclient.perform_throwaway_task(llm_settings,
-                                                                                             instruction=prompt,
-                                                                                             on_progress=llmclient.make_console_progress_handler("."))
+                    # As in `collect_cluster_keywords`: the summary goes into a dataset field, not into a
+                    # chat, and the failure sentinel below has to arrive verbatim.
+                    record = agent.turn(llm_settings,
+                                        prompt,
+                                        use_character_card=False,
+                                        tools_enabled=False,
+                                        on_progress=llmclient.make_console_progress_handler("."))
+                    scrubbed_output_text = record.reply
 
-                    logger.info(f"        LLM output (raw):\n{raw_output_text}")
+                    for reasoning in record.reasoning:
+                        logger.info(f"        LLM thoughts:\n{reasoning}")
                     logger.info(f"        LLM output (final answer):\n{scrubbed_output_text}")
 
                     if scrubbed_output_text.strip().lower() == "summarization failed":
