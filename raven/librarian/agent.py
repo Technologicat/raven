@@ -437,9 +437,12 @@ def turn(llm_settings: env,
             if user_message_text is None:
                 raise ValueError("agent.turn: with `use_character_card=False` there is no greeting to answer, so a "
                                  "turn needs either a `user_message_text` or a `head_node_id` to run from.")
-            # The character-independent half of the configuration still applies — it is what holds whatever
-            # character the model is wearing. Raven ships it empty, in which case there is no system node
-            # and the user's message is simply the root of the chat.
+            # An in-character chat is rooted at the system message, then the character's greeting, then the
+            # user's message. Here the greeting is gone with the character, but the character-independent
+            # half of the configuration still applies — it holds instructions meant to hold whichever
+            # character is worn, or none — so the root is a system message carrying that alone, and the
+            # user's message hangs directly off it. Raven ships that half empty, in which case there is no
+            # system node either and the user's message is itself the root.
             maybe_system_message = chatutil.create_initial_system_message(llm_settings, use_character_card=False)
             if maybe_system_message is not None:
                 head_node_id = datastore.create_node(payload=chatutil.create_payload(llm_settings=llm_settings,

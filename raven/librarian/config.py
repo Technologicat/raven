@@ -666,6 +666,29 @@ def setup_system_prompt(template_vars: env) -> str:
     return textwrap.dedent("""""").strip()
 
 # ----------------------------------------
+# LLM user card
+#
+# This defines who the *user* is, and how they prefer to be communicated with. The AI reads it the way it
+# reads the character card — as part of the setup, not as something the user said.
+#
+# Ships empty, and is worth filling in: current models respond well to knowing who they are talking to.
+# Useful things to put here are the user's field and role (so that an explanation lands at the right level),
+# and communication preferences (brevity, formality, units, whether to hedge).
+#
+# It belongs to the same layer as the character card, and travels with it: a turn taken without the
+# character is taken without this too. The reason is that the two are one setup between them — a description
+# of who is asking only means something when somebody is answering — and a scripted one-shot call is not a
+# conversation with anyone. Instructions that should hold no matter who or what is at either end go in the
+# system prompt above instead, which is the half that always applies.
+#
+# `raven.librarian.llmclient.setup` calls this every time `raven-librarian` (or `raven-minichat`) starts.
+#
+def setup_user_card(template_vars: env) -> str:
+    user = template_vars.user  # noqa: F841, for documentation purposes
+    char = template_vars.char  # noqa: F841, for documentation purposes
+    return textwrap.dedent("""""").strip()
+
+# ----------------------------------------
 # LLM character card
 #
 # This defines the AI character's personality.

@@ -808,7 +808,16 @@ def setup(backend_url: str,
 
         `system_prompt: str`: Currently empty. Used to be a generic system prompt for the LLM (the LLaMA 3 preset from SillyTavern), to make it follow the character card.
 
-        `character_card: str`: Character card that configures the AI to improve the model's performance.
+        `character_card: str`: Who the AI is: the assistant character's identity and manner. It shapes what
+                               the model does as well as how it sounds — a character card elicits a persona,
+                               propensities included — so it is part of the answer rather than a coat of
+                               paint on one. That is why withholding it is offered as a choice
+                               (`chatutil.create_initial_system_message`) rather than assumed either way.
+
+        `user_card: str`: Who the user is and how they prefer to be communicated with. Empty unless the
+                          deployment fills it in. Travels with the character card — both describe the two
+                          ends of a conversation, so a call made without the character is made without this
+                          too; see `chatutil.create_initial_system_message`.
 
         `stopping_strings: List[str]`: List of strings that automatically interrupt the AI in `invoke`.
                                        The default is `[f"\n{user}:"]`, which prevents old models' habit of speaking on the user's behalf.
@@ -908,6 +917,7 @@ def configure(model_info: env,
                         context_length=context_length)  # loaded context window, for the card to tell the model its real size
     system_prompt = librarian_config.setup_system_prompt(template_vars)
     character_card = librarian_config.setup_character_card(template_vars)
+    user_card = librarian_config.setup_user_card(template_vars)
     greeting = librarian_config.llm_greeting
 
     # Set up the chat completion request metadata template. Tool-calling instructions are NOT injected
@@ -960,6 +970,7 @@ def configure(model_info: env,
                    tokens_per_character=_DEFAULT_TOKENS_PER_CHARACTER,  # estimate-path calibration; refined from usage in `invoke`
                    system_prompt=system_prompt,
                    character_card=character_card,
+                   user_card=user_card,
                    stopping_strings=stopping_strings,
                    greeting=greeting,
                    tools=TOOLS,  # for inspection

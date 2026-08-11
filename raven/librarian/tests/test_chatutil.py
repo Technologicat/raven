@@ -25,6 +25,7 @@ def llm_settings():
     return env(personas={"user": "User", "assistant": "Aria"},
                system_prompt="You are a helpful assistant.",
                character_card="Name: Aria",
+               user_card="",
                greeting="How can I help you today?")
 
 
@@ -740,6 +741,7 @@ class TestCreateInitialSystemMessage:
         settings = env(personas={},
                        system_prompt="Be helpful.",
                        character_card="",
+                       user_card="",
                        greeting="Hello!")
         msg = chatutil.create_initial_system_message(settings)
         content = chatutil.content_to_text(msg["content"])
@@ -750,6 +752,7 @@ class TestCreateInitialSystemMessage:
         settings = env(personas={},
                        system_prompt="",
                        character_card="Name: Bot",
+                       user_card="",
                        greeting="Hello!")
         msg = chatutil.create_initial_system_message(settings)
         assert "Name: Bot" in chatutil.content_to_text(msg["content"])
@@ -758,9 +761,38 @@ class TestCreateInitialSystemMessage:
         settings = env(personas={},
                        system_prompt="",
                        character_card="",
+                       user_card="",
                        greeting="Hello!")
-        with pytest.raises(ValueError, match="Need at least"):
+        with pytest.raises(ValueError, match="need at least"):
             chatutil.create_initial_system_message(settings)
+
+    def test_nothing_to_say_without_the_character_is_not_an_error(self):
+        # The mirror of the case above, and the distinction is the point: setting up a chat with nothing to
+        # introduce it with is a misconfiguration, while a bare-model call having no character-independent
+        # instructions is the ordinary case. Raven ships exactly that way.
+        settings = env(personas={},
+                       system_prompt="",
+                       character_card="Name: Bot",
+                       user_card="Name: User",
+                       greeting="Hello!")
+        assert chatutil.create_initial_system_message(settings, use_character_card=False) is None
+
+    def test_the_user_card_travels_with_the_character(self):
+        settings = env(personas={},
+                       system_prompt="Answer in metric units.",
+                       character_card="Name: Bot",
+                       user_card="The user is a materials scientist.",
+                       greeting="Hello!")
+
+        in_character = chatutil.content_to_text(chatutil.create_initial_system_message(settings)["content"])
+        assert "Name: Bot" in in_character and "materials scientist" in in_character
+        assert in_character.index("Name: Bot") < in_character.index("materials scientist")  # answerer, then asker
+
+        # Withheld together: a description of who is asking means nothing with nobody answering.
+        bare = chatutil.content_to_text(chatutil.create_initial_system_message(settings,
+                                                                              use_character_card=False)["content"])
+        assert "Answer in metric units." in bare
+        assert "Name: Bot" not in bare and "materials scientist" not in bare
 
 
 # ---------------------------------------------------------------------------

@@ -868,32 +868,42 @@ def create_initial_system_message(llm_settings: env, use_character_card: bool = 
 
     `llm_settings`: Obtain this by calling `raven.librarian.llmclient.setup` at app start time.
 
-    `use_character_card`: Whether the AI character is present. `False` builds the message from `system_prompt`
-                   alone — the half of the configuration that holds whatever character it is wearing — and
-                   returns `None` when that is empty, which is how Raven ships it. The caller then creates
-                   no system node at all, which is the correct shape for a bare-model call: nothing is lost,
-                   because there was nothing character-independent to say.
+    Three configured pieces can go in, in the order a reader would want them: `system_prompt`, which holds
+    instructions that apply whichever character is worn — or none; `character_card`, which says who is
+    answering; and `user_card`, which says who is asking. Whichever are non-empty are joined with a blank
+    line between, and a `-----` rule closes the block off from the conversation. Raven ships only the
+    character card filled.
+
+    `use_character_card`: Whether the AI character is present. `False` builds the message from
+                   `system_prompt` alone, and returns `None` when that is empty, which is how Raven ships
+                   it — the caller then creates no system node at all, which is the right shape for a
+                   bare-model call: nothing is lost, because there was nothing character-independent to say.
+
+                   The *user* card goes with the character card rather than staying, because the two are one
+                   setup between them: a description of who is asking only means something when somebody is
+                   answering, and a scripted one-shot call is not a conversation with anyone. Anything that
+                   should hold regardless belongs in `system_prompt`.
 
                    This is the one place that knows how a system message is assembled, so that a deployment
-                   which does fill `system_prompt` keeps it in both settings without every caller having to
-                   remember that it might be there.
+                   which fills a slot keeps it without every caller having to remember that it might be there.
     """
-    if not use_character_card:
-        return (create_chat_message(llm_settings, role="system", add_persona=False,
-                                    text=f"{llm_settings.system_prompt}\n\n-----")
-                if llm_settings.system_prompt else None)
-    if llm_settings.system_prompt and llm_settings.character_card:
-        # The system prompt is stripped, so we need two linefeeds to have one blank line in between.
-        text = f"{llm_settings.system_prompt}\n\n{llm_settings.character_card}\n\n-----"
-    elif llm_settings.system_prompt:
-        text = f"{llm_settings.system_prompt}\n\n-----"
-    elif llm_settings.character_card:
-        text = f"{llm_settings.character_card}\n\n-----"
-    else:
-        raise ValueError("create_initial_system_message: Need at least a system prompt or a character card.")
+    # The system prompt is stripped, so the sections are joined with two linefeeds to leave one blank line.
+    sections = [llm_settings.system_prompt]
+    if use_character_card:
+        sections.extend([llm_settings.character_card, llm_settings.user_card])
+    sections = [section for section in sections if section]
+    if not sections:
+        if use_character_card:
+            # Only with `use_character_card=True`: a chat is being set up, and there is nothing at all to
+            # introduce it with, which is a misconfiguration. With the character withheld, having nothing to
+            # say is the ordinary case rather than an error, and the answer is no system message.
+            raise ValueError("create_initial_system_message: with `use_character_card=True`, need at least "
+                             "one of a system prompt, a character card or a user card.")
+        return None
     return create_chat_message(llm_settings,
                                role="system",
-                               text=text)
+                               add_persona=False,
+                               text="\n\n".join([*sections, "-----"]))
 
 def create_payload(llm_settings: env,
                    message: Dict[str, Any],
