@@ -33,6 +33,15 @@ prohibitions are what the whole inject rework exists to stop handing the model. 
 temperature was enough to make a bad shape look like a fix. So: run both temperatures, and read the
 reasoning length, not only the verdict. See `investigations/context-injects/context-inject-shape-measurements.md`.
 
+**That rejection is model-specific, and the model has moved.** On qwen3.6-35b-a3b the runaway belongs to
+the *as-shipped* wording instead — three of four samples at T=0 — while `closing-note` answers cleanly in
+0 of 3. Treat the paragraph above as the 27B result it is, and re-run the sweep before defending either
+wording on it.
+
+**Three samples per arm at T=0, not one.** Identical requests produced 2484, 30757 and 29684 characters of
+reasoning in the same run: greedy decoding is deterministic given identical numerics, and a GPU does not
+provide those. A single T=0 observation here carries no information.
+
 Usage:
     python absent_fact.py [base_url] [model] [samples_per_variant]
 """
@@ -117,11 +126,23 @@ def build(variant):
 
 
 def ask(messages, temperature):
-    # A budget the model cannot exhaust. At 2000 tokens a runaway deliberation truncates and reads as a
-    # refusal, which is the mistake that made the rejected variant look like a fix in the first place.
+    # Raven's own request template, tools and samplers included, so that what varies between the arms is the
+    # thing under test. Sampling is part of what Raven sends: the shipped configuration is `min_p=0.02` ahead
+    # of the temperature, and a probe that sends a bare temperature is measuring a distribution nobody runs.
+    payload = dict(settings.request_data)
+    payload["messages"] = messages
+    payload["temperature"] = temperature  # the variable this probe sweeps
+    # A budget the model cannot exhaust, but small enough to keep a runaway tractable — Raven itself ships no
+    # cap, so an arm that ends `finish=length` here is one Raven would have let run to the context window.
+    payload["max_tokens"] = 8000
+    payload.pop("stream", None)  # this probe reads one whole response; `invoke` is the streaming caller
+    # The controlled condition, and the reason the numbers here compare with the earlier nine-sample runs:
+    # no tools are declared, so a model that wants to search has nowhere to put the request and writes it
+    # out as text. Raven's real turns *do* declare `search_documents`, so this arm is deliberately narrower
+    # than a live turn rather than a replica of one.
+    payload.pop("tools", None)
     req = urllib.request.Request(f"{BASE}/v1/chat/completions",
-                                 data=json.dumps({"model": MODEL, "messages": messages, "max_tokens": 8000,
-                                                  "temperature": temperature}).encode("utf-8"),
+                                 data=json.dumps(payload).encode("utf-8"),
                                  headers={"Content-Type": "application/json"}, method="POST")
     with urllib.request.urlopen(req, timeout=1200) as r:
         body = json.loads(r.read().decode("utf-8"))
@@ -141,7 +162,13 @@ def requested_a_search(got):
 def main():
     # Both temperatures, because they disagree. T=1 samples the behaviour a user actually meets; T=0 is
     # where a wording that quietly costs the model its whole reasoning budget shows up.
-    for temperature, samples in ((0.0, 1), (1.0, N)):
+    #
+    # T=0 is sampled repeatedly too. Greedy decoding is deterministic on paper, and on a GPU only nearly so:
+    # kernel choice and float non-associativity can flip a near-tie, after which the trajectory diverges. The
+    # runaway arm is where that bites hardest, being some 8000 sampling decisions long rather than a few
+    # hundred. Whether the runaway repeats is the open question, so it is worth the samples until answered -
+    # if it repeats, one sample is enough here afterwards.
+    for temperature, samples in ((0.0, N), (1.0, N)):
         for variant in ("as-shipped", "closing-note", "no-synthetic-call"):
             print(f"\n--- {variant} @ T={temperature} ---")
             asked_again = 0

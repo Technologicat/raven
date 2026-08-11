@@ -44,19 +44,47 @@ Re-running them once against qwen3.6-35b-a3b, two outputs differed from the forg
 | `absent_fact`, as-shipped, T=0 | `finish=stop`, 4430 chars of reasoning | `finish=length`, 31726 chars — never produced a reply |
 | `assembled_shape` [2], absent fact | declined cleanly | emitted literal `<tool_call> <function=search_documents>` text |
 
-**Read that table as two anecdotes, not as a result.** It is one sample per cell, at T=0 — a sampling
-setting these models are not good at, and one nobody runs in production (Raven ships T=1 with
-`min_p=0.02`). A stochastic system given a different system prompt returning a different output is what a
-stochastic system does; it is not evidence that the real prompt *causes* either behaviour. Turning these
-into findings costs a handful of runs per arm at realistic sampling, which has not been done.
-
-The runaway is the one worth spending that on. `absent_fact`'s docstring records 29000 characters of
-reasoning with no reply as the reason the `closing-note` wording was **rejected** — so if the *shipped*
-wording reproducibly does the same against the real system prompt, that matters before Researchers' Night.
-One T=0 run does not establish that it does.
+**Read that table as two anecdotes, not as a result.** It is one sample per cell, and the next section says
+why one sample is worth nothing here.
 
 **The measurements above stand as taken** — this section is the note that says what they were taken against.
 Anything re-measured from here on is measured against the real settings.
+
+## T=0 is not reproducible on this stack (2026-08-11)
+
+Re-ran `absent_fact` with three samples per arm, and with the probe sending Raven's own request template
+(`settings.request_data`) so that the samplers are Raven's too — `min_p=0.02` ahead of the temperature,
+where before it sent a bare temperature and no `min_p`, i.e. a distribution nobody runs. Against
+qwen3.6-35b-a3b, tools not declared:
+
+| variant | T=0 (3 samples) | T=1 (3 samples) |
+|---|---|---|
+| as-shipped | reasoning **2484 / 30757 / 29684** chars — two of three hit the 8000-token cap with no reply | 2/3 asked to search again |
+| closing-note | 2876 / 2492 / 2355 chars, all answered | 1/3 asked to search again |
+| no-synthetic-call | 2849 / 1212 / 2472 chars, all answered | 0/3 asked to search again |
+
+**The methodological finding comes first, because it invalidates the table above it.** Three identical
+requests at T=0 produced 2484, 30757 and 29684 characters of reasoning. Greedy decoding is deterministic
+only given identical numerics, and on a GPU it is not: kernel selection and float non-associativity can flip
+a near-tie, after which the trajectory diverges completely. A generation this long is thousands of sampling
+decisions, so it is the *least* reproducible thing here rather than the most. **Single-sample T=0 claims are
+therefore worthless on this stack**, which is exactly what the one-sample table above was making.
+
+What does survive, at 3 of 4 samples counting a fourth run made while timing the probe: **the as-shipped
+wording is the one that runs away**, and the two alternatives do not, 0 of 3 each. The reasoning lengths
+separate cleanly — roughly 2.5k when it answers, roughly 30k when it does not, with nothing in between.
+
+**This inverts the reason `closing-note` was rejected — on a different model, which is the catch.** That
+rejection was measured on Qwen3.6-27B, where `closing-note` was the variant burning 29000 characters at
+T=0. On 35B-A3B it is clean and as-shipped is the one that burns. So the rejection rationale is
+model-specific and was never re-checked against the model now in use.
+
+Do not read the two tables against each other for anything finer. Between the 27B nine-sample runs and
+these, the model, the samplers and the surrounding prompt all changed; only the internal comparisons within
+each table are controlled. What is warranted is a re-run of the full variant sweep on the current model
+before the shipped wording is defended on the strength of the old numbers.
+
+Raw output: `absent_fact-2026-08-11.txt` (`.txt` rather than `.log`, which `.gitignore` excludes).
 
 ## Related
 

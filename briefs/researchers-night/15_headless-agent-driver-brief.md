@@ -172,14 +172,14 @@ nothing CI lacks.
 > with `system_prompt="You are a helpful assistant."`. That is the durable gain, independent of any single
 > run's output.
 >
-> Re-run once against qwen3.6-35b-a3b, two outputs differed from the forged-settings runs: `absent_fact`
-> as-shipped returned `finish=length` with 31726 characters of reasoning and no reply, and
-> `assembled_shape`'s absent-fact check emitted literal `<tool_call>` text instead of declining cleanly.
-> **This is one sample per arm at T=0, which is not evidence that the real prompt causes either.** Sampling
-> is stochastic and T=0 is not a setting these models are good at; a different system prompt yielding a
-> different output is the expected behaviour of the system, not a finding. What would make it one: several
-> runs per arm at realistic sampling (T=1, `min_p=0.02`), which is cheap and has not been done. Recorded in
-> `investigations/context-injects/README.md`.
+> The re-run that followed found something worth knowing, and it is written up in
+> `investigations/context-injects/README.md`. Three samples per arm at T=0 gave 2484, 30757 and 29684
+> characters of reasoning **from identical requests** — so T=0 is not reproducible on this stack, and the
+> one-sample comparison first written here could not have supported any conclusion. What survives is that
+> the *as-shipped* wording is the one that runs away (3 of 4), while the two alternatives do not (0 of 3
+> each) — which inverts the rationale that rejected `closing-note`, though that was measured on a different
+> model. The probe now also sends Raven's own samplers rather than a bare temperature, which is the same
+> "measure what Raven sends" correction one level down.
 
 No backend involved. This is what the prompt-shape probes want: the prompt Raven *would* send, so they can
 send it themselves and measure the backend without Raven confounding the result.
@@ -438,6 +438,40 @@ Answering the questions below; the list is kept for its reasoning, and these are
 7. **The mutation goes.** The public function returns a new list; `scaffold`'s internal call site rebinds.
    `perform_` then names a side effect that no longer exists, so the rename is forced rather than optional —
    which is what the brief predicted would follow from settling the shape first.
+
+### Raised 2026-08-11: `perform_throwaway_task` belongs in `agent` too
+
+It is the scripting entry point that already exists, and `TODO.md` says so in as many words — "the only
+scripting entry point, and deliberately thin: no datastore, so no attachments, no branch, no retrieval".
+Those four absences are the list of things this brief adds, so the two are the same surface at different
+stages of growth, currently one layer apart.
+
+The layering argues the same way. `llmclient` is the backend-protocol layer, and `perform_throwaway_task`
+does orchestration inside it: it assembles a history from the system prompt, the greeting and the
+instruction, and then calls `invoke`. That is scaffold-shaped work. Its ten call sites are all first-party
+and sit in two files — `papers/pdf2bib.py` (eight) and `visualizer/importer.py` (two) — both of which are
+scripts driving an LLM with no chat in the picture, which is precisely what `agent` is for.
+
+**What is not settled is what it becomes, and that should follow Part B rather than precede it.** Moving it
+unchanged is the one option to reject: it relocates the limitation and leaves two one-shot paths. The real
+choice is whether it *widens* — gaining the optional datastore, so that a throwaway task can carry an
+attachment, which is the narrow fix `TODO.md` asks for — or *dissolves* into a documented one-liner over the
+new surface, with the name going away. Which is right depends on whether a one-shot no-tools call is
+genuinely a one-liner once the surface exists, and that is not knowable until it does.
+
+Either way the ten call sites change shape, since they currently unpack `Tuple[str, str]` and the surface
+returns a record. Two files, first-party, greppable.
+
+**And the name should not survive the move.** "Throwaway" describes what becomes of the chat state, which is
+a distinction only an app that *has* a chat can draw; a script never had one to throw away, so the word names
+an absence the caller never experienced. "Perform a task" then says nothing a reader did not already know
+from it being an LLM call.
+
+Proposal: **`agent.ask`**. It is the plain verb for what happens — you ask, you get an answer — and it pairs
+with whatever Part B's full-loop entry point ends up called (`agent.turn` reads well against it). The two
+then differ in the way they actually differ: `ask` is one shot with no tools and no history, `turn` is the
+agent loop with a record of what it did. Not settled; the alternative worth weighing is a name carrying the
+"one shot" explicitly, at the cost of length.
 
 ## What this brief must settle before implementation
 

@@ -1,0 +1,58 @@
+absent_fact.py, 3 samples per arm, qwen3.6-35b-a3b, tools not declared.
+Probe sends Raven's own request template (settings.request_data): min_p=0.02, seed=-1.
+max_tokens capped at 8000 by the probe; Raven itself ships no cap.
+
+
+--- as-shipped @ T=0.0 ---
+  [1] answered                 finish=stop, reasoning=2484 chars
+      reply: 'Based on the documents provided, there is no information regarding a "Kelvin-7" stack. The only specific stack data available in the literature is for the **Vantaa-3** stack, which'
+  [2] answered                 finish=length, reasoning=30757 chars
+      reply: ''
+  [3] answered                 finish=length, reasoning=29684 chars
+      reply: ''
+  => 0/3 tried to search again
+
+--- closing-note @ T=0.0 ---
+  [1] answered                 finish=stop, reasoning=2876 chars
+      reply: 'Based on the documents provided, there is no information regarding a "Kelvin-7" stack or its specific energy consumption. The only specific energy consumption mentioned in the retr'
+  [2] answered                 finish=stop, reasoning=2492 chars
+      reply: "I couldn't find any information regarding the specific energy consumption of the Kelvin-7 stack in the provided documents. The only specific energy consumption mentioned is for the"
+  [3] answered                 finish=stop, reasoning=2355 chars
+      reply: 'Based on the provided documents, there is no information regarding the specific energy consumption of the Kelvin-7 stack. The only specific energy consumption data available in the'
+  => 0/3 tried to search again
+
+--- no-synthetic-call @ T=0.0 ---
+  [1] answered                 finish=stop, reasoning=2849 chars
+      reply: 'I don\'t see any information about a "Kelvin-7 stack" in the provided documents. The only specific stack mentioned is the **Vantaa-3**, which draws **41.7 kWh/kg** under nominal loa'
+  [2] answered                 finish=stop, reasoning=1212 chars
+      reply: 'I don\'t see any information about a "Kelvin-7 stack" in the documents provided. The only specific stack data available in the snippets refers to the **Vantaa-3** pressurized alkali'
+  [3] answered                 finish=stop, reasoning=2472 chars
+      reply: 'I don\'t see any information regarding a "Kelvin-7 stack" in the provided documents. The only specific stack mentioned is the **Vantaa-3** stack, which draws **41.7 kWh/kg** under n'
+  => 0/3 tried to search again
+
+--- as-shipped @ T=1.0 ---
+  [1] ASKED FOR ANOTHER SEARCH finish=stop, reasoning=427 chars
+      reply: '<tool_call> <function=search_documents> <parameter=query> Kelvin-7 </parameter> </function> </tool_call>'
+  [2] answered                 finish=stop, reasoning=4834 chars
+      reply: 'I took a quick look through the documents, but I couldn’t find any data on a "Kelvin-7" stack. The only specific energy consumption figure currently in the materials is for the Van'
+  [3] ASKED FOR ANOTHER SEARCH finish=stop, reasoning=1603 chars
+      reply: '<tool_call> <function=search_documents> <parameter=query> Kelvin-7 stack </parameter> </function> </tool_call>'
+  => 2/3 tried to search again
+
+--- closing-note @ T=1.0 ---
+  [1] answered                 finish=stop, reasoning=6750 chars
+      reply: 'Based on the documents provided, there\'s no mention of a "Kelvin-7" stack or its specific energy consumption. However, the reports do cite the **Vantaa-3 pressurized alkaline stack'
+  [2] ASKED FOR ANOTHER SEARCH finish=stop, reasoning=1110 chars
+      reply: '<tool_call> <function=search_documents> <parameter=query> Kelvin-7 </parameter> </function> </tool_call>'
+  [3] answered                 finish=stop, reasoning=3295 chars
+      reply: 'I don\'t have any information on a "Kelvin-7" stack in the search results. The only specific stack data available here is for the **Vantaa-3** stack, which draws **41.7 kWh/kg** und'
+  => 1/3 tried to search again
+
+--- no-synthetic-call @ T=1.0 ---
+  [1] answered                 finish=stop, reasoning=5744 chars
+      reply: 'Based on the documents provided, I don\'t have any information regarding a "Kelvin-7" stack. The only specific stack data available in the provided files is for the **Vantaa-3**, wh'
+  [2] answered                 finish=stop, reasoning=7807 chars
+      reply: 'I\'ve checked the provided documents, but there is no mention of a "Kelvin-7 stack" in the text. The only specific energy consumption data available in these excerpts is for the Van'
+  [3] answered                 finish=stop, reasoning=3330 chars
+      reply: 'I don\'t see any mention of a "Kelvin-7 stack" in the documents currently provided. The only specific energy consumption figures I have in the literature right now are for the **Van'
+  => 0/3 tried to search again
