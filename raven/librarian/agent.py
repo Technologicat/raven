@@ -230,7 +230,7 @@ def turn(llm_settings: env,
          datastore: chattree.Forest | None = None,
          head_node_id: str | None = None,
          retriever: "hybridir.HybridIR | None" = None,
-         use_persona: bool = True,
+         use_character_card: bool = True,
          tools_enabled: bool = True,
          internet_enabled: bool = False,
          docs_enabled: bool = True,
@@ -354,7 +354,7 @@ def turn(llm_settings: env,
                  measured). `None` means no documents: no automatic search, and the document tools are not
                  offered.
 
-    `use_persona`: Who does the job — the assistant character, or the bare model. `True` (default) is what
+    `use_character_card`: Who does the job — the assistant character, or the bare model. `True` (default) is what
                    the chat apps run: the character card as the system message, the character's greeting
                    ahead of the user's message, the persona prefix on messages, and the per-turn
                    instruction injects (the date, the reminder to write conversationally) plus the clock.
@@ -368,7 +368,7 @@ def turn(llm_settings: env,
                    The tool switches are *not* part of the bundle: which tools to offer is a property of
                    the job, not of who is doing it.
 
-                   What survives with `use_persona=False` is `llm_settings.system_prompt`, the
+                   What survives with `use_character_card=False` is `llm_settings.system_prompt`, the
                    character-independent half of the system message. Raven ships that slot empty — modern
                    models no longer need the "you are an expert actor" preamble that once made character
                    play work — so in the default configuration a bare run has no system message at all. A
@@ -431,12 +431,20 @@ def turn(llm_settings: env,
         if datastore.nodes:
             raise ValueError("agent.turn: `head_node_id` is required for a datastore that already has "
                              "nodes; starting a new conversation would delete them.")
-        if use_persona:
+        if use_character_card:
             head_node_id = chatutil.factory_reset_datastore(datastore, llm_settings)
-        elif user_message_text is None:
-            raise ValueError("agent.turn: with `use_persona=False` there is no greeting to answer, so a "
-                             "turn needs either a `user_message_text` or a `head_node_id` to run from.")
-        # ...and with a persona but no preamble, the user's message is simply the root of the chat.
+        else:
+            if user_message_text is None:
+                raise ValueError("agent.turn: with `use_character_card=False` there is no greeting to answer, so a "
+                                 "turn needs either a `user_message_text` or a `head_node_id` to run from.")
+            # The character-independent half of the configuration still applies — it is what holds whatever
+            # character the model is wearing. Raven ships it empty, in which case there is no system node
+            # and the user's message is simply the root of the chat.
+            maybe_system_message = chatutil.create_initial_system_message(llm_settings, use_character_card=False)
+            if maybe_system_message is not None:
+                head_node_id = datastore.create_node(payload=chatutil.create_payload(llm_settings=llm_settings,
+                                                                                     message=maybe_system_message),
+                                                     parent_id=None)
 
     if docs_query is from_user_message:
         # With no corpus there is nothing to search, and passing a query anyway makes `ai_turn` warn about a
@@ -461,7 +469,7 @@ def turn(llm_settings: env,
                                      retriever=retriever,
                                      head_node_id=head_node_id,
                                      tools_enabled=tools_enabled,
-                                     use_persona=use_persona,
+                                     use_character_card=use_character_card,
                                      internet_enabled=internet_enabled,
                                      continue_=continue_,
                                      docs_enabled=docs_enabled,

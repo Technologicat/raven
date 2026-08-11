@@ -863,11 +863,25 @@ def create_chat_message(llm_settings: env,
                                      tool_calls=tool_calls,
                                      reasoning_content=reasoning_content)
 
-def create_initial_system_message(llm_settings: env) -> Dict:
+def create_initial_system_message(llm_settings: env, use_character_card: bool = True) -> Optional[Dict]:
     """Create a chat message containing the system prompt and the AI's character card as specified in `llm_settings`.
 
     `llm_settings`: Obtain this by calling `raven.librarian.llmclient.setup` at app start time.
+
+    `use_character_card`: Whether the AI character is present. `False` builds the message from `system_prompt`
+                   alone — the half of the configuration that holds whatever character it is wearing — and
+                   returns `None` when that is empty, which is how Raven ships it. The caller then creates
+                   no system node at all, which is the correct shape for a bare-model call: nothing is lost,
+                   because there was nothing character-independent to say.
+
+                   This is the one place that knows how a system message is assembled, so that a deployment
+                   which does fill `system_prompt` keeps it in both settings without every caller having to
+                   remember that it might be there.
     """
+    if not use_character_card:
+        return (create_chat_message(llm_settings, role="system", add_persona=False,
+                                    text=f"{llm_settings.system_prompt}\n\n-----")
+                if llm_settings.system_prompt else None)
     if llm_settings.system_prompt and llm_settings.character_card:
         # The system prompt is stripped, so we need two linefeeds to have one blank line in between.
         text = f"{llm_settings.system_prompt}\n\n{llm_settings.character_card}\n\n-----"

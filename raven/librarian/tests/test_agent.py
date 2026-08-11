@@ -415,7 +415,7 @@ class TestTurn:
             return make_invoke_result(content="Keywords: raven, corvid.")
         monkeypatch.setattr("raven.librarian.llmclient.invoke", fake_invoke)
 
-        agent.turn(llm_settings, "Extract the keywords.", use_persona=False, tools_enabled=False)
+        agent.turn(llm_settings, "Extract the keywords.", use_character_card=False, tools_enabled=False)
         agent.turn(llm_settings, "Extract the keywords.", tools_enabled=False)
 
         bare, in_character = prompts
@@ -423,6 +423,28 @@ class TestTurn:
         # character withheld there is no system message left to send.
         assert [message["role"] for message in bare] == ["user"]
         assert [message["role"] for message in in_character] == ["system", "assistant", "user"]
+
+    def test_character_independent_instructions_survive_the_character(self, monkeypatch, llm_settings):
+        # `system_prompt` is the half of the configuration that holds whatever character the model wears,
+        # so a deployment that fills it keeps it in both settings. Raven ships it empty, which is the only
+        # reason a bare run usually has no system message -- and testing only the shipped case would have
+        # let "no character" quietly mean "no instructions of any kind".
+        prompts = []
+
+        def fake_invoke(**kw):
+            prompts.append(llmclient.serialize_history_for_wire(kw["settings"], kw["history"],
+                                                                continue_=kw["continue_"]))
+            return make_invoke_result(content="Done.")
+        monkeypatch.setattr("raven.librarian.llmclient.invoke", fake_invoke)
+        llm_settings.system_prompt = "Answer in metric units."
+
+        agent.turn(llm_settings, "How tall is it?", use_character_card=False)
+
+        assert prompts[0][0]["role"] == "system"
+        wire = chatutil.content_to_text(prompts[0][0]["content"])
+        assert "Answer in metric units." in wire
+        # ...and it is the system half only: the character is what was withheld.
+        assert llm_settings.character_card not in wire
 
     def test_the_bare_model_is_not_handed_a_system_message_of_leftovers(self, monkeypatch, llm_settings):
         # The trap `_add_to_system_message` sets: it *inserts* a leading system message when the history
@@ -435,7 +457,7 @@ class TestTurn:
             return make_invoke_result(content="Done.")
         monkeypatch.setattr("raven.librarian.llmclient.invoke", fake_invoke)
 
-        agent.turn(llm_settings, "Do the thing.", use_persona=False)
+        agent.turn(llm_settings, "Do the thing.", use_character_card=False)
 
         wire = "\n".join(chatutil.content_to_text(message.get("content")) for message in prompts[0])
         assert chatutil.default_formatters().date_now() not in wire

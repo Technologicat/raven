@@ -468,13 +468,13 @@ nontrivial task the two bundles can therefore reach different answers, and **lit
 nontrivial and is one of Librarian's points**. So "who is doing the extraction" is a question the user may
 legitimately want to answer either way, per run.
 
-#### The shape: `use_persona`, with tools left orthogonal (Juha, 2026-08-11)
+#### The shape: `use_character_card`, with tools left orthogonal (Juha, 2026-08-11)
 
 One boolean, because the bundle is one question — *who does the job* — and the tool switches stay
 independent of it, since offering the internet or the documents is a per-use-site choice that has nothing
 to do with which character is asking.
 
-| | `use_persona=True` | `use_persona=False` |
+| | `use_character_card=True` | `use_character_card=False` |
 |---|---|---|
 | system message | the character card | none at all |
 | greeting node | yes | no |
@@ -491,13 +491,13 @@ to do with which character is asking.
   expert actor, capable of taking any role" preamble before they would play a character and current ones do
   not, so it has been empty for some time.
 
-  What follows for the knob: `use_persona=False` keeps that half and drops the card, which in the shipped
+  What follows for the knob: `use_character_card=False` keeps that half and drops the card, which in the shipped
   configuration leaves no system message at all — "bare Qwen" falling out rather than being chosen — while
   a deployment that fills the slot keeps its contents either way.
 
   **Wanted later, and it belongs in the same structure** (Juha): a *user*-level slot — who the user is and
   how they prefer to be communicated with. The current Qwens respond favourably to that. It would make the
-  split three-way (system / character / user), and only the middle one is what `use_persona` withholds.
+  split three-way (system / character / user), and only the middle one is what `use_character_card` withholds.
 - **The instruction injects have to go with the persona, or one gets synthesized.**
   `_add_to_system_message` *inserts* a leading system message when the history has none, so leaving the
   unconditional date inject on would hand the bare model a system message containing nothing but the date.
