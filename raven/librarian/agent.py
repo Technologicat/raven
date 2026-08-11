@@ -24,7 +24,13 @@ chat is a tree. A retry, a reroll, or a second phrasing of the same question is 
 parent, so the failed attempt and the one that worked are both in the chat afterwards — as are all four
 samples of a turn that was sampled four times, side by side under the message that prompted them. Nothing
 has to be switched on for that, and there is no separate place for the run's history to live: a batch's
-whole record of what it did is a chat, openable in Librarian and readable by a person.
+whole record of what it did is a chat in Raven's own format, which `describe_turn` reads back and a person
+can too.
+
+Whether Librarian can *show* it depends on where the batch put it. Librarian opens the datastore named in
+`librarian_config.llm_datastore_file` and no other, so a run against that one — see the `appstate.load`
+example under `turn` — is waiting in the app afterwards, while a run that built its own
+`chattree.PersistentForest` somewhere else is readable only programmatically.
 
 `turn`'s docstring carries worked examples. The *executable* ones are in
 `raven/librarian/tests/test_agent.py`, which is the better place to look for a pattern this docstring does
