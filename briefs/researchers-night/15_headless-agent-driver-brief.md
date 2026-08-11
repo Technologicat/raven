@@ -700,7 +700,8 @@ sites, and it must land with the storage change rather than after it.
 Which retires an earlier note here: an old card that never acquired a chat is then *not* collected by that
 sweep, since a root is reachable by construction. It costs one node and no attachments, and reclaiming it
 would need a rule about which roots are still wanted — a different question from reachability, and not one
-worth raising for a node apiece.
+worth raising for a node apiece. A user who wants one gone can delete it in the GUI (Juha), which is the
+right place for a judgement about what is still wanted.
 
 #### Raised while doing the above, and not settled: the character card is carrying character-independent text
 
