@@ -144,10 +144,16 @@ are known.
 
 So both blind paths can be caught positively, at the input rather than at the scroll:
 
-- **Wheel:** a wheel event with the pointer over the chat panel is a reader scrolling it, and nothing else
-  is. Exact.
-- **Scrollbar drag:** a left button held with the pointer inside the panel, dragging. The scrollbar occupies
-  a known strip at the panel's right edge, so the test can be as tight as wanted.
+- **Wheel:** a wheel event with the pointer over the chat panel is a reader scrolling it - *unless a modal
+  is up*, which takes the wheel while the pointer still reads as being over the panel underneath.
+  `app.is_any_modal_window_visible` already answers that (help card, attach dialog, cleanup dialog,
+  messagebox), so the test is the conjunction, and it is then exact.
+- **Scrollbar drag:** a left button held, dragging, with the *press* inside the panel. The press is what has
+  to be tested, not the pointer at each moment: once a drag has begun, the pointer routinely leaves the
+  scrollbar strip and the panel entirely and the drag continues - it would be unusable otherwise. So this is
+  a small state machine, opened by a button-down inside the strip and closed by the release, and a
+  position test applied per-event would drop exactly the part of the drag where the reader is furthest from
+  where they started.
 
 That turns "did the reader scroll?" from an inference about position into an observation about input, which
 is what the whole difficulty here has been.
