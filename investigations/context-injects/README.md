@@ -35,22 +35,25 @@ one layer up from where it was being watched. Neither docstring said so; both cl
 actually sends.
 
 Both now call `llmclient.configure`, which builds the genuine settings object without contacting a backend.
-Re-running them against qwen3.6-35b-a3b immediately changed two results, in the direction that matters:
+That is the durable gain here, and it holds regardless of what any individual run returns.
+
+Re-running them once against qwen3.6-35b-a3b, two outputs differed from the forged-settings runs:
 
 | check | with the stand-in prompt | with Raven's real prompt |
 |---|---|---|
-| `absent_fact`, as-shipped, T=0 | `finish=stop`, 4430 chars of reasoning | **`finish=length`, 31726 chars** — never produced a reply |
+| `absent_fact`, as-shipped, T=0 | `finish=stop`, 4430 chars of reasoning | `finish=length`, 31726 chars — never produced a reply |
 | `assembled_shape` [2], absent fact | declined cleanly | emitted literal `<tool_call> <function=search_documents>` text |
 
-Both are failures the probes were written to catch, and both were invisible while the prompt was a
-placeholder. The second is precisely the behaviour `absent_fact`'s own docstring describes — with no tools
-declared, the model writes the call out as text and the user gets that instead of an answer — so the probe
-was reporting clean on the very defect it exists to find.
+**Read that table as two anecdotes, not as a result.** It is one sample per cell, at T=0 — a sampling
+setting these models are not good at, and one nobody runs in production (Raven ships T=1 with
+`min_p=0.02`). A stochastic system given a different system prompt returning a different output is what a
+stochastic system does; it is not evidence that the real prompt *causes* either behaviour. Turning these
+into findings costs a handful of runs per arm at realistic sampling, which has not been done.
 
-The runaway is the more serious of the two: `absent_fact`'s docstring records 29000 characters of reasoning
-with no reply as the reason the `closing-note` wording was **rejected**. On the real system prompt, the
-*shipped* wording does the same thing at T=0. That wants a fresh look before Researchers' Night, and it is
-not what these older measurements say, because they were not taken against this prompt.
+The runaway is the one worth spending that on. `absent_fact`'s docstring records 29000 characters of
+reasoning with no reply as the reason the `closing-note` wording was **rejected** — so if the *shipped*
+wording reproducibly does the same against the real system prompt, that matters before Researchers' Night.
+One T=0 run does not establish that it does.
 
 **The measurements above stand as taken** — this section is the note that says what they were taken against.
 Anything re-measured from here on is measured against the real settings.
