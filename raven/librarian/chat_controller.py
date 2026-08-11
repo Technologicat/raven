@@ -2567,20 +2567,24 @@ class DPGLinearizedChatView:
         _, panel_h = dpg.get_item_rect_size(self.gui_parent)
         return 0.7 * panel_h
 
-    def scroll_lines(self, delta_lines: int) -> None:
-        """Scroll by `delta_lines` lines of text; negative is up.
+    def scroll_by_font_heights(self, delta: int) -> None:
+        """Scroll by `delta` font heights; negative is up.
 
         The fine-adjustment gesture, for a reader whose hands are on the keyboard — which in a chat app is
         the default posture, since typing is the primary activity. (The Visualizer reaches for the mouse
         instead, because there the map *is* the interaction.)
 
-        A line is taken as `font_size`, matching `_PIN_TOLERANCE_PX`'s own "two lines of text". That the two
-        are expressed in the same unit is what keeps the arrow keys working: `should_follow_tail` treats
-        anything within the tolerance of the end as still at the end, so a scroll smaller than that is undone
-        by the next arriving chunk. The caller's per-keypress step therefore has to clear two lines, and
-        stays clear at any font size because both quantities scale with it.
+        The unit is the font height rather than a rendered line, and the distinction is why it is named that
+        way: a line box also carries the item spacing, so a line runs about a quarter taller. Callers wanting
+        "a couple of lines" should ask for a couple more of these.
+
+        What matters is not the count but that the caller's step **clears the follow-tail floor**:
+        `should_follow_tail` treats anything within `_PIN_TOLERANCE_PX` of the end as still at the end, so a
+        smaller scroll is undone by the next arriving chunk during a streaming reply. That floor is counted
+        in the same unit, so the margin holds at any font size. See `_SCROLL_FONT_HEIGHTS_PER_ARROW` in
+        `app.py` for the caller's side of it.
         """
-        self.scroll_to_position(dpg.get_y_scroll(self.gui_parent) + delta_lines * gui_config.font_size)
+        self.scroll_to_position(dpg.get_y_scroll(self.gui_parent) + delta * gui_config.font_size)
 
     def page_up(self) -> None:
         """Scroll up by one page."""

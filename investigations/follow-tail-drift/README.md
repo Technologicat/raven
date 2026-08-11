@@ -267,15 +267,20 @@ would let the drift floor drop to a few pixels — making genuine small scrolls 
 
 ### The unit is used as a proxy in three places, and it is consistently low
 
-`font_size` stands in for the line height in `_PIN_TOLERANCE_PX`, in `DPGLinearizedChatView.scroll_lines`
-(`delta_lines * gui_config.font_size`), and in `_SCROLL_LINES_PER_ARROW`. It is low by about a quarter — a
-rendered line measures 26 px against a font size of 20 — so the arrow keys move about 3.8 lines where the
-constant says 5, and the tolerance allows about 1.5 lines where its comment says 2.
+`font_size` stands in for the line height in `_PIN_TOLERANCE_PX`, in the chat view's per-keypress scroll,
+and in the arrow-key step. It is low by about a quarter — a rendered line measures 26 px against a font size
+of 20 — so an arrow moves about 3.8 lines where the count said 5, and the tolerance allows about 1.5 lines
+where its comment said 2.
+
+**The two scroll names have since been corrected to say what they measure**: `scroll_by_font_heights` and
+`_SCROLL_FONT_HEIGHTS_PER_ARROW`, since a font height is what the arithmetic actually uses. Only
+`_PIN_TOLERANCE_PX`'s comment still has to explain the discrepancy, because that one is a length rather than
+a count.
 
 **Nothing breaks, because the error is consistent.** The design argument the two share is that the
 per-keypress step must clear the follow-tail floor or a streaming chunk would undo it, and that holds on the
 ratio rather than on the unit: five font-sizes against two is 100 px against 40, a 2.5x margin, and both
-scale together with the font. The comment beside `_SCROLL_LINES_PER_ARROW` states this correctly.
+scale together with the font. The comment beside `_SCROLL_FONT_HEIGHTS_PER_ARROW` states this correctly.
 
 So this is cosmetic — the constants do not mean quite what they say — and worth knowing mainly because
 `_PIN_TOLERANCE_PX`'s share of it was implicated in the bug above, where 46 and 47 px of drift exceeded a

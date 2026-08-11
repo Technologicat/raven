@@ -4,58 +4,38 @@ import pytest
 
 from unpythonic.env import env
 
-from raven.librarian import chatutil
+from raven.librarian import llmclient
 
 
 @pytest.fixture
-def llm_settings():
-    """Minimal `llm_settings` env for tests that don't talk to a real LLM backend.
+def llm_settings(monkeypatch):
+    """The real `llm_settings` env, built without contacting a backend.
 
-    Covers the fields read by `chatutil`, `scaffold`, and `appstate`: persona names,
-    system prompt and character card (used by `create_initial_system_message`),
-    greeting (used by `appstate._refresh_greeting`), and the `personas` map
-    (used by `create_chat_message` to prefix messages with the speaker's name).
+    `llmclient.configure` is `setup` minus the two network queries that discover its arguments, so a caller
+    holding the facts gets the genuine object — the same system prompt, character card, tool tables, sampler
+    settings and personas a running app has. Forging one instead means tests assert against a replica that
+    can drift from what the app actually uses, and the drift is invisible until something depends on a field
+    the replica got wrong.
+
+    That was not available until `llmclient` became importable without the client stack: it used to reach
+    `spacy` and `transformers` through `raven.client.api`, and an import failure in a *conftest* takes the
+    whole package's collection with it rather than skipping the few tests that need a backend. `api` is now
+    imported on first use by the two tool wrappers that need it, so this import is safe — including in CI,
+    which installs neither.
+
+    Two things are pinned rather than taken from the local configuration, so that the fixture describes the
+    same model on every machine:
+
+      - `model_info`, which a running app discovers from the backend. Stated here.
+      - `llm_tokenizer_path`, which selects exact token counting when set. Left unset, so `count_tokens`
+        takes the estimate path, which needs no model files — the exactness of the count is not what any of
+        these tests are about, and a configured tokenizer would otherwise be fetched.
     """
-    return env(user="User",
-               char="Aria",
-               model="test-model",
-               system_prompt="You are a helpful assistant.",
-               character_card="Name: Aria",
-               greeting="How can I help you today?",
-               personas={"user": "User",
-                         "assistant": "Aria",
-                         "system": None,
-                         "tool": None},
-               # Token accounting, as `llmclient.setup` builds it. `tokenizer=None` selects the estimate
-               # path (`count_tokens` tier 3), which needs no model files - the exactness of the count is
-               # not what any of these tests are about.
-               tokenizer=None,
-               tokens_per_character=0.27,
-               context_length=32768,
-               backend_flavor="lmstudio",
-               # A copy of the tool registry, and it has to be one: importing `llmclient` to get the real
-               # thing pulls `spacy` and `transformers` through `raven.client.api`, which CI deliberately
-               # does not install — so a module-level import here fails *collection* for this whole
-               # package, and every librarian test disappears rather than the few that need a backend.
-               # `test_llmclient` `importorskip`s for the same reason; this file cannot, because it is the
-               # conftest and everything else in the directory depends on it.
-               #
-               # The copy is guarded rather than trusted: `TestToolRegistry.test_the_fixture_matches_the_real_registry`
-               # compares it against `llmclient.TOOL_ENTRYPOINTS` and fails if they diverge. That test skips
-               # in CI along with the rest of `test_llmclient`, which is the right place for the cost to
-               # land — drift is a thing a developer introduces while adding a tool, and they run the full
-               # suite locally, where the import works.
-               #
-               # The entrypoints are never called (tests fake `perform_tool_calls`), so the names are what
-               # matter; `None` stands in for each function.
-               tool_entrypoints={"websearch": None,
-                                 "webfetch": None,
-                                 "get_current_time": None,
-                                 "search_documents": None,
-                                 "fetch_document": None,
-                                 "list_consulted_documents": None},
-               document_tool_names=frozenset({"search_documents", "fetch_document", "list_consulted_documents"}),
-               network_tool_names=frozenset({"websearch", "webfetch"}),
-               # The real thing, not a copy: `chatutil` is already imported here (it needs no backend and
-               # no ML stack), so there is nothing to forge and nothing to drift.
-               formatters=chatutil.default_formatters())
+    monkeypatch.setattr(llmclient.librarian_config, "llm_tokenizer_path", None)
+    return llmclient.configure(model_info=env(label="test-model",
+                                              model_id="test-model",
+                                              context_length=32768,
+                                              is_vlm=None),  # "cannot tell", as a backend that does not report it gives
+                               backend_flavor="lmstudio",
+                               backend_url="http://test-backend",
+                               quiet=True)

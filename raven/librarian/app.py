@@ -86,14 +86,21 @@ logger.info(f"Libraries loaded in {tim.dt:0.6g}s.")
 # ----------------------------------------
 # Module bootup
 
-# How far one Up/Down keypress scrolls the chat log, in lines of text. Sized as a comfortable reading nudge
-# — enough to bring the next couple of lines in without losing your place, and well short of the ~27 lines a
+# How far one Up/Down keypress scrolls the chat log, counted in font heights. Sized as a comfortable reading
+# nudge — enough to bring the next couple of lines in without losing your place, and well short of what a
 # page moves.
 #
-# It also has to clear a floor: `should_follow_tail` counts anything within two lines of the end as still at
-# the end, so a smaller movement during a streaming reply would be undone by the next arriving chunk. Both
-# quantities are expressed in lines, so the margin holds at any font size rather than only at this one.
-_SCROLL_LINES_PER_ARROW = 5
+# The load-bearing property is not the count but the margin: it has to **clear the follow-tail floor**.
+# `should_follow_tail` treats anything within `_PIN_TOLERANCE_PX` of the end as still at the end, so a
+# keypress moving less than that would be undone by the next arriving chunk during a streaming reply. Five
+# font heights against that floor's two is a 2.5x margin, and since both are counted in the same unit the
+# margin holds at any font size rather than only at this one.
+#
+# The unit is the font height and not a *line*, which is why it is named that way: a rendered line also
+# carries the item spacing, 26 px against a font height of 20 in the chat panel. So five of these are nearer
+# four lines than five — harmless, since the property above rests on the ratio and both sides count the same
+# unit, but not something the name should claim.
+_SCROLL_FONT_HEIGHTS_PER_ARROW = 5
 
 def _send_key_label() -> str:
     """How to name the send chord in a tooltip, per `config.send_message_key`."""
@@ -1585,11 +1592,11 @@ def librarian_hotkeys_callback(sender, app_data):
         else:
             # With the composer out of the way, the remaining navigation keys scroll the log. Bare Up/Down
             # were previously unbound; the modified arrows are sibling navigation (`Ctrl` +/- `Shift`) and
-            # keep their meaning. See `_SCROLL_LINES_PER_ARROW` for why an arrow moves several lines.
+            # keep their meaning. See `_SCROLL_FONT_HEIGHTS_PER_ARROW` for why an arrow moves several.
             if key == dpg.mvKey_Up:
-                chat_controller.view.scroll_lines(-_SCROLL_LINES_PER_ARROW)
+                chat_controller.view.scroll_by_font_heights(-_SCROLL_FONT_HEIGHTS_PER_ARROW)
             elif key == dpg.mvKey_Down:
-                chat_controller.view.scroll_lines(_SCROLL_LINES_PER_ARROW)
+                chat_controller.view.scroll_by_font_heights(_SCROLL_FONT_HEIGHTS_PER_ARROW)
             elif key == dpg.mvKey_Home:
                 chat_controller.view.go_to_top()
             elif key == dpg.mvKey_End:

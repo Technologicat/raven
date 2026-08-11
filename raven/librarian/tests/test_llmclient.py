@@ -81,23 +81,6 @@ class TestToolRegistry:
         in it that is not a real tool would silently shrink nothing while looking like it gated something."""
         assert llmclient.DOCUMENT_TOOL_NAMES <= set(llmclient.TOOL_ENTRYPOINTS)
 
-    def test_the_fixture_matches_the_real_registry(self, llm_settings):
-        """`conftest`'s `llm_settings` copies the registry, and a copy is free to drift.
-
-        It cannot import the real one: `llmclient` reaches `spacy` and `transformers` through
-        `raven.client.api`, which CI does not install, and a failed import in a conftest takes the whole
-        package's collection with it rather than skipping the few tests that need a backend. So the copy
-        stays, and this is what keeps it honest. It lives here, behind this module's `importorskip`, so the
-        check runs wherever the real registry can be loaded and skips quietly where it cannot — which is
-        also where drift gets introduced, since adding a tool is done on a machine that can run the app.
-        """
-        assert set(llm_settings.tool_entrypoints) == set(llmclient.TOOL_ENTRYPOINTS), (
-            "conftest's tool_entrypoints has drifted from llmclient.TOOL_ENTRYPOINTS")
-        assert llm_settings.document_tool_names == llmclient.DOCUMENT_TOOL_NAMES, (
-            "conftest's document_tool_names has drifted from llmclient.DOCUMENT_TOOL_NAMES")
-        assert llm_settings.network_tool_names == llmclient.NETWORK_TOOL_NAMES, (
-            "conftest's network_tool_names has drifted from llmclient.NETWORK_TOOL_NAMES")
-
     def test_the_gated_groups_are_disjoint(self):
         """A tool answering to two switches would make one of them a lie, whichever way they were set."""
         assert not (llmclient.DOCUMENT_TOOL_NAMES & llmclient.NETWORK_TOOL_NAMES)
