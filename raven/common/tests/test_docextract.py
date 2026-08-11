@@ -543,16 +543,22 @@ class TestExtractFromBytes:
     caller had moved off paths.
     """
 
-    @pytest.mark.parametrize("name, raw", [("notes.txt", "Plain and indexable".encode("utf-8")),
-                                           ("paper.pdf", make_minimal_pdf("Hello from a PDF")),
-                                           ("report.docx", make_docx(["First para", "Second para"])),
-                                           ("deck.pptx", make_pptx([{"text": ["Slide one"]}])),
-                                           ("thesis.odt", make_odt([("p", "A paragraph")])),
-                                           ("talk.odp", make_odp([["Slide text"]])),
-                                           ("page.html", b"<html><body><article><p>"
-                                                         + b"Readable body text. " * 20
-                                                         + b"</p></article></body></html>")])
-    def test_bytes_and_path_agree(self, tmp_path, name, raw):
+    # The sample is built inside the test, from a zero-argument builder, rather than passed as bytes. A
+    # `parametrize` argument becomes part of the test ID, and these samples are binary — a `.docx` is a ZIP
+    # — so passing the bytes puts an arbitrary byte string in the line pytest prints for each case. The IDs
+    # here are the format names, which is also what makes a failure readable.
+    @pytest.mark.parametrize("name, build", [("notes.txt", lambda: "Plain and indexable".encode("utf-8")),
+                                             ("paper.pdf", lambda: make_minimal_pdf("Hello from a PDF")),
+                                             ("report.docx", lambda: make_docx(["First para", "Second para"])),
+                                             ("deck.pptx", lambda: make_pptx([{"text": ["Slide one"]}])),
+                                             ("thesis.odt", lambda: make_odt([("p", "A paragraph")])),
+                                             ("talk.odp", lambda: make_odp([["Slide text"]])),
+                                             ("page.html", lambda: b"<html><body><article><p>"
+                                                                   + b"Readable body text. " * 20
+                                                                   + b"</p></article></body></html>")],
+                             ids=["txt", "pdf", "docx", "pptx", "odt", "odp", "html"])
+    def test_bytes_and_path_agree(self, tmp_path, name, build):
+        raw = build()
         path = tmp_path / name
         path.write_bytes(raw)
         assert docextract.extract_text_from_bytes(raw, name) == docextract.extract_text(path)
