@@ -242,7 +242,7 @@ Legacy `flake8rc` also present (used by Emacs flycheck, not by CI or CC).
 
 Raven ships many separate user-facing apps, so within each of **Added** / **Changed** / **Fixed**, entries are grouped under an italic component header and the per-entry `*Raven-<app>*:` prefix is dropped — the header carries it. Entries then read as continuations of the header, so they start lowercase.
 
-Component order is fixed, so a reader learns where to look: *Raven-librarian*, *Raven-visualizer*, *Raven-server*, *Raven-avatar*, *Raven-cherrypick*, *Raven-arxiv-download*, then *Constellation-wide* for anything cross-cutting (install, device strings, CLI options shared by every app, client-side HTTP behavior). Omit a component that has no entries in that section. An entry spanning two tools goes under the primary one and names the other inline ("with `raven-wos2bib`: …").
+Component order is fixed, so a reader learns where to look: *Raven-librarian*, *Raven-visualizer*, *Raven-server*, *Raven-avatar*, *Raven-cherrypick*, *Raven-arxiv-download*, *Raven-pdf2bib*, then *Constellation-wide* for anything cross-cutting (install, device strings, CLI options shared by every app, client-side HTTP behavior). Omit a component that has no entries in that section. An entry spanning two tools goes under the primary one and names the other inline ("with `raven-wos2bib`: …").
 
 **File a new entry into its group when you write it.** The failure this prevents: 0.2.8 accumulated 58 flat entries — 24 of them opening with `*Raven-librarian*:` — before anyone noticed the prefix was a heading doing prose duty, and regrouping after the fact is a large, error-prone reshuffle that has to be verified entry by entry.
 

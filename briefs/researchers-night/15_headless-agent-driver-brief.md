@@ -396,8 +396,8 @@ one. A surface offering only B would leave the prompt-shape probes still reachin
 Three items, and **only the first is ordered by a dependency** — the rest is a judgement about value, stated
 as such so that a later reader can overrule it without having to work out whether something would break.
 
-1. **`perform_throwaway_task` moves to `agent` and is renamed.** **Unblocked 2026-08-11 — Part B landed, and
-   the answer is that it dissolves**, but not until the surface grows two things. Read against the code
+1. **`perform_throwaway_task` moves to `agent` and is renamed.** **Done 2026-08-11 — it dissolved, and the
+   ten call sites went bare; the decision and what settled it are recorded below.** Read against the code
    rather than guessed: its first four lines are `agent.turn`'s one-liner path exactly (`chattree.Forest()`
    → `factory_reset_datastore` → user node → `linearize_chat`), and what remains differs in three ways, of
    which only two matter.
@@ -503,13 +503,35 @@ to do with which character is asking.
   unconditional date inject on would hand the bare model a system message containing nothing but the date.
   A stray shape nobody would design.
 
-That makes the shape of the API settled, and the ten call sites wait on building it. Converting them today would have swapped one accidental
-in-between for another, adding a conversational-writing instruction to a pipeline whose output
-`raven-pdf2bib` parses.
-
-Measurement still has a place once the shape exists: what made the 2025 choice good was that it was
+Measurement still has a place now that the shape exists: what made the 2025 choice good was that it was
 measured, and the apparatus for redoing it is what this brief built — `agent.turn`, a `TurnRecord` per
 document, a stash of real PDFs, and the two bundles as the arms.
+
+#### How the ten call sites were decided, and the bug the conversion surfaced (2026-08-11)
+
+**Both tools went bare** — `use_character_card=False, tools_enabled=False` at all ten sites — and it is one
+judgement rather than two that happened to agree: every one of the ten outputs is consumed by a parser.
+`raven-pdf2bib`'s eight produce BibTeX field values; `visualizer.importer`'s two produce a comma-separated
+keyword list and a dataset field, the latter carrying a failure sentinel that must arrive verbatim. The
+character card asks for Markdown, for a reported train of thought, and for conversational prose, and each of
+the ten prompts already states its own task — `pdf2bib`'s say outright that the answer "will be sent to a
+computer program that cannot understand natural language". So what the character contributes here is exactly
+the part that has to be undone afterwards.
+
+The 2025 measurement is not evidence against this, and the reason is what it compared: Librarian's whole
+setup against a *raw question*. These are not raw questions.
+
+**What conversion cost, in code:** `perform_throwaway_task` is gone from `llmclient`; `pdf2bib` grew two
+helpers — `extract`, which is the bundle written once instead of eight times, and `full_output_trace`, which
+formats a failed step's thinking and answer for the error report *through `chatutil.format_message_text_for_export`*,
+so a trace in an error report and a trace in an exported chat are the same artifact. The retry loops were
+left alone; folding those into the surface is a separate question.
+
+**And the bug it surfaced** (found by running one real extraction and reading the stored text): the persona
+prefix was still being attached on a turn taken with no character — `ai_turn` hardcoded `add_persona=True`,
+and the synthetic backend-failure node did too. `TurnRecord.reply` strips the prefix, which is what hid it:
+the wrong text was in the *stored* message, so it reached anything reading a node directly, saving the chat,
+or exporting it. Both now follow `use_character_card`. The table above always said so; the code did not.
 2. **The "is a model loaded?" check.** Blocked by nothing, and lopsided: the *check* is cheap — the state is
    already in the `/api/v0/models` response `detect_backend_flavor` fetches and discards — while **the pill
    that shows it is a UX problem**, and that is the half that will take the time. The sketch below settles
