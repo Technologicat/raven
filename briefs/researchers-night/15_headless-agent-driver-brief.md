@@ -639,6 +639,23 @@ That is a change to what the model is told and where, so it wants measuring befo
 inject-shape probes in `investigations/context-injects/` are the apparatus, and they now run on real
 settings, which is what makes such a measurement trustworthy.
 
+**Landed 2026-08-11**, and the next refinement is placement: **the user should be able to say where each
+inject goes** (Juha), with `str.format`-looking template syntax in the system prompt rather than Raven
+appending the injects to the leading system block. The stored text then holds the *template*, with
+`{model}`, `{context_length}` and `{date}` still literal in it, and a turn renders it. Three things fall
+out at once — the user controls placement, nothing goes stale because nothing is resolved until the turn,
+and the stored text becomes stable, which is exactly the key the per-variety storage below wants to match
+on.
+
+**The wrinkle to solve first: there are two substitution passes, and they need to be told apart.** `user`
+and `char` are settled at app start and the shipped cards insert them with f-strings; `model`,
+`context_length` and the date must survive that pass as literal text and be resolved per turn. An f-string
+cannot emit a literal `{model}` without `{{model}}`, so writing prose would mean remembering which
+placeholders need doubling — a trap of the same family as the one this whole change removes. Either the
+startup pass stops being an f-string, or the two passes get visibly different delimiters. Undecided; worth
+settling before any of it is built, because it is what a person writing the prose actually has to hold in
+their head.
+
 #### And the storage side is open too: keep the old cards, one per variety (Juha, 2026-08-11)
 
 The refresh-and-delete above is not a design to be worked around; it was **cooked up quickly for the first

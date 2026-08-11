@@ -651,8 +651,9 @@ llm_greeting = "How can I help you today?"
 #                         "No model information is available" - never a guess.
 #     `context_length`  - the loaded context window, in tokens.
 #
-# To insert one, the recommended way is an f-string; each function below unpacks the set into local names
-# first, so `{char}` reads as it would in the finished text.
+# To insert one, the recommended way is an f-string, so `{char}` reads as it would in the finished text. The
+# slots that ship empty unpack all four into local names first, as a starting point for writing; the two
+# character cards, being written prose, unpack the ones they actually use.
 #
 # **The last two are a trap, and are deliberately unused in what Raven ships.** Everything in this section
 # runs once, at app start, and what it returns is stored in the chat datastore as the message a chat is
@@ -664,6 +665,15 @@ llm_greeting = "How can I help you today?"
 #
 # They stay available because a deployment may have a use for them that this reasoning does not cover. If
 # you write one in, know that you are choosing a value fixed at startup.
+#
+# TODO: This is not where it should end up. The injects are appended to the leading system block, which
+# TODO: means Raven chooses where they go; the user should be able to choose, by writing a placeholder into
+# TODO: the prose and having it resolved per turn rather than at startup. Then the stored text holds the
+# TODO: template and nothing in it can go stale. What has to be settled first: `user` and `char` are
+# TODO: resolved here at startup with f-strings, and the per-turn placeholders would have to survive that
+# TODO: pass as literal text - which in an f-string means writing `{{model}}`, a trap of the same family as
+# TODO: the one this arrangement exists to avoid. Two passes over one string need either different
+# TODO: delimiters or a non-f-string first pass.
 
 # ----------------------------------------
 # LLM system prompt
