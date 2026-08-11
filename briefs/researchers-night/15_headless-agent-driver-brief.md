@@ -449,12 +449,33 @@ unevenly:
   whose output `raven-pdf2bib` parses. This is the real delta between the two paths now that the clock is
   handled, and it is why the conversion is not a drop-in.
 
-**Settle it by measurement rather than by intuition — anyone's.** What made the 2025 choice good was that
-it was measured, and the apparatus for redoing it is exactly what this brief just built: `agent.turn` with
-`tools_enabled=False`, a `TurnRecord` per document, and a stash of real PDFs. Four arms — full injects, no
-conversational reminder, no injects, and a bare prompt — scored on whether the extracted BibTeX parses and
-is correct. Until that runs, converting the ten call sites would change what a working pipeline sends on
-the strength of a guess about which half of a year-old finding survived.
+**But the axes are not orthogonal, and that is the finding** (Juha, 2026-08-11). Listing the four parts as
+independent knobs invites four booleans, and the two shapes anyone actually wants are bundles:
+
+- **bare Qwen does the job** — no card, no greeting, no clock, no conversational reminder;
+- **Aria does the job** — all of it, because they are what constitute her.
+
+The clock and the conversational reminder belong to the second bundle *as a matter of what a persona is*,
+not as separately-chosen features. So `tools_enabled` is not the knob for this question; it is one axis of
+a bundle, and a caller setting it alone gets a third shape — Aria without her tools — that nobody asked
+for. Worth noting that today's `perform_throwaway_task` is *also* a third shape: card and greeting, but no
+injects and no tools. Neither in-between is a design; both are where the code happened to stop.
+
+**And the choice is substantive rather than cosmetic**, which is what rules out picking a default and
+moving on. Per the 2026 persona literature — a modern continuation of Janus's *Simulators* — a character
+card elicits a persona, and with it that persona's propensities, not merely a tone of voice. On a
+nontrivial task the two bundles can therefore reach different answers, and **literature analysis is
+nontrivial and is one of Librarian's points**. So "who is doing the extraction" is a question the user may
+legitimately want to answer either way, per run.
+
+That makes the shape of the API the thing to settle first — plausibly a mode rather than a pile of
+booleans — and the ten call sites wait for it. Converting them today would have swapped one accidental
+in-between for another, adding a conversational-writing instruction to a pipeline whose output
+`raven-pdf2bib` parses.
+
+Measurement still has a place once the shape exists: what made the 2025 choice good was that it was
+measured, and the apparatus for redoing it is what this brief built — `agent.turn`, a `TurnRecord` per
+document, a stash of real PDFs, and the two bundles as the arms.
 2. **The "is a model loaded?" check.** Blocked by nothing, and lopsided: the *check* is cheap — the state is
    already in the `/api/v0/models` response `detect_backend_flavor` fetches and discards — while **the pill
    that shows it is a UX problem**, and that is the half that will take the time. The sketch below settles
