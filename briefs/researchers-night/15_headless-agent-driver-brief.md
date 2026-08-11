@@ -485,11 +485,19 @@ to do with which character is asking.
 
 **Two facts found while checking that this cuts cleanly, both of which shape it:**
 
-- **`setup_system_prompt` returns the empty string, as shipped.** Every word of Raven's system message is
-  the character card. So there is no "the real system prompt, minus the persona" — the thing an earlier
-  version of this section wanted to keep does not exist, and `use_persona=False` therefore means *no system
-  message at all*. Which is what "bare Qwen" meant anyway; the point is that it falls out rather than being
-  chosen.
+- **`setup_system_prompt` returns the empty string, as shipped** — and the slot is deliberate rather than
+  vestigial (Juha). The split mirrors SillyTavern's: system-level instructions that hold for any character,
+  kept apart from the character-level ones. It ships empty because 2024-era models needed a "you are an
+  expert actor, capable of taking any role" preamble before they would play a character and current ones do
+  not, so it has been empty for some time.
+
+  What follows for the knob: `use_persona=False` keeps that half and drops the card, which in the shipped
+  configuration leaves no system message at all — "bare Qwen" falling out rather than being chosen — while
+  a deployment that fills the slot keeps its contents either way.
+
+  **Wanted later, and it belongs in the same structure** (Juha): a *user*-level slot — who the user is and
+  how they prefer to be communicated with. The current Qwens respond favourably to that. It would make the
+  split three-way (system / character / user), and only the middle one is what `use_persona` withholds.
 - **The instruction injects have to go with the persona, or one gets synthesized.**
   `_add_to_system_message` *inserts* a leading system message when the history has none, so leaving the
   unconditional date inject on would hand the bare model a system message containing nothing but the date.

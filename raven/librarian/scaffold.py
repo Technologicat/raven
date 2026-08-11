@@ -395,7 +395,8 @@ def build_turn_prompt(llm_settings: env,
                       docs_matches: List[Dict],
                       tool_context: env,
                       tools_are_spent: bool = False,
-                      tools_enabled: bool = True) -> List[Dict]:
+                      tools_enabled: bool = True,
+                      use_persona: bool = True) -> List[Dict]:
     """Return the message history for the AI's turn: `history` with the temporary injects added.
 
     These are not meant to be persistent, so we don't even add them to the datastore,
@@ -453,11 +454,17 @@ def build_turn_prompt(llm_settings: env,
     # still found by walking the branch.
     grounding_material_exists = tool_context.grounded or _attachment_is_present(history)
 
-    _add_to_system_message(llm_settings=llm_settings,
-                           history=history,
-                           texts=build_system_injects(llm_settings=llm_settings,
-                                                      grounding_material_exists=grounding_material_exists,
-                                                      tools_are_spent=tools_are_spent))
+    # The instruction injects belong to the character, and go when she does. Not merely a preference: with
+    # no persona there may be no system message at all (Raven's shipped `system_prompt` is empty, all of the
+    # content being the character card), and `_add_to_system_message` *inserts* one when the history has
+    # none — so leaving these on would hand a deliberately bare model a system message containing nothing
+    # but today's date.
+    if use_persona:
+        _add_to_system_message(llm_settings=llm_settings,
+                               history=history,
+                               texts=build_system_injects(llm_settings=llm_settings,
+                                                          grounding_material_exists=grounding_material_exists,
+                                                          tools_are_spent=tools_are_spent))
 
     # The data-like injects below go into synthetic tool exchanges of their own, not into the system
     # message; see `_add_to_system_message` for why the split is not a stylistic one.
@@ -471,7 +478,7 @@ def build_turn_prompt(llm_settings: env,
     # tool and the same reasoning runs backwards: staging a call to a tool that now does not exist is the
     # confusing shape rather than the safe one. A one-shot scripted job also rarely wants the time at all.
     data_injects = []
-    if tools_enabled:
+    if tools_enabled and use_persona:
         data_injects.extend(_synthetic_tool_exchange(llm_settings=llm_settings,
                                                      call_id="raven_clock",
                                                      function_name="get_current_time",
@@ -788,7 +795,8 @@ def ai_turn(llm_settings: env,
             on_tool_done: Optional[Callable],
             on_tools_done: Optional[Callable],
             tool_context: Optional[env] = None,
-            tools_enabled: bool = True) -> str:
+            tools_enabled: bool = True,
+            use_persona: bool = True) -> str:
     """AI's turn: LLM generation interleaved with tool responses, until there are no tool calls in the LLM's latest reply.
 
     This continues the current branch with as many chat nodes as needed: one for each LLM response, and one for each tool call.
@@ -1091,7 +1099,8 @@ def ai_turn(llm_settings: env,
                                             # away — the point of the notice is to make the doomed call
                                             # unnecessary, which is too late once the model has already tried it.
                                             tools_are_spent=(any_tools_available and budget_spent),
-                                            tools_enabled=tools_enabled)
+                                            tools_enabled=tools_enabled,
+                                            use_persona=use_persona)
 
         if on_llm_start is not None:
             on_llm_start()

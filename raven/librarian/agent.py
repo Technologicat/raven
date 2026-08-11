@@ -230,6 +230,7 @@ def turn(llm_settings: env,
          datastore: chattree.Forest | None = None,
          head_node_id: str | None = None,
          retriever: "hybridir.HybridIR | None" = None,
+         use_persona: bool = True,
          tools_enabled: bool = True,
          internet_enabled: bool = False,
          docs_enabled: bool = True,
@@ -316,6 +317,12 @@ def turn(llm_settings: env,
                          `None` runs the assistant's turn against the branch as it stands, which is what a
                          reroll or a continuation does.
 
+                         Whichever way, the branch needs a user message *somewhere*: a strict chat template
+                         refuses a history that has none, and a system prompt plus the character's greeting
+                         is not enough to start generation on some models (Qwen3.5-9B fails there). The
+                         backend's refusal is diagnosed by `llmclient.invoke`, which checks for exactly this
+                         and says so.
+
     `staged_images`, `staged_files`: Images and documents attached to that message; see `scaffold.user_turn`
                                      for the shape of an entry. These work with the default in-memory
                                      datastore as well as with a file-backed one — the attachment is held
@@ -346,6 +353,26 @@ def turn(llm_settings: env,
                  stub keeps a probe independent of raven-server when retrieval quality is not what is being
                  measured). `None` means no documents: no automatic search, and the document tools are not
                  offered.
+
+    `use_persona`: Who does the job — the assistant character, or the bare model. `True` (default) is what
+                   the chat apps run: the character card as the system message, the character's greeting
+                   ahead of the user's message, the persona prefix on messages, and the per-turn
+                   instruction injects (the date, the reminder to write conversationally) plus the clock.
+                   `False` withholds all of it.
+
+                   One switch rather than several, because they are one question. A card does not merely
+                   set a tone: it elicits a persona, propensities included, so on a task with any judgement
+                   in it the two settings can reach different answers — which is why this is the caller's
+                   choice per run and not a default worth arguing about.
+
+                   The tool switches are *not* part of the bundle: which tools to offer is a property of
+                   the job, not of who is doing it.
+
+                   What survives with `use_persona=False` is `llm_settings.system_prompt`, the
+                   character-independent half of the system message. Raven ships that slot empty — modern
+                   models no longer need the "you are an expert actor" preamble that once made character
+                   play work — so in the default configuration a bare run has no system message at all. A
+                   deployment that fills the slot keeps its contents in both settings.
 
     `tools_enabled`: Whether to offer any tools at all. `False` makes this a one-shot completion: with no
                      tools to ask for, the agent loop runs exactly once. That is the shape a scripted
@@ -404,7 +431,12 @@ def turn(llm_settings: env,
         if datastore.nodes:
             raise ValueError("agent.turn: `head_node_id` is required for a datastore that already has "
                              "nodes; starting a new conversation would delete them.")
-        head_node_id = chatutil.factory_reset_datastore(datastore, llm_settings)
+        if use_persona:
+            head_node_id = chatutil.factory_reset_datastore(datastore, llm_settings)
+        elif user_message_text is None:
+            raise ValueError("agent.turn: with `use_persona=False` there is no greeting to answer, so a "
+                             "turn needs either a `user_message_text` or a `head_node_id` to run from.")
+        # ...and with a persona but no preamble, the user's message is simply the root of the chat.
 
     if docs_query is from_user_message:
         # With no corpus there is nothing to search, and passing a query anyway makes `ai_turn` warn about a
@@ -429,6 +461,7 @@ def turn(llm_settings: env,
                                      retriever=retriever,
                                      head_node_id=head_node_id,
                                      tools_enabled=tools_enabled,
+                                     use_persona=use_persona,
                                      internet_enabled=internet_enabled,
                                      continue_=continue_,
                                      docs_enabled=docs_enabled,

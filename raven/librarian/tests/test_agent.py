@@ -404,6 +404,43 @@ class TestTurn:
         # ...where an ordinary turn stages it, because there the tool is real.
         assert any(message.get("tool_calls") for message in ordinary)
 
+    def test_the_bare_model_gets_the_task_and_nothing_else(self, monkeypatch, llm_settings):
+        # "Run bare Qwen on this" rather than "run the character on this". Everything the character
+        # consists of goes at once: card, greeting, persona prefix, the instruction injects and the clock.
+        prompts = []
+
+        def fake_invoke(**kw):
+            prompts.append(llmclient.serialize_history_for_wire(kw["settings"], kw["history"],
+                                                                continue_=kw["continue_"]))
+            return make_invoke_result(content="Keywords: raven, corvid.")
+        monkeypatch.setattr("raven.librarian.llmclient.invoke", fake_invoke)
+
+        agent.turn(llm_settings, "Extract the keywords.", use_persona=False, tools_enabled=False)
+        agent.turn(llm_settings, "Extract the keywords.", tools_enabled=False)
+
+        bare, in_character = prompts
+        # Raven ships `system_prompt` empty -- all of the content is the character card -- so with the
+        # character withheld there is no system message left to send.
+        assert [message["role"] for message in bare] == ["user"]
+        assert [message["role"] for message in in_character] == ["system", "assistant", "user"]
+
+    def test_the_bare_model_is_not_handed_a_system_message_of_leftovers(self, monkeypatch, llm_settings):
+        # The trap `_add_to_system_message` sets: it *inserts* a leading system message when the history
+        # has none, so an inject left switched on would synthesize one containing nothing but the date.
+        prompts = []
+
+        def fake_invoke(**kw):
+            prompts.append(llmclient.serialize_history_for_wire(kw["settings"], kw["history"],
+                                                                continue_=kw["continue_"]))
+            return make_invoke_result(content="Done.")
+        monkeypatch.setattr("raven.librarian.llmclient.invoke", fake_invoke)
+
+        agent.turn(llm_settings, "Do the thing.", use_persona=False)
+
+        wire = "\n".join(chatutil.content_to_text(message.get("content")) for message in prompts[0])
+        assert chatutil.default_formatters().date_now() not in wire
+        assert chatutil.default_formatters().reminder_to_write_conversationally() not in wire
+
     def test_progress_is_reported_while_the_model_streams(self, monkeypatch, llm_settings):
         # The single callback this surface takes. A batch of several hundred documents on a local model is
         # otherwise an hour of silence, which reads exactly like a hang.
