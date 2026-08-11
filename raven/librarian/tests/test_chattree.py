@@ -1,6 +1,7 @@
 """Unit tests for raven.librarian.chattree (Forest and PersistentForest)."""
 
 import json
+import logging
 import pathlib
 
 import pytest
@@ -851,3 +852,72 @@ class TestSidecarStorage:
         assert pf.prune_unreferenced_sidecars() == []
         assert len(pf.list_sidecar_files()) == 1
         assert pf.list_unreferenced_sidecars() == []
+
+
+class TestInMemorySidecarStorage:
+    """`Forest` holds attachments too, in memory instead of in a directory.
+
+    The policy above the storage — content addressing, first-write-wins descriptions, mark-and-sweep GC —
+    is written once and shared, so these do not re-assert it in detail. What they pin is that the two
+    backends answer the same questions the same way, and that the two members which can only mean something
+    on disk say so rather than returning something plausible.
+    """
+
+    def test_store_read_roundtrip(self):
+        forest = chattree.Forest()
+        name = forest.store_sidecar(b"hello-bytes", "png")
+        assert name.endswith(".png")
+        assert forest.read_sidecar(name) == b"hello-bytes"
+        assert forest.sidecar_size(name) == len(b"hello-bytes")
+        assert forest.has_sidecar(name)
+
+    def test_the_same_bytes_get_the_same_name_as_on_disk(self, tmp_path):
+        # Content addressing is the shared half, so the name must not depend on where it is stored: a chat
+        # moved between the two must keep resolving its own `sidecar:` URLs.
+        forest = chattree.Forest()
+        pf = PersistentForest(tmp_path / "chat.json", autosave=False)
+        assert forest.store_sidecar(b"same bytes", "png") == pf.store_sidecar(b"same bytes", "png")
+
+    def test_a_path_is_an_error_rather_than_a_plausible_answer(self):
+        forest = chattree.Forest()
+        name = forest.store_sidecar(b"bytes", "png")
+        with pytest.raises(NotImplementedError):
+            forest.sidecar_path(name)
+        with pytest.raises(NotImplementedError):
+            forest.sidecar_dir
+
+    def test_unsafe_filenames_are_refused_here_too(self):
+        # The check belongs to the data, not to the filesystem: a name out of a corrupt payload is no more
+        # trustworthy for being held in memory.
+        forest = chattree.Forest()
+        for bad in ("../escape.png", "sub/dir.png", "/abs.png"):
+            with pytest.raises(ValueError):
+                forest.has_sidecar(bad)
+
+    def test_descriptions_are_first_write_wins(self):
+        forest = chattree.Forest()
+        name = forest.store_sidecar(b"bytes", "png", metadata={"name": "first.png"})
+        assert forest.maybe_set_sidecar_metadata(name, {"name": "second.png"}) is False
+        assert forest.get_sidecar_metadata(name) == {"name": "first.png"}
+
+    def test_gc_sweeps_what_no_payload_references(self):
+        forest = chattree.Forest(sidecar_extractor=lambda payload: set(payload.get("sidecars", [])))
+        kept = forest.store_sidecar(b"referenced", "png")
+        dropped = forest.store_sidecar(b"orphaned", "png", metadata={"name": "orphan.png"})
+        forest.create_node(payload={"sidecars": [kept]}, parent_id=None)
+
+        assert forest.list_unreferenced_sidecars() == [dropped]
+        assert forest.prune_unreferenced_sidecars() == [dropped]
+        assert forest.list_sidecar_files() == [kept]
+        # The description goes with what it describes, or it becomes its own slow leak.
+        assert forest.get_sidecar_metadata(dropped) is None
+
+    def test_gc_without_an_extractor_deletes_nothing(self, caplog):
+        # An in-memory sidecar occupies RAM for the life of the process and nothing else reclaims it, so an
+        # unconfigured store is worth warning about -- but never at the price of deleting a live attachment.
+        forest = chattree.Forest()
+        name = forest.store_sidecar(b"bytes", "png")
+        with caplog.at_level(logging.WARNING):
+            assert forest.prune_unreferenced_sidecars() == []
+        assert forest.list_sidecar_files() == [name]
+        assert "sidecar_extractor" in caplog.text

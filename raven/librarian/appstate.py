@@ -399,9 +399,9 @@ def backfill_sidecar_metadata(datastore: chattree.PersistentForest) -> int:
             for payload in node.get("data", {}).values():  # every revision: an older one may name a sidecar the current one dropped
                 for filename, provenance in sidecarstore.provenance_entries_in_payload(payload).items():
                     try:
-                        if datastore.sidecar_path(filename).exists() and datastore.maybe_set_sidecar_metadata(filename, provenance):
+                        if datastore.has_sidecar(filename) and datastore.maybe_set_sidecar_metadata(filename, provenance):
                             written += 1
-                    except ValueError:  # unsafe filename from a corrupt datastore; `sidecar_path` refuses it
+                    except ValueError:  # unsafe filename from a corrupt datastore; `has_sidecar` refuses it
                         logger.warning(f"backfill_sidecar_metadata: skipping unsafe sidecar filename '{filename}'.")
     if written:
         plural_s = "s" if written != 1 else ""

@@ -313,12 +313,12 @@ def turn(llm_settings: env,
                          reroll or a continuation does.
 
     `staged_images`, `staged_files`: Images and documents attached to that message; see `scaffold.user_turn`
-                                     for the shape of an entry. **Either one requires a file-backed
-                                     `datastore`**: an attachment is stored as a content-addressed sidecar
-                                     file beside the datastore, and the in-memory default has nowhere to
-                                     put it. Refused up front rather than partway through storing.
+                                     for the shape of an entry. These work with the default in-memory
+                                     datastore as well as with a file-backed one — the attachment is held
+                                     beside the tree either way, so a batch that attaches a page image or a
+                                     paper per item leaves nothing on disk to clean up afterwards.
 
-                                     `staged_images` additionally needs a model that accepts image input,
+                                     `staged_images` needs a model that accepts image input,
                                      and is refused when `llm_settings.model_is_vlm` says otherwise —
                                      `False` only, since `None` means the backend did not say. A document
                                      needs no such capability: its text is folded into the prompt.
@@ -327,8 +327,11 @@ def turn(llm_settings: env,
                  is in-memory and costs nothing. Pass a `chattree.PersistentForest` to keep the run: the
                  whole conversation then lands on disk in Raven's own format — every message, the reasoning
                  that never reached `content`, the tool nodes and their metadata — so a later analysis is
-                 not limited to what the script thought to summarize at the time. It is also what attaching
-                 anything requires, per above.
+                 not limited to what the script thought to summarize at the time.
+
+                 A datastore built here holds its attachments in memory too, so they last exactly as long
+                 as it does. Give it a `sidecar_extractor` if a long run attaches many — see
+                 `chattree.Forest`; without one, `prune_unreferenced_sidecars` cannot reclaim them.
 
     `head_node_id`: Where in the conversation to continue from. `None` starts a fresh conversation, which
                     means a factory reset of `datastore` — system prompt, character card and greeting. That
@@ -365,9 +368,6 @@ def turn(llm_settings: env,
     """
     if datastore is None:
         datastore = chattree.Forest()
-    if (staged_images or staged_files) and not hasattr(datastore, "store_sidecar"):
-        raise ValueError("agent.turn: attachments need a datastore with a sidecar store — a "
-                         "`chattree.PersistentForest`, not the in-memory `Forest` this defaults to.")
     if staged_images and llm_settings.model_is_vlm is False:
         # Only on a confirmed `False`: the tri-state's `None` is "the backend does not say", and refusing
         # on that would block every backend that reports nothing. Librarian's attach button reads it the

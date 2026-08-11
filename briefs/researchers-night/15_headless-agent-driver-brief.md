@@ -301,10 +301,18 @@ taking bytes, every consumer of the sidecar store on the *read* side wants bytes
 bytes-backed sidecar store on `Forest` would make both attachment kinds work in an in-memory chat, with no
 temp file anywhere and no second mechanism.
 
-**What remains is the `chattree` half.** `PersistentForest` exposes eight sidecar members, and they do not
-all move up: `read_sidecar`, `store_sidecar`, `list_sidecar_files` and the metadata pair are bytes-and-dicts
-and would; `sidecar_path` and `sidecar_dir` return paths and cannot, and they have real callers —
-`cleanup` stats a file for its size, `chat_controller` opens one in the desktop's file manager.
+**The `chattree` half landed 2026-08-11**, to the decisions below. The sidecar store is split by what
+actually differs: `Forest` owns the *policy* — content addressing, first-write-wins descriptions,
+mark-and-sweep GC — over a dict-backed storage, and `PersistentForest` overrides only the members that
+touch the filesystem. All 101 existing `chattree` tests pass unchanged, which is the invariant that
+mattered; seven new ones pin the two backends answering alike — including that identical bytes get the same
+content-addressed name in either, so a chat is not tied to where its attachments happen to live.
+
+`sidecar_size` and `has_sidecar` are new, and between them they retire both non-GUI callers of
+`sidecar_path` — `cleanup`'s size lookup and `appstate`'s existence check. `rescue_to_staging` copies bytes
+rather than a file, which costs nothing since it already read both sides to compare them. What still asks
+for a path is `chat_controller` and `cleanup_dialog`, reached only from a running Librarian, which always
+has a file-backed datastore.
 
 ### Decisions (Juha, 2026-08-11)
 
@@ -320,6 +328,25 @@ and would; `sidecar_path` and `sidecar_dir` return paths and cannot, and they ha
 - **An in-memory store still wants a `sidecar_extractor`**, and arguably more than a file-backed one: its
   sidecars occupy RAM for the life of the process, and nothing else ever reclaims them. A long batch
   attaching a page image per item is exactly where that matters.
+- **No option to persist the sidecars of an in-memory chat** — raised as a repeatability question, and the
+  answer is that it would produce exactly the state the GC exists to delete. A sidecar is content-addressed
+  bytes whose meaning lives in the payload referencing it, so writing the sidecars while the tree stays in
+  RAM leaves a directory of hash-named orphans that nothing points at. It would also make "is this chat
+  persistable" a question with three answers where the choice of class answers it once, and the upgrade
+  path is already one argument: pass a `PersistentForest` and everything is kept, sidecars included.
+
+  And repeatability does not need it in the first place, which is the part that settles it: a script's
+  inputs are the script's own, and they outlive the run without Raven's help. The files are on the user's
+  disk already — the fulltext PDF, the page images — and the next run offers the same ones again. What
+  makes such a run reproducible is the input plus the script, which is where this repo keeps
+  reproducibility anyway; Raven's copy of the bytes is a cache, and a cache is not an archive.
+
+  **What re-attaching does cost is a fresh extraction**, and for a PDF that is `pypdf` parsing the whole
+  document again. `textfilestore` memoizes on the content-addressed filename, so it is once per document
+  per *process* however many turns use it — but a second run of the script pays it again. That is an
+  argument for a persistent datastore on its own terms, though not the one it looks like: what is saved is
+  not the extraction, which is not cached on disk either, but the asking. The previous run's answers are
+  still in the chat, so the questions already answered do not have to be put again.
 
 Worth knowing while doing it: **the GC already fails safe** without an extractor
 (`prune_unreferenced_sidecars` logs and deletes nothing), so a partially wired store cannot lose

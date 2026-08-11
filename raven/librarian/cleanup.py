@@ -37,7 +37,6 @@ logger = logging.getLogger(__name__)
 
 import dataclasses
 import pathlib
-import shutil
 from typing import Any, Optional, Union
 
 from unpythonic.env import env
@@ -168,8 +167,8 @@ def describe_sidecar(datastore: chattree.PersistentForest, filename: str) -> Sid
                     sidecarstore.provenance_filename_from_url(metadata.get("url")) or
                     filename)
     try:
-        size_bytes = datastore.sidecar_path(filename).stat().st_size
-    except OSError:  # vanished under us, or unreadable; report it as present-but-unknown rather than failing
+        size_bytes = datastore.sidecar_size(filename)
+    except (OSError, KeyError):  # vanished under us, or unreadable; report it as present-but-unknown rather than failing
         size_bytes = 0
     return SidecarEntry(filename=filename,
                         display_name=display_name,
@@ -255,20 +254,22 @@ def rescue_to_staging(datastore: chattree.PersistentForest,
     directory = pathlib.Path(staging_dir if staging_dir is not None
                              else librarian_config.attachment_staging_dir).expanduser().resolve()
     common_utils.create_directory(directory)
-    source = datastore.sidecar_path(entry.archival_filename)
+    # By bytes rather than by path: the sidecar may be held in memory, and the comparison below reads the
+    # whole of both files anyway, so nothing is spent that was not already being spent.
+    source_bytes = datastore.read_sidecar(entry.archival_filename)
 
     stem = pathlib.Path(entry.display_name).stem or entry.filename
     suffix = pathlib.Path(entry.display_name).suffix or pathlib.Path(entry.archival_filename).suffix
     candidate = directory / f"{stem}{suffix}"
     counter = 2
     while candidate.exists():
-        if candidate.stat().st_size == source.stat().st_size and candidate.read_bytes() == source.read_bytes():
+        if candidate.stat().st_size == len(source_bytes) and candidate.read_bytes() == source_bytes:
             logger.info(f"rescue_to_staging: '{entry.filename}' is already staged at '{candidate}'.")
             return candidate
         candidate = directory / f"{stem} ({counter}){suffix}"
         counter += 1
 
-    shutil.copyfile(source, candidate)
+    candidate.write_bytes(source_bytes)
     logger.info(f"rescue_to_staging: copied sidecar '{entry.filename}' to '{candidate}'.")
     return candidate
 

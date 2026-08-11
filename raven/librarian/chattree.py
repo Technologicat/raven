@@ -28,7 +28,7 @@ from unpythonic import gensym, partition
 from ..common import utils as common_utils
 
 class Forest:
-    def __init__(self):
+    def __init__(self, sidecar_extractor: Callable[[Any], set[str]] | None = None):
         """Forest datastore with data revisioning.
 
         Each node has at most one parent, but may have many children, making a forest structure.
@@ -91,9 +91,39 @@ class Forest:
 
         If you want to walk links, it is advisable to lock the datastore first, just to be safe against any creations or deletions
         that might affect the vicinity you are looking at.
+
+        **Attachment sidecars**
+
+        A node payload may reference attached bytes — an image, a document — held beside the tree rather than
+        inside it, content-addressed by hash. Here they live in memory and last as long as this object;
+        `PersistentForest` keeps them in a directory next to its JSON. Everything above the storage is the
+        same either way, so a caller stores and reads attachments without knowing which it holds. The two
+        members that can only mean something on disk — `sidecar_path` and `sidecar_dir` — say so when asked.
+
+        There is deliberately no way to write these out while the tree stays in memory. A sidecar is
+        content-addressed bytes whose meaning lives in the payload that references it, so sidecars saved
+        without their tree are hash-named orphans — the state the GC exists to reclaim. Use a
+        `PersistentForest` when the chat is worth keeping; it keeps the attachments with it. What is stored
+        here is a copy of bytes the caller already had, which makes it a cache rather than an archive.
+
+        `sidecar_extractor`: How to read the sidecar references out of one (otherwise opaque) node payload —
+                    a callable `payload -> set[str]` returning the sidecar filenames that payload references.
+                    Configured once here by the layer that owns the payload format (for Librarian chats,
+                    `raven.librarian.appstate.sidecar_refs_in_payload`), because payloads are opaque to
+                    `chattree` by design and only the format owner can read a `sidecar:` reference out of one.
+                    `chattree` drives the revision traversal itself and calls this per revision at GC time; it is
+                    never invoked during load, so it only needs to understand the *current* payload format.
+                    `None` (default) means this datastore does no sidecar GC — `prune_unreferenced_sidecars`
+                    becomes a safe no-op (it will not delete anything it can't prove is unreferenced).
+
+                    Worth configuring even in memory, and arguably more so: an in-memory sidecar occupies RAM
+                    for the life of the process, and no filesystem cleanup will ever come along and reclaim it.
         """
         self.nodes = {}
         self.lock = threading.RLock()
+        self._sidecar_extractor = sidecar_extractor
+        self._sidecar_bytes: dict[str, bytes] = {}
+        self._sidecar_descriptions: dict[str, dict[str, Any]] = {}
 
     def create_node(self, payload: Any, parent_id: Optional[str]) -> str:
         """Create a node containing `payload`, and store it in the forest.
@@ -711,6 +741,237 @@ class Forest:
         with self.lock:
             self.nodes.clear()
 
+    # ------------------------------------------------------------------
+    # Attachment sidecars
+    #
+    # Split in two on purpose. Everything down to `_sweep_orphaned_descriptions` is *storage*: the handful of
+    # operations that differ between holding bytes in a dict and holding them in a directory, and the only
+    # thing `PersistentForest` overrides. Everything after it is policy — content-addressing, first-write-wins
+    # descriptions, mark-and-sweep GC — and is written once, here, because it is the same reasoning either
+    # way. A bug fixed in the GC is fixed for both backends by construction rather than by remembering.
+
+    def _sidecar_exists(self, filename: str) -> bool:
+        return filename in self._sidecar_bytes
+
+    def _write_sidecar(self, filename: str, data: bytes) -> None:
+        self._sidecar_bytes[filename] = data
+
+    def _delete_sidecar(self, filename: str) -> None:
+        """Remove the sidecar and its description. Called only for something `list_sidecar_files` reported."""
+        self._sidecar_bytes.pop(filename, None)
+        self._sidecar_descriptions.pop(filename, None)
+
+    def _read_sidecar_description(self, filename: str) -> dict[str, Any] | None:
+        return self._sidecar_descriptions.get(filename)
+
+    def _write_sidecar_description(self, filename: str, metadata: dict[str, Any]) -> bool:
+        self._sidecar_descriptions[filename] = metadata
+        return True
+
+    def _sweep_orphaned_descriptions(self) -> None:
+        """Drop descriptions whose sidecar is gone.
+
+        Nothing to do in memory — a description is dropped with its sidecar, and no outside hand can remove
+        one without the other. `PersistentForest` overrides it, because a directory can be edited by anyone.
+        """
+
+    def has_sidecar(self, filename: str) -> bool:
+        """Whether sidecar `filename` is present. Raises `ValueError` if the name is not a bare basename.
+
+        The question a caller asks when it holds a name out of a payload and does not yet know whether the
+        bytes are still there — a backfill pass, say. Asking it here rather than by probing a path is what
+        lets such a caller work against either backend.
+        """
+        self._validate_sidecar_filename(filename)
+        with self.lock:
+            return self._sidecar_exists(filename)
+
+    def read_sidecar(self, filename: str) -> bytes:
+        """Return the raw bytes of sidecar `filename`. Raises `KeyError` if there is no such sidecar."""
+        self._validate_sidecar_filename(filename)
+        return self._sidecar_bytes[filename]
+
+    def sidecar_size(self, filename: str) -> int:
+        """Return the size of sidecar `filename` in bytes.
+
+        Asked as its own question rather than derived from `sidecar_path(...).stat()`, so that a caller
+        reporting how much a cleanup would reclaim works against either backend. Size is a property of the
+        bytes; needing a filesystem to learn it was an accident of where the store used to live.
+        """
+        self._validate_sidecar_filename(filename)
+        return len(self._sidecar_bytes[filename])
+
+    def list_sidecar_files(self) -> list[str]:
+        """List the sidecar filenames held, sorted. Descriptions are not sidecars and are not listed.
+
+        Sorted so that everything built on it — the GC sweep, its log line, the dry-run preview — is
+        deterministic. The exclusion of descriptions is load-bearing rather than cosmetic: the sweep deletes
+        every listed name no payload references, and no payload ever references a description.
+        """
+        with self.lock:
+            return sorted(self._sidecar_bytes)
+
+    def _get_sidecar_dir(self) -> pathlib.Path:
+        raise NotImplementedError("Forest.sidecar_dir: this datastore holds its attachments in memory, so they "
+                                  "have no directory. Use a `PersistentForest` if you need them on disk.")
+    sidecar_dir = property(fget=_get_sidecar_dir,
+                           doc="Directory holding this datastore's attachment sidecars. In-memory datastores have none; see `PersistentForest`.")
+
+    def sidecar_path(self, filename: str) -> pathlib.Path:
+        """Absolute path of sidecar `filename`. In-memory datastores have none; see `PersistentForest`."""
+        raise NotImplementedError("Forest.sidecar_path: this datastore holds its attachments in memory, so they "
+                                  "have no path. Read the bytes with `read_sidecar`, or use a "
+                                  "`PersistentForest` if you need a file.")
+
+    def _validate_sidecar_filename(self, filename: str) -> None:
+        # Filenames reaching here come from stored `sidecar:` URLs, i.e. from datastore data. Refuse anything
+        # that isn't a bare basename, so a crafted/corrupt datastore can't escape the sidecar directory. The
+        # check lives here rather than on the persistent subclass because the *data* is what is untrusted, and
+        # an in-memory store built from a loaded payload is no more trustworthy than a file-backed one.
+        if pathlib.Path(filename).name != filename:
+            raise ValueError(f"{type(self).__name__}: unsafe sidecar filename '{filename}' (must be a bare basename, no path separators).")
+
+    def store_sidecar(self, data: bytes, ext: str, metadata: dict[str, Any] | None = None) -> str:
+        """Store `data` as a sidecar; return its content-hash filename `<sha256>.<ext>`.
+
+        Content-addressed: storing identical bytes twice keeps one copy and returns the same name (natural
+        dedup). `ext` is the extension without a leading dot (e.g. "png", "jpeg"). The caller decides *what*
+        bytes to store — the verbatim original, or a re-encoded downsample (see
+        `raven.librarian.imagestore.store_image_as_sidecar`).
+
+        `metadata`, if given, describes this sidecar — see `get_sidecar_metadata` for what it is for and why it
+        is kept beside the bytes rather than only in the referencing payload. It is stored as an opaque JSON
+        dict; `chattree` neither reads nor interprets its contents, exactly as with node payloads. Must be
+        JSON-serializable.
+
+        Deduplication applies to the metadata too, and **first write wins**: attaching identical bytes a second
+        time under a different name does not overwrite the record made the first time. Overwriting would let a
+        later and possibly worse name — a temp file, a copy with a mangled name — displace a good one, and there
+        is no way to tell from here which of two names is the better description of the same bytes.
+        """
+        filename = f"{hashlib.sha256(data).hexdigest()}.{ext.lstrip('.')}"
+        with self.lock:
+            if not self._sidecar_exists(filename):  # content-addressed: identical bytes -> identical name
+                self._write_sidecar(filename, data)
+            if metadata is not None:
+                self.maybe_set_sidecar_metadata(filename, metadata)
+        return filename
+
+    def maybe_set_sidecar_metadata(self, filename: str, metadata: dict[str, Any]) -> bool:
+        """Attach a description to an already-stored sidecar, if it does not have one. Return whether it was written.
+
+        The *maybe* is the first-write-wins rule: returns `False` without touching anything if `filename`
+        already has metadata, and `False` again if the write fails. A caller that needs to know whether the
+        stored description is now the one it passed has to read the return value; nothing here reports the two
+        cases apart, because no caller so far cares which way it declined. See
+        `store_sidecar` for why a later name must not displace an earlier one, and `get_sidecar_metadata` for what
+        the description is for.
+
+        Also the backfill entry point for datastores predating sidecar metadata. Those still hold the provenance
+        in the payloads that reference each sidecar, so it can be recovered for everything currently referenced
+        — an orphan from a deletion that already happened is past saving, since the payload that named it went
+        with the node.
+
+        Never raises on a write failure: the sidecar is stored and usable either way, and a description that
+        could not be written is a display problem rather than a reason to fail the caller's operation.
+        """
+        with self.lock:
+            if self._read_sidecar_description(filename) is not None:
+                return False
+            return self._write_sidecar_description(filename, metadata)
+
+    def get_sidecar_metadata(self, filename: str) -> dict[str, Any] | None:
+        """Return the stored description of sidecar `filename`, or `None` if it has none.
+
+        A sidecar is named by content hash, so the bytes themselves say nothing about where they came from. The
+        human-readable name lives in the payload that references it — which is exactly what an *orphaned*
+        sidecar no longer has, and orphans are precisely the ones a cleanup preview needs to name. Hence a
+        description stored beside the bytes at store time, surviving independently of the tree.
+
+        The cleanup preview is what motivated it, but the larger effect is that a file-backed sidecar directory
+        becomes **self-describing**. Without these, it is a pile of hash-named files that can only be
+        interpreted by loading the datastore and cross-referencing every payload. With them, anything that can
+        read a directory — a person, a shell script, an agent asked to tidy up — can tell what each file is,
+        where it came from and when it arrived, without Raven's help and without the datastore being present.
+
+        Returns `None` for a sidecar stored before this existed, or if the description is unreadable or
+        corrupt: a missing description is a display problem, never a reason to fail an operation on the file.
+        """
+        return self._read_sidecar_description(filename)
+
+    def _referenced_sidecars(self, *, excluding_nodes: Iterable[str] = ()) -> set[str]:
+        """Union of sidecar filenames referenced by every revision of every node — the GC "mark" phase.
+
+        `chattree` owns this traversal over its own revision model; the per-payload interpretation is delegated
+        to the `sidecar_extractor` configured at construction, because payloads are opaque to `chattree` by design.
+        Returns an empty set if no extractor is configured (callers guard against acting on that).
+
+        `excluding_nodes` names node IDs to treat as already gone — see `list_unreferenced_sidecars`.
+        """
+        if self._sidecar_extractor is None:
+            return set()
+        skip = set(excluding_nodes)
+        referenced = set()
+        with self.lock:
+            for node_id, node in self.nodes.items():
+                if node_id in skip:
+                    continue
+                for payload in node.get("data", {}).values():  # every revision of every node
+                    referenced |= set(self._sidecar_extractor(payload))
+        return referenced
+
+    def list_unreferenced_sidecars(self, *, excluding_nodes: Iterable[str] = ()) -> list[str]:
+        """Sidecar filenames stored but referenced by no revision — the GC dry-run.
+
+        The same computation as `prune_unreferenced_sidecars` without deleting, for a pre-commit preview
+        ("would delete N files, X MB"). Returns `[]` (deleting nothing) if no `sidecar_extractor` is configured
+        — references can't be determined, so nothing is reported as safe to delete.
+
+        `excluding_nodes` names node IDs to treat as though they had already been deleted, so that the answer
+        describes a *future* state rather than the current one. This is what makes an honest preview of the
+        full cleanup possible: the two prune steps run as a pair (`prune_unreachable_nodes` first, then
+        `prune_unreferenced_sidecars`), so a dry run taken before either has run must discount the references
+        held by nodes the first step is about to delete — otherwise it under-reports exactly the attachments
+        the cleanup is there to reclaim. Pass `list_unreachable_nodes(*roots)` to preview that pair.
+        """
+        with self.lock:
+            if self._sidecar_extractor is None:
+                if self.list_sidecar_files():
+                    logger.warning(f"{type(self).__name__}.list_unreferenced_sidecars: no sidecar_extractor configured; cannot determine references.")
+                return []
+            referenced = self._referenced_sidecars(excluding_nodes=excluding_nodes)
+            return [filename for filename in self.list_sidecar_files() if filename not in referenced]
+
+    def prune_unreferenced_sidecars(self) -> list[str]:
+        """Delete sidecars referenced by no revision of any node; return the filenames deleted.
+
+        Mark-and-sweep GC. The mark phase (`_referenced_sidecars`) delegates per-payload reading to the
+        `sidecar_extractor` configured at construction; the sweep deletes everything else in the store. Pairs
+        with `prune_unreachable_nodes`: run that first, so attachments referenced only by
+        now-unreachable nodes become unreferenced here and get swept. If no `sidecar_extractor` is configured
+        this is a safe no-op — it will not delete anything it cannot prove is unreferenced (returns `[]`, and
+        warns if any sidecars exist).
+        """
+        with self.lock:
+            if self._sidecar_extractor is None:
+                if self.list_sidecar_files():
+                    logger.warning(f"{type(self).__name__}.prune_unreferenced_sidecars: no sidecar_extractor configured; skipping sidecar GC to avoid deleting referenced files.")
+                return []
+            referenced = self._referenced_sidecars()
+            deleted = []
+            for filename in self.list_sidecar_files():
+                if filename not in referenced:
+                    # The description goes with what it describes; otherwise it accumulates as its own slow
+                    # leak, which is the very thing this sweep exists to stop.
+                    self._delete_sidecar(filename)
+                    deleted.append(filename)
+            self._sweep_orphaned_descriptions()
+            if deleted:
+                plural_s = "s" if len(deleted) != 1 else ""
+                logger.info(f"{type(self).__name__}.prune_unreferenced_sidecars: deleted {len(deleted)} unreferenced sidecar{plural_s}.")
+            return deleted
+
+
 # Suffix of the directory holding a datastore's attachment sidecars, derived from the datastore's own
 # filename so that two datastores in one directory cannot share a sidecar store — which is what keeps the
 # GC correct, since a prune against one must not delete files the other still references.
@@ -809,11 +1070,10 @@ class PersistentForest(Forest):
                     `None` (default) means this datastore does no sidecar GC — `prune_unreferenced_sidecars`
                     becomes a safe no-op (it will not delete files it can't prove are unreferenced).
         """
-        super().__init__()
+        super().__init__(sidecar_extractor=sidecar_extractor)
 
         self.datastore_file = datastore_file
         self._autosave = autosave
-        self._sidecar_extractor = sidecar_extractor
 
         # Filesystem-level migration, so it cannot live in `_upgrade` — that one migrates the loaded nodes
         # dict and knows nothing about paths.
@@ -923,85 +1183,24 @@ class PersistentForest(Forest):
     sidecar_dir = property(fget=_get_sidecar_dir,
                            doc=f"Directory holding this datastore's attachment sidecar files: `<datastore>{SIDECAR_SUFFIX}/`, alongside the JSON. Derived from `datastore_file`; created lazily on the first `store_sidecar`.")
 
-    def store_sidecar(self, data: bytes, ext: str, metadata: dict[str, Any] | None = None) -> str:
-        """Store `data` as a sidecar file; return its content-hash filename `<sha256>.<ext>`.
+    # The storage half of the sidecar store, as files in `sidecar_dir`. Everything above it — content
+    # addressing, first-write-wins descriptions, the mark-and-sweep GC — is `Forest`'s and is not repeated
+    # here, so the two backends cannot drift on the policy that is the same for both.
 
-        Content-addressed: storing identical bytes twice writes one file and returns the same name (natural
-        dedup). `ext` is the extension without a leading dot (e.g. "png", "jpeg"). Creates `sidecar_dir` if
-        needed. The caller decides *what* bytes to store — the verbatim original, or a re-encoded downsample
-        (see `raven.librarian.imagestore.store_image_as_sidecar`).
+    def _sidecar_exists(self, filename: str) -> bool:
+        return self.sidecar_path(filename).exists()
 
-        `metadata`, if given, is written to a sibling file describing this sidecar — see `get_sidecar_metadata` for
-        what it is for and why it is stored beside the file rather than only in the referencing payload. It is
-        persisted as an opaque JSON dict; `chattree` neither reads nor interprets its contents, exactly as with
-        node payloads. Must be JSON-serializable.
+    def _write_sidecar(self, filename: str, data: bytes) -> None:
+        directory = self.sidecar_dir
+        common_utils.create_directory(directory)
+        with open(directory / filename, "wb") as sidecar_file:
+            sidecar_file.write(data)
 
-        Deduplication applies to the metadata too, and **first write wins**: attaching identical bytes a second
-        time under a different name does not overwrite the record made the first time. Overwriting would let a
-        later and possibly worse name — a temp file, a copy with a mangled name — displace a good one, and there
-        is no way to tell from here which of two names is the better description of the same bytes.
-        """
-        filename = f"{hashlib.sha256(data).hexdigest()}.{ext.lstrip('.')}"
-        with self.lock:
-            directory = self.sidecar_dir
-            common_utils.create_directory(directory)
-            path = directory / filename
-            if not path.exists():  # content-addressed: identical bytes -> identical name -> already on disk
-                with open(path, "wb") as sidecar_file:
-                    sidecar_file.write(data)
-            if metadata is not None:
-                self.maybe_set_sidecar_metadata(filename, metadata)
-        return filename
+    def _delete_sidecar(self, filename: str) -> None:
+        (self.sidecar_dir / filename).unlink()
+        self._sidecar_metadata_path(filename).unlink(missing_ok=True)
 
-    def maybe_set_sidecar_metadata(self, filename: str, metadata: dict[str, Any]) -> bool:
-        """Attach a description to an already-stored sidecar, if it does not have one. Return whether it was written.
-
-        The *maybe* is the first-write-wins rule: returns `False` without touching anything if `filename`
-        already has metadata, and `False` again if the write fails. A caller that needs to know whether the
-        description on disk is now the one it passed has to read the return value; nothing here reports the two
-        cases apart, because no caller so far cares which way it declined. See
-        `store_sidecar` for why a later name must not displace an earlier one, and `get_sidecar_metadata` for what
-        the description is for.
-
-        Also the backfill entry point for datastores predating sidecar metadata. Those still hold the provenance
-        in the payloads that reference each sidecar, so it can be recovered for everything currently referenced
-        — an orphan from a deletion that already happened is past saving, since the payload that named it went
-        with the node.
-
-        Never raises on a write failure: the sidecar is on disk and usable either way, and a description that
-        could not be written is a display problem rather than a reason to fail the caller's operation.
-        """
-        with self.lock:
-            metadata_path = self._sidecar_metadata_path(filename)
-            if metadata_path.exists():
-                return False
-            try:
-                common_utils.create_directory(metadata_path.parent)
-                with open(metadata_path, "w", encoding="utf-8") as metadata_file:
-                    json.dump(metadata, metadata_file, indent=2)
-            except (OSError, TypeError, ValueError) as exc:
-                logger.warning(f"PersistentForest.maybe_set_sidecar_metadata: could not write metadata for "
-                               f"'{filename}': {type(exc)}: {exc}")
-                return False
-            return True
-
-    def get_sidecar_metadata(self, filename: str) -> dict[str, Any] | None:
-        """Return the stored description of sidecar `filename`, or `None` if it has none.
-
-        A sidecar is named by content hash, so the file itself says nothing about where it came from. The
-        human-readable name lives in the payload that references it — which is exactly what an *orphaned*
-        sidecar no longer has, and orphans are precisely the ones a cleanup preview needs to name. Hence a
-        description written beside the file at store time, surviving independently of the tree.
-
-        The cleanup preview is what motivated it, but the larger effect is that the sidecar directory becomes
-        **self-describing**. Without these, the sidecar directory is a pile of hash-named files that can only be
-        interpreted by loading the datastore and cross-referencing every payload. With them, anything that can
-        read a directory — a person, a shell script, an agent asked to tidy up — can tell what each file is,
-        where it came from and when it arrived, without Raven's help and without the datastore being present.
-
-        Returns `None` for a sidecar stored before this existed, or if the metadata file is unreadable or
-        corrupt: a missing description is a display problem, never a reason to fail an operation on the file.
-        """
+    def _read_sidecar_description(self, filename: str) -> dict[str, Any] | None:
         metadata_path = self._sidecar_metadata_path(filename)
         try:
             with open(metadata_path, "r", encoding="utf-8") as metadata_file:
@@ -1009,21 +1208,36 @@ class PersistentForest(Forest):
         except FileNotFoundError:
             return None
         except (OSError, json.JSONDecodeError) as exc:
-            logger.warning(f"PersistentForest.get_sidecar_metadata: could not read metadata for '{filename}': "
+            logger.warning(f"PersistentForest._read_sidecar_description: could not read metadata for '{filename}': "
                            f"{type(exc)}: {exc}")
             return None
+
+    def _write_sidecar_description(self, filename: str, metadata: dict[str, Any]) -> bool:
+        # Never raises: the sidecar is on disk and usable either way, and a description that could not be
+        # written is a display problem rather than a reason to fail the caller's operation.
+        metadata_path = self._sidecar_metadata_path(filename)
+        try:
+            common_utils.create_directory(metadata_path.parent)
+            with open(metadata_path, "w", encoding="utf-8") as metadata_file:
+                json.dump(metadata, metadata_file, indent=2)
+        except (OSError, TypeError, ValueError) as exc:
+            logger.warning(f"PersistentForest._write_sidecar_description: could not write metadata for "
+                           f"'{filename}': {type(exc)}: {exc}")
+            return False
+        return True
 
     def _sidecar_metadata_path(self, filename: str) -> pathlib.Path:
         """Path of the metadata sibling describing sidecar `filename`. Validates `filename`; existence unchecked."""
         path = self.sidecar_path(filename)
         return path.with_name(f"{path.name}{self._SIDECAR_METADATA_SUFFIX}")
 
-    def _prune_orphaned_sidecar_metadata(self) -> None:
+    def _sweep_orphaned_descriptions(self) -> None:
         """Delete metadata files whose sidecar is gone.
 
         The sweep removes each description along with its file, so this only finds strays — a sidecar deleted by
         hand, or by a version that did not know about metadata. Since a metadata file is never referenced by
-        anything, nothing else would ever collect it.
+        anything, nothing else would ever collect it. The in-memory store overrides this to nothing: there,
+        the two cannot come apart.
         """
         directory = self.sidecar_dir
         if not directory.is_dir():
@@ -1034,12 +1248,6 @@ class PersistentForest(Forest):
                 if not (directory / described).exists():
                     entry.unlink(missing_ok=True)
 
-    def _validate_sidecar_filename(self, filename: str) -> None:
-        # Filenames reaching here come from stored `sidecar:` URLs, i.e. from datastore data — refuse anything
-        # that isn't a bare basename, so a crafted/corrupt datastore can't escape the sidecar directory.
-        if pathlib.Path(filename).name != filename:
-            raise ValueError(f"PersistentForest: unsafe sidecar filename '{filename}' (must be a bare basename, no path separators).")
-
     def sidecar_path(self, filename: str) -> pathlib.Path:
         """Absolute path to sidecar file `filename` within `sidecar_dir`. Does not check existence."""
         self._validate_sidecar_filename(filename)
@@ -1049,6 +1257,10 @@ class PersistentForest(Forest):
         """Read and return the raw bytes of sidecar file `filename`."""
         with open(self.sidecar_path(filename), "rb") as sidecar_file:
             return sidecar_file.read()
+
+    def sidecar_size(self, filename: str) -> int:
+        """Return the size of sidecar file `filename` in bytes, without reading it."""
+        return self.sidecar_path(filename).stat().st_size
 
     def list_sidecar_files(self) -> list[str]:
         """List the sidecar filenames present in `sidecar_dir` (bare names, not paths), sorted. Empty if the directory doesn't exist yet.
@@ -1067,79 +1279,6 @@ class PersistentForest(Forest):
             return []
         return sorted(entry.name for entry in directory.iterdir()
                       if entry.is_file() and not entry.name.endswith(self._SIDECAR_METADATA_SUFFIX))
-
-    def _referenced_sidecars(self, *, excluding_nodes: Iterable[str] = ()) -> set[str]:
-        """Union of sidecar filenames referenced by every revision of every node — the GC "mark" phase.
-
-        `chattree` owns this traversal over its own revision model; the per-payload interpretation is delegated
-        to the `sidecar_extractor` configured at construction, because payloads are opaque to `chattree` by design.
-        Returns an empty set if no extractor is configured (callers guard against acting on that).
-
-        `excluding_nodes` names node IDs to treat as already gone — see `list_unreferenced_sidecars`.
-        """
-        if self._sidecar_extractor is None:
-            return set()
-        skip = set(excluding_nodes)
-        referenced = set()
-        with self.lock:
-            for node_id, node in self.nodes.items():
-                if node_id in skip:
-                    continue
-                for payload in node.get("data", {}).values():  # every revision of every node
-                    referenced |= set(self._sidecar_extractor(payload))
-        return referenced
-
-    def list_unreferenced_sidecars(self, *, excluding_nodes: Iterable[str] = ()) -> list[str]:
-        """Sidecar filenames present on disk but referenced by no revision — the GC dry-run.
-
-        The same computation as `prune_unreferenced_sidecars` without deleting, for a pre-commit preview
-        ("would delete N files, X MB"). Returns `[]` (deleting nothing) if no `sidecar_extractor` is configured
-        — references can't be determined, so nothing is reported as safe to delete.
-
-        `excluding_nodes` names node IDs to treat as though they had already been deleted, so that the answer
-        describes a *future* state rather than the current one. This is what makes an honest preview of the
-        full cleanup possible: the two prune steps run as a pair (`prune_unreachable_nodes` first, then
-        `prune_unreferenced_sidecars`), so a dry run taken before either has run must discount the references
-        held by nodes the first step is about to delete — otherwise it under-reports exactly the attachments
-        the cleanup is there to reclaim. Pass `list_unreachable_nodes(*roots)` to preview that pair.
-        """
-        with self.lock:
-            if self._sidecar_extractor is None:
-                if self.list_sidecar_files():
-                    logger.warning("PersistentForest.list_unreferenced_sidecars: no sidecar_extractor configured; cannot determine references.")
-                return []
-            referenced = self._referenced_sidecars(excluding_nodes=excluding_nodes)
-            return [filename for filename in self.list_sidecar_files() if filename not in referenced]
-
-    def prune_unreferenced_sidecars(self) -> list[str]:
-        """Delete sidecar files referenced by no revision of any node; return the filenames deleted.
-
-        Mark-and-sweep GC. The mark phase (`_referenced_sidecars`) delegates per-payload reading to the
-        `sidecar_extractor` configured at construction; the sweep deletes everything else in the sidecar
-        directory. Pairs with `prune_unreachable_nodes`: run that first, so attachments referenced only by
-        now-unreachable nodes become unreferenced here and get swept. If no `sidecar_extractor` is configured
-        this is a safe no-op — it will not delete files it cannot prove are unreferenced (returns `[]`, and
-        warns if any sidecars exist).
-        """
-        with self.lock:
-            if self._sidecar_extractor is None:
-                if self.list_sidecar_files():
-                    logger.warning("PersistentForest.prune_unreferenced_sidecars: no sidecar_extractor configured; skipping sidecar GC to avoid deleting referenced files.")
-                return []
-            referenced = self._referenced_sidecars()
-            deleted = []
-            for filename in self.list_sidecar_files():
-                if filename not in referenced:
-                    (self.sidecar_dir / filename).unlink()
-                    # The description goes with the file it describes; otherwise the metadata accumulates as its
-                    # own slow leak, which is the very thing this sweep exists to stop.
-                    self._sidecar_metadata_path(filename).unlink(missing_ok=True)
-                    deleted.append(filename)
-            self._prune_orphaned_sidecar_metadata()
-            if deleted:
-                plural_s = "s" if len(deleted) != 1 else ""
-                logger.info(f"PersistentForest.prune_unreferenced_sidecars: deleted {len(deleted)} unreferenced sidecar file{plural_s}.")
-            return deleted
 
     def _upgrade(self, nodes: Dict[str, Dict[str, Any]]) -> None:
         """Migrate `nodes` (loaded from a saved datastore) to the latest format.

@@ -195,15 +195,29 @@ class TestTurn:
         # ...and it is a stored attachment rather than pasted text: the sidecar is on disk, content-addressed.
         assert datastore.list_sidecar_files()
 
-    def test_attaching_to_an_in_memory_datastore_is_refused_up_front(self, llm_settings):
-        # The sidecar store is a directory beside the datastore file, so `chattree.Forest` has none — and
-        # the default datastore *is* a `Forest`. Without the guard this fails inside `imagestore`, on a
-        # missing method, after the turn has already begun.
-        from unpythonic.env import env  # noqa: PLC0415 -- only this test builds a staged attachment
+    def test_an_attachment_needs_no_file_backed_datastore(self, monkeypatch, llm_settings):
+        # The default datastore is in-memory, and a batch attaching a paper per item wants to leave nothing
+        # behind. The sidecar is held beside the tree rather than in a directory, and everything above the
+        # storage -- content addressing, the fold-in at wire-build -- is the same code either way.
+        from unpythonic.env import env  # noqa: PLC0415 -- only the attachment tests build a staged entry
 
-        staged = env(raw=b"not really a png", provenance_url=None, provenance_source="user_attachment")
-        with pytest.raises(ValueError):
-            agent.turn(llm_settings, "What is in this image?", staged_images=[staged])
+        def fake_invoke(**kw):
+            kw["on_prompt_ready"](llmclient.serialize_history_for_wire(kw["settings"], kw["history"],
+                                                                       continue_=kw["continue_"],
+                                                                       datastore=kw["datastore"]))
+            return make_invoke_result(content="It says 47.2 kWh/kg.")
+        monkeypatch.setattr("raven.librarian.llmclient.invoke", fake_invoke)
+
+        staged = env(raw=b"The Kelvin-7 stack recorded 47.2 kWh/kg at nominal load.",
+                     name="kelvin7.txt", provenance_url=None, provenance_source="user_attachment")
+        record = agent.turn(llm_settings, "What does this say?", staged_files=[staged])
+
+        wire = "\n".join(chatutil.content_to_text(message.get("content")) for message in record.prompts[-1])
+        assert "47.2 kWh/kg" in wire
+        assert record.datastore.list_sidecar_files()
+        # ...and nothing was written: asking an in-memory store for a path is an error, not an empty answer.
+        with pytest.raises(NotImplementedError):
+            record.datastore.sidecar_path(record.datastore.list_sidecar_files()[0])
 
     def test_images_are_refused_on_a_model_that_cannot_see_them(self, llm_settings, tmp_path):
         # A batch feeding page images to a text-only model would pay for every call and get an answer about
