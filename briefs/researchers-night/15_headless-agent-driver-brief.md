@@ -10,10 +10,15 @@ Not admitted to v0.2.8: it is not a defect, so the freeze covers it by the lette
 would make 09's own validation easier is exactly the "one more thing" the freeze exists to stop. It goes first
 after the tag, and the reason is timing rather than value — see below.
 
-**This brief consolidates rather than invents.** The design is largely already written, in `TODO.md` under
+**This brief consolidates rather than invents.** The design was largely already written, in `TODO.md` under
 Librarian → Core features ("Make the scaffold scriptable", 2026-07-29). What follows lifts it into brief form,
-adds the import-side prerequisite, and cuts one piece out into a brief of its own. Where the two disagree,
-`TODO.md` is right and this brief has been corrected to match.
+adds the import-side prerequisite, and cuts one piece out into a brief of its own.
+
+**This brief is now the authority, and the `TODO.md` entry is redundant** (2026-08-11). It said the opposite
+— that `TODO.md` was right where the two disagreed — which had it backwards: `TODO.md` is a queue and is
+ephemeral by design, so nothing should persist only there. Everything in that entry has been checked against
+this brief and is either here or deliberately scoped out; the last piece to be moved across is the wire-level
+exclusion, below. The entry can be retired whenever `TODO.md` is next edited.
 
 **Filed in two places under different names**, which is how the poorer copy came to be the one that got
 deferred: `TODO_DEFERRED.md`, *"Headless scaffold mode for `ai_turn` (scriptable agent layer)"* (filed
@@ -49,6 +54,14 @@ the full-turn ones under `briefs/librarian-extension/manual_tests/`. This work i
 `inject_shapes`, `assembled_shape`, `absent_fact` and `rag_placement` can be rewritten against Part A without
 reaching through a private door, and `rag_live_corpus` and `rag_tool_rescue` against Part B without
 hand-rolling a branch walk.
+
+**A third group is deliberately excluded, and must stay excluded.** The survey that produced those two entry
+points sorted twelve probes three ways, and the third are the *wire-level* ones — `backend_capabilities`,
+`gemma4_reasoning_roundtrip`, `vision_check`, the `webfetch_*` set, `datetime_inject`. Those post raw to
+`/v1/chat/completions` on purpose: what they measure is the **backend**, and routing them through `llmclient`
+would put the thing under test behind the thing doing the testing. A scripting surface is not for them, and
+"port the remaining probes onto it" is the shape of a later mistake — one that would quietly turn a set of
+backend measurements into measurements of Raven's handling of the backend.
 
 Rewriting them is not required by this brief — they work, and `investigations/` exists so that measurements
 stay reproducible as they were made. But *being able to* is the criterion, and checking it against real
