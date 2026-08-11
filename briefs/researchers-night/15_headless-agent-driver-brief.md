@@ -264,9 +264,12 @@ as such so that a later reader can overrule it without having to work out whethe
 1. **`perform_throwaway_task` moves to `agent` and is renamed.** Genuinely blocked: whether it *widens* into
    the surface or *dissolves* into a one-liner over it depends on the shape Part B lands, and the name
    should follow what it turns out to be. See the section on it below.
-2. **The "is a model loaded?" check.** Designed here and not built; blocked by nothing. Second because it is
-   small and because a wrong answer is visible to a user at the worst moment — the first message of a
-   session, against a backend with nothing loaded.
+2. **The "is a model loaded?" check.** Blocked by nothing, and lopsided: the *check* is cheap — the state is
+   already in the `/api/v0/models` response `detect_backend_flavor` fetches and discards — while **the pill
+   that shows it is a UX problem**, and that is the half that will take the time. The sketch below settles
+   its behaviour (poll only while known-bad, green then hide) but not its appearance or its place in the
+   layout. Second on the list because a wrong answer here meets the user at the worst moment: the first
+   message of a session, against a backend with nothing loaded.
 3. **The variant sweep across the model fleet.** Blocked by nothing either, and needs no code: four arms,
    three or more samples each, per
    `investigations/context-injects/README.md`. Last because it costs backend time rather than attention, and
