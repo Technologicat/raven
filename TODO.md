@@ -59,8 +59,9 @@ measures 0.00 GiB today only because its filter chain is empty; these go into ex
 **Explicitly *not* on the demo path**, each for a recorded reason:
 
 - *Avatar stutter* — deprioritized; a warm-up handles it without knowing the cause.
-- *Chat view drops a character* — one sighting, no recurrence; an open report, not a known defect, and
-  nothing to test a fix against.
+- *Chat view drops a character* — three sightings now, none reproducible on demand, so still nothing to
+  test a fix against. The third points at the font atlas rather than at the text pipeline, which is a
+  cheaper thing to check than the render-thread race — but not on the demo path either way.
 - *RAG reranking* — **now off the list entirely: measured and rejected** (2026-08-06, see the struck item
   below and `investigations/retrieval/REPORT.md` §2). It was parked here as "quality work, not
   correctness"; it turns out not to be quality work either.

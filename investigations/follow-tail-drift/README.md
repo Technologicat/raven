@@ -1,5 +1,10 @@
 # The chat view stops following the tail mid-reply
 
+**This bundle now holds three episodes of the same machinery**, newest last in the file but not in date
+order: the 2026-08-11 drift below, the 2026-08-12 settle-wait fault after it, and the 2026-07-30 work that
+made the view follow at all, which is the background to both. They share `should_follow_tail`,
+`scroll_view` and `_commanded_y_scroll`, and each one's fix is visible in the next one's failure.
+
 Observed in `raven-librarian` on 2026-08-11: while a reply was streaming, the view fell behind the text and
 only jumped to the end once the message was finalized. Seen a handful of times before, intermittently, and
 never reproduced on demand.
@@ -290,6 +295,48 @@ applied: changing the unit would move a keyboard gesture, and the margin that ma
 The failure is silent and reads as the app being broken: the reply scrolls out of view while the model is
 writing, which is precisely when a viewer is watching it. The recovery - a jump to the end at finalize - is
 itself a visible lurch.
+
+## Later episode: the settle wait believed the first standstill (2026-08-12)
+
+Fault 1 below — `get_y_scroll_max` lagging a content change — came back in a second costume, and the fix
+for it turned out to be one frame short.
+
+**Symptom**: the chat panel came up part-way down its own content. On startup, and after the ▼ button
+rebuilt the view, the message the reader had come back to sat below the fold; pressing End found it there
+all along. So the tree walk was right and only the scroll was short — which is what made it read as a
+loading bug rather than a scrolling one.
+
+**Cause**: the panel's content is laid out in *pieces*, because the Markdown renderer runs on its own
+worker — so `get_y_scroll_max` does not climb monotonically to its final value. It stands still *between*
+pieces. Fault 1's settle wait asked for a single unchanged frame, and a lull satisfies that.
+
+Measured at startup on a real chat:
+
+| observation | `max_y_scroll` |
+|---|---|
+| first settle candidate | 3051 |
+| a few frames later | 3497 |
+| final | 4147 |
+
+The scroll went to **3051** and left the reader **1096 px short**.
+
+**Fixed 2026-08-12.** A standstill now has to last three consecutive frames
+(`chat_controller._SCROLL_SETTLE_FRAMES`) before it is taken for the end, and a full rebuild allows sixty
+frames for that rather than ten (`_BUILD_SCROLL_WAIT_FRAMES`) — laying out a chat from nothing takes many
+more frames than appending one message to a chat already on screen. Same measurement after the change: the
+first scroll waits four frames and goes to 4147.
+
+**It is a heuristic and the code says so.** The renderer reports no "finished" event, so there is nothing to
+wait on that would make this exact. Three frames buys headroom over the one-frame lull that was actually
+observed, and costs nothing when the content settles sooner, which is the ordinary case.
+
+Two things worth carrying:
+
+- **The tell was that pressing End found the message.** A short scroll and a failed load look identical on
+  screen; one keystroke separates them, and it points at the scroll rather than at the tree walk.
+- **A probe, not reasoning, found it.** `max_y_scroll` was printed on each of the four frames after the
+  scroll; the sequence above is what the log showed, and no amount of reading the settle loop would have
+  suggested that the maximum pauses mid-layout. The probe was removed once it had answered.
 
 ## Prior episode: making the view follow at all (2026-07-30)
 

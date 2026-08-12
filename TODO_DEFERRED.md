@@ -1330,32 +1330,6 @@ chatlog does it (`chat_controller.py`, `wrap=chat_text_w`). The help card simply
 direction. Note also that the chat graph view will want an entry here plus a hotkey-shaped gesture of its
 own, so the redesign should be able to take one more feature without another shape decision.
 
-## `dpg_markdown` intermittently drops a single letter from rendered text
-
-*Cluster: markdown-renderer · Cost: ? · Gate: ? · Filed: 2026-08-05*
-
-Observed 2026-08-04 in Librarian's `F1` card: the letter **m** was missing from every italic run in the
-render — `/home/jje/...` came out `/ho e/jje/...`, `search_documents` as `search_docu ents` — while
-non-italic text in the same paragraph kept its `m`s, and the gap left behind was about one character wide.
-It did not reproduce on the next launch. Screenshots of both renders were taken.
-
-**The cause is not diagnosed, and the obvious explanations were checked and eliminated**: the font files do
-carry the glyph (`fontTools`: `m` present in `OpenSans-Italic.ttf` and `OpenSans-BoldItalic.ttf`), and
-Raven's font callback is a bare `dpg.add_font` with no ranges, on DPG 2.3.1 where `add_font_range` is a
-no-op anyway. So it is neither missing coverage nor the font-range removal of the same day.
-
-Juha reports the same signature before, in a different place and on a different letter — a greeting once
-rendered as "ow can I help you today", losing the `H` from non-italic text. That the two cases disagree on
-both the letter and the emphasis is the strongest evidence available that this is the vendored renderer's
-known intermittent fault rather than anything to do with italics, and it is probably the same bug as the
-untracked "DearPyGui_Markdown URL highlight bug (threading-related)" in `CLAUDE.md`'s known-issues list.
-
-Hard to chase precisely because it is intermittent and cosmetic. A start would be rendering a page of known
-text in a loop and diffing the rasterized output against a reference, which at least turns "sometimes" into
-a rate.
-
-Related: the fleet-wide hotkey-discoverability audit above, which touches the same card.
-
 ## Modernize the Librarian system prompt / character card
 
 *Cluster: ? · Cost: ? · Gate: next · Filed: 2026-07-30 · See also: `briefs/researchers-night/done/15_headless-agent-driver-brief.md` (final section)*
@@ -2393,6 +2367,10 @@ its own fix, and lives in "Emoji support in the Markdown renderer" below.
 
 *Cluster: markdown-renderer · Cost: ? · Gate: ? · Filed: 2026-07-19*
 
+**Absorbs "`dpg_markdown` intermittently drops a single letter from rendered text"** (merged 2026-08-12).
+That was the same defect reported from the renderer's end rather than the chat view's, and its sighting is
+the most informative of the three — see the third one below.
+
 Observed 2026-07-18 in Librarian's chat view: an assistant greeting displayed as
 "Hello! I'm here and ready to help.    hat can I do for you?" — the `W` missing, with a visible
 run of extra whitespace where it should be.
@@ -2456,6 +2434,30 @@ is a hypothesis from timing coincidence, not from reading the interaction; if it
 quickly, drop it rather than building on it. (It is also why the observation is treated as a genuine
 first occurrence rather than a long-standing bug finally noticed: a dropped letter is the kind of
 thing this project's author does reliably catch.)
+
+**Third sighting, 2026-08-04, and the one that points at a layer nobody had checked.** In Librarian's `F1`
+card, the letter **m** was missing from *every italic run* in the render — `/home/jje/...` came out
+`/ho e/jje/...`, `search_documents` as `search_docu ents` — while non-italic text in the same paragraph kept
+its `m`s, and the gap left behind was about one character wide. It did not reproduce on the next launch;
+screenshots of both renders were taken. The obvious explanations were checked and eliminated: the font files
+do carry the glyph (`fontTools`: `m` present in `OpenSans-Italic.ttf` and `OpenSans-BoldItalic.ttf`), and
+Raven's font callback is a bare `dpg.add_font` with no ranges, on DPG 2.3.1 where `add_font_range` is a no-op
+anyway. So it is neither missing coverage nor the font-range removal of the same day.
+
+**Start the investigation at the font atlas.** All three sightings eliminated *text-layer* explanations
+rigorously — datastore verbatim, `mistletoe` output intact, glyph present in the TTF — and none of them
+checked the layer below. *Present in the TTF* is not *present in the rasterized atlas*. `dpg_markdown` loads
+fonts at runtime via `markdown_add_font_callback`, per size and per family, italic being a separate font;
+a glyph that fails to rasterize renders blank while keeping its advance width, which predicts the observed
+signature exactly — a right-sized gap, variant-specific, intermittent across launches as atlas packing
+varies. That does not rule out the render-thread race below; it is the cheaper hypothesis to test first, and
+it is the one that explains why the italic sighting hit *every* `m` in one variant and no `m` in another.
+
+That the three sightings disagree on the letter *and* on the emphasis is also the strongest available
+evidence that this is not about italics. Probably the same bug as the untracked "DearPyGui_Markdown URL
+highlight bug (threading-related)" in `CLAUDE.md`'s known-issues list — and note Juha's observation that
+that highlight sat **one character off** from its correct position, which matches the boundary signature
+above.
 
 Discovered while committing the chat-template fix (2026-07-19).
 
