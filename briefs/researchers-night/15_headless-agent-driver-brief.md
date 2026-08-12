@@ -608,6 +608,38 @@ startup, with its answer currently spent on a log line and a `sys.exit(255)` in 
 Poll-only-while-known-bad covers all three unchanged: both bad states are conditions the user is actively
 fixing, and both clear the same way.
 
+#### Built 2026-08-12, and what the appearance turned out to be
+
+The behaviour was settled above; what was open was where it goes and what it looks like. Decided by drawing
+the candidates rather than describing them (Juha):
+
+- **Inline above the composer**, in the layout flow, rather than floating over the chat log or joining the
+  avatar panel's indicator stack. It is a precondition for the composer rather than a property of one
+  control, and it is in the reader's eye on the way to the thing they are about to type into. The cost is
+  that it changes the composer's geometry, which the composer already knew how to absorb: `chat_controls_h`
+  is fixed and an appearing row steals its height from the text field, exactly as the attachments strip
+  does. With two optional rows, one function now owns the field's height — two writers would each set it as
+  if it were the only one.
+- **Clickable, meaning "check now"** rather than a pure readout. The poll interval could simply be short,
+  but a user who has just started the server wants to say so, and the sequential `TaskManager` makes the
+  click supersede the sleeping poll for free.
+- **The AI-warning orange, not red** (Juha, on seeing it). Red was the first cut, borrowed from the DOCS
+  indicator's recording cue. The disclosure label below the avatar is the closer relative: neither is an
+  error, both want reading before the user sends anything. The shade is now `_CAUTION_COLOR`, one definition
+  with two owners.
+- **Icon pulsates, sentence does not** — the DOCS row's split, for the DOCS row's reason: a sentence is too
+  long to read inside one pulsation cycle. The icon is a separate text widget because a DPG item draws its
+  label in one font and the app font has no warning glyph, so the leftmost ~23 px of the row do not respond
+  to a click. Accepted; the same constraint decides the jump-to-latest pill's font.
+
+**Verified live against the state that is hardest to arrange deliberately**: LM Studio reachable with all
+ten models `not-loaded`. Startup showed the right row, the field gave up exactly its height, and the poll
+re-probed on schedule.
+
+**One scope statement worth keeping**, because the row's absence would otherwise read as a claim: a backend
+that goes away *mid-session* is not noticed. Noticing it would mean polling a backend that is working, which
+is the thing this design refuses. The failing send reports it, and the user is present for that one.
+
 ### The catch: the system prompt depends on the backend — and probably should not
 
 **The prompt is not independent of what the probe learns.** `configure` builds `system_prompt` and

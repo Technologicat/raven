@@ -45,6 +45,7 @@ with timer() as tim:
     import dearpygui.dearpygui as dpg
 
     from mcpyrate import colorizer
+    from unpythonic import sym
     from unpythonic.env import env
 
     # Vendored libraries
@@ -164,6 +165,12 @@ with timer() as tim:
                                           font=themes_and_fonts.icon_font_solid,
                                           tooltip="Send to chat input:\n{url}")
 
+    # The app's "read this, but nothing has gone wrong" orange. Two owners: the AI-disclosure label below
+    # the avatar, and the LLM backend status row above the composer. Named rather than written out at each
+    # site, because two literals in one file are two literals that can drift, and these two are meant to be
+    # recognizably the same voice — neither is an error, both want reading before the user sends anything.
+    _CAUTION_COLOR = (255, 180, 120)
+
     # animation for document database and web access indicators (cyclic, runs in the background)
     with dpg.theme(tag="my_pulsating_gray_text_theme"):
         with dpg.theme_component(dpg.mvAll):
@@ -200,6 +207,29 @@ with timer() as tim:
         with dpg.theme_component(dpg.mvAll):
             dpg.add_theme_color(dpg.mvThemeCol_Text, (180, 180, 180))
 
+    # Themes for the LLM backend status pill above the composer (`_refresh_backend_status_pill`). Its own
+    # pulsator rather than the DOCS one, for the reason the DOCS indicator has its own: a pulsation whose
+    # phase another owner may reset is a pulsation that jumps.
+    #
+    # Split steady/pulsating the same way the DOCS row is, and for the same reason — the icon pulsates to
+    # say "act on me", the sentence beside it stays at full alpha because a sentence is too long to read
+    # inside one cycle. The same caution orange for both bad states: which of the two it is, and what to do
+    # about it, is what the words are for.
+    with dpg.theme(tag="my_pulsating_caution_backend_theme"):
+        with dpg.theme_component(dpg.mvAll):
+            pulsating_caution_backend_color = dpg.add_theme_color(dpg.mvThemeCol_Text, _CAUTION_COLOR)
+        pulsating_caution_backend_glow = gui_animation.PulsatingColor(cycle_duration=2.0,
+                                                                     theme_color_widget=pulsating_caution_backend_color)
+        gui_animation.animator.add(pulsating_caution_backend_glow)
+    with dpg.theme(tag="my_steady_caution_backend_theme"):
+        with dpg.theme_component(dpg.mvAll):
+            dpg.add_theme_color(dpg.mvThemeCol_Text, _CAUTION_COLOR)
+    # The connected state, which appears only to announce itself and then leaves. Steady on both widgets:
+    # nothing here is asking to be acted on.
+    with dpg.theme(tag="my_steady_green_backend_theme"):
+        with dpg.theme_component(dpg.mvAll):
+            dpg.add_theme_color(dpg.mvThemeCol_Text, (96, 224, 96))
+
     if platform.system().upper() == "WINDOWS":
         icon_ext = "ico"
     else:
@@ -223,8 +253,8 @@ print()
 # `idle_timeout`, and from there onward we coast at the throttled rate.
 #
 # Ambient animator caveat: the startup `PulsatingColor` cycles (gray for the LLM / DOCS /
-# WEB indicators, red for the mic button, red for the DOCS indicator while indexing) run
-# continuously and stay registered for the lifetime of the app. They show up in
+# WEB indicators, red for the mic button, red for the DOCS indicator while indexing, red
+# for the backend status pill) run continuously and stay registered for the lifetime of the app. They show up in
 # `gui_animation.animator.active_count` even when idle. We snapshot the count here as the
 # baseline; only animations *above* baseline (button flashes, smooth scrolls) count as
 # "busy". A more elegant ambient/transient split is in TODO_DEFERRED.
@@ -268,11 +298,14 @@ def _on_any_input(*_args) -> None:
 
 if not api.test_connection():
     sys.exit(255)
-if not llmclient.test_connection(llm_backend_url):
-    sys.exit(255)
-print()
 
-llm_settings = llmclient.setup(backend_url=llm_backend_url)
+# The LLM backend is deliberately not a startup gate, where Raven-server just above is one. Librarian is
+# useful with no model in sight — past chats, the cleanup dialog, the settings — and a user who started the
+# LLM server second is two clicks from fixing it. So `connect` where a batch tool would call `setup`: it
+# reports which of the three states this is instead of raising, on the console here and in the composer's
+# status pill (`_refresh_backend_status_pill`) once there is a GUI to put it in.
+llm_settings = llmclient.connect(backend_url=llm_backend_url)
+print()
 
 logger.info("Loading chat datastore.")
 with timer() as tim:
@@ -353,19 +386,182 @@ def _decode_staged_thumbnail(raw: bytes) -> Tuple[str, int, int]:
     dpg.split_frame()  # ...and ensure it completed before the thumbnail draws
     return texture_tag, disp_w, disp_h
 
-def _refresh_attachments_strip() -> None:
-    """Show the staged-attachments strip iff anything is staged, stealing that height from the text field.
+# --------------------------------------------------------------------------------
+# LLM backend status
+#
+# Librarian opens whatever the LLM backend is doing (see the `connect` call above), so the window may be up
+# while nothing can answer. The composer's status row is how that is reported, and what it reports is one of
+# `llmclient.backend_status`'s three states.
+#
+# Its scope is the state Librarian *starts* in, and recovery from it. A backend that goes away mid-session
+# — the user unloads the model, or stops the server — is not noticed here, because noticing it would mean
+# polling a backend that is working, which is a request nobody asked for on every idle session. It is
+# reported instead by the send that fails, which the user is present for and can reroll.
 
-    The composer's outer height (`chat_controls_h`) is fixed, so the strip's height is taken from the text
-    field rather than added to the composer — the chat and avatar panels never jump when attachments appear.
-    Shared by both staged images (thumbnails) and staged documents (chips).
+# How often to re-probe a backend that cannot answer, in seconds. This runs *only* while the row is up: a
+# healthy Librarian sends nothing nobody asked for. Short, because the condition is one the user is actively
+# fixing — they start the server or load a model and look back at the window — and the probe is one HTTP
+# request, usually against the same machine.
+_BACKEND_POLL_INTERVAL_S = 3.0
+# How long the row stays up to announce a connection before it goes away.
+_BACKEND_CONNECTED_LINGER_S = 4.0
+# Slice length for the two waits above. They are waited out in slices so that closing the window does not
+# have to sit through a whole interval first.
+_BACKEND_POLL_TICK_S = 0.1
+
+# Sequential, so that a click on the row supersedes the poll that is currently sleeping rather than racing
+# it: submitting cancels whatever was in flight, which is exactly "retry now".
+backend_status_task_manager = bgtask.TaskManager(name="librarian_backend_status",
+                                                 mode="sequential",
+                                                 executor=bg)
+
+_backend_pill_shown = False  # mirrors the row's visibility; `_refresh_composer_layout` sizes the field from it
+
+def _describe_backend_status(status: sym) -> Tuple[str, str, str]:
+    """Return `(icon, label, tooltip)` for the composer's status row in `status`.
+
+    The three states get distinct wording because the user can act on the difference: starting a server and
+    loading a model into one that is already running are different jobs, and a row that said only "not
+    working" would leave them to guess which. All three icons are plug variants, so the glyph changes while
+    the row stays recognizably about the connection.
     """
-    if staged_images or staged_files:
+    backend_url = llm_settings.backend_url
+    if status is llmclient.backend_unreachable:
+        return (fa.ICON_PLUG_CIRCLE_XMARK,
+                "LLM backend not connected",
+                f"Nothing answered at {backend_url}.\n"
+                "Is the LLM server running, and is that the right address?\n\n"
+                "Retrying automatically. Click to retry now.")
+    if status is llmclient.backend_has_no_model:
+        return (fa.ICON_PLUG_CIRCLE_EXCLAMATION,
+                "LLM backend has no model loaded",
+                f"The LLM server at {backend_url} answered, but has no model loaded.\n"
+                "Load one there, and this will clear by itself.\n\n"
+                "Retrying automatically. Click to retry now.")
+    # Connected. The model identity is what just changed, so say it — unless the backend does not report one
+    # (`NO_MODEL_INFO`), where naming it would turn an announcement into an apology.
+    model_suffix = "" if llm_settings.model == llmclient.NO_MODEL_INFO else f" — {llm_settings.model}"
+    return (fa.ICON_PLUG_CIRCLE_CHECK,
+            f"LLM backend connected{model_suffix}",
+            f"Connected to the LLM server at {backend_url}.\n\nClick to check again.")
+
+def _refresh_backend_status_pill(status: sym) -> None:
+    """Put `status` into the composer's status row, and show the row."""
+    global _backend_pill_shown
+    icon, label, tooltip = _describe_backend_status(status)
+    dpg.set_value("backend_status_icon", icon)  # tag
+    dpg.configure_item("backend_status_button", label=label)  # tag
+    dpg.set_value("backend_status_tooltip_text", tooltip)  # tag
+    if status is llmclient.backend_ready:
+        dpg.bind_item_theme("backend_status_icon", "my_steady_green_backend_theme")  # tag
+        dpg.bind_item_theme("backend_status_button", "my_steady_green_backend_theme")  # tag
+    else:
+        dpg.bind_item_theme("backend_status_icon", "my_pulsating_caution_backend_theme")  # tag
+        dpg.bind_item_theme("backend_status_button", "my_steady_caution_backend_theme")  # tag
+    _backend_pill_shown = True
+    _refresh_composer_layout()
+
+def _hide_backend_status_pill() -> None:
+    """Take the composer's status row down, giving the text field its height back."""
+    global _backend_pill_shown
+    _backend_pill_shown = False
+    _refresh_composer_layout()
+
+def _backend_status_poll_task(task_env: env) -> None:
+    """Re-probe the LLM backend until it can answer, then stand the status row down.
+
+    This is the one place a poll is unavoidable, and it is worth being clear about why. A *send* against a
+    backend that cannot answer already reports itself and is retried by reroll — user-initiated, free when
+    idle, and already built. But nothing user-initiated makes a status readout go green, so the readout has
+    to look. The cost is bounded by the duration of a condition the user is fixing: the task exists only
+    while the row is up, and returns as soon as it is not.
+
+    `task_env.delay_first_probe`: whether to wait out an interval before the first probe. `True` when the
+                                  status was just established (at startup), `False` when the user clicked.
+    """
+    def keep_waiting(duration: float) -> bool:
+        """Wait up to `duration` seconds in slices. Return whether the caller should carry on."""
+        deadline = time.monotonic() + duration
+        while time.monotonic() < deadline:
+            if task_env.cancelled or _shutting_down:
+                return False
+            time.sleep(_BACKEND_POLL_TICK_S)
+        return not (task_env.cancelled or _shutting_down)
+
+    # Captured before the first `reconnect`, which overwrites it. Only a backend that was *not* answering
+    # needs the stored-prompt repair below; without this, clicking an already-green row would rewrite the
+    # system prompt and rebuild the chat view for nothing.
+    was_bad = (llmclient.backend_status(llm_settings) is not llmclient.backend_ready)
+
+    if task_env.delay_first_probe and not keep_waiting(_BACKEND_POLL_INTERVAL_S):
+        return
+    while True:
+        logger.debug(f"_backend_status_poll_task: {task_env.task_name}: re-probing {llm_settings.backend_url}")
+        status = llmclient.reconnect(llm_settings)
+        if task_env.cancelled or _shutting_down:
+            return
+        if status is llmclient.backend_ready:
+            break
+        _refresh_backend_status_pill(status)  # the two bad states can turn into each other
+        if not keep_waiting(_BACKEND_POLL_INTERVAL_S):
+            return
+
+    logger.info(f"_backend_status_poll_task: {task_env.task_name}: backend is ready, model is '{llm_settings.model}'.")
+    if was_bad:
+        # The stored system prompt is rebuilt because it may state what the reconnect has just learned:
+        # Librarian's own prose no longer names the model or the context length, but those template
+        # variables are documented for a user writing their own (see `config.py`). The chat view is rebuilt
+        # after it because a system message is drawn in the log like any other, so replacing its revision
+        # under a live view would leave the superseded text on screen.
+        appstate.refresh_system_prompt(llm_settings, datastore, app_state)
+        if task_env.cancelled or _shutting_down:
+            return
+        chat_controller.view.build()
+    _refresh_backend_status_pill(llmclient.backend_ready)
+    if not keep_waiting(_BACKEND_CONNECTED_LINGER_S):
+        return
+    _hide_backend_status_pill()
+
+def _start_backend_status_poll(delay_first_probe: bool) -> None:
+    """Start watching the LLM backend. Supersedes a watch already running."""
+    if _shutting_down:
+        return
+    backend_status_task_manager.submit(_backend_status_poll_task, env(delay_first_probe=delay_first_probe))
+
+def _request_backend_reconnect() -> None:
+    """Re-probe the LLM backend now, instead of at the poll's next tick. The status row's click action."""
+    gui_animation.flash_button(button="backend_status_button",  # tag
+                               message="Checking the LLM backend...",
+                               duration=gui_config.acknowledgment_duration,
+                               tooltip="backend_status_tooltip",  # tag
+                               text="backend_status_tooltip_text")  # tag
+    _start_backend_status_poll(delay_first_probe=False)
+
+def _refresh_composer_layout() -> None:
+    """Show or hide the composer's two optional rows, and give the text field the height they leave.
+
+    The rows are the backend-status pill (above the field) and the staged-attachments strip (below it,
+    shared by staged images and staged documents). The composer's outer height (`chat_controls_h`) is fixed,
+    so a row that appears takes its height from the text field rather than adding to the composer — the chat
+    and avatar panels never jump.
+
+    One function for both rows rather than one per row: the field's height is a function of *both*
+    conditions, so two writers would each set it as if it were the only one, and whichever ran last would
+    win. Call after changing either condition.
+    """
+    attachments_shown = bool(staged_images or staged_files)
+    field_h = gui_config.chat_field_h
+    if _backend_pill_shown:
+        dpg.show_item("backend_status_pill")  # tag
+        field_h -= gui_config.chat_backend_pill_h
+    else:
+        dpg.hide_item("backend_status_pill")  # tag
+    if attachments_shown:
         dpg.show_item("chat_attachments_strip")  # tag
-        dpg.configure_item("chat_field", height=gui_config.chat_field_h - gui_config.chat_attachments_h)  # tag
+        field_h -= gui_config.chat_attachments_h
     else:
         dpg.hide_item("chat_attachments_strip")  # tag
-        dpg.configure_item("chat_field", height=gui_config.chat_field_h)  # tag
+    dpg.configure_item("chat_field", height=field_h)  # tag
 
 def _remove_staged_image(staged: env) -> None:
     """Remove one staged attachment: drop it from the list and delete its strip widgets + thumbnail texture."""
@@ -375,7 +571,7 @@ def _remove_staged_image(staged: env) -> None:
         dpg.delete_item(staged.strip_group_tag)  # the thumbnail image + its remove button
     with guiutils.nonexistent_ok():
         dpg.delete_item(staged.texture_tag)  # free the thumbnail texture (safe under the GLVND workaround)
-    _refresh_attachments_strip()
+    _refresh_composer_layout()
 
 def _clear_staged_images() -> None:
     """Remove all staged attachments (called after a send)."""
@@ -413,7 +609,7 @@ def _add_staged_image(path: str) -> None:
         with dpg.tooltip(remove_button_tag):  # tag
             dpg.add_text(f"Remove attachment\n{pathlib.Path(path).name}")
     staged_images.append(staged)
-    _refresh_attachments_strip()
+    _refresh_composer_layout()
 
 # What the attach tooltip names as accepted, asked for rather than typed out. Each kind declares its own
 # formats (`imagestore` and `docextract`), so spelling them out again here would put the tooltip at the mercy
@@ -429,7 +625,7 @@ def _remove_staged_file(staged: env) -> None:
         staged_files.remove(staged)
     with guiutils.nonexistent_ok():
         dpg.delete_item(staged.strip_group_tag)  # the chip group (icon + filename + remove button)
-    _refresh_attachments_strip()
+    _refresh_composer_layout()
 
 def _clear_staged_files() -> None:
     """Remove all staged documents (called after a send)."""
@@ -492,7 +688,7 @@ def _add_staged_file(path: str) -> None:
         with dpg.tooltip(remove_button_tag):  # tag
             dpg.add_text(f"Remove attachment\n{name}")
     staged_files.append(staged)
-    _refresh_attachments_strip()
+    _refresh_composer_layout()
 
 def _attach_callback(selected_files) -> None:
     """FileDialog callback: route each selected file to image or document staging by its extension.
@@ -623,7 +819,30 @@ with timer() as tim:
                                       height=chat_controls_h,
                                       no_scrollbar=True,
                                       no_scroll_with_mouse=True):
-                    with dpg.group():  # composer: vertical stack (multiline text field / staged-image strip / toolbar)
+                    with dpg.group():  # composer: vertical stack (backend status pill / multiline text field / staged-image strip / toolbar)
+                        # LLM backend status. Hidden whenever the backend is answering and has something to
+                        # answer with, which is the ordinary case — so this is a row that normally isn't
+                        # there at all, appearing to report a condition the user can fix and leaving once
+                        # they have. Its contents are set by `_refresh_backend_status_pill`.
+                        #
+                        # Above the field rather than beside the send button, because it is a precondition
+                        # for the whole composer rather than a property of one control — and here it is in
+                        # the reader's eye on the way to the thing they are about to type into.
+                        #
+                        # The icon is a plain text widget and only the label is a button, so the leftmost
+                        # ~23 px of the row do not respond to a click. The alternative is no icon: DPG draws
+                        # an item's label in one font, and the app font has no warning glyph (the same
+                        # constraint that decides the jump-to-latest pill's font — see `chat_controller`).
+                        # An icon that reads at a glance is worth more than those pixels.
+                        with dpg.group(tag="backend_status_pill", horizontal=True, show=False):  # tag
+                            dpg.add_text(fa.ICON_PLUG_CIRCLE_XMARK, tag="backend_status_icon")  # tag
+                            dpg.bind_item_font("backend_status_icon", themes_and_fonts.icon_font_solid)  # tag
+                            dpg.add_button(label="",
+                                           callback=lambda: _request_backend_reconnect(),
+                                           tag="backend_status_button")  # tag
+                            with dpg.tooltip("backend_status_button", tag="backend_status_tooltip"):  # tag
+                                dpg.add_text("", tag="backend_status_tooltip_text")  # tag
+
                         def send_message_to_ai_callback() -> None:
                             # Grab and strip the message. The trailing newline the multiline widget inserts on the
                             # sending Enter, plus any stray whitespace, come off here. An empty result is intentional
@@ -1192,11 +1411,11 @@ with timer() as tim:
                         # (4 px) after the spacer, so the spacer itself supplies the remaining 5.
                         with dpg.group():
                             dpg.add_spacer(height=5)
-                            dpg.add_text(fa.ICON_TRIANGLE_EXCLAMATION, color=(255, 180, 120), tag="ai_warning_icon")  # orange
+                            dpg.add_text(fa.ICON_TRIANGLE_EXCLAMATION, color=_CAUTION_COLOR, tag="ai_warning_icon")
                         dpg.add_text(_AI_WARNING_TEXT,
-                                     color=(255, 180, 120),
+                                     color=_CAUTION_COLOR,
                                      wrap=gui_config.ai_warning_w,
-                                     tag="ai_warning_text")  # orange
+                                     tag="ai_warning_text")
         dpg.bind_item_font("ai_warning_icon", themes_and_fonts.icon_font_solid)  # tag
 
 # --------------------------------------------------------------------------------
@@ -1737,6 +1956,7 @@ def _gui_cancel_tasks() -> None:
     chat_controller.cancel_tasks()        # cancel chat / AI-turn / context-prefill tasks (no wait)
     gui_resize_task_manager.clear(wait=False)  # cancel any in-flight GUI resize (it can use split_frame)
     cleanup_dialog.task_manager.clear(wait=False)  # cancel thumbnail loading (it too can use split_frame)
+    backend_status_task_manager.clear(wait=False)  # stop watching the LLM backend (it rebuilds the chat view)
     dpg_avatar_renderer.stop(wait=False)  # signal the avatar renderer's background (OpenGL) task to stop (no wait)
     avatar_controller.stop_tts()          # stop TTS playback (no wait)
 dpg.set_exit_callback(_gui_cancel_tasks)
@@ -1766,6 +1986,7 @@ def gui_shutdown() -> None:
     scanner.shutdown()
     hybridir.shutdown()
     gui_resize_task_manager.clear(wait=True)
+    backend_status_task_manager.clear(wait=True)
     chat_controller.shutdown()
     avatar_controller.shutdown()
     dpg_avatar_renderer.stop(wait=True)
@@ -1870,6 +2091,14 @@ def _build_initial_chat_view(sender, app_data) -> None:
     # leaves it *inactive* — no caret — and inactive is what the navigation keys are gated on, so the log is
     # scrollable from the first frame without anyone having been sent anywhere. `Ctrl+Space` activates the
     # composer when the reader wants it.
+
+    # Report the LLM backend if it cannot answer yet, and keep watching until it can. Here rather than at
+    # `connect` time because both the status row and the chat view the reconnect rebuilds are DPG widgets,
+    # and neither exists until this frame.
+    startup_backend_status = llmclient.backend_status(llm_settings)
+    if startup_backend_status is not llmclient.backend_ready:
+        _refresh_backend_status_pill(startup_backend_status)
+        _start_backend_status_poll(delay_first_probe=True)
 dpg.set_frame_callback(3, _build_initial_chat_view)
 
 logger.info("App render loop starting.")

@@ -500,11 +500,12 @@ gui_config = env(  # ----------------------------------------
                  # range is 521 (the first line's own width) to 576 (one word more would fit); the midpoint
                  # leaves room on both sides for font-metric drift.
                  ai_warning_w=550,
-                 # Composer (chat input) geometry. The composer is a vertical stack: multiline text field,
-                 # an optional staged-image thumbnail strip, and a button toolbar. Its outer height
-                 # (`chat_controls_h`) is FIXED so that showing/hiding the strip never rescales the chat or
-                 # avatar panels (the avatar panel height tracks the chat panel height). When the strip
-                 # appears it steals height from the text field instead (field and strip heights adjust together).
+                 # Composer (chat input) geometry. The composer is a vertical stack: an optional LLM
+                 # backend status pill, the multiline text field, an optional staged-image thumbnail strip,
+                 # and a button toolbar. Its outer height (`chat_controls_h`) is FIXED so that showing or
+                 # hiding either optional row never rescales the chat or avatar panels (the avatar panel
+                 # height tracks the chat panel height). A row that appears steals its height from the text
+                 # field instead, so the two optional rows and the field are sized together.
                  #
                  # The heights below are DERIVED from the live theme metrics: font_size = 20 (the value passed to
                  # `guiutils.bootup`), and `guiutils.setup_themes` overrides only rounding, so FramePadding /
@@ -515,6 +516,10 @@ gui_config = env(  # ----------------------------------------
                  # TODO: confirm against a GIMP measurement of a rendered screenshot before treating as final.
                  chat_field_h=128,  # multiline text field, ~5-6 rows at font_size 20
                  chat_attachments_h=68,  # staged-image thumbnail strip; shown only while composing with attachments
+                 # LLM backend status pill; shown only while the backend has nothing to answer with, plus a
+                 # moment when it starts answering again. One line: font(20) + 2*frame_padding_y(3) = 26,
+                 # the same arithmetic as a toolbutton, plus item_spacing_y(4) for the gap to the field.
+                 chat_backend_pill_h=30,
                  chat_controls_h=174,  # = chat_field_h(128) + item_spacing_y(4) + toolbutton_h(26) + child_padding(16)
                  chat_panel_w=(1920 // 2),  # net width 960 -> gross width with borders = this + 2 * 8 = 976
                  vu_meter_w=8,  # mic VU meter ("voltage units", audio input level)
