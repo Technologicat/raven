@@ -97,12 +97,14 @@ def minimal_chat_client(backend_url) -> None:
             print(colorizer.colorize("The LLM will have access to websearch.", colorizer.Style.BRIGHT, colorizer.Fore.GREEN))
             print()
 
-        if not llmclient.test_connection(backend_url):
-            sys.exit(255)
+        # Warn rather than exit, as the GUI does: this is an interactive client, and past chats, `!history`
+        # and `!dump` all work with nothing loaded. A batch tool wants the opposite and keeps `setup` —
+        # failing at document 1 with a precise diagnosis beats discovering it at document 2400. `connect`
+        # prints which of the three states this is; `!reconnect` is how the user says they have fixed it.
+        llm_settings = llmclient.connect(backend_url=backend_url)
 
         print()
 
-        llm_settings = llmclient.setup(backend_url=backend_url)
         chat_show_model_info()
 
         # Persistent, branching chat history, and app settings (these will auto-persist at app exit).
@@ -206,6 +208,7 @@ def minimal_chat_client(backend_url) -> None:
             print(f"        !internet [True|False]  - Web search and page fetching on/off/toggle (currently {app_state['internet_enabled']})")
             print("        !model                  - Show which model is in use")
             print("        !models                 - List all models available at connected backend")
+            print("        !reconnect              - Re-probe the LLM backend (after starting it, or loading a model)")
             print("        !reroll                 - Reroll (regenerate) the latest AI response, creating a new sibling.")
             print("        !help                   - Show this message again")
             print()
@@ -232,6 +235,7 @@ def minimal_chat_client(backend_url) -> None:
                         "!internet ",
                         "!model",
                         "!models",
+                        "!reconnect",
                         "!reroll"]
             def get_completions(candidates: List[str], text: str) -> List[str]:
                 """Return a list of matching completions for `text`.
@@ -448,6 +452,16 @@ def minimal_chat_client(backend_url) -> None:
                 return Values(action=action_next_exchange)
             elif user_message_text == "!models":
                 chat_show_list_of_models()
+                return Values(action=action_next_exchange)
+            elif user_message_text == "!reconnect":
+                # `reconnect` prints the verdict itself, in the same words the startup probe used.
+                llmclient.reconnect(llm_settings, quiet=False)
+                # The stored system prompt may state what the backend just told us — Raven's own prose no
+                # longer names the model or the context length, but those template variables are there for
+                # a user writing their own (see `config.py`).
+                appstate.refresh_system_prompt(llm_settings, datastore, app_state)
+                print()
+                chat_show_model_info()
                 return Values(action=action_next_exchange)
             elif user_message_text == "!reroll":
                 if len(node_id_history) < 4:  # system prompt, the AI's initial greeting, the user's first message, the AI's first message.

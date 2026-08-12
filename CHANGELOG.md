@@ -38,6 +38,8 @@
   - It clears itself. Start the server, or load a model, and the row turns green a few seconds later, names the model now loaded, and goes away. Clicking it checks immediately instead of waiting for the next check.
   - Nothing is polled while the backend is healthy — the row only exists while something is wrong, and the checking stops the moment it clears.
   - A backend that goes away *mid-session* is still reported by the reply that fails, which you can reroll. This row is about the state you start in.
+  - `raven-minichat` does the same and keeps the REPL — `!history` and `!dump` work with nothing loaded — reporting the verdict on the console. Its `!reconnect` command is the terminal's version of clicking the row.
+  - The batch tools are unchanged and still exit: `raven-pdf2bib` and `raven-importer` can run for hours, so stopping at document 1 with a precise diagnosis beats discovering it at document 2400.
 
 - the chat datastore is now `chat.json`, with its attachments in `chat.sidecars/` beside it. They were `data.json` and `data.images/` — the first said nothing about what was in it, and the second was named when images were the only thing you could attach, which stopped being true once documents could be. **Both are renamed on first start, together**, so there is nothing to do.
   - A `data.json` is adopted only if it actually reads as a chat datastore. The name is generic enough to belong to something else entirely, and the file is looked for beside whatever datastore path you configured — so if you have pointed Raven at a directory of your own, an unrelated `data.json` there is left alone.
