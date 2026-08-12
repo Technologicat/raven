@@ -3,6 +3,35 @@
 New items go at the **top**. (Both ends were in use up to 2026-07-27, which is how the two halves of the same
 Librarian session ended up ~1000 lines apart.)
 
+## The ingest pool's concurrency is nominal: pypdf is pure Python
+
+*Cluster: ? · Cost: M · Gate: next · Filed: 2026-08-12 (measured 2026-08-06)*
+
+Split out 2026-08-12 from "Indexing a large corpus is silent for minutes", whose titular half shipped. This
+half did not, and it is the larger one.
+
+`hybridir.setup` builds a bare `concurrent.futures.ThreadPoolExecutor()` when the caller passes none, so the
+width is Python's default `min(cpu_count + 4, 32)` — 32 on this machine. `py-spy dump` during a corpus
+ingest shows every one of those workers inside `pypdf.extract_text`.
+
+**`pypdf` is pure Python — zero compiled extensions (6.14.2, checked).** So it holds the GIL for the whole
+extraction, and 32 workers are 32 threads taking turns. Measured on the 1268-PDF corpus: **109% CPU across
+148 threads**, i.e. one core's worth on a 28-core machine, and about 33 minutes to extract what ~1.5 s per
+document predicts serially. The pool buys nothing.
+
+This also retires the concern that prompted the measurement — that 32 concurrent reads would thrash a
+spinning disk. They cannot: the GIL serializes them long before they reach the disk together. The defect is
+the opposite of the one suspected.
+
+The fix is a `ProcessPoolExecutor` for the extraction step specifically, which is what a pure-Python
+CPU-bound stage needs. Two things to weigh first: the extracted text has to cross a process boundary (cheap
+— it is a string, and the alternative is 30 minutes), and `hybridir` currently takes one executor for
+everything, so the ingest stage would need its own rather than sharing. Measure the achievable speedup on a
+subset before committing to the restructuring; 28 cores suggests a lot of headroom, but pypdf's per-document
+cost varies enormously with the PDF.
+
+Raised by Juha (2026-08-06), asking why the indexer was still on its first document after half an hour.
+
 ## The vendored Markdown renderer has no way to say it has finished
 
 *Cluster: markdown-renderer · Cost: S · Gate: 0.2.9 · Filed: 2026-08-12*
@@ -115,48 +144,6 @@ no user-visible change, raised while the chat-view scrolling was still under liv
 is confirmed stable. Note the 2026-08-11 follow-tail fix went *around* `self.start()` rather than into it, so
 the construction-time commit is untouched and this is still exactly as filed. Raised by Juha, who asked whether the design was dangerous; agreed worth fixing
 (2026-08-03).
-
-## The DPG tests we have never run in CI
-
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-08-03*
-
-`raven/common/gui/tests/` — `test_messagebox`, `test_animation`, `test_utils`, `test_viewport_math`, 50 tests
-in all — drive a real DPG context with an unmapped viewport, and pass locally. But `dearpygui` is not in
-`.github/workflows/requirements-ci.txt`, so each module's `pytest.importorskip("dearpygui.dearpygui")` fires
-on every CI run and all of them execute only on a dev machine. Nothing reports this: a skip looks like a pass
-in the summary line, and the tests were presumably written on a machine where they ran.
-
-(A fifth module, `test_focus_semantics`, is a separate case and *should* stay out of CI: it is marked `gui`
-because it maps a real window, and is skipped unless `pytest --run-gui` is passed. See `conftest.py`.)
-
-The open question is whether DPG can initialize at all on a headless GitHub runner. The tests never *show* a
-window — `create_viewport` then `setup_dearpygui` with nothing mapped — but that still goes through GLFW and
-an OpenGL context, and `ubuntu-latest` has no display server and may lack the GL libraries. So this is a
-measurement, not a one-line config change: add `dearpygui` to the requirements file, push, and see. If GLFW
-refuses, the options are a software GL stack (`xvfb-run`, or Mesa's llvmpipe via `libgl1-mesa-dri`) or
-accepting that these tests are dev-machine-only and saying so where someone will read it.
-
-**Know before deciding: "DPG runs headless" is narrower than it sounds** (measured 2026-08-03, on a dev
-machine with a display). Contexts, widgets, themes and item state all work with an unshown viewport. But
-`dpg.render_dearpygui_frame()` **aborts the process** — `SIGABRT` on the GLFW assertion `window != NULL` in
-`glfwWindowShouldClose`, not a catchable exception — so nothing that needs *layout* is reachable: no real
-scroll extents, no `get_y_scroll_max`, no hit-testing, no measured text sizes. That is why the existing tests
-step `animation.animator.render_frame()` (Raven's own animator, pure Python) rather than DPG's frame, and why
-`test_animation.py`'s `SmoothScrolling` tests assert against state transitions instead of against pixels.
-
-So even in the best case — GLFW initializes on the runner — the tier this buys is "widget and state logic",
-not "the GUI works". Worth saying out loud, because the cheap reading of "we can test DPG in CI" would set an
-expectation the mechanism cannot meet, and someone would then write a layout-dependent test and be puzzled by
-a core dump rather than a failure. Whether a software GL stack lifts the `render_dearpygui_frame` restriction
-too, or only the initialization, is a second unknown and worth measuring separately.
-
-Worth resolving because it changes what the untested-GUI gap actually costs. If DPG runs in CI, the frontend
-modules become ordinarily testable and the Visualizer test gap is a matter of writing them. If it does not,
-GUI tests are a local-only tier and the project should know that before investing in more of them.
-
-Discovered 2026-08-03, auditing `CLAUDE.md`'s test-coverage claims — the doc asserted CI "has no toolkit for"
-driving DPG, which turned out to be true by accident (the toolkit is simply not installed) rather than for
-the reason given.
 
 ## Make the DPG reference a skill, so it fires when it is needed
 
@@ -848,26 +835,6 @@ is already a ritual somebody performs.
 
 Discovered while closing brief 10 and finding a stale item next to an accurate one (2026-07-29).
 
-## EU AI Act Article 50 (transparency) compliance
-
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-07-28*
-
-`briefs/reference/ai-act-article-50-summary.md` has the analysis; Commission guidelines were adopted 20 July 2026 and the
-Article applies from **2 August 2026**. Raven has been available since 2024, so it is a system already on the
-market before that date, which means the **2 December 2026** grace period applies — but only to the 50(2)
-machine-readable marking of generated content. The rest applies from August with no grace period.
-
-The implementation is briefed: `briefs/librarian-extension/done/07_export-disclosure-brief.md`, which
-scopes it to attaching system-level provenance to exported chatlogs and messages, and explicitly rules out
-building text watermarking — the robust 50(2) mark acts on the logits during sampling, and Librarian samples
-un-watermarked third-party weights through an OpenAI-compatible backend, so there is nothing post-hoc to add.
-Depends on content-parts (brief 03).
-
-Work backwards from December, and note it lands right after Researchers' Night, so the demo build and the
-compliance build are the same autumn's work.
-
-Raised by Juha (2026-07-28).
-
 ## Make the canned AI greeting optional
 
 *Cluster: ? · Cost: ? · Gate: next · Filed: 2026-07-28*
@@ -1232,84 +1199,6 @@ fix this" item (Juha).
 
 Discovered during brief-03 Half-2 multimodal work (2026-07-17, flagged by Juha).
 
-## OS drag-and-drop of files into DPG apps (cross-platform)
-
-*Cluster: filedialog · Cost: ? · Gate: ? · Filed: 2026-07-17*
-
-**Priority raised to ASAP, 2026-08-07 (Juha)** — second only to the TODO triage, and ahead of the
-Researchers' Night briefs. Two reasons, and the open house is *not* one of them: a visitor in one sitting is
-not dragging files out of a file manager either.
-
-- The probe below collapsed the cost from "write a shim per platform" to "call one exported GLFW function".
-- **It is a power multiplier for our own testing**, which is where the gesture actually happens dozens of
-  times a day — feeding corpora in, attaching a file to check a render, driving the GUI by hand. That is
-  also why the `FileDialog` improvements below have piled up: it is the sole entry path for all of it.
-
-Tracked here rather than as a brief because at this size it does not need one; the design is the probe's
-result.
-
-DPG apps can't receive files dragged in from the OS file manager — you must go through the in-app `FileDialog`
-every time. A recurring pain point across the fleet (Juha), and it compounds the image-picker problem above:
-with no drag-and-drop, the picker is the sole entry path, so the picker has to be good. There's a Windows-only
-extension for this, but nothing for Linux/macOS. Investigate whether cross-platform OS→app file drop is feasible
-(SDL/GLFW-level drop events, a platform-specific shim per OS, or an out-of-process helper) and, if so, wire it as
-a general capability the apps can opt into — image attach and `FileDialog` both benefit.
-
-Discovered during brief-03 Half-2 multimodal work (2026-07-17, flagged by Juha as a constant pain point).
-
-**Lead worth trying before building anything (2026-08-07): the per-OS work may already be done, one layer
-down.**
-
-DPG has no OS-level drop, and this was checked against the *binary* rather than the documentation, which on
-this project is often stale: in `dearpygui` 2.3.1 nothing in the public Python surface takes a dropped file,
-the handler registry offers 36 handler types and none of them is a drop handler, no such string appears in the
-extension at all, and every `drop`-named symbol DPG itself defines is ImGui's widget-to-widget DragDrop
-(`check_drop_event(mvAppItem*)`, `apply_drag_drop(mvAppItem*)`). So the absence is real and not a doc lag.
-
-But DPG statically links GLFW, *and GLFW has had cross-platform file drop since 3.1*. Read off
-`_dearpygui.so` (v2.3.1) with `nm -D --defined-only`, these are **exported dynamic symbols**, i.e. callable
-from Python via `ctypes` with no C extension of our own:
-
-- `glfwSetDropCallback` — the OS-level file-drop hook DPG never calls.
-- `_glfwInputDrop` — GLFW's internal delivery path, so the platform backends in this build do implement it.
-- `glfwGetX11Window`, `glfwGetCurrentContext` — the X11 backend is compiled in, and there is a plausible way
-  to get at the window handle `glfwSetDropCallback` needs, which DPG does not expose.
-
-So the shape may be *"call one function GLFW already ships"* rather than *"write a shim per OS"* — which is a
-different size of job entirely, and would land on Windows and macOS for free since GLFW implements those too.
-
-**Probed 2026-08-07, and it works.** A file dragged from the file manager onto a bare DPG viewport arrived
-as its absolute path. Measured, on X11:
-
-- `glfwGetCurrentContext()`, called on the render thread after the first `render_dearpygui_frame()`, returns
-  DPG's window — the same pointer the callback later receives as its `window` argument, and
-  `glfwGetX11Window` resolves it to a real X11 window ID.
-- **DPG had no drop callback installed** (`glfwSetDropCallback` returned NULL as the previous one), so there
-  is nothing of DPG's to displace, and nothing replaced ours over ~7000 frames.
-- The path arrived complete and correctly decoded.
-
-So the shape is settled: bind `ctypes` to the already-loaded `_dearpygui.so` (it must be *that* GLFW
-instance, since it owns the window), get the handle, set the callback. No C extension, no per-OS shim, no
-patched DPG. Windows and macOS should follow for free, GLFW implementing drop on both.
-
-**The constraint to design around, measured rather than assumed: the callback runs on the render thread.**
-GLFW dispatches from `glfwPollEvents()`, which DPG calls inside `render_dearpygui_frame()`, so the callback
-thread id is identical to the render loop's. It may touch DPG state — DPG is fine with that — but it must
-not do anything that *waits for a frame*: no `split_frame`, and therefore no modal messagebox, which rules
-out the obvious "dropped an unsupported file → show an error dialog" written directly in the handler. Copy
-the paths and hand off to a background task or a frame callback, as pitfall #4 already prescribes.
-
-**Still untested**: Wayland (GLFW implements it, but that is inference, not observation), and multi-file
-drops — the signature is `(window, count, paths)` and only `count == 1` has been seen.
-
-**Decided 2026-08-07 (Juha): do not gate the feature on Wayland.** There is no Wayland session here to test
-against and none to hand; X11, macOS and Windows are already three platforms, and the win is large enough
-that waiting for a fourth is the wrong trade. If it turns out not to work there, someone can file an issue.
-
-The probe and the full result are in `investigations/dpg-dnd/` — kept because it is re-runnable, which is
-what closes the Wayland question when a machine turns up. The feature gets tests of its own when it is
-built.
-
 ## Librarian's help card has no room to describe attachments
 
 *Cluster: ? · Cost: ? · Gate: next · Filed: 2026-08-05 · See also: "Fleet audit: every hotkey discoverable in a tooltip + help card"*
@@ -1421,18 +1310,6 @@ Why this is deferred: `api.py` already imports torch, qoi, spaCy, etc. for its o
 For symmetry, if we ever start splitting, we should do all five backends, not just spaCy.
 
 Discovered during natlang wire-format migration (2026-04-21). Original framing lived in the now-resolved "Language-neutral wire format for the natlang (spaCy) endpoint" item, superseded by this follow-up.
-
-## Enable HTTP response compression on raven-server
-
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-04-21*
-
-The natlang wire-format migration (JSON via `Doc.to_json()` instead of DocBin) lost DocBin's vocab-sharing optimization — categorical strings (POS tags, dep labels, lemmas) now appear once per token rather than once per batch. gzip/deflate recovers most of the loss because those are exactly the patterns dictionary-based compression eats for breakfast; natively we're probably 1.5×–2.5× bigger uncompressed, within 10–20% after gzip.
-
-Raven-server uses Flask/waitress without response compression currently. Adding `Flask-Compress` or a waitress pre-filter is ~one line. Other endpoints would benefit too (imagefx JSON metadata, the server's HTML index page).
-
-Not urgent — Raven's trusted-LAN-or-localhost deployment means bandwidth isn't the bottleneck for typical payloads (KB-range, not MB-range). Revisit if profiling shows wire time becoming a meaningful fraction of end-to-end latency, or when a JS client on a WAN-ish link enters the picture.
-
-Discovered during natlang wire-format migration (2026-04-21).
 
 ## Uniform load-on-demand for Raven-server modules
 
@@ -1557,29 +1434,6 @@ Worth a pass in that spirit over `messagebox` (modal state and the `split_frame`
 Priority if picking one up: `bgtask` (most likely to harbour concurrency bugs; test-time cost is low), then `layout_math` (easy win), then `hfutil`/`deviceinfo` (requires monkeypatching but small).
 
 Discovered during speech-extract-to-common discussion (2026-04-17).
-
-## Lazy `api.initialize` in `llmclient` and `hybridir` (would unblock `test_scaffold` in minimal CI)
-
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-04-17*
-
-`raven/librarian/llmclient.py` calls `api.initialize(...)` at module top (lines 55–58). This means `from raven.librarian import llmclient` both (a) requires the full `raven.client.api` import chain to succeed (qoi, spaCy, Kokoro TTS, …), and (b) runs the initialization side effect. As a result, `scaffold` — which imports `llmclient` at module level — is not importable in environments without the full dep stack.
-
-The same anti-pattern also lives in `raven/librarian/hybridir.py` (same line-range).
-
-Concrete cost observed 2026-04-17: `test_scaffold.py` has to `pytest.importorskip("raven.librarian.scaffold")` at the top, so the scaffold tests skip entirely in the CI minimal-deps job (matching the existing pattern for `test_api.py` and `test_hybridir.py`). Scaffold coverage is visible only in dev environments — not a regression, just a cap on what CI can report.
-
-Refactor sketch:
-
-- Move `api.initialize(...)` out of the module body into a lazy setup function. The natural home in `llmclient` is probably `llmclient.setup`, which app startup already calls; `hybridir` has an analogous setup path.
-- Audit `llmclient`'s / `hybridir`'s module-top imports for other side effects; move to lazy/TYPE_CHECKING where possible. `scaffold.py` now uses `TYPE_CHECKING` for its `hybridir` import, which is a good model.
-- Verify no other module relies on `api.initialize` being called as a side effect of importing `llmclient` / `hybridir`.
-
-Once done, remove the `pytest.importorskip` from `test_scaffold.py`; the scaffold tests then contribute to CI coverage too (~90% of scaffold.py's 119 statements).
-
-Fleet status as of 2026-04-24: `raven/visualizer/importer.py` used to have the same pattern but was cleaned up — `api.initialize(...)` now lives in that module's `main()` (for the `raven-importer` CLI) and in `raven/visualizer/app.py` (for the GUI). Same shape as `librarian/app.py` already uses. Use as a reference when tackling `llmclient` / `hybridir`.
-
-Discovered during scaffold/appstate test work (2026-04-17).
-
 
 ## MPS (Apple Silicon) device synchronization
 
@@ -1734,14 +1588,6 @@ directories, and plausibly bears on "raven-cherrypick: low FPS with large images
 
 Originally discovered during raven-cherrypick session 5 (2026-03-19).
 
-## Idle throttle for Librarian
-
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-04-05*
-
-Librarian has an avatar idle auto-off, and a no-avatar mode is under consideration. When the avatar is off and no LLM generation is in progress, the GUI is mostly static — same pattern as cherrypick/xdot-viewer. Busy sources: avatar rendering, LLM streaming, RAG indexing, pulsating color animations (audit which are always-on vs. conditional), recent user input. The existing cherrypick/xdot-viewer pattern (`_is_busy()` + sleep) should port directly.
-
-Discovered during idle throttle discussion (2026-04-05).
-
 ## raven-cherrypick: low FPS with large images
 
 *Cluster: ? · Cost: ? · Gate: investigate in 0.2.9 · Filed: 2026-03-28*
@@ -1858,24 +1704,6 @@ Some instructions don't yet exist, and need to be written.
 Small enough to start from a draft. **Schedule it with the README correctness sweep** — the argument is not
 completeness but that out-of-date docs scare away potential users, and both jobs are the same reading pass.
 
-## Hybridir: cover the edit-queueing layer with tests
-
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-04-27*
-
-`raven/librarian/tests/test_hybridir.py`'s original 18 tests all target the post-commit query side — corpus is added once, committed, queried. The edit-queueing layer (`_pend_edit` dedup, update/delete paths, the add-then-update-same-doc race) was untested. Two latent bugs survived this gap: a `_pend_edit` shape-mismatch (triggered by dropping ~200 .bib files into the docs dir at once), and a spurious delete queued for a brand-new file whose watchdog create+modify events both landed before the first commit (triggered by ingesting a PDF — the first large files the docs DB handled).
-
-A first batch of `_pend_edit` collapse tests landed 2026-07-18 (covering: update of an existing document → delete+add; delete of an existing document; add-then-update dedup for a new file → single add; the observed create/modify event-flurry ordering → single add). Remaining coverage to add:
-
-- More dedup shapes: queue delete then add same id; queue add for two docs and update one; etc.
-- Idempotency of `commit()` on empty queue.
-- `is_indexing()` reference-counting under threaded concurrent `commit()` calls — mock the slow inner work, have two threads enter, verify `is_indexing` stays True throughout and goes False only when both have exited (also covers same-thread re-entry under the existing `datastore_lock` RLock).
-- BM25 + semantic search is becoming the de-facto standard hybrid retrieval shape, so the layer is worth investing in regardless.
-
-The watchdog-driven flow (tmpdir + `Path.touch` / `unlink` to drive `HybridIRFileSystemEventHandler`) crosses into bgtask scheduling and is harder to make deterministic — separate, lower-priority follow-up.
-
-Discovered during DOCS-indexing-indicator smoke test (2026-04-27).
-
-
 ## Easy install with a chosen CUDA version (and a sensible CPU default)
 
 *Cluster: ? · Cost: ? · Gate: 0.2.9, re-scope first · Filed: 2026-04-29 · See also: "Replace `torchaudio.functional.resample`, and drop torchaudio", "`pdm.lock` is gitignored"*
@@ -1971,20 +1799,6 @@ means building it twice.
 
 Discovered during the brief-01 GUI override session (2026-06-04).
 
-## "Internet" toggle: scope `tools_enabled` to a clear security boundary in the GUI
-
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-06-04*
-
-`scaffold.ai_turn`'s `tools_enabled` is a blunt all-or-nothing hammer (standing TODO on the param).
-The intent behind the GUI toggle is to make the **network/security boundary blindingly obvious** to
-the user. Direction: rename/scope the toggle to "Internet" and have it gate the network-reaching tools
-(`websearch`, `webfetch`) specifically, rather than all tools indiscriminately. A separate toggle for
-MCP tools is likely wanted later (different trust surface). This needs `ai_turn` to accept a per-tool
-enable set (or an allowed-tool-name list) instead of a single bool, and the controller/app to map each
-GUI toggle onto the relevant tool names. Pairs with the brief's tool-description-generation work.
-
-Discovered during the brief-01 GUI override session (2026-06-04).
-
 ## scaffold: collect `ai_turn`'s callbacks into a single bundle object
 
 *Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-06-04*
@@ -1998,41 +1812,6 @@ and makes "the AI-turn callback set" a named thing. Do it as a focused refactor 
 mechanical (one bundle type, update each producer/consumer), not entangled with feature work.
 
 Discovered during the brief-01 GUI override session (2026-06-04).
-
-## Headless scaffold mode for `ai_turn` (scriptable agent layer)
-
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-06-03*
-
-`llmclient` already acts as an LLM *scripting* layer — a non-interactive way to drive the model
-for one-shot tasks (used by `raven-pdf2bib` and friends). What's missing is the equivalent one
-level up: a way to drive the full **agent** loop (`scaffold.ai_turn`) — LLM plus tool-calling,
-branching chat tree, RAG — programmatically, with **no UI of any kind**.
-
-Note the distinction from the existing frontends: Librarian (`app.py`) is the GUI client and
-`minichat` is a TUI client, but *both* are interactive UIs. `scaffold` is already
-*frontend*-agnostic (its ~15 callbacks are the seam — `minichat` proves the same backend drives
-a terminal as well as the GUI), so the building blocks exist. The headless mode is not a third
-frontend; it's the *no-frontend*, non-interactive, programmatic caller. What's wanted is a small,
-ergonomic layer: feed it a backend (real or scripted), a datastore, and an initial message; let
-it run `user_turn` + `ai_turn` to completion with tools enabled; return the resulting nodes /
-tool transcript. Think "`llmclient` for agents".
-
-Value:
-- **Testing**: exercise agentic flows end-to-end without a live, nondeterministic LLM — e.g. the
-  websearch -> webfetch chain, canonical-phrase copying, multi-step tool loops. Today the
-  structural tests mock `invoke` / `perform_tool_calls`; a headless driver with a *scripted*
-  backend could drive the real `ai_turn` against canned model turns deterministically.
-- **Automation**: headless agent runs for batch/offline tasks, cron-style jobs, evaluation
-  harnesses — the same way `raven-pdf2bib` scripts the plain LLM today.
-
-Natural to build somewhere in the summer 2026 librarian six-part sprint; it would make every
-later brief's agent behavior far easier to verify. Likely lands near `scaffold` / `minichat`
-(a programmatic sibling of the CLI client) or as a thin headless driver module beside `scaffold`.
-(Deliberately unnamed here: `raven.librarian.scaffold` already owns the concept, so the name
-should be picked against what the module ends up doing rather than fixed in advance.)
-
-Discovered during webfetch implementation (2026-06-03), when validating the agent loop required
-a live Qwen backend that wasn't available.
 
 ## Markdown ATX headings (`### ...`) don't render in the chat view
 
@@ -3798,39 +3577,6 @@ its default full-width span, which would have to be sized to the text.
 
 Raised by Juha (2026-08-04), asking whether the fetched-page chip should open on click.
 
-## Tokenization is dominated by per-call overhead, not by the tokenizer
-
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-08-06*
-
-Indexing tokenizes one chunk per HTTP call to `raven-server`. Measured 2026-08-06 on ~300-token chunks:
-
-| | ms/chunk |
-|---|---|
-| `en_core_web_sm` compute, GPU | 24.7 |
-| `en_core_web_sm` compute, CPU | 33.1 |
-| **observed end-to-end through the server** | **~90** |
-
-So roughly 57 ms of every chunk is request overhead — HTTP round trip plus serialization — against 25 ms
-of actual work. On a 53000-chunk corpus that is about 50 minutes spent on framing rather than
-tokenizing.
-
-**Batching is therefore worth several times more than any device change.** `/api/natlang/analyze`
-already accepts a list of texts (`nlptools.spacy_analyze` takes one), and spaCy has `nlp.pipe` for
-exactly this, so the server side may need little. The caller is what assumes one chunk per call:
-`HybridIR._tokenize` is invoked per chunk from the commit loop, which is also where the per-chunk
-progress display comes from — so batching and progress reporting want designing together, or the
-progress goes backwards.
-
-Worth stating because the tempting fix is the wrong one: GPU-vs-CPU for this pipeline is 1.34x on a
-component that is 28% of the cost, i.e. about 9% end to end. `en_core_web_sm` is a small CNN pipeline;
-spaCy's GPU benefit is largest for transformer pipelines. (The server does already run spaCy on GPU —
-`env.sh` puts the venv's nvidia lib directories on `LD_LIBRARY_PATH`, and the running process has cupy
-and `libcublas.so.12` mapped. A shell that has not sourced `env.sh` will find `spacy.require_gpu()`
-fails there, which says nothing about the server.)
-
-Discovered while asking whether the tokenizer was the indexing bottleneck. It was not — that was pypdf
-extraction, in a different phase. Raised by Juha (2026-08-06).
-
 ## A crash during ingest loses the whole run, however long it was
 
 *Cluster: ? · Cost: ? · Gate: next, with the per-document LLM pass · Filed: 2026-08-06 · See also: `briefs/researchers-night/per-document-llm-pass-brief.md`*
@@ -3896,57 +3642,6 @@ so a crash there costs one document rather than a thousand.
 
 Discovered while indexing the arXiv AI fulltext corpus. Raised by Juha (2026-08-06), on realizing what
 "the count will jump from 42 to the full corpus in one step" implies for durability.
-
-## Indexing a large corpus is silent for minutes, and reads as a hang
-
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-08-06*
-
-`raven-indexer` on a 1268-document fulltext corpus printed one document's progress, then nothing for
-several minutes while holding ~110% CPU. It was working correctly the whole time.
-
-The shape is by design and worth knowing before touching it. `task_managers["ingest"]` is `"concurrent"`,
-so a rescan submits every document at once and they read their PDFs in parallel; `task_managers["commit"]`
-is `"sequential"` with a one-second delayed-commit coalescer, so each finished read pushes the commit
-further out. On a big corpus the reads never settle for long enough, and the whole run therefore spends
-its first phase doing bulk PDF extraction with **no progress output at all** — the per-document progress
-belongs to the commit, which has not started.
-
-What made it read as a hang rather than as work: the last line on screen was `[1 / 1] | <file> | tokenizing
-42 / 42`, a *completed* document, and the embedded-chunk count in ChromaDB stayed flat at 42 across
-minutes of sampling. Both are consistent with a stall. The tells that it was alive: 8 PDF file descriptors
-open, and `/proc/<pid>/io` climbing through 1.33 GB.
-
-Wanted: progress during ingest — even `read 340 / 1268 documents` would do. Two smaller things noticed
-alongside, both cheap: `[1 / 1]` is ambiguous (it counts documents in *this commit*, not in the corpus),
-and a commit that is being repeatedly deferred could say so.
-
-Not a correctness bug and not on the 0.2.8 path, hence deferred. Worth doing before anyone else points a
-large corpus at this and kills it at the four-minute mark, concluding it is broken.
-
-**Second, separable question in the same code: the ingest pool's concurrency is nominal.**
-`hybridir.setup` builds a bare `concurrent.futures.ThreadPoolExecutor()` when the caller passes none, so
-the width is Python's default `min(cpu_count + 4, 32)` — 32 on this machine. `py-spy dump` shows every
-one of those workers inside `pypdf.extract_text`.
-
-**`pypdf` is pure Python — zero compiled extensions (6.14.2, checked).** So it holds the GIL for the
-whole extraction, and 32 workers are 32 threads taking turns. Measured on the 1268-PDF corpus: **109%
-CPU across 148 threads**, i.e. one core's worth on a 28-core machine, and about 33 minutes to extract
-what ~1.5 s/document serially predicts. The pool buys nothing here.
-
-This also retires the concern that prompted this note — that 32 concurrent reads would thrash a spinning
-disk. They cannot: the GIL serializes them long before they reach the disk together. The defect is the
-opposite of the one suspected.
-
-The fix is a `ProcessPoolExecutor` for the extraction step specifically, which is what a pure-Python
-CPU-bound stage needs. Two things to weigh first: the extracted text has to cross a process boundary
-(cheap — it is a string, and the alternative is 30 minutes), and `hybridir` currently takes one executor
-for everything, so the ingest stage would need its own rather than sharing. Worth measuring the
-achievable speedup on a subset before committing to the restructuring; a 28-core machine suggests a lot
-of headroom, but pypdf's per-document cost varies enormously with the PDF.
-
-Raised by Juha (2026-08-06), asking why the indexer was still on its first document after half an hour.
-
-Discovered while indexing the arXiv AI fulltext corpus for the retrieval investigation (2026-08-06).
 
 ## Ligature mojibake in PDF-extracted text, and why `normalize` must not be wired into `docextract`
 
@@ -4030,13 +3725,67 @@ grounds that an honest "code is not supported" beats a feature that half-works w
 
 Raised by Juha (2026-08-07), reviewing the supported-format list.
 
+## Already done
+
+**A holding pen, not an archive.** These shipped, so they are no longer tasks — but they are kept together
+for one deletion pass rather than removed one at a time, because an item tagged in one session can turn out
+in a later one to be the only place some piece of prose lived. Anything worth keeping has been re-homed
+already, and each entry says where. Git is the history once this block goes.
+
+- **OS drag-and-drop of files into DPG apps (cross-platform)** — shipped 2026-08-10 as
+  `raven.common.gui.filedrop`, and it turned out to be one exported GLFW function rather than a shim per
+  platform. *Re-homed*: the mechanism, the render-thread constraint and the no-drag-hover limitation are in
+  `dpg-notes.md`; the probes and the full measurement are in `investigations/dpg-dnd/`, kept because they
+  are what answers the Wayland question when a machine turns up.
+- **"Internet" toggle: scope `tools_enabled` to a clear security boundary in the GUI** — landed in
+  0.2.9-dev; `ai_turn` takes an allowed-tool-name set and the toggle gates `websearch` / `webfetch`
+  specifically. *Re-homed*: the "MCP wants its own toggle, different trust surface" aside is now a section
+  in `briefs/librarian-extension/04_librarian-mcp-client-brief.md`, where the decision actually gets made.
+- **Indexing a large corpus is silent for minutes, and reads as a hang** — 0.2.8 added the INDEXING
+  indicator. *Split, not merely closed*: the item's second half — the ingest pool being GIL-bound because
+  pypdf is pure Python, measured at one core's worth across 148 threads — is untouched and is now its own
+  item at the top of this file.
+- **Idle throttle for Librarian** — 0.2.8.
+- **Enable HTTP response compression on raven-server** — implemented.
+- **Hybridir: cover the edit-queueing layer with tests** — covered at unit level. The shapes it listed as
+  still-to-write, in case anyone wants them: further dedup orderings (delete-then-add same id; add two docs
+  and update one), `commit()` idempotency on an empty queue, and `is_indexing()` reference-counting under
+  concurrent `commit()` calls. The watchdog-driven flow remains the harder, lower-priority half.
+- **EU AI Act Article 50 (transparency) compliance** — both halves shipped and the scoping brief closed
+  (`briefs/librarian-extension/done/07_export-disclosure-brief.md`, and the analysis in
+  `briefs/reference/ai-act-article-50-summary.md`, which is where the dates live).
+- **Tokenization is dominated by per-call overhead, not by the tokenizer** — batched since filing. Filed
+  2026-08-06 and fixed within days. The number worth remembering: ~90 ms end-to-end against ~25 ms of
+  actual work, so most of it was HTTP framing, and GPU-vs-CPU would have bought about 9%.
+- **The DPG tests we have never run in CI** — done, and the experiment it prescribed is what answered it:
+  GLFW gets a context on a runner with no display server, on ubuntu, macOS and Windows alike. 2090 → 2147
+  tests per platform per push. *Re-homed*: `dpg-notes.md`, "Testing DPG code", which now records both the CI
+  status and the ceiling — `render_dearpygui_frame()` aborts the process without a mapped window, so the
+  tier this buys is widget and state logic, not layout.
+- **Headless scaffold mode for `ai_turn` (scriptable agent layer)** — this *is* brief 15, landed as
+  `raven.librarian.agent`, brief archived to `briefs/researchers-night/done/`.
+- **Lazy `api.initialize` in `llmclient` and `hybridir`** — done; `test_scaffold.py`'s `importorskip` is
+  gone, which was the entire cost the item recorded.
+- **Librarian chat input: make it multiline (Shift+Enter = newline)** — done; `app.py` builds the composer
+  with `multiline=True`, and Ctrl+Enter sends. (Filed under `## Declined` on 2026-08-10; moved here
+  2026-08-12, since it shipped rather than being rejected.)
+- **Attachment + docs-DB: support office document formats (MS Office / LibreOffice)** — the formats it asked
+  for landed 2026-07-29 (`093c400`): word processor documents, presentations and saved web pages, on both the
+  attach path and the ingester. Spreadsheets were the remaining gap and have their own item; the design this
+  item had accumulated for them moved to `briefs/spreadsheet-ingestion-brief.md` first. (Also moved from
+  `## Declined`, 2026-08-12.)
+- **`TODO.md`: [Low] Add lockfile so `raven-minichat` and `raven-librarian` can't run simultaneously** —
+  shipped 2026-08-12 as `raven.common.datastorelock`, which locks the file rather than recording a PID, so
+  the OS releases it on a crash and there is no stale lock to detect. Listed here rather than in `TODO.md`
+  so the deletion pass has one block; the entry there is struck through and points at this one.
+
 ## Declined
 
 Items closed without doing. A reason is recorded so the decision stays made — an undocumented discard gets
 re-added by the next person who has the same thought.
 
 **This is the anti-re-litigation section, not the finished-work one.** Something that shipped belongs under
-`## Already done` below; something *considered and rejected* belongs here. Two entries were filed here on
+`## Already done` above; something *considered and rejected* belongs here. Two entries were filed here on
 2026-08-10 under the looser reading and moved on 2026-08-12.
 
 - **torch.compile for the postprocessor** — measured and answered: ~6% on THA3 for 37s of compilation, and it

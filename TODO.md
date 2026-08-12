@@ -551,7 +551,14 @@ every tier, chosen on measurements rather than reputation.
   - **Why it was dropped** (Juha's recollection, so treat it as a lead rather than as a finding): three things had to hold at once — the rect sized correctly, the box behind the message in z-order, and the box scrolling with the chat log — and it was a pick-two-of-three situation, possibly pick-one.
   - That is what makes a *widget* the likelier shape than a drawlist: a container with a background of its own is sized, ordered and scrolled by the toolkit, so all three fall out instead of being maintained. An ImGui child window takes `mvThemeCol_ChildBg` from a theme, one theme per role. Unverified — check whether a per-message child window is affordable at chat-log lengths before committing, since each one is a scroll region and a clip rect.
 
-- **[Low]** Add lockfile so `raven-minichat` and `raven-librarian` can't run simultaneously (prevents losing changes made in one app). Quick CC session.
+- ~~**[Low]** Add lockfile so `raven-minichat` and `raven-librarian` can't run simultaneously.~~ **Done**
+  2026-08-12 as `raven.common.datastorelock`. Held in `TODO_DEFERRED.md`'s `## Already done` block until
+  that block's deletion pass, so both files' finished items are reviewed together.
+  - Worth keeping from the triage: this was rated `[Low]` because the trigger is rare *and* a hand-rolled
+    fix would have cost more than it was worth — but its actual severity was silent loss of an in-progress
+    chat. **A single priority label collapses value and cost**, and once collapsed the two are
+    indistinguishable. An old low rating that encoded value still stands; one that encoded effort is stale,
+    because the cost side has since moved by a large factor. That applies hardest to the audits and sweeps.
 
 - **[Low]** minichat: **[Verify]** when retrieval results are `null` in `chat.json` — old bug or still present in current codebase? (CC session)
 

@@ -306,6 +306,26 @@ Multiple servers can expose the same tool name. Namespace registered tools by se
 (e.g. `label__toolname`) and reverse-map at call time, so `tool_entrypoints` keys stay unique
 and the model is told unambiguous names.
 
+### MCP tools want their own GUI toggle, separate from "Internet"
+
+Re-homed here 2026-08-12 from the deferred item that shipped the Internet toggle, because it is the only
+place this was written down and it is a decision this brief has to make.
+
+The **Internet** toggle now gates the network-reaching built-ins (`websearch`, `webfetch`) specifically,
+rather than all tools indiscriminately — `ai_turn` takes an allowed-tool-name set, and the app maps each GUI
+toggle onto the relevant names. That machinery is what an MCP toggle would reuse.
+
+**But MCP is a different trust surface and should not ride on that switch.** An MCP server is third-party
+code the user chose to run; a user may reasonably want their local tools available while the model's reach
+to the open internet is off, or the reverse. Folding both under one control asserts they are the same risk,
+and they are not — which is the same reason the Internet toggle exists at all rather than the original
+all-or-nothing `tools_enabled` bool.
+
+Open: whether one toggle covers all configured servers or each server gets its own. Per-server matches the
+config shape (`"enabled": True` per entry, §3) and matches the trust argument, since two servers need not be
+equally trusted; one toggle is less GUI. The `enabled` flag in config is the *static* answer to this — the
+toggle is the per-session one, and they should agree on what a disabled server does to the tool list.
+
 ---
 
 ## 5. Lifecycle

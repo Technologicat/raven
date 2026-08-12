@@ -721,7 +721,15 @@ def dpg_context():
     dpg.destroy_context()
 ```
 
-Guard with `importorskip` — Raven's CI installs no GUI toolkit deliberately, so these are local-only tests. Create the context once per module: it is not cheap, and DPG holds global state, so per-test contexts are both slow and a good way to find out which of your other tests leaked a widget.
+Create the context once per module: it is not cheap, and DPG holds global state, so per-test contexts are both slow and a good way to find out which of your other tests leaked a widget.
+
+**These run in CI, on all three platforms** (since 2026-08-12; `dearpygui` and `mistletoe` are in `.github/workflows/requirements-ci.txt`). The open question was whether GLFW could get a context on a runner with no display server, and it can — ubuntu, macOS and Windows alike, 2090 → 2147 tests passing per platform. Keep the `importorskip` anyway: it costs nothing and it is what lets the suite run in an environment that genuinely lacks the toolkit.
+
+Tests that *map* a window are the separate case and stay out: they carry the `gui` marker and need `pytest --run-gui`.
+
+**Know the ceiling before writing one: "DPG runs headless" is narrower than it sounds** (measured 2026-08-03, on a machine *with* a display). Contexts, widgets, themes and item state all work with an unshown viewport. But `dpg.render_dearpygui_frame()` **aborts the process** — `SIGABRT` on the GLFW assertion `window != NULL` in `glfwWindowShouldClose`, not a catchable exception — so nothing that needs *layout* is reachable: no real scroll extents, no `get_y_scroll_max`, no hit-testing, no measured text sizes.
+
+That is why the existing tests step `animation.animator.render_frame()` — Raven's own animator, pure Python — rather than DPG's frame, and why `test_animation.py`'s `SmoothScrolling` tests assert against state transitions instead of against pixels. The tier this buys is "widget and state logic", not "the GUI works"; someone who reads it the cheap way will write a layout-dependent test and get a core dump rather than a failure. Whether a software GL stack (`xvfb-run`, or Mesa's llvmpipe) lifts the `render_dearpygui_frame` restriction as well as initialization is a separate unknown, and unmeasured.
 
 **Animations need no wall-clock waiting.** `animator.render_frame()` is what Raven's render loop calls; a test can call it directly and step the animation as fast as the CPU allows, with a wall-clock deadline so a bug fails the test instead of hanging the suite.
 
