@@ -1678,7 +1678,7 @@ class DPGCompleteChatMessage(DPGChatMessage):
                                     action=lambda: _open_source_url(source_url))
             self._add_action_button(parent=actions,
                                     icon=fa.ICON_FOLDER_OPEN,
-                                    tooltip_text="Open the image folder\n(where attached images are stored)",
+                                    tooltip_text="Open the attachments folder\n(where attached files are stored)",
                                     ok_message="Opened folder",
                                     action=lambda: common_utils.open_in_file_manager(datastore.sidecar_dir))
 

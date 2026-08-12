@@ -1203,7 +1203,7 @@ with timer() as tim:
                         dpg.bind_item_font("util_open_datastore_dir_button", themes_and_fonts.icon_font_solid)  # tag
                         dpg.bind_item_theme("util_open_datastore_dir_button", "disablable_widget_theme")  # tag
                         with dpg.tooltip("util_open_datastore_dir_button", tag="util_open_datastore_dir_tooltip"):  # tag
-                            dpg.add_text("Open the chat data folder\n(chat history + attached images)", tag="util_open_datastore_dir_tooltip_text")  # tag
+                            dpg.add_text("Open the chat data folder\n(chat history + attached files)", tag="util_open_datastore_dir_tooltip_text")  # tag
 
                     # A destructive action gets its own row rather than a third seat on the folder row above:
                     # that row's label would start lying, and "delete things forever" should not sit a few
