@@ -921,9 +921,13 @@ def connect(backend_url: str, quiet: bool = False) -> env:
     knows, so the character card names no model and states the default context length. `backend_status`
     reports which of the three states this is, and `reconnect` replaces the placeholders once there is
     something to ask.
+
+    Unless `quiet`, the verdict is printed — all three states, in the same words and with the same advice a
+    frontend's status readout gives, so a user who has a terminal in view and a user who has not are told
+    the same thing.
     """
     try:
-        return setup(backend_url, quiet=quiet)
+        settings = setup(backend_url, quiet=quiet)
     except requests.exceptions.RequestException as exc:
         logger.warning(f"connect: no LLM backend at {backend_url}; continuing without one. Reason {type(exc)}: {exc}")
         if not quiet:
@@ -934,6 +938,13 @@ def connect(backend_url: str, quiet: bool = False) -> env:
                          backend_url=backend_url,
                          quiet=quiet,
                          backend_is_reachable=False)
+    if not quiet:
+        if backend_status(settings) is backend_has_no_model:
+            print(colorizer.colorize(f"LLM backend at {backend_url} has no model loaded.",
+                                     colorizer.Style.BRIGHT, colorizer.Fore.YELLOW) + " Load one in your LLM server.")
+        else:
+            print(colorizer.colorize(f"Connected to LLM backend at {backend_url}", colorizer.Style.BRIGHT, colorizer.Fore.GREEN))
+    return settings
 
 def backend_status(settings: env) -> sym:
     """Return which of the three states `settings` describes.

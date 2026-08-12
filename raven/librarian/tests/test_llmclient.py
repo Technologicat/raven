@@ -706,6 +706,80 @@ class TestModelInfoResolution:
         assert info.loaded is False
 
 
+class TestBackendStatus:
+    """The fold from two backend facts to the one question a frontend asks: can this thing answer?"""
+
+    def test_the_three_states_a_frontend_has_to_tell_apart(self):
+        # Distinct rather than collapsed into "not working", because the user meets all three at the same
+        # moment -- the first message of a session -- and what they should do about each differs.
+        unreachable = env(backend_is_reachable=False, model_is_loaded=False)
+        assert llmclient.backend_status(unreachable) is llmclient.backend_unreachable
+
+        empty = env(backend_is_reachable=True, model_is_loaded=False)
+        assert llmclient.backend_status(empty) is llmclient.backend_has_no_model
+
+        ready = env(backend_is_reachable=True, model_is_loaded=True)
+        assert llmclient.backend_status(ready) is llmclient.backend_ready
+
+    def test_cannot_tell_is_not_a_fault_to_report(self):
+        # ooba and generic backends have nothing to report residency with, so `model_is_loaded is None`.
+        # Reading that as "no model loaded" would park a permanent warning in front of every user of either.
+        cannot_tell = env(backend_is_reachable=True, model_is_loaded=None)
+        assert llmclient.backend_status(cannot_tell) is llmclient.backend_ready
+
+
+class TestConnectAndReconnect:
+    """`connect` is the interactive frontends' `setup`: it reports a dead backend rather than raising."""
+
+    def _good_settings(self):
+        return llmclient.configure(model_info=env(label="a-model", model_id="a-model", context_length=4096,
+                                                  is_vlm=True, loaded=True),
+                                   backend_flavor="lmstudio",
+                                   backend_url="http://x",
+                                   quiet=True)
+
+    def test_an_unreachable_backend_yields_usable_settings(self, monkeypatch):
+        # The whole point: a window opens anyway, so what comes back has to be a real settings object -- the
+        # chat view, the cleanup dialog and the settings all read it -- and merely say that nothing answered.
+        def _refuse(backend_url, quiet=False):
+            raise llmclient.requests.exceptions.ConnectionError("nothing listening")
+        monkeypatch.setattr(llmclient, "setup", _refuse)
+
+        settings = llmclient.connect("http://x", quiet=True)
+        assert llmclient.backend_status(settings) is llmclient.backend_unreachable
+        assert settings.backend_url == "http://x"
+        assert settings.context_length == 64 * 1024  # the default, standing in for one nobody could ask about
+        assert settings.model == llmclient.NO_MODEL_INFO
+
+    def test_reconnect_updates_the_settings_object_the_caller_is_holding(self, monkeypatch):
+        # Every consumer -- the chat controller, the app state, a script -- already holds this object, so a
+        # replacement returned to one caller would leave all the others on the stale one.
+        def _refuse(backend_url, quiet=False):
+            raise llmclient.requests.exceptions.ConnectionError("nothing listening")
+        monkeypatch.setattr(llmclient, "setup", _refuse)
+        settings = llmclient.connect("http://x", quiet=True)
+
+        good = self._good_settings()
+        monkeypatch.setattr(llmclient, "setup", lambda backend_url, quiet=False: good)
+
+        status = llmclient.reconnect(settings, quiet=True)
+        assert status is llmclient.backend_ready
+        assert settings.model == "a-model"
+        assert settings.context_length == 4096
+        assert settings.model_is_vlm is True
+        assert settings.backend_is_reachable is True
+
+    def test_a_backend_that_answers_with_nothing_loaded_is_its_own_state(self, monkeypatch):
+        empty = llmclient.configure(model_info=env(label=llmclient.NO_MODEL_INFO, model_id=None,
+                                                   context_length=None, is_vlm=None, loaded=False),
+                                    backend_flavor="lmstudio",
+                                    backend_url="http://x",
+                                    quiet=True)
+        monkeypatch.setattr(llmclient, "setup", lambda backend_url, quiet=False: empty)
+        settings = llmclient.connect("http://x", quiet=True)
+        assert llmclient.backend_status(settings) is llmclient.backend_has_no_model
+
+
 # ---------------------------------------------------------------------------
 # Token counting tiers + usage calibration (brief 02 §7)
 # ---------------------------------------------------------------------------
