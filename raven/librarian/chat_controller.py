@@ -107,6 +107,23 @@ _JUMP_TO_LATEST_MARGIN = 8
 # app breathes at one rate rather than several.
 _JUMP_TO_LATEST_PULSE_SECONDS = 2.0
 
+# How many consecutive frames the chat panel's scroll maximum must report the same value before "scroll to
+# the end" believes it. One is not enough, and the difference is visible rather than theoretical: the panel's
+# content is laid out in pieces — the Markdown renderer runs on its own worker — and the maximum stands still
+# between them. Measured on a real chat at startup: 3051 for a frame, then 3497 a few frames later, then
+# 4147, where it stopped. A scroll issued at the first standstill went to 3051 and left the reader 1096 px
+# short of the message they had come back to.
+#
+# A heuristic, and worth naming as one: the renderer reports no "finished" event, so there is nothing to wait
+# on that would make this exact. What it buys is that a lull has to last three frames to be mistaken for the
+# end, and the measured lull was one.
+_SCROLL_SETTLE_FRAMES = 3
+
+# What a full rebuild allows for that settling — laying out a chat from nothing takes many more frames than
+# appending one message to a chat already on screen. Measured growth above had stopped by frame 20; this is
+# headroom over that, and it costs nothing when the content settles sooner, which is the ordinary case.
+_BUILD_SCROLL_WAIT_FRAMES = 60
+
 # The same gray the LLM / DOCS / WEB indicators use, rather than a pure white. White would be the brightest
 # thing on the panel and would read as an alert; this is one more quiet status light, and it belongs to that
 # family both in what it means and in how it looks.
@@ -2447,12 +2464,17 @@ class DPGLinearizedChatView:
         # a stale one, so there is always a second sample to compare against. One frame on a background thread
         # is a cheap price for the scroll landing where it was asked to.
         elapsed_frames = 0
+        stable_frames = 0
         max_y_scroll = dpg.get_y_scroll_max(self.gui_parent)
         for elapsed_frames in range(1, max_wait_frames + 1):
             guiutils.split_frame(operation="scroll_view: settle the chat panel's scroll maximum")
             previous_max_y_scroll, max_y_scroll = max_y_scroll, dpg.get_y_scroll_max(self.gui_parent)
             if max_y_scroll > 0 and max_y_scroll == previous_max_y_scroll:  # TODO: The nonzero requirement fails when the content is less than one screenful in length: a legitimately zero maximum is indistinguishable from a panel that has not laid out yet, so we wait out `max_wait_frames`. Think of a better way.
-                break
+                stable_frames += 1
+                if stable_frames >= _SCROLL_SETTLE_FRAMES:
+                    break
+            else:
+                stable_frames = 0  # it moved again; whatever we saw was a lull, not the end
         plural_s = "s" if elapsed_frames != 1 else ""
         waited_str = f" (after waiting for {elapsed_frames} frame{plural_s})" if elapsed_frames > 0 else " (no waiting was needed)"
         # Logging the frame number only when we waited is deliberate but no longer explained. It used to cite
@@ -2792,7 +2814,8 @@ class DPGLinearizedChatView:
         # first action of teardown, so a startup `build()` that races the close bails here instead of parking.
         if self.chat_controller.gui_updates_safe:
             dpg.split_frame()
-            self.scroll_view(scroll_target_node_id=scroll_target_node_id)
+            self.scroll_view(scroll_target_node_id=scroll_target_node_id,
+                             max_wait_frames=_BUILD_SCROLL_WAIT_FRAMES)
 
 # --------------------------------------------------------------------------------
 # Scaffold to GUI integration

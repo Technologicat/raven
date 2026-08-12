@@ -1,13 +1,17 @@
 """Unit tests for raven.librarian.chat_controller.
 
-Only the datastore-side helpers so far — the ones that decide which of a message's buttons are live. Those
-are pure functions over a `Forest`, so they need no GUI, but the module imports DearPyGui at import time,
-hence the skip below.
+Only the datastore-side helpers so far — the ones that decide which of a message's buttons are live, and the
+descent that picks where a rebuilt view lands. Those are pure functions over a `Forest` and need no GUI.
+
+The module they live in needs rather more, though: importing it reaches DearPyGui *and*, through the avatar
+client, the full ML stack down to spaCy. So the skip names the module under test rather than any one of its
+dependencies — the same thing `test_scaffold.py` did until `api.initialize` was made lazy, and the reason
+these tests do not run in the minimal-dependency CI job even though they would pass there.
 """
 
 import pytest
 
-pytest.importorskip("dearpygui")  # noqa: E402 -- the module under test imports it at module level
+pytest.importorskip("raven.librarian.chat_controller")  # noqa: E402 -- reaches DearPyGui and the ML stack
 
 from raven.librarian import chat_controller, chattree  # noqa: E402
 

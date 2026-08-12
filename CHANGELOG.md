@@ -68,6 +68,8 @@
 - **running `raven-librarian` and `raven-minichat` at once no longer loses one of the two sessions.** Each holds the whole chat datastore in memory and writes it back on exit, so whichever closed last silently discarded everything the other had done — including a chat you were in the middle of. The second app to start now says the datastore is already open, names it, and stops. Two Librarians did the same thing to each other, and are covered too.
   - The claim is released when the process ends, crash included, so there is no stale lock to notice or clean up.
 
+- **the chat view now opens at the end of the conversation**, instead of part-way down it. On startup, and after jumping to a chat's continuation, the latest message could be below the fold — pressing End found it there, so nothing was missing, but the view had stopped short. The longer the conversation on screen, the further short it stopped.
+
 - **the AI's opening greeting could be deleted, rerolled, continued and branched from**, none of which it is supposed to allow — and deleting it takes the entire chat below it. The four buttons ask one shared list whether the message is a greeting, and that list was computed lazily, so the first question consumed it and the rest were answered from what was left: nothing. Which reads as "not a greeting".
 
 - two tooltips still described the attachment store as holding images, which stopped being the whole story in 0.2.8 when documents became attachable. The two buttons that open that folder — one on an attached image, one on an attached document — also gave it two different names, though it is one folder.
