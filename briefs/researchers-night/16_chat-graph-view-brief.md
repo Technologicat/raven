@@ -152,8 +152,43 @@ too.
 
 **Depth limiting** is recorded as a hard constraint (the `TODO.md` item: the full tree will not render at
 interactive FPS). For the demo case it is less pressing than that suggests, since walk-up conversations are
-short. The accumulated forest is what is large, and scoping to the tree containing HEAD plus windowed
-siblings is what handles it.
+short. What is large is *depth over a long-lived chat plus the width of the session level*, and scoping to
+the tree containing HEAD plus windowed siblings is what handles it.
+
+> **Corrected 2026-08-12.** An earlier version of that sentence said "the accumulated forest is what is
+> large", and an earlier passage assumed an open-house evening accumulates dozens of roots. **A root is a
+> distinct system prompt text**, not a session — `appstate` keeps one root per variety of card, so a chat
+> written under an older card is rooted at its own. An evening at one system prompt produces **one** root and
+> dozens of branches beneath the greeting. The forest is never wide at the root level; the width is one level
+> down, at the first user message, which this brief already identifies correctly. The scoping decision may
+> still be right; the reason given for it was not.
+
+### Roots became first-class on 2026-08-12, after this brief was written
+
+Multi-root system-prompt storage landed, so showing the root level is now a natural thing to consider — and
+the out-of-scope entry below ("a forest view across all roots") was decided against a world where roots were
+effectively singular.
+
+**What the root level is, and is not.** A root is a distinct *system prompt text*; the character's name,
+avatar and voice live in `config.py`. So the root set is largely **version history of one character's card**,
+not a character selector. Two consequences:
+
+- **Clicking a root does not switch character.** The app would keep rendering the configured avatar and voice
+  while the chat sits under a different system prompt. That mismatch needs a decision, and it is the main
+  reason not to expose roots casually.
+- **What it does give is reachability of chats written under older cards** — precisely the "access old chats"
+  gap this brief says it closes. Those chats are in the datastore and unreachable from the GUI today.
+  **Archaeology rather than switching**, and worth having on those terms.
+
+So the graph has **two wide levels doing different jobs** — cards at the root, sessions one level down — and
+this brief designed for only one. Whether the root level gets the same windowed treatment, a different
+affordance, or stays out of scope is now an open question rather than a settled one; see settle-item 7.
+
+**Consequent cost.** `chattree.get_siblings` calls `get_all_root_nodes`, which is an O(n) scan over every
+node in the forest. If the graph view shows the root level, every root-sibling lookup pays that — and the
+memoization that exists is at the `chat_controller` layer (`_scan_for_root_nodes` plus a live-node filter),
+not in `chattree`, so a graph view calling `chattree` directly does not inherit it. **This decision
+determines whether the deferred item on that scan needs acting on at all.**
 
 ## Truncation must be visible, and it is one mechanism serving two cases
 
@@ -306,7 +341,9 @@ tree sizes with windowed siblings. Revisit only if measurement says otherwise.
 - **Editing the tree from the graph.** `chattree` has `delete_subtree`, `reparent_subtree` and friends, so it
   is tempting. Destructive operations driven from a graph a stranger is clicking is a bad first version.
 - **Revisions**, per above — they belong with message editing.
-- **A forest view across all roots.** The windowed wide level covers what the demo needs.
+- **A forest view across all roots.** The windowed wide level covers what the demo needs. **Reopened as
+  settle-item 7** — this was decided when roots were effectively singular, which stopped being true on
+  2026-08-12.
 
 ## What this brief must settle before implementation
 
@@ -321,3 +358,7 @@ tree sizes with windowed siblings. Revisit only if measurement says otherwise.
 6. **Whether an icon scales with its node or holds a constant screen size.** See the resampling note above:
    the two answers differ by an order of magnitude in cost, and constant size is also likely what reads
    better when zoomed out to take in a wide sibling fan.
+7. **Whether the graph view shows the root level at all**, and if so how — given that roots are card
+   versions rather than characters, that clicking one creates an avatar/voice mismatch against `config.py`,
+   and that it is the only route to chats written under older cards. This decision also fixes whether
+   `get_all_root_nodes` needs an index.
