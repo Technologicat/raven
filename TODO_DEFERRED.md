@@ -3,9 +3,9 @@
 New items go at the **top**. (Both ends were in use up to 2026-07-27, which is how the two halves of the same
 Librarian session ended up ~1000 lines apart.)
 
-Two sections at the bottom close items rather than holding them: **`## Already done`** for work that shipped,
-and **`## Declined`** for work considered and rejected. The distinction matters — Declined is the
-anti-re-litigation category, so putting finished work there hides a decision that was never made.
+**Finished items are deleted, not archived** — git is the history. `## Declined` at the bottom is for
+something else: work *considered and rejected*, kept so the decision stays made. Putting shipped work there
+hides a decision that was never taken, which is how four entries ended up mis-filed before 2026-08-12.
 
 ## Two things a triage pass should know
 
@@ -1196,7 +1196,7 @@ an event.** So candidate directions, in rough order of how much they change:
 Worth thinking about before the list grows further; not worth a big refactor of the file itself.
 
 **Half of this has now happened, and the half that is left is the recurring one.** The 2026-08-10 sweep and
-the triage that followed it are the one-off reconciliation, and the `## Already done` section below is the
+the triage that followed it are the one-off reconciliation, and the deletion pass that ended it is the
 closing ritual the file never had. Neither of those makes anyone visit the list *again*, which was the
 complaint — so what survives is a periodic pass, and the natural hook for it is the release procedure, which
 is already a ritual somebody performs.
@@ -4095,68 +4095,15 @@ grounds that an honest "code is not supported" beats a feature that half-works w
 
 Raised by Juha (2026-08-07), reviewing the supported-format list.
 
-## Already done
-
-**A holding pen, not an archive.** These shipped, so they are no longer tasks — but they are kept together
-for one deletion pass rather than removed one at a time, because an item tagged in one session can turn out
-in a later one to be the only place some piece of prose lived. Anything worth keeping has been re-homed
-already, and each entry says where. Git is the history once this block goes.
-
-- **OS drag-and-drop of files into DPG apps (cross-platform)** — shipped 2026-08-10 as
-  `raven.common.gui.filedrop`, and it turned out to be one exported GLFW function rather than a shim per
-  platform. *Re-homed*: the mechanism, the render-thread constraint and the no-drag-hover limitation are in
-  `dpg-notes.md`; the probes and the full measurement are in `investigations/dpg-dnd/`, kept because they
-  are what answers the Wayland question when a machine turns up.
-- **"Internet" toggle: scope `tools_enabled` to a clear security boundary in the GUI** — landed in
-  0.2.9-dev; `ai_turn` takes an allowed-tool-name set and the toggle gates `websearch` / `webfetch`
-  specifically. *Re-homed*: the "MCP wants its own toggle, different trust surface" aside is now a section
-  in `briefs/librarian-extension/04_librarian-mcp-client-brief.md`, where the decision actually gets made.
-- **Indexing a large corpus is silent for minutes, and reads as a hang** — 0.2.8 added the INDEXING
-  indicator. *Split, not merely closed*: the item's second half — the ingest pool being GIL-bound because
-  pypdf is pure Python, measured at one core's worth across 148 threads — is untouched and is now its own
-  item at the top of this file.
-- **Idle throttle for Librarian** — 0.2.8.
-- **Enable HTTP response compression on raven-server** — implemented.
-- **Hybridir: cover the edit-queueing layer with tests** — covered at unit level. The shapes it listed as
-  still-to-write, in case anyone wants them: further dedup orderings (delete-then-add same id; add two docs
-  and update one), `commit()` idempotency on an empty queue, and `is_indexing()` reference-counting under
-  concurrent `commit()` calls. The watchdog-driven flow remains the harder, lower-priority half.
-- **EU AI Act Article 50 (transparency) compliance** — both halves shipped and the scoping brief closed
-  (`briefs/librarian-extension/done/07_export-disclosure-brief.md`, and the analysis in
-  `briefs/reference/ai-act-article-50-summary.md`, which is where the dates live).
-- **Tokenization is dominated by per-call overhead, not by the tokenizer** — batched since filing. Filed
-  2026-08-06 and fixed within days. The number worth remembering: ~90 ms end-to-end against ~25 ms of
-  actual work, so most of it was HTTP framing, and GPU-vs-CPU would have bought about 9%.
-- **The DPG tests we have never run in CI** — done, and the experiment it prescribed is what answered it:
-  GLFW gets a context on a runner with no display server, on ubuntu, macOS and Windows alike. 2090 → 2147
-  tests per platform per push. *Re-homed*: `dpg-notes.md`, "Testing DPG code", which now records both the CI
-  status and the ceiling — `render_dearpygui_frame()` aborts the process without a mapped window, so the
-  tier this buys is widget and state logic, not layout.
-- **Headless scaffold mode for `ai_turn` (scriptable agent layer)** — this *is* brief 15, landed as
-  `raven.librarian.agent`, brief archived to `briefs/researchers-night/done/`.
-- **Lazy `api.initialize` in `llmclient` and `hybridir`** — done; `test_scaffold.py`'s `importorskip` is
-  gone, which was the entire cost the item recorded.
-- **Librarian chat input: make it multiline (Shift+Enter = newline)** — done; `app.py` builds the composer
-  with `multiline=True`, and Ctrl+Enter sends. (Filed under `## Declined` on 2026-08-10; moved here
-  2026-08-12, since it shipped rather than being rejected.)
-- **Attachment + docs-DB: support office document formats (MS Office / LibreOffice)** — the formats it asked
-  for landed 2026-07-29 (`093c400`): word processor documents, presentations and saved web pages, on both the
-  attach path and the ingester. Spreadsheets were the remaining gap and have their own item; the design this
-  item had accumulated for them moved to `briefs/spreadsheet-ingestion-brief.md` first. (Also moved from
-  `## Declined`, 2026-08-12.)
-- **`TODO.md`: [Low] Add lockfile so `raven-minichat` and `raven-librarian` can't run simultaneously** —
-  shipped 2026-08-12 as `raven.common.datastorelock`, which locks the file rather than recording a PID, so
-  the OS releases it on a crash and there is no stale lock to detect. Listed here rather than in `TODO.md`
-  so the deletion pass has one block; the entry there is struck through and points at this one.
-
 ## Declined
 
 Items closed without doing. A reason is recorded so the decision stays made — an undocumented discard gets
 re-added by the next person who has the same thought.
 
-**This is the anti-re-litigation section, not the finished-work one.** Something that shipped belongs under
-`## Already done` above; something *considered and rejected* belongs here. Two entries were filed here on
-2026-08-10 under the looser reading and moved on 2026-08-12.
+**This is the anti-re-litigation section, not the finished-work one.** Something that *shipped* is simply
+deleted, git being the history; only something *considered and rejected* belongs here. Two entries were
+filed here on 2026-08-10 under the looser reading and removed on 2026-08-12 with the rest of the finished
+work.
 
 - **torch.compile for the postprocessor** — measured and answered: ~6% on THA3 for 37s of compilation, and it
   hung in the server. A finding rather than a task; the write-up is

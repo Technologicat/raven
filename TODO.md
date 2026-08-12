@@ -41,10 +41,6 @@ already decided.
   - **Now briefed as one job**, `briefs/researchers-night/markdown-block-rendering-brief.md`, and much
     smaller than these three read: the barriers are in Raven's own code rather than the vendored renderer,
     and one change to the colour wrapper fixes headings outright. That brief is the tracker.
-- ~~**Chat view scroll position jumps back down during generation.**~~ **Done** — three app-side faults
-  fixed 2026-07-30, and the follow-tail drift that survived them fixed 2026-08-11. What remains is holding
-  your place while *dragging the scrollbar*, which is a different gesture and not demo-critical. Write-up:
-  `investigations/follow-tail-drift/README.md`.
 - **Librarian: in-flight AI turn bleeds into a new chat** (turn-sequencing race).
 - **Thinking mode is a wall of text on a projector.** Details under Librarian / Chat UI; here is why it is
   phase 1 rather than polish. A thinking model spends most of the turn reasoning, and right now every word
@@ -160,7 +156,7 @@ every tier, chosen on measurements rather than reputation.
   - `HF_HUB_OFFLINE=1` — forces huggingface_hub to use only locally cached models, no network requests at all.
   - `HF_HUB_DISABLE_TELEMETRY=1` — stops telemetry pings only.
 
-- ~~**[High]** Neural reranker for HybridIR~~ — **measured and rejected, 2026-08-06.** Two cross-encoders (`ms-marco-MiniLM-L6-v2` at 23M and `bge-reranker-base` at 278M, different sizes and training data) in three placements, on three corpora. No configuration beat plain fusion; reranking the *fused* list is the worst option on all three and that part generalizes. The mechanism: fusing two cheap independent signals beats one expensive model's opinion, so collapsing RRF's evidence diversity is the cost. Latency was never the constraint — 144 ms for 100 candidates on the 4090. Full tables in `investigations/retrieval/REPORT.md` §2; the design in `TODO_DEFERRED.md` is kept for the shape, not as a plan.
+- ~~**[High]** Neural reranker for HybridIR~~ — **measured and rejected, 2026-08-06.** Two cross-encoders (`ms-marco-MiniLM-L6-v2` at 23M and `bge-reranker-base` at 278M, different sizes and training data) in three placements, on three corpora. No configuration beat plain fusion; reranking the *fused* list is the worst option on all three and that part generalizes. The mechanism: fusing two cheap independent signals beats one expensive model's opinion, so collapsing RRF's evidence diversity is the cost. Latency was never the constraint — 144 ms for 100 candidates on the 4090. Full tables in `investigations/retrieval/REPORT.md` §2, which also keeps the design for the shape a future model would want, the caveat that the diversity mechanism is a post-hoc explanation, and the better lead: the ranks got *worse*, which that mechanism does not predict.
   - The *motivation* also weakened: `k=50` shipped (measured, +10.1 points of recall for +1.7 s prefill), so "avoid needing large k" is much less pressing than when this was filed.
 
 - **[High]** Revisit logging system: library modules should not reconfigure the logger (verify exact behavior against Python `logging` stdlib docs, but currently each module sets the log level, which is the entrypoint's responsibility). Move logging configuration to entrypoints only. Add a "detailed debug" level at that time for particularly spammy-but-useful log lines (e.g. `SmoothScrolling.render_frame`, `_managed_task`, `binary_search_item`).
@@ -550,15 +546,6 @@ every tier, chosen on measurements rather than reputation.
   - **An abandoned attempt is in the history, and the approach is what to avoid, not to resume.** The original librarian WIP (`ef3a5d9`, Oct 2025) drew a rounded `draw_rectangle` into a drawlist positioned behind each message's container. Being a drawlist rather than a laid-out widget, it had to be told its own geometry: the message's rect size is not known until a frame after it is built, so it needed a deferred frame callback per message — and since `set_frame_callback` holds one callback per frame number, that meant a queue plus a master callback to drain it (`DPGChatMessage.callbacks` / `run_callbacks`, which is what those were for). It did run, a couple of times, during development; it was commented out before the first commit that carries it, and the queue then rode along as dead code until it was removed.
   - **Why it was dropped** (Juha's recollection, so treat it as a lead rather than as a finding): three things had to hold at once — the rect sized correctly, the box behind the message in z-order, and the box scrolling with the chat log — and it was a pick-two-of-three situation, possibly pick-one.
   - That is what makes a *widget* the likelier shape than a drawlist: a container with a background of its own is sized, ordered and scrolled by the toolkit, so all three fall out instead of being maintained. An ImGui child window takes `mvThemeCol_ChildBg` from a theme, one theme per role. Unverified — check whether a per-message child window is affordable at chat-log lengths before committing, since each one is a scroll region and a clip rect.
-
-- ~~**[Low]** Add lockfile so `raven-minichat` and `raven-librarian` can't run simultaneously.~~ **Done**
-  2026-08-12 as `raven.common.datastorelock`. Held in `TODO_DEFERRED.md`'s `## Already done` block until
-  that block's deletion pass, so both files' finished items are reviewed together.
-  - Worth keeping from the triage: this was rated `[Low]` because the trigger is rare *and* a hand-rolled
-    fix would have cost more than it was worth — but its actual severity was silent loss of an in-progress
-    chat. **A single priority label collapses value and cost**, and once collapsed the two are
-    indistinguishable. An old low rating that encoded value still stands; one that encoded effort is stale,
-    because the cost side has since moved by a large factor. That applies hardest to the audits and sweeps.
 
 - **[Low]** minichat: **[Verify]** when retrieval results are `null` in `chat.json` — old bug or still present in current codebase? (CC session)
 
