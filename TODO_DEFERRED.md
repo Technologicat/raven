@@ -1673,7 +1673,9 @@ Discovered during avatar-client-crop brief review (2026-04-20).
 
 `raven.client.api` currently imports `nlptools` purely to reach `deserialize_spacy_docs` for the natlang response reconstruction. If a *lighter* client module ever wants to reconstruct spaCy Docs from wire data without pulling transformers/flair/dehyphen, a clean way to do it would be: extract each backend into its own module (e.g. `raven.common.spacy_wire` for the spaCy serialize/deserialize pair, parallel modules for each of classifier, dehyphenator, embedder, translator), and leave `nlptools` as a thin aggregator that re-exports them.
 
-Why this is deferred: `api.py` already imports torch, qoi, spaCy, etc. for its other endpoints — so `nlptools` riding along costs `api.py` nothing extra *today*. The split pays off only when some caller wants a minimal "just reconstruct a Doc from JSON" importable, which no one currently needs. Also ties into the companion item "Lazy `api.initialize` in `llmclient`" — that one is about letting `llmclient` be imported in minimal-deps CI without triggering the full chain; slimming `nlptools` becomes relevant only once that parent effort is on the table.
+Why this is deferred: `api.py` already imports torch, qoi, spaCy, etc. for its other endpoints — so `nlptools` riding along costs `api.py` nothing extra *today*. The split pays off only when some caller wants a minimal "just reconstruct a Doc from JSON" importable, which no one currently needs.
+
+The companion effort has since landed: `api.initialize` is lazy in `llmclient` and `hybridir`, so those are importable in minimal-deps CI without triggering the full chain. **That was the parent, and it did not need this** — which is the useful signal here. The next thing to ask for a minimal import is `chat_controller`, whose own item is open, and if that one also lands without needing the split, this item is answered rather than merely unscheduled.
 
 For symmetry, if we ever start splitting, we should do all five backends, not just spaCy.
 
