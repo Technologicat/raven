@@ -571,13 +571,15 @@ def test_connection(backend_url: str,
     try:
         list_models(backend_url)  # just do something, to try to connect
     except requests.exceptions.ConnectionError as exc:
-        print(colorizer.colorize(f"Cannot connect to LLM backend at {backend_url}.",
-                                 colorizer.Style.BRIGHT, colorizer.Fore.RED) + " Is the LLM server running?")
+        if not quiet:
+            print(colorizer.colorize(f"Cannot connect to LLM backend at {backend_url}.",
+                                     colorizer.Style.BRIGHT, colorizer.Fore.RED) + " Is the LLM server running?")
         msg = f"Failed to connect to LLM backend at {backend_url}, reason {type(exc)}: {exc}"
         logger.error(msg)
         return False
     else:
-        print(colorizer.colorize(f"Connected to LLM backend at {backend_url}", colorizer.Style.BRIGHT, colorizer.Fore.GREEN))
+        if not quiet:
+            print(colorizer.colorize(f"Connected to LLM backend at {backend_url}", colorizer.Style.BRIGHT, colorizer.Fore.GREEN))
         return True
 
 def detect_backend_flavor(backend_url: str) -> str:
