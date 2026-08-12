@@ -301,10 +301,11 @@ itself a visible lurch.
 Fault 1 below — `get_y_scroll_max` lagging a content change — came back in a second costume, and the fix
 for it turned out to be one frame short.
 
-**Symptom**: the chat panel came up part-way down its own content. On startup, and after the ▼ button
-rebuilt the view, the message the reader had come back to sat below the fold; pressing End found it there
-all along. So the tree walk was right and only the scroll was short — which is what made it read as a
-loading bug rather than a scrolling one.
+**Symptom**: the chat panel came up part-way down its own content, with no gesture involved — the view built
+itself as the app loaded and settled at the wrong scroll position, the latest message sitting below the fold.
+Pressing End found it there all along. So the tree walk was right and only the scroll was short, which is
+what made it read as a loading bug rather than a scrolling one. Any other full rebuild goes through the same
+`build()` path and had the same fault; startup is simply where it was seen.
 
 **Cause**: the panel's content is laid out in *pieces*, because the Markdown renderer runs on its own
 worker — so `get_y_scroll_max` does not climb monotonically to its final value. It stands still *between*
@@ -329,6 +330,12 @@ first scroll waits four frames and goes to 4147.
 **It is a heuristic and the code says so.** The renderer reports no "finished" event, so there is nothing to
 wait on that would make this exact. Three frames buys headroom over the one-frame lull that was actually
 observed, and costs nothing when the content settles sooner, which is the ordinary case.
+
+**And the heuristic has an exact replacement available, because the renderer is ours** (Juha, 2026-08-12).
+`DearPyGui_Markdown` is adopted code, not a pinned upstream snapshot, so "it reports no finished event" is a
+statement about what it does today rather than a constraint. Give `CallInNextFrame` a way to say its queue is
+drained and the frame-counting disappears. Tracked in `TODO_DEFERRED.md`, "The vendored Markdown renderer
+has no way to say it has finished".
 
 Two things worth carrying:
 

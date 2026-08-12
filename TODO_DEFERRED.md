@@ -3,6 +3,40 @@
 New items go at the **top**. (Both ends were in use up to 2026-07-27, which is how the two halves of the same
 Librarian session ended up ~1000 lines apart.)
 
+## The vendored Markdown renderer has no way to say it has finished
+
+*Cluster: markdown-renderer · Cost: S · Gate: 0.2.9 · Filed: 2026-08-12*
+
+`raven/vendor/DearPyGui_Markdown` lays a message out in pieces from its own worker thread
+(`CallInNextFrame._worker`), and nothing tells a caller when the last piece has landed. Anything that needs
+the finished geometry therefore has to guess.
+
+Raven guesses in one place today and it cost a visible bug. `chat_controller.scroll_view` waits for
+`dpg.get_y_scroll_max` to stop changing, which is not the same question — the maximum stands *still* between
+layout pieces, so a lull reads as the end. Measured at startup on a real chat: 3051 for a frame, then 3497,
+then 4147. The scroll went to 3051 and left the reader 1096 px short of the message they had come back to.
+Fixed 2026-08-12 by requiring three consecutive unchanged frames and allowing sixty for a full rebuild
+(`_SCROLL_SETTLE_FRAMES`, `_BUILD_SCROLL_WAIT_FRAMES`) — headroom over the lull that was actually observed,
+which is all a frame count can ever be.
+
+**The renderer is adopted code, so the honest signal is available rather than absent** (Juha, 2026-08-12).
+Give `CallInNextFrame` a way to report that its queue is drained — a callback, an event, or a counter a
+caller can poll — and `scroll_view` waits on that instead of counting frames. The constants and the comment
+explaining why they are guesses both go away.
+
+Two things to settle when building it:
+
+- **Per-message or global?** The worker serves the whole app, so "the queue is empty" is a weaker statement
+  than "this message is laid out". Global is much easier and is probably enough for the scroll case, since
+  nothing else is rendering at startup; a per-message token is the honest version.
+- **It must not resurrect the shutdown hazard.** That worker already outlives app teardown and keeps calling
+  DPG across `destroy_context` (see "Fleet-wide: shared two-phase DPG shutdown helper + audit"). A completion
+  signal is a second thing a caller can block on, so it needs the same stop-flag discipline, or a wait at
+  shutdown never returns.
+
+Raised while fixing the short scroll (2026-08-12, Juha — "that's the solution; it's adopted code, we could
+add a finish event").
+
 ## Holding the chat view's scrollbar does not hold your place while a reply streams
 
 *Cluster: ? · Cost: ? · Gate: 0.2.9 · Filed: 2026-08-03*
@@ -2129,35 +2163,24 @@ a live Qwen backend that wasn't available.
 
 ## Markdown ATX headings (`### ...`) don't render in the chat view
 
-*Cluster: markdown-renderer · Cost: ? · Gate: ? · Filed: 2026-06-03*
+*Cluster: markdown-renderer · Cost: ? · Gate: superseded · Filed: 2026-06-03*
 
-LLM replies that use ATX headings (`# `, `## `, `### `) show the literal `#` markers in
-Librarian's chat history instead of rendering as headings. Confirmed it is NOT a data/websearch
-problem: the stored content is valid markdown, and `mistletoe.markdown()` produces a correct
-`<h3>...</h3>` even with the `<font color='...'>` wrapper that `chat_controller._render_text`
-(chat_controller.py ~455) adds. So the heading is lost downstream, in the adopted
-`raven/vendor/DearPyGui_Markdown` renderer's HTML→widget stage (`_HTMLToParser.handle_starttag`
-in `parser.py` plus the entity rendering) — it doesn't appear to map `<h1>`–`<h6>` to heading
-entities. Raven's own help text sidesteps this by using `**bold**` as pseudo-headings instead of
-`###`, consistent with headings never having rendered.
-
-Fix when convenient: add `<h1>`–`<h6>` handling to the renderer's HTML parser, wiring them to the
-existing `H1`–`H6` font attributes (already defined in `font_attributes.py`; the markdown path may
-just not be connecting them). Separately, emoji in replies render as tofu/`?` because the body font
-has no emoji glyphs — cosmetic, lower priority (would need an emoji fallback font).
+**Superseded by `briefs/researchers-night/markdown-block-rendering-brief.md`, which is the live tracker.**
+The brief's step 1 fixes this on its own, and it corrects the diagnosis this item and its two siblings
+shared: the renderer *does* map `<h1>`–`<h6>`, and what stops a heading is `chat_controller._render_text`
+wrapping every paragraph in a `<font>` tag on the same line as the content, which makes the whole thing a
+CommonMark paragraph — and a heading is a block construct, which cannot occur inside one.
 
 Discovered while smoke-testing the webfetch send-to-AI affordance (2026-06-03).
 
 ## Fenced code block (```` ``` ````) support in the Markdown renderer
 
-*Cluster: markdown-renderer · Cost: ? · Gate: ? · Filed: 2026-07-17*
+*Cluster: markdown-renderer · Cost: ? · Gate: superseded · Filed: 2026-07-17*
 
-`dpg_markdown` (vendored) doesn't render triple-backtick fenced code blocks: the fences show up literally and
-the content between them renders as ordinary prose (no monospace, no background box). Add fenced-code-block
-parsing plus a styled render — monospace font, background fill, and horizontal scroll (or wrap) for long lines.
-Would let LLM replies containing code display properly, and let Raven's own system/error messages show verbatim
-technical text cleanly. (Librarian's backend-error message wanted a code box for the raw error string; it falls
-back to plain text for now.)
+**Superseded by `briefs/researchers-night/markdown-block-rendering-brief.md`.** Same cause as the heading
+item, plus the second barrier: `_render_text_paragraphs` splits on single newlines, so a construct spanning
+lines cannot form at all. The brief's step 3 removes the split. The renderer has `MessageEntityPre` already,
+which is the part the original diagnosis missed.
 
 Discovered during brief-03 Half-2 error-message work (2026-07-17, flagged by Juha).
 
@@ -2234,33 +2257,24 @@ Found by Juha (2026-08-04), reading the reasoning trace on a websearch turn.
 
 ## Markdown tables don't render in the chat view
 
-*Cluster: markdown-renderer · Cost: ? · Gate: ? · Filed: 2026-08-04*
+*Cluster: markdown-renderer · Cost: ? · Gate: superseded · Filed: 2026-08-04*
 
-`dpg_markdown` (vendored) has no table support: a GFM pipe table shows its raw source, one line per row —
-`| Kingdom: | Animalia |`, `|---|---|` — as ordinary prose. The sibling of the ATX-heading and fenced-code
-gaps, and arguably the worst of the three for this project's subject matter, because a table is *structure*:
-prose that loses its heading is still readable, a table that loses its columns is not. Confirmed live
-2026-08-04 on a `webfetch` of a Wikipedia article, whose lead infobox is a table.
+**Superseded by `briefs/researchers-night/markdown-block-rendering-brief.md`, step 7** — and it is the one
+genuine renderer gap of the three: `table` is the only block construct with no `case`. That also makes it
+the only one of the three that stays *optional* once the two barriers are removed, rather than falling out
+of them.
 
-Two audiences want it, and neither is optional here:
-
-- **LLM replies.** Asked to compare things — models, methods, measurements — a model reaches for a table
-  almost every time, and that is the shape the answer *wants*. Today it arrives as pipe soup.
-- **Fetched and attached documents.** A results table is often the part of a paper worth reading, and
-  `trafilatura` extracts them as pipe tables. The same goes for the docs DB once spreadsheets land (see the
-  `.xlsx` / `.ods` item), which produce tables by construction.
-
-Needs a GFM pipe-table parser plus a renderer with real column alignment — DPG has `add_table` with
-resizable/borders flags, so the widget exists; the work is the parse, the column-width policy, and deciding
-what happens when a table is wider than the chat panel (horizontal scroll within the message, or shrink).
-Related but distinct from [Rendering LaTeX equations in the chat log]: both are "structured content the
-renderer flattens", and if the renderer is opened up for one it is worth doing the other in the same pass.
+The argument for doing it, which the brief carries: a table is *structure*. Prose that loses its heading is
+still readable; a table that loses its columns is not. Two audiences want it — a model asked to compare
+things reaches for a table almost every time, and `trafilatura` extracts a paper's results tables as pipe
+tables, as will the docs DB once spreadsheets land. Confirmed live 2026-08-04 on a `webfetch` of a Wikipedia
+article, whose lead infobox is a table.
 
 Noticed 2026-08-04 while checking a fetched Wikipedia page's excerpt (flagged by Juha).
 
 ## Reasoning traces with indented bullets mis-render (Markdown indented-code-block collision)
 
-*Cluster: markdown-renderer · Cost: ? · Gate: ? · Filed: 2026-06-05*
+*Cluster: markdown-renderer · Cost: ? · Gate: superseded · Filed: 2026-06-05*
 
 A model's reasoning trace that indents its bullets — Gemma 4 emits `    *   Role: ...` with **four leading
 spaces** — collides with standard Markdown semantics: 4+ leading spaces is an **indented code block**, so the
@@ -2279,11 +2293,15 @@ Two visual manifestations of the same input:
 
 Not a content-parts (brief 03) regression: the reasoning-bubble rendering is unchanged
 (`add_paragraph(reasoning_content, is_thought=True)`); the model's indented output simply meets standard
-Markdown. A reroll whose reasoning used `1.`/`2.` numbers at column 0 rendered cleanly. Likely fix: **dedent /
-normalize the reasoning trace's leading indentation before Markdown rendering** (strip the common/per-line
-leading whitespace so indented bullets become real bullets, not code), and/or fix the vendored renderer's
-color-on-list and `Pre`-box-position handling. Separately note: paragraph font color is also not applied to
-list-item *markers* (bullets/numbers keep the default color) even when the list renders correctly.
+Markdown. A reroll whose reasoning used `1.`/`2.` numbers at column 0 rendered cleanly.
+
+**Superseded by `briefs/researchers-night/markdown-block-rendering-brief.md`, step 4**, which takes the
+cause above as correct — this is the one item of the four whose diagnosis survived — and works out the fix:
+step 1 removes the leaked `</font>` for free, and the indentation collision needs a dedent **by common
+prefix, never per line**, so that a trace carrying real code keeps its relative indentation. Note that the
+zero-backticks grep is a fact about the questions asked rather than about traces in general; ask a coding
+question and the trace will contain fenced blocks whose leading whitespace is content. The list-marker
+colour is step 5; the `Pre`-box position is the separate stranded-box item below.
 
 Discovered during brief 03 §4 live validation, reported by Juha (2026-06-05).
 
@@ -2797,7 +2815,12 @@ Discovered during cherrypick preload adaptive-cap work (2026-06-09).
 
 ## Remove the dead inline-`<think>` handling in the chat renderer
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-07-16*
+*Cluster: markdown-renderer · Cost: ? · Gate: superseded · Filed: 2026-07-16*
+
+**Superseded by `briefs/researchers-night/markdown-block-rendering-brief.md`, step 2**, which absorbs it
+because step 3 depends on it: this dead path is the *only* reason `_render_text_paragraphs` splits on single
+newlines at all, and that split is the second barrier in front of every multi-line Markdown construct. So
+removing it is not tidying alongside that work — it is the thing that unblocks it.
 
 `DPGChatMessage._render_text_paragraphs` (`chat_controller.py`) still splits inline `<think>...</think>` out of a text content-part into a collapsible thought paragraph. That path is dead: since the June 2026 `reasoning_content` migration, thinking is separated before render — at load by `chatutil.upgrade_datastore`, live by the stream parser — so a text part never contains inline `<think>`. It's leftover from last autumn's demo code, not dismantled when the June 2026 thinking-block handling landed.
 

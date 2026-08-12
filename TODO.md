@@ -38,6 +38,9 @@ already decided.
   mis-render.** All three are content defects rather than cosmetic, and Qwen emits headings and code
   fences constantly. The indented-bullet one is *not* fixed — the bullets fix that landed was a different
   bug (stacking at origin in hidden containers), and the render path still has no dedent.
+  - **Now briefed as one job**, `briefs/researchers-night/markdown-block-rendering-brief.md`, and much
+    smaller than these three read: the barriers are in Raven's own code rather than the vendored renderer,
+    and one change to the colour wrapper fixes headings outright. That brief is the tracker.
 - ~~**Chat view scroll position jumps back down during generation.**~~ **Done** — three app-side faults
   fixed 2026-07-30, and the follow-tail drift that survived them fixed 2026-08-11. What remains is holding
   your place while *dragging the scrollbar*, which is a different gesture and not demo-critical. Write-up:
