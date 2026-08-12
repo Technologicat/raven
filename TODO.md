@@ -547,7 +547,7 @@ every tier, chosen on measurements rather than reputation.
 
 - **[Low]** Add lockfile so `raven-minichat` and `raven-librarian` can't run simultaneously (prevents losing changes made in one app). Quick CC session.
 
-- **[Low]** minichat: **[Verify]** when retrieval results are `null` in `data.json` — old bug or still present in current codebase? (CC session)
+- **[Low]** minichat: **[Verify]** when retrieval results are `null` in `chat.json` — old bug or still present in current codebase? (CC session)
 
 
 ### STT / voice

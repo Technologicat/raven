@@ -1647,7 +1647,7 @@ ROCm presents as `"cuda"` in PyTorch, so our Lanczos kernel and `deviceinfo` val
 - Third-party ML libraries: `transformers`, `sentence-transformers`, Flair, Whisper, Kokoro TTS — check ROCm compatibility status for each.
 - THA3 (vendored) — uses standard `nn.Module`, probably fine.
 
-Discovered while implementing `raven/common/lanczos.py`.
+Discovered while implementing `raven/common/image/lanczos.py`.
 
 ## pillow-simd for faster PIL image processing
 
@@ -1787,7 +1787,7 @@ Discovered during raven-cherrypick deadlock/flash fix session (2026-03-28).
 
 DPG pitfall #5 (callback thread deadlock pattern) was temporarily removed from CLAUDE.md because it causes Claude Opus and Sonnet to hang when analyzing cherrypick concurrency code. The model reads the complex three-way deadlock description, then enters an unproductive reasoning loop — consistently stalls at ~250–300 output tokens across multiple retries and effort levels.
 
-The information is correct and important (confirmed by C++ source analysis — see `dpg-threading-notes.md`). Needs rephrasing in a way that conveys the same constraints without the chain-of-reasoning structure that triggers the loop. The original text is recoverable from git history.
+The information is correct and important (confirmed by C++ source analysis — see `dpg-notes.md`). Needs rephrasing in a way that conveys the same constraints without the chain-of-reasoning structure that triggers the loop. The original text is recoverable from git history.
 
 Discovered during raven-cherrypick debugging session (2026-03-28).
 
@@ -1800,7 +1800,7 @@ Raven's CLAUDE.md is growing long, which increases token cost per conversation a
 - Material that could move to **project-specific skills** (e.g. "how to set up a new Raven DPG app" — the DPG app structure, startup sequence, and key patterns sections are reference material, not per-conversation instructions).
 - Material already covered by **sub-project CLAUDE.md files** (Visualizer and Librarian have their own — check for redundancy).
 - Material that belongs in the **global `~/.claude/CLAUDE.md`** (see existing deferred item "Triage CLAUDE.md style conventions").
-- Sections that are **too detailed for instructions** and would be better as standalone reference docs (like `dpg-threading-notes.md`).
+- Sections that are **too detailed for instructions** and would be better as standalone reference docs (like `dpg-notes.md`).
 
 Goal: CLAUDE.md should be concise instructions and constraints, not an encyclopedia. Reference material goes in separate files that can be read on demand.
 
@@ -2169,7 +2169,7 @@ A model's reasoning trace that indents its bullets — Gemma 4 emits `    *   Ro
 spaces** — collides with standard Markdown semantics: 4+ leading spaces is an **indented code block**, so the
 whole bullet list renders as verbatim/`Pre`, drawing a grey background box around it. Confirmed it is the
 indentation, not stray markup: the stored `reasoning_content` has **zero backticks and zero font tags**
-(grepped `data.json`); the offending lines are literally `'\n    *   Role: Aria...'`.
+(grepped `chat.json`); the offending lines are literally `'\n    *   Role: Aria...'`.
 
 Two visual manifestations of the same input:
 - **On reload / completed message** (whole reasoning rendered as one Markdown block): the 4-space indent fires
@@ -2788,13 +2788,13 @@ chat still reloads offline — only the provenance `url` points at the web.
 
 Discovered during brief-03 Half-2 (2026-07-17, noted by Juha — the backend already accounts for it).
 
-## Datastore scaling: a single `data.json` (+ flat sidecar dir) won't hold years of chats
+## Datastore scaling: a single `chat.json` (+ flat sidecar dir) won't hold years of chats
 
 *Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-07-17*
 
 Librarian stores *every* chat — all nodes, all payload revisions, across the whole forest — in one
-`data.json` (`chattree.PersistentForest`), and every attached image as a file in one flat `<datastore>.images/`
-sidecar directory. Both are fine now and for a long while, but neither scales to months/years of daily use:
+`chat.json` (`chattree.PersistentForest`), and every attachment as a file in one flat
+`<datastore>.sidecars/` directory. Both are fine now and for a long while, but neither scales to months/years of daily use:
 
 - **The JSON**: `PersistentForest.save` serializes and rewrites the *entire* file every time it runs. As the
   forest grows to thousands of nodes with revision history, load-at-startup and each save get linearly slower,
@@ -3615,7 +3615,7 @@ SIGTERM behaviour is itself now in question).
 
 Raised by Juha (2026-08-04) as needing thought rather than a patch, and it does — the obvious fix has a
 sharp edge. **Naive autosave makes the failure worse, not better:** `save` serializes and rewrites the
-entire `data.json` in place, so a process dying *during* a write leaves a truncated file where the whole
+entire `chat.json` in place, so a process dying *during* a write leaves a truncated file where the whole
 history used to be. Saving more often means more windows in which to lose everything rather than one
 session. Any autosave therefore has to be atomic first — write to a temp file in the same directory,
 `fsync`, then `os.replace` — and that is worth doing on its own merits even before deciding on a cadence.
@@ -3627,7 +3627,7 @@ Axes to settle, roughly in order of how much they constrain the rest:
   conversation. A wall-clock timer is simpler but saves when nothing has changed and misses the moment
   that matters. Debounced-after-mutation splits the difference.
 - **Cost, which couples this to the datastore-scaling item.** A whole-file rewrite per turn is nothing at
-  today's size and is exactly the thing "Datastore scaling: a single `data.json` … won't hold years of
+  today's size and is exactly the thing "Datastore scaling: a single `chat.json` … won't hold years of
   chats" says gets linearly worse. If that item's incremental/SQLite direction is taken, autosave becomes
   nearly free and this design question dissolves; if it is not taken for a long while, a per-turn rewrite
   is the thing that will make it hurt first. **Decide these two together, or at least decide this one
@@ -3645,7 +3645,7 @@ the current once-per-session write, and every later design needs it anyway.
 `HybridIR`'s `fulldocs/data.json` holds, per document, a `"text"` field (`# copy of original text as-is`,
 `hybridir.py`) and a `"chunks"` list whose entries each carry their own `"text"`. The chunks are slices of the
 full text with overlap, so they alone come to more than 100% of it, and the full copy is stored beside them.
-Measured on this machine: **48 MB of source documents produce a 124 MB `data.json`**, about 2.6×. Load and save
+Measured on this machine: **48 MB of source documents produce a 124 MB `fulldocs/data.json`**, about 2.6×. Load and save
 both pay for all of it, and the file is rewritten whole.
 
 Two separable reductions, and they are not equally safe:
