@@ -501,11 +501,7 @@ def _backend_status_poll_task(task_env: env) -> None:
             time.sleep(_BACKEND_POLL_TICK_S)
         return not (task_env.cancelled or _shutting_down)
 
-    # Captured before the first `reconnect`, which overwrites it. Only a backend that was *not* answering
-    # needs the stored-prompt repair below; without this, clicking an already-green row would rewrite the
-    # system prompt and rebuild the chat view for nothing.
     previous_status = llmclient.backend_status(llm_settings)
-    was_bad = (previous_status is not llmclient.backend_ready)
 
     if task_env.delay_first_probe and not keep_waiting(_BACKEND_POLL_INTERVAL_S):
         return
@@ -526,16 +522,14 @@ def _backend_status_poll_task(task_env: env) -> None:
             return
 
     logger.info(f"_backend_status_poll_task: {task_env.task_name}: backend is ready, model is '{llm_settings.model}'.")
-    if was_bad:
-        # The stored system prompt is rebuilt because it may state what the reconnect has just learned:
-        # Librarian's own prose no longer names the model or the context length, but those template
-        # variables are documented for a user writing their own (see `config.py`). The chat view is rebuilt
-        # after it because a system message is drawn in the log like any other, so replacing its revision
-        # under a live view would leave the superseded text on screen.
-        appstate.refresh_system_prompt(llm_settings, datastore, app_state)
-        if task_env.cancelled or _shutting_down:
-            return
-        chat_controller.view.build()
+    # Nothing stored needs repairing, which is the point of stating the backend's facts as per-turn injects:
+    # the card's text is determined by the configuration alone, so connecting cannot have made it wrong.
+    #
+    # Deliberately not calling `appstate.refresh_system_prompt` here. It is now match-or-create rather than
+    # rewrite-in-place, so on a card that did not change it does nothing — and on one that did, it would
+    # create a root mid-run with no greeting under it while `new_chat_HEAD` still pointed under the old one.
+    # A card *can* change here, but only in a deployment whose own prose writes `{model}` or
+    # `{context_length}` into it; that one picks up the new text at the next start.
     _refresh_backend_status_pill(llmclient.backend_ready)
     if not keep_waiting(_BACKEND_CONNECTED_LINGER_S):
         return
@@ -1922,11 +1916,15 @@ chat_controller = DPGChatController(llm_settings=llm_settings,
                                     is_any_modal_window_visible=is_any_modal_window_visible,
                                     executor=bg)
 
-def _cleanup_roots() -> Tuple[str]:
-    """The node IDs a cleanup must keep everything reachable from: the system prompt node, which is the root
-    of every chat in this datastore. Read fresh at each cleanup — a factory reset replaces that node, and a
-    stale ID here would declare the whole chat history unreachable."""
-    return (app_state["system_prompt_node_id"],)
+def _get_cleanup_roots() -> Tuple[str, ...]:
+    """The node IDs a cleanup must keep everything reachable from: **every** root, each of which is a system
+    prompt node holding the chats that were written under it.
+
+    Every root, not the configured one. The datastore keeps one card per variety, so the chats held under an
+    older card hang off a different root — and a sweep given only the current one would call all of them
+    unreachable and offer to delete them. Read fresh at each cleanup: roots come and go as the configuration
+    changes, and a stale list here is the same mistake in slower motion."""
+    return tuple(datastore.get_all_root_nodes())
 
 def _on_cleanup_committed(result: env) -> None:
     """Acknowledge a completed cleanup on the button that started it (the dialog is gone by now)."""
@@ -1938,7 +1936,7 @@ def _on_cleanup_committed(result: env) -> None:
                                ok=True, message=message, duration=gui_config.acknowledgment_duration)
 
 cleanup_dialog = DPGCleanupDialog(datastore=datastore,
-                                  get_roots=_cleanup_roots,
+                                  get_roots=_get_cleanup_roots,
                                   executor=bg,  # use the same thread pool as our main task manager
                                   themes_and_fonts=themes_and_fonts,
                                   save_app_state=lambda: appstate.save(state_file=librarian_config.llm_state_file, state=app_state),

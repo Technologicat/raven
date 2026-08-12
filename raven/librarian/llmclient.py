@@ -1006,10 +1006,11 @@ def reconnect(settings: env, quiet: bool = True) -> sym:
     state, whatever a script is holding — already has this one, and handing back a replacement would leave
     them all on the old.
 
-    What changes is everything the backend has a say in: which model is loaded, its context window, whether
-    it can see images, and therefore the character card, which tells the model its own identity and size. So
-    a caller holding a *stored* copy of that card has one more step to take — `appstate.refresh_system_prompt`
-    rewrites the node the chat is rooted at.
+    What changes is everything the backend has a say in: which model is loaded, its context window, and
+    whether it can see images. Nothing stored has to be repaired afterwards, because none of that is written
+    into the stored system prompt — a card's text comes from the configuration alone, and the model's
+    identity and the context length are stated per turn as injects. That is what makes reconnecting a
+    change of settings and nothing else.
 
     The token-per-character calibration `invoke` accumulates is reset along with the rest, which is what a
     changed model wants: the old figure describes a tokenizer that is no longer in the picture.

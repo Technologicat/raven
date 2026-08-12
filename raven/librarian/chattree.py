@@ -389,11 +389,14 @@ class Forest:
             `siblings` is a list of node IDs,
             `node_index` is the (0-based) index of `node_id` itself in the `siblings` list.
 
-        The sibling scan is performed via the parent node of `node_id`. If the parent is not found,
-        the return value is `(None, None)`. The return value is always arity-2 to support the pattern
-        `children, idx = datastore.get_siblings(node_id)` and then checking for `idx is None`.
+        The sibling scan is performed via the parent node of `node_id`. The return value is always arity-2
+        to support the pattern `children, idx = datastore.get_siblings(node_id)` and then checking for
+        `idx is None`.
 
-        A root node is defined as having no siblings. If you want all roots, use `get_all_root_nodes`.
+        **A root node's siblings are the other roots.** A forest holds several trees, and they stand beside
+        each other exactly as two replies to one message do — so a caller walking siblings walks between
+        trees at the top, which is how a chat under one system prompt is reached from a chat under another.
+        `get_all_root_nodes` gets the same list without needing a node to ask from.
         """
         with self.lock:
             if node_id not in self.nodes:
@@ -401,8 +404,9 @@ class Forest:
             node = self.nodes[node_id]
 
             parent_node_id = node["parent"]
-            if parent_node_id is None:  # root node?
-                return None, None
+            if parent_node_id is None:  # root node -> its siblings are the forest's other roots
+                siblings = self.get_all_root_nodes()
+                return siblings, siblings.index(node_id)
 
             if parent_node_id not in self.nodes:
                 raise KeyError(f"Forest.get_siblings: node '{node_id}': its parent node '{parent_node_id}' does not exist.")

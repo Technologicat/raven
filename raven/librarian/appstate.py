@@ -109,30 +109,47 @@ def _reset_datastore_and_update_state(settings: env,
     state["new_chat_HEAD"] = chatutil.factory_reset_datastore(datastore, settings)
     state["HEAD"] = state["new_chat_HEAD"]  # current last node in chat; like HEAD pointer in git
 
-def _get_system_prompt_node_id(datastore: chattree.Forest) -> str:
-    """Return the chat node ID of the system prompt.
+def _reference_root_node_id(datastore: chattree.Forest) -> str:
+    """Return the ID of *some* root node — any will do — for the payload-format migration.
+
+    `chatutil.upgrade_datastore` wants one as a *sample*: a root carries no client-added metadata even in
+    the oldest format, so its key set is the template for telling system-level keys from client ones. Which
+    root is therefore immaterial, and this runs before the configured one has been identified — the
+    migration has to go first, since matching a card by its content means reading content, and content is
+    not readable until it is in the current format.
 
     `datastore`: `chattree.PersistentForest` containing the chat database.
     """
     root_node_ids = datastore.get_all_root_nodes()
     if not root_node_ids:
-        logger.error("_get_system_prompt_node_id: No system prompt nodes found in datastore, cannot proceed.")
+        logger.error("_reference_root_node_id: No system prompt nodes found in datastore, cannot proceed.")
         raise ValueError("No system prompt nodes found in datastore, cannot proceed.")
-    if len(root_node_ids) > 1:
-        logger.info(f"_get_system_prompt_node_id: There is more than one system prompt node in datastore, picking the first one. IDs of all system prompt nodes: {root_node_ids}")
-    logger.info(f"_get_system_prompt_node_id: System prompt node ID is '{root_node_ids[0]}'.")
     return root_node_ids[0]
 
 def refresh_system_prompt(llm_settings: env,
                           datastore: chattree.Forest,
                           state: Dict) -> None:
-    """Refresh the system prompt in the datastore (to the one currently produced by `llmclient`).
+    """Point `state["system_prompt_node_id"]` at the root holding the currently configured system prompt.
 
-    A new revision is created on the system prompt node, and the previous revision is deleted.
+    Match-or-create, the same shape `_refresh_greeting` uses one level down: the roots are scanned for one
+    whose stored text equals the configured text, and a new root is created only when none matches. So the
+    datastore keeps every distinct system card, one per variety, and a chat stays rooted at the card it was
+    actually held under instead of silently acquiring today's.
 
-    `load` calls this, and so does a caller that has just changed what `llm_settings` says — notably
-    `llmclient.reconnect`, after which the stored card names a model that is no longer the one loaded, and
-    states a context length that was a default standing in for one.
+    What makes equality-of-text a sound key is that a card's text is determined by the configuration alone.
+    Anything the backend supplies — the model's identity, its context window — is stated per turn as an
+    inject and never written here, so two runs of an unedited config produce byte-identical text and match.
+    A deployment that does write a backend fact into its prose gets a root per distinct value, which is the
+    honest outcome: the text really is different.
+
+    Nothing is ever rewritten, so an old card is not lost and there is no revision to juggle. Reaching a
+    chat under an older card is branch navigation on the system prompt message — roots are each other's
+    siblings, see `chattree.Forest.get_siblings` — and a user who wants an old card gone, *along with every
+    chat held under it*, deletes it in the GUI. That is where a judgement about what is still wanted
+    belongs, and taking the subtree along is the point of it rather than a side effect.
+
+    NOTE: Requires the datastore to be in the current payload format, since it reads stored content. `load`
+    runs `chatutil.upgrade_datastore` first for that reason.
 
     NOTE: This is an evil mutating function that writes to `datastore`. The write happens in-memory;
     if `datastore` is a `PersistentForest`, it persists the changes at app exit.
@@ -145,14 +162,31 @@ def refresh_system_prompt(llm_settings: env,
 
     `state`: `dict` containing the app state (HEAD node, various persistent settings).
     """
-    system_prompt_node_id = _get_system_prompt_node_id(datastore)
-    state["system_prompt_node_id"] = system_prompt_node_id  # remember it, the GUI chat client needs it
-    old_system_prompt_revision_id = datastore.get_revision(node_id=system_prompt_node_id)
-    datastore.add_revision(node_id=system_prompt_node_id,
-                           payload=chatutil.create_payload(llm_settings=llm_settings,
-                                                           message=chatutil.create_initial_system_message(llm_settings)))
-    datastore.delete_revision(node_id=system_prompt_node_id,
-                              revision_id=old_system_prompt_revision_id)
+    with datastore.lock:
+        system_prompt_message = chatutil.create_initial_system_message(llm_settings)
+        configured_text = chatutil.content_to_text(system_prompt_message["content"]).strip()
+
+        for system_prompt_node_id in datastore.get_all_root_nodes():
+            payload = datastore.get_payload(system_prompt_node_id)  # currently active revision
+            message = payload["message"]
+            message_role = message["role"]
+            if message_role != "system":  # skip a non-system root (should not happen, but let's be robust)
+                logger.warning(f"refresh_system_prompt: Detected non-system message node (role = '{message_role}') '{system_prompt_node_id}' among the root nodes. Skipping.")
+                continue
+            if chatutil.content_to_text(message["content"]).strip() == configured_text:  # found it?
+                logger.info(f"refresh_system_prompt: Found currently configured system prompt at root node '{system_prompt_node_id}'.")
+                break
+        else:  # Currently configured system prompt not found among the roots -> create a new root for it
+            logger.info("refresh_system_prompt: Currently configured system prompt (see `raven.librarian.config`) not found among the root nodes. Creating a new root node for it.")
+            system_prompt_node_id = datastore.create_node(payload=chatutil.create_payload(llm_settings=llm_settings,
+                                                                                          message=system_prompt_message),
+                                                          parent_id=None)  # no parent -> another root in the forest
+            logger.info(f"refresh_system_prompt: Created new system prompt node '{system_prompt_node_id}'.")
+        # Remembered because it is what a *new* chat starts under, in both frontends: `_refresh_greeting`
+        # hangs the greeting off this node and points `new_chat_HEAD` at it, so this is the card the next
+        # conversation will be held under while the older ones keep theirs. The GUI reads it once more, to
+        # refuse deleting the card currently in use.
+        state["system_prompt_node_id"] = system_prompt_node_id
 
 def _refresh_greeting(llm_settings: env,
                       datastore: chattree.Forest,
@@ -335,30 +369,33 @@ def load(llm_settings: env,
         if state.pop(key, None) is not None:
             logger.info(f"load: Dropping retired key '{key}' from '{mayberel_state_file}' (resolved to '{state_file}')")
 
-    # Refresh the system prompt and AI greeting to the ones configured in `raven.librarian.config`.
+    # Migrate the datastore to the current format BEFORE anything reads message content. Both refreshes
+    # below compare stored content via `chatutil.content_to_text`, which assumes the content-parts format; a
+    # legacy datastore stores `content` as a bare string, so the migration must run first or those
+    # comparisons crash on the un-migrated data. (This updates only if needed.)
     #
-    #   - The system prompt node payload is overwritten by the new version.
-    #     - A new revision of the payload is created, and the old revision is deleted.
-    #     - Refreshing the system prompt also ensures that `state["system_prompt_node_id"]` is correct (and adds it to `state`, if missing).
-    #   - The AI greeting either uses an existing node, or creates a new node.
-    #     - If there is an existing AI greeting node (under the system prompt node) that matches the configured AI greeting text *for the current AI character*, that node is selected.
-    #     - Otherwise a new node is created with the configured AI greeting text (and due to OAI-compatible chatlog format, starting the message content with the AI character name)
-    #     - Refreshing the AI greeting sets `state["new_chat_HEAD"]` (always to a valid node, so we don't need to validate it here).
+    # It wants a root node as a sample of which keys are system-level, and any root will do — see
+    # `_reference_root_node_id`, which exists so that this can run before the configured card has been
+    # picked out rather than after.
+    # v0.2.3+: data format change
+    chatutil.upgrade_datastore(llm_settings,
+                               datastore,
+                               system_prompt_node_id=_reference_root_node_id(datastore))
+
+    # Point the app at the system prompt and AI greeting configured in `raven.librarian.config`. Both are
+    # match-or-create against what the datastore already holds, so neither overwrites anything:
+    #
+    #   - The system prompt: the root whose stored text matches the configured text is selected; if there is
+    #     none, a new root is created for it, and the chats under the other roots keep the card they were
+    #     held under. Sets `state["system_prompt_node_id"]` (and adds it to `state`, if missing).
+    #   - The AI greeting: likewise, among the children of that system prompt node, matching the configured
+    #     greeting text *for the current AI character* (the stored text starts with the character's name,
+    #     per the OAI-compatible chatlog format).
+    #     - Sets `state["new_chat_HEAD"]` (always to a valid node, so we don't need to validate it here).
     #
     refresh_system_prompt(llm_settings,
                           datastore,
                           state)
-
-    # Migrate the datastore to the current format BEFORE anything reads message content. `refresh_system_prompt`
-    # above only overwrites the system prompt node (it does not read content), and it sets
-    # `state["system_prompt_node_id"]`, which `upgrade_datastore` needs. `_refresh_greeting` below, however,
-    # compares stored greeting content via `chatutil.content_to_text`, which assumes the content-parts format;
-    # a legacy datastore stores `content` as a bare string, so the migration must run first or that comparison
-    # crashes on the un-migrated data. (This updates only if needed.)
-    # v0.2.3+: data format change
-    chatutil.upgrade_datastore(llm_settings,
-                               datastore,
-                               system_prompt_node_id=state["system_prompt_node_id"])
 
     _refresh_greeting(llm_settings,
                       datastore,

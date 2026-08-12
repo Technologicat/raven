@@ -792,6 +792,42 @@ would need a rule about which roots are still wanted — a different question fr
 worth raising for a node apiece. A user who wants one gone deletes it in the GUI (Juha) — which is the right
 place for a judgement about what is still wanted, and which is why the delete gate above has to admit it.
 
+#### Landed 2026-08-12, and the one thing the design had not foreseen
+
+All five parts, as specified above: match-or-create in `appstate.refresh_system_prompt`, a root's siblings
+being the other roots in `chattree.get_siblings`, `get_all_root_nodes()` at both prune call sites, and the
+delete gate on `state["system_prompt_node_id"]` rather than on root-ness. The controller needed no change
+for navigation, as predicted.
+
+**What the design had not foreseen is an ordering constraint in `appstate.load`.** Matching a card by its
+content means *reading* content — and `chatutil.upgrade_datastore` is what makes content readable, since a
+pre-0.2.3 datastore stores it as a bare string. But the migration was being handed
+`state["system_prompt_node_id"]`, which `refresh_system_prompt` set, so the two now wanted to run before
+each other. The knot unties on reading what the migration actually wants the node *for*: a sample of which
+keys are system-level, for which any root will do. Hence `_reference_root_node_id`, and the migration now
+runs first. Without this, the first launch on an old datastore would have crashed in the comparison.
+
+**Two consequences worth stating, because they change what other code should do:**
+
+- **`refresh_system_prompt` came out of the reconnect path** (`app.py`), exactly as this section predicted it
+  would. It is now match-or-create, so on an unchanged card it does nothing, and on a changed one it would
+  create a root mid-run with no greeting under it while `new_chat_HEAD` still pointed under the old — a
+  worse state than the staleness it was there to fix. A deployment whose own prose writes `{model}` into
+  the card picks up the new text at the next start.
+- **The memoized root lists in `chat_controller` had to be taken apart**, because deleting a card is now
+  possible and the memos were written when nothing could remove a root. The first attempt documented the
+  staleness as harmless — every caller only asks whether a *live* node is in the list — and that was the
+  wrong call twice over (Juha): a function whose name says it returns the system prompt nodes must not
+  return IDs of nodes that are gone, and `_get_all_greeting_node_ids` hands each of them to `get_children`,
+  which raises on a missing node. It was safe only because that function was memoized too, which is
+  fragility rather than correctness. So the O(n) scan stays cached under its own name, its result is
+  filtered against the live nodes, and the greeting list — now costing a child lookup per card — is not
+  cached at all.
+
+**Verified**: the card's text is identical across two different loaded models and across the no-backend
+case, which is the precondition that makes equality-of-text a usable key — pinned as a test, since the
+storage design silently degrades to one-root-per-model if it ever stops holding.
+
 #### Raised while doing the above, and not settled: the character card is carrying character-independent text
 
 `setup_interaction_style` — "About the system", "Interaction tips", "Known limitations", "Data sources" — is

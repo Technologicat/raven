@@ -295,11 +295,36 @@ class TestNavigation:
         assert siblings2 == [left, right]
         assert idx2 == 1
 
-    def test_get_siblings_of_root_returns_none(self, chain):
+    def test_a_lone_root_is_its_own_only_sibling(self, chain):
         f, a, _b, _c = chain
         siblings, idx = f.get_siblings(a)
-        assert siblings is None
-        assert idx is None
+        assert siblings == [a]
+        assert idx == 0
+
+    def test_the_siblings_of_a_root_are_the_other_roots(self, chain):
+        # A forest's trees stand beside each other exactly as two replies to one message do. Librarian walks
+        # this to reach a chat held under a different system prompt: each distinct card is its own root, so
+        # without it those chats are stored and unreachable.
+        f, a, _b, _c = chain
+        second = f.create_node("another root", parent_id=None)
+        third = f.create_node("a third root", parent_id=None)
+
+        siblings, idx = f.get_siblings(a)
+        assert siblings == [a, second, third]
+        assert idx == 0
+
+        siblings, idx = f.get_siblings(third)
+        assert siblings == [a, second, third]
+        assert idx == 2
+
+    def test_a_root_and_a_child_do_not_see_each_other_as_siblings(self, chain):
+        # The two cases stay separate: roots answer with roots, children with their parent's children.
+        f, a, b, _c = chain
+        f.create_node("another root", parent_id=None)
+        root_siblings, _idx = f.get_siblings(a)
+        child_siblings, _idx = f.get_siblings(b)
+        assert b not in root_siblings
+        assert a not in child_siblings
 
     def test_get_siblings_nonexistent_raises(self, forest):
         with pytest.raises(KeyError):
@@ -583,6 +608,18 @@ class TestMaintenance:
         assert r1 in forest.nodes
         assert r2 in forest.nodes
         assert orphan not in forest.nodes
+
+    def test_naming_one_root_condemns_the_other_trees(self, forest):
+        # Characterization, not a wish: a prune keeps what is reachable from the roots it was *given*, so a
+        # caller that names one root in a forest of several deletes everything under the rest. Librarian
+        # keeps one root per distinct system prompt, which makes every one of them a tree of real chats —
+        # so its callers pass `get_all_root_nodes()`, and this is what the shortcut would cost.
+        r1 = forest.create_node("r1", parent_id=None)
+        r2 = forest.create_node("r2", parent_id=None)
+        chat_under_r2 = forest.create_node("a chat held under the other card", parent_id=r2)
+
+        assert set(forest.list_unreachable_nodes(r1)) == {r2, chat_under_r2}
+        assert forest.list_unreachable_nodes(*forest.get_all_root_nodes()) == []
 
     def test_prune_dead_links_parent(self, forest):
         root = forest.create_node("root", parent_id=None)

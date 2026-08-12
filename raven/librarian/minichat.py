@@ -190,14 +190,17 @@ def minimal_chat_client(backend_url) -> None:
             # Before saving the chat database (which happens automatically at exit),
             # remove any nodes not reachable from the initial message, and also remove dead links.
             # There shouldn't be any, but this way we exercise these features, too.
-            try:
-                new_chat_node_id = app_state["new_chat_HEAD"]
-                system_prompt_node_id = datastore.get_parent(new_chat_node_id)
-            except KeyError:
-                logger.warning("During app shutdown: while pruning chat forest", exc_info=True)
+            #
+            # From *every* root, not from the one this session was held under. The datastore keeps one
+            # system prompt node per distinct card, so the chats written under an earlier card hang off a
+            # different root — walking down from this session's root alone would find them unreachable and
+            # delete them, silently, at exit.
+            root_node_ids = datastore.get_all_root_nodes()
+            if not root_node_ids:
+                logger.warning("During app shutdown: no root nodes in chat forest, skipping the prune")
             else:
-                datastore.prune_unreachable_nodes(system_prompt_node_id)
-                datastore.prune_dead_links(system_prompt_node_id)
+                datastore.prune_unreachable_nodes(*root_node_ids)
+                datastore.prune_dead_links(*root_node_ids)
         # We register later than `datastore` does (which `appstate.load` sets up), so ours runs first.
         # Hence we'll have the chance to prune before the forest is persisted to disk.
         #     https://docs.python.org/3/library/atexit.html

@@ -303,22 +303,78 @@ class TestSystemPromptRefresh:
         assert llm_settings.system_prompt in content
         assert llm_settings.character_card in content
 
-    def test_refresh_leaves_exactly_one_revision(self, tmp_path, llm_settings):
-        # The refresh adds a new revision and deletes the old one, so the node should
-        # end up with exactly one revision even after bootstrap + refresh.
+    def test_a_card_node_is_written_once_and_never_revised(self, tmp_path, llm_settings):
+        # A card is matched or created, never rewritten, so nothing accumulates revisions on it.
         datastore, state, _, _ = _load(tmp_path, llm_settings)
         system_prompt_node_id = state["system_prompt_node_id"]
-        revisions = datastore.get_revisions(system_prompt_node_id)
-        assert len(revisions) == 1
+        assert len(datastore.get_revisions(system_prompt_node_id)) == 1
 
-    def test_refresh_picks_up_updated_prompt(self, tmp_path, llm_settings):
-        # First load with original settings.
-        _load(tmp_path, llm_settings)
-        # Mutate llm_settings and reload.
+    def test_an_unchanged_config_reuses_the_same_root(self, tmp_path, llm_settings):
+        # The everyday case: start the app twice and nothing is added. This is what makes equality-of-text
+        # a usable key, and it holds only because no backend fact is written into the card.
+        _, state1, _, _ = _load(tmp_path, llm_settings)
+        datastore, state2, _, _ = _load(tmp_path, llm_settings)
+        assert state2["system_prompt_node_id"] == state1["system_prompt_node_id"]
+        assert len(datastore.get_all_root_nodes()) == 1
+
+    def test_an_edited_prompt_gets_its_own_root_and_the_old_one_survives(self, tmp_path, llm_settings):
+        datastore, state1, _, _ = _load(tmp_path, llm_settings)
+        old_root = state1["system_prompt_node_id"]
+
         llm_settings.system_prompt = "You are an updated assistant."
+        datastore, state2, _, _ = _load(tmp_path, llm_settings)
+
+        assert state2["system_prompt_node_id"] != old_root
+        assert "updated assistant" in chatutil.content_to_text(
+            datastore.get_payload(state2["system_prompt_node_id"])["message"]["content"])
+        assert old_root in datastore.get_all_root_nodes(), "the card an existing chat is rooted at must survive"
+
+    def test_a_chat_stays_under_the_card_it_was_held_under(self, tmp_path, llm_settings):
+        # The whole point of keeping one card per variety: editing the prompt must not silently re-root an
+        # existing conversation under text it was never written against.
         datastore, state, _, _ = _load(tmp_path, llm_settings)
-        payload = datastore.get_payload(state["system_prompt_node_id"])
-        assert "updated assistant" in chatutil.content_to_text(payload["message"]["content"])
+        old_root = state["system_prompt_node_id"]
+        chat_node = datastore.create_node(payload={"message": {"role": "user",
+                                                               "content": [{"type": "text", "text": "hi"}],
+                                                               "tool_calls": []},
+                                                   "general_metadata": {"persona": None}},
+                                          parent_id=state["new_chat_HEAD"])
+        datastore.save()
+
+        llm_settings.system_prompt = "You are an updated assistant."
+        datastore, _, _, _ = _load(tmp_path, llm_settings)
+
+        assert chat_node in datastore.nodes
+        assert datastore.linearize_up(chat_node)[0] == old_root
+
+    def test_going_back_to_a_previous_prompt_costs_no_nodes(self, tmp_path, llm_settings):
+        # Matching by content, not by insertion order, so switching back and forth between two configured
+        # prompts reuses both roots rather than growing one per app start.
+        original = llm_settings.system_prompt
+        _, state1, _, _ = _load(tmp_path, llm_settings)
+        llm_settings.system_prompt = "You are an updated assistant."
+        _load(tmp_path, llm_settings)
+        llm_settings.system_prompt = original
+        datastore, state3, _, _ = _load(tmp_path, llm_settings)
+
+        assert state3["system_prompt_node_id"] == state1["system_prompt_node_id"]
+        assert len(datastore.get_all_root_nodes()) == 2
+
+    def test_the_card_does_not_depend_on_what_the_backend_reports(self, tmp_path, llm_settings):
+        # The precondition for all of the above. If a backend fact reached the stored text, a user who
+        # loaded a different model would get a new root per model, and their chats would scatter across
+        # roots that differ by a line nobody wrote. Those facts are per-turn injects for this reason.
+        from unpythonic.env import env as _env
+        from raven.librarian import llmclient
+
+        def card_for(label, context_length):
+            settings = llmclient.configure(model_info=_env(label=label, model_id=label,
+                                                           context_length=context_length,
+                                                           is_vlm=True, loaded=True),
+                                           backend_flavor="lmstudio", backend_url="http://x", quiet=True)
+            return chatutil.content_to_text(chatutil.create_initial_system_message(settings)["content"])
+
+        assert card_for("model-a, Q4, 128 Ki context", 131072) == card_for("model-b, Q8, 8 Ki context", 8192)
 
 
 # ---------------------------------------------------------------------------

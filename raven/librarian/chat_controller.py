@@ -202,22 +202,31 @@ def format_chat_message_for_clipboard(message_number: Optional[int],
     return f"{message_heading}{message_text}"
 
 @memoize
+def _scan_for_root_nodes(datastore: chattree.Forest) -> List[str]:
+    """The O(n) scan behind `_get_all_system_prompt_node_ids`, memoized on its own so the result can be filtered.
+
+    Memoized because it would otherwise run once per chat message widget created, over the whole datastore.
+    Safe to cache because roots are only ever *created* while the app state loads, before any of this
+    exists. They can still go away — see the caller, which is where that is dealt with.
+    """
+    return datastore.get_all_root_nodes()
+
 def _get_all_system_prompt_node_ids(datastore: chattree.Forest) -> List[str]:
     """As it says on the tin.
 
-    As of v0.2.4, there is just one system prompt node (which is dynamically updated at app startup),
-    but this may change in the future, so we future-proof this by doing the semantically Right Thing:
-    looking up all root nodes of the chat forest.
+    There are as many as there are distinct system prompts the datastore has seen: `appstate` keeps one root
+    per variety of card, so a chat written under an older card is rooted at its own. Every root is a system
+    prompt node, which is what makes `get_all_root_nodes` the whole answer.
 
-    Memoized; it's an O(n) search, which would need to run for each chat message widget created.
-    The node ID of a system prompt node doesn't change once the node has been initially created.
+    The scan is cached, but the answer is not: a card that is not the one in use can be deleted from the
+    GUI, so the cached list is filtered against the live nodes before it is returned. Skipping that filter
+    would leave this returning IDs of nodes that no longer exist — and `_get_all_greeting_node_ids` asks
+    `get_children` about each of these, which raises on a node that is gone.
 
     See also `_get_all_greeting_node_ids`.
     """
-    system_prompt_node_ids = datastore.get_all_root_nodes()
-    return system_prompt_node_ids
+    return [node_id for node_id in _scan_for_root_nodes(datastore) if node_id in datastore.nodes]
 
-@memoize
 def _get_all_greeting_node_ids(datastore: chattree.Forest) -> List[str]:
     """As it says on the tin.
 
@@ -227,7 +236,10 @@ def _get_all_greeting_node_ids(datastore: chattree.Forest) -> List[str]:
     Hence the reliable way to detect is to see whether the node a direct child node of a root node;
     any root node is a system prompt node.
 
-    Same remarks as for `_get_all_system_prompt_node_ids`, which see.
+    Not memoized, unlike the scan it is built on: greetings come and go with the cards they hang from — a
+    card deleted in the GUI takes its greetings with it — and a cached list would keep answering with them.
+    The cost without a cache is a child lookup per system prompt, of which there are as many as the user has
+    distinct prompts; the part that is worth caching is the scan over every node, and that still is.
     """
     system_prompt_node_ids = _get_all_system_prompt_node_ids(datastore=datastore)
     greeting_node_idss = [datastore.get_children(node_id) for node_id in system_prompt_node_ids]
@@ -289,10 +301,11 @@ class DPGChatMessage:
         Returns the node ID of the sibling, or `None` if no such sibling.
 
         May return `node_id` itself.
+
+        Works at the top of the tree as well: a root's siblings are the forest's other roots, so this walks
+        between system prompts — which is how a chat held under an earlier card is reached.
         """
         siblings, this_node_index = self.parent_view.chat_controller.datastore.get_siblings(node_id)
-        if siblings is None:  # can happen for root node
-            return None
         if direction == "next":
             if step is None:  # jump to end
                 return siblings[-1]
@@ -1038,9 +1051,19 @@ class DPGChatMessage:
 
         # Delete subtree starting from this node (requires a confirmation click)
         #
-        # NOTE: We disallow deleting the system prompt and the AI's initial greeting, as well as any message that is not linked to a chat node in the datastore.
+        # NOTE: We disallow deleting the AI's initial greeting, any message not linked to a chat node in the
+        #       datastore, and the system prompt node the app is *currently configured with* — deleting that
+        #       one would take the chat the user is in, and the app would recreate it at the next start.
+        #
+        #       Any *other* system prompt node may be deleted, and taking its subtree along is the point
+        #       rather than a side effect: those are the chats held under that card, and this is where a
+        #       judgement about which cards are still wanted belongs. The datastore keeps one card per
+        #       variety and never collects them (a root is reachable by construction), so without this there
+        #       would be no way to be rid of one. With a single root the test degenerates to the old
+        #       behaviour, that root being the configured one.
+        configured_system_prompt_node_id = self.parent_view.chat_controller.app_state["system_prompt_node_id"]
         delete_enabled = ((node_id is not None) and
-                          (node_id not in system_prompt_node_ids) and
+                          (node_id != configured_system_prompt_node_id) and
                           (node_id not in greeting_node_ids))
         def delete_subtree_callback():
             current_time = time.monotonic_ns()
