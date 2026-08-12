@@ -5,7 +5,7 @@ Librarian session ended up ~1000 lines apart.)
 
 ## Holding the chat view's scrollbar does not hold your place while a reply streams
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-08-03*
+*Cluster: ? · Cost: ? · Gate: 0.2.9 · Filed: 2026-08-03*
 
 `raven/librarian/chat_controller.py` plus a new per-frame hook, probably in
 `raven/common/gui/animation.py`. Grab the scrollbar mid-reply and hold it: the view creeps downward, roughly
@@ -36,7 +36,7 @@ the chat-view scrolling live test (2026-08-03).
 
 ## `SmoothScrolling` commits during construction, so it cannot be built without being fired
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-08-03*
+*Cluster: ? · Cost: ? · Gate: 0.2.9 · Filed: 2026-08-03*
 
 `raven/common/gui/animation.py`. `SmoothScrolling.__init__` ends by calling `self.start()`, which is not a
 start at all — it is the deduplication step: under `class_lock`, it either retargets the instance already
@@ -66,7 +66,8 @@ caller's problem, and the ghost concept may leave the public surface entirely.
 
 Deferred rather than done because it is a pure refactor of code both GUI apps' scrolling runs through, with
 no user-visible change, raised while the chat-view scrolling was still under live test. Do it once that work
-is confirmed stable. Raised by Juha, who asked whether the design was dangerous; agreed worth fixing
+is confirmed stable. Note the 2026-08-11 follow-tail fix went *around* `self.start()` rather than into it, so
+the construction-time commit is untouched and this is still exactly as filed. Raised by Juha, who asked whether the design was dangerous; agreed worth fixing
 (2026-08-03).
 
 ## The DPG tests we have never run in CI
@@ -113,7 +114,7 @@ the reason given.
 
 ## Make the DPG reference a skill, so it fires when it is needed
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-08-03*
+*Cluster: ? · Cost: ? · Gate: 0.2.9 · Filed: 2026-08-03*
 
 `CLAUDE.md` says "**Before editing any DPG code, read `dpg-notes.md` first**" and defines what counts as DPG
 code. That is about as strong as prose gets, and it still depends on the agent noticing and obeying a line —
@@ -153,7 +154,7 @@ seen at the moment it is needed, and again 2026-07-31. Filed as two separate ite
 
 ## The 8/3 pass: bare DPG margins should name themselves
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-07-31*
+*Cluster: hygiene-sweep · Cost: ? · Gate: hygiene-sweep · Filed: 2026-07-31*
 
 `raven.common.gui.utils` now carries `DPG_WINDOW_PADDING = 8` and `DPG_FRAME_PADDING_Y = 3`, named after the
 style variable each mirrors. The constants exist; the sweep that puts them everywhere they belong does not.
@@ -199,7 +200,7 @@ whether the model behind them is wrong, but not part of this pass.
 
 ## Smooth scrolling in Cherrypick too, now that Librarian has it
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-08-03*
+*Cluster: ? · Cost: ? · Gate: 0.2.9 · Filed: 2026-08-03*
 
 **The precondition is met** (2026-08-03): Librarian's chat panel has `SmoothScrolling`, the reader-driven
 keys, and the `ScrollEndFlasher`, all live-tested. So three apps now glide — Visualizer, Librarian, and the
@@ -258,7 +259,7 @@ Cherrypick has none of the three.
 
 ## `replace_last_paragraph`'s `dpg.mutex()` is disabled because it hangs the app
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-07-30*
+*Cluster: ? · Cost: ? · Gate: — · Filed: 2026-07-30*
 
 `chat_controller.DPGChatMessage.replace_last_paragraph` swaps the in-progress paragraph by deleting its widget
 and re-rendering. The `with dpg.mutex():` that would confine both halves to a single frame is commented out,
@@ -288,7 +289,7 @@ Noticed while auditing `split_frame` hazards (2026-07-30); flagged for tracking 
 
 ## The subtitle translator silently drops `=` (and probably other symbols)
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-07-30*
+*Cluster: ? · Cost: ? · Gate: — · Filed: 2026-07-30*
 
 The AI answered "2 + 2 = 4." and the subtitle read "2 + 2  4." — two spaces where the `=` had been
 (screenshot, 2026-07-30). The chat panel rendered the same string correctly, so nothing is wrong with the text
@@ -332,7 +333,7 @@ Discovered by Juha (2026-07-30), during the chat-view scrolling live tests.
 
 ## Revisit `recenter_window`'s degrade-instead-of-raise policy
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-07-30*
+*Cluster: ? · Cost: ? · Gate: next · Filed: 2026-07-30*
 
 `guiutils.recenter_window` passes `required=False` for its offscreen-measure wait, so calling it from the
 render loop thread warns and centers using whatever size the window reports pre-autosize. Provisional, kept
@@ -388,7 +389,7 @@ and the classification is the slow part.
 
 ## The avatar upscaler offers bilinear and bicubic, but not Lanczos
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-07-29*
+*Cluster: ? · Cost: ? · Gate: 0.2.9, early · Filed: 2026-07-29 · See also: "Move the avatar backdrop onto `image.utils.fit_cover`"*
 
 `raven.common.video.upscaler.Upscaler`'s `quality` parameter takes `"low"` / `"high"` (Anime4K model sizes)
 or `"bilinear"` / `"bicubic"` (bypass Anime4K entirely, straight to `torch.nn.functional.interpolate`).
@@ -448,7 +449,7 @@ Discovered while picking icons for the tool-call navigation links (2026-07-30).
 
 ## GUI: hardcoded stand-ins for values DPG has no getter for
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-07-30*
+*Cluster: ? · Cost: ? · Gate: — · Filed: 2026-07-30*
 
 DPG exposes very few getters for theme state — there is no way to ask a theme for its colors or spacings —
 so code that wants to *restore* a value ends up guessing a literal instead. Found while widening `ButtonFlash`
@@ -527,11 +528,35 @@ Two separable pieces of work, and the cheap one is worth doing even if the other
   are genuinely stuck until upstream grows a getter. Those that are stuck should at least say so, so the next
   reader knows it is a workaround rather than a choice.
 
+### The general pattern, if this is ever taken up: shadow state
+
+Stated generally (Juha, 2026-08-11), because it is not a DPG quirk. **When a stateful third-party API accepts
+writes but exposes no reads, state cannot be recovered by asking — so become the sole writer and record what
+went in.** A registry, and all writes funnelled through it.
+
+Raven already has a worked example, including the failure mode. `commanded_y_scroll` is exactly this: a box
+recording every scroll position written, because DPG's reported position cannot distinguish "we moved it"
+from "the reader moved it". And the 2026-08-11 follow-tail bug was that shadow drifting from reality — the
+record held a value the panel never took, because DPG clamped the write and the animation waited for an
+equality that could never hold.
+
+Three properties it carries:
+
+- **Record what was observed, not what was requested**, wherever the result is observable. That is what the
+  follow-tail fix changed, and it is the difference between a shadow that tracks reality and one that tracks
+  intent.
+- **It requires sole writership.** Anything else mutating the state drifts the shadow — and a drifted shadow
+  is worse than none, since confidently wrong beats honestly unknown and this gives the former. So a direct
+  call to the underlying setter becomes a bug.
+- **Measured defaults are version-fragile.** Initial state is not observable either, so it comes from
+  measurement, and a measured default can go silently wrong on a library upgrade with nothing reporting it.
+  Same shape as the linter-canary item, and it wants the same answer: assert the measured value still holds.
+
 Raised by Juha (2026-07-30), while reviewing the `WidgetFlash` theme-restore fix.
 
 ## Web status panel: check on a long job without being at the machine
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-07-30*
+*Cluster: ? · Cost: ? · Gate: next · Filed: 2026-07-30*
 
 The motivating case is concrete: a ~12k-abstract hydrogen indexing run, and no way to see how it is doing
 except the Librarian window and the terminal that launched it. From a phone, from another room, there is
@@ -627,11 +652,30 @@ dependence on a live socket to show anything — a meta-refresh or a small poll 
 blank until a websocket connects, over a link that may be poor. And no CDN assets: Raven is local-first and
 must work with no internet at all, so whatever CSS/JS there is ships in the repo.
 
+**This is the first scope of something larger** (2026-08-11). If the engine is live, a JS frontend to the
+whole stack follows: Librarian usable from a phone on the same LAN, Visualizer as a web interface. It is also
+where the world is — desktop apps are the minority, and the mainstream expectation is browser-accessible or
+it does not exist. Adjacent to the parked JS avatar client. The status panel is the right first scope
+precisely because it is the smallest surface: read-only, no auth.
+
+**One licensing consequence, and it is narrower than it first looks.** A web frontend does *not* inherit
+`AGPL-3.0-only` by calling raven-server — a client talking to it at arm's length over HTTP is a separate
+work, which is why Librarian, a Python client of the same server, does not inherit it today. What changes is
+on the *server* side, and it is about users rather than scope: AGPL §13's source-offer obligation runs to
+those interacting with the program remotely over a network. Today the server has one user, who has the
+source, so the obligation is satisfied invisibly; exposed on a LAN for other people, those people become
+remote users and the offer has to be made for real. That is a property of raven-server having been AGPL all
+along, not of the frontend existing.
+
+Not a gate on the work — remote users here are either the same person as the local user, or lab colleagues
+who have repo access anyway, and nothing is served to the internet. Do it regardless: a visible source offer
+from the server or the web UI, linking to the public repo. Cheap, correct, and good advertising.
+
 Raised by Juha (2026-07-30), from wanting to check the hydrogen indexing run from a phone.
 
 ## Browse *all* attachments in the datastore, not just the orphaned ones
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-07-29*
+*Cluster: ? · Cost: ? · Gate: next · Filed: 2026-07-29*
 
 The cleanup dialog (`raven/librarian/cleanup_dialog.py`) turned out to be a decent attachment browser that
 happens to be filtered to orphans. Point the same machinery at `list_sidecar_files()` instead of
@@ -708,7 +752,7 @@ Raised by Juha (2026-07-29), right after the cleanup dialog landed.
 
 ## Move the avatar backdrop onto `image.utils.fit_cover`
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-07-29*
+*Cluster: ? · Cost: ? · Gate: 0.2.9, early · Filed: 2026-07-29 · See also: "The avatar upscaler offers bilinear and bicubic, but not Lanczos", "Consolidate remaining numpy/tensor/DPG image conversions"*
 
 `DPGAvatarRenderer.configure_backdrop` (`raven/client/avatar_renderer.py`) scales its backdrop with PIL —
 `scale = max(...)`, resize, crop — which is exactly what `raven.common.image.utils.fit_cover` now does. Porting
@@ -741,11 +785,15 @@ small ones back.
 
 None of this is urgent: the resize fires on a window resize, never in a hot loop.
 
+**One session should close this and the Lanczos item together**, and the numpy/tensor/DPG conversion item
+if it fits. All three are the same shape: the constellation grew a shared implementation and a call site
+predates it, so each is a small port that leaves one fewer resampler or converter behind.
+
 Noticed while extracting `fit_contain` / `fit_cover` for the cleanup preview's thumbnail grid (2026-07-29).
 
 ## TODO.md goes stale because nothing in the workflow makes anyone visit it
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-07-29*
+*Cluster: ? · Cost: ? · Gate: periodic · Filed: 2026-07-29*
 
 The two lists have different failure rates and the reason is mechanical rather than a matter of discipline.
 `TODO_DEFERRED.md` stays fresh because the workflow *writes to it as a side effect of doing other work*:
@@ -768,6 +816,12 @@ an event.** So candidate directions, in rough order of how much they change:
   fix rather than reconstructed at release time.
 
 Worth thinking about before the list grows further; not worth a big refactor of the file itself.
+
+**Half of this has now happened, and the half that is left is the recurring one.** The 2026-08-10 sweep and
+the triage that followed it are the one-off reconciliation, and the `## Already done` section below is the
+closing ritual the file never had. Neither of those makes anyone visit the list *again*, which was the
+complaint — so what survives is a periodic pass, and the natural hook for it is the release procedure, which
+is already a ritual somebody performs.
 
 Discovered while closing brief 10 and finding a stale item next to an accurate one (2026-07-29).
 
@@ -793,7 +847,7 @@ Raised by Juha (2026-07-28).
 
 ## Make the canned AI greeting optional
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-07-28*
+*Cluster: ? · Cost: ? · Gate: next · Filed: 2026-07-28*
 
 A new chat opens with a canned greeting from the AI (`raven.librarian.config`, "Names, AI's greeting"). That is a
 2024-ism: as of mid-2026 the first message after the system prompt can just as well be the user's, and an opening
@@ -803,26 +857,32 @@ Make it optional: blank in config means no greeting node at all, and starting a 
 system prompt instead. The assumption is baked into several places, and one of them fails silently rather than
 loudly:
 
-- `chat_controller._get_all_greeting_node_ids` identifies a greeting *structurally*, as any direct child of a
-  root (system prompt) node — deliberately, so that a chat stored under an older config's greeting is still
-  recognized. With no greeting node, the direct children of the system prompt are **the user's first messages**,
-  so every first message in every chat would be classified as a greeting. Reroll, continue, branch-from-here and
-  delete are all gated on `node_id not in greeting_node_ids`, so they would quietly go dead on exactly those
-  messages. This one needs a real fix, not a length tweak.
-- `chat_controller.py:653`, an `assert k < len(...) - 3` whose comment enumerates system prompt + greeting +
-  first user message.
-- `minichat.py:453`, `len(node_id_history) < 4`, counting the greeting as one of four expected nodes.
+- ~~`chat_controller._get_all_greeting_node_ids` classifies every first user message as a greeting.~~
+  **Fixed 2026-08-12** — the one this item flagged as needing "a real fix, not a length tweak", and it was
+  the largest blocker. Greeting detection now checks `role == "assistant"` as well as position, so a user
+  message sitting where a greeting would be is no longer taken for one. It landed for its own reasons:
+  multi-root system prompts made HEAD able to rest on a root, which forced the same distinction.
+- `chat_controller`'s `assert k < len(...) - 3`, whose comment enumerates system prompt + greeting + first
+  user message.
+- `minichat`'s `len(node_id_history) < 4`, counting the greeting as one of four expected nodes.
 - `chatutil.factory_reset_datastore` (creates the node) and `appstate._refresh_greeting` (rewrites it on load),
-  which is also where "blank means omit" has to be honoured.
+  which is also where "blank means omit" has to be honoured — and with no greeting, `_refresh_greeting` must
+  point `new_chat_HEAD` at the system prompt node itself. **That state is supported now**: HEAD resting on a
+  root stopped being an anomaly on 2026-08-12, which is what the role check and the one-step descent in
+  `_descend_to_latest` were for.
+
+**Keep a greeting for the exhibit.** A visitor facing a blank chat has nothing telling them what this is or
+that it is ready — so the night runs with either the current "How can I help you today?" or an explanatory
+line. The philosophically correct version lands after.
 
 Related: [Modernize the Librarian system prompt / character card] — same question of how much identity the
-frontend should assert at a modern model.
+frontend should assert at a modern model, and worth deciding as one.
 
 Raised by Juha (2026-07-28).
 
 ## TTS reads arXiv IDs digit by digit
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-07-28*
+*Cluster: ? · Cost: ? · Gate: next · Filed: 2026-07-28*
 
 Qwen likes to cite arXiv papers by their full identifier, and the TTS then says
 "twenty twenty six dot zero five ... v three" — long, and the least informative part of the sentence gets the most
@@ -839,7 +899,7 @@ Discovered while fixing the zero-segment TTS crash (2026-07-28, reported by Juha
 
 ## The licensing story is accurate only in a subdirectory README
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-08-03*
+*Cluster: ? · Cost: ? · Gate: 0.2.9, with the first PyPI upload · Filed: 2026-08-03 · See also: "Decide the public name" (Declined — the decision is recorded there)*
 
 Raven ships under **three** licences, and none of the three places a reader would look says so. Verified in
 the tree 2026-08-03:
@@ -997,7 +1057,7 @@ PEP 639 deprecates those, and this project is already clean on that axis.
 
 ## Two adopted directories ship without their licence text
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-08-03*
+*Cluster: ? · Cost: ? · Gate: 0.2.9, soon · Filed: 2026-08-03*
 
 Found while enumerating the adopted licences for the sibling item on Raven's own licensing docs, and filed
 separately because it is a different kind of problem with a different urgency: shipping someone else's code
@@ -1030,6 +1090,10 @@ being incomplete. This one wants fixing on its own, ahead of and independently o
 
 `LICENSE.md` and `README.md` should carry the same breakdown as the table above, since those are what a human
 reads before deciding anything.
+
+**Establish what is actually left before scheduling this.** A round of missing-`LICENSE` fixes landed in the
+weeks after filing, so some of the above may be done. And a filename-matching audit will report Font Awesome
+as a false positive: all its fonts ship in one folder whose licence file is not named exactly `LICENSE`.
 
 Raised during the vision-document discussion with claude.ai, 2026-08-03. Note the claim as relayed was that
 "the server and parts of the avatar are AGPL" — accurate, but checking the tree also turned up the MIT
@@ -1217,7 +1281,7 @@ built.
 
 ## Librarian's help card has no room to describe attachments
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-08-05*
+*Cluster: ? · Cost: ? · Gate: next · Filed: 2026-08-05 · See also: "Fleet audit: every hotkey discoverable in a tooltip + help card"*
 
 The prose was brought up to date 2026-08-04 — five tools instead of one, the real ingested file types, and
 the two "this is a tech demo" claims gone. **Attachments are still not mentioned at all**, though they are
@@ -1244,6 +1308,10 @@ One thing learned while fitting the text, worth knowing before touching it again
 Note that the clipping is *not* a `dpg_markdown` limitation: it wraps when passed `wrap=`, which is how the
 chatlog does it (`chat_controller.py`, `wrap=chat_text_w`). The help card simply never passes one, so each
 `add_text` is one unwrapped line. Whichever way the shape decision goes, wrapping is available.
+
+**Do it in one pass with the hotkey-discoverability audit**, which rewrites the same card from the other
+direction. Note also that the chat graph view will want an entry here plus a hotkey-shaped gesture of its
+own, so the redesign should be able to take one more feature without another shape decision.
 
 ## `dpg_markdown` intermittently drops a single letter from rendered text
 
@@ -1273,7 +1341,7 @@ Related: the fleet-wide hotkey-discoverability audit above, which touches the sa
 
 ## Modernize the Librarian system prompt / character card
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-07-30*
+*Cluster: ? · Cost: ? · Gate: next · Filed: 2026-07-30 · See also: `briefs/researchers-night/done/15_headless-agent-driver-brief.md` (final section)*
 
 The default system prompt (`raven.librarian.config`) reads as dated for current instruction-tuned models —
 "take a deep breath and think step by step", "believe in your abilities and strive for excellence", "you are
@@ -1312,6 +1380,16 @@ Four things make this less obvious than it looks:
   system-block build time, not per turn.)
 - **Say how to attach, not just what.** "Yes, `.docx` works" is a dead end if the model cannot then point at
   the paperclip. The prompt should name the affordance alongside the formats.
+
+**Do not fold `setup_interaction_style` into the system prompt as a unit**, which is the obvious move and is
+wrong. Brief 15's final section works out why: it is three different kinds of thing wearing one name —
+deployment facts, conversational manner, and two backend facts that have since moved to per-turn injects
+because they change per turn. Each half wants a different home, so the rewrite has to take it apart first.
+That analysis exists nowhere else.
+
+Post-exhibit either way: a prompt change needs soak time, and there are more valuable things before the
+night. **Decide it together with "Make the canned AI greeting optional"** — both are one question about how
+much identity the frontend should assert at a model that does not need it told.
 
 Extension raised by Juha (2026-07-30).
 
@@ -1434,7 +1512,7 @@ Discovered during avatar-client-crop brief review (2026-04-20).
 
 ## Split `raven.common.nlptools` per backend (reduce import weight)
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-04-21*
+*Cluster: ? · Cost: ? · Gate: — · Filed: 2026-04-21*
 
 `raven.common.nlptools` is a hub module: it imports `torch`, `transformers`, `sentence_transformers`, `flair`, `dehyphen`, and `spacy`. All five ML-engine loaders (spaCy, classifier, dehyphenator, embedder, translator) live in it, so importing the module drags the entire ML stack into any process that touches it.
 
@@ -1460,7 +1538,7 @@ Discovered during natlang wire-format migration (2026-04-21).
 
 ## Uniform load-on-demand for Raven-server modules
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-07-28*
+*Cluster: ? · Cost: ? · Gate: — · Filed: 2026-07-28*
 
 Raven-server keeps every model resident. That is the right default when the server owns the GPU, and the
 wrong one on a laptop dGPU where the VRAM budget is already spent on the LLM and the avatar — any new
@@ -1480,7 +1558,7 @@ Raised while scoping RAG reranking (2026-07-28, Juha).
 
 ## Remaining server modules without a MaybeRemote
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-04-22*
+*Cluster: ? · Cost: ? · Gate: next, scoped down · Filed: 2026-04-22*
 
 With `Classifier`, `Translator`, `Postprocessor`, `Upscaler` landed (2026-04-22), the following server modules still don't participate in the MaybeRemote pattern:
 
@@ -1491,14 +1569,14 @@ These are both intentional omissions, not TODO gaps. Kept as a navigational note
 
 ## Client-local avatar animator (licensing-bounded)
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-04-17*
+*Cluster: ? · Cost: ? · Gate: next, deprioritized · Filed: 2026-04-17*
 
-The avatar animator currently lives only in `raven.server.modules.avatar` under AGPL. THA3 upstream (the underlying ML model, vendored in `raven/vendor/tha3/`) is actually MIT — so the AGPL tax comes from Raven-side extensions, not the model itself.
+The avatar animator currently lives only in `raven.server.modules.avatar` under AGPL. THA3 upstream (the underlying ML model, vendored in `raven/vendor/tha3/`) is MIT — so the AGPL does not come from the model. It comes from the *detour*: the animator reached Raven through SillyTavern-Extras, which is AGPL, and `raven/avatar/README.md` says the licence exists to comply with that. Raven-side extensions are the one thing that is *not* the source of it.
 
 A client-local animator would be valuable even though the server one stays:
 
 - It extends the "server-optional" story (the goal behind the existing MaybeRemote pattern) to the avatar: a Raven app running standalone could still show the avatar, without requiring the server to be running.
-- It enables a **fully-BSD Raven distribution** — simpler to configure for single-app users, and avoids the "license: it's complicated" friction that tends to drive people away from otherwise-perfectly-serviceable software.
+- It enables a **fully-BSD Raven distribution** — simpler to configure for single-app users, and avoids the "license: it's complicated" friction that tends to drive people away from otherwise-perfectly-serviceable software. Note this is not a relicensing decision available unilaterally: it is a *rewrite* of the parts Juha did not author, which is what makes deprioritizing straightforwardly right rather than a judgement call. Everything unilaterally relicensable has already been relicensed — the postprocessor in particular. What remains derived is the **service skeleton**: the THA3 + distilBERT wiring and the `x-multipart-replace` video-streaming approach, built on and partly rewritten, but from ST-Extras. "Partly rewritten but derived" is the hardest of the three positions — wholly inherited is clear and wholly rewritten is clear, while a substantially reworked file has no bright line where derivation ends, so the rewrite's *endpoint* is unfalsifiable without someone qualified saying it is now a different program. A stronger reason to defer than the effort estimate is. (OSS licences bind on *distribution*, so private experimentation is unconstrained — though that is a lot of building for something that could not be pushed to GitHub.)
 - It skips the QOI encode/decode + loopback-socket round-trip. This *may* be a meaningful latency contributor even on localhost setups — needs measuring before being used as justification. On a non-localhost server setup, the user has put the server elsewhere for a reason (shared GPU across machines, a specific box with the VRAM, etc.), so "skip the network" isn't really the escape for those cases — a client-local animator helps only standalone / localhost use.
 
 **Per-module authorship provenance on the server side** (for scoping what can / can't be unilaterally relicensed):
@@ -1546,7 +1624,7 @@ No action until the user decides whether to pursue the clean-room path. Discover
 
 ## Untested but test-worthy modules in `raven.common`
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-04-17*
+*Cluster: ? · Cost: ? · Gate: 0.2.9 · Filed: 2026-04-17*
 
 Cross-referencing `raven/common/**/*.py` against existing `tests/` dirs, the following have non-trivial algorithmic content but no tests:
 
@@ -1623,7 +1701,7 @@ Discovered during scaffold/appstate test work (2026-04-17).
 
 ## MPS (Apple Silicon) device synchronization
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-03-30*
+*Cluster: ? · Cost: ? · Gate: — · Filed: 2026-03-30*
 
 `torch.cuda.synchronize()` calls throughout the codebase (preload cache, imageview mip loading) only handle CUDA/ROCm. Apple MPS (`torch.device("mps")`) needs `torch.mps.synchronize()` instead. Audit all `torch.cuda.synchronize` call sites and add MPS equivalents. Consider a `deviceinfo.synchronize(device)` helper.
 
@@ -1651,7 +1729,7 @@ Discovered while implementing `raven/common/image/lanczos.py`.
 
 ## pillow-simd for faster PIL image processing
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-03-17*
+*Cluster: ? · Cost: ? · Gate: — · Filed: 2026-03-17*
 
 `pillow-simd` is a drop-in Pillow replacement with SIMD-optimized processing (resize, convert, transpose, etc.). Doesn't accelerate format decoders (libjpeg, libpng), but Raven has real PIL `.resize()` calls that would benefit:
 
@@ -1665,7 +1743,7 @@ Discovered during raven-cherrypick loader pipeline design.
 
 ## Consolidate remaining numpy/tensor/DPG image conversions
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-03-20*
+*Cluster: ? · Cost: ? · Gate: 0.2.9 if it fits · Filed: 2026-03-20 · See also: "The avatar upscaler offers bilinear and bicubic, but not Lanczos", "Move the avatar backdrop onto `image.utils.fit_cover`"*
 
 `raven/common/image/utils.py` provides canonical `np_to_tensor`, `tensor_to_np`, `tensor_to_dpg_flat`. The `imagefx.py` conversions have been migrated. Remaining sites have intentional differences that make direct replacement impractical:
 
@@ -1704,17 +1782,22 @@ Discovered during raven-cherrypick development.
 
 ## Robust public API auditing tool
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-03-18*
+*Cluster: ? · Cost: ? · Gate: — · Filed: 2026-03-18*
 
 A tool that checks all public symbols are listed in `__all__` (PEP 8 compliance). The simple AST approach works for straightforward modules but misses re-exports, macro-generated symbols, and barrel `__init__.py` patterns. See mcpyrate's troubleshooting docs for the full complexity: https://github.com/Technologicat/mcpyrate/blob/master/doc/troubleshooting.md#how-to-list-the-whole-public-api-and-only-the-public-api
 
 Could be a useful addition to pyan3 (static call graph generator already understands Python module structure).
 
+**Build the general tool or none** (Juha, 2026-08-11). Scoping it down to whatever one caller needs is
+declined: the value is in handling the hard cases, and a tool that only manages the easy ones reports a
+clean bill of health it did not earn. Note that `unpythonic` is the fleet's only macro-using project, so
+mcpyrate's full difficulty lands on exactly one consumer.
+
 Discovered during raven-cherrypick development.
 
 ## Faster PNG decoder
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-03-18*
+*Cluster: ? · Cost: ? · Gate: next · Filed: 2026-03-18*
 
 PIL's PNG decode via libpng is slow (~59 ms for a 1 MP image). Unlike JPEG (where turbojpeg provides scaled decode), libpng has no equivalent fast path. Options to investigate:
 - `cv2.imread` — uses libpng but OpenCV's memory handling may be faster
@@ -1726,7 +1809,7 @@ Discovered during raven-cherrypick test drive.
 
 ## Preload cache: 16MP image optimization
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-03-19*
+*Cluster: ? · Cost: ? · Gate: 0.2.9, if it measurably helps · Filed: 2026-03-19*
 
 With 16MP images (4624×3472), each cached mipchain is ~342MB as flat arrays. The current 1500MB budget fits only ~4 images, causing most preloads to be dropped after doing the full GPU work (wasted ~530ms each, with GPU contention degrading frame times to ~90ms).
 
@@ -1737,11 +1820,14 @@ Three improvements needed:
 4. **Profile ~300ms mipgen anomaly on non-sequential navigation** — `lanczos.mipchain` takes ~300ms wall-clock on click-after-scroll, but 0ms on End key. Both are cache misses, same image size, same allocator state, no thumbnail or preload contention (confirmed by cancelling all background work). The function contains only async CUDA kernel launches (F.pad, F.conv2d) — nothing that should block. Needs py-spy (GIL analysis) or nsight (CUDA timeline) to identify what's actually blocking. Might be cuDNN autotuning, CUDA memory allocator fragmentation, or something else entirely.
 5. **Wait for preload CUDA completion on cancel** — `cancel_pending()` is cooperative (sets flag, doesn't wait). Cancelled preload tasks may still be mid-CUDA-operation (Lanczos mipchain, tensor transfers). The bg_mip_task's `cuda.synchronize` then blocks on both its own work AND the lingering preload ops. Observed: `mipgen=508ms` for 1024×1024 (should be ~1ms) after a far jump. Consider `cuda.synchronize` before starting the bg_mip_task, or use CUDA streams to isolate preload vs display work.
 
+**There is now a concrete corpus to test against**: a large set of 16MP photos from ECCOMAS 2026. Measure on
+those before doing the work, and let the measurement decide whether it lands in 0.2.9.
+
 Discovered during raven-cherrypick preload performance session.
 
 ## raven-cherrypick: export image sequence (QOI→PNG batch conversion)
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-03-19*
+*Cluster: ? · Cost: ? · Gate: next · Filed: 2026-03-19*
 
 raven-cherrypick is effectively an image viewer with QOI support, which is rare. This makes it ideal for previewing avatar recordings frame-by-frame. Integrate `raven-qoi2png` CLI functionality so that raven-cherrypick can export avatar recordings for external consumption (e.g. as a PNG image sequence for OpenShot or other video editors).
 
@@ -1753,9 +1839,16 @@ The fix isn't missing — it's queued. Last commit on pygame's `main` was 2025-1
 
 ## raven-cherrypick: further reduce idle CPU/GPU load
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-03-19*
+*Cluster: ? · Cost: ? · Gate: 0.2.9 · Filed: 2026-03-19*
 
 Idle throttle (2026-04-05) reduced CPU load from ~80% to ~20% of one core by sleeping ~80ms between frames when nothing needs updating. The remaining ~20% is the floor cost of `render_dearpygui_frame()` at ~12fps — ImGui resubmits the entire UI each call. Further reduction options: adaptive sleep ramp (80ms → 500ms over ~5s idle, snap back on input), or skipping `render_dearpygui_frame()` entirely (risky — event processing is tied to the render call).
+
+**Take the ramp; it is small.** Skipping the render call stays out of scope for the reason above.
+
+**And measure a second mechanism before assuming the ramp is the whole story** (Juha, 2026-08-11): all
+thumbnails are currently kept in VRAM, so a directory with many images builds a very large texture atlas,
+which may itself be slowing DPG down. That is unrelated to the idle-frame cost, may dominate on large
+directories, and plausibly bears on "raven-cherrypick: low FPS with large images" too.
 
 Originally discovered during raven-cherrypick session 5 (2026-03-19).
 
@@ -1769,7 +1862,7 @@ Discovered during idle throttle discussion (2026-04-05).
 
 ## raven-cherrypick: low FPS with large images
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-03-28*
+*Cluster: ? · Cost: ? · Gate: investigate in 0.2.9 · Filed: 2026-03-28*
 
 With large images (e.g. 4247×891, 5203×1313), steady-state FPS drops to 10–15 (66ms/frame) compared to ~30 FPS for 1MP images. DPG metrics show the bottleneck is in presentation/rendering, not input routing. Likely causes:
 
@@ -1793,7 +1886,7 @@ Discovered during raven-cherrypick debugging session (2026-03-28).
 
 ## Audit and slim down project CLAUDE.md
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-03-28*
+*Cluster: ? · Cost: ? · Gate: periodic · Filed: 2026-03-28*
 
 Raven's CLAUDE.md is growing long, which increases token cost per conversation and may contribute to reasoning issues (see pitfall #5 incident above). Audit for:
 
@@ -1806,9 +1899,12 @@ Goal: CLAUDE.md should be concise instructions and constraints, not an encyclope
 
 Discovered during raven-cherrypick debugging session (2026-03-28). Reinforced 2026-04-06: instruction volume caused Claude to lint a .md file despite existing memory saying not to.
 
+**A pass was done recently, so this is now the recurring check rather than an open job.** CLAUDE.md files
+grow without bound; what the item is for is noticing that again, not the first noticing.
+
 ## Audit typing: abstract parameter types, concrete return types
 
-*Cluster: hygiene-sweep · Cost: ? · Gate: ? · Filed: 2026-03-30*
+*Cluster: hygiene-sweep · Cost: ? · Gate: hygiene-sweep · Filed: 2026-03-30*
 
 Raven convention: parameters should use abstract types from `collections.abc` (`Mapping`, `Sequence`, `Iterable`) for widest-possible-accepted semantics. Return types should use concrete lowercase builtins (`tuple[int, int]`, `list[int]`, `dict[str, int]`) — PEP 585, Python 3.9+. The capitalized `typing` forms (`Dict`, `List`, `Tuple`) are deprecated aliases for the builtins and offer no extra width — avoid them. Audit existing type hints across the codebase for consistency.
 
@@ -1816,7 +1912,7 @@ Discovered during raven-cherrypick compare mode planning (2026-03-30).
 
 ## Audit toolbar buttons for WidgetFlash acknowledgment
 
-*Cluster: hygiene-sweep · Cost: ? · Gate: ? · Filed: 2026-03-30*
+*Cluster: hygiene-sweep · Cost: ? · Gate: hygiene-sweep · Filed: 2026-03-30*
 
 Check existing toolbar buttons in raven-cherrypick and raven-xdot-viewer for whether their actions should flash green on activation (Raven's convention for acknowledging a click or hotkey press). Other Raven apps (Librarian, Visualizer) already use `WidgetFlash` (via `flash_button`) consistently — cherrypick and xdot-viewer may be missing it.
 
@@ -1824,7 +1920,7 @@ Discovered during raven-cherrypick compare mode planning (2026-03-30).
 
 ## Extract `raven.common` into an upstream library ("corvid")
 
-*Cluster: ? · Cost: ? · Gate: a second consumer needing the toolkit · Filed: 2026-04-03 · See also: "Decide the public name"*
+*Cluster: ? · Cost: ? · Gate: next (or —); nothing is waiting on it · Filed: 2026-04-03 · See also: "Decide the public name" (Declined — the naming decision is recorded there)*
 
 Raven's `common/` package has grown into a general-purpose DPG toolkit: GUI widgets (file dialog, markdown, helpcard, xdot widget, animation framework, VU meter), video/audio processing, networking utils, bgtask infrastructure. This creates a gravitational well — new apps land in Raven because the batteries are there, even when they have nothing to do with NLP/ML.
 
@@ -1836,11 +1932,14 @@ Extracting `raven.common` (and the vendored DPG extensions) into a standalone li
 
 Short-term: vendor the xdot widget into pyan for pyan-gui. Long-term: extract properly.
 
+**Name settled 2026-08-12: the distribution is `corvid-lab`, matching `raven-lab`.** `corvid` is taken on
+PyPI, and the qualified form keeps the family together rather than reaching for an unrelated word.
+
 Discovered during tooltip feature session (2026-04-03).
 
 ## Avatar settings editor: custom postprocessor chain ordering
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-04-09*
+*Cluster: ? · Cost: ? · Gate: next · Filed: 2026-04-09*
 
 **This is a GUI limitation only** — `briefs/researchers-night/crt-display.md` §0 establishes that the backend has always
 supported multiple instances at arbitrary positions: `render_into` applies the chain *positionally*, and
@@ -2066,7 +2165,7 @@ Discovered during brief-03 Half-2 error-message work (2026-07-17, flagged by Juh
 
 ## The chat composer scrolls sideways instead of wrapping
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-08-04*
+*Cluster: ? · Cost: ? · Gate: RN2026 · Filed: 2026-08-04*
 
 Typing past the composer's width pushes the line onwards and scrolls horizontally, so a long sentence
 disappears off the left edge as it is written. It should soft-wrap to the field's width, which is what every
@@ -2466,7 +2565,7 @@ Discovered while wrapping up brief 01 webfetch (2026-06-03).
 
 ## Context-window budgeting and conversation compaction (Librarian)
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-06-04*
+*Cluster: ? · Cost: ? · Gate: next · Filed: 2026-06-04*
 
 Librarian does not yet budget the prompt against the model's context window, nor compact long
 conversations. After brief 02 (LM Studio compat), the loaded context-window figure captured per
@@ -2548,7 +2647,7 @@ librarian shutdown races.
 
 ## Librarian: in-flight AI turn bleeds into a new chat (turn-sequencing race)
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-06-04*
+*Cluster: ? · Cost: ? · Gate: RN2026 · Filed: 2026-06-04*
 
 Pressing "new chat" (or otherwise switching HEAD) while an `ai_turn` is still streaming doesn't cancel that
 turn. `start_new_chat_callback` (`app.py`) just sets `app_state["HEAD"] = new_chat_HEAD` and rebuilds the
@@ -2571,7 +2670,7 @@ Discovered during brief 02 LM Studio live validation (2026-06-04).
 
 ## Idle prefill fires even when the HEAD's token count is already exact (redundant, and slows the next turn)
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-06-04*
+*Cluster: ? · Cost: ? · Gate: RN2026 if the gate is as cheap as this item says, else 0.2.9 · Filed: 2026-06-04*
 
 `DPGChatController._context_prefill_entrypoint` schedules an idle prefill (5 s after a HEAD change) to get an
 exact `usage.prompt_tokens` count and warm the backend KV cache. But it doesn't check whether the current
@@ -2588,11 +2687,16 @@ only prefill when it's an estimate (or when the HEAD's prompt has changed since 
 exact/estimate bit already drives the `X%` vs `~X%` typography, so the signal is in hand; it just needs to gate
 the prefill too.
 
+**The parenthesis in that fix is the expensive half.** "The HEAD's prompt has changed since the last exact
+reading" is not a HEAD comparison: the same HEAD builds a different prompt from one minute to the next,
+because the injects carry a datetime and the RAG matches move as the corpus does. So it means tracking
+*prompt* identity, and the cheap-looking clause is where the work is. Size that before scheduling this.
+
 Discovered during brief 02 PR-B work, reported by Juha from live LM Studio use (2026-06-04).
 
 ## Render the streaming thinking trace inside a bubble from the start, not just on completion
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-06-04*
+*Cluster: ? · Cost: ? · Gate: RN2026 · Filed: 2026-06-04*
 
 The thinking trace renders in two different shapes across a message's lifetime. *While streaming*, reasoning
 paragraphs (`is_thought=True`) render as inline blue text — same flow as the visible answer, just tinted (blue
@@ -2611,7 +2715,7 @@ Discovered during brief 02 §9 live validation, suggested by Juha (2026-06-04).
 
 ## Streaming thinking shows as gray (not blue) for models that pre-fill the opening `<think>` tag
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-06-05*
+*Cluster: ? · Cost: ? · Gate: 0.2.9 · Filed: 2026-06-05 · See also: "Upgrade oobabooga and re-check Raven's ooba support"*
 
 QwQ-32B-style thinking models (and Qwen3-2507 as served by ooba) are trained to *begin thinking immediately*:
 their chat template pre-fills `<think>\n` into the prompt tail, so the generated stream starts already inside
@@ -2638,6 +2742,15 @@ flip `is_thought`) — correct but invasive in the streaming renderer. Related t
 token" item above, but distinct: there the thinking is *already* detected (blue, just inline); here it is *not
 detected at all* until completion. This is the `chatutil.py:827` TODO ("add the opening `<think>` while
 streaming, or to the prompt?") surfacing in the typed-event parser.
+
+**Not exhibit-relevant, and not linked to the think toggle** — both worth stating, because both were reasoned
+the other way first. There are three cases, not two: a backend that sends `reasoning_content` as its own
+channel (LM Studio, the demo backend) never exercises tag inference at all; single-channel with both tags
+present works; single-channel with a template-prefilled open tag is this bug, which is QwQ-style and
+Qwen3-2507 *as served by ooba*. And the think toggle prefills into the *prompt*, after which the model
+generates plain content and the parser is correctly in `_PS_TEXT` — so the toggle needs no parser change.
+The fix is moving `chatutil.scrub`'s orphan-close recovery into the parser. Arguably `—` rather than `0.2.9`
+until ooba is run again at all.
 
 Discovered during the brief-02 ooba cross-backend regression test (2026-06-05).
 
@@ -2709,7 +2822,7 @@ content-parts refactor.
 
 ## Keyboard-layout-aware positional hotkeys across the fleet
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-06-07*
+*Cluster: ? · Cost: ? · Gate: — · Filed: 2026-06-07*
 
 Some Raven apps bind hotkeys *positionally* — keys chosen for their physical location rather than the letter they produce. The first case is `raven-cherrypick`'s WASD navigation (an alias for the arrow keys, plus `Q`/`E` for page up/down, for one-handed triage). On AZERTY (French) that cluster sits at ZQSD; on QWERTZ (German/Swiss) `Z` and `Y` are swapped — so positional bindings land under the wrong fingers for those users.
 
@@ -2766,7 +2879,7 @@ Discovered 2026-07-16 (noted by Juha during brief-03 Half-2 pause).
 
 ## Make the Librarian chat composer text field resizable
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-07-17*
+*Cluster: ? · Cost: ? · Gate: — · Filed: 2026-07-17*
 
 The composer's multiline text field (`chat_field`, `app.py`) is a fixed height (`gui_config.chat_field_h`, ~5 rows). For essay-length prompts — common in scientific use — a fixed box is a toilet-paper-roll view of the input. Add a drag-to-resize affordance (or a fixed/expand toggle) so the user can grow the field when composing long messages. The composer's outer height is currently fixed on purpose (so the chat/avatar panels don't jump when the staged-image strip appears), so a resize handle would need to grow the whole composer and re-run the panel layout — reuse `_resize_panels`.
 
@@ -2815,7 +2928,7 @@ data folder" button making the single-store design visible).
 
 ## Colorblind-safe status signaling (ok/error flashes distinguished by color alone)
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-07-17*
+*Cluster: ? · Cost: ? · Gate: 0.2.9 · Filed: 2026-07-17*
 
 `animation.flash_button(ok=...)` (and, more broadly, Raven's flash/highlight vocabulary) conveys success vs.
 failure by *color alone* — green for ok, red for error. That's invisible to the ~8% of men with red–green
@@ -3181,7 +3294,15 @@ Raised while scoping office-format support (2026-07-29, Juha).
 
 ## Librarian doesn't check that the LLM backend has a model loaded
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-07-29*
+*Cluster: ? · Cost: ? · Gate: RN2026 · Filed: 2026-07-29*
+
+**The titular case shipped 2026-08-12**, which is what makes the rest of this item the live part.
+`llmclient.connect` reports three states — reachable with a model, reachable with none, unreachable — and
+`describe_backend_status` centralizes the wording for all four frontends. Librarian shows a status pill above
+the composer instead of failing on the first turn, and the two batch tools stop at startup rather than
+extracting nothing from several hundred documents. **So the `RN2026` gate was ruled against a half that is
+now done, and wants re-reading against what remains**: the general error-reporting sweep below, which is a
+larger piece of work than the ruling was sized for.
 
 Starting Librarian against a backend with no model loaded produces no warning; the first turn fails with a raw
 `HTTP 400 Bad Request` and the backend's own error text ("No models loaded. Please load a model in the developer
@@ -3307,7 +3428,7 @@ reason to have a version number rather than just a migration marker.
 
 ## A no-avatar mode, with the chat tree in the panel the avatar vacates
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-07-29*
+*Cluster: ? · Cost: ? · Gate: next · Filed: 2026-07-29 · See also: `briefs/researchers-night/16_chat-graph-view-brief.md`*
 
 Raised 2026-07-29 (Juha), and the opposite end of the same axis as the avatar-first mode sketched in
 `briefs/design/lab-assistant-hci-sketch.md`. On the road, on a laptop, with no power outlet in sight, the avatar is
@@ -3515,7 +3636,7 @@ Raised during the 0.2.8 format work (2026-07-29, Juha).
 
 ## Librarian leaks its server-side avatar instance when it doesn't exit normally
 
-*Cluster: abnormal-exit · Cost: ? · Gate: ? · Filed: 2026-07-29*
+*Cluster: abnormal-exit · Cost: ? · Gate: 0.2.9 · Filed: 2026-07-29*
 
 Librarian releases its avatar instance in `app_shutdown` (`raven/librarian/app.py`), which is registered with
 `atexit`. That covers the normal exit, but `atexit` handlers run only when the interpreter shuts down cleanly —
@@ -3604,7 +3725,7 @@ Noticed 2026-08-04 while bumping the `dearpygui` floor and finding `pdm lock` pr
 
 ## Librarian has no periodic autosave: an abnormal exit loses the whole session's chat
 
-*Cluster: abnormal-exit · Cost: ? · Gate: ? · Filed: 2026-08-04*
+*Cluster: abnormal-exit · Cost: ? · Gate: RN2026 · Filed: 2026-08-04*
 
 `PersistentForest`'s `autosave=True` registers `self.save` with `atexit` and nothing else — verified in
 `chattree.py`, there is no timer and no save-on-mutation. So the datastore is written **once per session,
@@ -3804,7 +3925,7 @@ Raised by Juha (2026-08-04), reviewing the webfetch attachment work.
 
 ## A clickable chip in the chat log gives no hover cue
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-08-04*
+*Cluster: ? · Cost: ? · Gate: RN2026 · Filed: 2026-08-04*
 
 0.2.8 made inline attachments and fetched documents click-to-open (`DPGChatMessage._make_clickable`, an item
 handler registry per cluster, owned by the message so `demolish` can delete it — a registry does not live
