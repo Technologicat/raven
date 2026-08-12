@@ -677,7 +677,8 @@ llm_greeting = "How can I help you today?"
 # the text really is different each time, but it is unlikely to be what anyone wanted. Both facts are stated
 # in the system message on every turn regardless; see `chatutil.format_loaded_model`.
 #
-# TODO: This is not where it should end up. The injects are appended to the leading system block, which
+# TODO (see TODO_DEFERRED.md, "System prompt templating: the user should choose where the per-turn facts
+# TODO: go"): This is not where it should end up. The injects are appended to the leading system block, which
 # TODO: means Raven chooses where they go; the user should be able to choose, by writing a placeholder into
 # TODO: the prose and having it resolved per turn rather than at startup. Then the stored text holds the
 # TODO: template and nothing in it can go stale. What has to be settled first: `user` and `char` are

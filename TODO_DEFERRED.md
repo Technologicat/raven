@@ -7,6 +7,12 @@ Librarian session ended up ~1000 lines apart.)
 something else: work *considered and rejected*, kept so the decision stays made. Putting shipped work there
 hides a decision that was never taken, which is how four entries ended up mis-filed before 2026-08-12.
 
+**When this file stops being readable, that is a trigger.** Bump *Visualizer's importer should read the
+document database* — a semantic map of this backlog is a convergence-detection tool, and it needs the
+importer first. Recorded here rather than in that item because a trigger nobody meets is not a trigger, and
+the tool for finding things in the backlog cannot be gated on someone remembering to look for it *in* the
+backlog. The recurring moment to ask is the triage step in the release procedure.
+
 ## Two things a triage pass should know
 
 Written down 2026-08-12, after a pass over the whole file, because both change how the remaining items read.
@@ -399,6 +405,42 @@ subset before committing to the restructuring; 28 cores suggests a lot of headro
 cost varies enormously with the PDF.
 
 Raised by Juha (2026-08-06), asking why the indexer was still on its first document after half an hour.
+
+## System prompt templating: the user should choose where the per-turn facts go
+
+*Cluster: ? · Cost: M · Gate: next · Filed: 2026-08-12 · See also: "Make the canned AI greeting optional", "Modernize the Librarian system prompt / character card"*
+
+Filed 2026-08-12 to make good on a condition set when the multi-root work landed: today's advice — **do not
+use `{model}` or `{context_length}` in a card** — is documented at the `# TODO:` block in
+`raven/librarian/config.py`, and was accepted as good enough *if* an item existed to reopen it. It did not.
+This is that item; the config comment is the fuller statement and stays authoritative on mechanism.
+
+**The problem.** `setup_system_prompt` and friends resolve `template_vars` with f-strings **at startup**, so
+`model` and `context_length` are baked into the stored card text. Two consequences, and the second is the
+one that shows:
+
+- The text goes stale the moment a different model is loaded.
+- `appstate.refresh_system_prompt` matches stored roots by content equality, so **a card naming the model
+  produces a separate stored root — and a separate tree of chats — for every model ever loaded.** That is
+  the honest outcome rather than a fault, since the text really is different each time, but it is unlikely
+  to be what anyone wanted.
+
+Both facts are already stated in the system message every turn regardless (`chatutil.format_loaded_model`),
+which is why the advice above costs nothing today.
+
+**Where it should end up.** The injects are appended to the leading system block, so *Raven* chooses where
+they go; the user should choose, by writing a placeholder into the prose and having it resolved **per turn**
+rather than at startup. The stored text then holds the template, and nothing in it can go stale.
+
+**What has to be settled first, and it is a real trap.** `user` and `char` are resolved here at startup with
+f-strings, so a per-turn placeholder has to survive that pass as literal text — which in an f-string means
+writing `{{model}}`, a trap of exactly the family this arrangement exists to avoid. Two passes over one
+string need either different delimiters or a non-f-string first pass.
+
+**Part of a set with the greeting and the card rewrite.** All three are about how much the frontend asserts
+into the prompt and where: the greeting item is *whether* to assert an opening line, the card item is
+*what* the standing text should say, and this one is *when* the changing facts get substituted. Deciding
+them separately risks three answers to one question.
 
 ## The vendored Markdown renderer has no way to say it has finished
 
@@ -1205,7 +1247,7 @@ Discovered while closing brief 10 and finding a stale item next to an accurate o
 
 ## Make the canned AI greeting optional
 
-*Cluster: ? · Cost: ? · Gate: next · Filed: 2026-07-28*
+*Cluster: ? · Cost: ? · Gate: next · Filed: 2026-07-28 · See also: "System prompt templating: the user should choose where the per-turn facts go", "Modernize the Librarian system prompt / character card"*
 
 A new chat opens with a canned greeting from the AI (`raven.librarian.config`, "Names, AI's greeting"). That is a
 2024-ism: as of mid-2026 the first message after the system prompt can just as well be the user's, and an opening
@@ -1233,8 +1275,11 @@ loudly:
 that it is ready — so the night runs with either the current "How can I help you today?" or an explanatory
 line. The philosophically correct version lands after.
 
-Related: [Modernize the Librarian system prompt / character card] — same question of how much identity the
-frontend should assert at a modern model, and worth deciding as one.
+**One of a set of three**, and they answer one question between them: how much the frontend asserts into the
+prompt, and where. This item is *whether* to assert an opening line at all; [Modernize the Librarian system
+prompt / character card] is *what* the standing text should say; [System prompt templating] is *when* the
+changing facts get substituted, and it is the one that decides whether a card can name the model without
+forking the datastore. Deciding them separately risks three answers to one question.
 
 Raised by Juha (2026-07-28).
 
@@ -1603,7 +1648,7 @@ own, so the redesign should be able to take one more feature without another sha
 
 ## Modernize the Librarian system prompt / character card
 
-*Cluster: ? · Cost: ? · Gate: next · Filed: 2026-07-30 · See also: `briefs/researchers-night/done/15_headless-agent-driver-brief.md` (final section)*
+*Cluster: ? · Cost: ? · Gate: next · Filed: 2026-07-30 · See also: "Make the canned AI greeting optional", "System prompt templating: the user should choose where the per-turn facts go", `briefs/researchers-night/done/15_headless-agent-driver-brief.md` (final section)*
 
 The default system prompt (`raven.librarian.config`) reads as dated for current instruction-tuned models —
 "take a deep breath and think step by step", "believe in your abilities and strive for excellence", "you are
@@ -1650,8 +1695,10 @@ because they change per turn. Each half wants a different home, so the rewrite h
 That analysis exists nowhere else.
 
 Post-exhibit either way: a prompt change needs soak time, and there are more valuable things before the
-night. **Decide it together with "Make the canned AI greeting optional"** — both are one question about how
-much identity the frontend should assert at a model that does not need it told.
+night. **Decide it with the other two in the set** — "Make the canned AI greeting optional" (whether to
+assert an opening line) and "System prompt templating" (when the changing facts get substituted). This item
+is the *what*; between them they answer one question about how much identity the frontend asserts at a model
+that does not need it told, and where.
 
 Extension raised by Juha (2026-07-30).
 
@@ -3480,6 +3527,61 @@ Substantial enough to deserve a brief rather than an incremental change — it r
 *is*, and the importer is already flagged for a stage-separation refactor.
 
 Raised during the 0.2.8 format work (2026-07-29, Juha).
+
+### Second use: mapping the backlog itself, for convergence detection
+
+`TODO_DEFERRED.md` items, `TODO.md` entries and the briefs together are ~160 documents of roughly abstract
+length — a corpus Visualizer is sized for, and one where the answers are already known well enough to check
+the map against.
+
+**The purpose is not scheduling.** A semantic map gives proximity, and the axis that decides scheduling is
+operational — which component, which session, what blocks what — which correlates with topic only loosely.
+The purpose is finding items that have **converged without anyone noticing**.
+
+That failure is well evidenced. The 2026-08-10 sweep and the triage after it found the scriptable-scaffold
+design filed in two files under different names, with the poorer copy driving decisions; three Markdown
+items sharing one cause that none of them named; six independent pointers at an unwritten brief; and the
+ingest-crash and mid-run-recovery items arriving separately at the same missing primitive. Every one was
+found by a human noticing, several after two days of reading.
+
+**Two prerequisites**: brief 11's double-clustering bugfix, since the 2D labels are what colour the map; and
+this item, since the importer wants `.bib` and a fake bibliography is the alternative.
+
+**One technical caveat if it is built**: a 400-line brief and a 15-line item embed very differently — the
+brief's vector is a topic average that will not sit near any specific item, so cross-file convergence, the
+thing most worth finding, is what gets washed out. **Embed briefs per section rather than whole.** That also
+gives finer hits: "this item is about brief 16 §4" rather than "about brief 16". t-SNE (Visualizer's current
+projection) suits this better than UMAP would, since local neighbourhoods are the whole question and
+inter-cluster distance is not; perplexity does real work at n≈160.
+
+**Trigger**: bump this item's priority when the backlog becomes unmanageable by reading. That is recorded in
+`TODO_DEFERRED.md`'s own header rather than here, because the tool for finding things in the backlog cannot
+be gated on someone remembering to look for it *in* the backlog.
+
+### The operational map is a different route to the same goal, and it needs no GUI work
+
+Raised 2026-08-12. Recorded so it is not re-derived; not scheduled.
+
+A semantic map does not capture the operational axis. With the agent-scripting layer
+(`raven.librarian.agent`) that axis is now **derivable**: a per-item pass could extract component,
+dependency and blocking relations from the item text, and the result is a **graph** rather than a
+projection. Two things that makes it, both of which the semantic map cannot be — a dependency graph, which
+is what scheduling actually needs, and a use case for the per-document LLM pass on a corpus already in the
+repository.
+
+**No GUI work.** The pass emits DOT, GraphViz lays it out, `raven-xdot-viewer` opens the result. So where
+the semantic map is gated on brief 11, this item and a fake bibliography, this route needs the pass and a
+prompt.
+
+**DOT is also diffable**, which the projection is not: regenerate after a triage session and the diff shows
+what changed in the dependency structure. That is precisely the drift the two-file duplication kept
+producing, and a t-SNE layout cannot show it — the coordinates move for reasons unrelated to content.
+
+**The prompt is the hard part, not the plumbing.** "What does this item depend on" is a judgement across 120+
+items where the answer is usually another item's *heading*, and the model has to resolve references like
+"the sibling item above" or "brief 03" into actual node names. Which argues for doing it **after** a triage
+pass: the metadata line then carries `Cluster:` and `See also:`, both of which are edges a human has already
+drawn, giving the pass a scaffold rather than a blank page.
 
 ## Let the AI drive the constellation's own views (tools, and then voice)
 
