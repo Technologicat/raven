@@ -19,7 +19,7 @@ __all__ = ["TOOLS", "TOOL_ENTRYPOINTS", "DOCUMENT_TOOL_NAMES", "NETWORK_TOOL_NAM
            "configure",
 
            # For frontends that open a window whether or not a backend answers
-           "connect", "reconnect", "backend_status",
+           "connect", "reconnect", "backend_status", "describe_backend_status",
            "backend_unreachable", "backend_has_no_model", "backend_ready",
 
            "count_tokens",
@@ -939,23 +939,45 @@ def connect(backend_url: str, quiet: bool = False) -> env:
         settings = setup(backend_url, quiet=quiet)
     except requests.exceptions.RequestException as exc:
         if not quiet:
-            logger.warning(f"connect: no LLM backend at {backend_url}; continuing without one. Reason {type(exc)}: {exc}")
-            print(colorizer.colorize(f"Cannot connect to LLM backend at {backend_url}.",
-                                     colorizer.Style.BRIGHT, colorizer.Fore.RED) + " Is the LLM server running?")
+            headline, advice = describe_backend_status(backend_unreachable, backend_url)
+            logger.warning(f"connect: {headline} Continuing without one. Reason {type(exc)}: {exc}")
+            print(colorizer.colorize(headline, colorizer.Style.BRIGHT, colorizer.Fore.RED) + f" {advice}")
         return configure(model_info=_UNREACHABLE_MODEL_INFO,
                          backend_flavor=librarian_config.llm_backend_flavor or "generic",
                          backend_url=backend_url,
                          quiet=quiet,
                          backend_is_reachable=False)
     if not quiet:
-        if backend_status(settings) is backend_has_no_model:
-            logger.warning(f"connect: LLM backend at {backend_url} is reachable, but has no model loaded.")
-            print(colorizer.colorize(f"LLM backend at {backend_url} has no model loaded.",
-                                     colorizer.Style.BRIGHT, colorizer.Fore.YELLOW) + " Load one in your LLM server.")
+        status = backend_status(settings)
+        headline, advice = describe_backend_status(status, backend_url)
+        if status is backend_has_no_model:
+            logger.warning(f"connect: {headline}")
+            print(colorizer.colorize(headline, colorizer.Style.BRIGHT, colorizer.Fore.YELLOW) + f" {advice}")
         else:
-            logger.info(f"connect: connected to LLM backend at {backend_url}; model is '{settings.model}'.")
-            print(colorizer.colorize(f"Connected to LLM backend at {backend_url}", colorizer.Style.BRIGHT, colorizer.Fore.GREEN))
+            logger.info(f"connect: {headline} Model is '{settings.model}'.")
+            print(colorizer.colorize(headline, colorizer.Style.BRIGHT, colorizer.Fore.GREEN))
     return settings
+
+def describe_backend_status(status: sym, backend_url: str) -> Tuple[str, str]:
+    """Return `(headline, advice)` for `status` — what is true, and what the user can do about it.
+
+    One source for the wording every frontend needs: the console verdict `connect` prints, the message a
+    batch tool dies with, and a GUI's tooltip. A message like this goes stale without looking stale — a copy
+    still naming an address the app no longer reads reads exactly like a correct one — so it is written once.
+
+    Split rather than joined into one sentence because the two halves are wanted in different places: a
+    narrow GUI row can show a short label of its own and put both of these in the tooltip, while a console
+    prints them together. `advice` is empty where there is nothing to do.
+
+    Not `str`-formatted with color: whether to colorize, and in which color, belongs to the frontend.
+    """
+    if status is backend_unreachable:
+        return (f"Cannot connect to the LLM backend at {backend_url}.",
+                "Is the LLM server running, and is that the right address?")
+    if status is backend_has_no_model:
+        return (f"The LLM backend at {backend_url} has no model loaded.",
+                "Load one in your LLM server.")
+    return (f"Connected to the LLM backend at {backend_url}.", "")
 
 def backend_status(settings: env) -> sym:
     """Return which of the three states `settings` describes.

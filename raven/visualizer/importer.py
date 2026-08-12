@@ -27,6 +27,8 @@ import sys
 import threading
 from typing import Optional
 
+from mcpyrate import colorizer
+
 from unpythonic.env import env
 from unpythonic import box, dyn, ETAEstimator, islice, make_dynvar, sym, timer, uniqify
 
@@ -53,9 +55,27 @@ if visualizer_config.clusters_keyword_method == "llm" or visualizer_config.summa
     from ..librarian import config as librarian_config
     from ..librarian import llmclient
     llm_backend_url = librarian_config.llm_backend_url
+    # A batch tool stops here rather than starting: an import can run for an hour, so a precise diagnosis
+    # now beats one failed LLM call per cluster and per abstract. Reachable and reachable-with-a-model are
+    # separate questions, and the second is the one that reads as a bug when unchecked — the backend
+    # answers, so nothing looks wrong until every keyword list comes back empty.
+    #
+    # This is a check at the start and nothing more: a backend that goes away mid-run is not recovered from,
+    # and every remaining LLM step fails. Known and accepted for now — recovering properly means deciding
+    # how long to wait and what to do with the documents already done, which is a design question rather
+    # than a missing line. The interactive frontends do reconnect; see `llmclient.reconnect`.
     if not llmclient.test_connection(llm_backend_url):
         sys.exit(255)
     llm_settings = llmclient.setup(backend_url=llm_backend_url)
+    if (status := llmclient.backend_status(llm_settings)) is llmclient.backend_has_no_model:
+        headline, advice = llmclient.describe_backend_status(status, llm_backend_url)
+        print(colorizer.colorize(headline, colorizer.Style.BRIGHT, colorizer.Fore.RED) + f" {advice}")
+        logger.error(f"{headline} Cannot proceed.")
+        sys.exit(255)
+    # Which model did the keywording and summarizing is worth having in the log of an import that can run
+    # for an hour. No character logged: these steps run with `use_character_card=False`, so the configured
+    # persona takes no part in them.
+    logger.info(f"Using LLM model: {llm_settings.model}")
 
 # --------------------------------------------------------------------------------
 # Inits that must run before we proceed any further

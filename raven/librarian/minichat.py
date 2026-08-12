@@ -80,7 +80,7 @@ def minimal_chat_client(backend_url) -> None:
     # Ugh for the presentation order, but this is needed in two places, starting immediately below.
     def chat_show_model_info() -> None:
         print(f"    {colorizer.colorize('Model', colorizer.Style.BRIGHT)}: {llm_settings.model}")
-        print(f"    {colorizer.colorize('Character', colorizer.Style.BRIGHT)}: {llm_settings.char} [defined in this client]")
+        print(f"    {colorizer.colorize('Character', colorizer.Style.BRIGHT)}: {llm_settings.char} [configured in raven.librarian.config]")
         print()
 
     # Main program

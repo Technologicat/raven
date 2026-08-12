@@ -721,6 +721,21 @@ class TestBackendStatus:
         ready = env(backend_is_reachable=True, model_is_loaded=True)
         assert llmclient.backend_status(ready) is llmclient.backend_ready
 
+    def test_each_state_is_described_distinctly_and_names_the_backend(self):
+        # Four frontends print these -- two batch tools, a console client and a GUI tooltip -- so the
+        # wording is shared rather than copied. What each caller relies on: the three differ, the address is
+        # in the headline (the user may have several backends, or a typo in one), and only a state the user
+        # can act on carries advice.
+        described = {status: llmclient.describe_backend_status(status, "http://x:1234")
+                     for status in (llmclient.backend_unreachable,
+                                    llmclient.backend_has_no_model,
+                                    llmclient.backend_ready)}
+        headlines = [headline for headline, _advice in described.values()]
+        assert len(set(headlines)) == 3
+        assert all("http://x:1234" in headline for headline in headlines)
+        assert described[llmclient.backend_ready][1] == ""
+        assert all(advice for status, (_headline, advice) in described.items() if status is not llmclient.backend_ready)
+
     def test_cannot_tell_is_not_a_fault_to_report(self):
         # ooba and generic backends have nothing to report residency with, so `model_is_loaded is None`.
         # Reading that as "no model loaded" would park a permanent warning in front of every user of either.

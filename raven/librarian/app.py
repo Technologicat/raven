@@ -436,26 +436,27 @@ def _describe_backend_status(status: sym) -> Tuple[str, str, str]:
     loading a model into one that is already running are different jobs, and a row that said only "not
     working" would leave them to guess which. All three icons are plug variants, so the glyph changes while
     the row stays recognizably about the connection.
+
+    What is said comes from `llmclient.describe_backend_status`, which every frontend shares. Only the row's
+    *label* is local, and only because it has to fit: the shared headline names the backend's address, which
+    is more than a one-line row beside a message box can carry, so the address goes in the tooltip with the
+    advice and the label says the short of it.
     """
-    backend_url = llm_settings.backend_url
+    headline, advice = llmclient.describe_backend_status(status, llm_settings.backend_url)
     if status is llmclient.backend_unreachable:
         return (fa.ICON_PLUG_CIRCLE_XMARK,
                 "LLM backend not connected",
-                f"Nothing answered at {backend_url}.\n"
-                "Is the LLM server running, and is that the right address?\n\n"
-                "Retrying automatically. Click to retry now.")
+                f"{headline}\n{advice}\n\nRetrying automatically. Click to retry now.")
     if status is llmclient.backend_has_no_model:
         return (fa.ICON_PLUG_CIRCLE_EXCLAMATION,
                 "LLM backend has no model loaded",
-                f"The LLM server at {backend_url} answered, but has no model loaded.\n"
-                "Load one there, and this will clear by itself.\n\n"
-                "Retrying automatically. Click to retry now.")
+                f"{headline}\n{advice}\n\nRetrying automatically. Click to retry now.")
     # Connected. The model identity is what just changed, so say it — unless the backend does not report one
     # (`NO_MODEL_INFO`), where naming it would turn an announcement into an apology.
     model_suffix = "" if llm_settings.model == llmclient.NO_MODEL_INFO else f" — {llm_settings.model}"
     return (fa.ICON_PLUG_CIRCLE_CHECK,
             f"LLM backend connected{model_suffix}",
-            f"Connected to the LLM server at {backend_url}.\n\nClick to check again.")
+            f"{headline}\n\nClick to check again.")
 
 def _refresh_backend_status_pill(status: sym) -> None:
     """Put `status` into the composer's status row, and show the row."""

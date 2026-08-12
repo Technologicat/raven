@@ -913,10 +913,21 @@ def process_abstracts(paths: List[str], opts: argparse.Namespace) -> None:
 
     Each PDF is assumed to contain a conference abstract (the final file sent to the conference organizers in PDF format), and nothing else.
     """
-    # Connect to the LLM
+    # Connect to the LLM. A batch tool stops here rather than starting: this run can take hours, so a
+    # precise diagnosis at document 1 beats an HTTP 400 per document for the rest of the corpus. Reachable
+    # and reachable-with-a-model are separate questions, and the second one is the one that reads as a bug
+    # when it is not checked — the backend answers, so nothing looks wrong until every extraction is empty.
+    #
+    # This is a check at the start and nothing more: a backend that goes away mid-run is not recovered from,
+    # and every remaining document fails. Known and accepted for now — recovering properly means deciding
+    # how long to wait and what to do with the documents already done, which is a design question rather
+    # than a missing line. The interactive frontends do reconnect; see `llmclient.reconnect`.
     if not llmclient.test_connection(opts.backend_url):
         raise RuntimeError("Failed to connect to LLM backend, cannot proceed.")
     llm_settings = llmclient.setup(backend_url=opts.backend_url)
+    if (status := llmclient.backend_status(llm_settings)) is llmclient.backend_has_no_model:
+        headline, advice = llmclient.describe_backend_status(status, opts.backend_url)
+        raise RuntimeError(f"{headline} {advice}")
     prompts = setup_prompts(llm_settings,
                             n_retries=opts.retries,
                             conference_year=opts.conference_year,
@@ -934,7 +945,8 @@ def process_abstracts(paths: List[str], opts: argparse.Namespace) -> None:
     # for model_name in sorted(payload["model_names"], key=lambda s: s.lower()):
     #     logger.info(f"        {model_name}")
     logger.info(f"    model: {llm_settings.model}")
-    logger.info(f"    character: {llm_settings.char} [defined in this client]")
+    # No character logged: the extraction steps run with `use_character_card=False`, so `llm_settings.char`
+    # names a persona that takes no part in this run.
 
     # Process the PDFs
     #

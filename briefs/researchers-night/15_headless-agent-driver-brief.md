@@ -640,6 +640,21 @@ re-probed on schedule.
 that goes away *mid-session* is not noticed. Noticing it would mean polling a backend that is working, which
 is the thing this design refuses. The failing send reports it, and the user is present for that one.
 
+#### The batch tools got the other half of the decision, and one box was left shut
+
+"Batch tools exit" had only ever been implemented for *unreachable*. `raven-pdf2bib` and `raven-importer`
+now also stop on reachable-with-no-model, which is the case that most needed it: the backend answers, so
+nothing looks wrong until every extraction comes back empty, several hundred documents in. Both use
+`llmclient.describe_backend_status`, which is where the wording for all three states now lives — four
+frontends print it (two batch tools, `minichat`, and the GUI's tooltip), and a copy of a message like this
+goes stale without looking stale.
+
+**Deliberately not solved (Juha, 2026-08-12): a batch run does not recover from a backend that goes away
+mid-run.** Every remaining document fails. This is a start-time check and nothing more, and making it more
+means answering questions this brief does not: how long to wait before giving up, whether to resume or
+restart, and what to do with the documents already written. Recorded at both call sites so the next reader
+meets the limit where it applies rather than discovering it at document 900.
+
 ### The catch: the system prompt depends on the backend — and probably should not
 
 **The prompt is not independent of what the probe learns.** `configure` builds `system_prompt` and
