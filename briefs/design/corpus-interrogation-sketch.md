@@ -427,9 +427,15 @@ old, first contact. Each of the three needs restating:
 
   Claude's claim that multi-agent is the larger job was wrong for this codebase, because the pieces already
   compose: `ai_turn` is the agent, a `Forest` is the scoped context, the scripting surface is the driver,
-  and reset-between-documents is the isolation. A sub-agent is a fresh forest, a scoped prompt, one
-  `user_turn` + `ai_turn`, and a result. **Map-reduce is then the degenerate case** — a map whose agent
-  makes no tool calls — rather than a cheaper alternative.
+  and reset-between-documents is the isolation. A sub-agent is a fresh forest, a scoped prompt, and a
+  conversation — **possibly several turns, not one** (Juha, 2026-08-11): the orchestrator may well send
+  follow-up questions once the first result comes back, which is the ordinary shape of asking someone to
+  read a paper for you. So a sub-run is a small chat the orchestrator drives, and the result is whatever it
+  decides it has. **Map-reduce is then the degenerate case** — a single-turn map whose agent makes no tool
+  calls — rather than a cheaper alternative.
+
+  That the orchestrator is itself a model asking questions is also what makes the transcript worth keeping,
+  per the next bullet: the follow-ups are where the reasoning lives, and a bare final answer discards them.
 
   Three things settled in passing, worth keeping:
 
