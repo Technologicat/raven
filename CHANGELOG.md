@@ -47,6 +47,8 @@
   - **A system prompt can be deleted when it is not the one in use**, and this takes the chats held under it with it — which is the point, since that is the only thing those chats hang from. The one currently in use stays undeletable, as before. Deleting one leaves you where a new chat under the system prompt you land on would begin, rather than on the bare prompt with its greeting out of sight.
   - Cleanup understands this: chats under an older system prompt are not offered for deletion as unreachable.
 
+- **"branch from here" now works on the AI's opening greeting**, where it was refused before. Branching sets where you are writing from and nothing else, so from a greeting it starts a new chat under that system prompt — which is a fair thing to want, and reachable anyway through the new-chat button. It stays refused on a system prompt message, where it would leave you writing from a point that shows you none of the conversation.
+
 - the chat datastore is now `chat.json`, with its attachments in `chat.sidecars/` beside it. They were `data.json` and `data.images/` — the first said nothing about what was in it, and the second was named when images were the only thing you could attach, which stopped being true once documents could be. **Both are renamed on first start, together**, so there is nothing to do.
   - A `data.json` is adopted only if it actually reads as a chat datastore. The name is generic enough to belong to something else entirely, and the file is looked for beside whatever datastore path you configured — so if you have pointed Raven at a directory of your own, an unrelated `data.json` there is left alone.
 

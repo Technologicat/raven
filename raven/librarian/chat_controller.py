@@ -1064,11 +1064,18 @@ class DPGChatMessage:
         dpg.add_text("Edit (revise)", parent=edit_tooltip)
 
         # Branch chat at this node
-        # NOTE: We disallow branching from the system prompt, as well as from any message that is not linked to a chat node in the datastore.
-        #       We also disallow using the "branch from here" feature on the AI's initial greeting, as that's an unnecessarily confusing way to say "start new chat".
+        #
+        # NOTE: Branching *is* setting HEAD here and nothing else, which decides both of the cases below.
+        #
+        #       Disallowed from a system prompt node, and from any message not linked to a chat node in the
+        #       datastore. Leaving HEAD on a card is the state the view cannot show anything useful from —
+        #       the chat under it, greeting included, builds downward and so falls out of sight.
+        #
+        #       Allowed on the AI's greeting, which amounts to starting a new chat under that card. That is
+        #       what the action honestly does, and it is worth saying plainly rather than refusing a button
+        #       whose effect the user can reach anyway through "new chat" (Juha).
         branch_enabled = ((node_id is not None) and
-                          (node_id not in system_prompt_node_ids) and
-                          (node_id not in greeting_node_ids))
+                          (node_id not in system_prompt_node_ids))
         def branch_chat_callback():
             self.parent_view.chat_controller.app_state["HEAD"] = node_id
             self.parent_view.build()
