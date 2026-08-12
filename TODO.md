@@ -38,8 +38,10 @@ already decided.
   mis-render.** All three are content defects rather than cosmetic, and Qwen emits headings and code
   fences constantly. The indented-bullet one is *not* fixed — the bullets fix that landed was a different
   bug (stacking at origin in hidden containers), and the render path still has no dedent.
-- **Chat view scroll position jumps back down during generation.** Fires on every turn regardless of
-  content, unlike the Markdown cases, and removes the one useful thing to do while a thinking model works.
+- ~~**Chat view scroll position jumps back down during generation.**~~ **Done** — three app-side faults
+  fixed 2026-07-30, and the follow-tail drift that survived them fixed 2026-08-11. What remains is holding
+  your place while *dragging the scrollbar*, which is a different gesture and not demo-critical. Write-up:
+  `investigations/follow-tail-drift/README.md`.
 - **Librarian: in-flight AI turn bleeds into a new chat** (turn-sequencing race).
 - **Thinking mode is a wall of text on a projector.** Details under Librarian / Chat UI; here is why it is
   phase 1 rather than polish. A thinking model spends most of the turn reasoning, and right now every word

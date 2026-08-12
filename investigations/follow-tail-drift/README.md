@@ -290,3 +290,90 @@ applied: changing the unit would move a keyboard gesture, and the margin that ma
 The failure is silent and reads as the app being broken: the reply scrolls out of view while the model is
 writing, which is precisely when a viewer is watching it. The recovery - a jump to the end at finalize - is
 itself a visible lurch.
+
+## Prior episode: making the view follow at all (2026-07-30)
+
+Re-homed here 2026-08-12 from `TODO_DEFERRED.md`, where it had accumulated under "Chat view scroll position
+jumps back down while the model is writing" — an item that is now merged into "Holding the chat view's
+scrollbar does not hold your place while a reply streams", since what is left live is the ImGui drift and
+not this. The record belongs with the apparatus rather than on a list of things to do.
+
+**The original defect**: while a reply streamed, the scroll position kept being pulled back to the bottom, so
+scrolling up to re-read an earlier message did not stay put. `chat_controller` called `scroll_view()` with no
+target — which scrolls to the end — at four points during a streaming turn, unconditionally.
+
+Fixed 2026-07-30 and confirmed live. Three faults, each found by a live test. The final run, over a long
+reply with a thinking block and a multi-screenful `webfetch` answer: **zero near-miss refusals**, following
+correct throughout, the position-wait firing 115 times and needing more than one extra frame only once.
+Honouring a scrolled-away reader worked from the start, including across tool calls; making the view
+*follow* took all three.
+
+**Fault 1 — `dpg.get_y_scroll_max` lags a content change by more than one frame.** `scroll_view` read the
+maximum before the newly added message had been laid out, so "scroll to the end" landed where the *previous*
+message ended (on Send, the view stayed on the greeting). Fixed with a settle-wait: the loop used to stop as
+soon as `max_y_scroll > 0` and now stops only once that value is also unchanged from the previous frame,
+still bounded by `max_wait_frames`. Same lag `SmoothScrolling` budgets four frames for
+(`update_pending_threshold = 4`). The wait lives in `scroll_view` alone — `add_complete_message` and
+`follow_tail` no longer `split_frame` on their own account, since one owner of the timing is the point.
+
+**Fault 2 — the predicate could not tell arriving content from a user scroll, and getting it wrong latched.**
+This was the one that kept the view frozen, and the log made it unmistakable: over a single reply the gap
+grew 52 → 68 → 120 → 146 → 172 → 198 → 224 px and never recovered, with `scroll_view` never called once.
+
+The mechanism: `is_pinned_to_bottom` compared the position against `max_y_scroll`. But two endpoints move
+independently — the user moves the position, arriving content moves the maximum — so both causes produced the
+same gap, and the view read its own content arriving as a reason to stop following. Because the verdict is
+sampled once per chunk *before* that chunk renders, one false answer guarantees the next sample is taken from
+a view one chunk further behind: monotonically worse, no recovery. A displacement of two lines was enough to
+disable following for a whole turn.
+
+Fixed by comparing against **the position we last commanded**, not the maximum — the shadow-state pattern,
+and the same `_commanded_y_scroll` whose drift is the subject of the sections above. Content arrival cannot
+change that relationship; a user scroll is exactly a change to the position we did not ask for. All of the
+view's own scrolling goes through one private setter that records the commanded value and whether it was a
+scroll-to-end, so the two causes separate with one remembered integer and no scroll events. Renamed to
+`should_follow_tail`, because "is it at the bottom" is no longer the question it answers — it deliberately
+returns `True` for a view that is *not* at the bottom but is still following.
+
+**Fault 3 — `dpg.get_y_scroll` does not reflect a `dpg.set_y_scroll` for more than one frame,** so the
+comparison introduced by fault 2's fix was reading our own in-flight command as a discrepancy. That is what
+produced the one remaining dropout (mid chain-of-thought): `gap=52.0px ... drifted 52.0px from the 533.0 we
+last commanded` — the panel was simply still at the previous position. Fixed by waiting in `scroll_view` for
+the panel to report the position asked for, bounded by a round count and re-issuing the recomputed target
+each round. Measured after the fix: one extra frame sufficed 114 times out of 115, two once, three never.
+
+An earlier hypothesis — that DPG had clamped the command to a content height momentarily shortened by
+`replace_last_paragraph`'s delete-then-add — **did not survive the log**: the first wait of the session read
+a position of `0.0` against a maximum of `692.0`, where nothing had shrunk. That clamp window is real (the
+`dpg.mutex()` that would make the swap atomic is disabled because holding it hangs the app) and recomputing
+the target each round covers it for free, but it was not the cause of any measured case. Recorded because the
+wrong mechanism was briefly written into the code comments and `dpg-notes.md`.
+
+**Also dropped in the same pass: the refusal was initially made *sticky*, which looked careful and was the
+opposite.** A reader who genuinely scrolls away keeps failing the drift test unaided, because they stay put
+and we issue no further commands — so stickiness added no protection, only amplification, turning one wrong
+refusal into a dead view for the rest of the reply. The log showed exactly that: every later refusal in the
+affected turn reported `drift 0.0` with the flag already cleared. Each sample now decides on current evidence
+and stores no verdict, so a wrong answer costs one chunk.
+
+Diagnostics kept in place, and they are what made the 2026-08-11 episode above diagnosable from an ordinary
+run: `should_follow_tail` logs both comparisons and the deciding branch at DEBUG, a near-miss refusal at
+INFO, and `scroll_view` logs each wait round. For a future regression the number to read is the *drift* — a
+nonzero drift with no user scrolling means something moved the position behind our back, which is a different
+bug from a tolerance being too small.
+
+### Two design constraints from that work, still live
+
+**"Was", not "is", and that is the whole trick.** The at-the-bottom test has to be sampled *before* the new
+content is added, and acted on after. Appending text grows the container, so `max_y_scroll` increases and a
+view that was pinned to the bottom is no longer at the bottom the instant the chunk lands. Testing after the
+append therefore reports "the user has scrolled away" every single time, autoscroll never engages, and the
+view freezes wherever the stream began — a fix that fails in exactly the opposite direction from the bug, and
+one that would look correct in the code.
+
+**The same hazard reaches `ScrollEndFlasher`, so the predicate is shared in *form* but not in timing.** A
+user-initiated scroll is not a quiet moment — the user can scroll *while* the model streams — so a chunk can
+land between the flasher's sample and its act, and "you are at the end" becomes false as it is drawn. What
+differs is the consequence, not the exposure: the flasher's failure is one wrong flash, the autoscroll's is a
+view that never follows again. Do not fold them into a single "am I at the bottom" helper on the assumption
+that one of them is safe; either pass the sampled state in, or take the size change into account explicitly.

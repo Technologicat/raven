@@ -34,6 +34,15 @@ rather than the one we have.
 Severity is low: it creeps rather than latching, and releasing the mouse ends it. Discovered by Juha during
 the chat-view scrolling live test (2026-08-03).
 
+**"Chat view scroll position jumps back down while the model is writing" is merged in here** (2026-08-12).
+That item's three app-side faults were fixed on 2026-07-30 and its remainder is this drift — same mechanism,
+same fraction-vs-absolute cause — so keeping both invited a reader to fix the same thing twice. It is also
+distinct from the 2026-08-11 clamp-timeout fix, which does not settle it. Its write-up moved to
+`investigations/follow-tail-drift/README.md`, "Prior episode", where the rest of the follow-tail apparatus
+already lives; two design constraints from that work are recorded there and still bind — the at-the-bottom
+test must be sampled *before* new content lands, and `ScrollEndFlasher` shares the predicate's form but not
+its timing, so the two must not be folded into one helper.
+
 ## `SmoothScrolling` commits during construction, so it cannot be built without being fired
 
 *Cluster: ? · Cost: ? · Gate: 0.2.9 · Filed: 2026-08-03*
@@ -1668,22 +1677,6 @@ Priority if picking one up: `bgtask` (most likely to harbour concurrency bugs; t
 
 Discovered during speech-extract-to-common discussion (2026-04-17).
 
-## torch / torchaudio CUDA version alignment on fresh installs
-
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-04-17*
-
-`torchaudio>=2.4.0` was added as a direct dep alongside the existing `torch>=2.4.0`. Bare `pip install torchaudio` on a machine with `torch==2.10.0+cu128` fetched `torchaudio==2.11.0` from PyPI, which is built against CUDA 13 and fails to load (`libcudart.so.13: cannot open shared object file`). Workaround used on the dev box: `pip install "torchaudio==2.10.0" --index-url https://download.pytorch.org/whl/cu128`.
-
-This is a broader torch-ecosystem packaging issue (torch/torchvision/torchaudio minor versions must match, and PyPI's default wheels track the latest CUDA while most installed torch is older). Not fixable from within raven's `pyproject.toml` without pinning a specific torch build — which would create its own problems across Linux/Mac/Windows and CPU-only/CUDA users.
-
-Follow-up options to consider:
-
-- Document the issue in `README.md` / install instructions: if `pip install` from PyPI pulls a torchaudio that fails to load, install it from `https://download.pytorch.org/whl/<your-cuda-or-cpu>` matching the installed torch minor.
-- Check whether PDM respects PyTorch's index-url convention if we add it to `[[tool.pdm.source]]` — might auto-resolve correctly on fresh installs.
-- Revisit once torchvision is pinned somewhere (same class of problem).
-
-No code change; this is a documentation / install-experience issue. Discovered during speech-extract-to-common step 2 (2026-04-17).
-
 ## Lazy `api.initialize` in `llmclient` and `hybridir` (would unblock `test_scaffold` in minimal CI)
 
 *Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-04-17*
@@ -2015,6 +2008,19 @@ In particular, `torchaudio` should be part of the CUDA dep set, pinned to the ma
 CPU-only path: someone who just wants Raven-visualizer on a laptop without a GPU shouldn't have to learn about extra-dep groups. The default install (`pdm install` with no extras) should pull the CPU build of torch/torchaudio/torchvision; the `-G cudaXX` extras only add CUDA-build alternates. Today GPU support being opt-in is fine (it's the heavy/optional capability), but the CPU torch build still has to *appear*, otherwise `import torch` fails outright. Probably means listing the CPU-build versions in the base `[project] dependencies` (with PyTorch's CPU index URL) and having the `-G cudaXX` extras override the base pins via a higher-priority constraint.
 
 Discovered during the logsetup smoke test (2026-04-29) when a routine `pdm install` (run to refresh a console-script entry point) bumped torchaudio and broke the visualizer's import path. Recurred 2026-06-03 on the CUDA 12.8 machine: adding `trafilatura` triggered a re-resolve that again bumped `torchaudio 2.10.0+cu128 → 2.11.0` (CUDA-13 build, `OSError: libcudart.so.13`); restored with `python -m pip install "torchaudio==2.10.0" --index-url https://download.pytorch.org/whl/cu128`. Second occurrence — this is a recurring tax on every dependency change, not a one-off.
+
+**Absorbed 2026-08-12: "torch / torchaudio CUDA version alignment on fresh installs" was the same problem
+filed twice**, from the fresh-install end rather than the switching-machines end. What it added: bare
+`pip install torchaudio` against `torch==2.10.0+cu128` pulls the CUDA-13 build from PyPI, which fails to
+load; torch, torchvision and torchaudio minor versions must match, and PyPI's default wheels track the
+latest CUDA while most installed torch is older. Its follow-ups were to document the workaround in the
+README, and to check whether PDM honours PyTorch's index-url convention via `[[tool.pdm.source]]`.
+
+**Re-scope before doing any of it.** Every symptom recorded here and there is torchaudio's, so if
+torchaudio goes (see "Replace `torchaudio.functional.resample`, and drop torchaudio"), the stated remedy —
+pin torchaudio into the CUDA dep set rather than letting it float — becomes moot, and what survives is the
+genuinely separate half: **the CPU-default path**, where a bare `pdm install` must still yield a working
+`import torch`, with `-G cuda12` / `-G cuda13` overriding the base pins. That is the real content.
 
 ## Convert startup `print()`s to `logger.info()` where appropriate
 
@@ -2382,106 +2388,6 @@ configuration, and not the renderer.
 Raised during webfetch GUI smoke-testing (2026-06-03); flagged for a dedicated discussion. Split out
 from a combined emoji + super/subscript item on 2026-07-27 — the emoji half is a separate problem with
 its own fix, and lives in "Emoji support in the Markdown renderer" below.
-
-## Chat view scroll position jumps back down while the model is writing
-
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-07-28*
-
-While a reply streams, the chat view's scroll position keeps being pulled back to the bottom, so
-scrolling up to re-read an earlier message during generation does not stay put — the next streamed
-chunk yanks the view down again. The user has to wait for the turn to finish before they can read
-anything else, which on a thinking model is a long time.
-
-Demo-facing (Researchers' Night, 2026-09-26), and arguably the most *felt* of the chat-view defects:
-it fires on every single turn, unlike the Markdown cases which need particular content. On stage it
-also removes the natural thing to do while the model thinks, which is to scroll back and talk about
-what it said last.
-
-**Done 2026-07-30 — confirmed live.** Three faults, each found by a live test and fixed. Final run over a long
-reply with a thinking block and a multi-screenful `webfetch` answer: **zero near-miss refusals**, following
-correct throughout, with the position-wait firing 115 times and needing more than one extra frame only once.
-Honouring a scrolled-away reader worked from the start, including across tool calls; making the view *follow*
-took all three.
-
-**Fault 1 — `dpg.get_y_scroll_max` lags a content change by more than one frame.** `scroll_view` read the
-maximum before the newly added message had been laid out, so "scroll to the end" landed where the *previous*
-message ended (on Send, the view stayed on the greeting). Fixed with a settle-wait: the loop used to stop as
-soon as `max_y_scroll > 0` and now stops only once that value is also unchanged from the previous frame, still
-bounded by `max_wait_frames`. Same lag `SmoothScrolling` budgets four frames for (`update_pending_threshold =
-4`). The wait lives in `scroll_view` alone — `add_complete_message` and `follow_tail` no longer `split_frame`
-on their own account, since one owner of the timing is the point.
-
-**Fault 2 — the predicate could not tell arriving content from a user scroll, and getting it wrong latched.**
-This was the one that kept the view frozen, and the log made it unmistakable: over a single reply the gap grew
-52 → 68 → 120 → 146 → 172 → 198 → 224 px and never recovered, with `scroll_view` never called once.
-
-The mechanism: `is_pinned_to_bottom` compared the position against `max_y_scroll`. But two endpoints move
-independently — the user moves the position, arriving content moves the maximum — so both causes produced the
-same gap, and the view read its own content arriving as a reason to stop following. Because the verdict is
-sampled once per chunk *before* that chunk renders, one false answer guarantees the next sample is taken from a
-view one chunk further behind: monotonically worse, no recovery. A displacement of two lines was enough to
-disable following for a whole turn.
-
-Fixed by comparing against **the position we last commanded**, not the maximum. Content arrival cannot change
-that relationship; a user scroll is exactly a change to the position we did not ask for. All of the view's own
-scrolling goes through one private setter that records the commanded value and whether it was a scroll-to-end,
-so the two causes separate with one remembered integer and no scroll events. Renamed to `should_follow_tail`,
-because "is it at the bottom" is no longer the question it answers — it deliberately returns `True` for a view
-that is *not* at the bottom but is still following.
-
-**Fault 3 — `dpg.get_y_scroll` does not reflect a `dpg.set_y_scroll` for more than one frame,** so the
-comparison introduced by fault 2's fix was reading our own in-flight command as a discrepancy. That is what
-produced the one remaining dropout (mid chain-of-thought): `gap=52.0px ... drifted 52.0px from the 533.0 we
-last commanded` — the panel was simply still at the previous position. Fixed by waiting in `scroll_view` for
-the panel to report the position asked for, bounded by a round count and re-issuing the recomputed target each
-round. Measured after the fix: one extra frame sufficed 114 times out of 115, two once, three never.
-
-An earlier hypothesis — that DPG had clamped the command to a content height momentarily shortened by
-`replace_last_paragraph`'s delete-then-add — **did not survive the log**: the first wait of the session read a
-position of `0.0` against a maximum of `692.0`, where nothing had shrunk. That clamp window is real (the
-`dpg.mutex()` that would make the swap atomic is disabled because holding it hangs the app) and recomputing the
-target each round covers it for free, but it was not the cause of any measured case. Recorded because the wrong
-mechanism was briefly written into the code comments and `dpg-notes.md`.
-
-Also dropped in the same pass: the refusal was initially made *sticky*, which looked careful and was the
-opposite. A reader who genuinely scrolls away keeps failing the drift test unaided, because they stay put and
-we issue no further commands — so stickiness added no protection, only amplification, turning one wrong refusal
-into a dead view for the rest of the reply. The log showed exactly that: every later refusal in the affected
-turn reported `drift 0.0` with the flag already cleared. Each sample now decides on current evidence and stores
-no verdict, so a wrong answer costs one chunk.
-
-Diagnostics kept in place: `should_follow_tail` logs both comparisons and the deciding branch at DEBUG, a
-near-miss refusal at INFO, and `scroll_view` logs each wait round. For a future regression, the number to read
-is the *drift* — a nonzero drift with no user scrolling means something moved the position behind our back,
-which is a different bug from a tolerance being too small.
-
-**Earlier, and already fixed:** the follow-the-tail autoscroll was unconditional. `chat_controller.py` calls `self.view.scroll_view()` with no target — which scrolls to the end
-— at four points during a streaming turn (≈ lines 2267, 2335, 2356, 2365). The fix is the standard rule:
-stick to the bottom only while the view *was* at (or near) the bottom, and stop following the moment the user
-scrolls away.
-
-**"Was", not "is", and that is the whole trick.** The test has to be sampled *before* the new content is
-added, and acted on after. Appending text grows the container, so `max_y_scroll` increases and a view that
-was pinned to the bottom is no longer at the bottom the instant the chunk lands. Testing after the append
-therefore reports "the user has scrolled away" every single time, autoscroll never engages, and the view
-freezes wherever the stream began — a fix that fails in exactly the opposite direction from the bug, and
-one that would look correct in the code.
-
-The same hazard reaches `ScrollEndFlasher`, so the predicate is shared in *form* but not in timing. A
-user-initiated scroll is not a quiet moment — the user can scroll *while* the model streams — so a chunk can
-land between the flasher's sample and its act, and "you are at the end" becomes false as it is drawn. What
-differs is the consequence, not the exposure: the flasher's failure is one wrong flash, the autoscroll's is a
-view that never follows again. Do not fold them into a single "am I at the bottom" helper on the assumption
-that one of them is safe; either pass the sampled state in, or take the size change into account explicitly.
-
-**Belongs with the chat-view scrolling item above, and probably first within it.** Smooth scrolling makes
-this defect *worse* if built first: today the view is yanked down instantly, which is at least over quickly;
-animated, the same unconditional call becomes a visible fight for the scrollbar every time a chunk arrives.
-The "am I at the bottom?" test is also the same predicate `ScrollEndFlasher` needs, so the three pieces share
-machinery rather than merely sharing a subsystem.
-
-Discussed in an earlier session and believed to be recorded here; it was not. Written down
-2026-07-28 after failing to find it (reported by Juha).
 
 ## Chat view drops a character mid-message ("What" renders as " hat")
 
@@ -2916,22 +2822,6 @@ Discovered 2026-07-16 (noted by Juha during brief-03 Half-2 pause).
 The composer's multiline text field (`chat_field`, `app.py`) is a fixed height (`gui_config.chat_field_h`, ~5 rows). For essay-length prompts — common in scientific use — a fixed box is a toilet-paper-roll view of the input. Add a drag-to-resize affordance (or a fixed/expand toggle) so the user can grow the field when composing long messages. The composer's outer height is currently fixed on purpose (so the chat/avatar panels don't jump when the staged-image strip appears), so a resize handle would need to grow the whole composer and re-run the panel layout — reuse `_resize_panels`.
 
 Discovered during brief-03 Half-2 composer rework (2026-07-17, flagged by Juha).
-
-## Attach an image from a web URL (paste-URL path)
-
-*Cluster: document-ingestion · Cost: ? · Gate: ? · Filed: 2026-07-17*
-
-The image-attach GUI only supports attaching *local files* (composer paperclip → FileDialog → a `file://`
-provenance). The storage and provenance layers already anticipate a web source: `imagestore.store_image_as_sidecar`
-accepts `provenance_source="paste_url"` (and `"mcp:<server>"`), records an `https://` provenance `url`, and the
-inline-image "Open source" action opens an `https://` URL in the browser — but nothing yet *produces* such an
-image, so that branch is unreachable in normal use today. Add a user path to attach an image by URL (paste a URL
-into the composer, or a dedicated "attach from URL" affordance): fetch the bytes, run them through the same
-`store_image_as_sidecar` (which downsamples + keeps the original per the existing cap policy), and record the
-web source as provenance. The image itself is stored as a sidecar exactly like a local attachment, so a saved
-chat still reloads offline — only the provenance `url` points at the web.
-
-Discovered during brief-03 Half-2 (2026-07-17, noted by Juha — the backend already accounts for it).
 
 ## Datastore scaling: a single `chat.json` (+ flat sidecar dir) won't hold years of chats
 
@@ -3373,11 +3263,19 @@ those tracks, which will otherwise each build half of it differently.
 
 ## No way for the user to attach a document from a URL
 
-*Cluster: document-ingestion · Cost: ? · Gate: ? · Filed: 2026-07-29*
+*Cluster: document-ingestion · Cost: ? · Gate: 0.2.9 · Filed: 2026-07-29*
 
 The attach button takes a local file. There is no affordance for "attach *this URL* as a document to my
 message", even though the storage layer was designed expecting one: `sidecarstore.base_provenance` names
 `"paste_url"` as a `provenance_source`, and nothing in the tree emits it.
+
+**Images are the same affordance and are absorbed here** (merged 2026-08-12, from "Attach an image from a
+web URL (paste-URL path)"). `imagestore.store_image_as_sidecar` already accepts
+`provenance_source="paste_url"`, records an `https://` provenance URL, and the inline-image "Open source"
+action already opens one — but nothing in the tree *produces* such an image, so that branch is unreachable
+in normal use. The fetched bytes go through the same `store_image_as_sidecar`, which downsamples and keeps
+the original under the existing cap policy, so a saved chat still reloads offline and only the provenance
+URL points at the web. One absent affordance; what differs between the two is only what comes back.
 
 What exists today is not a substitute. A user who pastes a URL into the chat is relying on the *model* to
 decide to call `webfetch` — which needs tools enabled, needs the model to actually make that call, fetches

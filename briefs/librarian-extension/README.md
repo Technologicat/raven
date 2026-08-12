@@ -93,7 +93,7 @@ including the items that arrived without a brief of their own. Anything not list
 Done and confirmed: **03 §D** (archived), and the **streaming autoscroll** half of the scrolling set — the view
 now follows a reply for a reader at the end and leaves a scrolled-away reader alone, verified live over a
 thinking block and a multi-screenful `webfetch` answer. Details and the three faults it took are in
-`TODO_DEFERRED.md`, "Chat view scroll position jumps back down while the model is writing".
+`investigations/follow-tail-drift/README.md`, under "Prior episode".
 
 **Next session starts here** (agreed 2026-08-04, item 4 done that evening): settle whether item 3's two
 defect-shaped consequences are release blockers — the note under item 3 has the argument and the one
