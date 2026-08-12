@@ -388,3 +388,62 @@ Not a replacement for the chat. The interrogation produces a summary and a set o
 — "which of those studies said that, and what else does it say" — is exactly what brief 10's tools are for,
 and it is the natural second act. The two modes are complementary, and the seam between them is where the
 provenance list already lives.
+
+## The scope boundary this sits against, restated
+
+Brief 15 says Librarian is "not a generic agent harness, and it must not become one: no plugin system, no
+workflow DSL, no orchestration layer". **The first clause is Juha's; the three prohibitions were Claude's
+addition**, and this sketch's map stage is the first thing to test them. Recorded here rather than in the
+brief, which is archived and is not retconned. Checked 2026-08-11: that line is the only place in the tree
+where the boundary is stated, so there is no pattern of the design bumping into it — one line, four days
+old, first contact. Each of the three needs restating:
+
+- **Plugin system.** *Partly wrong.* GUI plugins are off the table for now; other kinds are an open
+  question, and a clean solution would be admissible. What is genuinely not planned is a plugin
+  *ecosystem* — no centralized Raven plugin repository, no dynamic website; the scope is local-to-user or
+  local-to-lab, and users sharing plugins on GitHub is fine. The security surface is the one Raven already
+  has: MCP servers run arbitrary code, `webfetch` reaches the network, and `tools_enabled` already gates a
+  security boundary in the GUI. Third-party code is a risk an informed user may want to opt into.
+- **Workflow DSL.** *Stands, with a correction to the alternative.* The fewer idiosyncratic DSLs the better
+  — but the answer is not "no scripting", it is **Python**, which technical users and AIs already know. A
+  Turing-complete security hole, acknowledged as such; the same trust decision as bundled scripts, not a
+  design objection.
+- **Orchestration layer.** *Overreach, and the interesting one.* There is a class of problems multi-agent
+  solves, and synthesizing across a collection of papers is plausibly one: a clean context per paper before
+  the synthesis step would likely improve results and save context in the main chat.
+
+  **This sketch already scopes that case, and not as orchestration** — `summaries = map(summarize, docs);
+  overview = synthesize(summaries)`, with `summarize` shipped and switched off. Naming it multi-agent
+  orchestration would have imported an architecture for a problem that already has a smaller shape.
+
+  **But the general solution is the better fit, and it may not cost more** (Juha, 2026-08-11 — six
+  impossible things before breakfast). The difference is what the per-document step *is*: map-reduce makes
+  it a pure function, doc → summary, no decisions. Multi-agent makes it a *turn* — the sub-task can search
+  the corpus, fetch a reference, follow a citation, notice the paper does not address the question.
+  "Summarize this paper" is fine as a pure function; "what does this say about X, and does it contradict Y"
+  is not. And by the aria-worthy criterion the pure-function version is knowledge left on the floor: Raven
+  already handles the harder case, so refusing a sub-task the capability the main chat has is a visible
+  lapse.
+
+  Claude's claim that multi-agent is the larger job was wrong for this codebase, because the pieces already
+  compose: `ai_turn` is the agent, a `Forest` is the scoped context, the scripting surface is the driver,
+  and reset-between-documents is the isolation. A sub-agent is a fresh forest, a scoped prompt, one
+  `user_turn` + `ai_turn`, and a result. **Map-reduce is then the degenerate case** — a map whose agent
+  makes no tool calls — rather than a cheaper alternative.
+
+  Three things settled in passing, worth keeping:
+
+  - **Not necessarily an in-memory forest.** An earlier draft said in-memory `Forest` is the clean context,
+    which quietly frames a sub-run as a tool call with disposable internals. A sub-run's transcript is
+    exactly what a researcher wants to inspect afterwards. Keeping it is probably not much more than a
+    `PersistentForest` with a sub-agent-scoped sidecar directory.
+  - **The main agent should be able to spawn sub-runs too**, via a builtin tool — not only the scripting
+    surface. That is a capability decision rather than plumbing: scripting-only means the *user* decides to
+    decompose, a builtin tool means the *model* can. Interacts with the tool-budget work, since a sub-run is
+    one tool call costing many turns.
+  - **Sub-runs are sequential**, Raven being a local system. That dissolves most of the UX difficulty an
+    earlier draft claimed: twenty concurrent runs would need a novel display, while one at a time with a
+    queue behind it is the shape of the existing INDEXING indicator. Transcripts arrive in order, too.
+
+  What genuinely remains is UX and storage detail, and opening it is a design session of its own. Not now;
+  not off the table.
