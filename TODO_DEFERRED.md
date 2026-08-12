@@ -1120,6 +1120,14 @@ clusters, as of 2026-07-27:
   stranded on dynamic reflow", "Emoji support in the Markdown renderer". Adjacent: "Super/subscript font
   coverage in the GUI" is an *atlas* problem rather than a renderer one (`fontsetup` serves both plain DPG
   text and `dpg_markdown`), but it shares the font-survey work with the emoji item's monochrome-font route.
+  **Four of these now point at `briefs/researchers-night/markdown-block-rendering-brief.md`**, which found
+  the shared cause and turned out to be much smaller than the items assumed.
+- **Document ingestion** — "Same file formats in the docs DB and in chat attachments", "Spreadsheets",
+  "Text out of images (OCR, and SVG `<text>`)", "Vector figures (`.svg`)", "Read documents as page images".
+  **Brief this once rather than five times**: they are five faces of one question — what an ingestible
+  document *is* — and the answers constrain each other. Page images is the one that bites on this project's
+  own terms: figure- and equation-heavy literature extracts to prose that omits the argument, in exactly the
+  corpus Raven exists to read.
 
 ## FileDialog: slow open and a teardown input-dead-window on huge directories
 
@@ -1963,7 +1971,7 @@ Discovered during postprocessor chain ordering redesign (2026-04-09).
 
 ## raven.papers user manual
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-04-13*
+*Cluster: ? · Cost: ? · Gate: 0.2.9, with the README correctness sweep · Filed: 2026-04-13*
 
 The `raven.papers` tool collection has grown to the point where it deserves its own user manual, like Visualizer, Librarian and Server already have.
 
@@ -1972,6 +1980,9 @@ There are existing usage instructions for `raven-arxiv-search` in the README of 
 For the others, some instructions are scattered in Raven's main `README.md`.
 
 Some instructions don't yet exist, and need to be written.
+
+Small enough to start from a draft. **Schedule it with the README correctness sweep** — the argument is not
+completeness but that out-of-date docs scare away potential users, and both jobs are the same reading pass.
 
 ## Hybridir: cover the edit-queueing layer with tests
 
@@ -1993,7 +2004,7 @@ Discovered during DOCS-indexing-indicator smoke test (2026-04-27).
 
 ## Easy install with a chosen CUDA version (and a sensible CPU default)
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-04-29*
+*Cluster: ? · Cost: ? · Gate: 0.2.9, re-scope first · Filed: 2026-04-29 · See also: "Replace `torchaudio.functional.resample`, and drop torchaudio", "`pdm.lock` is gitignored"*
 
 Raven's `[cuda]` extra currently pulls a torch / torchaudio / torchvision combo pinned to one CUDA toolchain (currently `+cu128`). The PyTorch project ships these via `--index-url https://download.pytorch.org/whl/cuXXX`, and the matching `nvidia-cuda-runtime-cuYY` runtime is also installable as a Python package — so a Raven install could in principle bundle a complete CUDA stack from PyPI without touching the host's toolchain.
 
@@ -2007,7 +2018,7 @@ Discovered during the logsetup smoke test (2026-04-29) when a routine `pdm insta
 
 ## Convert startup `print()`s to `logger.info()` where appropriate
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-04-30*
+*Cluster: hygiene-sweep · Cost: ? · Gate: hygiene-sweep · Filed: 2026-04-30*
 
 `raven/server/app.py:11` has had a standing `# TODO: convert prints to use logger where appropriate` for a while; the smoke tests for the new `--log` flag made it concrete. Server startup currently does much of its progress via `print()` ("Server config loaded from '…'", "No API key, accepting all requests", "Initializing avatar on device 'cuda:0' …", etc.) — all log-worthy, none captured by `--log` today. Same pattern in a few other apps where startup status got `print()` instead of `logger.info()` historically.
 
@@ -2019,7 +2030,7 @@ Discovered during the logsetup smoke test (2026-04-30).
 
 ## Hybridir: BM25 backend migration for larger corpora
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-04-27*
+*Cluster: ? · Cost: ? · Gate: — (value at current scale, not effort) · Filed: 2026-04-27*
 
 `bm25s` rebuilds the entire keyword index on every commit (full corpus → full reindex; IDF changes mean it can't be incremental in this design). Sub-second on ~1k small documents, so a non-issue today. Will start to pinch around the 10k–100k mark.
 
@@ -2039,7 +2050,7 @@ Discovered during cancellable-commit work (2026-04-27).
 
 ## webfetch "approve denied host" button relocates in brief 03
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-06-04*
+*Cluster: ? · Cost: ? · Gate: 0.2.9 · Filed: 2026-06-04*
 
 The brief-01 override affordance (approve a denied host for the session, then re-run the fetch on
 a new branch — `scaffold.retry_tool_calls`) is wired to a button in `chat_controller.build_buttons`,
@@ -2050,11 +2061,15 @@ button to wherever the denied fetch's result then renders, and drop the special 
 button-row branch. The backend (`retry_tool_calls`, `approve_host_for_session`, the
 `webfetch_denied_host` marker) is rendering-independent and stays as-is.
 
+**This should have closed already, and its precondition landing without it makes it more live than when
+filed.** Brief 03 shipped; the relocation did not, and `chat_controller` still carries the `role == "tool"`
+branch. That is what a conditional deferral looks like when nothing watches for the condition.
+
 Discovered while implementing the brief-01 GUI override (2026-06-04).
 
 ## webfetch: batch-approve several denied hosts at once
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-06-04*
+*Cluster: ? · Cost: ? · Gate: — · Filed: 2026-06-04 · Blocked by: "webfetch \"approve denied host\" button relocates in brief 03"*
 
 The "approve denied host & retry" override creates a NEW branch per approval (correct, given the
 chat store is a forest). But approving several denied fetches one at a time leaves all-but-the-last
@@ -2063,6 +2078,9 @@ let the user approve a *set* of denied hosts in one action (e.g. multi-select th
 or an "approve all denials in this turn" button), then re-run all of them on a single new branch.
 `retry_tool_calls` currently re-runs exactly one call; the batch version would re-run the union of
 approved calls and copy/share the rest — a natural generalization of the same branch-and-rebuild logic.
+
+Batch approval attaches to wherever the approve button ends up, so building this before the relocation
+means building it twice.
 
 Discovered during the brief-01 GUI override session (2026-06-04).
 
@@ -2537,7 +2555,7 @@ Discovered while committing the chat-template fix (2026-07-19).
 
 ## webfetch local (client-side) mode
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-06-03*
+*Cluster: ? · Cost: ? · Gate: — · Filed: 2026-06-03*
 
 `websearch` and `webfetch` currently live server-side only. `webfetch` is a candidate for running
 client-side too (e.g. to fetch from the client's network vantage — VPN-internal sites the server
@@ -2584,7 +2602,7 @@ Discovered during brief 02 (LM Studio compat) kickoff (2026-06-04).
 
 ## Fleet-wide: shared two-phase DPG shutdown helper + audit
 
-*Cluster: abnormal-exit · Cost: ? · Gate: ? · Filed: 2026-06-04*
+*Cluster: abnormal-exit · Cost: ? · Gate: 0.2.9 · Filed: 2026-06-04*
 
 The DPG apps each hand-roll their render-loop teardown, and the pattern is fragile — `raven-librarian`
 and `raven-avatar-settings-editor` both got it *wrong* independently, which is the signal it should be a
@@ -2756,7 +2774,7 @@ Discovered during the brief-02 ooba cross-backend regression test (2026-06-05).
 
 ## Parse Gemma's inline tool-call spelling if a raw-passthrough backend needs it
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-06-05*
+*Cluster: ? · Cost: ? · Gate: — (on hold) · Filed: 2026-06-05 · Blocked by: "Upgrade oobabooga and re-check Raven's ooba support"*
 
 The `StreamParser` (`raven/librarian/llmclient.py`) parses the generic / Qwen inline tool-call form
 (`<tool_call>{json}</tool_call>`) but not Gemma's: `<|tool_call>call:NAME{...}<tool_call|>` (inner pipes, a
@@ -2778,7 +2796,7 @@ Discovered during the brief-02 Gemma 4 reasoning-channel work (2026-06-05).
 
 ## Add built-in calculator and weather LLM tools (parked in brief 01 §6)
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-06-05*
+*Cluster: ? · Cost: ? · Gate: calculator RN2026; weather declined · Filed: 2026-06-05*
 
 Two small built-in tools were scoped out of brief 01 (webfetch) v0 and parked for "after the retrieval
 workstream wraps." Recording here so they survive brief archival:
@@ -2793,11 +2811,16 @@ Both register as built-in tools alongside `websearch` / `webfetch` (tool registr
 `raven.librarian.llmclient`). Under content-parts (brief 03) their string output wraps as a single text part —
 no special handling. Worked-out design and rationale: brief 01 §6 ("Out of scope for v0").
 
+**Split, 2026-08-12.** The **weather** half is dropped: the openmeteo MCP server already exists in the
+dotclaude setup, and building a second one in-tree while MCP support is landing anyway is duplicated effort.
+The **calculator** is worth more than its size suggests at an exhibit — a model doing arithmetic badly in
+front of an audience is a visible failure, and this is the one built-in that removes it.
+
 Flagged by Juha while wrapping brief 02 (2026-06-05).
 
 ## Reconsider the webfetch allowlist default: ship deny-by-default?
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-06-05*
+*Cluster: ? · Cost: ? · Gate: RN2026 for the demo config, 0.2.9 for the shipped default · Filed: 2026-06-05*
 
 `librarian_config.webfetch_allowlist` defaults to `None`, which means **allow-all**: the allowlist gate in
 `webfetch_wrapper` (`raven/librarian/llmclient.py`) is skipped entirely (`if allowlist is not None:`), so the
@@ -2820,6 +2843,11 @@ Posture decision for Juha (security vs. convenience for the median scientific us
 review (2026-06-05); pre-existing since the webfetch brief (brief 01) shipped, not introduced by the
 content-parts refactor.
 
+**These are two decisions and only one is on a clock.** For exhibit night, set an explicit allowlist in the
+demo config — one line, and a machine running unattended in front of strangers is exactly the case the gate
+exists for. The *shipped* default is the open question, and it has been open since June; the exhibit is
+merely the forcing function that made it visible again.
+
 ## Keyboard-layout-aware positional hotkeys across the fleet
 
 *Cluster: ? · Cost: ? · Gate: — · Filed: 2026-06-07*
@@ -2836,7 +2864,7 @@ Discovered during cherrypick WASD navigation work (2026-06-07).
 
 ## Fleet audit: every hotkey discoverable in a tooltip + help card
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-06-07*
+*Cluster: ? · Cost: ? · Gate: next · Filed: 2026-06-07 · See also: "Librarian's help card has no room to describe attachments"*
 
 Policy (now in `raven-style-guide.md`, "Hotkey discoverability"): every hotkey must be surfaced both in the `F1` help card *and* in the tooltip of the GUI control it triggers (bracketed, e.g. `"Open folder [Ctrl+O]"`). Most apps in the wild miss the tooltip half; Raven apps shouldn't.
 
@@ -2851,7 +2879,7 @@ Discovered during cherrypick WASD navigation work (2026-06-07).
 
 ## Cherrypick: zoom-in doesn't upgrade already-cached preload neighbors
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-06-09*
+*Cluster: ? · Cost: ? · Gate: 0.2.9 if time, else next · Filed: 2026-06-09*
 
 The preload cap is adaptive to the current zoom (`preload.mip_scale_for_zoom`): `schedule_neighbors` prefetches each neighbor at the smallest mip that displays crisply at the zoom in effect when it runs. But an already-cached neighbor is skipped (`if idx in self._cache: continue`), so if the user zooms *in* after a neighbor was cached at a smaller scale, that entry keeps its now-too-small mips. The first navigation to it then triggers the on-arrival augment (a one-time re-sharpen); take/donate cycles heal it thereafter.
 
@@ -2871,9 +2899,13 @@ Discovered during brief-03 Half-2 doc pass (2026-07-16); the renderer comments a
 
 ## Upgrade oobabooga and re-check Raven's ooba support
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-07-16*
+*Cluster: ? · Cost: ? · Gate: — until after RN, possibly after 0.2.9 too · Filed: 2026-07-16*
 
 text-generation-webui (oobabooga) hasn't been pulled in a long time; its OpenAI-compat API may have drifted from what Raven's `llmclient` assumes. Upgrade the local ooba install, then re-validate the ooba code paths against the current version: backend-flavor detection (`detect_backend_flavor`), model-info resolution (`_resolve_model_info` — the `/v1/internal/model/info` shape, and whether ooba now exposes a VLM-capability field so `model_is_vlm` can be better than `None`), the `mode: "instruct"` request field, the explicit `continue_` flag, the reasoning/tool-call streaming shape, and the exact token-count endpoint. Live-test a real generation + a tool call + (if supported) an image attach through ooba.
+
+**New backend variables are the last thing wanted in September**, and 0.2.9 is already carrying a lot. But
+note this item **unblocks two others**: the gray-thinking bug and the Gemma inline tool-call item are both
+ooba-only and currently untestable, since the install is stale and absent from the 16 GB machine.
 
 Discovered 2026-07-16 (noted by Juha during brief-03 Half-2 pause).
 
@@ -2903,7 +2935,7 @@ Discovered during brief-03 Half-2 (2026-07-17, noted by Juha — the backend alr
 
 ## Datastore scaling: a single `chat.json` (+ flat sidecar dir) won't hold years of chats
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-07-17*
+*Cluster: ? · Cost: ? · Gate: next · Filed: 2026-07-17 · See also: "Version the chat datastore file …", "`chattree.get_all_root_nodes` is an O(n) scan"*
 
 Librarian stores *every* chat — all nodes, all payload revisions, across the whole forest — in one
 `chat.json` (`chattree.PersistentForest`), and every attachment as a file in one flat
@@ -2942,7 +2974,7 @@ Discovered during brief-03 Half-2 (2026-07-17, flagged by Juha).
 
 ## Consolidate the flash palette into named constants
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-07-30*
+*Cluster: hygiene-sweep · Cost: ? · Gate: hygiene-sweep, first · Filed: 2026-07-30*
 
 A cleanup in `raven.common.gui.animation`, fleet-wide (touching multiple apps), so deferred out of the
 checkpoint that surfaced it.
@@ -2953,11 +2985,16 @@ The flash colors are magic tuples repeated across the codebase: the ok-green `(9
 `xdot_viewer/app`, …); the error-red `(150, 96, 96)` / `(255, 180, 180)` is newer. Extract a small named
 palette (success/failure flash background + text) and have `WidgetFlash`'s defaults, `flash_button`, and the
 scattered literals reference it.
+
+**Take this one first in the hygiene sweep.** It is the clearest *visible* instance of drift in the file:
+the duplication is already present rather than predicted, and `WidgetFlash`'s own default being re-hardcoded
+in `flash_button` is the whole phenomenon in one line.
+
 Discovered during brief-03 Half-2 checkpoint C (2026-07-17, flagged by Juha while reviewing `flash_button`).
 
 ## Expose the docs-DB source files behind a reply's RAG citations
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-07-18*
+*Cluster: ? · Cost: ? · Gate: next, wanted this year · Filed: 2026-07-18*
 
 When the AI composes a reply using the document database, it sees a set of retrieved snippets, and that
 provenance is already tracked per turn (the payload's `retrieval` field records the query and the snippets the
@@ -2972,7 +3009,7 @@ Discovered during the plain-text/PDF interlude (2026-07-18, requested by Juha).
 
 ## VLM reranking of mixed-modality search results (post-Nomic)
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-07-18*
+*Cluster: ? · Cost: ? · Gate: — · Filed: 2026-07-18 · See also: "RAG: rerank retrieved chunks and inject only the best few" (Declined — this item is **not** struck by that result; see the note below)*
 
 > **Note (2026-08-06): text cross-encoder reranking was measured and rejected** — see "RAG: rerank
 > retrieved chunks…" above. This item is *not* refuted by that, and the distinction is worth stating so
@@ -3007,11 +3044,15 @@ BM25-able text representation. This is the same "the ingestor needs an embeddabl
 each file" generalization that the PDF-extraction callback foreshadows — for text it's the extracted plaintext,
 for an image it's a caption plus the image embedding.
 
+**Re-test after the Nomic switch.** The rejection above is an empirical result about Raven's *current*
+hybridir, where reranking was worse than useless; a new embedder changes the conditions under which it was
+obtained.
+
 Discovered during the plain-text/PDF interlude (2026-07-18, raised by Juha).
 
 ## Same file formats in the docs DB and in chat attachments
 
-*Cluster: document-ingestion · Cost: ? · Gate: ? · Filed: 2026-07-29*
+*Cluster: document-ingestion · Cost: ? · Gate: next, with the cluster · Filed: 2026-07-29*
 
 The docs database and chat attachments should accept the *same* set of formats. A user who can attach a file
 to a message reasonably expects to be able to drop it in the documents folder, and vice versa; a split between
@@ -3042,7 +3083,7 @@ Raised during the 0.2.8 release scoping (2026-07-29, Juha).
 
 ## Spreadsheets in the docs DB and attachments (`.xlsx`, `.ods`)
 
-*Cluster: document-ingestion · Cost: ? · Gate: ? · Filed: 2026-07-29 · See also: `briefs/spreadsheet-ingestion-brief.md`*
+*Cluster: document-ingestion · Cost: ? · Gate: next, with the cluster · Filed: 2026-07-29 · See also: `briefs/spreadsheet-ingestion-brief.md`*
 
 Left out of the office-formats work deliberately: a spreadsheet is a different problem class wearing the same
 file picker. Its content is tabular, so "the text of this file" is not well defined — reading a sheet row-major
@@ -3057,7 +3098,7 @@ Raised while scoping office-format support (2026-07-29, Juha).
 
 ## Text out of images, so figures work without a vision model (OCR, and SVG `<text>`)
 
-*Cluster: document-ingestion · Cost: ? · Gate: ? · Filed: 2026-07-30*
+*Cluster: document-ingestion · Cost: ? · Gate: next, with the cluster · Filed: 2026-07-30*
 
 The image → text cell of the 2×2 in the SVG item below: given an image, produce its plain text. Wanted for
 three distinct reasons, which is what makes it worth building rather than a nice-to-have:
@@ -3143,7 +3184,7 @@ Raised by Juha (2026-07-30), from the `imageextract` question.
 
 ## Vector figures in the docs DB and attachments (`.svg`)
 
-*Cluster: document-ingestion · Cost: ? · Gate: ? · Filed: 2026-07-30*
+*Cluster: document-ingestion · Cost: ? · Gate: next, with the cluster · Filed: 2026-07-30*
 
 Hand-authored figures — problem setups, schematics, diagrams — are commonly SVG, because that is what you get
 when you draw them yourself for a manuscript rather than exporting them from a plotting library. So this is not
@@ -3234,7 +3275,7 @@ Raised by Juha (2026-07-30).
 
 ## Read documents as page images, for figure- and math-heavy sources
 
-*Cluster: document-ingestion · Cost: ? · Gate: ? · Filed: 2026-07-29*
+*Cluster: document-ingestion · Cost: ? · Gate: next, with the cluster — and the one that bites hardest · Filed: 2026-07-29*
 
 Current extraction is **text-layer only**, for PDFs and (as of 0.2.8) office formats alike. That loses exactly
 what matters in the sources this project exists to read: equations, plots, diagrams, tables-as-figures. A paper
@@ -3390,7 +3431,7 @@ Raised during the 0.2.8 format work (2026-07-29, Juha).
 
 ## Version the chat datastore file, so migrations can be skipped once applied
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-07-29*
+*Cluster: ? · Cost: ? · Gate: 0.2.9 · Filed: 2026-07-29 · See also: "Datastore scaling: a single `chat.json` …", "`chattree.get_all_root_nodes` is an O(n) scan"*
 
 Raised 2026-07-29 (Juha), from noticing that `appstate.backfill_sidecar_metadata` walks every revision of every
 node at every load. Nothing today tells a loaded datastore apart from one that has already been through each
@@ -3462,7 +3503,7 @@ about, since a mode that merely hides the avatar panel saves nothing that matter
 
 ## Visualizer's importer should read the document database, not just `.bib` files
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-07-29*
+*Cluster: ? · Cost: ? · Gate: next · Filed: 2026-07-29*
 
 Visualizer ingests BibTeX databases. That is where it started — scientific abstracts, one entry per paper — and
 it is now the wrong boundary. What the importer actually wants as its source is **the same document database
@@ -3497,7 +3538,7 @@ Raised during the 0.2.8 format work (2026-07-29, Juha).
 
 ## Let the AI drive the constellation's own views (tools, and then voice)
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-07-29*
+*Cluster: ? · Cost: ? · Gate: next, this year if possible · Filed: 2026-07-29*
 
 Falls out of the item above, and is easy to miss because it looks like prose: *"show me the map"*, *"search my
 documents"*, *"show me what cleanup is about to delete"* are not descriptions of features, they are things a
@@ -3527,7 +3568,7 @@ commands).
 
 ## Semantic grouping in the sidecar cleanup preview (once Nomic lands)
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-07-29*
+*Cluster: ? · Cost: ? · Gate: — (gated on Nomic) · Filed: 2026-07-29*
 
 The "Clean up & save" preview lists the orphaned sidecars it is about to delete. There is no grouping, because
 today there is nothing to group *by*: sidecars are content-addressed, so the set is globally unordered, the
@@ -3563,7 +3604,7 @@ Raised while implementing brief 03 D (2026-07-29, Juha's idea, and Juha's placem
 
 ## HTML pages whose content is produced by running them
 
-*Cluster: document-ingestion · Cost: ? · Gate: ? · Filed: 2026-07-29*
+*Cluster: document-ingestion · Cost: ? · Gate: next, with the cluster · Filed: 2026-07-29*
 
 `raven.common.docextract` reads HTML through `trafilatura`'s readability extraction, which looks at markup. A
 page that has no text in its markup — because a script writes it at load — therefore extracts as empty, and the
@@ -3605,11 +3646,16 @@ else in the database. Some possible shapes, none yet chosen:
   would have to earn. If it is ever built, it belongs behind a per-file action the user takes deliberately,
   never behind the ingester or the attach dialog.
 
+**A licensing constraint to carry into the cluster brief**, since it decides *where* the feature can live
+rather than being a detail: the only browser driver in the tree is `websearch`'s Selenium driver, which is
+AGPL. So a rendering route has to be server-side — exactly what the *webfetch local mode* item records for
+`_fetch_tier2`.
+
 Raised while adding HTML support (2026-07-29, Juha's example).
 
 ## Rendering LaTeX equations in the chat log
 
-*Cluster: markdown-renderer · Cost: ? · Gate: ? · Filed: 2026-07-29*
+*Cluster: markdown-renderer · Cost: ? · Gate: 0.2.9 · Filed: 2026-07-29 · See also: `briefs/researchers-night/markdown-block-rendering-brief.md`*
 
 Models emit LaTeX — `$...$`, `$$...$$`, `\begin{equation}` — whenever the subject is mathematical, and Librarian
 currently shows it as source. For a research assistant aimed at scientific work this is the wrong way round: the
@@ -3631,6 +3677,10 @@ renderer needs to hold an incomplete fragment as source and swap in the rendered
 reflowing everything above it.
 
 Not tracked before now because it was too large to take on solo; that calculus has changed.
+
+**Upgraded from `next` on 2026-08-12**, because the renderer work it rides with turned out far smaller than
+assumed — tables are close to the only genuinely missing feature, and syntax highlighting is off the
+roadmap. Wanted this year; can wait until after the exhibit.
 
 Raised during the 0.2.8 format work (2026-07-29, Juha).
 
@@ -3680,7 +3730,7 @@ Discovered during brief 07 GUI testing (2026-07-29, raised by Juha).
 
 ## `pdm.lock` is gitignored, against the fleet policy for applications
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-08-04*
+*Cluster: ? · Cost: ? · Gate: 0.2.9 if it resolves cleanly, else next · Filed: 2026-08-04 · See also: "Easy install with a chosen CUDA version"*
 
 Fleet policy is that libraries don't commit `pdm.lock` and applications do — a lockfile is what makes a
 deployment reproducible, and Raven is an application. Raven's `.gitignore` has ignored it since early on
@@ -3717,6 +3767,11 @@ again. This is the same reason the probes live there: the apparatus is the repro
 Commit the lock if it resolves; if it doesn't, the outcome is a decided-and-written-down exception in the
 `.gitignore` and in `project-setup`'s fleet classification, which is worth as much as the lock would have
 been.
+
+**Do it in one session with "Easy install with a chosen CUDA version"** — same blocker, the lock/index
+interaction, asked from two directions. Dropping torchaudio simplifies both. **And do not let it become a
+large must-resolve item inside 0.2.9**: if the interaction turns out thorny, move it to `next` rather than
+expanding the cycle around it.
 
 Do it for 0.2.8 if the check is quick, otherwise 0.2.9 — it is a packaging defect with no user-visible
 symptom today, so it does not gate a release.
@@ -3761,7 +3816,7 @@ the current once-per-session write, and every later design needs it anyway.
 
 ## The docs DB stores each document's full text *and* its chunks, both in the JSON
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-08-04*
+*Cluster: ? · Cost: ? · Gate: 0.2.9, resolve soon · Filed: 2026-08-04 · See also: "Version the chat datastore file …", "Datastore scaling …"*
 
 `HybridIR`'s `fulldocs/data.json` holds, per document, a `"text"` field (`# copy of original text as-is`,
 `hybridir.py`) and a `"chunks"` list whose entries each carry their own `"text"`. The chunks are slices of the
@@ -3828,13 +3883,17 @@ end of every commit — the same shape of cost, and where `tokens` should go), a
 item, which named this coupling first. Second measurement and the field breakdown taken from
 `investigations/retrieval/README.md`, under the arXiv fulltext corpus state.
 
+**Check what actually consumes `"text"` before removing it.** The fix looks like one field, which is exactly
+when it is not — and the corpora are no longer hypothetical: ~12k hydrogen abstracts, ~2500 one-page ECCOMAS
+2024 abstracts, and the 1268-paper arXiv fulltext set are all ingested today.
+
 Raised by Juha (2026-08-04); the measurement was taken while filing it. Cross-referenced from
 `investigations/retrieval/README.md`, under the arXiv fulltext corpus state, which is where the second
 measurement was taken.
 
 ## A fetched web page is budgeted as a user attachment, not as a speculative fetch
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-08-04*
+*Cluster: ? · Cost: ? · Gate: 0.2.9 · Filed: 2026-08-04*
 
 0.2.8 stores a long `webfetch` result as an attachment sidecar, which put it under
 `fit_attachments_to_context` — the *user attachment* budget, bounded only by `context_reserve_fraction`
@@ -3978,7 +4037,7 @@ extraction, in a different phase. Raised by Juha (2026-08-06).
 
 ## A crash during ingest loses the whole run, however long it was
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-08-06*
+*Cluster: ? · Cost: ? · Gate: next, with the per-document LLM pass · Filed: 2026-08-06 · See also: `briefs/researchers-night/per-document-llm-pass-brief.md`*
 
 The delayed-commit coalescer defers a commit for one second after each finished document read, so on a
 large corpus it never fires until the reads stop arriving. Measured on the 1268-PDF fulltext corpus
@@ -4107,7 +4166,7 @@ this item when the `raven-fixbib` half lands.
 
 ## Source code in the document database wants its own tokenizer, not just a new file extension
 
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-08-07*
+*Cluster: ? · Cost: ? · Gate: — · Filed: 2026-08-07*
 
 `.py` is plain text, LLMs read code well, and writing code is part of doing numerical science — so adding
 it to `llm_docs_exts` looks like a one-line change. It is not, and the reason is worth having measured
