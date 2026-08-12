@@ -56,6 +56,10 @@ The goal is to make a large body of text navigable: screen tens of thousands of 
 
 *Raven* is 100% local, 100% privacy-first, 100% open source.
 
+The name does three jobs at once, which is why it stuck. Jyväskylä once ran *Korppi*, a course-management system built in-house at the university before a commercial product replaced it — "Jyväskylä develops ravens" is the local tradition, cheekily generalized from a single data point. Ravens also collect shiny things, which is precisely what the visualizer does, and that is where the name came from back in the visualizer-only days. And *Corvus* is an actual constellation, which landed retroactively once Raven became a constellation of apps rather than one tool.
+
+**On PyPI, Raven is `raven-lab`; the import package stays `raven`.** The index name `raven` belongs to Sentry's legacy client, so the qualified form is the closest available — and *lab* is what this is: a repo of experimental research prototypes across AI, LLMs and HCI, currently applied to literature management. **Install Raven into a venv**, as ML/AI applications generally require; Sentry's client ships a top-level `raven/` too, and a venv is what keeps the two apart.
+
 Recent changes are explained in the [CHANGELOG](CHANGELOG.md).
 
 For my stance on AI contributions, see the [collaboration guidelines](https://github.com/Technologicat/substrate-independent/blob/main/collaboration.md).

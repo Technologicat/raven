@@ -26,9 +26,12 @@ explaining why they are guesses both go away.
 
 Two things to settle when building it:
 
-- **Per-message or global?** The worker serves the whole app, so "the queue is empty" is a weaker statement
-  than "this message is laid out". Global is much easier and is probably enough for the scroll case, since
-  nothing else is rendering at startup; a per-message token is the honest version.
+- **The unit is a caller-supplied group ID, not the whole queue** (Juha, 2026-08-12). "The queue is empty"
+  is a weaker statement than "the thing I asked for is laid out", and the worker serves the whole app —
+  the chat log is one caller of `dpg_markdown.add_text` among several, so a global signal can be delayed
+  by, or satisfied by, work that has nothing to do with the waiter. So the signal wants to be per call,
+  grouped: the caller passes an ID, and the event fires when no writes remain pending under it. A chat
+  message is then one group, and `scroll_view` waits for that group rather than for the app to fall quiet.
 - **It must not resurrect the shutdown hazard.** That worker already outlives app teardown and keeps calling
   DPG across `destroy_context` (see "Fleet-wide: shared two-phase DPG shutdown helper + audit"). A completion
   signal is a second thing a caller can block on, so it needs the same stop-flag discipline, or a wait at
@@ -466,29 +469,6 @@ bypass. Lanczos joins the second axis, so it fits the existing shape; it does ma
 visible, but untangling it is a separate (and API-breaking) question.
 
 Raised by Juha (2026-07-29).
-
-## Updating the vendored FontAwesome means both files, not just the header
-
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-07-30*
-
-`CLAUDE.md` notes the vendored `IconsFontAwesome6.py` is an outdated version. Measured 2026-07-30, the
-situation is more specific than that: the header and the shipped fonts are **exactly in sync** —
-`fa-solid-900.ttf` carries 1969 codepoints over 1395 distinct glyph names, the header names all 1395, and no
-glyph in the font lacks a constant. (The 574-codepoint surplus is pure aliasing: 461 names have two
-codepoints, e.g. `angle-down` at both U+2304 and U+F107. It is *not* a set of icons waiting to be exposed.)
-
-So regenerating the header alone would gain nothing. An update means fetching newer `fa-solid-900.ttf` /
-`fa-regular-400.ttf` webfonts **and** regenerating the header from the matching `icons.yml`, as one change —
-and then checking the font atlas still fits (see `dpg-notes.md`, "Font atlas limits"; more glyphs is exactly
-the direction that breaks it).
-
-Concrete motivation, for whenever this is picked up: `arrow-down-to-bracket` does not exist in this version,
-which is why the tool-call navigation links use the symmetric `ARROW_UP_LONG` / `ARROW_DOWN_LONG` pair
-instead of the `arrow-up-from-bracket` / `arrow-down-to-bracket` pair brief 03 suggested. If the update
-happens, that icon choice is worth revisiting — it is a two-line change in `add_tool_call_invocation` and
-`build_buttons`.
-
-Discovered while picking icons for the tool-call navigation links (2026-07-30).
 
 ## GUI: hardcoded stand-ins for values DPG has no getter for
 
@@ -1417,113 +1397,6 @@ night. **Decide it together with "Make the canned AI greeting optional"** — bo
 much identity the frontend should assert at a model that does not need it told.
 
 Extension raised by Juha (2026-07-30).
-
-## RAG: rerank retrieved chunks and inject only the best few
-
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-07-19*
-
-> **Measured and rejected, 2026-08-06. Retained for the design, not as a plan.**
->
-> Two cross-encoders — `ms-marco-MiniLM-L6-v2` (23M) and `bge-reranker-base` (278M), deliberately chosen to
-> differ in size and training data — in three placements, across three corpora. **No configuration beat
-> plain fusion.** Reranking the *fused* list is the worst option on all three corpora, and that part
-> generalizes: whatever else is true, do not rerank after fusion.
->
-> The mechanism, since it is the transferable part: fusing two cheap *independent* signals beats one
-> expensive model's opinion, so collapsing RRF's evidence diversity into a single ranking is the cost.
-> Reranking one arm and fusing afterwards recovers most of the loss (MRR 0.358 → 0.449) without beating
-> the 0.471 of plain fusion — which is what identifies diversity rather than model quality as the issue.
->
-> Latency was never the constraint (144 ms for 100 candidates on the 4090, 532 ms on loaded CPU), and two
-> mechanical explanations were eliminated before believing the result: a sign error (checked — the model
-> scores an obviously relevant passage +8.24 and an irrelevant one −11.43) and truncation (measured — only
-> 9.8% of real candidates exceed the 512-token limit).
->
-> **The motivation also weakened independently.** This item exists to avoid needing large `k`; `k=50`
-> subsequently shipped on measurement (+10.1 points of recall for +1.7 s of prefill), which is most of what
-> the reranker was wanted for, at no model cost.
->
-> Full tables in `investigations/retrieval/REPORT.md` §2. The three-layer `common`/`server`/`mayberemote`
-> shape sketched below is still the right shape for *some* future model — it is the reranker specifically
-> that did not survive. **`TODO.md` no longer lists this as planned work.**
-
-**Do `briefs/librarian-extension/done/09_retrieval-query-side-brief.md` first.** It documents a
-verified finding that changes the diagnosis below: `_query_body` applies each engine's quality signal as
-an absolute cutoff *before* fusion, and `reciprocal_rank_fusion` then sums `1 / (rank + K)` over
-positions only. So the score-to-quality mapping is discarded one line before the rank that is supposed to
-carry it, and a top-of-a-bad-batch result is indistinguishable from a top-of-a-good-batch one. That is
-the reported symptom (less topical matches outscoring the ones that answer the question), and it gets
-*worse* as retrieval widens — which is the direction this item wants to push. The brief also carries the
-labelled-set setup that makes any of this measurable.
-
-`docs_num_results = 20` (`raven.librarian.config`), and `scaffold._perform_injects` injects *all* of
-them into the prompt, as one merged tool message placed before the user's latest message. That is a lot
-of material to hand a model for one question, and it costs three ways at once:
-
-- **Context.** Twenty chunks of scientific fulltext is a large fraction of the window before the
-  conversation has even started, and the "Context-window budgeting and conversation compaction" item
-  below has no enforcement yet.
-- **KV cache.** They go in at the front, so every one of them is part of the prefix that gets rebuilt
-  each turn (see the fold item's discussion of insert position).
-- **Attention.** A model given twenty candidate passages, most of them irrelevant, has to do the
-  relevance filtering itself — and long-context attentiveness is exactly what degrades as the prompt
-  fills. Handing it three good passages is a different task from handing it twenty mediocre ones.
-
-The standard shape for this is a **reranking stage**: retrieve broadly (the current hybrid BM25 +
-vector + reciprocal-rank-fusion pass is a good recall stage), then score each candidate against the
-query with a cross-encoder — which reads query and passage *together*, rather than comparing
-independently-computed embeddings — and keep only the top few. Retrieval stays wide; what reaches the
-prompt is narrow. See sentence-transformers' cross-encoder documentation
-(https://www.sbert.net/examples/applications/cross-encoder/README.html) for the usual implementation,
-and note the recall/precision division of labour is the whole point: the fusion pass is cheap and
-approximate, the reranker is expensive per candidate but only runs on a shortlist.
-
-Fits the three-layer pattern the other ML subsystems use: a `raven.common.rerank` implementation, a
-`raven.server.modules.rerank` shim with its route, and a `raven.client.mayberemote.Reranker`. It is a
-separate model from the embedder (cross-encoder, not bi-encoder), so it is a new load on whichever
-device serves it — worth weighing against the VRAM budget on single-GPU setups, and a good candidate
-for the CPU in `config_lowvram` since it runs on a shortlist rather than the whole corpus.
-
-Open question worth settling with the same experiment: how many chunks should actually reach the
-prompt. The answer interacts with the "answer from context only" reminder below — fewer, better
-passages may make that reminder unnecessary rather than merely better-worded.
-
-Discovered during Librarian↔LM Studio connectivity work (2026-07-19, Juha).
-
-## Decide the public name: "Raven" is taken, and the project has outgrown "raven-visualizer"
-
-*Cluster: ? · Cost: ? · Gate: before the first PyPI upload · Filed: 2026-07-14*
-
-Raven has no PyPI package, and can't easily get one under either candidate name.
-`raven` on PyPI is Sentry's old client, and the name is common enough to be crowded
-generally — there is now an AI product using it too. Meanwhile `raven-visualizer`
-(the name in `pyproject.toml`) no longer describes the thing: Raven is a constellation
-of apps now, and the visualizer is one of them.
-
-So this is a naming *and* branding decision, not a packaging chore, and it needs an
-in-house discussion before anything is chosen.
-
-What any replacement has to preserve, since the current name is doing several jobs at once:
-
-- **The local in-joke.** Jyväskylä once ran Korppi, a course-management system built
-  in-house at the university before a commercial product replaced it. "Jyväskylä develops
-  ravens" is the tradition — cheekily generalized from a single data point.
-- **The literal aptness.** Ravens collect shiny things, which is precisely what the
-  visualizer does. This is where the name came from, back in the visualizer-only days
-  (~2024).
-- **The constellation pun.** Corvus *is* an actual constellation, which landed retroactively
-  once Raven became a constellation of apps rather than one tool.
-
-Decision inputs: discoverability (a crowded name costs visibility), namespace availability on
-PyPI, and whatever branding constraints the in-house discussion surfaces. Note that keeping
-"Raven" as the *project* name while publishing under a distinct PyPI name is also on the
-table — the two don't have to match.
-
-**Before closing this item, move the three-part etymology above somewhere permanent.** It is
-filed here because it constrains the naming decision, but it long outlives it — and this file's
-convention is that resolved items are *deleted*, git being the history. Whatever is decided, the
-reason the thing was ever called Raven should not be deleted along with the question of what to
-call it next.
 
 ## Audit fleet for dict constants that should be `frozendict`
 
@@ -4162,19 +4035,48 @@ Raised by Juha (2026-08-07), reviewing the supported-format list.
 Items closed without doing. A reason is recorded so the decision stays made — an undocumented discard gets
 re-added by the next person who has the same thought.
 
-- **Librarian chat input: make it multiline (Shift+Enter = newline)** — done; `app.py` builds the composer
-  with `multiline=True`, and Ctrl+Enter sends. (Declined 2026-08-10.)
+**This is the anti-re-litigation section, not the finished-work one.** Something that shipped belongs under
+`## Already done` below; something *considered and rejected* belongs here. Two entries were filed here on
+2026-08-10 under the looser reading and moved on 2026-08-12.
+
 - **torch.compile for the postprocessor** — measured and answered: ~6% on THA3 for 37s of compilation, and it
   hung in the server. A finding rather than a task; the write-up is
   `investigations/tha3-performance/tha3-performance-audit.md`, with `debug_torch_compile.py` beside it.
   (Declined 2026-08-10.)
 - **Drop the Intel Mac / macOS 10.x install workaround** — that platform is being dropped rather than
   supported; the one Mac user is on Apple Silicon. (Declined 2026-08-10.)
-- **Attachment + docs-DB: support office document formats (MS Office / LibreOffice)** — the formats it asked
-  for landed 2026-07-29 (`093c400`): word processor documents, presentations and saved web pages, on both the
-  attach path and the ingester. Spreadsheets were the remaining gap and have their own item; the design this
-  item had accumulated for them moved to `briefs/spreadsheet-ingestion-brief.md` before it was closed.
-  (Declined 2026-08-10.)
+- **RAG: rerank retrieved chunks and inject only the best few** — measured and rejected 2026-08-06, and the
+  textbook case for this section: two cross-encoders, three placements, three corpora, and no configuration
+  beat plain fusion. Reranking the *fused* list is the worst option on all three, which generalizes. The
+  design that was worked out but never built, the caveat that the offered mechanism is post-hoc, and the
+  better lead (the ranks got *worse*, which evidence-diversity does not predict — domain mismatch is the
+  candidate) are all in `investigations/retrieval/REPORT.md` §2, with the tables. Its motivation weakened
+  independently too: `k=50` shipped on measurement and is most of what the reranker was wanted for.
+  **Does not strike "VLM reranking of mixed-modality search results"**, which that item argues on its own
+  grounds. (Declined 2026-08-12.)
+- **Decide the public name: "Raven" is taken** — decided rather than dropped, so the question stops being
+  open: the distribution is **`raven-lab`** and the import package stays **`raven`**. `raven` on PyPI is
+  Sentry's legacy client — 187 releases, none yanked, still installable, and its wheel ships a top-level
+  `raven/` — so the index name is squatted by a tombstone and cannot be had. The import collision is real but
+  confined to shared environments, and Raven installs into a venv as ML/AI applications generally must, so
+  **the venv requirement is the mitigation and belongs prominently in the README** (it is there now, with
+  the three-part etymology this item was holding). `raven-lab` → `raven` is a qualified form of the same
+  name rather than an opaque mapping like `cv2` from `opencv-python`; the qualifier exists only because the
+  index forced it. *lab* because Raven is one — a repo of experimental research prototypes across AI, LLMs
+  and HCI, currently applied to literature management, a reading that survives a change of application area
+  where the "lab computer" framing in `briefs/design/product-identity-sketch.md` explicitly may not.
+  The same qualified-form move is available for `corvid`, which is also taken. (Declined 2026-08-12.)
+- **Updating the vendored FontAwesome means both files, not just the header** — filed against a belief the
+  measurement refuted, so there is nothing to fix. Header and shipped fonts are **exactly in sync**:
+  `fa-solid-900.ttf` carries 1969 codepoints over 1395 distinct glyph names, the header names all 1395, and
+  no glyph lacks a constant. The 574-codepoint surplus is pure aliasing (461 names have two codepoints, e.g.
+  `angle-down` at U+2304 and U+F107), not icons waiting to be exposed. **Two things it established, kept
+  because a future update needs them**: an update means fetching newer `fa-solid-900.ttf` /
+  `fa-regular-400.ttf` **and** regenerating the header from the matching `icons.yml` as one change, then
+  checking the font atlas still fits (`dpg-notes.md`, "Font atlas limits"); and the one concrete motivation
+  is that `arrow-down-to-bracket` does not exist in this version, which is why the tool-call navigation uses
+  the symmetric `ARROW_UP_LONG` / `ARROW_DOWN_LONG` pair — a two-line change in `add_tool_call_invocation`
+  and `build_buttons` if it is ever revisited. (Declined 2026-08-12.)
 
 ## Waiting on upstream
 

@@ -48,6 +48,50 @@ that result generalizes: do not do it. Reranking a single arm and fusing afterwa
 loss but still does not beat plain fusion. The mechanism is that fusing two cheap independent signals
 beats one expensive model's opinion — RRF's value is evidence diversity, and collapsing it is the cost.
 
+*The rest of this subsection was re-homed here on 2026-08-12 from the deferred item this result closed
+("RAG: rerank retrieved chunks and inject only the best few", now declined), because it is the part of that
+item the result did not refute.*
+
+**The offered mechanism is a post-hoc explanation, and stays one.** The empirical result is solid and
+repeatedly replicated — two models, three placements, three corpora, `k` up to 200. The diversity story is
+*consistent* with the placement gradient (fused-rerank worst, single-arm-then-fuse recovering most of the
+loss but still losing to plain fusion), but that gradient is not a test of it. The test would need a second
+independent cheap signal, and none was found: IDF was proposed and is too correlated with BM25 to add
+anything, so it would be weak confirmation at best.
+
+**And the diversity story does not predict what actually happened** (Juha, 2026-08-12). Reranking did not
+merely fail to help — **the rank of the best-matching documents became *worse***, with both models, in every
+test. The mechanism of reranking is retrieve `M >> k`, rerank, cut at `k`; the point is to pull good
+documents *up* into the cut. A relevance-trained model with nothing to add should be roughly neutral. Being
+harmful is a different claim, and something is mis-scoring.
+
+The lead worth putting ahead of pool size and fused input — **both already tested, so neither is the
+answer** — is **domain mismatch in what cross-encoders are trained on.** They learn short web queries
+against short passages; Raven feeds whole conversational messages against scientific prose chunks. Scoring
+out-of-distribution pairs can be anti-correlated rather than merely uninformative. Testable with short
+focused queries against the same corpus, and this report already establishes that query form matters here —
+rambling questions retrieve at half the MRR of focused ones.
+
+**What survives for a future model, since the shape was worked out and only the reranker died.** It fits
+the three-layer pattern the other ML subsystems use: a `raven.common.rerank` implementation, a
+`raven.server.modules.rerank` shim with its route, and a `raven.client.mayberemote.Reranker`. It is a
+separate model from the embedder — cross-encoder, not bi-encoder — so it is a new load on whichever device
+serves it, worth weighing against the VRAM budget on single-GPU setups, and a good candidate for the CPU in
+`config_lowvram` since it runs on a shortlist rather than the whole corpus.
+
+**The motivation weakened independently of the result.** The item existed to avoid needing a large `k`;
+`k=50` subsequently shipped on measurement (+10.1 points of recall for +1.7 s of prefill), which is most of
+what the reranker was wanted for, at no model cost. What remains unanswered, and is a question about
+prompts rather than about rerankers: how many chunks should actually reach the model. Twenty candidate
+passages, most irrelevant, is a different task from three good ones, and long-context attentiveness is
+exactly what degrades as the prompt fills.
+
+**Re-test after the Nomic switch.** The result is specific to Raven's current hybridir; a new embedder
+changes the conditions it was obtained under. This does *not* extend to "VLM reranking of mixed-modality
+search results", which is a different kind of thing — a cross-encoder emits a similarity score, the same
+kind of judgment the two arms already make, whereas a VLM reads and reasons. That item defends itself on
+those grounds and is not struck by this.
+
 **Per-query arm selection — no signal found.** The oracle is wide (+7.1 to +12.1 points at @20 over fixed
 fusion), so the opportunity is real. But score sharpness and a scale-free standardized-top statistic both
 sit at AUROC ≈ 0.53 on the two corpora with headroom. Note the sharpness variant is not merely weak but

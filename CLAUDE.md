@@ -376,7 +376,10 @@ either way, treat the in-tree copy as the source of truth. Don't reach for "it's
 - `file_dialog/` - File dialog, extended (sortable, animated OK button, click twice when overwriting).
 - `anime4k/` - PyTorch port of Anime4K upscaler (extracts kernels from GLSL), slightly cleaned up.
 - `kokoro_fastapi/` - Streaming audio writer for TTS over network.
-- `IconsFontAwesome6.py` - Icon font (note: outdated version).
+- `IconsFontAwesome6.py` - Icon font codepoint table. Not the newest FontAwesome release, but **in sync with
+  the fonts we ship**: measured 2026-07-30, every glyph in `fa-solid-900.ttf` has a constant and vice versa,
+  so regenerating the header alone would gain nothing. Updating means new webfonts *and* a header
+  regenerated from the matching `icons.yml`, as one change.
 
 ## Code Style
 All new and modified code must follow `raven-style-guide.md` (in the project root). **Read the full guide before implementing a new app.** The summary below covers the most commonly needed conventions.
@@ -485,8 +488,8 @@ Size follows VRAM in the usual way — a ~30B MoE wants 24 GB or more, a ~4B fit
 ## Known Issues / TODOs
 - Visualizer: the `app.py` split has landed (see `raven/visualizer/CLAUDE.md` for the module map). What remains is ordinary tidying — `info_panel.py` at 1518 lines is the next split candidate, and `importer.py` could use stage separation — not a god-object rescue
 - Visualizer has zero tests (the librarian gaps this used to list — `scaffold`, `appstate`, `llmclient` — are all covered now)
-- DearPyGui_Markdown URL highlight bug (threading-related, untracked)
-- FontAwesome version outdated
+- DearPyGui_Markdown URL highlight bug (threading-related, untracked). Possibly the same fault as the
+  dropped-character item in `TODO_DEFERRED.md`: that highlight sat one character off from where it belonged
 - Hindsight integration pending (PDM dependency conflicts; likely separate container with optional backend, keeping BM25+vector backend as primary)
 - TTS engine expansion limited by phoneme timestamp requirement
 - Many `# TODO: DRY duplicate definitions for labels` scattered through Visualizer `app.py`
