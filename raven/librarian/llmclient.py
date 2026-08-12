@@ -924,15 +924,22 @@ def connect(backend_url: str, quiet: bool = False) -> env:
     reports which of the three states this is, and `reconnect` replaces the placeholders once there is
     something to ask.
 
-    Unless `quiet`, the verdict is printed — all three states, in the same words and with the same advice a
-    frontend's status readout gives, so a user who has a terminal in view and a user who has not are told
-    the same thing.
+    Unless `quiet`, the verdict is reported for all three states — to the console in the same words and with
+    the same advice a frontend's status readout gives, so a user who has a terminal in view and a user who
+    has not are told the same thing, and to the log, so that a session can be diagnosed after the fact from
+    a `--log` file that has no console attached.
+
+    `quiet` silences **both** channels, which is a wider meaning than "don't print" and is what its one user
+    needs: the only caller that passes it is `reconnect` under a frontend's poll, which asks this question
+    every few seconds for as long as the answer is bad. Logging the verdict there would write the same line
+    a few hundred times an hour, all of it describing one condition. A frontend that polls logs the
+    *transitions* instead.
     """
     try:
         settings = setup(backend_url, quiet=quiet)
     except requests.exceptions.RequestException as exc:
-        logger.warning(f"connect: no LLM backend at {backend_url}; continuing without one. Reason {type(exc)}: {exc}")
         if not quiet:
+            logger.warning(f"connect: no LLM backend at {backend_url}; continuing without one. Reason {type(exc)}: {exc}")
             print(colorizer.colorize(f"Cannot connect to LLM backend at {backend_url}.",
                                      colorizer.Style.BRIGHT, colorizer.Fore.RED) + " Is the LLM server running?")
         return configure(model_info=_UNREACHABLE_MODEL_INFO,
@@ -942,9 +949,11 @@ def connect(backend_url: str, quiet: bool = False) -> env:
                          backend_is_reachable=False)
     if not quiet:
         if backend_status(settings) is backend_has_no_model:
+            logger.warning(f"connect: LLM backend at {backend_url} is reachable, but has no model loaded.")
             print(colorizer.colorize(f"LLM backend at {backend_url} has no model loaded.",
                                      colorizer.Style.BRIGHT, colorizer.Fore.YELLOW) + " Load one in your LLM server.")
         else:
+            logger.info(f"connect: connected to LLM backend at {backend_url}; model is '{settings.model}'.")
             print(colorizer.colorize(f"Connected to LLM backend at {backend_url}", colorizer.Style.BRIGHT, colorizer.Fore.GREEN))
     return settings
 
@@ -1034,7 +1043,8 @@ def configure(model_info: env,
     context_length = model_info.context_length
     if context_length is None:
         context_length = 64 * 1024
-        logger.warning(f"configure: backend '{backend_flavor}' at {backend_url} did not report a loaded context length; defaulting to {context_length} tokens.")
+        if not quiet:
+            logger.warning(f"configure: backend '{backend_flavor}' at {backend_url} did not report a loaded context length; defaulting to {context_length} tokens.")
 
     user = librarian_config.llm_user_name
     char = librarian_config.llm_char_name

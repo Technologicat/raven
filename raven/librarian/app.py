@@ -491,15 +491,21 @@ def _backend_status_poll_task(task_env: env) -> None:
     # Captured before the first `reconnect`, which overwrites it. Only a backend that was *not* answering
     # needs the stored-prompt repair below; without this, clicking an already-green row would rewrite the
     # system prompt and rebuild the chat view for nothing.
-    was_bad = (llmclient.backend_status(llm_settings) is not llmclient.backend_ready)
+    previous_status = llmclient.backend_status(llm_settings)
+    was_bad = (previous_status is not llmclient.backend_ready)
 
     if task_env.delay_first_probe and not keep_waiting(_BACKEND_POLL_INTERVAL_S):
         return
     while True:
         logger.debug(f"_backend_status_poll_task: {task_env.task_name}: re-probing {llm_settings.backend_url}")
+        # Quiet, which for `reconnect` covers the log as well as the console: this asks the same question
+        # every few seconds, so what is worth recording is where the answer *changes*, which is here.
         status = llmclient.reconnect(llm_settings)
         if task_env.cancelled or _shutting_down:
             return
+        if status is not previous_status:
+            logger.info(f"_backend_status_poll_task: {task_env.task_name}: backend at {llm_settings.backend_url} went from {previous_status} to {status}.")
+            previous_status = status
         if status is llmclient.backend_ready:
             break
         _refresh_backend_status_pill(status)  # the two bad states can turn into each other
