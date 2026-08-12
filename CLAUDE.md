@@ -48,6 +48,20 @@ index.
   indexed in `scripts/README.md` with the question it answers.
 - **`dpg-notes.md`**, **`raven-style-guide.md`** — at the root because they are consulted constantly.
 
+A fourth kind of non-source material sits *inside* the package tree rather than beside it, because it belongs
+with what it produced:
+
+- **`00_workfiles/` holds originals, never runtime assets.** Wherever shipped art lives, the sources it was
+  exported *from* live in a `00_workfiles/` subdirectory next to it — GIMP `.xcf`, Inkscape `.svg`, camera
+  originals, intermediate crops. Currently `raven/icons/00_workfiles/` and
+  `raven/avatar/assets/characters/00_workfiles/`.
+  - **Nothing at runtime may read from one.** The name is the contract: an editable original is not an asset,
+    and code that loads one is a bug, not a shortcut. What ships is the export beside the directory.
+  - **They are excluded from the wheel** (`[tool.pdm.build].excludes` in `pyproject.toml`). Measured
+    2026-08-12: they were 92.8 MB of a 107 MB wheel, which is now 14.4 MB. The exclusion is safe *because*
+    of the rule above, so a new `00_workfiles/` anywhere in the tree is covered automatically by the
+    `**/00_workfiles` glob.
+
 Two conventions worth knowing before adding to any of them:
 
 - **Keep an artifact with what produced it.** This is why `investigations/` exists, and it applies wherever the

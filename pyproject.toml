@@ -246,7 +246,13 @@ includes = ["raven"]
 # releases are tag-only — those source tarballs are `git archive`, which contains tracked files only, so the
 # gitignored weights were never in them. Building an sdist by hand was the first time it showed.
 # Measured 2026-08-03: 903 MB across 582 files before, 107 MB across 537 after.
-excludes = ["**/tests", "**/__pycache__", "raven/vendor/tha3/models"]
+#
+# `00_workfiles` directories hold the sources the shipped art was exported *from* — GIMP `.xcf`, Inkscape
+# `.svg`, camera originals, intermediate crops. They belong in the repository, where someone redrawing an
+# icon or a character needs them, and not in a wheel, where nothing can open them and no code looks for
+# them. Measured 2026-08-12: 95 files that compress to 92.8 MB, taking the wheel from 107 MB to 14.4 MB —
+# so the 107 MB left over from the exclusion above was almost entirely this.
+excludes = ["**/tests", "**/__pycache__", "raven/vendor/tha3/models", "**/00_workfiles"]
 
 [[tool.pdm.source]]
 name = "nvidia"
