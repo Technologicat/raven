@@ -29,7 +29,7 @@ import numpy as np
 
 import dearpygui.dearpygui as dpg
 
-from unpythonic import box, flatten, memoize, sym, unbox
+from unpythonic import box, memoize, sym, unbox
 from unpythonic.env import env
 
 from ..vendor.IconsFontAwesome6 import IconsFontAwesome6 as fa  # https://github.com/juliettef/IconFontCppHeaders
@@ -227,27 +227,58 @@ def _get_all_system_prompt_node_ids(datastore: chattree.Forest) -> List[str]:
     """
     return [node_id for node_id in _scan_for_root_nodes(datastore) if node_id in datastore.nodes]
 
+def _descend_to_latest(datastore: chattree.Forest, start_node_id: str, recursive: bool = True) -> str:
+    """Follow the most recently written child down from `start_node_id`, and return where that lands.
+
+    "Most recent" is by the child's own timestamp, so this follows the branch the user was last working on.
+    A node with no children is its own answer, which is what makes the two callers below need no special
+    case for a chat that has not been continued.
+
+    `recursive`: `True` (default) walks all the way to a leaf — the whole conversation, as the "show chat
+                 continuation" button and the sibling arrows mean it. `False` takes exactly one step, which
+                 is what "put me where a new chat under this node would begin" wants; going further would
+                 instead land inside a conversation already held there.
+
+                 What that one step lands on is whatever a chat under this node opens with, and the caller
+                 should not assume more than that. Under a system prompt node it is the AI's greeting today
+                 — but a greeting is on its way to being optional, after which the same step may land on
+                 the user's own opening message, or stay put on a card that has nothing under it yet.
+    """
+    node_ids = datastore.get_children(start_node_id)
+    if not node_ids:
+        return start_node_id
+    payloads = [datastore.get_payload(node_id) for node_id in node_ids]
+    timestamps = [payload["general_metadata"]["timestamp"] for payload in payloads]
+    latest_node_id = node_ids[np.argmax(timestamps)]
+    if not recursive:
+        return latest_node_id
+    return _descend_to_latest(datastore, latest_node_id)
+
 def _get_all_greeting_node_ids(datastore: chattree.Forest) -> List[str]:
     """As it says on the tin.
 
     Since the AI's greeting can be changed in the config, the greeting used in any given stored chat
     is NOT necessarily the *current* greeting (`app_state["new_chat_HEAD"]`).
 
-    Hence the reliable way to detect is to see whether the node a direct child node of a root node;
-    any root node is a system prompt node.
+    So a greeting is identified by where it sits and by who said it: a direct child of a root — every root
+    being a system prompt node — that the *assistant* wrote. Position alone is not enough. HEAD can rest on
+    a root, and a message sent from there lands beside the greetings; taking it for one would disable its
+    own reroll, continue, branch and delete buttons, leaving the user with a message they cannot remove.
 
     Not memoized, unlike the scan it is built on: greetings come and go with the cards they hang from — a
     card deleted in the GUI takes its greetings with it — and a cached list would keep answering with them.
     The cost without a cache is a child lookup per system prompt, of which there are as many as the user has
     distinct prompts; the part that is worth caching is the scan over every node, and that still is.
+
+    Returns a list rather than a lazy iterable, deliberately. Each caller asks it four times — reroll,
+    continue, branch, delete — and a generator answers the first question and then reports that it is empty.
     """
-    system_prompt_node_ids = _get_all_system_prompt_node_ids(datastore=datastore)
-    greeting_node_idss = [datastore.get_children(node_id) for node_id in system_prompt_node_ids]
-    # `list`, not the bare `flatten`: `unpythonic`'s iterable utilities are lazy wherever they can be, so
-    # this is a generator, and every `x in it` test *consumes* it. The callers hold one of these and ask
-    # about it four times — reroll, continue, branch, delete — so all but the first would be answered from
-    # what was left over, which is to say answered "no".
-    return list(flatten(greeting_node_idss))
+    greeting_node_ids = []
+    for system_prompt_node_id in _get_all_system_prompt_node_ids(datastore=datastore):
+        for node_id in datastore.get_children(system_prompt_node_id):
+            if datastore.get_payload(node_id)["message"]["role"] == "assistant":
+                greeting_node_ids.append(node_id)
+    return greeting_node_ids
 
 # --------------------------------------------------------------------------------
 
@@ -1094,6 +1125,18 @@ class DPGChatMessage:
                 # Perform the delete
                 self.parent_view.chat_controller.datastore.delete_subtree(node_id)
 
+                # Deleting a system prompt lands on another one, and a system prompt node alone is not a
+                # place to be left: the view builds upward from HEAD, so the chat under that card — its
+                # greeting included — would be out of sight, and a message sent from there would attach
+                # beside the greetings rather than after one. So take one step down, to where a new chat
+                # under that card begins — its newest greeting, with nothing said after it yet. One step and
+                # not the whole way, which would instead drop the user into the middle of some conversation
+                # already held under that card, which is not what deleting a different one asked for.
+                if self.parent_view.chat_controller.datastore.get_parent(new_HEAD) is None:
+                    new_HEAD = _descend_to_latest(self.parent_view.chat_controller.datastore,
+                                                  new_HEAD,
+                                                  recursive=False)
+
                 # Refresh view
                 self.parent_view.chat_controller.app_state["HEAD"] = new_HEAD
                 self.parent_view.build()
@@ -1172,13 +1215,7 @@ class DPGChatMessage:
 
         datastore = self.parent_view.chat_controller.datastore
         def descend(start_node_id: str) -> str:
-            node_ids = datastore.get_children(start_node_id)
-            if not node_ids:
-                return start_node_id
-            payloads = [datastore.get_payload(node_id) for node_id in node_ids]
-            timestamps = [payload["general_metadata"]["timestamp"] for payload in payloads]
-            idx = np.argmax(timestamps)
-            return descend(node_ids[idx])
+            return _descend_to_latest(datastore, start_node_id)
         def make_navigate_to_sibling(message_node_id: str, direction: str, step: Optional[int]) -> Callable:
             # Pick the most recent subtree, greedily
             def navigate_to_sibling_callback():
