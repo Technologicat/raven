@@ -36,6 +36,9 @@ bibtexparser==2.0.0b9
 # they carry the `gui` marker and need `--run-gui`, which CI does not pass.
 dearpygui==2.3.1
 feedparser==6.0.14
+# Needed *because* of `dearpygui` above, not on its own account: the GUI tests import
+# `raven.common.gui.utils`, which reaches the vendored `DearPyGui_Markdown`, whose parser imports this.
+mistletoe==1.6.0
 filelock==3.31.0  # common.datastorelock; keeps two frontends off one chat datastore
 odfpy==1.4.1
 Pillow==12.3.0
