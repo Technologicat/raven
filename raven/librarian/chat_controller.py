@@ -243,8 +243,11 @@ def _get_all_greeting_node_ids(datastore: chattree.Forest) -> List[str]:
     """
     system_prompt_node_ids = _get_all_system_prompt_node_ids(datastore=datastore)
     greeting_node_idss = [datastore.get_children(node_id) for node_id in system_prompt_node_ids]
-    greeting_node_ids = flatten(greeting_node_idss)
-    return greeting_node_ids
+    # `list`, not the bare `flatten`: `unpythonic`'s iterable utilities are lazy wherever they can be, so
+    # this is a generator, and every `x in it` test *consumes* it. The callers hold one of these and ask
+    # about it four times — reroll, continue, branch, delete — so all but the first would be answered from
+    # what was left over, which is to say answered "no".
+    return list(flatten(greeting_node_idss))
 
 # --------------------------------------------------------------------------------
 
