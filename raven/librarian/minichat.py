@@ -50,6 +50,7 @@ with timer() as tim:
 
     from .. import __version__
 
+    from ..common import datastorelock
     from ..common import docextract
 
     from ..client import api
@@ -106,6 +107,15 @@ def minimal_chat_client(backend_url) -> None:
         print()
 
         chat_show_model_info()
+
+        # Claim the chat datastore before reading it: this app and the GUI each hold the whole thing in
+        # memory and write it back at exit, so with both running the later exit discards the other's
+        # session. The lock is held by this object for the rest of the run; the OS releases it at exit.
+        try:
+            datastore_lock = datastorelock.acquire(datastore_file, what="The chat datastore")  # noqa: F841 -- held, not called: the lock lives as long as this binding does
+        except datastorelock.DatastoreBusyError as exc:
+            print(colorizer.colorize(str(exc), colorizer.Style.BRIGHT, colorizer.Fore.RED))
+            sys.exit(255)
 
         # Persistent, branching chat history, and app settings (these will auto-persist at app exit).
         datastore, app_state = appstate.load(llm_settings, datastore_file, state_file)

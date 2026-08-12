@@ -62,6 +62,7 @@ with timer() as tim:
     from ..common.audio import player as audio_player
     from ..common.audio import recorder as audio_recorder
     from ..common import bgtask
+    from ..common import datastorelock
     from ..common import docextract
     from ..common import utils as common_utils
 
@@ -306,6 +307,17 @@ if not api.test_connection():
 # status pill (`_refresh_backend_status_pill`) once there is a GUI to put it in.
 llm_settings = llmclient.connect(backend_url=llm_backend_url)
 print()
+
+# Claim the chat datastore before reading it. Librarian and minichat each hold the whole thing in memory
+# and write it back at exit, so running both means the later exit silently discards the other's session.
+#
+# Bound to a module-level name deliberately: the lock lives as long as this object does, and the process
+# needs it for its whole run. Nothing releases it — the OS does that at exit, crash included.
+try:
+    datastore_lock = datastorelock.acquire(librarian_config.llm_datastore_file, what="The chat datastore")
+except datastorelock.DatastoreBusyError as exc:
+    print(colorizer.colorize(str(exc), colorizer.Style.BRIGHT, colorizer.Fore.RED))
+    sys.exit(255)
 
 logger.info("Loading chat datastore.")
 with timer() as tim:

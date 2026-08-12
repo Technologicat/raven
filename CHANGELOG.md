@@ -57,6 +57,9 @@
 
 *Raven-librarian*
 
+- **running `raven-librarian` and `raven-minichat` at once no longer loses one of the two sessions.** Each holds the whole chat datastore in memory and writes it back on exit, so whichever closed last silently discarded everything the other had done — including a chat you were in the middle of. The second app to start now says the datastore is already open, names it, and stops. Two Librarians did the same thing to each other, and are covered too.
+  - The claim is released when the process ends, crash included, so there is no stale lock to notice or clean up.
+
 - two tooltips still described the attachment store as holding images, which stopped being the whole story in 0.2.8 when documents became attachable. The two buttons that open that folder — one on an attached image, one on an attached document — also gave it two different names, though it is one folder.
 
 *Raven-avatar*
