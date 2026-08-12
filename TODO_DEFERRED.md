@@ -3,6 +3,327 @@
 New items go at the **top**. (Both ends were in use up to 2026-07-27, which is how the two halves of the same
 Librarian session ended up ~1000 lines apart.)
 
+## The `flake8` → `ruff` migration dropped indentation checking
+
+*Cluster: hygiene-sweep · Cost: S · Gate: 0.2.9 · Filed: 2026-08-10 · See also: "Assert the linter actually runs the rules we rely on"*
+
+`[tool.ruff.lint] select = ["E", "W", "F", "SIM"]` looks like it covers pycodestyle, and does not: the E1
+(indentation) family splits in two, and ruff ships neither half by default.
+
+**E101 and E111–E117 exist but are preview-gated** — the rule pages say so, and Astral recommends against
+them alongside their formatter, on the grounds that the formatter makes them redundant. Recoverable now: add
+them to `select` and pass `--preview` in CI.
+
+**E121–E131, the continuation-line family, is not implemented.** astral-sh/ruff#4666 (2023) reports E124,
+E125, E128 and E129 passing silently under ruff while pycodestyle flags them; the community PR
+astral-sh/ruff#13585 to add the remaining E12x rules describes itself as incomplete and a work in progress.
+This is the half that matters here — continuation lines aligned to the opening bracket are the house style,
+and E127/E128/E124 are precisely the rules that police it.
+
+Options, in order of preference:
+
+1. Enable the preview E11x rules in ruff. Free, no new tool, recovers the basic-indentation half.
+2. Run `pycodestyle --select=E12` as a second CI pass for the continuation-line half. Note that `flake8` is
+   *still* a declared dev dependency while CI runs ruff only — a residue of the migration — so this is
+   closer to finishing the migration than to adding a tool. Prefer `pycodestyle` directly over `flake8`,
+   which is only a runner around it.
+3. **Not** adopting a formatter. Astral recommends it; **fleet policy is a hard no** (Juha, 2026-08-10),
+   covering `ruff format` and `black` alike. The reasoning is Goodhart's: a formatter optimizes a proxy
+   (uniformity) for a goal (readability), which pays when the alternative is unbounded variance across a
+   large team with fast turnover. Solo, the variance is already bounded by one person's judgment, so the
+   proxy buys nothing and costs the cases where layout carries meaning — aligned continuation lines,
+   math-heavy comment blocks, tabular literals. The only acceptable formatter would be an in-house one.
+
+**Adopt the E12x rules for the right reason.** They are a formatter's opinion in linter clothes, worth
+having here because they happen to encode the house style. Where the style deviates deliberately the answer
+is `noqa`, not a change of habit — worth stating in the config comment so the reason stays visible.
+
+**Measured 2026-08-10, before any of this lands**: 149 violations across 24 files — 81 E127, 64 E128, 4
+E126, all in the visual-indent family. Normalized by lines of code the density is **2.77 per kloc in
+`tests/` against 1.23 elsewhere, a 2.25× ratio**, which is what the drift hypothesis predicts: tests are
+where CC writes most and where a human editor's flycheck never runs. Suggestive rather than conclusive —
+test code is call-heavy and so has more continuation lines to get wrong — but it points the right way. Top
+files: `test_textfilestore.py` (31), `chat_controller.py` (29), `test_layout_math.py` (14), `scaffold.py`
+(13). Small enough for one focused pass; `autopep8` fixes E12x mechanically, though on a hand-aligned
+codebase its choices want reviewing rather than trusting.
+
+Tidy-up either way: decide whether `flake8` stays in dev dependencies, and say why.
+
+## Assert the linter actually runs the rules we rely on
+
+*Cluster: ? · Cost: S · Gate: 0.2.9 · Filed: 2026-08-10*
+
+`select = ["E", "W", "F", "SIM"]` reads as covering pycodestyle's error rules and does not enable the E1
+indentation family at all. Nothing warned: no error, no skipped-rule notice. The lint passed and the checks
+were not running. **A configuration that is silently narrower than it looks is indistinguishable from one
+that is working.**
+
+Guard: a fixture file carrying one deliberate violation per rule family we rely on, and a test asserting the
+linter reports every one. Drop a rule from the config and the canary fails loudly instead of the codebase
+quietly drifting.
+
+- The fixture must be excluded from the normal lint run, or CI fails permanently. Name it so pytest does not
+  collect it either — `lint_canary_fixture.py`, not `test_*.py`.
+- **Invoke the linter exactly as CI does**, same flags and same config file. A canary that shells out
+  differently can pass while CI's real invocation has drifted, which reproduces the original bug one level up.
+- Assert on the *set* of codes reported, so a dropped rule shrinks the set and names itself in the failure.
+- Keep it minimal: one violation per rule whose loss would matter, not coverage of the rule set.
+
+The same shape recurred three times on 2026-08-10 — two sweep verdicts reached by grepping Markdown
+vocabulary against a module that switches on HTML tag names, a `line_atributes` typo that makes a grep for
+`attributes` skip one of three sibling modules, and this. **An absence is only evidence if the check could
+have found the thing.** The canary is that rule applied to tooling.
+
+## Replace `torchaudio.functional.resample`, and drop torchaudio
+
+*Cluster: ? · Cost: S · Gate: 0.2.9 · Filed: 2026-08-10 · See also: "Easy install with a chosen CUDA version"*
+
+**Higher priority than it looks**, because torchaudio is already a hard dependency rather than a future one,
+and it is silently pinning torch.
+
+**torchaudio has stopped shipping.** Last release 2.11.0 on 2026-03-23, the same day as torch 2.11.0; torch
+has since shipped 2.12.0, 2.12.1 and 2.13.0 with no counterpart. Note "dead" is overclaimed — a few months
+of silence is not conclusive — but *missing three consecutive torch releases after a history of same-day
+pairing* is the sharper signal.
+
+**The pin is real and invisible to the resolver.** torchaudio 2.11.0 declares *no* `requires_dist`, so the
+torch pairing is a compiled-ABI constraint rather than a declared one: pip will install it beside torch
+2.13.0 without complaint and fail at load with a missing-symbol error. `pyproject.toml` already pins
+`torchaudio==2.11.0` exactly, so Raven is effectively held at torch 2.11.x with nothing in the metadata
+saying so.
+
+**The exposure is one function.** Production use is `raven/common/audio/resample.py`, a thin wrapper over
+`torchaudio.functional.resample`, called from `stt.py` for Whisper input. Everything else is two tests behind
+`pytest.importorskip`.
+
+**The replacement is already installed.** `scipy` is a dependency (for Visualizer's KDTree), and
+`scipy.signal.resample_poly` is polyphase resampling of the same family. If its quality is not enough,
+`soxr` is the dedicated alternative — small wheel, no torch — but try scipy first since it is free.
+
+**The one property that would be lost** is device-agnosticism: the wrapper's docstring says it follows the
+tensor's device, and scipy is CPU-only. Almost certainly not load-bearing — speech-length audio resamples in
+milliseconds on CPU, and the call sites are Whisper input at 16 kHz and TTS output around 24 kHz — but
+measure rather than assume. `raven/common/audio/tests/test_resample.py` already works to a tolerance (±2
+samples of rounding slack), so a backend swap is testable against what is there.
+
+**What it buys: newer torch.** `pyproject.toml` pins `torch==2.11.0`, and **that pin was added on 2026-08-10
+because of torchaudio** — it is this problem already written into the build, not pre-existing CUDA-index
+policy. Remove torchaudio and the pin has no remaining reason; torch 2.12 and 2.13 become available, and the
+`[cuda]` extra's version-alignment problem goes from three packages to two. *(Recorded because it was
+misread once already, as a deliberate CUDA-alignment choice independent of torchaudio. The comment in
+`pyproject.toml` describes the mechanism — a pinned trio from the `pytorch-cu128` index — without saying
+which package forced it, which is what makes the misreading available. Worth a word in that comment.)*
+
+**The cost to state honestly**: nothing touches lipsync today, but the escape route from Kokoro would have
+used `torchaudio.functional.forced_align`. `TODO.md` already re-scopes that to an acoustic model from
+`transformers` plus an in-house alignment step, so the bridge becomes buildable rather than importable —
+which is a real cost, and also stops the escape route depending on a package that may be dead.
+
+## Batch tools: LLM reconnect mid-run
+
+*Cluster: ? · Cost: ? · Gate: next · Filed: 2026-08-12 · See also: `briefs/researchers-night/per-document-llm-pass-brief.md`*
+
+The model-loaded work made `raven-pdf2bib` and `raven-importer` stop at *start time* on both failure states
+— unreachable, and reachable-with-no-model. The second was the one that most needed it: the backend answers,
+so nothing looks wrong until every extraction comes back empty several hundred documents in.
+
+What remains, recorded as deliberately out of that work's scope: **a backend that goes away mid-run.** Every
+remaining document fails. Wording for all three states now lives in `llmclient.describe_backend_status`,
+printed by four frontends (two batch tools, `minichat`, the GUI tooltip), so the reporting side is already
+centralized — what is missing is the recovery behaviour.
+
+**Do not solve this standalone — it is the per-document-pass brief's territory.** The three open questions
+are that brief's scope exactly: how long to wait before giving up, whether to resume or restart, and what to
+do with the documents already written. `raven-pdf2bib` is one of its named users, with the same symptom on
+record — eight hand-written retry loops around `perform_throwaway_task`, no caching and no resume, so a
+crash at document 2400 restarts from zero. Building reconnect on its own would put a second retry mechanism
+beside the one that brief exists to unify. Same class as *A crash during ingest loses the whole run*: long
+batch runs with no durability, and one resume mechanism answers both.
+
+## `chat_controller` is not importable without spaCy
+
+*Cluster: ? · Cost: S · Gate: 0.2.9 · Filed: 2026-08-12*
+
+Same anti-pattern as the just-completed *Lazy `api.initialize` in `llmclient` and `hybridir`*, one layer up:
+`chat_controller` reaches the full ML stack through the avatar client, so `test_chat_controller.py` has to
+skip on the module under test and its pure datastore helpers can only run on a dev machine.
+
+**Now that the GUI tests run in CI, this is the only thing keeping the controller out of it** — and those
+helpers are exactly the code the chat graph view and the open-a-datastore work will build on. Same fix
+shape: move the side-effecting import behind the seam that already exists.
+
+## Audit what the built wheel actually contains
+
+*Cluster: ? · Cost: S · Gate: 0.2.9, with the first PyPI upload · Filed: 2026-08-12*
+
+**The 83% case is fixed** (2026-08-12): `**/00_workfiles` is excluded, taking the wheel from **107 MB to
+14.4 MB**, 7.5× smaller. Those were editing masters — GIMP `.xcf`, source SVG, camera originals — which
+belong in git and have no business in an installed wheel. What follows is what has *not* been checked, plus
+the standing question.
+
+**The audit of the remainder, same day.** Of 14.4 MB: `raven/avatar/assets` 8.1 MB (over half),
+`raven/vendor/anime4k` 3.24 MB, fonts 2.17 MB, Python 3.78 MB. Of the anime4k share, 2.18 MB is `.glsl`
+kernel source the PyTorch port extracts from — load-bearing. Fonts and Python are fine.
+
+**Two candidates remain, ~4 MB together, and they are different kinds of decision.**
+
+- **`raven/vendor/anime4k/images/6486130.png`, 1.04 MB — a rule, like the workfiles.** Checked 2026-08-12:
+  the only reference is inside the module's `__main__` demo block, next to a `wget` comment giving the URL
+  it came from. No Raven code path loads it. **The confirmation step belongs in the audit**: check nobody
+  uses that demo block as a manual benchmark before excluding — a demo whose own comment says how to
+  re-download the input is otherwise a clear cut.
+- **Backdrops, 5.3 MB for three — settled: ship them at full size** (Juha, 2026-08-12). Measured:
+  `cyberspace.png` 1920×1080 at 2.89 MB; `anime-plains.png` and `study.png` 1344×768 at 1.46 and 1.20 MB.
+
+  *An earlier draft argued these were oversized, reasoning that the avatar canvas is 512×512 so the pixels
+  are discarded at load. That was backwards.* The 512×512 is THA3's *character* input; the backdrop fills
+  the **window**, which is 1080p or larger, and the pipeline upscales after posing. So 1920×1080 is
+  correctly sized. The two 1344×768 backdrops are technically under-sized for a 1080p display and get
+  upscaled, but they look fine in practice — that resolution is simply what the generator produced.
+
+  **And full resolution is required, not merely harmless**: the backdrop blur is a *user toggle*. Were it
+  always on, these could ship pre-blurred and much smaller. The optionality is what forces shipping the
+  source at full fidelity, since a user who turns blur off gets whatever detail is actually there.
+  Generalizes: **any optional downstream transform means shipping the untransformed source.**
+
+**One dangling reference created by the fix**, worth knowing rather than fixing: `raven/avatar/README.md`
+points at `animefx.svg` under `00_workfiles` as a drawing guide. It is a link for a repo reader rather than
+a file the package opens, so it works where it is actually read and dangles only for someone reading that
+README out of `site-packages`.
+
+**A standing check is the real output here.** The failure is silent: a build that quietly grew by 100 MB
+looks exactly like one that did not, which is the linter-canary problem again. The release procedure could
+compare wheel size against the previous release and flag a large jump.
+
+## `chattree.get_all_root_nodes` is an O(n) scan
+
+*Cluster: ? · Cost: S · Gate: — while the graph view does not show roots; 0.2.9 if it does · Filed: 2026-08-12 · See also: "Datastore scaling: a single `chat.json` …"*
+
+`get_all_root_nodes` scans the whole forest for nodes whose parent is `None`. Deliberate, and the docstring
+says so.
+
+**The path that mattered is already fixed.** `chat_controller._scan_for_root_nodes` memoizes it, and
+`_get_all_system_prompt_node_ids` filters the cached list against `datastore.nodes` before returning. Both
+halves of the reasoning are in the docstrings: safe to cache because roots are only ever *created* while app
+state loads, and the filter is required because a card that is not in use can be deleted from the GUI, after
+which `get_children` raises on a node that is gone. Without the memo it would run once per chat message
+widget created, over the whole datastore — that was the hot path, and it is closed.
+
+What remains is the underlying method, still O(n), called from `appstate` (×2, at startup), `minichat`,
+`app.py`, and `chattree.get_siblings`.
+
+**The `get_siblings` path is live.** Multi-root support landed 2026-08-12, and enumerating a root's siblings
+— the character cards — is its natural consequence. If the graph view shows the root level, every such
+lookup is a full-forest scan, and the `chat_controller` memo does not help because that lives one layer up.
+**Whether the graph view shows roots is what decides this item's gate**; see the chat-graph-view brief.
+
+Shape of the answer: an index of roots maintained by `create_node` / `delete_node`. Roots are few while the
+scan is over every node, so the index is small and the saving grows with the datastore.
+
+## Librarian: open a chat datastore other than the configured default
+
+*Cluster: ? · Cost: ? · Gate: next · Filed: 2026-08-11*
+
+Librarian loads one datastore, fixed at `librarian_config.llm_datastore_file`. There is no way to open
+another from inside the app.
+
+**The motivation is the scripting surface.** A scripted run can generate a datastore on a specific topic —
+scripted questions, the model's replies, in Raven's native format. Librarian already reads that format, so
+opening one turns it into the **results browser for scripted experiments**: branching, thinking traces and
+tool calls all rendered by the UI that already knows how, instead of read by squinting at JSON. That is a
+capability rather than a convenience, and it is the reason to do this rather than the general-purpose "open
+a file" argument.
+
+**Scripted datastores are self-contained, and the existing type distinction is what makes them so** (settled
+by Juha, 2026-08-11). A plain `Forest` carries *in-memory* sidecars, so attachments work identically within
+a run and only their lifetime differs — nothing dangles, because nothing outlives the process and there is
+no artifact to open later. Persistence is opted into by handing the scripting layer a `PersistentForest`,
+which already carries a sidecar directory. So the sidecar concept is uniform across both and the attachment
+path does not branch on forest type.
+
+*Interaction to keep in mind*: a per-document pass over a large corpus would hold every document's bytes for
+the life of the run under in-memory sidecars. Two exits, and the second is the better default — persist to a
+`PersistentForest` when the run is worth keeping and resumable, or **reset between documents**, which is the
+shape `pdf2bib` already had. The reset is not only a memory fix: a map stage processes documents
+independently, so a fresh forest per item also gives isolation, with bounded memory falling out of the
+correct semantics rather than being arranged for.
+
+**Sidecars are a cache, not the record.** Repeatability rests on the user's own files plus the script: an
+in-memory run reproduces by supplying the same files again, at the cost of reprocessing them. The
+content-hashed sidecar naming means materialization is deterministic, so re-running writes identical
+sidecars rather than a second copy.
+
+**The datastore claim is per-datastore, and read-only opens do not take one** (settled 2026-08-12). The
+interprocess claim added that day is keyed to the datastore rather than to the app, so two Librarians on
+*different* datastores coexist — which is what makes this item workable at all. A read-only open writes
+nothing and therefore claims nothing: inspecting a generated run must not lock out the process still writing
+it, which is exactly the case a scripted experiment plus a Librarian window creates.
+
+**It is not just swapping a path.** The sidecars directory is derived from the datastore's name, so
+attachments move with it; HEAD, the chat view and any open graph view all need rebuilding; and the current
+datastore has to be persisted before the swap.
+
+**Both modes wanted** (Juha, 2026-08-11) — they have different uses. A generated datastore is a research
+artifact, and opening it read-write means a stray keystroke mutates a measurement, which is the concern
+`investigations/README.md` states about apparatus staying as it was run. But opening one to continue a
+scripted conversation by hand is a real use too. So the questions are how the mode is chosen and how it is
+enforced:
+
+- **Enforce at the datastore layer, not the GUI.** Disabling the send button is not read-only — autosave,
+  HEAD moves, sidecar writes and the cleanup flow all have their own paths. One gate low down in
+  `PersistentForest` is what holds; disabled controls are the affordance on top of it.
+- **Let the artifact carry its own default.** A flag in the datastore, set when a scripted run generates
+  one, means it opens safe regardless of who opens it or whether they remember — overridable at open time
+  for a deliberate edit. Better than an open-time-only choice, where the protection depends on recalling
+  what kind of file this is. **A requirement on the producer side**, to be picked up when this is built:
+  `raven.librarian.agent` sets the read-only flag on the datastores it writes, with the caller able to
+  choose and **`True` as the default** — scripted output is a measurement unless someone says otherwise.
+- **The mode must be visible while open**, not confirmed once at open time. An invisible read-only either
+  gives false confidence, or makes one hesitate to type in a datastore that is in fact writable.
+
+Read-only is also the cheaper path — no autosave, no persisted HEAD moves, no attachment writes — so the
+safer default is the smaller implementation, which is not usually how that goes.
+
+**Interacts with autosave.** Once periodic autosave exists it will write to whatever is open, so it has to
+know whether the current datastore is writable. Cheaper to design that in than to retrofit it.
+
+**A new use site for `FileDialog`**, so it inherits whatever comes of *FileDialog: reduce per-use-site
+boilerplate*. A recent-datastores list follows naturally once swapping works, and both the graph view and
+*browse all attachments* are scoped to "the datastore" — they inherit whichever is open, with no extra work
+if the swap rebuilds cleanly.
+
+## Agent skills for Librarian (natural-language workflows over the document database)
+
+*Cluster: ? · Cost: ? · Gate: next · Filed: 2026-08-11*
+
+Design work deliberately postponed; this records the idea and what is already established about it.
+
+The Agent Skills open standard (https://agentskills.io) — originally Anthropic's, now adopted across a range
+of agent products. A skill is a folder with a `SKILL.md` carrying metadata (`name`, `description`) plus
+instructions, optionally bundling scripts, references and templates.
+
+**Why it belongs in a librarian, given that Librarian is deliberately not a generic agent harness**: MCP and
+skills solve different problems, and the hype conflates them. **MCP is capability supply** — a plugin
+surface giving the agent tools. **Skills are procedure over whatever tools exist** — natural-language
+scripting on top of the building blocks. For a digital librarian that means the user can describe custom
+workflows over their own document database, without either party writing code.
+
+**Librarian already has stages one and two, under another name.** The standard loads skills by progressive
+disclosure: *discovery* keeps only names and descriptions resident, *activation* pulls the full `SKILL.md`
+when a task matches, *execution* follows the instructions. The first two are what the lorebook (brief 05)
+does — a small always-resident index, full text injected on match. So the mechanism largely exists and the
+question is what sits on top of it.
+
+**Stage three is where the line falls.** Executing a skill's bundled scripts is third-party code running
+in-process. The position: **instructions-only by default, scripts behind an explicit opt-in**, treated like
+the trust decision that MCP servers and `tools_enabled` already are. What is genuinely ruled out is a *GUI*
+plugin surface, which the standard does not ask for.
+
+Open questions for the design session: how skills and lorebook entries relate (one mechanism with two
+front-ends, or two separate things); whether a skill can restrict itself to a corpus scope; and whether
+declining to run bundled scripts makes Raven's implementation non-conforming or merely a subset — worth
+checking the specification rather than assuming.
+
 ## The ingest pool's concurrency is nominal: pypdf is pure Python
 
 *Cluster: ? · Cost: M · Gate: next · Filed: 2026-08-12 (measured 2026-08-06)*
