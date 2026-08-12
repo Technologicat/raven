@@ -364,8 +364,9 @@ amendment above. Listed so the folder's contents are legible from its README rat
   rest: it holds the 2026-08-01 design-session material with its `[D]`/`[N]`/`[P]`/`[X]` provenance markers
   intact, so a later reader can tell settled from proposed. Prerequisite for the corpus TOC and for most of
   what the corpus-interrogation sketch wants. Brief 12 deliberately does not depend on it.
-- **15 — scripting surface over the scaffold** (`15_headless-agent-driver-brief.md`). **v0.2.9, first in
-  that queue**, ahead of 05 — see the amendment above for why it ranks on timing rather than closure. Two
+- **15 — scripting surface over the scaffold** (`15_headless-agent-driver-brief.md`). **Landed 2026-08-12**;
+  closed into `researchers-night/done/`. Was first in that queue, ahead of 05 — see the amendment above for
+  why it ranked on timing rather than closure. Two
   entry points, not one: build the turn's prompt and hand it back (no backend), and run the turn and report
   what happened (a result record, not a node id). Part 0 is lazy `api.initialize`, which is what makes
   `scaffold` importable without the full dep stack and removes `test_scaffold.py`'s `importorskip`. The

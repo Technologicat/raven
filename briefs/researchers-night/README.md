@@ -12,7 +12,6 @@ Librarian features and 11 is Visualizer, sitting side by side here because of wh
 
 | Brief | What | Status |
 |---|---|---|
-| `15_headless-agent-driver-brief.md` | A scripting surface over the scaffold — build a turn's prompt, or run a turn and report what happened | **First in the queue.** v0.2.9. Ranked on *timing*, not closure: roughly seven weeks of investigation-heavy work sit ahead of it and every one of them wants a scriptable driver. It is also **a power multiplier for Claude specifically** — see below |
 | `16_chat-graph-view-brief.md` | The chat tree as a graph, for the exhibit | Researchers' Night. Explanatory before navigational — the job is making "an LLM is a multiverse generator" visible. Step zero is that `XDotWidget.set_graph` has no callers and no tests |
 | `crt-display.md` | Avatar postprocessor: CRT look | Researchers' Night |
 | `atmospheric-dust.md` | Avatar postprocessor: dust | Researchers' Night, and **the schedule's slack** — lands only if time remains. Ranked behind 16 on 2026-08-05. Safe to drop: nothing depends on it, and it borrows its priority-band scheme *from* `crt-display.md` rather than the other way round |
@@ -21,12 +20,24 @@ Librarian features and 11 is Visualizer, sitting side by side here because of wh
 | `11_visualizer-importer-rework-brief.md` | Nomic migration, PCA preprocessing, cosine-to-medoid outlier assignment, Procrustes alignment | Its item 1 carries **a fork that needs deciding** — `nomic-embed-text-v1.5` buys a shared image-text space, `v2-moe` buys multilingual, and no v2-aligned vision encoder appears to exist. That decision reaches brief 12 |
 | `14_chat-search-brief.md` | Search within the chat log | v0.2.9. The match unit is the **message**, which is what keeps v1 cheap — it sidesteps in-text highlighting, whose Visualizer implementation rebuilds the whole panel and so does not transfer to an incrementally-built chat log |
 
+## Closed
+
+| Brief | What | Landed |
+|---|---|---|
+| `done/15_headless-agent-driver-brief.md` | A scripting surface over the scaffold — `raven.librarian.agent`, plus the backend-status work and the per-variety system prompt storage that came out of it | 2026-08-12, v0.2.9 |
+
+It raised one question it did not settle, and the analysis is worth finding: **the character card carries
+character-independent text** (`setup_interaction_style` — deployment facts, conversational manner, and the
+two backend facts, which are three different things sharing one block). The live queue entry for it is
+`TODO_DEFERRED.md`, "Modernize the Librarian system prompt / character card"; the argument for why the block
+cannot move as a unit is in the closed brief's last section.
+
 ## Ordering
 
-**15 first**, for the amortization argument above. After that the ordering is not settled, and the two
-sensible axes disagree — closure rate (smallest first, so briefs shut faster than they open) against the
-exhibit deadline. 16, `crt-display` and `atmospheric-dust` are the only ones the deadline actually binds;
-everything else could slip past September without anything breaking.
+**15 is done** (2026-08-12); the amortization argument below is why it went first. After that the ordering is
+not settled, and the two sensible axes disagree — closure rate (smallest first, so briefs shut faster than
+they open) against the exhibit deadline. 16, `crt-display` and `atmospheric-dust` are the only ones the
+deadline actually binds; everything else could slip past September without anything breaking.
 
 ### Decided 2026-08-07 — what Monday starts on
 

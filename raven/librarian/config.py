@@ -668,8 +668,14 @@ llm_greeting = "How can I help you today?"
 # reconnects. Raven states both in the system message on every turn instead, next to the date, which is
 # handled that way for the same reason; see `chatutil.format_loaded_model`.
 #
-# They stay available because a deployment may have a use for them that this reasoning does not cover. If
-# you write one in, know that you are choosing a value fixed at startup.
+# **The advice, until the TODO below is done: do not use `model` or `context_length` here.** They stay
+# available because a deployment may have a use for them that this reasoning does not cover, but writing one
+# in now costs more than a frozen value. The datastore keeps one system prompt node per distinct text, and
+# matches the configured text against them to decide which one a new chat is rooted at (see
+# `appstate.refresh_system_prompt`) - so a card naming the model produces a separate stored card, and a
+# separate tree of chats, for every model ever loaded. That is the honest outcome rather than a fault, since
+# the text really is different each time, but it is unlikely to be what anyone wanted. Both facts are stated
+# in the system message on every turn regardless; see `chatutil.format_loaded_model`.
 #
 # TODO: This is not where it should end up. The injects are appended to the leading system block, which
 # TODO: means Raven chooses where they go; the user should be able to choose, by writing a placeholder into
