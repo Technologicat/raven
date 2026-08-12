@@ -439,13 +439,18 @@ What is **not** covered:
   landed without them — so what they would pin now is the new module boundaries rather than a rewrite
   in flight.
 - **The DPG frontends**: librarian `app`, `chat_controller`, `cleanup_dialog`, and every Visualizer GUI
-  module. **Not because DPG resists testing** — it runs without a mapped window, and
-  `common/gui/tests/` (messagebox, animation, utils — 18 tests) already drives a real context with an
-  unmapped viewport. See `dpg-notes.md`, "Testing DPG code". The barrier is that nobody has written them
-  for the large frontend modules, which is a different and more tractable problem than "untestable".
-  - **Caveat: those 18 tests never run in CI.** `dearpygui` is not in `requirements-ci.txt`, so their
-    module-level `importorskip` fires on every run and they execute only on a dev machine. Whether the
-    toolkit can initialize on a headless runner is untested — see `TODO_DEFERRED.md`.
+  module. **Not because DPG resists testing** — it runs without a mapped window, and `common/gui/tests/`
+  already drives a real context with an unmapped viewport. See `dpg-notes.md`, "Testing DPG code". The
+  barrier is that nobody has written them for the large frontend modules, which is a different and more
+  tractable problem than "untestable".
+  - **And they run in CI, on all three platforms**, since 2026-08-12: `dearpygui` and `mistletoe` are in
+    `requirements-ci.txt`, which brought 57 tests that had only ever run on a dev machine into every push
+    (2090 → 2147 passing). The open question was whether GLFW could get a context on a runner with no
+    display server; it can, on ubuntu, macOS and Windows alike. Tests that *map* a window are a separate
+    case and still stay out — they carry the `gui` marker and need `--run-gui`.
+  - **What is still dev-machine-only is `test_chat_controller.py`**, and not for a GUI reason: importing
+    `chat_controller` reaches spaCy through the avatar client, so the module skips on itself. Same
+    anti-pattern as the `llmclient` one that lazy `api.initialize` fixed, one layer up.
   - Splitting an operation from its dialog is what makes the operation testable at all; `cleanup.py` /
     `cleanup_dialog.py` is the worked example, and its module docstring explains why.
 - **`librarian/minichat`** — the readline REPL, and the odd one out: no DPG anywhere in it, so none of the
