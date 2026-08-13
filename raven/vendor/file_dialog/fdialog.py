@@ -48,7 +48,12 @@ class FileDialog:
     @classmethod
     def _initialize_class(cls):
         with cls._class_init_lock:
-            if cls._class_initialized:
+            # Everything cached here — icon textures, themes, the hotkey handler registry — belongs to the DPG
+            # context that created it, and `dpg.destroy_context` takes it along while leaving this flag set. An
+            # app holds one context for its whole life and so never meets this; a test suite that builds a
+            # second one gets `SystemError: Texture not found` out of the first `add_image` in the constructor.
+            # So ask the context whether the cached items are still there, rather than trusting the flag alone.
+            if cls._class_initialized and dpg.does_item_exist("ico_home"):  # tag
                 return
             cls._class_initialized = True
 

@@ -723,6 +723,10 @@ def dpg_context():
 
 Create the context once per module: it is not cheap, and DPG holds global state, so per-test contexts are both slow and a good way to find out which of your other tests leaked a widget.
 
+**A shared context means widget tags have to be unique across the module**, not merely within a test — a duplicate ID takes the process down rather than raising (pitfall 5). Parameterize the tag on `request.node.name` where a fixture builds the same widget for every test.
+
+**And watch for class-level caches of DPG items, which outlive the context they were created in.** DPG itself is well-behaved here — the failure surfaces as `SystemError: Texture not found` from the first `add_image`, not as silent corruption — but the *cache* is application code, and a "have I initialized yet?" boolean is not the same question as "do my items still exist?". Nothing resets such a flag on `destroy_context`, so the second context finds it set and every cached tag dangling. An app never meets this, holding one context for its whole life; a test suite meets it on the second context it builds. (Live case: the adopted `file_dialog` cached its icon textures, themes and handler registry behind `_class_initialized`. Fixed by having the guard ask the context — `if cls._class_initialized and dpg.does_item_exist("ico_home")` — rather than trusting the flag. Bare `create_context` / `destroy_context` cycles with no such cache were measured to be fine, so this is about the cache and not about context recreation.)
+
 **These run in CI, on all three platforms** (since 2026-08-12; `dearpygui` and `mistletoe` are in `.github/workflows/requirements-ci.txt`). The open question was whether GLFW could get a context on a runner with no display server, and it can — ubuntu, macOS and Windows alike, 2090 → 2147 tests passing per platform. Keep the `importorskip` anyway: it costs nothing and it is what lets the suite run in an environment that genuinely lacks the toolkit.
 
 Tests that *map* a window are the separate case and stay out: they carry the `gui` marker and need `pytest --run-gui`.
