@@ -54,8 +54,21 @@ Settled 2026-08-13 (Juha and Claude).
 - **Lazy decode is the whole point.** Ask `grid.visible_on_screen()` for the tiles actually on screen and
   decode only those, restarting the pipeline when that set changes materially rather than every frame.
 
-Left open: which torch device the dialog decodes on. Cherrypick resolves one at app level; the dialog has no
-such config, so it probably wants an optional constructor parameter with a lazy default.
+**Which device it decodes on: default to the literal `"gpu"`, with an optional override.** Settled
+2026-08-13. `raven.common.deviceinfo` already resolves that string — it autodetects the single available GPU
+backend, falls back to CPU with an info log when there is none, and raises only if two distinct GPU vendors
+are active at once, which is rare enough that forcing an explicit pick is right.
+
+That matters because of the failure it avoids: **an app that innocently wants a file-open dialog must not
+have to know about torch devices.** A required per-app setting is a landmine — the app that forgets it is
+the app that gets a crash or a silent CPU fallback nobody chose. Defaulting to `"gpu"` means configuring
+nothing works everywhere, CPU-only machines included. The optional parameter is for apps that *do* care:
+pinning thumbnails to the same device as their other work, or deliberately keeping them off a GPU already
+busy with inference.
+
+For reference, Cherrypick pins `cuda:0` in `config.gpu_config["thumbnails"]` with a `--device` override, and
+still passes it through `deviceinfo.validate`, which checks availability and falls back to CPU — so its
+hardcoded string is not the portability hazard it looks like.
 
 ## The budget, which is what forces the design
 
