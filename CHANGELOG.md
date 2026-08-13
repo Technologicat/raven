@@ -74,6 +74,8 @@
 
 - two tooltips still described the attachment store as holding images, which stopped being the whole story in 0.2.8 when documents became attachable. The two buttons that open that folder — one on an attached image, one on an attached document — also gave it two different names, though it is one folder.
 
+- **attaching a document no longer reads it twice.** Its text was extracted once when you picked the file, to tell you straight away if a PDF turned out to be scanned pages with no text in them, and then extracted all over again when the message was sent. For a large paper each pass is seconds — nearly four, for an 8.5 MB one — so the wait happened twice for no reason. The first result is now kept and reused.
+
 *Raven-avatar*
 
 - in the pose editor, keyboard shortcuts no longer fire behind a modal dialog. Every failed character-image or emotion load is reported through one, and the guard that suppresses hotkeys did not count it as a dialog — so the Enter that dismissed the error also did whatever Enter does in the editor behind it.
@@ -82,6 +84,11 @@
 *Raven-xdot-viewer*
 
 - dismissing an error dialog no longer also acts on the graph behind it. The dialog floats over the canvas, so clicking its button re-centered the view on whichever node happened to sit under the pointer. 0.2.8 fixed the keyboard half of this; the mouse half was still open, because the graph's handlers are global — they fire wherever the cursor is — and decided "is the mouse over the graph?" geometrically, which cannot tell that a dialog is covering it.
+
+*Constellation-wide*
+
+- **the file browser closes faster, and the button that opens it no longer looks dead afterwards.** Closing it rebuilt the whole file listing — twice, if you picked something — although the listing was already hidden and gets rebuilt on the next open anyway. The apps run one action at a time, so whatever you clicked next had to wait for that wasted work, which is why the attach button could ignore a click, its own click animation included. On a directory of ~1600 files that was roughly half a second per close.
+  - Long listings are cheaper to display too: the browser now draws only the rows on screen, where it used to draw all of them on every frame.
 
 ---
 

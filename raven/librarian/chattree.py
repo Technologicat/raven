@@ -5,6 +5,7 @@ Used as branching chat history for Raven's LLM client.
 
 __all__ = ["SIDECAR_SUFFIX", "LEGACY_SIDECAR_SUFFIX",
            "rename_datastore",
+           "sidecar_filename_for",
 
            "Forest", "PersistentForest"]
 
@@ -26,6 +27,21 @@ from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Tupl
 from unpythonic import gensym, partition
 
 from ..common import utils as common_utils
+
+
+def sidecar_filename_for(data: bytes, ext: str) -> str:
+    """The content-addressed sidecar filename `<sha256>.<ext>` that `Forest.store_sidecar` would give `data`.
+
+    `ext` is the extension without a leading dot (e.g. "png", "pdf").
+
+    Exposed so a caller holding the bytes can name the sidecar *before* storing it. That is what lets work
+    derived from those bytes — notably a document's extracted text, which is expensive for a large PDF — be
+    filed under the eventual name while it is still cheap to have, rather than being recomputed once the
+    sidecar exists. Storing is idempotent for identical bytes, so the name is stable from the moment the
+    bytes are.
+    """
+    return f"{hashlib.sha256(data).hexdigest()}.{ext.lstrip('.')}"
+
 
 class Forest:
     def __init__(self, sidecar_extractor: Callable[[Any], set[str]] | None = None):
@@ -853,7 +869,7 @@ class Forest:
         later and possibly worse name — a temp file, a copy with a mangled name — displace a good one, and there
         is no way to tell from here which of two names is the better description of the same bytes.
         """
-        filename = f"{hashlib.sha256(data).hexdigest()}.{ext.lstrip('.')}"
+        filename = sidecar_filename_for(data, ext)
         with self.lock:
             if not self._sidecar_exists(filename):  # content-addressed: identical bytes -> identical name
                 self._write_sidecar(filename, data)

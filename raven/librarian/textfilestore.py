@@ -24,6 +24,7 @@ The shared sidecar mechanics (URL scheme, provenance skeleton, byte ingestion, G
 """
 
 __all__ = ["store_file_as_sidecar",
+           "remember_extracted_text",
            "sidecar_to_text",
            "sidecar_refs_in_payload"]
 
@@ -62,6 +63,30 @@ def _mime_for_ext(ext: str) -> str:
     return _MIME_TYPES.get(ext.lower().lstrip("."), "text/plain")
 
 
+def _ext_for_name(name: str) -> str:
+    """The sidecar extension a document called `name` gets (no leading dot); "txt" when it has none.
+
+    The extension is what selects the extractor later, so every path that computes one has to agree — which
+    is why `remember_extracted_text` and `store_file_as_sidecar` both come here rather than each spelling it
+    out.
+    """
+    return pathlib.Path(name).suffix.lstrip(".").lower() or "txt"
+
+
+def remember_extracted_text(name: str, raw: bytes, text: str) -> None:
+    """Record `text` as the extracted plaintext of the document `raw`, to be stored later under `name`.
+
+    For a caller that has already extracted a document's text for its own reasons — validating an attachment
+    at the moment the user picks it, say — and would otherwise throw the result away. Extraction is the
+    expensive step (seconds for a large PDF) and it runs again at wire-build; this makes the second run free.
+
+    Safe to call before the document is stored, and safe to call for one that never is. A sidecar's name is a
+    hash of its bytes, so it is knowable as soon as the bytes are, and an entry for a document that is never
+    attached costs one dictionary slot for the session.
+    """
+    _extracted_text_cache[chattree.sidecar_filename_for(raw, _ext_for_name(name))] = text
+
+
 def store_file_as_sidecar(datastore: chattree.PersistentForest,
                           file_source: bytes | str | pathlib.Path,
                           *,
@@ -92,7 +117,7 @@ def store_file_as_sidecar(datastore: chattree.PersistentForest,
     """
     raw = sidecarstore.read_source_bytes(file_source)
 
-    ext = pathlib.Path(name).suffix.lstrip(".").lower() or "txt"
+    ext = _ext_for_name(name)
     content_type = content_type or _mime_for_ext(ext)
 
     metadata = sidecarstore.base_provenance(url=provenance_url, source=provenance_source,

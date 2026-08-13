@@ -85,11 +85,27 @@ the app's callback — `cancel` and `ok` each used to carry one and two full reb
 `show_file_dialog`'s entry line lands under a millisecond before the rebuild it triggers, so nothing was
 queued behind anything.
 
-**What still has no measurement is the original "several seconds".** Nothing here reconstructs it, from the
-old code or the new. The account that fits every observation is that the two symptoms compounded: a click
-on the opener while the previous close was still rebuilding waited out that close on the callback thread
-before its own open began, with an unclipped table costing frame time throughout. That is a hypothesis
-assembled after the fix rather than a measurement taken before it, and it is recorded here as one.
+## Where the original "several seconds" went
+
+No single number here reaches it, and looking for one was the mistake. Juha's reading, once the pieces were
+on the table: the report conflated **two costs that happen to arrive together**, and both are now measured.
+
+- **The wasted rebuilds**, up to three per open-and-close cycle at 0.19–0.26 s each — approaching a second,
+  spent on a listing nobody was looking at.
+- **An unlucky PDF.** Picking a file runs `docextract.extract_text` synchronously inside the dialog's OK
+  callback, to validate that the document has text at all. Measured on real papers from this same
+  directory: 0.18 s at 0.3 MB, 0.92 s at 3.7 MB, **3.97 s at 8.5 MB**. And because DPG runs callbacks one
+  at a time, the whole GUI is mute for that duration — so a big paper reads as the *dialog* being slow,
+  since the dialog is what you just used.
+
+Together those are several seconds, with nothing left over to explain. The first is fixed here; the second
+is filed as "Attaching a document freezes the GUI while its text is extracted", with a design for making
+the wait visible instead of mute.
+
+A related waste turned up with it and is fixed: the attach-time extraction was validation only, its result
+discarded, and the wire builder extracted the same document again — so a large PDF cost its four seconds
+twice. `textfilestore.remember_extracted_text` files the first result under the sidecar name those bytes
+will get, which is knowable before the file is stored because the name is a hash of its contents.
 
 **A cold page cache was carried as a candidate through this investigation and should not have been.** Every
 measurement here is warm — even the first visit to the papers directory logged `list 0.001 s` — but the

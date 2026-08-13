@@ -377,6 +377,44 @@ front-ends, or two separate things); whether a skill can restrict itself to a co
 declining to run bundled scripts makes Raven's implementation non-conforming or merely a subset — worth
 checking the specification rather than assuming.
 
+## Attaching a document freezes the GUI while its text is extracted
+
+*Cluster: librarian-attachments · Cost: M · Gate: next · Filed: 2026-08-13*
+
+`app._add_staged_file` calls `docextract.extract_text` synchronously, inside the FileDialog's OK callback. DPG
+runs callbacks one at a time on a single thread, so for the duration *nothing* in the GUI responds — not the
+composer, not a hotkey, not another button's own acknowledgment flash. Measured with pypdf on real papers:
+0.18 s for a 0.3 MB PDF, 0.92 s for 3.7 MB, **3.97 s for 8.5 MB**. The last one is a four-second freeze of the
+whole application, and the files that do it are exactly the ones worth attaching.
+
+Same mechanism as the FileDialog close-path stall fixed on 2026-08-13
+(`investigations/filedialog-performance/`), one layer up. The extraction itself is not the bug — pypdf is pure
+Python and slow (see "The ingest pool's concurrency is nominal"), and it always will be. Running it where it
+blocks every other callback is.
+
+**The design, from Juha (2026-08-13).** Move extraction to a background task, and make the chip carry its own
+state so the wait is visible rather than the app being mute:
+
+- The chip appears **immediately** on pick, **pulsating** while its text is being extracted — Raven's existing
+  idiom for work in progress.
+- It then settles to **white** (the current colour) on success, or **red** on failure.
+- **Hovering a failed chip** — icon or filename — says what went wrong. That is where the messages currently
+  raised as modal dialogs go: unreadable file, and no extractable text (the scanned-PDF case).
+- **The message is not sendable while any attachment is in the error state.** Today the failing document is
+  simply never staged, so this is a new state to hold rather than a rule over an existing one.
+
+What this trades away is the current promise, stated in `_add_staged_file`'s docstring, that a bad file is
+caught by a dialog *at the moment you pick it*. The chip's colour becomes the report instead, arriving a beat
+later. That is the intended trade, not an oversight — but the docstring asserts the old contract and must be
+updated with the code.
+
+**Accessibility is deliberately unspecified.** Colour alone carries the success/failure distinction here, and
+hover carries the reason — neither of which works for every user. Spec that separately rather than letting it
+block this.
+
+Discovered while measuring the FileDialog open path (2026-08-13); the freeze was what remained after the
+dialog itself got fast.
+
 ## The ingest pool's concurrency is nominal: pypdf is pure Python
 
 *Cluster: ? · Cost: M · Gate: next · Filed: 2026-08-12 (measured 2026-08-06)*

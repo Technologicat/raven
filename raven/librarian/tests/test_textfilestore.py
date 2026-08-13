@@ -127,6 +127,45 @@ def test_sidecar_to_text_is_memoized_on_immutable_filename(datastore):
     assert textfilestore.sidecar_to_text(datastore, url) == first == "cache me"
 
 
+def test_remembered_text_is_used_instead_of_extracting_again(datastore):
+    """Seeded before the document exists, and honoured once it does — which is the whole point.
+
+    The GUI extracts an attachment's text when the user picks it, to reject a scanned PDF then rather than at
+    send. That result used to be discarded and re-derived at wire-build, and for a large PDF each run is
+    seconds. The sentinel here stands in for that: it can only be returned if the extractor never ran.
+    """
+    raw = b"the document on disk"
+    textfilestore.remember_extracted_text("paper.txt", raw, "the text we already had")
+    result = textfilestore.store_file_as_sidecar(datastore, raw,
+                                                 name="paper.txt", provenance_url="file:///paper.txt",
+                                                 provenance_source="user_attachment")
+    assert textfilestore.sidecar_to_text(datastore, result.part["text_file"]["url"]) == "the text we already had"
+
+
+def test_remembering_text_for_a_document_never_attached_is_harmless(datastore):
+    """A user can pick a file and then remove the chip; nothing has been stored, and nothing may break."""
+    textfilestore.remember_extracted_text("unused.txt", b"never attached", "unused text")
+    result = textfilestore.store_file_as_sidecar(datastore, b"a different document",
+                                                 name="other.txt", provenance_url="file:///other.txt",
+                                                 provenance_source="user_attachment")
+    assert textfilestore.sidecar_to_text(datastore, result.part["text_file"]["url"]) == "a different document"
+
+
+def test_remembered_text_is_keyed_by_content_not_by_name(datastore):
+    """The key has to be the sidecar's, or the seed lands under a name nothing will ever look up.
+
+    Same bytes attached under two names are one sidecar, and its extension comes from whichever name stored
+    it — so a seed made under the other name must still be found. This is what breaks if the key is ever
+    changed to something name-derived.
+    """
+    raw = b"same bytes, two names"
+    textfilestore.remember_extracted_text("a.txt", raw, "seeded once")
+    result = textfilestore.store_file_as_sidecar(datastore, raw,
+                                                 name="b.txt", provenance_url="file:///b.txt",
+                                                 provenance_source="user_attachment")
+    assert textfilestore.sidecar_to_text(datastore, result.part["text_file"]["url"]) == "seeded once"
+
+
 def test_sidecar_to_text_empty_document_placeholder(datastore):
     result = textfilestore.store_file_as_sidecar(datastore, b"   \n\t ",
                                                  name="blank.txt", provenance_url="file:///blank.txt",

@@ -82,6 +82,7 @@ with timer() as tim:
     from . import hybridir
     from . import imagestore
     from . import llmclient
+    from . import textfilestore
 
     gui_config = librarian_config.gui_config  # shorthand, this is used a lot
 logger.info(f"Libraries loaded in {tim.dt:0.6g}s.")
@@ -652,6 +653,10 @@ def _add_staged_file(path: str) -> None:
     Extraction is validated *here*, at attach time, so a scanned/empty PDF or an unreadable file is caught with a
     dialog now rather than silently contributing nothing at send. The bytes stored are this snapshot, so a file
     edited on disk between attach and send still sends exactly what the user picked.
+
+    The extracted text is handed to `textfilestore` rather than discarded, so the wire-build that needs it does
+    not extract the same document a second time. Measured on a large paper, that second run costs about as much
+    as the first: 4 s for an 8.5 MB PDF.
     """
     global _staged_file_counter
     name = pathlib.Path(path).name
@@ -673,6 +678,7 @@ def _add_staged_file(path: str) -> None:
                                 buttons=["OK"], ok_button="OK", cancel_button="OK",
                                 centering_reference_window="librarian_main_window")
         return
+    textfilestore.remember_extracted_text(name, raw, text)
     _staged_file_counter += 1
     idx = _staged_file_counter
     strip_group_tag = f"staged_file_group_{idx}"  # tag
