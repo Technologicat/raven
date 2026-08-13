@@ -34,9 +34,13 @@ conventions in this file look arbitrary until you know that, so they are worth s
 Four trees, sorted by what a document *is* rather than what it is about. Each has its own README; this is the
 index.
 
-- **`briefs/`** — prose. `design/` for sketches (direction clear, mechanism not), `active/`
-  for the current sprint's numbered implementation briefs, `done/` for closed ones, `reference/` for material we
-  consult but did not produce (the EU AI Act summary, the DPG keycode table, an archived style snapshot).
+- **`briefs/`** — prose. `design/` for sketches (direction clear, mechanism not), **one folder per sprint**,
+  named for its scope (currently `librarian-extension/` and `researchers-night/`), `done/` for closed briefs
+  and closed sprints, `reference/` for material we consult but did not produce (the EU AI Act summary, the DPG
+  keycode table, an archived style snapshot). A sprint folder is a working set: it holds its own `README.md`
+  and `done/`, and unnumbered briefs alongside any numbered ones. **Numbering is discontinued** — the 01–16
+  run is historical, and new briefs are named for what they are. `briefs/README.md` is authoritative, and
+  explains why a single `active/` folder was tried and rejected on 2026-08-07.
 - **`investigations/`** — things we measured, profiled or reproduced. **One directory per investigation, holding
   its write-up, its scripts and its data together**, because a measurement whose apparatus lives in another tree
   is not reproducible in practice however carefully it was written. Currently `context-injects`, `retrieval`,

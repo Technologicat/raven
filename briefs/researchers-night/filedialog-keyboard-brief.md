@@ -1,0 +1,181 @@
+# FileDialog: keyboard accessibility
+
+**Status: designed in full, unbuilt.** The design below was settled on 2026-08-13 (Juha and Claude) and is
+agreed; what remains is building it, plus three live checks listed at the end. Moved out of
+`TODO_DEFERRED.md` on 2026-08-13, where a 164-line settled specification was the largest thing in a file
+meant for items noticed and parked.
+
+One of the two final FileDialog pieces for Researchers' Night, with `filedialog-thumbnails-brief.md`.
+They touch the same widget and should be built with each other in view — the grid view needs the same cursor
+and selection machinery this brief defines, and the type-filter hotkeys here are what switch the grid on.
+
+## Why
+
+`FileDialog` cannot be operated from the keyboard. The listing has no cursor at all — selection happens only
+through mouse clicks on per-cell selectables, with a hand-rolled double-click timer — so there is no way to
+move through a directory, descend into a folder, or toggle a selection without a pointing device. The five
+hotkeys that exist (`fdialog_hotkeys_callback`: Enter, Esc, F5, Ctrl+Home, Ctrl+F) cover the frame around the
+listing and not the listing itself, and the source has carried a standing `# TODO: Add hotkeys to navigate
+up/down in the table, descend into folder, ...` since adoption.
+
+**This is an equality consideration first.** It is also a straightforward usability one: DPG is mouse-centric
+by default, Raven supports keyboard operation wherever reasonably possible, and this dialog is the part that
+has not. The bar to clear is bash's filename completion, or a file manager with find-as-you-type and arrow
+navigation.
+
+## The design
+
+**Focus lives in the find field**, which doubles as the filename field in save mode. Being a single-line
+entry it leaves *up and down* free for the listing; left and right stay with the text caret, so the design
+must not want horizontal navigation, and does not. Nothing Tab-cycles. Two other widgets are reachable, each
+by explicit key rather than by a focus order.
+
+**The governing rule for Enter: *Enter goes as deep as it can; Ctrl+Enter stops here.*** Uniform across all
+modes. In open-file mode Enter on a file has nothing deeper, so it accepts — which is why the rule reads as
+one sentence rather than a table of special cases.
+
+| key | action |
+|---|---|
+| Up / Down | move the cursor one row |
+| Page Up / Page Down | move *most of* a visible page, as in the Librarian chat log and the Visualizer info panel |
+| Home / End | first / last row |
+| Enter | descend into the cursor directory; on a file (open mode) accept it; on `..` go up |
+| Ctrl+Enter | commit here — same as the OK button. In `dirs_only`, accepts the cursor directory |
+| Esc | cancel |
+| Ctrl+Space | toggle the cursor row's selection (multi-selection mode only) |
+| Alt+Up | up one level |
+| Ctrl+Up | up one level, one-handed alias — see below |
+| Ctrl+Home | back to the default directory (exists) |
+| F5 | refresh (exists) |
+| Ctrl+F | focus the find field (exists) |
+| Ctrl+L | focus the path field; Enter navigates, Esc returns to find |
+| Ctrl+1 … Ctrl+9 | select the Nth offered type filter |
+| Ctrl+T | focus the type filter combo; Up / Down / Home / End then cycle it — see below |
+| Tab | complete in the field — see below |
+
+**Why Ctrl+Up exists alongside the standard Alt+Up.** On a Nordic layout Alt sits only to the *left* of
+space — the right-hand key is AltGr, which is a different key — so Alt+Up needs two hands. Ctrl is mirrored
+on both sides, so right Ctrl and the arrow cluster are both under the right hand. Alt+Up was the only
+two-handed chord in the table: Ctrl+Enter, Ctrl+Home and Ctrl+End already fall under the right hand, and
+Ctrl+F / Ctrl+L / Ctrl+Space / Ctrl+1…9 are all reachable with the left alone. One alias fixes the set.
+
+**The type filter follows the Raven combo idiom, not only Ctrl+1…9.** DPG combos have no keyboard operation
+at all, so Raven supplies its own: a hotkey focuses the combo, and while it is focused Up / Down / Home / End
+cycle the choices. `raven-avatar-settings-editor` is the reference implementation — a `combobox_choice_map`
+of `{widget: (choices, callback)}`, and a bare-key branch that dispatches on `dpg.get_focused_item()`. Copy
+that shape rather than inventing one. Ctrl+1…9 stays as the direct-jump shortcut, useful because the filter
+list here is short and labelled.
+
+This means bare Up / Down mean different things depending on what holds focus — the listing cursor from the
+find field, the filter choices from the combo — which is the idiom's normal behaviour and is why the handler
+dispatches on the focused item rather than on a mode flag.
+
+**Esc means "give me back the find field" wherever focus has been parked, and cancels the dialog only when
+it is already there.** One rule covering the path field and the combo alike, and it is what keeps Esc from
+being a mode-dependent surprise.
+
+What does *not* generalize is restoring on the way out. The path field holds a **draft** — typing there does
+nothing until Enter — so Esc discards it and puts the current directory back. Combo cycling **applies on
+every keypress**, and watching the listing re-filter as you cycle is the useful part of it; there is no
+uncommitted state to discard, and reverting would undo a change the user just watched happen and kept
+cycling past. So: same focus rule, no restore. Worth stating because "same rule for both" is the natural
+assumption and is half right.
+
+**Ctrl+Enter rather than a double-Enter in `dirs_only` mode.** A timing window penalizes exactly the users
+this brief exists to serve. The existing overwrite confirmation survives that objection because it is a
+*confirmation* — press #1 is inert, so missing the window merely re-arms it — whereas in `dirs_only` press #1
+would *descend*, and a slow second press descends again rather than accepting, losing your place in the tree.
+Deferring the descent by the confirm window would restore the benign-failure property, at the cost of lag on
+the most common keystroke. Ctrl+Enter costs neither.
+
+### Tab completion, and how it coexists with the fragment search
+
+One rule with a fallback:
+
+> Among the shown items, take those whose name *starts with* the field content. If none do, take **all**
+> shown items. Extend the field to that group's longest common prefix.
+
+Read as a sentence: Tab answers *"what do the things I am looking at have in common?"*, and prefix-matching
+is a refinement for when the field happens to be a prefix. With `readme.txt, readme.md, headers.h`, `re`
+gives `readme.` by prefix; `eadm` gives `readme.` through the fallback, the fragment search having already
+narrowed it; `ead` gives nothing and flashes, since `headers.h` is still shown. Two riders, both bash's:
+complete fully when unique, and append the separator when the unique result is a directory — which gives
+Tab-descent for free.
+
+**The path field completes too, by the same rule against a different candidate set.** It already exists and
+is already typable — `ex_path_input_*`, an `InputText` with `on_enter=True` whose callback `chdir`s to what
+was typed — so Ctrl+L has a real target rather than needing one built. What it lacks is completion, and
+without that a Ctrl+L that lands you in a field where you must type an absolute path by hand is worse than
+no Ctrl+L.
+
+Tab there completes the **last path component** against the directory named by everything before it, using
+the same prefix-preferred-else-all rule and the same smart-case matcher as the find field. Two differences
+from the find field, both falling out of what the field is for:
+
+- **Only directories are candidates.** The callback `chdir`s, so a file path can only produce the "not a
+  directory" message box. Completing to one would be completing to a dead end.
+- **There is no listing to fall back on**, since typing here filters nothing. The candidate set is read from
+  the filesystem for the directory named by the typed prefix, on each Tab.
+
+Append the separator after a completed component, as bash does, so repeated Tab walks down the tree.
+
+**Esc in the path field returns to the find field** rather than cancelling the dialog, restoring the field to
+the current directory on the way — the browser's Ctrl+L behaviour. Cancelling then takes a second Esc, which
+is a consequence of the rule rather than a timing window: focus is back in the find field, where Esc cancels
+as always.
+
+**Nothing but Tab writes the find field**, which is what keeps save mode honest: `ok()` already takes the field
+verbatim, so `readm` saves as `readm` with `readme.txt` sitting right there. Implicit completion is the only
+thing that could break that, so there is none.
+
+**In save mode only**, arrow navigation also fills the field from the cursor row — *unless the user has typed
+since the last programmatic write*. One boolean, cleared on any character, set when we write. Browse and the
+name follows you; type one character and the field is yours. The mechanical catch: those writes must **not**
+re-run the filter, or the listing collapses to one row and the cursor has nowhere left to move. The existing
+click path calls `_update_search()` explicitly after `set_value`, which is right for a click and wrong for
+arrows.
+
+### Cursor and selection
+
+**Cursor and selection are different things** once Ctrl+Space exists, so they need different looks. Selection
+keeps the selectable's `True` highlight; the proposal for the cursor is a bound theme painting
+`mvThemeCol_HeaderHovered`, on the reasoning that "hovered" is the affordance a cursor wants. **Whether the
+two are actually distinguishable at a glance has to be looked at**, not argued — they are adjacent greys in
+the default theme, and a cursor that reads as a weak selection is worse than either. Render a row in each
+state side by side and pick from that; if the hovered colour is too close, the fallback is a border or a
+distinct text colour rather than a third fill. The cursor is an index into `shown_items`,
+re-anchored **by path** after every rebuild and clamped if that path is gone; every keystroke in the find
+field rebuilds the listing, so this is the common case rather than an edge one.
+
+### Odds and ends
+
+**Constructor parameters**: `smooth_scrolling` and `smooth_scrolling_step_parameter`, so each app passes its
+own config setting (Librarian already has both).
+
+**Save mode keeps its double-Enter overwrite confirmation**, unchanged.
+
+## What still needs checking, and what no longer does
+
+**`dpg.set_value` does not fire the widget's callback** — measured 2026-08-13 on a combo and on an
+`InputText`, both silent while the value did change. So the save-mode arrow-fill can write the field without
+re-running the filter, which is what that rule needs, and the combo idiom can set a choice and call the
+callback itself. Two places in the tree already relied on this in comments; it is now measured.
+
+Still open:
+
+- **Page Up / Page Down arrive as `517` / `518`**, not `mvKey_Prior` / `mvKey_Next` — this dialog is exactly
+  where that trap bites. Compare against the literals.
+- **Whether Ctrl+Enter, Alt+Up and Ctrl+Up reach a DPG handler while a single-line `InputText` holds the
+  caret.** Unverified. The window manager may eat Alt; Ctrl+Up is the fallback for that too.
+- **Whether the cursor and the selection are visually distinguishable** — see above; a looking question, not
+  an arguing one.
+
+**Out of scope, worth recording**: an audio cue for the overwrite warning, and for whatever other warnings the
+dialog grows. Visual-only feedback is a gap for the same audience this brief is about.
+
+## Where the dialog stands
+
+Four sibling items closed on 2026-08-13 and changed what this brief builds on: smart-case find, grouped
+multi-extension type filters, reduced per-call-site boilerplate, and the performance work
+(`investigations/filedialog-performance/`) that made the listing cheap to rebuild — which matters here,
+because every keystroke in the find field rebuilds it and the cursor has to survive that.

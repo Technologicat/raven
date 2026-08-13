@@ -19,6 +19,8 @@ Librarian features and 11 is Visualizer, sitting side by side here because of wh
 | `13_corpus-scopes-and-unified-db-brief.md` | Corpus scopes and the unified DB | **A draft, not a design** — it holds the 2026-08-01 session material with its `[D]`/`[N]`/`[P]`/`[X]` provenance markers intact, so a reader can tell settled from proposed. Realistically after Researchers' Night |
 | `11_visualizer-importer-rework-brief.md` | Nomic migration, PCA preprocessing, cosine-to-medoid outlier assignment, Procrustes alignment | Its item 1 carries **a fork that needs deciding** — `nomic-embed-text-v1.5` buys a shared image-text space, `v2-moe` buys multilingual, and no v2-aligned vision encoder appears to exist. That decision reaches brief 12 |
 | `14_chat-search-brief.md` | Search within the chat log | v0.2.9. The match unit is the **message**, which is what keeps v1 cheap — it sidesteps in-text highlighting, whose Visualizer implementation rebuilds the whole panel and so does not transfer to an incrementally-built chat log |
+| `filedialog-keyboard-brief.md` | Operating the file dialog without a pointing device | Researchers' Night. **Designed in full, unbuilt.** An equality consideration first; the bar is bash completion and a file manager's arrow navigation. Three live checks remain, one of them the 517/518 keycode trap this dialog is precisely where it bites |
+| `filedialog-thumbnails-brief.md` | Image previews in the file dialog, as a toggled grid view | Researchers' Night. **Foundations shipped 2026-08-13** — the grid widget, its decoder and its hooks now live in `raven.common.gui` / `raven.common.image`, with Cherrypick ported onto them as the proving ground. What remains is the dialog's own view |
 
 ## Closed
 

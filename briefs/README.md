@@ -10,9 +10,15 @@ what stops "done" from being applied to something that was never going to be fin
   becoming one. Each carries a status line saying which parts are decided. See `design/README.md`.
 
 - **One folder per sprint**, named for its scope — currently `librarian-extension/` and
-  `researchers-night/`. Numbered implementation briefs for work that has been decided on, each folder with
+  `researchers-night/`. Implementation briefs for work that has been decided on, each folder with
   its own `README.md` for ordering and its own `done/` for the ones that have closed. A sprint folder is a
   working set, so it also holds unnumbered briefs and its session records.
+
+  **Numbering is discontinued.** The 01–16 run is historical and keeps its numbers; new briefs are named for
+  what they are. The numbers recorded the order briefs were *written*, which is not the order they are read,
+  built or closed in — `researchers-night/` inherited 11–16 from that run and its own contents are ordered by
+  the README's table, not by the filenames. A name that says what a brief covers survives being reordered,
+  rescheduled, or moved between sprint folders; a number has to be defended against all three.
 
 - **One folder per one-off pass** — the worked example is `done/todo-sweep-2026-08-10/`. It is a folder because the pass
   arrived as several files that belong together, which is the same reason anything else here gets one. It
