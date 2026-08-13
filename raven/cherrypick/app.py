@@ -72,7 +72,7 @@ from ..vendor.tha3.util import torch_linear_to_srgb
 from . import config
 from .triage import TriageState, TriageManager
 from .history import TriageHistory
-from .loader import ThumbnailPipeline
+from ..common.image.thumbnails import ThumbnailPipeline
 from .imageview import ImageView
 from .grid import ThumbnailGrid, FilterMode
 from .gridnav import resolve_undo_nav_target

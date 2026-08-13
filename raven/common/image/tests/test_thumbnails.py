@@ -1,4 +1,4 @@
-"""Tests for raven.cherrypick.loader — thumbnail pipeline."""
+"""Tests for raven.common.image.thumbnails — the decode-and-resize thumbnail pipeline."""
 
 import time
 
@@ -7,7 +7,7 @@ import pytest
 import torch
 from PIL import Image
 
-from raven.cherrypick.loader import ThumbnailPipeline
+from raven.common.image.thumbnails import ThumbnailPipeline
 from raven.common.image import codec as imagecodec
 
 

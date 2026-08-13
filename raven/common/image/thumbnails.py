@@ -1,4 +1,4 @@
-"""Thumbnail generation pipeline for raven-cherrypick.
+"""Thumbnail generation pipeline: decode a list of images and Lanczos-resize them to uniform tiles.
 
 Triple-buffered with two background threads:
 
@@ -6,10 +6,12 @@ Triple-buffered with two background threads:
   - **GPU thread**: transfers decoded arrays to the GPU, Lanczos-resizes to
     tile size (with imageutils.letterboxing for non-square images), transfers back.
 
-The main thread polls for completed thumbnails and creates DPG textures.
+The caller polls for completed thumbnails and does whatever it wants with them — creating DPG textures, in
+both current callers, but nothing here knows that: the output is flat float32 RGBA, and this module imports
+no GUI toolkit.
 
-The pipeline is managed via ``raven.common.bgtask.bgtask.TaskManager`` for
-cooperative cancellation when the user opens a new folder.
+The pipeline is managed via ``raven.common.bgtask.TaskManager`` for cooperative cancellation when the
+caller moves on (a new folder, a new visible range).
 """
 
 __all__ = ["ThumbnailPipeline"]
@@ -24,10 +26,10 @@ import torch
 
 from unpythonic.env import env
 
-from ..common import bgtask
-from ..common.image import codec as imagecodec
-from ..common.image import lanczos
-from ..common.image import utils as imageutils
+from .. import bgtask
+from . import codec as imagecodec
+from . import lanczos
+from . import utils as imageutils
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +67,7 @@ class ThumbnailPipeline:
         self._order = lanczos_order
 
         self._executor = concurrent.futures.ThreadPoolExecutor(
-            max_workers=2, thread_name_prefix="cherrypick_thumb")
+            max_workers=2, thread_name_prefix="thumbnail")
         self._task_mgr = bgtask.TaskManager("thumbnails", "concurrent", self._executor)
 
         # Inter-thread queues.  A small decode queue keeps the GPU fed even when
