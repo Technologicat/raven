@@ -10,7 +10,11 @@ import torch
 # Validated at startup by deviceinfo.validate() — auto-falls back to CPU if CUDA unavailable,
 # auto-promotes float16 → float32 on CPU.
 gpu_config = {
-    "thumbnails": {"device_string": "cuda:0",
+    # "gpu" is `deviceinfo`'s autodetect: the single available GPU backend, or CPU when there is none. A
+    # literal "cuda:0" works here only because `deviceinfo.validate` checks availability and falls back —
+    # but it says NVIDIA when what is meant is "whatever this machine has", and on a Mac or an Intel Arc box
+    # that reads as a request that quietly failed rather than a preference that was never expressed.
+    "thumbnails": {"device_string": "gpu",
                    "dtype": torch.float32},
 }
 

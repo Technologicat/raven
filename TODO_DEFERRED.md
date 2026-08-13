@@ -2286,7 +2286,16 @@ Discovered during brief-03 Half-2 error-message work (2026-07-17, flagged by Juh
 
 ## The chat composer scrolls sideways instead of wrapping
 
-*Cluster: ? · Cost: ? · Gate: RN2026 · Filed: 2026-08-04*
+*Cluster: ? · Cost: ? · Gate: **not RN2026** — blocked upstream · Filed: 2026-08-04*
+
+**Un-gated from RN2026 on 2026-08-13.** Nothing here is buildable on our side: ImGui's multiline
+`InputText` has no word-wrap, `add_input_text` exposes no `wrap`, and every direction below is either
+a non-fix, a rewrite of the widget, or an upstream change. It should never have carried a deadline
+gate, because meeting it was not within our control.
+
+**The one cheap action that remains** is the check this item already names: confirm against a current
+ImGui whether word-wrap has landed and DPG simply has not exposed it. That is a few minutes and it is
+what would move this item at all.
 
 Typing past the composer's width pushes the line onwards and scrolls horizontally, so a long sentence
 disappears off the left edge as it is written. It should soft-wrap to the field's width, which is what every
@@ -3350,7 +3359,12 @@ Raised while scoping office-format support (2026-07-29, Juha).
 
 ## Librarian doesn't check that the LLM backend has a model loaded
 
-*Cluster: ? · Cost: ? · Gate: RN2026 · Filed: 2026-07-29*
+*Cluster: ? · Cost: L · Gate: **not RN2026** — its RN2026 half shipped · Filed: 2026-07-29*
+
+**Un-gated from RN2026 on 2026-08-13**, acting on the re-reading this item asked for below. What the
+gate was set against — Librarian starting silently against a model-less backend — shipped on 2026-08-12
+as the status pill. What remains is the general error-reporting sweep, which is a larger piece of work
+than the ruling was sized for and does not belong on a demo deadline.
 
 **The titular case shipped 2026-08-12**, which is what makes the rest of this item the live part.
 `llmclient.connect` reports three states — reachable with a model, reachable with none, unreachable — and
