@@ -2047,6 +2047,31 @@ directories, and plausibly bears on "raven-cherrypick: low FPS with large images
 
 Originally discovered during raven-cherrypick session 5 (2026-03-19).
 
+## The shared thumbnail grid materializes every tile, not just the visible ones
+
+*Cluster: ? · Cost: M · Gate: ? · Filed: 2026-08-13*
+
+`ThumbnailGrid._rebuild` (`raven.common.gui.thumbnailgrid`) creates a group, a drawlist, a label and a
+tooltip for **every entry the filter admits** — "visible" there means "not filtered out", not "on screen" —
+and holds a texture per thumbnail. That is why Cherrypick slows down in a huge folder.
+
+**As of 2026-08-13 this is one bug in one place.** The grid was extracted out of Cherrypick that day and the
+file dialog's forthcoming grid view will sit on the same widget, so a windowing fix serves both apps at once.
+Before the extraction it would have had to be written twice, which is most of why it never was.
+
+The file dialog's escape from the same shape — `clipper=True` on a table — has no counterpart here: the
+clipper is a table feature and this is a grid of drawlists. Real windowing is what it takes: keep a pool of
+tiles sized to the viewport and repopulate it as the user scrolls, rather than one tile per entry.
+
+**Do not reach for the obvious shortcut.** One drawlist sized to the whole scroll extent renders the X
+session unusable, recoverable only from a text terminal — measured 2026-08-13, see `dpg-notes.md`, "Never
+size a drawlist to a scroll extent".
+
+`visible_on_screen()` already exists on the widget and reports which tiles the last frame actually drew, so
+the "which ones matter" half is solved; what is missing is not creating the rest.
+
+Adjacent but distinct: "raven-cherrypick: low FPS with large images" is about the *image view*, not the grid.
+
 ## raven-cherrypick: low FPS with large images
 
 *Cluster: ? · Cost: ? · Gate: investigate in 0.2.9 · Filed: 2026-03-28*
