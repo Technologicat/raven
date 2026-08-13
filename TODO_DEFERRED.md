@@ -4271,7 +4271,8 @@ Not tasks. There is no action available on our side; what is recorded is the tri
   widget means reimplementing selection, the caret and the clipboard, everything ImGui gives for free.
 
   **The trigger to look again: has a current ImGui grown word-wrap, with DPG merely not exposing it yet?**
-  Last checked the week of 2026-08-11 — still not there. So this is a re-check on the next ImGui or DPG
-  release rather than an open question, and it is not urgent either way: most messages are a sentence or
-  two, and the ones that are not tend to be pasted rather than typed. Carried an `RN2026` gate until 2026-08-13, which it should never have had: a deadline on
+  Last checked the week of 2026-08-11 against **DPG 2.3.1** — still not there. So this is a re-check when DPG
+  moves past 2.3.1 (or when ImGui does and DPG catches up) rather than an open question, and it is not urgent
+  either way: most messages are a sentence or two, and the ones that are not tend to be pasted rather than
+  typed. Carried an `RN2026` gate until 2026-08-13, which it should never have had: a deadline on
   work outside our control can only be missed. Noticed by Juha (2026-08-04) while testing the send-key change.
