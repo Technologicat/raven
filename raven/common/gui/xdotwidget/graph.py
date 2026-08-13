@@ -437,14 +437,8 @@ class Graph:
         if not text:
             return []
         # Simple O(n) scan for exact matches, ANDed across all fragments. No stopwording, lemmatization or anything fancy.
-        case_sensitive_fragments, case_insensitive_fragments = common_utils.search_string_to_fragments(text, sort=False)  # minor speedup: don't need to sort, since all must match
-        results = []
-        for item, t in self._items_and_texts:
-            t_lowercase = t.lower()
-            if (all(term in t_lowercase for term in case_insensitive_fragments) and
-               all(term in t for term in case_sensitive_fragments)):
-                results.append(item)
-        return results
+        matches_search = common_utils.make_search_matcher(text)
+        return [item for item, item_text in self._items_and_texts if matches_search(item_text)]
 
     def get_node_by_name(self, name: str) -> Optional[Node]:
         """Return node by its internal name, or None."""

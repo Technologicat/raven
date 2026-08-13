@@ -9,7 +9,8 @@ __all__ = ["absolutize_filename", "canonical_path",
            "format_bibtex_author", "format_bibtex_authors",
            "normalize_whitespace", "normalize_unicode",
            "unicodize_basic_markup",
-           "normalize_search_string", "search_string_to_fragments", "search_fragment_to_highlight_regex_fragment",
+           "normalize_search_string", "search_string_to_fragments", "make_search_matcher",
+           "search_fragment_to_highlight_regex_fragment",
            "chunkify_text"]
 
 import logging
@@ -602,6 +603,29 @@ def search_string_to_fragments(s, *, sort):
         case_sensitive_fragments = list(sorted(case_sensitive_fragments, key=lambda x: -len(x)))  # longest to shortest
         case_insensitive_fragments = list(sorted(case_insensitive_fragments, key=lambda x: -len(x)))  # longest to shortest
     return case_sensitive_fragments, case_insensitive_fragments
+
+def make_search_matcher(s):
+    """Compile search string `s` into a predicate `matches(text) -> bool`.
+
+    The predicate is the incremental fragment search `search_string_to_fragments` describes: every fragment
+    must appear somewhere in `text`, in any order, and a lowercase fragment matches case-insensitively while
+    one carrying an uppercase letter matches exactly. An empty search string yields a predicate that accepts
+    everything, so "no query" needs no special case at the call site.
+
+    Compiling once and testing many is the point: splitting the search string is per-query work, and the
+    predicate is what runs per candidate.
+
+    Note `text` is matched as given. Where the corpus has a normalized form (as Visualizer's entries do),
+    pass that — `s` is normalized by `normalize_search_string`, so an unnormalized `text` can fail to match
+    on exactly the characters normalization exists to reconcile.
+    """
+    case_sensitive_fragments, case_insensitive_fragments = search_string_to_fragments(s, sort=False)  # all must match, so sorting buys nothing
+
+    def matches(text):
+        text_lowercase = text.lower()
+        return (all(fragment in text_lowercase for fragment in case_insensitive_fragments) and
+                all(fragment in text for fragment in case_sensitive_fragments))
+    return matches
 
 def search_fragment_to_highlight_regex_fragment(s):
     """Make a search fragment usable in a regex for search highlighting."""

@@ -473,6 +473,48 @@ class TestSearchStringToFragments:
         assert ci == []
 
 
+class TestMakeSearchMatcher:
+    def test_lowercase_query_ignores_case(self):
+        matches = utils.make_search_matcher("readme")
+        assert matches("README.txt")
+        assert matches("readme.txt")
+        assert matches("ReadMe.TXT")
+
+    def test_query_with_uppercase_is_case_sensitive(self):
+        matches = utils.make_search_matcher("README")
+        assert matches("README.txt")
+        assert not matches("readme.txt")
+
+    def test_fragments_match_anywhere_and_in_any_order(self):
+        """The HELM/Firefox behavior: fragments are ANDed, position and order are free."""
+        matches = utils.make_search_matcher("photo cat")
+        assert matches("photocatalytic")
+        assert matches("cat_photo.png")
+        assert not matches("photosynthesis")
+
+    def test_mixed_case_fragments_are_judged_separately(self):
+        matches = utils.make_search_matcher("Cat photo")
+        assert matches("Cat photo")
+        assert matches("Cat PHOTO")  # "photo" is lowercase in the query, so its case is free
+        assert not matches("cat photo")  # ...but "Cat" is not, so this one must match exactly
+
+    def test_empty_query_accepts_everything(self):
+        """So a call site with no query needs no special case, which is the reason it is spelled this way."""
+        matches = utils.make_search_matcher("")
+        assert matches("anything at all")
+        assert matches("")
+
+    def test_query_is_normalized(self):
+        """`normalize_search_string` runs on the query, so a subscript typed by the user still finds "CO2"."""
+        matches = utils.make_search_matcher("CO₂")
+        assert matches("CO2 capture")
+
+    def test_matcher_can_be_reused(self):
+        """Compile once, test many — the whole point of returning a predicate."""
+        matches = utils.make_search_matcher("report")
+        assert [name for name in ["report.pdf", "notes.txt", "final_report.docx"] if matches(name)] == ["report.pdf", "final_report.docx"]
+
+
 class TestSearchFragmentToHighlightRegex:
     def test_parens_escaped(self):
         result = utils.search_fragment_to_highlight_regex_fragment("f(x)")
