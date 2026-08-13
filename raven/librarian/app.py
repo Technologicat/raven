@@ -36,6 +36,7 @@ with timer() as tim:
     import requests
     import sys
     import time
+    from collections.abc import Callable
     from typing import Tuple, Union
 
     # WORKAROUND: Deleting a texture or image widget causes DPG to segfault on Nvidia/Linux.
@@ -126,6 +127,11 @@ bg = concurrent.futures.ThreadPoolExecutor()
 gui_resize_task_manager = bgtask.TaskManager(name="librarian_gui_resize",  # de-spammer for expensive parts of GUI resizing
                                              mode="sequential",
                                              executor=bg)
+# Reading an attached document's text. Concurrent, not sequential: a multi-select attaches several files at
+# once, and each is an independent question about a different file — a later one must not cancel an earlier.
+attachment_task_manager = bgtask.TaskManager(name="librarian_attachment_extract",
+                                             mode="concurrent",
+                                             executor=bg)
 api.initialize(raven_server_url=client_config.raven_server_url,
                raven_api_key_file=client_config.raven_api_key_file,
                executor=bg)  # reuse our executor for client background tasks
@@ -209,6 +215,14 @@ with timer() as tim:
     with dpg.theme(tag="my_steady_gray_docs_theme"):
         with dpg.theme_component(dpg.mvAll):
             dpg.add_theme_color(dpg.mvThemeCol_Text, (180, 180, 180))
+
+    # An attachment whose text could not be extracted. Steady, not pulsating: the pulsation means "working
+    # on it", so a failed chip must stop moving or the two states read the same at a glance. Its own theme
+    # rather than the DOCS red above, whose name says who owns it — and an owner's name on a shared theme is
+    # how a later edit for one owner silently restyles the other.
+    with dpg.theme(tag="my_attachment_error_theme"):
+        with dpg.theme_component(dpg.mvAll):
+            dpg.add_theme_color(dpg.mvThemeCol_Text, (255, 96, 96))
 
     # Themes for the LLM backend status pill above the composer (`_refresh_backend_status_pill`). Its own
     # pulsator rather than the DOCS one, for the reason the DOCS indicator has its own: a pulsation whose
@@ -364,10 +378,19 @@ staged_images = []
 
 # Currently staged document attachments (plain text / PDF). Each entry is an `env` with `raw` (file bytes),
 # `path`, `name`, `provenance_url`, `provenance_source` (consumed by `scaffold.user_turn`), plus `strip_group_tag`
-# for GUI teardown. Documents need no vision model (their text is folded into the prompt at wire-build) and no
-# thumbnail texture (they render as a chip), so this staging is simpler than the image staging above.
+# and the chip's other widget tags for GUI teardown and restyling. Documents need no vision model (their text is
+# folded into the prompt at wire-build) and no thumbnail texture (they render as a chip), so this staging carries
+# no texture — but unlike an image, a document must be *read* before it is known to be attachable at all, which
+# is what the states below are for.
 staged_files = []
 _staged_file_counter = 0  # monotonic; keeps chip widget tags unique even across remove-then-re-add
+
+# What a staged document's chip is currently saying. Extracting a large PDF takes seconds (measured: ~4 s for
+# 8.5 MB), so the chip appears immediately and reports its own progress rather than the app going quiet — see
+# `_add_staged_file`.
+ATTACHMENT_EXTRACTING = sym("attachment_extracting")  # text is being read out; chip pulsates
+ATTACHMENT_READY = sym("attachment_ready")            # text in hand; chip is calm, and the message can be sent
+ATTACHMENT_FAILED = sym("attachment_failed")          # nothing usable in it; chip is red and blocks the send
 
 # Thumbnails for the staged-image strip get their own texture registry (distinct from the chat log's inline-image
 # registry, which the controller owns). These thumbnails ARE deleted — on remove, and on send — so this relies on
@@ -635,12 +658,17 @@ _ATTACH_IMAGE_EXTS_TEXT = " ".join(imagestore.supported_extensions())
 
 
 def _remove_staged_file(staged: env) -> None:
-    """Remove one staged document: drop it from the list and delete its strip chip widgets."""
+    """Remove one staged document: drop it from the list and delete its strip chip widgets.
+
+    Removing is also how a failed attachment is cleared, and how a user gives up on one that is taking too
+    long — so this is what unblocks the send, and re-checks it.
+    """
     if staged in staged_files:
         staged_files.remove(staged)
     with guiutils.nonexistent_ok():
         dpg.delete_item(staged.strip_group_tag)  # the chip group (icon + filename + remove button)
     _refresh_composer_layout()
+    _refresh_send_gate()
 
 def _clear_staged_files() -> None:
     """Remove all staged documents (called after a send)."""
@@ -648,57 +676,54 @@ def _clear_staged_files() -> None:
         _remove_staged_file(staged)
 
 def _add_staged_file(path: str) -> None:
-    """Stage the document at `path`: snapshot its bytes, verify text can be extracted, add a strip chip.
+    """Stage the document at `path`: add its chip straight away, and read its text in the background.
 
-    Extraction is validated *here*, at attach time, so a scanned/empty PDF or an unreadable file is caught with a
-    dialog now rather than silently contributing nothing at send. The bytes stored are this snapshot, so a file
-    edited on disk between attach and send still sends exactly what the user picked.
+    Reading is what takes the time — pypdf is pure Python, and a large paper costs seconds (measured: 4 s for
+    an 8.5 MB PDF). Doing it here, inline, would do it on DPG's single callback thread, which is the one that
+    runs every other callback in the app: for those seconds nothing would respond, not the composer, not a
+    hotkey, not another button's own acknowledgment flash. So the chip goes up immediately and says what it is
+    doing — pulsating while reading, calm when ready, red when the document turns out to hold no text.
 
-    The extracted text is handed to `textfilestore` rather than discarded, so the wire-build that needs it does
-    not extract the same document a second time. Measured on a large paper, that second run costs about as much
-    as the first: 4 s for an 8.5 MB PDF.
+    The bytes are snapshotted with the text, so a file edited on disk between attach and send still sends what
+    the user picked. The text is handed to `textfilestore` rather than discarded, so the wire-build that needs
+    it later does not read the same document a second time.
     """
     global _staged_file_counter
     name = pathlib.Path(path).name
-    try:
-        raw = pathlib.Path(path).read_bytes()
-        text = docextract.extract_text(path)  # validate up front (any model can use the text; no VLM needed)
-    except Exception as exc:  # noqa: BLE001 -- a bad file must not break the composer; report and skip it
-        logger.error(f"_add_staged_file: failed to read '{path}': {type(exc)}: {exc}")
-        messagebox.modal_dialog(window_title="Could not attach file",
-                                message=f"'{name}' could not be read as text.",
-                                buttons=["OK"], ok_button="OK", cancel_button="OK",
-                                centering_reference_window="librarian_main_window")
-        return
-    if not text:
-        logger.info(f"_add_staged_file: '{path}' yielded no extractable text; not attaching.")
-        messagebox.modal_dialog(window_title="Could not attach file",
-                                message=f"'{name}' has no extractable text.\n\n"
-                                        "If it is a scanned or image-only PDF, run it through OCR first.",
-                                buttons=["OK"], ok_button="OK", cancel_button="OK",
-                                centering_reference_window="librarian_main_window")
-        return
-    textfilestore.remember_extracted_text(name, raw, text)
     _staged_file_counter += 1
     idx = _staged_file_counter
     strip_group_tag = f"staged_file_group_{idx}"  # tag
     icon_tag = f"staged_file_icon_{idx}"  # tag
+    label_tag = f"staged_file_label_{idx}"  # tag
+    icon_tooltip_text_tag = f"staged_file_icon_tooltip_text_{idx}"  # tag
+    label_tooltip_text_tag = f"staged_file_label_tooltip_text_{idx}"  # tag
     remove_button_tag = f"staged_file_remove_{idx}"  # tag
-    staged = env(raw=raw,
+    staged = env(raw=None,  # filled in by the extraction task, along with `status`
+                 text=None,
                  path=path,
                  name=name,
                  provenance_url=pathlib.Path(path).resolve().as_uri(),  # "file:///abs/path" — provenance only, never a live ref
                  provenance_source="user_attachment",
-                 strip_group_tag=strip_group_tag)
+                 strip_group_tag=strip_group_tag,
+                 status=ATTACHMENT_EXTRACTING,
+                 error_message=None,
+                 icon_tag=icon_tag,
+                 label_tag=label_tag,
+                 icon_tooltip_text_tag=icon_tooltip_text_tag,
+                 label_tooltip_text_tag=label_tooltip_text_tag)
     with dpg.group(parent="chat_attachments_strip", horizontal=True, tag=strip_group_tag):  # tag
         dpg.add_text(fa.ICON_FILE_LINES, tag=icon_tag)  # tag  # a document glyph stands in for the image thumbnail
         dpg.bind_item_font(icon_tag, themes_and_fonts.icon_font_solid)  # tag
         # Wrap the filename so a very long name can't push the remove button off the (fixed-width) composer panel
         # — bounded conservatively so the button stays reachable even on a narrow (~1080p-split) window. The full
-        # name is always available via the icon's tooltip.
-        dpg.add_text(name, wrap=420)
+        # name is always available via the tooltips.
+        dpg.add_text(name, wrap=420, tag=label_tag)  # tag
+        # Both the icon and the name carry the chip's state, so both answer when hovered. A failed chip's
+        # colour says *that* something is wrong; only the tooltip can say what.
         with dpg.tooltip(icon_tag):  # tag
-            dpg.add_text(name)
+            dpg.add_text(name, tag=icon_tooltip_text_tag)  # tag
+        with dpg.tooltip(label_tag):  # tag
+            dpg.add_text(name, tag=label_tooltip_text_tag)  # tag
         dpg.add_button(label=fa.ICON_XMARK,
                        width=gui_config.toolbutton_w,
                        callback=lambda: _remove_staged_file(staged),
@@ -707,8 +732,119 @@ def _add_staged_file(path: str) -> None:
         dpg.bind_item_theme(remove_button_tag, "disablable_widget_theme")  # tag
         with dpg.tooltip(remove_button_tag):  # tag
             dpg.add_text(f"Remove attachment\n{name}")
+    _apply_staged_file_appearance(staged)
     staged_files.append(staged)
     _refresh_composer_layout()
+    _refresh_send_gate()
+    # `staged` reaches the task through the closure, and only its name goes in the task `env`. `TaskManager`
+    # logs the env at DEBUG, and `staged.raw` is the whole document — passing it there put an 8 MB PDF in the
+    # log per attachment, at the very log level this area asks people to run at.
+    attachment_task_manager.submit(_make_extraction_task(staged), env(name=name))
+
+
+def _apply_staged_file_appearance(staged: env) -> None:
+    """Restyle a staged document's chip and retarget its tooltips to match `staged.status`.
+
+    Called from the extraction task as well as from the GUI thread, which DPG allows. Every widget is
+    guarded, because the user may remove the chip while its document is still being read — the task cannot
+    be stopped mid-`extract_text` (pypdf offers no hook), so it finishes and reports into widgets that are
+    no longer there.
+    """
+    if staged.status is ATTACHMENT_EXTRACTING:
+        theme, detail = "my_pulsating_gray_text_theme", "Reading the text out of this document…"  # tag
+    elif staged.status is ATTACHMENT_FAILED:
+        theme, detail = "my_attachment_error_theme", staged.error_message  # tag
+    else:
+        theme, detail = None, None  # ready: the app's ordinary text colour, and nothing more to say
+    tooltip = f"{staged.name}\n\n{detail}" if detail else staged.name
+    with guiutils.nonexistent_ok():
+        for item in (staged.icon_tag, staged.label_tag):
+            dpg.bind_item_theme(item, theme)
+        for item in (staged.icon_tooltip_text_tag, staged.label_tooltip_text_tag):
+            dpg.set_value(item, tooltip)
+
+
+def _make_extraction_task(staged: env) -> Callable[[env], None]:
+    """Build the background task that reads `staged`'s document and settles its chip into ready or failed.
+
+    A closure rather than a plain function taking `staged` in its task `env`, so that the document's bytes
+    never enter anything `TaskManager` prints: it logs the env at DEBUG, and an `env` repr recurses, so one
+    attached paper became megabytes of log per attachment.
+    """
+    def extract_staged_file(task_env: env) -> None:
+        try:
+            raw = pathlib.Path(staged.path).read_bytes()
+            text = docextract.extract_text(staged.path)
+        except Exception as exc:  # noqa: BLE001 -- a bad file must not break the composer; report it on the chip
+            logger.error(f"extract_staged_file: {task_env.task_name}: failed to read '{staged.path}': {type(exc)}: {exc}")
+            _settle_staged_file(staged, error_message="This file could not be read as text.")
+            return
+        if task_env.cancelled:  # the chip is already gone; reporting into it would only log noise
+            return
+        if not text:
+            logger.info(f"extract_staged_file: {task_env.task_name}: '{staged.path}' yielded no extractable text.")
+            _settle_staged_file(staged, error_message="There is no text in this document.\n"
+                                                      "If it is a scanned or image-only PDF, run it through OCR first.")
+            return
+        # Filed under the name these bytes will get as a sidecar, so the wire-build reuses it instead of
+        # reading the document again.
+        textfilestore.remember_extracted_text(staged.name, raw, text)
+        staged.raw = raw
+        staged.text = text
+        _settle_staged_file(staged, error_message=None)
+    return extract_staged_file
+
+
+def _settle_staged_file(staged: env, *, error_message: str | None) -> None:
+    """Move `staged` out of the extracting state, and bring the GUI up to date."""
+    staged.status = ATTACHMENT_FAILED if error_message is not None else ATTACHMENT_READY
+    staged.error_message = error_message
+    if staged not in staged_files:  # removed while it was being read; nothing left to restyle or unblock
+        return
+    _apply_staged_file_appearance(staged)
+    _refresh_send_gate()
+
+
+def _count_staged_files(status: sym) -> int:
+    """How many staged documents are currently in `status`."""
+    return sum(1 for staged in staged_files if staged.status is status)
+
+
+def _describe_send_gate() -> str | None:
+    """Why the message cannot be sent right now, or `None` when it can.
+
+    A multi-select attaches several documents at once, so every count here can be more than one — and the
+    failed case is reported before the pending one, because it is the one the user has to act on.
+    """
+    n_failed = _count_staged_files(ATTACHMENT_FAILED)
+    if n_failed:
+        if n_failed == 1:
+            return "Remove the attachment shown in red — its text could not be read."
+        return f"Remove the {n_failed} attachments shown in red — their text could not be read."
+    n_pending = _count_staged_files(ATTACHMENT_EXTRACTING)
+    if n_pending:
+        if n_pending == 1:
+            return "Still reading an attached document."
+        return f"Still reading {n_pending} attached documents."
+    return None
+
+
+def _refresh_send_gate() -> None:
+    """Enable or disable sending, according to the staged documents' states.
+
+    A failed attachment blocks rather than being silently dropped: the user chose that document, and sending
+    the message without it would answer a question they did not ask. One still being read blocks too, for the
+    shorter reason that its text is not there yet.
+
+    The button is disabled *and* the callback re-checks. Disabling the button says so visibly, but the send
+    hotkey fires the text field's own callback and never touches the button — so the button is the
+    affordance and the callback's own check is the rule.
+    """
+    reason = _describe_send_gate()
+    with guiutils.nonexistent_ok():
+        dpg.configure_item("chat_send_button", enabled=(reason is None))  # tag
+        dpg.set_value("chat_send_tooltip_text",  # tag
+                      reason if reason is not None else f"Send to AI [{_send_key_label()}]")
 
 def _attach_callback(selected_files) -> None:
     """FileDialog callback: route each selected file to image or document staging by its extension.
@@ -892,6 +1028,19 @@ with timer() as tim:
                             # sending Enter, plus any stray whitespace, come off here. An empty result is intentional
                             # and still sends — an empty user message is Librarian's canonical "let the AI take
                             # another turn" gesture.
+                            # An attachment still being read, or one that turned out to have no text, holds the
+                            # send. The button is already disabled, but the send hotkey comes through the text
+                            # field's own callback and never consults it — so the rule lives here.
+                            gate_reason = _describe_send_gate()
+                            if gate_reason is not None:
+                                gui_animation.animator.add(gui_animation.WidgetFlash(message=gate_reason,
+                                                                                     target="chat_send_button",  # tag
+                                                                                     target_tooltip=None,
+                                                                                     target_text=None,
+                                                                                     flash_color=(255, 32, 32),
+                                                                                     text_color=(255, 255, 255),
+                                                                                     duration=1.0))
+                                return
                             user_message_text = dpg.get_value("chat_field").strip()  # tag
                             # Snapshot the staged attachments and hand them off, then clear the staging. `chat_exchange`
                             # stores each image (bytes and all) on a background thread from this snapshot, so clearing
@@ -1065,7 +1214,9 @@ with timer() as tim:
                             dpg.bind_item_font("chat_send_button", themes_and_fonts.icon_font_solid)  # tag
                             dpg.bind_item_theme("chat_send_button", "disablable_widget_theme")  # tag
                             with dpg.tooltip("chat_send_button"):  # tag
-                                dpg.add_text(f"Send to AI [{_send_key_label()}]")
+                                # Tagged because `_refresh_send_gate` swaps in the reason sending is blocked.
+                                # A disabled button with an unchanged tooltip is a button that looks broken.
+                                dpg.add_text(f"Send to AI [{_send_key_label()}]", tag="chat_send_tooltip_text")  # tag
 
                             record_audio_message_button = dpg.add_button(label=fa.ICON_MICROPHONE,
                                                                          callback=record_audio_message_callback,

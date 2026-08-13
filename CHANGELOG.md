@@ -74,6 +74,11 @@
 
 - two tooltips still described the attachment store as holding images, which stopped being the whole story in 0.2.8 when documents became attachable. The two buttons that open that folder — one on an attached image, one on an attached document — also gave it two different names, though it is one folder.
 
+- **attaching a document no longer freezes the app while it is read.** Reading a large PDF takes seconds — nearly four, for an 8.5 MB paper — and it used to happen before the attachment appeared at all, with the whole GUI unresponsive meanwhile: no typing, no buttons, no hotkeys. The attachment chip now appears at once and reads its document in the background.
+  - The chip says which state it is in: **pulsating** while its text is being read, **calm** once it is ready, **red** if the document turns out to hold no text. Hovering a red chip — its icon or its filename — says what went wrong.
+  - **A message cannot be sent while an attachment is red, or still being read.** The send button is disabled and says why; the send key refuses with a flash. Previously a document with no readable text was reported in a dialog and then silently dropped, so the message went without it — which is the one outcome nobody wants, since you attached it for a reason. Remove the red chip (or wait) to send.
+  - The scanned-PDF case is the common one here: a page of images has nothing for a text extractor to find. Run it through OCR first.
+
 - **attaching a document no longer reads it twice.** Its text was extracted once when you picked the file, to tell you straight away if a PDF turned out to be scanned pages with no text in them, and then extracted all over again when the message was sent. For a large paper each pass is seconds — nearly four, for an 8.5 MB one — so the wait happened twice for no reason. The first result is now kept and reused.
 
 *Raven-avatar*

@@ -416,43 +416,23 @@ cycling.
 Related: `dpg-notes.md`, "Context recreation is not reliably safe once real widgets have rendered", which is
 the same fault seen from outside pytest.
 
-## Attaching a document freezes the GUI while its text is extracted
+## Attachment state is carried by colour and hover alone
 
-*Cluster: librarian-attachments · Cost: M · Gate: next · Filed: 2026-08-13*
+*Cluster: librarian-attachments · Cost: ? · Gate: ? · Filed: 2026-08-13*
 
-`app._add_staged_file` calls `docextract.extract_text` synchronously, inside the FileDialog's OK callback. DPG
-runs callbacks one at a time on a single thread, so for the duration *nothing* in the GUI responds — not the
-composer, not a hotkey, not another button's own acknowledgment flash. Measured with pypdf on real papers:
-0.18 s for a 0.3 MB PDF, 0.92 s for 3.7 MB, **3.97 s for 8.5 MB**. The last one is a four-second freeze of the
-whole application, and the files that do it are exactly the ones worth attaching.
+The staged-attachment chips built on 2026-08-13 say what they are doing three ways, and every one of them
+excludes somebody: **pulsating** while the document is being read, **calm** when ready, **red** when it has no
+extractable text — with the reason available only on hover. Colour alone distinguishes success from failure,
+and a tooltip is not reachable without a pointer.
 
-Same mechanism as the FileDialog close-path stall fixed on 2026-08-13
-(`investigations/filedialog-performance/`), one layer up. The extraction itself is not the bug — pypdf is pure
-Python and slow (see "The ingest pool's concurrency is nominal"), and it always will be. Running it where it
-blocks every other callback is.
+This was left out of that work deliberately, to keep it from blocking, and it should be specced on its own
+terms rather than bolted on. It is not only the chips: the send button's disabled state has the same shape (a
+greyed button plus a tooltip), and the composer as a whole is being made keyboard-navigable under "FileDialog:
+keyboard accessibility", which is the natural companion.
 
-**The design, from Juha (2026-08-13).** Move extraction to a background task, and make the chip carry its own
-state so the wait is visible rather than the app being mute:
-
-- The chip appears **immediately** on pick, **pulsating** while its text is being extracted — Raven's existing
-  idiom for work in progress.
-- It then settles to **white** (the current colour) on success, or **red** on failure.
-- **Hovering a failed chip** — icon or filename — says what went wrong. That is where the messages currently
-  raised as modal dialogs go: unreadable file, and no extractable text (the scanned-PDF case).
-- **The message is not sendable while any attachment is in the error state.** Today the failing document is
-  simply never staged, so this is a new state to hold rather than a rule over an existing one.
-
-What this trades away is the current promise, stated in `_add_staged_file`'s docstring, that a bad file is
-caught by a dialog *at the moment you pick it*. The chip's colour becomes the report instead, arriving a beat
-later. That is the intended trade, not an oversight — but the docstring asserts the old contract and must be
-updated with the code.
-
-**Accessibility is deliberately unspecified.** Colour alone carries the success/failure distinction here, and
-hover carries the reason — neither of which works for every user. Spec that separately rather than letting it
-block this.
-
-Discovered while measuring the FileDialog open path (2026-08-13); the freeze was what remained after the
-dialog itself got fast.
+Worth deciding together: whether a shape or glyph should carry the state alongside colour, whether the failure
+reason belongs somewhere a keyboard user reaches, and whether the blocked send should announce itself as more
+than a flash.
 
 ## The ingest pool's concurrency is nominal: pypdf is pure Python
 
