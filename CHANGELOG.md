@@ -251,6 +251,11 @@
 
 - Install (GPU): `torch` / `torchvision` / `torchaudio` are pinned as a matched set and installed as CUDA 12.8 (`+cu128`) wheels from a dedicated PyTorch index (`pytorch-cu128` in `pyproject.toml`), so a dependency re-lock can't silently swap in a mismatched-CUDA wheel that fails to load at import. These wheels run on both CUDA 12 and CUDA 13 driver stacks; macOS installs must remove that source first (see the README's CUDA section).
 
+- **the file browser's Find field now searches the way the rest of Raven does.** Typing lowercase matches regardless of case, and typing any capital asks for an exact match — so `readme` finds `README.txt` while `README` finds only the shouted one. Several words are matched independently and in any order, anywhere in the name: `2026 report` finds `annual_report_2026.pdf`. This is the same search Raven-visualizer's search field and the graph viewer have always used.
+
+- **the file browser's type filter can offer a named group of formats** instead of one entry per extension. Raven-librarian's attach dialog opens on *Documents and images*, which is every format it can actually take — 21 extensions, previously reachable only as *All files* with everything else mixed in — and offers *Documents* and *Images* for when you know which you want. Hovering the filter lists the extensions it covers.
+  - The offered sets are asked for at startup rather than written down, so the picker cannot come to disagree with what Raven will accept.
+
 **Fixed**:
 
 *Raven-librarian*
@@ -313,6 +318,8 @@
 - `dpg_markdown` bullet lists and blockquotes now render correctly inside tooltips (and any other initially-hidden container). Previously every bullet glyph in a tooltip stacked at the top-left, because DPG reports `get_item_pos() == (0, 0)` for children of a hidden container; the bullet drawlists are now deferred until their row has been laid out.
 - `deviceinfo.validate`: `device_name` label now reflects the actual running backend. Previously a working MPS / XPU / Vulkan setup was logged as `'CPU'` in the startup "Compute device for ..." line because the labeling block was tied to a CUDA-prefix check it shouldn't have been. Cosmetic — the actual compute device was always correct.
 - every GUI app used to open with four `DeprecationWarning`s about `add_font_range`, a DearPyGui call that stopped doing anything in DPG 2.3, which builds font atlas character ranges by itself. Raven no longer declares ranges, and now requires `dearpygui>=2.3` (it was `>=2.0.0`) so that it doesn't have to. Text rendering is unchanged — a character that came out as a box before still does, and still means the font lacks that glyph.
+- the file browser's type filter now matches extensions regardless of case, so a photo named `SCAN.JPG` appears under a `.jpg` filter instead of vanishing from it.
+- on Linux and macOS, the file browser's shortcuts panel no longer lists raw block devices alongside the real mount points. It scanned `/dev` for anything named `sd…` or `nvme…` and offered each as a destination — on a plain single-disk machine, four extra entries naming the same disk in four ways, none of them a directory, so clicking one could only produce "the selected item is not a directory". Windows was never affected.
 
 ---
 

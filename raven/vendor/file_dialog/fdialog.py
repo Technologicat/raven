@@ -10,12 +10,29 @@ import glob
 import os
 import platform
 import psutil
+import textwrap
 import threading
 import time
+from typing import Iterable, Optional, Union
 
 import dearpygui.dearpygui as dpg
 
+from ...common import utils as common_utils
 from ...common.gui import animation as gui_animation
+
+
+def _normalize_filter(entry: Union[str, tuple[str, Iterable[str]]]) -> tuple[str, Optional[tuple[str, ...]]]:
+    """Normalize one `FileDialog` `filter_list` entry to a `(label, extensions)` pair.
+
+    `extensions` is a tuple of lowercase suffixes, or `None` for the ".*" catch-all. A bare string is its
+    own label and matches that one suffix, which is the original single-extension form.
+    """
+    if isinstance(entry, str):
+        if entry == ".*":
+            return (entry, None)
+        return (entry, (entry.lower(),))
+    label, extensions = entry
+    return (label, tuple(sorted({ext.lower() for ext in extensions})))
 
 
 # Hotkey support
@@ -126,8 +143,22 @@ class FileDialog:
                                     In the GUI, the "Search files" field becomes the filename field. (Searching is still enabled, to help avoid accidental overwriting.)
             default_file_extension: Only used when save_mode is True. If not None, and the user specifies no file extension for the "save as" filename, this extension (e.g. ".png") is automatically added.
             default_path:           str, The default path when file_dialog starts, if it's the string 'cwd', the default path will be the current working directory.
-            filter_list:            [str, ...], A list of different file extensions, for the user to choose in the file type filter. E.g. [".png", ".jpg"].
-            file_filter:            str, The value of the file type filter when the dialog is opened, e.g. ".py".
+            filter_list:            The items offered in the file type filter. Each item is either:
+
+                                        - `str`: a single file extension, which is also its own label, e.g. ".png".
+                                          The special value ".*" matches every file.
+                                        - `(label, extensions)`: a label plus any number of extensions it matches,
+                                          e.g. ("Images", [".png", ".jpg", ".webp"]). The listing shows only the
+                                          label; a tooltip on the filter spells out the extensions.
+
+                                    The pair form exists because a useful extension set is often far too long to
+                                    read as a label — "every image Pillow can open" is 67 extensions — so the
+                                    label has to be written by hand rather than derived.
+
+                                    Matching is by case-insensitive suffix, so an entry like ".tar.gz" works, and
+                                    ".png" matches "PHOTO.PNG".
+            file_filter:            str, The file type filter selected when the dialog is opened. This is an item's
+                                    *label*, e.g. ".py" for a bare-string item or "Images" for a pair.
             callback:               callable, When the OK or Cancel button is pressed, the file dialog will call this, sending the list of selected files. Upon cancel, the list is empty.
 
                                     The argument is a `list` of `str`, each an absolute path. (Not `pathlib.Path`.)
@@ -184,20 +215,52 @@ class FileDialog:
 
         self._initialize_class()
 
+        # File type filter.
+        self._filters = [_normalize_filter(entry) for entry in self.filter_list]
+        self._filter_labels = [label for label, _extensions in self._filters]
+        self._filter_extensions = dict(self._filters)
+        # Every extension any filter knows of. Save mode uses this to decide whether a typed filename already
+        # carries an extension, so it accepts any offered one rather than only the active filter's.
+        self._all_extensions = tuple(sorted({ext
+                                             for _label, extensions in self._filters if extensions is not None
+                                             for ext in extensions}))
+
+        def _set_type_filter(label: str) -> None:
+            self.file_filter = label
+            if label in self._filter_extensions:
+                self._active_extensions = self._filter_extensions[label]
+            else:  # not one of the offered items; read it as a literal extension, as the single-extension form did
+                self._active_extensions = None if label == ".*" else (label.lower(),)
+        _set_type_filter(self.file_filter)
+
+        def _matches_type_filter(file_name: str) -> bool:
+            if self._active_extensions is None:  # ".*"
+                return True
+            file_name = file_name.lower()
+            return any(file_name.endswith(ext) for ext in self._active_extensions)
+
+        def _describe_type_filter(label: str) -> str:
+            extensions = self._filter_extensions.get(label)
+            if extensions is None:
+                return "Every file, whatever its extension."
+            return textwrap.fill(" ".join(extensions), width=72,
+                                 initial_indent="Matches: ", subsequent_indent="         ")
+
         # low-level functions
         def _get_all_drives():
-            all_drives = psutil.disk_partitions()
+            """Mount points to offer in the shortcuts panel, one menu item each.
 
-            drive_list = [drive.mountpoint for drive in all_drives if drive.mountpoint]
+            Mount points, specifically: every entry has to be somewhere `chdir` can go, because that is the
+            only thing clicking one does.
 
-            if os.name == 'posix':
-                for device in os.listdir('/dev'):
-                    if device.startswith("sd") or device.startswith("nvme"):
-                        device_path = f"/dev/{device}"
-                        if device_path not in drive_list:
-                            drive_list.append(device_path)
-
-            return drive_list
+            A POSIX-only branch here used to also scan /dev for names starting with "sd" or "nvme" and append
+            the raw device paths. It was skipped on Windows (`os.name == 'posix'`), which is why the panel
+            looked right there and only there. On this machine it added four entries — the two partitions
+            already listed by their mount points, plus the whole disk and the controller — and a block device
+            is not a directory, so each could only raise `NotADirectoryError` into the message box. Its
+            dedup test could never fire either: it compared /dev paths against a list of mount points.
+            """
+            return [drive.mountpoint for drive in psutil.disk_partitions() if drive.mountpoint]
 
         def delete_table():
             for child in dpg.get_item_children(f"explorer_{self.instance_tag}", 1):
@@ -413,7 +476,7 @@ class FileDialog:
         def _makefile(item, callback, parent=f"explorer_{self.instance_tag}"):
             # logger.debug(f"_makefile: instance '{self.tag}' ({self.instance_tag}), making table entry for file '{item}' with callback {callback}")  # don't keep enabled, to avoid leaking user private data to debug log
 
-            if self.file_filter == ".*" or item.endswith(self.file_filter):
+            if _matches_type_filter(item):
                 file_name = os.path.basename(item)
                 full_path = os.path.join(os.getcwd(), file_name)
                 self.shown_items.append(full_path)
@@ -498,11 +561,20 @@ class FileDialog:
                 dpg.set_value(f"ex_search_{self.instance_tag}", "")
                 chdir("..")
 
+        def set_type_filter(label):
+            """Select the file type filter by its label, exactly as picking it from the combo would.
+
+            `label` is one of the labels derived from `filter_list` — a bare extension for a string entry,
+            or the given label for a `(label, extensions)` pair.
+            """
+            _set_type_filter(label)
+            dpg.set_value(self.combo_file_filter, self.file_filter)  # keep the GUI in sync when called programmatically
+            dpg.set_value(self.text_file_filter_extensions, _describe_type_filter(self.file_filter))
+            reset_dir(default_path=os.getcwd())
+        self.set_type_filter = set_type_filter  # needs to be accessible from the outside; uses closure data from this scope, so shouldn't be injected as an instance method (on the class); inject as a regular function *on the instance*.
+
         def filter_combo_selector(sender, app_data):
-            filter_file = dpg.get_value(sender)
-            self.file_filter = filter_file
-            cwd = os.getcwd()
-            reset_dir(default_path=cwd)
+            set_type_filter(dpg.get_value(sender))
 
         def chdir(path):
             try:
@@ -531,6 +603,10 @@ class FileDialog:
                 dirs = list(sorted(dirs))
                 files = list(sorted(files))
 
+                # Compiled once per rebuild rather than per entry: on a directory of thousands, the split is
+                # the part worth hoisting out of the loop.
+                matches_name_filter = common_utils.make_search_matcher(file_name_filter or "")
+
                 # 'special directory' that sends back to the previous directory
                 with dpg.table_row(parent=f"explorer_{self.instance_tag}"):
                     with dpg.group(horizontal=True):
@@ -541,20 +617,14 @@ class FileDialog:
                 # dir list
                 for _dir in dirs:
                     if not _is_hidden(_dir) or self.show_hidden_files:
-                        if file_name_filter:
-                            if file_name_filter in _dir:
-                                _makedir(_dir, open_file)
-                        else:
+                        if matches_name_filter(_dir):  # noqa: SIM102 -- two separate concerns: is it visible at all, and does the Find query select it
                             _makedir(_dir, open_file)
 
                 # file list
                 if not self.dirs_only:
                     for file in files:
                         if (not _is_hidden(file)) or self.show_hidden_files:
-                            if file_name_filter:
-                                if file_name_filter in file:
-                                    _makefile(file, open_file)
-                            else:
+                            if matches_name_filter(file):  # noqa: SIM102 -- two separate concerns: is it visible at all, and does the Find query select it
                                 _makefile(file, open_file)
 
                 reapply_latest_sort()  # apply the latest sort criterion (if any) explicitly (the sort callback doesn't get called automatically when we rebuild the table)
@@ -770,8 +840,10 @@ class FileDialog:
             with dpg.group(horizontal=True):
                 dpg.add_spacer(width=480)
                 dpg.add_text('File type filter')
-                dpg.add_combo(items=self.filter_list,
-                              callback=filter_combo_selector, default_value=self.file_filter, width=-1)
+                self.combo_file_filter = dpg.add_combo(items=self._filter_labels,
+                                                       callback=filter_combo_selector, default_value=self.file_filter, width=-1)
+                with dpg.tooltip(self.combo_file_filter):
+                    self.text_file_filter_extensions = dpg.add_text(_describe_type_filter(self.file_filter))
 
             with dpg.group(horizontal=True):
                 self.spacer_notification = dpg.add_spacer(width=int(self.width * 0.5))
@@ -891,7 +963,7 @@ class FileDialog:
         if self.save_mode and self.default_file_extension is not None:
             def ensure_ext(path):
                 path_lower = path.lower()
-                if not any(path_lower.endswith(ext.lower()) for ext in self.filter_list):  # any valid ext is fine, but if none match, add the default ext.
+                if not any(path_lower.endswith(ext) for ext in self._all_extensions):  # any valid ext is fine, but if none match, add the default ext.
                     logger.debug(f"ok: instance '{self.tag}' ({self.instance_tag}), automatically adding default file extension '{self.default_file_extension}' to '{path}'.")
                     return path + self.default_file_extension
                 return path

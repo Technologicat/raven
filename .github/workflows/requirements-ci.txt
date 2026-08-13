@@ -42,6 +42,9 @@ mistletoe==1.6.0
 filelock==3.31.0  # common.datastorelock; keeps two frontends off one chat datastore
 odfpy==1.4.1
 Pillow==12.3.0
+# Imported at module level by the adopted `file_dialog`, so `raven/vendor/file_dialog/tests/` needs it to
+# collect at all — the tests themselves are pure-function and touch nothing psutil provides.
+psutil==7.2.2
 pypdf==6.14.2
 pytest==9.1.1
 pytest-cov==7.1.0

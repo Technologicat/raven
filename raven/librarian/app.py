@@ -748,15 +748,23 @@ def show_attach_dialog() -> None:
                                duration=gui_config.acknowledgment_duration)
     _filedialog_attach.show_file_dialog()
 
-# The attach dialog manages its own window (created outside any window context). `.*` is the default filter so
-# every supported type shows at once — the widget's type filter is single-extension, with no grouped "all images"
-# / "all documents" option yet (see TODO_DEFERRED).
+# The attach dialog manages its own window (created outside any window context).
+#
+# The filters are grouped rather than one item per extension: the default shows everything that can actually be
+# attached and nothing else, and the two narrower items are there for when you know which kind you are after.
+# Both sets are asked for at startup rather than written out, so the picker cannot drift from what the ingester
+# and the image store will accept.
+_attachable_image_extensions = imagestore.supported_extensions()
+_attachable_document_extensions = docextract.supported_extensions()
 _filedialog_attach = FileDialog(title="Attach file(s) [Ctrl+click to multi-select]",
                                 tag="attach_file_dialog",
                                 callback=_attach_callback,
                                 modal=True,
-                                filter_list=[".*", *imagestore.supported_extensions(), *docextract.supported_extensions()],
-                                file_filter=".*",
+                                filter_list=[("Documents and images", (*_attachable_document_extensions, *_attachable_image_extensions)),
+                                             ("Documents", _attachable_document_extensions),
+                                             ("Images", _attachable_image_extensions),
+                                             ".*"],
+                                file_filter="Documents and images",
                                 multi_selection=True,
                                 allow_drag=False,
                                 default_path=os.path.expanduser("~"))
