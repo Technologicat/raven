@@ -368,6 +368,17 @@ Missing are the matching itself (fuzzy title/author against filenames and extrac
 imperfect and must say so), OCR for the scans, and a review surface — a match proposed from a scan of a 1970s
 report should be confirmed by a human before it rewrites a bibliography.
 
+**The match runs both ways, and both directions have content.** Entries with no document on disk (a
+19th-century paper cited from a later source, never obtained) and documents in no bibliography are each a real
+finding, and neither is a superset of the other.
+
+**But "entry without a document" is not automatically a gap to fill**, which is the wrinkle that stops this
+being a simple set difference. A bibliography accumulates entries that were never read: references added on a
+reviewer's suggestion, cited because the review asked for them rather than because they bear on the argument.
+A report that lists those beside genuinely missing sources — the ones the author looked for and could not get
+— buries the second kind in the first. Worth a distinction in the output even if the tool cannot always tell
+which is which; "cited but never held" is at least a category the user can sort into.
+
 Worth deciding early: whether this writes back into the user's `.bib` at all, or only ever emits a *proposed*
 merge for them to apply. Rewriting a bibliography in place is the kind of operation that has to be right the
 first time.
@@ -1637,6 +1648,32 @@ drag-and-drop. That stopped being true on 2026-08-10**, when `raven.common.gui.f
 GUI apps. The item stands on its own merits — a filename-only picker is a poor fit for choosing images, and a
 drop only helps when the file manager is already open on the right folder — but it is one justification
 lighter than it was.
+
+**The widget exists as of 2026-08-13, and Cherrypick is already on it.** `raven.common.gui.thumbnailgrid`
+holds the layout, tiles, placeholder pool, selection, hit testing and navigation; the decoder is
+`raven.common.image.thumbnails.ThumbnailPipeline`; `raven.cherrypick.grid.TriageGrid` is the worked example
+of extending it (two hooks, `draw_underlay` and `draw_overlay`, plus `border_color_for`). Filtering is the
+owner's job — the grid takes a list of visible indices, which is what lets a *file* dialog drive it.
+
+**What remains is the dialog integration, and its design is settled** (Juha, 2026-08-13):
+
+- **Presentation: a grid view mode, toggled**, replacing the table in the same slot rather than growing the
+  rows. Taller uniform rows were the alternative and were rejected; a preview pane does not let you pick by
+  looking across many files.
+- **When: auto-on whenever the selected type filter is image-typed, with a manual toggle that overrides in
+  either direction.** So it costs vertical space only when the user is actually after pictures.
+- **The grid must list directories too**, as folder tiles before the image tiles, mirroring the table's
+  order. Otherwise switching to grid mode removes the only way to navigate, which is the obvious version of
+  this feature and is wrong.
+- **Somebody has to tick it.** The grid needs `update()` every frame and the pipeline needs polling, and
+  `FileDialog` is a widget inside apps that own their render loops. Rather than requiring every host app to
+  call something, the dialog should run its own ticker while the grid is visible — DPG permits widget work
+  from any thread, and `visible_on_screen()` reads last-frame state, which is safe to read from one.
+- **Lazy decode is the whole point**: ask `grid.visible_on_screen()` for the tiles actually on screen and
+  decode only those, restarting the pipeline when that set changes materially rather than every frame.
+
+Left open: which torch device the dialog decodes on (Cherrypick resolves one at app level; the dialog has no
+such config, so it probably wants an optional constructor parameter with a lazy default).
 
 **Follow Cherrypick's image-grid pattern, deliberately** (Juha, 2026-08-13): thumbnails should *feel* the same
 across the two apps. That means the VHS-noise placeholder standing in for "not loaded yet"
