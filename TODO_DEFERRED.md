@@ -594,6 +594,22 @@ Points still to settle when writing it:
 
 Raised by Juha twice — 2026-07-30, after noticing `dpg-notes.md` is not auto-loaded and so is unlikely to be
 seen at the moment it is needed, and again 2026-07-31. Filed as two separate items and merged 2026-08-03.
+Raised a third time 2026-08-13, on the grounds that the file is collecting lore that gets re-derived in a
+fresh session. The file was 644 lines when this was filed and is 761 now, so that reading is right about the
+direction.
+
+**A data point from 2026-08-13, worth having stated precisely because it cuts a finer line than the argument
+above.** A session spent entirely in DPG code (the `FileDialog` work) never read `dpg-notes.md` front to
+back — it grepped two sections and edited three — so the `CLAUDE.md` instruction did not fire as written,
+which is evidence for the weak-trigger claim. But the two DPG facts that went wrong in that session were
+**not in the notes at all**: that `set_value` fires no callback, and that `configure_item(default_value=...)`
+does change the live value. Reading the file would not have helped, and one of the two was a *confabulated*
+mechanism written into a code comment, which no amount of retrieval prevents.
+
+So today argues for the skill only on the trigger, and argues at least as strongly for something the skill
+cannot fix: **measure a DPG claim before writing it down.** Both facts took one short probe each. Whatever
+the skill ends up saying, that instruction belongs in it — a router that only points at existing sections
+would not have caught either failure, since neither section existed.
 
 ## The 8/3 pass: bare DPG margins should name themselves
 
@@ -1632,7 +1648,18 @@ list here is short and labelled.
 
 This means bare Up / Down mean different things depending on what holds focus — the listing cursor from the
 find field, the filter choices from the combo — which is the idiom's normal behaviour and is why the handler
-dispatches on the focused item rather than on a mode flag. Esc or Ctrl+F returns to the find field.
+dispatches on the focused item rather than on a mode flag.
+
+**Esc means "give me back the find field" wherever focus has been parked, and cancels the dialog only when
+it is already there.** One rule covering the path field and the combo alike, and it is what keeps Esc from
+being a mode-dependent surprise.
+
+What does *not* generalize is restoring on the way out. The path field holds a **draft** — typing there does
+nothing until Enter — so Esc discards it and puts the current directory back. Combo cycling **applies on
+every keypress**, and watching the listing re-filter as you cycle is the useful part of it; there is no
+uncommitted state to discard, and reverting would undo a change the user just watched happen and kept
+cycling past. So: same focus rule, no restore. Worth stating because "same rule for both" is the natural
+assumption and is half right.
 
 **Ctrl+Enter rather than a double-Enter in `dirs_only` mode.** A timing window penalizes exactly the users
 this item exists to serve. The existing overwrite confirmation survives that objection because it is a
