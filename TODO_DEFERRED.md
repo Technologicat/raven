@@ -555,61 +555,21 @@ is confirmed stable. Note the 2026-08-11 follow-tail fix went *around* `self.sta
 the construction-time commit is untouched and this is still exactly as filed. Raised by Juha, who asked whether the design was dangerous; agreed worth fixing
 (2026-08-03).
 
-## Make the DPG reference a skill, so it fires when it is needed
+## Does `CLAUDE.md`'s DPG pitfall index still earn its place?
 
-*Cluster: ? · Cost: ? · Gate: 0.2.9 · Filed: 2026-08-03*
+*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-08-13*
 
-`CLAUDE.md` says "**Before editing any DPG code, read `dpg-notes.md` first**" and defines what counts as DPG
-code. That is about as strong as prose gets, and it still depends on the agent noticing and obeying a line —
-a weak trigger for 644 lines of hard-won lore that matter on exactly the tasks where getting it wrong is
-expensive. The failure mode is silent: an agent that edits a render-loop callback without having read the
-notes does not notice it skipped anything, and the pitfall lands later as a hang or a segfault.
+The `dpg` skill shipped 2026-08-13 (`.claude/skills/dpg/`), closing "Make the DPG reference a skill". One
+question from that item was deliberately left open, because it cannot be answered before the skill has been
+used: `CLAUDE.md` carries a numbered index of the eight worst DPG pitfalls, and that index is either a safety
+net for when the skill does not fire, or duplicated attention cost in an always-loaded file.
 
-A **project-scoped skill** in `raven/.claude/skills/` fixes the trigger mechanically: skills are surfaced by
-description match, so "editing DPG code" pulls it in without anyone remembering to. Project-scoped rather
-than fleet-wide (`~/.claude/skills/`) because the notes cite Raven modules throughout, and a repo-local skill
-is version-controlled with the code it documents — so it travels between machines and cannot drift from the
-tree it describes. If `raven.common` is ever extracted as `corvid`, promoting it is a move, not a rewrite.
+**Decide from observation, not from argument.** The evidence to collect is simply whether the skill fires on
+DPG tasks without being asked for. If it does, cut the index to a single pointer. If it does not, the index is
+carrying the load and the skill's description needs widening instead.
 
-**The skill body must be a router, not a copy.** A short index saying which section of `dpg-notes.md` answers
-which question, and nothing else. Duplicating the content is how one of the two copies goes stale, and the
-human-facing file has to stay authoritative — that is what a person reads in an IDE, where no skill exists.
-
-Explicitly *not* an `@include` of `dpg-notes.md` in `CLAUDE.md`: that loads all 644 lines into every
-conversation, including the ones about BibTeX parsing. See the sibling item "Audit and slim down project
-CLAUDE.md" — Raven's has not been through an optimization pass yet (the global one has, and has nothing left
-to trim), so adding to it is the wrong direction.
-
-Points still to settle when writing it:
-
-- **The trigger.** "DPG code" is already defined in `CLAUDE.md` — anything importing `dearpygui`, the render
-  loop, key/mouse handlers, texture or `split_frame` work. 36 files in `raven/` import `dearpygui`, so the
-  match is broad enough to be worth automating and narrow enough not to fire on everything.
-- **Where the routing boundary falls.** Likely the skill carries the pitfalls and the decision rules (the
-  parts that must be in mind *before* writing a line) and routes to the notes for the mechanics — but that is
-  a guess to test against the router principle above, not a conclusion.
-- **Whether the `CLAUDE.md` pitfall index survives.** If the skill fires reliably, the seven-item index is
-  duplicated attention-cost. If it does not, the index is the safety net. Decide after seeing the skill work,
-  not before.
-
-Raised by Juha twice — 2026-07-30, after noticing `dpg-notes.md` is not auto-loaded and so is unlikely to be
-seen at the moment it is needed, and again 2026-07-31. Filed as two separate items and merged 2026-08-03.
-Raised a third time 2026-08-13, on the grounds that the file is collecting lore that gets re-derived in a
-fresh session. The file was 644 lines when this was filed and is 761 now, so that reading is right about the
-direction.
-
-**A data point from 2026-08-13, worth having stated precisely because it cuts a finer line than the argument
-above.** A session spent entirely in DPG code (the `FileDialog` work) never read `dpg-notes.md` front to
-back — it grepped two sections and edited three — so the `CLAUDE.md` instruction did not fire as written,
-which is evidence for the weak-trigger claim. But the two DPG facts that went wrong in that session were
-**not in the notes at all**: that `set_value` fires no callback, and that `configure_item(default_value=...)`
-does change the live value. Reading the file would not have helped, and one of the two was a *confabulated*
-mechanism written into a code comment, which no amount of retrieval prevents.
-
-So today argues for the skill only on the trigger, and argues at least as strongly for something the skill
-cannot fix: **measure a DPG claim before writing it down.** Both facts took one short probe each. Whatever
-the skill ends up saying, that instruction belongs in it — a router that only points at existing sections
-would not have caught either failure, since neither section existed.
+There is no measurement yet either way — the premise that a description-matched skill fires more reliably than
+an always-in-context instruction is the whole bet, and it is untested.
 
 ## The 8/3 pass: bare DPG margins should name themselves
 

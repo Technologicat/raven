@@ -26,3 +26,8 @@ raven/avatar/assets/characters/00_workfiles/parody/
 
 # Session logs written by the apps' --log CLI option.
 *.log
+
+# Claude Code's per-machine permission grants: personal, and full of absolute local paths.
+# Deliberately narrow rather than ignoring `.claude/` wholesale — the skills beside it are
+# version-controlled on purpose, so they travel with the code they document.
+.claude/settings.local.json
