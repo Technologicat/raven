@@ -1585,40 +1585,96 @@ by default, Raven supports keyboard operation wherever reasonably possible, and 
 has not. The bar to clear is bash's filename completion, or a file manager with find-as-you-type and arrow
 navigation.
 
-What the design has to provide (Juha, 2026-08-13):
+### The design, settled 2026-08-13 (Juha and Claude)
 
-- **One focus target in the ordinary case** — the find field, which doubles as the filename field in save
-  mode. Being a single-line entry, it leaves *up and down* free for the listing; left and right stay with the
-  text caret, so horizontal navigation is not available to the listing and the design must not want it.
-- **Completion in the field**, bash-style, extending to the unique part — without losing the existing
-  fragment (substring) search, and without ever silently rewriting a name the user typed. The conflict
-  between the two is the open design question: a substring query has no prefix to extend, and in save mode
-  a completion that fires implicitly would prevent naming a file `readm` in a directory containing
-  `readme.txt`.
-- **Arrow up/down and Page up/down through the listing**, page keys moving *most of* a visible page as in the
-  Librarian chat log and the Visualizer info panel. Smooth scrolling optional, as a constructor parameter, so
-  each app can pass its own config setting.
-- **Ctrl+Space toggles the current row's selection** in multi-selection mode. Single-selection mode needs no
-  equivalent: Enter accepts and Esc cancels.
-- **Enter on a folder descends into it**, in every mode that is not "open folder".
-  - Up-one-level and return-to-default-directory need their own keys. Descending into the `..` row must keep
-    working — it falls out of the design — but it is clumsy enough that it cannot be the only way up.
-  - **"Open folder" (`dirs_only`) mode needs a way to descend as well as accept**, and those are the same
-    gesture today. Juha's first sketch was single Enter to descend and a second Enter to accept, reusing the
-    confirmation-flash pattern that save mode already uses for overwrite. Alternatives welcome — see the
-    note on timing-based chords below.
-- **Save mode keeps its double-Enter overwrite confirmation** (already implemented, with the red flash and
-  the non-intrusive warning text).
+Agreed in full; what remains is building it and the live checks at the end.
 
-**Timing-based chords are a poor fit for this item in particular.** A double-press within a fixed window
-penalizes exactly the motor-impaired users the work is meant to serve. The existing overwrite confirmation
-survives that objection because it is a *confirmation* — miss the window and you press again — whereas a
-double-Enter carrying a *primary* action fails by doing the other thing, which in `dirs_only` mode means
-descending when you meant to accept, and losing your place. Prefer a modifier over a timer where the action
-is primary.
+**Focus lives in the find field**, which doubles as the filename field in save mode. Being a single-line
+entry it leaves *up and down* free for the listing; left and right stay with the text caret, so the design
+must not want horizontal navigation, and does not. Nothing Tab-cycles. Two other widgets are reachable, each
+by explicit key rather than by a focus order.
 
-**Out of scope today, worth recording**: an audio cue for the overwrite warning, and for whatever other
-warnings the dialog grows. Visual-only feedback is a gap for the same audience this item is about.
+**The governing rule for Enter: *Enter goes as deep as it can; Ctrl+Enter stops here.*** Uniform across all
+modes. In open-file mode Enter on a file has nothing deeper, so it accepts — which is why the rule reads as
+one sentence rather than a table of special cases.
+
+| key | action |
+|---|---|
+| Up / Down | move the cursor one row |
+| Page Up / Page Down | move *most of* a visible page, as in the Librarian chat log and the Visualizer info panel |
+| Home / End | first / last row |
+| Enter | descend into the cursor directory; on a file (open mode) accept it; on `..` go up |
+| Ctrl+Enter | commit here — same as the OK button. In `dirs_only`, accepts the cursor directory |
+| Esc | cancel |
+| Ctrl+Space | toggle the cursor row's selection (multi-selection mode only) |
+| Alt+Up | up one level |
+| Ctrl+Up | up one level, one-handed alias — see below |
+| Ctrl+Home | back to the default directory (exists) |
+| F5 | refresh (exists) |
+| Ctrl+F | focus the find field (exists) |
+| Ctrl+L | focus the path field; Enter navigates, Esc returns to find |
+| Ctrl+1 … Ctrl+9 | select the Nth offered type filter |
+| Tab | complete in the field — see below |
+
+**Why Ctrl+Up exists alongside the standard Alt+Up.** On a Nordic layout Alt sits only to the *left* of
+space — the right-hand key is AltGr, which is a different key — so Alt+Up needs two hands. Ctrl is mirrored
+on both sides, so right Ctrl and the arrow cluster are both under the right hand. Alt+Up was the only
+two-handed chord in the table: Ctrl+Enter, Ctrl+Home and Ctrl+End already fall under the right hand, and
+Ctrl+F / Ctrl+L / Ctrl+Space / Ctrl+1…9 are all reachable with the left alone. One alias fixes the set.
+
+**Ctrl+Enter rather than a double-Enter in `dirs_only` mode.** A timing window penalizes exactly the users
+this item exists to serve. The existing overwrite confirmation survives that objection because it is a
+*confirmation* — press #1 is inert, so missing the window merely re-arms it — whereas in `dirs_only` press #1
+would *descend*, and a slow second press descends again rather than accepting, losing your place in the tree.
+Deferring the descent by the confirm window would restore the benign-failure property, at the cost of lag on
+the most common keystroke. Ctrl+Enter costs neither.
+
+**Tab completion, and how it coexists with the fragment search.** One rule with a fallback:
+
+> Among the shown items, take those whose name *starts with* the field content. If none do, take **all**
+> shown items. Extend the field to that group's longest common prefix.
+
+Read as a sentence: Tab answers *"what do the things I am looking at have in common?"*, and prefix-matching
+is a refinement for when the field happens to be a prefix. With `readme.txt, readme.md, headers.h`, `re`
+gives `readme.` by prefix; `eadm` gives `readme.` through the fallback, the fragment search having already
+narrowed it; `ead` gives nothing and flashes, since `headers.h` is still shown. Two riders, both bash's:
+complete fully when unique, and append the separator when the unique result is a directory — which gives
+Tab-descent for free.
+
+**Nothing but Tab writes the field**, which is what keeps save mode honest: `ok()` already takes the field
+verbatim, so `readm` saves as `readm` with `readme.txt` sitting right there. Implicit completion is the only
+thing that could break that, so there is none.
+
+**In save mode only**, arrow navigation also fills the field from the cursor row — *unless the user has typed
+since the last programmatic write*. One boolean, cleared on any character, set when we write. Browse and the
+name follows you; type one character and the field is yours. The mechanical catch: those writes must **not**
+re-run the filter, or the listing collapses to one row and the cursor has nowhere left to move. The existing
+click path calls `_update_search()` explicitly after `set_value`, which is right for a click and wrong for
+arrows.
+
+**Cursor and selection are different things** once Ctrl+Space exists, so they need different looks. Selection
+keeps the selectable's `True` highlight; the cursor gets a bound theme painting `mvThemeCol_HeaderHovered`,
+which reads as "hovered" — the right affordance for a cursor. The cursor is an index into `shown_items`,
+re-anchored **by path** after every rebuild and clamped if that path is gone; every keystroke in the find
+field rebuilds the listing, so this is the common case rather than an edge one.
+
+**Constructor parameters**: `smooth_scrolling` and `smooth_scrolling_step_parameter`, so each app passes its
+own config setting (Librarian already has both).
+
+**Save mode keeps its double-Enter overwrite confirmation**, unchanged.
+
+### Three things to verify live before trusting the table
+
+- **Page Up / Page Down arrive as `517` / `518`**, not `mvKey_Prior` / `mvKey_Next` — this dialog is exactly
+  where that trap bites. Compare against the literals.
+- **Whether Ctrl+Enter, Alt+Up and Ctrl+Up reach a DPG handler while a single-line `InputText` holds the
+  caret.** Unverified. The window manager may eat Alt; Ctrl+Up is the fallback for that too.
+- **Whether `dpg.set_value` fires the widget's callback.** The existing click path calls `_update_search()`
+  explicitly right after a `set_value`, which implies it does not — but that is an inference from code, not a
+  measurement, and the arrow-fill rule above depends on it.
+
+**Out of scope, worth recording**: an audio cue for the overwrite warning, and for whatever other warnings the
+dialog grows. Visual-only feedback is a gap for the same audience this item is about.
 
 Discovered during the FileDialog UX work (2026-08-13, raised by Juha).
 
