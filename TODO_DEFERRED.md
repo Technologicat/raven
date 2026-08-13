@@ -377,6 +377,45 @@ front-ends, or two separate things); whether a skill can restrict itself to a co
 declining to run bundled scripts makes Raven's implementation non-conforming or merely a subset — worth
 checking the specification rather than assuming.
 
+## The `--run-gui` group segfaults if a second module maps a context
+
+*Cluster: testing · Cost: ? · Gate: next time a `gui` test is written · Filed: 2026-08-13*
+
+`pytest --run-gui` passes today, and stops passing the moment anyone adds a second `gui`-marked module that
+maps a viewport and renders frames. Not a hypothetical: writing one to pin DPG's row-visibility semantics
+segfaulted the group 3/3, and the test was dropped rather than shipped. What survives of it is
+`investigations/filedialog-performance/probe_row_visibility.py`, which answers the same question outside
+pytest, and the finding itself in `dpg-notes.md` under "To find which rows are on screen".
+
+**What was measured (2026-08-13).**
+
+- `test_focus_semantics.py` runs first by alphabetical collection order, and its `mapped_viewport` fixture
+  creates, shows, renders and destroys a context **once per test**, five times.
+- A module added after it crashes the run: **3/3** when it builds a table, **1/3** when it builds 400 plain
+  buttons instead. So a table makes it near-certain rather than causing it.
+- Order is what decides: new module *before* `test_focus_semantics` passes (11 tests), after it dies. Same
+  files, same count.
+- Reducing the new module from six contexts to one module-scoped context did **not** help.
+- `test_filedrop`'s `gui` test is the only other one, and it is safe on two counts — it sorts first, and it
+  renders no frames.
+
+**What was ruled out**, all clean at 3/3 in a bare script outside pytest: five focus-like cycles then a
+table cycle; six table cycles; twelve plain cycles; both orders of focus-like and table. So the crash needs
+the pytest process and does not reproduce from the widget recipe alone — which is where the investigation
+stopped.
+
+**Why it matters even though the suite is green.** The green depends on a filename sorting before another
+filename. Nobody writing the next `gui` test will know that, and what they will get is a segfault with no
+traceback, in a group that passed yesterday.
+
+**Routes worth weighing**, none investigated: run each `gui` module in its own process (`pytest-forked`, or a
+subprocess helper the test asserts against, which also sidesteps the focus-stealing problem); or make
+`test_focus_semantics` share one context across its five tests, since it is the module doing the repeated
+cycling.
+
+Related: `dpg-notes.md`, "Context recreation is not reliably safe once real widgets have rendered", which is
+the same fault seen from outside pytest.
+
 ## Attaching a document freezes the GUI while its text is extracted
 
 *Cluster: librarian-attachments · Cost: M · Gate: next · Filed: 2026-08-13*
@@ -1603,10 +1642,13 @@ The dialog now logs those phases at DEBUG (`list / delete / build / sort`, and `
 wait), so the same measurement is one `--log-level DEBUG` run away when this work needs a before and after.
 
 Note the render side is already handled: the table clips to the visible rows, so off-screen thumbnails cost
-no frame time once built. The open question is how to *ask* which rows are on screen, so the background job
-knows what to decode first. `dpg.is_item_visible` on a row is the obvious candidate — it reports what was
-rendered in the last frame, which under a clipper should be exactly the on-screen set — but that is a guess
-and wants one probe before any design leans on it.
+no frame time once built.
+
+**The "which rows are on screen" question is answered** (2026-08-13): call `dpg.is_item_visible` on a *cell*,
+never on the `table_row` — the row reports every row when the table is unclipped, and the on-screen run plus
+row 0 when it is clipped. The cell gives a clean contiguous run either way, so the lazy fill does not depend
+on the clipper being on. Details and the numbers in `dpg-notes.md` → "To find which rows are on screen, ask
+a cell — never the row"; reproduction in `investigations/filedialog-performance/probe_row_visibility.py`.
 
 Whether thumbnails appear only under an image-typed filter is now a live choice rather than the obvious one:
 grouped filters landed 2026-08-13, so "the filter is image-typed" is a real predicate — but keying off the

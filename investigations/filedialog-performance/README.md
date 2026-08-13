@@ -145,3 +145,21 @@ application subsystem. It marks where the boundary is, not an exception to it.
 | `bench_render.py` | What does a listing cost per rendered frame, with and without the table clipper? Takes `clipper` or `noclipper`; needs a mapped window, so it takes keyboard focus while it runs. |
 | `probe_minimal.py` | Does bare context recreation survive rendered frames? Takes `frames` or `noframes`. |
 | `probe_bisect.py` | Which ingredient turns a `FileDialog` context cycle into a segfault? (Answer: none in isolation.) Takes a variant name, or runs all of them one subprocess each. |
+| `probe_row_visibility.py` | Which rows of a scrolled table does DPG report as visible, and does the answer depend on the clipper? Takes `clipper` or `noclipper`; needs a mapped window. |
+
+## Which rows are on screen — the primitive the thumbnails need
+
+Thumbnails can only be decoded for rows the user can see, so something must answer which those are. Asked
+directly (`probe_row_visibility.py`, 400 rows, at top / middle / bottom):
+
+**`dpg.is_item_visible` works on a *cell*, and not on the row containing it.** The cell gives a contiguous
+on-screen run at every scroll position, with the clipper on or off. The row gives every row when unclipped,
+and the on-screen run plus row 0 when clipped — wrong in two different ways, the clipped one being the more
+dangerous because it nearly works.
+
+That the predicate is clipper-independent is the useful part: lazily filling a table and clipping it are
+separate decisions, and neither needs the other.
+
+Written up in `dpg-notes.md` under "To find which rows are on screen, ask a cell — never the row". The test
+that would have pinned it is *not* in the suite: adding a second viewport-mapping module to the `gui` group
+segfaults it, which is its own deferred item.

@@ -777,7 +777,8 @@ Consequences, which are small:
 
 - **An app never meets this**, holding one context for its whole life.
 - **The default test suite does not either**, using one module-scoped context per module and never rendering a frame (see the ceiling above).
-- **The `--run-gui` group does do this cycle, and has not crashed.** `test_focus_semantics.py`'s `mapped_viewport` fixture is *function*-scoped: it creates a context, shows the viewport, renders frames and destroys the context once per test, five times over. That is the same shape as the clean 8/8 baseline — plain widgets, no application subsystem — so the group is evidence for where the boundary sits rather than an exception to it. Adding a heavier subsystem to a `gui`-marked test is what would move it across, and a nondeterministic segfault is a poor thing to discover from CI.
+- **The `--run-gui` group does do this cycle, and is one module away from dying of it.** `test_focus_semantics.py`'s `mapped_viewport` fixture is *function*-scoped: a context created, shown, rendered and destroyed once per test, five times over. Adding any further module that maps a context and renders frames segfaults the group — measured 2026-08-13 at 3/3 with a table in it, 1/3 without, and *only* when `test_focus_semantics` runs first, which alphabetical collection order decides. The group passes today because the one other `gui` test (`test_filedrop`) sorts before it and renders no frames. See the deferred item "The `--run-gui` group segfaults if a second module maps a context".
+  - The same shapes do **not** crash outside pytest: five focus-like cycles then a table-building cycle, six table cycles, twelve plain cycles, all clean over three runs each. So something about the pytest process is part of it, and an earlier guess here — that a *heavier subsystem* would be what tipped it — was wrong; 400 plain buttons did it too.
 - **A benchmark or probe must use one process per context.** Run configurations as subprocesses and compare their printed output. This is cheap, and it is the only reason the constraint matters at all.
 
 ## Introspection gaps to expect
@@ -807,3 +808,23 @@ At 2500 rows the clipped table costs what an *empty* one costs: the row count st
 **Its one requirement is uniform row height**, which is why it cannot simply be switched on everywhere: a table whose rows vary in height needs each cell created with an explicit matching height first. The file dialog qualifies because every cell already passes `height=self.selec_height`.
 
 Worth knowing what this does *not* fix: building the rows still costs what it costs (~60 µs/row there, so ~0.19 s for 2500), and deleting them likewise. The clipper is about the frames after the build, not the build.
+
+## To find which rows are on screen, ask a cell — never the row
+
+Any "fill this in only for what the user can see" feature needs to know which rows are visible. `dpg.is_item_visible` is the right call and the `table_row` is the wrong thing to call it on, which is the trap: the row is what the clipper is clipping, so it is what a reader reaches for.
+
+Measured 2026-08-13 on a 400-row scrolled table (`investigations/filedialog-performance/probe_row_visibility.py`), asking at the top, the middle and the bottom:
+
+| asked of | `clipper=True` | `clipper=False` |
+|---|---|---|
+| the `table_row` | the on-screen run **plus row 0**, at every scroll position | **every row**, always |
+| a widget *inside* the row | the on-screen run, contiguous, correct | the on-screen run, contiguous, correct |
+
+So the cell answers the question and the row does not, under either configuration. Two consequences worth having:
+
+- **The predicate does not depend on the clipper.** A table can be lazily filled whether or not it clips; the clipper is a separate decision about frame cost.
+- **The row's answer is wrong in two different ways**, so neither is a usable approximation. Unclipped it is uselessly permissive; clipped it is nearly right, which is worse — a lazy-fill built on it would work in casual testing and decode one extra row forever.
+
+Row 0's appearance in the clipped answer is unexplained; it was not chased, because the cell-side answer is what the feature needs.
+
+**Rendered frames are required before any of this means anything** — visibility is a property of the last frame drawn, so it is unavailable headless (see "Testing DPG code"), and unavailable for a window shown microseconds ago.
