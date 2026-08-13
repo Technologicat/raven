@@ -215,8 +215,9 @@ including the whole tool loop, *round* = one iteration of the agent loop within 
 
 **Not gating this release, recorded so they are not mistaken for gates:**
 
-- The **8/3 DPG margin audit** and the **`dpg-notes.md` skill**. Both in `TODO_DEFERRED.md`; both small; both
-  fair game whenever there is a gap, but neither is user-visible.
+- The **8/3 DPG margin audit**, still in `TODO_DEFERRED.md`: small, fair game whenever there is a gap, and not
+  user-visible. Its companion here, the **`dpg-notes.md` skill**, shipped 2026-08-13 as
+  `.claude/skills/dpg/` — a router into the notes rather than a copy of them, with a checker beside it.
 - **Visualizer defects surfaced by the two studies now using it.** Those studies are live dogfooding of a
   component with zero tests, so they will find things. They go to `TODO_DEFERRED.md`. 0.2.8 is a Librarian
   release, and a Visualizer bug is not an argument for delaying it.
