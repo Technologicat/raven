@@ -35,6 +35,13 @@ one-line probes, and only the first survived.
 If a probe captures an invariant worth keeping, promote it to a test rather than leaving it in `/tmp` — see
 `raven/common/gui/tests/` for the shape.
 
+**A probe asking "how big can this be" is the exception, and it must climb.** The cheapness above holds for
+behavioural questions — does this fire, what does that return. It does not hold for limits: a probe that
+jumps straight to the size the feature wants can wedge the machine rather than answer. One that asked
+whether a drawlist could be 60800 px tall took the X session down, recoverable only from a text terminal;
+every API-level signal had said it was fine. Start an order of magnitude below what you need and increase
+until something gives. A probe is allowed to fail; it is not allowed to take the user's desktop with it.
+
 ## Where the answer lives
 
 Each target below names a top-level section as `*Section*`, optionally a subsection after `→`, and any
@@ -59,6 +66,7 @@ commentary in a trailing `(…)`. `·` separates targets. That shape is not deco
 | scroll programmatically, or follow a growing log | *Scrolling* → Three input paths move a scroll position, and DPG surfaces them differently · *Scrolling* → `max_y_scroll` moves when content is added |
 | set a window's size, or a tooltip's padding, or fight z-order | *Window sizing* (all of it) |
 | touch fonts, icons, super/subscripts or `dpg_markdown` | *Font atlas limits* (all of it) |
+| size a drawlist, or build anything that scrolls over a lot of content | *Drawlists* → Never size a drawlist to a scroll extent — it will take the X session down |
 | build a table, or wonder why a long listing costs frame time | *Tables* → Rows are submitted every frame unless the table clips |
 | fill rows lazily — thumbnails, previews, anything per-row and expensive | *Tables* → To find which rows are on screen, ask a cell — never the row |
 | write a test that drives DPG | *Testing DPG code* → DPG runs without a mapped window, so GUI code is unit-testable (mind the headless ceiling: no `render_dearpygui_frame`, so no layout) |

@@ -789,6 +789,41 @@ Consequences, which are small:
 
 There is **no getter for theme contents** — you cannot ask a theme for its colors or spacings. Code that needs to restore a themed value therefore tends to hardcode a measured literal instead; see the audit item in `TODO_DEFERRED.md`. Where a *per-widget* getter exists (as for a text widget's own color), use it — the gap is theme state specifically, not all of DPG.
 
+# Drawlists
+
+## Never size a drawlist to a scroll extent — it will take the X session down
+
+**Measured 2026-08-13, and it cost a desktop.** A drawlist of 860 × 60800 px inside a scrollable child window
+— the natural way to build a windowed grid, one canvas covering the whole content height, drawing only the
+tiles on screen — rendered the session unusable. Recovery took logging in on a text terminal and sending
+`SIGTERM` to the process; nothing on the graphical side responded.
+
+**Every API-level signal said it was fine**, which is what makes this worth writing down rather than filing
+under "don't do daft things":
+
+| asked | answered |
+|---|---|
+| `get_item_height("canvas")` | `60800` — exactly as requested |
+| `get_y_scroll_max("scroller")` | `60296` — a correct scroll extent |
+| `set_y_scroll(...)` to the bottom, then read back | `60296` — scrolling worked |
+
+Creation raised nothing, the geometry was right, and the numbers were the ones a windowing implementation
+would want. The cost appeared only in rendering.
+
+**The mechanism is not identified** and was not chased — the fix does not depend on it, and the experiment
+that would settle it is the experiment that killed the session.
+
+**So: size a drawlist to the viewport, never to the content.** A grid that scrolls needs its scroll extent
+established by something cheap (a spacer, or the layout of the tiles themselves) and its drawing done in a
+viewport-sized canvas, or in per-tile drawlists as `raven/cherrypick/grid.py` does. What it must not do is
+ask one drawlist to *be* the scrollable area.
+
+**And when probing DPG for a limit, climb toward it.** The standing instruction is that a headless probe
+answers most behavioural questions in seconds, and that is true — but a probe testing *how big* something can
+be is a different animal, and the honest version starts small and increases until something gives, rather
+than jumping to the size the feature would want. A probe is allowed to fail; it is not allowed to take the
+user's desktop with it.
+
 # Tables
 
 ## Rows are submitted every frame unless the table clips
