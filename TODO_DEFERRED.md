@@ -2284,49 +2284,6 @@ which is the part the original diagnosis missed.
 
 Discovered during brief-03 Half-2 error-message work (2026-07-17, flagged by Juha).
 
-## The chat composer scrolls sideways instead of wrapping
-
-*Cluster: ? · Cost: ? · Gate: **not RN2026** — blocked upstream · Filed: 2026-08-04*
-
-**Un-gated from RN2026 on 2026-08-13.** Nothing here is buildable on our side: ImGui's multiline
-`InputText` has no word-wrap, `add_input_text` exposes no `wrap`, and every direction below is either
-a non-fix, a rewrite of the widget, or an upstream change. It should never have carried a deadline
-gate, because meeting it was not within our control.
-
-**The one cheap action that remains** is the check this item already names: confirm against a current
-ImGui whether word-wrap has landed and DPG simply has not exposed it. That is a few minutes and it is
-what would move this item at all.
-
-Typing past the composer's width pushes the line onwards and scrolls horizontally, so a long sentence
-disappears off the left edge as it is written. It should soft-wrap to the field's width, which is what every
-other multiline text box a user has met does.
-
-**`add_input_text` has no `wrap` parameter** — verified against the signature; `add_text` has one, the input
-does not. What it does have is `no_horizontal_scroll`, and that is not the fix: it suppresses the *scrolling*
-without introducing wrapping, so a long line would run off the edge and stay there, which is worse than the
-present behaviour. (That ImGui's multiline `InputText` has no word-wrap at all is upstream's long-standing
-position as I recall it — worth confirming against the current ImGui before designing around it, since a
-newer release may have added one and DPG may simply not expose it yet.)
-
-Directions, none free:
-
-- **Live with it**, and mitigate by making the field taller. Cheapest, and it does nothing for one long
-  paragraph, which is the actual case.
-- **Soft-wrap by inserting real newlines** as the user types. Rejected on sight unless someone has a much
-  better idea than it sounds: it changes the text the user is composing, breaks re-editing, and would send
-  hard line breaks to the model.
-- **Replace the widget.** A text area built on `add_input_text`'s single-line form plus manual layout, or a
-  custom widget over a drawlist. Real work, and it would have to reimplement selection, the caret and
-  clipboard — everything ImGui gives for free.
-- **Fix it upstream** in ImGui / DPG, which is the honest answer for a gap this basic and the one with the
-  longest lead time.
-
-Worth weighing against how the composer is actually used: most messages are a sentence or two, and the ones
-that are not tend to be pasted rather than typed. That does not make it right, but it does put it behind the
-things a user hits every turn.
-
-Noticed by Juha (2026-08-04) while testing the send-key change.
-
 ## The automatic RAG search reads to the model as a mistake it made
 
 *Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-08-04*
@@ -4300,3 +4257,21 @@ Not tasks. There is no action available on our side; what is recorded is the tri
   2026-05-06: still 2.6.1 on PyPI, and `pkgdata.py` unchanged on pygame's `main`, so a fix is not merely
   unreleased. Re-check on the next pygame release. Catalogued with the other upstream warning noise in
   `CLAUDE.md`, "Upstream warning noise in `pytest raven/`".
+
+- **The chat composer scrolls sideways instead of wrapping** — typing past the field's width pushes the line
+  onwards, so a long sentence disappears off the left edge as it is written. `add_input_text` has **no `wrap`
+  parameter** (verified against the signature; `add_text` has one, the input does not), and the
+  `no_horizontal_scroll` it *does* have is not the fix — it suppresses the scrolling without introducing
+  wrapping, so a long line would run off the edge and stay there, which is worse than the present behaviour.
+  ImGui's multiline `InputText` has no word-wrap at all, which is upstream's long-standing position *as
+  recalled* — that part has not been checked against a current ImGui.
+
+  The two directions available on our side were both rejected: inserting real newlines as the user types
+  changes the text being composed, breaks re-editing and sends hard line breaks to the model; replacing the
+  widget means reimplementing selection, the caret and the clipboard, everything ImGui gives for free.
+
+  **The trigger to look again: has a current ImGui grown word-wrap, with DPG merely not exposing it yet?**
+  Last checked the week of 2026-08-11 — still not there. So this is a re-check on the next ImGui or DPG
+  release rather than an open question, and it is not urgent either way: most messages are a sentence or
+  two, and the ones that are not tend to be pasted rather than typed. Carried an `RN2026` gate until 2026-08-13, which it should never have had: a deadline on
+  work outside our control can only be missed. Noticed by Juha (2026-08-04) while testing the send-key change.
