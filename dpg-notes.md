@@ -3,6 +3,19 @@
 Reference notes on DPG gotchas, internal mechanisms, and workarounds.
 Derived from experience with Raven apps and confirmed against DPG 2.0 / ImGui source.
 
+**This file is indexed by `.claude/skills/dpg/`**, a router that maps "if you are about to do X, read section
+Y" so an agent lands on the right section instead of the whole file. Two consequences for anyone editing here:
+
+- **Adding a section that answers a *new question* means adding a row to that router.** A question nobody can
+  look up is one that gets re-derived, which is what the router exists to stop. A new fact inside an existing
+  section needs nothing — the row already points at it.
+- **Renaming a heading breaks a row silently**, because the router cites section names verbatim and prose
+  never errors. So it is checked instead of remembered: run `python .claude/skills/dpg/check_router.py` after
+  editing either file, and it reports every citation and path that no longer resolves.
+
+This file stays authoritative. The router deliberately holds no content of its own, because two copies of a
+fact means one of them is stale and nobody knows which.
+
 ---
 
 # Threading

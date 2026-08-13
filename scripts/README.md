@@ -16,6 +16,13 @@ directory is for.
 |---|---|
 | `check_ci_imports.py` | Which test modules would fail to *collect* in CI, whose dependency list is hand-picked and hand-maintained. Walks the unguarded tests and their first-party imports, and reports any module-level third-party import that `requirements-ci.txt` and the workflows' inline `pip install` lines do not provide. |
 
+**One checker deliberately lives elsewhere**, and is indexed here so that this table stays the place to look:
+`.claude/skills/dpg/check_router.py` verifies that the `dpg` skill's router still names sections that exist in
+`dpg-notes.md`. It sits beside the skill rather than here because the three files — notes, router, checker —
+are one unit, and the argument for co-locating the first two applies to the third: if they ever move to
+another repository, they move together and keep working. A checker in `scripts/` would be left behind
+pointing at nothing.
+
 ## Why `check_ci_imports.py` exists
 
 CI does not run `pdm install`. It installs a hand-picked subset, because Raven's full tree is multi-gigabyte
