@@ -1622,35 +1622,6 @@ warnings the dialog grows. Visual-only feedback is a gap for the same audience t
 
 Discovered during the FileDialog UX work (2026-08-13, raised by Juha).
 
-## Paths into `raven/avatar/assets/` are rebuilt by hand at 23 sites
-
-*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-08-13*
-
-Every consumer of the avatar assets tree spells out the same incantation, differing only in how many `".."`
-it needs to climb back to `raven/avatar/`:
-
-```python
-pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "characters")).expanduser().resolve()
-```
-
-Counted 2026-08-13: `avatar/pose_editor/app.py` 8, `avatar/settings_editor/app.py` 8, `librarian/config.py` 3,
-`server/modules/avatar.py` 2, `librarian/app.py` 1, `client/tests/conftest.py` 1. The `".."` count varies by
-the caller's depth — one from the avatar apps, two from the server module and the client tests — so each site
-encodes its own position in the tree, and moving a module silently breaks its asset paths with no import error
-to catch it.
-
-A single `raven.avatar.assets_path(*parts)` would collapse all of them and remove the depth-counting entirely,
-since it would resolve from its own location rather than the caller's. The obvious home is
-`raven/avatar/__init__.py`, which currently holds nothing.
-
-**Not done inline** because it crosses four subsystems including the server, and the placement is a decision
-rather than a mechanical edit. Cheap and mostly find-replace once that is settled; the invariant to check
-afterwards is that every resolved path is unchanged, which a script can assert directly by importing both
-spellings and comparing.
-
-Discovered while sweeping the `FileDialog` call sites (2026-08-13) — four of the avatar-app occurrences are
-`default_path=` arguments, and they are what is left of those constructors now that the rest has gone.
-
 ## Librarian's help card has no room to describe attachments
 
 *Cluster: ? · Cost: ? · Gate: next · Filed: 2026-08-05 · See also: "Fleet audit: every hotkey discoverable in a tooltip + help card"*

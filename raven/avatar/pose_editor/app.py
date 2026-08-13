@@ -42,6 +42,7 @@ This module was part of the old Talkinghead, and is licensed under the GNU AGPL,
 import argparse
 
 from ... import __version__
+from ... import avatar  # for `avatar.assets_path`; the package root, not this app
 
 parser = argparse.ArgumentParser(description="THA 3 Manual Poser. Pose a character image manually. Useful for generating static expression images and for editing the emotion templates.")
 parser.add_argument('-v', '--version', action='version', version=('%(prog)s ' + __version__))
@@ -241,7 +242,7 @@ def initialize_filedialogs():  # called at app startup
                                        tag="open_image_dialog",
                                        callback=_open_image_callback,
                                        filter_list=[".png"],
-                                       default_path=pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "characters")).expanduser().resolve())
+                                       default_path=avatar.assets_path("characters"))
     filedialog_save_image = FileDialog(title="Save posed image",
                                        tag="save_image_dialog",
                                        callback=_save_image_callback,
@@ -252,7 +253,7 @@ def initialize_filedialogs():  # called at app startup
                                       tag="open_json_dialog",
                                       callback=_open_json_callback,
                                       filter_list=[".json"],
-                                      default_path=pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "emotions")).expanduser().resolve())
+                                      default_path=avatar.assets_path("emotions"))
     filedialog_save_all_emotions = FileDialog(title="Save all emotion templates",
                                               tag="save_all_emotions_dialog",
                                               callback=_save_all_emotions_callback,
@@ -782,7 +783,7 @@ class PoseEditorGUI:
                          tag="source_no_image_loaded_text")
 
             # Emotion picker.
-            emotions_dir = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "emotions")).expanduser().resolve()
+            emotions_dir = avatar.assets_path("emotions")
             self.emotions, self.emotion_names = avatarutil.load_emotion_presets(emotions_dir)
 
             with dpg.group():
@@ -1199,7 +1200,7 @@ class PoseEditorGUI:
 
         current_emotion_name = dpg.get_value(self.emotion_choice)
 
-        emotions_dir = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "emotions")).expanduser().resolve()
+        emotions_dir = avatar.assets_path("emotions")
         self.emotions, self.emotion_names = avatarutil.load_emotion_presets(emotions_dir)
 
         dpg.configure_item(self.emotion_choice, items=self.emotion_names)
@@ -1460,24 +1461,24 @@ _help_window = helpcard.HelpWindow(hotkey_info=hotkey_info,
 # Blunder recovery options
 if args.factory_reset_all:
     print("Factory-resetting all emotion templates...")
-    with open(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "emotions", "_defaults.json")).expanduser().resolve(), "r", encoding="utf-8") as json_file:
+    with open(avatar.assets_path("emotions", "_defaults.json"), "r", encoding="utf-8") as json_file:
         factory_default_emotions = json.load(json_file)
     factory_default_emotions.pop("zero")  # not an actual emotion
     for key in factory_default_emotions:
-        with open(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "emotions", f"{key}.json")).expanduser().resolve(), "w", encoding="utf-8") as file:
+        with open(avatar.assets_path("emotions", f"{key}.json"), "w", encoding="utf-8") as file:
             json.dump({key: factory_default_emotions[key]}, file, indent=4)
     print("Done.")
     sys.exit(0)
 if args.factory_reset:
     key = args.factory_reset
     print(f"Factory-resetting emotion template '{key}'...")
-    with open(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "emotions", "_defaults.json")).expanduser().resolve(), "r", encoding="utf-8") as json_file:
+    with open(avatar.assets_path("emotions", "_defaults.json"), "r", encoding="utf-8") as json_file:
         factory_default_emotions = json.load(json_file)
     factory_default_emotions.pop("zero")  # not an actual emotion
     if key not in factory_default_emotions:
         print(f"No such factory-defined emotion: '{key}'. Valid values: {sorted(list(factory_default_emotions.keys()))}")
         sys.exit(1)
-    with open(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "emotions", f"{key}.json")).expanduser().resolve(), "w", encoding="utf-8") as file:
+    with open(avatar.assets_path("emotions", f"{key}.json"), "w", encoding="utf-8") as file:
         json.dump({key: factory_default_emotions[key]}, file, indent=4)
     print("Done.")
     sys.exit(0)

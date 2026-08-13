@@ -13,6 +13,7 @@ This module is licensed under the 2-clause BSD license.
 import argparse
 
 from ... import __version__
+from ... import avatar  # for `avatar.assets_path`; the package root, not this app
 
 parser = argparse.ArgumentParser(description="""Raven-avatar settings editor — standalone renderer for the AI avatar character with live postprocessor settings editing.""",
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -185,22 +186,22 @@ def initialize_filedialogs():  # called at app startup
                                              tag="open_input_image_dialog",
                                              callback=_open_input_image_callback,
                                              filter_list=[".png"],
-                                             default_path=pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "characters")).expanduser().resolve())
+                                             default_path=avatar.assets_path("characters"))
     filedialog_open_backdrop_image = FileDialog(title="Open backdrop image",
                                                 tag="open_backdrop_image_dialog",
                                                 callback=_open_backdrop_image_callback,
                                                 filter_list=[".png", ".jpg"],
-                                                default_path=pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "backdrops")).expanduser().resolve())
+                                                default_path=avatar.assets_path("backdrops"))
     filedialog_open_json = FileDialog(title="Open emotion templates",
                                       tag="open_json_dialog",
                                       callback=_open_json_callback,
                                       filter_list=[".json"],
-                                      default_path=pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "emotions")).expanduser().resolve())
+                                      default_path=avatar.assets_path("emotions"))
     filedialog_open_animator_settings = FileDialog(title="Open animator settings",
                                                    tag="open_animator_settings_dialog",
                                                    callback=_open_animator_settings_callback,
                                                    filter_list=[".json"],
-                                                   default_path=pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "settings")).expanduser().resolve())
+                                                   default_path=avatar.assets_path("settings"))
     filedialog_save_animator_settings = FileDialog(title="Save animator settings",
                                                    tag="save_animator_settings_dialog",
                                                    callback=_save_animator_settings_callback,
@@ -1156,7 +1157,7 @@ class PostprocessorSettingsEditorGUI:
         Reading fresh from disk (rather than snapshotting at startup) lets users who hand-edit `animator.json` see
         those edits reflected via this button.
         """
-        animator_json_path = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "settings", "animator.json")).expanduser().resolve()
+        animator_json_path = avatar.assets_path("settings", "animator.json")
         logger.info(f"PostprocessorSettingsEditorGUI.on_load_postprocessor_defaults: reloading postprocessor chain from '{str(animator_json_path)}'.")
         try:
             with open(animator_json_path, "r", encoding="utf-8") as json_file:
@@ -1693,7 +1694,7 @@ if not api.test_connection():
     sys.exit(255)
 
 # IMPORTANT: `avatar_load` first before we start the GUI, to create the avatar instance.
-_startup_input_image_path = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "characters", "other", "aria1.png")).expanduser().resolve()
+_startup_input_image_path = avatar.assets_path("characters", "other", "aria1.png")
 avatar_instance_id = api.avatar_load(_startup_input_image_path)
 api.avatar_load_emotion_templates(avatar_instance_id, {})  # send empty dict -> reset emotion templates to server defaults
 gui_instance = PostprocessorSettingsEditorGUI()  # will load animator settings into the GUI, as well as send them to the avatar instance.
@@ -1793,7 +1794,7 @@ initialize_filedialogs()
 # so that the GUI controls for the postprocessor are available, and so that if there are any issues
 # during loading, we can open a modal dialog.
 def _load_initial_animator_settings():
-    animator_json_path = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "settings", "animator.json")).expanduser().resolve()
+    animator_json_path = avatar.assets_path("settings", "animator.json")
 
     if not os.path.exists(animator_json_path):
         logger.info(f"_load_initial_animator_settings: Default animator settings file '{str(animator_json_path)}' missing, writing a default config.")
@@ -1812,7 +1813,7 @@ def _load_initial_animator_settings():
             raise
 
     gui_instance.load_animator_settings(animator_json_path)
-    # gui_instance.load_backdrop_image(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "backdrops", "anime-plains.png")).expanduser().resolve())  # DEBUG
+    # gui_instance.load_backdrop_image(avatar.assets_path("backdrops", "anime-plains.png"))  # DEBUG
 
 dpg.set_frame_callback(2, _load_initial_animator_settings)
 

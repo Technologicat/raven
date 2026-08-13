@@ -14,14 +14,13 @@ package instead makes the skip a coincidence, live for exactly as long as that
 package happens to be the first one missing.
 """
 
-import os
-import pathlib
 import textwrap
 
 import pytest
 
 pytest.importorskip("raven.client.api", reason="full client dependency stack not installed")
 
+from raven import avatar  # for `avatar.assets_path`
 from raven.client import api
 from raven.client import config as client_config
 
@@ -46,7 +45,7 @@ def initialized_api():
 @pytest.fixture(scope="session")
 def assets_base():
     """Path to the avatar assets directory (used by image-related tests)."""
-    return pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "..", "avatar", "assets")).expanduser().resolve()
+    return avatar.assets_path()
 
 
 # ---------------------------------------------------------------------------

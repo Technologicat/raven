@@ -4,14 +4,13 @@ Currently used by the `librarian.llmclient` and `tools.pdf2bib` modules.
 """
 
 import math
-import os
-import pathlib
 import textwrap
 
 from unpythonic.env import env
 
 import torch
 
+from .. import avatar  # for `avatar.assets_path`
 from .. import config as global_config
 
 from ..client.config import Timeout  # `(connect, read)` timeout tuple with named fields; see `raven.client.config`
@@ -582,9 +581,9 @@ gui_config = env(  # ----------------------------------------
 # The AI's avatar character in the Raven-librarian GUI.
 
 avatar_config = env(source_image_size=512,  # THA3 engine hardcoded input image size (512x512); this and "upscale" below are used for determining the pixel-perfect texture size for the client.
-                    image_path=pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "avatar", "assets", "characters", "other", "aria1.png")).expanduser().resolve(),
+                    image_path=avatar.assets_path("characters", "other", "aria1.png"),
                     voice="af_nova",  # See `raven-avatar-settings-editor`.
-                    # image_path=pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "avatar", "assets", "characters", "scientists", "jj1.png")).expanduser().resolve(),
+                    # image_path=avatar.assets_path("characters", "scientists", "jj1.png"),
                     # voice="am_echo",
                     voice_speed=1.0,  # Nominal = 1.0. Too high causes skipped words. If you want to change it, find a good value with `raven-avatar-settings-editor`.
                     video_offset=-0.8,  # TTS AV sync setting, seconds. Positive = shift video later w.r.t. audio. Find a good value for your system with `raven-avatar-settings-editor`.
@@ -597,7 +596,7 @@ avatar_config = env(source_image_size=512,  # THA3 engine hardcoded input image 
                                                  "upscale": 1.5,
                                                  "upscale_preset": "C",  # "A", "B" or "C"; these roughly correspond to the presets of Anime4K  https://github.com/bloc97/Anime4K/blob/master/md/GLSL_Instructions_Advanced.md
                                                  "upscale_quality": "bicubic",  # "low": anime4k fast, acceptable image quality; "high": anime4k slow, good image quality; "bilinear": lightning-fast, bad quality; "bicubic": very fast, often acceptable quality.
-                                                 "backdrop_path": str(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "avatar", "assets", "backdrops", "cyberspace.png")).expanduser().resolve()),
+                                                 "backdrop_path": str(avatar.assets_path("backdrops", "cyberspace.png")),
                                                  "backdrop_blur": True,  # The blur is applied once, when the backdrop is loaded, so it doesn't affect rendering performance.
                                                  }
                     )

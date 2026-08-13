@@ -50,6 +50,7 @@ import torch
 
 from flask import Response
 
+from ...avatar import assets_path  # the function, not the package: this module is itself named `avatar`
 from ...common.hfutil import maybe_install_models
 from ...common import numutils
 from ...common.running_average import RunningAverage
@@ -71,8 +72,8 @@ logger = logging.getLogger(__name__)
 # Global variables
 
 talkinghead_path = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "..", "vendor")).expanduser().resolve()  # THA3 install location containing the "tha3" folder
-emotions_path = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "..", "avatar", "assets", "emotions")).expanduser().resolve()  # location containing the emotion template JSON files
-animator_settings_path = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "..", "avatar", "assets", "settings")).expanduser().resolve()  # location containing the default "animator.json"
+emotions_path = assets_path("emotions")  # location containing the emotion template JSON files
+animator_settings_path = assets_path("settings")  # location containing the default "animator.json"
 
 module_initialized = False  # call `init_module` to initialize
 

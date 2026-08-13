@@ -4,6 +4,7 @@
 import argparse
 
 from .. import __version__
+from .. import avatar  # for `avatar.assets_path`
 
 parser = argparse.ArgumentParser(description="""GUI LLM client with auto-persisted branching chat history and RAG.""",
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -2080,7 +2081,7 @@ def _load_initial_animator_settings() -> None:
     if _shutting_down:  # window closed before this deferred startup callback even started
         return
 
-    animator_json_path = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "avatar", "assets", "settings", "animator.json")).expanduser().resolve()
+    animator_json_path = avatar.assets_path("settings", "animator.json")
 
     try:
         with open(animator_json_path, "r", encoding="utf-8") as json_file:
