@@ -17,6 +17,8 @@ from typing import Iterable, Optional, Union
 
 import dearpygui.dearpygui as dpg
 
+from unpythonic import timer
+
 from ...common import utils as common_utils
 from ...common.gui import animation as gui_animation
 
@@ -647,12 +649,17 @@ class FileDialog:
 
         def reset_dir(file_name_filter=None, default_path=self.default_path):
             logger.debug(f"reset_dir: instance '{self.tag}' ({self.instance_tag}), called with file_name_filter = {file_name_filter}, default_path = '{str(default_path)}'")
+            # Phase timings, so a slow open says *which* phase is slow rather than only that it was. Reading
+            # the directory, deleting the old rows and creating the new ones have entirely different fixes,
+            # and a report of "a couple of seconds" does not distinguish them.
             self.selected_files.clear()
             self.shown_items.clear()
             try:
                 dpg.configure_item(f"ex_path_input_{self.instance_tag}", default_value=os.getcwd())
-                _dir = os.listdir(default_path)
-                delete_table()
+                with timer() as tim_list:
+                    _dir = os.listdir(default_path)
+                with timer() as tim_delete:
+                    delete_table()
 
                 # Separate directories and files
                 dirs = [file for file in _dir if os.path.isdir(file)]
@@ -665,27 +672,33 @@ class FileDialog:
                 # the part worth hoisting out of the loop.
                 matches_name_filter = common_utils.make_search_matcher(file_name_filter or "")
 
-                # 'special directory' that sends back to the previous directory
-                with dpg.table_row(parent=f"explorer_{self.instance_tag}"):
-                    with dpg.group(horizontal=True):
-                        kwargs_file = {'tint_color': [255, 255, 255, 255], 'user_data': 'Dir'}
-                        dpg.add_image(self.img_mini_folder, **kwargs_file)
-                        dpg.add_selectable(label="..", callback=_go_up_one_level, span_columns=True, height=self.selec_height)
+                with timer() as tim_build:
+                    # 'special directory' that sends back to the previous directory
+                    with dpg.table_row(parent=f"explorer_{self.instance_tag}"):
+                        with dpg.group(horizontal=True):
+                            kwargs_file = {'tint_color': [255, 255, 255, 255], 'user_data': 'Dir'}
+                            dpg.add_image(self.img_mini_folder, **kwargs_file)
+                            dpg.add_selectable(label="..", callback=_go_up_one_level, span_columns=True, height=self.selec_height)
 
-                # dir list
-                for _dir in dirs:
-                    if not _is_hidden(_dir) or self.show_hidden_files:
-                        if matches_name_filter(_dir):  # noqa: SIM102 -- two separate concerns: is it visible at all, and does the Find query select it
-                            _makedir(_dir, open_file)
+                    # dir list
+                    for _dir in dirs:
+                        if not _is_hidden(_dir) or self.show_hidden_files:
+                            if matches_name_filter(_dir):  # noqa: SIM102 -- two separate concerns: is it visible at all, and does the Find query select it
+                                _makedir(_dir, open_file)
 
-                # file list
-                if not self.dirs_only:
-                    for file in files:
-                        if (not _is_hidden(file)) or self.show_hidden_files:
-                            if matches_name_filter(file):  # noqa: SIM102 -- two separate concerns: is it visible at all, and does the Find query select it
-                                _makefile(file, open_file)
+                    # file list
+                    if not self.dirs_only:
+                        for file in files:
+                            if (not _is_hidden(file)) or self.show_hidden_files:
+                                if matches_name_filter(file):  # noqa: SIM102 -- two separate concerns: is it visible at all, and does the Find query select it
+                                    _makefile(file, open_file)
 
-                reapply_latest_sort()  # apply the latest sort criterion (if any) explicitly (the sort callback doesn't get called automatically when we rebuild the table)
+                with timer() as tim_sort:
+                    reapply_latest_sort()  # apply the latest sort criterion (if any) explicitly (the sort callback doesn't get called automatically when we rebuild the table)
+
+                logger.debug(f"reset_dir: instance '{self.tag}' ({self.instance_tag}), {len(self.shown_items)} rows: "
+                             f"list {tim_list.dt:.3f}s, delete {tim_delete.dt:.3f}s, "
+                             f"build {tim_build.dt:.3f}s, sort {tim_sort.dt:.3f}s")
 
             # exceptions
             except FileNotFoundError:
@@ -922,14 +935,23 @@ class FileDialog:
 
     # high-level functions
     def show_file_dialog(self):
-        self.chdir(self.last_path)
+        # Timed alongside `reset_dir`'s own phases, because "the dialog takes a moment to appear" can mean
+        # the listing, or the frame this waits for, and the two have nothing to do with each other. The
+        # entry line also timestamps the moment this callback got to run, which is the other candidate: DPG
+        # runs callbacks one at a time, so a click can be waiting behind whatever ran before it.
+        logger.debug(f"show_file_dialog: instance '{self.tag}' ({self.instance_tag}), entered")
+        with timer() as tim_listing:
+            self.chdir(self.last_path)
         dpg.show_item(self.tag)
 
         global visible_dialog_instance
         visible_dialog_instance = self
 
         # Align the OK/Cancel buttons to the right
-        dpg.split_frame()
+        with timer() as tim_frame:
+            dpg.split_frame()
+        logger.debug(f"show_file_dialog: instance '{self.tag}' ({self.instance_tag}), "
+                     f"listing {tim_listing.dt:.3f}s, waited {tim_frame.dt:.3f}s for a frame")
         old_width = dpg.get_item_width(self.spacer_okcancel)
         new_width = self.width - (dpg.get_item_width(self.btn_ok) +
                                   dpg.get_item_width(self.btn_cancel) +
