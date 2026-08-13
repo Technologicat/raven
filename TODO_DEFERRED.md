@@ -342,6 +342,36 @@ boilerplate*. A recent-datastores list follows naturally once swapping works, an
 *browse all attachments* are scoped to "the datastore" — they inherit whichever is open, with no extra work
 if the swap rebuilds cleanly.
 
+## Reconcile a bibliography against the papers actually on disk
+
+*Cluster: papers · Cost: L · Gate: ? · Filed: 2026-08-13*
+
+A researcher accumulates two things that never quite line up: a bibliography file, and a directory of the
+documents themselves. Nothing connects them. Which `.bib` entries do I actually have? Which files on disk are
+not in any bibliography? For a given entry, where is the paper?
+
+**The interesting half is the part no lookup service can do.** A working researcher's older references are
+substantially works that are *not on the public internet* — out of print, institutional reports, conference
+proceedings that predate the web, material behind a library rather than a DOI. For those, no arXiv or
+Crossref query resolves anything, and the only source of metadata is the document in the directory. The same
+material is disproportionately **scanned rather than born-digital**, so it has no text layer either, which
+puts OCR on the path (see the ingestion cluster's "Text out of images").
+
+So the shape is: match entries to files, then use the matched file to fill in what the bibliography lacks —
+**abstracts above all**, since an abstract is what makes an entry findable by anything other than its title,
+and it is exactly the field that hand-made `.bib` entries omit. A corpus whose entries carry abstracts is a
+corpus Librarian's retrieval can actually reach.
+
+**Most of the parts exist**: `docextract` reads the documents, `papers.pdf2bib` already derives BibTeX from a
+PDF, `hybridir` indexes and retrieves, and `papers` has the arXiv path for the subset that *is* online.
+Missing are the matching itself (fuzzy title/author against filenames and extracted text, which will be
+imperfect and must say so), OCR for the scans, and a review surface — a match proposed from a scan of a 1970s
+report should be confirmed by a human before it rewrites a bibliography.
+
+Worth deciding early: whether this writes back into the user's `.bib` at all, or only ever emits a *proposed*
+merge for them to apply. Rewriting a bibliography in place is the kind of operation that has to be right the
+first time.
+
 ## Agent skills for Librarian (natural-language workflows over the document database)
 
 *Cluster: ? · Cost: ? · Gate: next · Filed: 2026-08-11*
@@ -376,6 +406,24 @@ Open questions for the design session: how skills and lorebook entries relate (o
 front-ends, or two separate things); whether a skill can restrict itself to a corpus scope; and whether
 declining to run bundled scripts makes Raven's implementation non-conforming or merely a subset — worth
 checking the specification rather than assuming.
+
+**A worked example to design against** (2026-08-13). "Go through my paper pile, say which field of science
+each one belongs to, and give me something I can move the strays out with." That is a real request, made of a
+real pile, and it is squarely the shape this item is about: a procedure over the documents the user already
+has, described in a sentence, that no fixed feature would have anticipated.
+
+It was carried out by hand as a script, which is what makes it useful here — the script is the thing a skill
+would have to stand in for. See `investigations/agent-batch-classification/`, and note what the script does
+that a naive "let the agent loop over the files" would not: batching for cost, index-keyed answers so a short
+reply is detected rather than silently misaligning, resumability across an hour-long run, and an escalation
+path computed in Python rather than delegated to the model's own confidence — that last because the model's
+confidence was highest exactly where its input was emptiest.
+
+The lesson for the design is not that skills need those four features. It is that a skill which merely
+*describes* the workflow will produce the naive version, and the naive version fails in ways the user cannot
+see. Whether the difference belongs in the skill's instructions, in bundled scripts (stage three, hence the
+trust question above), or in richer building blocks for skills to call, is exactly what the design session
+has to settle.
 
 ## The `--run-gui` group segfaults if a second module maps a context
 

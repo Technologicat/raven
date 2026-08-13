@@ -1,0 +1,4 @@
+# The outputs describe one person's reading. Regenerate them locally; do not commit them.
+papers-classified.jsonl
+papers-classified.tsv
+move-stragglers.sh
