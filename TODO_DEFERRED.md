@@ -1491,9 +1491,12 @@ clusters, as of 2026-07-27:
   chunks…" was measured and rejected on 2026-08-06 and is no longer open), plus the new "RAG access via
   tool-call" motivation recorded under Q11 of the
   measurements — the model asks for a second, better-aimed search and currently has no way to get one.
-- **FileDialog** — "slow open and a teardown input-dead-window", "smart-case the Find field", "image thumbnail
-  previews", "multi-extension filter as one labelled item", "reduce per-use-site boilerplate", plus "OS
-  drag-and-drop of files into DPG apps" (which is why the picker has to be good — it's the only entry path).
+- **FileDialog** — the cluster is down to "image thumbnail previews" and "keyboard accessibility". "Smart-case
+  the Find field", "multi-extension filter as one labelled item" and "reduce per-use-site boilerplate" landed
+  2026-08-13; "slow open and a teardown input-dead-window" was measured the same day and is closed
+  (`investigations/filedialog-performance/`); "OS drag-and-drop of files into DPG apps" shipped 2026-08-10 as
+  `raven.common.gui.filedrop`, which also retired the "the picker is the only entry path" argument that used
+  to motivate the rest.
 - **Markdown renderer** (the vendored `DearPyGui_Markdown`) — "Markdown ATX headings don't render", "Fenced
   code block support", "Reasoning traces with indented bullets mis-render", "inline-code background boxes are
   stranded on dynamic reflow", "Emoji support in the Markdown renderer". Adjacent: "Super/subscript font
@@ -1508,38 +1511,13 @@ clusters, as of 2026-07-27:
   own terms: figure- and equation-heavy literature extracts to prose that omits the argument, in exactly the
   corpus Raven exists to read.
 
-## FileDialog: does the open still feel slow?
-
-*Cluster: filedialog · Cost: small · Gate: a live re-test · Filed: 2026-07-18, mostly resolved 2026-08-13*
-
-**The dead-opener-button half of this item is fixed and the measurements are in
-`investigations/filedialog-performance/`.** Read that before adding anything here; it says where not to
-look. In short: building the listing costs ~60 µs per row (0.19 s for a real 2520-entry directory), the
-close path was rebuilding it two or three times for nothing, and the button was not being denied input —
-its callback was queued behind the close on DPG's single callback thread. `_forget_listing` removed the
-rebuilds; `clipper=True` on the table removed a per-frame cost of 3.76 ms at 2500 rows.
-
-**What is left is a question, not a defect: does opening still feel like a couple of seconds?** Nothing
-measured gets near that, so either the original report over-estimated a sub-second delay adjacent to a real
-one, or the live app has a factor the benchmarks lack. Re-test on the papers directory and say which. If it
-still drags, the listing build is ruled out and the next suspects are elsewhere — the one factor genuinely
-unmeasured is a cold page cache on the session's first open, which needs root to test.
-
-Only if the answer is "still slow" does the original plan — virtualize the rows, or reuse the listing
-across opens of an unchanged directory — become worth its complexity. The clipper already bought the
-render-side half of virtualization for one keyword.
-
-**Thumbnails still want to be designed with this** (see "FileDialog: image thumbnail previews"), because
-naive per-row decoding at build time would put real seconds into a path that currently has 0.19 s.
-
-Discovered during the document-attach test-drive (2026-07-18, Juha).
-
 ## FileDialog: image thumbnail previews (Lanczos'd)
 
 *Cluster: filedialog · Cost: ? · Gate: ? · Filed: 2026-07-17*
 
-*See also: "FileDialog: does the open still feel slow?", and the measurements behind it in
-`investigations/filedialog-performance/` — the budget this item has to fit into is stated there.*
+*The slow-open item this used to be paired with is **done** (2026-08-13) — see
+`investigations/filedialog-performance/` for what it turned out to be and, more usefully here, for the
+timing budget this item has to fit into.*
 
 The adopted `FileDialog` (`raven/vendor/file_dialog/`) lists files by name only — no image previews. For picking
 *image* files, a thumbnail per image would make selection usable — you pick by looking, not by guessing from the
@@ -1575,13 +1553,16 @@ thumbnail arrives from the background job — which started as an artifact and i
   normal way to use a picker, so re-decoding every thumbnail on the way back is the case that will actually be
   felt. Hold thumbnail atlases for a couple of recent directories and evict beyond that.
 
-**The budget is now known, which makes the design constraint sharp rather than vague.** Opening a
-2520-entry directory costs 0.19 s of row building, about 60 µs per row
-(`investigations/filedialog-performance/`). Decoding a thumbnail per row at build time would add
-milliseconds *each* — three orders of magnitude over the current per-row cost — so a naive version turns a
-fifth of a second into a minute. The laziness that avoids it (build the rows first, fill textures from a
-background task, and only for rows actually on screen) is not an optimization to add later; it is the only
-version of this feature that can exist.
+**The budget is now known, which makes the design constraint sharp rather than vague.** Measured live on
+the real papers pile — 1625 entries — a full open costs 0.32 s, of which 0.26 s is building the rows, about
+60 µs each (`investigations/filedialog-performance/`). Decoding a thumbnail per row at build time would add
+milliseconds *each*, three orders of magnitude over that, so a naive version turns a third of a second into
+minutes. The laziness that avoids it — build the rows first, fill textures from a background task, and only
+for rows actually on screen — is not an optimization to add later; it is the only version of this feature
+that can exist.
+
+The dialog now logs those phases at DEBUG (`list / delete / build / sort`, and `show_file_dialog`'s frame
+wait), so the same measurement is one `--log-level DEBUG` run away when this work needs a before and after.
 
 Note the render side is already handled: the table clips to the visible rows, so off-screen thumbnails cost
 no frame time once built. The open question is how to *ask* which rows are on screen, so the background job

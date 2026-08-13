@@ -69,16 +69,31 @@ deleting them earlier.
 row height, which holds because every cell is created with `height=self.selec_height`. Sorting, scroll
 extent and row alignment were checked by screenshot afterwards and are unaffected.
 
-## What is still unexplained
+## The live re-test
 
-**Nothing measured here reaches "a couple of seconds" on the open path.** Opening a 2520-entry directory
-costs 0.19 s to build plus a few milliseconds of first frame. Either the original report over-estimated a
-sub-second delay — plausible, since the close-side stall was real and adjacent — or something in the live
-app is absent from this apparatus. The next step is a live re-test now that the close path is cheap; if the
-open still feels slow, the cause is not in the listing build and this data says where not to look.
+Run the same day, in `raven-librarian` with `--log-level DEBUG`, on the real papers pile — **1625 entries**,
+rather than the several thousand the item had assumed. Verdict from the person who filed it: fast.
 
-One factor genuinely unmeasured: a **cold page cache** on the first open of a session. Dropping caches
-needs root, so every measurement here is warm.
+| | list | delete | build | sort | frame wait |
+|---|---|---|---|---|---|
+| navigate into papers | 0.001 s | 0.000 s | 0.174 s | 0.022 s | — |
+| again | 0.002 s | 0.002 s | 0.159 s | 0.030 s | — |
+| open directly onto papers | 0.001 s | 0.026 s | 0.258 s | 0.030 s | 0.004 s |
+
+Worst full open in the session: **0.324 s**. Both close paths return within the same logged millisecond as
+the app's callback — `cancel` and `ok` each used to carry one and two full rebuilds of those 1625 rows.
+`show_file_dialog`'s entry line lands under a millisecond before the rebuild it triggers, so nothing was
+queued behind anything.
+
+**What still has no measurement is the original "several seconds".** Nothing here reconstructs it, from the
+old code or the new. The account that fits every observation is that the two symptoms compounded: a click
+on the opener while the previous close was still rebuilding waited out that close on the callback thread
+before its own open began, with an unclipped table costing frame time throughout. That is a hypothesis
+assembled after the fix rather than a measurement taken before it, and it is recorded here as one.
+
+One factor remains untested: a **cold page cache**. Even the first visit to the papers directory logged
+`list 0.001 s`, so the cache was warm; `drop_caches` needs root and was not exercised. Since nothing is
+slow, this is a loose end rather than a lead.
 
 ## A DPG hazard found on the way
 
@@ -92,9 +107,14 @@ several times, because at these rates a single trial says nothing — the first 
 table implying that *removing* ingredients caused the crash, which was the 1-in-8 survival.
 
 The mechanism is not identified, and the write-up in `dpg-notes.md` → "Context recreation is not reliably
-safe once real widgets have rendered" says so. It costs nothing at runtime (an app holds one context for
-its life) and nothing in the test suite (one module-scoped context, no rendered frames). It costs
-benchmarks one subprocess per configuration.
+safe once real widgets have rendered" says so. It costs nothing at runtime, an app holding one context for
+its life, and nothing in the default test suite, which never renders a frame. It costs benchmarks one
+subprocess per configuration.
+
+The `--run-gui` group is the interesting case: `test_focus_semantics.py` builds and destroys a context with
+a shown viewport and rendered frames once per test, and has never crashed — which matches the clean
+baseline here, since what it builds is a window, a child window, a field and a button rather than an
+application subsystem. It marks where the boundary is, not an exception to it.
 
 ## The scripts
 
