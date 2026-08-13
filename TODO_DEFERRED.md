@@ -1612,6 +1612,59 @@ fix this" item (Juha).
 
 Discovered during brief-03 Half-2 multimodal work (2026-07-17, flagged by Juha).
 
+## FileDialog: keyboard accessibility
+
+*Cluster: filedialog · Cost: ? · Gate: ? · Filed: 2026-08-13*
+
+`FileDialog` cannot be operated from the keyboard. The listing has no cursor at all — selection happens only
+through mouse clicks on per-cell selectables, with a hand-rolled double-click timer — so there is no way to
+move through a directory, descend into a folder, or toggle a selection without a pointing device. The five
+hotkeys that exist (`fdialog_hotkeys_callback`: Enter, Esc, F5, Ctrl+Home, Ctrl+F) cover the frame around the
+listing and not the listing itself, and the source has carried a standing `# TODO: Add hotkeys to navigate
+up/down in the table, descend into folder, ...` since adoption.
+
+**This is an equality consideration first.** It is also a straightforward usability one: DPG is mouse-centric
+by default, Raven supports keyboard operation wherever reasonably possible, and this dialog is the part that
+has not. The bar to clear is bash's filename completion, or a file manager with find-as-you-type and arrow
+navigation.
+
+What the design has to provide (Juha, 2026-08-13):
+
+- **One focus target in the ordinary case** — the find field, which doubles as the filename field in save
+  mode. Being a single-line entry, it leaves *up and down* free for the listing; left and right stay with the
+  text caret, so horizontal navigation is not available to the listing and the design must not want it.
+- **Completion in the field**, bash-style, extending to the unique part — without losing the existing
+  fragment (substring) search, and without ever silently rewriting a name the user typed. The conflict
+  between the two is the open design question: a substring query has no prefix to extend, and in save mode
+  a completion that fires implicitly would prevent naming a file `readm` in a directory containing
+  `readme.txt`.
+- **Arrow up/down and Page up/down through the listing**, page keys moving *most of* a visible page as in the
+  Librarian chat log and the Visualizer info panel. Smooth scrolling optional, as a constructor parameter, so
+  each app can pass its own config setting.
+- **Ctrl+Space toggles the current row's selection** in multi-selection mode. Single-selection mode needs no
+  equivalent: Enter accepts and Esc cancels.
+- **Enter on a folder descends into it**, in every mode that is not "open folder".
+  - Up-one-level and return-to-default-directory need their own keys. Descending into the `..` row must keep
+    working — it falls out of the design — but it is clumsy enough that it cannot be the only way up.
+  - **"Open folder" (`dirs_only`) mode needs a way to descend as well as accept**, and those are the same
+    gesture today. Juha's first sketch was single Enter to descend and a second Enter to accept, reusing the
+    confirmation-flash pattern that save mode already uses for overwrite. Alternatives welcome — see the
+    note on timing-based chords below.
+- **Save mode keeps its double-Enter overwrite confirmation** (already implemented, with the red flash and
+  the non-intrusive warning text).
+
+**Timing-based chords are a poor fit for this item in particular.** A double-press within a fixed window
+penalizes exactly the motor-impaired users the work is meant to serve. The existing overwrite confirmation
+survives that objection because it is a *confirmation* — miss the window and you press again — whereas a
+double-Enter carrying a *primary* action fails by doing the other thing, which in `dirs_only` mode means
+descending when you meant to accept, and losing your place. Prefer a modifier over a timer where the action
+is primary.
+
+**Out of scope today, worth recording**: an audio cue for the overwrite warning, and for whatever other
+warnings the dialog grows. Visual-only feedback is a gap for the same audience this item is about.
+
+Discovered during the FileDialog UX work (2026-08-13, raised by Juha).
+
 ## Librarian's help card has no room to describe attachments
 
 *Cluster: ? · Cost: ? · Gate: next · Filed: 2026-08-05 · See also: "Fleet audit: every hotkey discoverable in a tooltip + help card"*
