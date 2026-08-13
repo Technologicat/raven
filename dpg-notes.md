@@ -776,7 +776,8 @@ Measured 2026-08-13, two contexts per process, a `FileDialog` built in each, 8 t
 Consequences, which are small:
 
 - **An app never meets this**, holding one context for its whole life.
-- **The test suite does not either**, using one module-scoped context and never rendering a frame (see the ceiling above).
+- **The default test suite does not either**, using one module-scoped context per module and never rendering a frame (see the ceiling above).
+- **The `--run-gui` group does do this cycle, and has not crashed.** `test_focus_semantics.py`'s `mapped_viewport` fixture is *function*-scoped: it creates a context, shows the viewport, renders frames and destroys the context once per test, five times over. That is the same shape as the clean 8/8 baseline — plain widgets, no application subsystem — so the group is evidence for where the boundary sits rather than an exception to it. Adding a heavier subsystem to a `gui`-marked test is what would move it across, and a nondeterministic segfault is a poor thing to discover from CI.
 - **A benchmark or probe must use one process per context.** Run configurations as subprocesses and compare their printed output. This is cheap, and it is the only reason the constraint matters at all.
 
 ## Introspection gaps to expect
