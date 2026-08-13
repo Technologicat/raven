@@ -274,3 +274,50 @@ def test_find_field_and_type_filter_compose(dialog):
     dialog.set_type_filter("Images")
     dialog.reset_dir(file_name_filter="o", default_path=os.getcwd())
     assert shown(dialog) == ["photo.png"]  # "notes.md" also contains "o", but is not an image
+
+
+# --------------------------------------------------------------------------------
+# Closing the dialog
+
+def count_rebuilds(dialog, monkeypatch):
+    """Count `reset_dir` calls from here on, without changing what it does."""
+    calls = []
+    original = dialog.reset_dir
+
+    def counting_reset_dir(*args, **kwargs):
+        calls.append((args, kwargs))
+        return original(*args, **kwargs)
+    monkeypatch.setattr(dialog, "reset_dir", counting_reset_dir)
+    return calls
+
+
+def test_cancelling_does_not_rebuild_the_listing(dialog, monkeypatch):
+    """A rebuild on the way out is pure cost: the rows are hidden, and the next open rebuilds anyway.
+
+    Timing cannot pin this — the cost only shows on a directory far too large for a test — so what is
+    asserted is the property that produced it. On a 2520-entry directory a rebuild measured ~0.19 s, and
+    because DPG runs callbacks one at a time, that delay landed on whichever callback came next: the
+    opener button, appearing dead for as long as the close took.
+    """
+    dpg.show_item(dialog.tag)
+    calls = count_rebuilds(dialog, monkeypatch)
+    dialog.cancel()
+    assert calls == []
+
+
+def test_accepting_does_not_rebuild_the_listing(dialog, monkeypatch):
+    """The `ok` path used to rebuild twice, so it cost twice what cancelling did."""
+    dpg.show_item(dialog.tag)
+    dialog.reset_dir(file_name_filter="photo", default_path=os.getcwd())  # narrow to one, which `ok` accepts
+    calls = count_rebuilds(dialog, monkeypatch)
+    dialog.ok()
+    assert calls == []
+
+
+def test_closing_forgets_the_selection(dialog):
+    """Whatever the close skips, it may not leave stale state for the next `ok` to act on."""
+    dpg.show_item(dialog.tag)
+    dialog.reset_dir(file_name_filter="photo", default_path=os.getcwd())
+    dialog.ok()
+    assert dialog.selected_files == []
+    assert dialog.shown_items == []

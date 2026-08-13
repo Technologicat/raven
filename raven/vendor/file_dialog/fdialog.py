@@ -885,6 +885,12 @@ class FileDialog:
                             callback=table_sort_callback,
                             scrollX=True,
                             scrollY=True,
+                            # ImGui submits every row of a table each frame unless the table clips to the
+                            # visible range. Measured on a 2500-row listing: 3.76 ms per frame without,
+                            # 0.68 ms with — the latter being what an empty listing costs, i.e. the row
+                            # count stops mattering. The clipper requires uniform row height, which holds
+                            # here because every cell is created with `height=self.selec_height`.
+                            clipper=True,
                         ):
                             iwow_name = 100
                             iwow_date = 50
@@ -941,6 +947,24 @@ class FileDialog:
         `tag` from having to be known outside the constructor that set it.
         """
         return dpg.is_item_visible(self.tag)  # tag
+
+    def _forget_listing(self):
+        """Drop what the closed dialog knew about its listing, without touching the widgets.
+
+        Closing used to rebuild the listing instead — `ok` did it twice, `cancel` once — which is work
+        thrown away twice over: the rows are hidden, and the next `show_file_dialog` rebuilds them anyway.
+        Measured on a 2520-entry directory, a rebuild is ~0.19 s, so a close cost up to ~0.4 s.
+
+        That cost was not merely slow, it was the second symptom filed against this dialog: the button
+        that opens it appeared dead for a moment afterwards, its own acknowledgement flash included.
+        Callbacks run one at a time on DPG's single callback thread, so the opener's callback was waiting
+        behind this one rather than being lost.
+
+        The rows themselves stay, and cost nothing while the window is hidden: a hidden window renders
+        nothing, and `reset_dir` starts by deleting them on the next open.
+        """
+        self.selected_files.clear()
+        self.shown_items.clear()
 
     def refresh(self):
         cwd = os.getcwd()
@@ -1061,10 +1085,8 @@ class FileDialog:
         if self.callback is not None:
             self.callback(self.selected_files)
         dpg.set_value(f"ex_search_{self.instance_tag}", "")  # clear the search when exiting
-        self._update_search()  # note this clears `selected_files` because refreshing the view, so should be called *after* the callback.
-        self.selected_files.clear()
         self.last_path = os.getcwd()  # update remembered path when the dialog is closed with OK
-        self.reset_dir(default_path=self.last_path)
+        self._forget_listing()  # after the callback, which was handed `selected_files`
 
     def cancel(self):
         """Close dialog without selecting any files.
@@ -1079,7 +1101,7 @@ class FileDialog:
         if self.callback is not None:
             self.callback([])
         dpg.set_value(f"ex_search_{self.instance_tag}", "")  # clear the search when exiting
-        self._update_search()
+        self._forget_listing()
 
     def change_callback(self, callback):
         self.callback = callback
