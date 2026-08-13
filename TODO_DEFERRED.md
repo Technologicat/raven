@@ -1508,35 +1508,29 @@ clusters, as of 2026-07-27:
   own terms: figure- and equation-heavy literature extracts to prose that omits the argument, in exactly the
   corpus Raven exists to read.
 
-## FileDialog: slow open and a teardown input-dead-window on huge directories
+## FileDialog: does the open still feel slow?
 
-*Cluster: filedialog · Cost: ? · Gate: ? · Filed: 2026-07-18*
+*Cluster: filedialog · Cost: small · Gate: a live re-test · Filed: 2026-07-18, mostly resolved 2026-08-13*
 
-`FileDialog.show_file_dialog` → `chdir` → `reset_dir` rebuilds the *entire* file listing — one widget row per
-entry — every time the dialog opens. On a directory with thousands of files (Juha's papers dir) this takes a
-couple of seconds to show, and there is a second symptom: right after *closing* the dialog, clicking the opener
-again does nothing (not even the opener button's own flash fires) for a similar couple of seconds, then works.
-The modal window is still tearing down its thousands of child widgets, and while it does, input to the button
-behind it is swallowed — the click never reaches the callback. Both symptoms share one root cause: the listing is
-fully materialized as DPG widgets. Fixes to weigh: virtualize the listing (render only the visible rows), or
-cache/reuse the built listing when the directory is unchanged across opens (the common reopen-same-dir case), so
-a reopen is instant and there is no thousands-of-widgets teardown to block on.
+**The dead-opener-button half of this item is fixed and the measurements are in
+`investigations/filedialog-performance/`.** Read that before adding anything here; it says where not to
+look. In short: building the listing costs ~60 µs per row (0.19 s for a real 2520-entry directory), the
+close path was rebuilding it two or three times for nothing, and the button was not being denied input —
+its callback was queued behind the close on DPG's single callback thread. `_forget_listing` removed the
+rebuilds; `clipper=True` on the table removed a per-frame cost of 3.76 ms at 2500 rows.
 
-**Do this with "FileDialog: image thumbnail previews", as one design.** Thumbnails built naively make this
-item strictly worse, and the laziness they need is most of the virtualization this one wants. That item
-carries the shared notes (Cherrypick's pattern, the atlas-eviction question).
+**What is left is a question, not a defect: does opening still feel like a couple of seconds?** Nothing
+measured gets near that, so either the original report over-estimated a sub-second delay adjacent to a real
+one, or the live app has a factor the benchmarks lack. Re-test on the papers directory and say which. If it
+still drags, the listing build is ruled out and the next suspects are elsewhere — the one factor genuinely
+unmeasured is a cold page cache on the session's first open, which needs root to test.
 
-**Where the rebuild path stands after 2026-08-13**, so the next reader starts from the current shape rather
-than the filed one. `reset_dir` is still the single rebuild entry point and still materializes every row, so
-nothing here is fixed — but three things around it moved:
+Only if the answer is "still slow" does the original plan — virtualize the rows, or reuse the listing
+across opens of an unchanged directory — become worth its complexity. The clipper already bought the
+render-side half of virtualization for one keyword.
 
-- The Find field's matcher is now compiled once per rebuild rather than per entry
-  (`common_utils.make_search_matcher`), so the per-row cost is a predicate call.
-- `set_filter_list` rebuilds *only when the dialog is already open*, precisely to avoid doubling the rebuild
-  on the open path — the same two seconds this item is about. Any new "refresh the listing" caller wants that
-  same question asked of it.
-- `allow_drag` now defaults off, so a row no longer creates a drag payload plus an icon widget unless asked.
-  That is a real per-row saving that nothing measured; worth measuring as the baseline before optimizing.
+**Thumbnails still want to be designed with this** (see "FileDialog: image thumbnail previews"), because
+naive per-row decoding at build time would put real seconds into a path that currently has 0.19 s.
 
 Discovered during the document-attach test-drive (2026-07-18, Juha).
 
@@ -1544,8 +1538,8 @@ Discovered during the document-attach test-drive (2026-07-18, Juha).
 
 *Cluster: filedialog · Cost: ? · Gate: ? · Filed: 2026-07-17*
 
-*See also: "FileDialog: slow open and a teardown input-dead-window on huge directories" — **do these two
-together**, see below.*
+*See also: "FileDialog: does the open still feel slow?", and the measurements behind it in
+`investigations/filedialog-performance/` — the budget this item has to fit into is stated there.*
 
 The adopted `FileDialog` (`raven/vendor/file_dialog/`) lists files by name only — no image previews. For picking
 *image* files, a thumbnail per image would make selection usable — you pick by looking, not by guessing from the
@@ -1572,14 +1566,28 @@ thumbnail arrives from the background job — which started as an artifact and i
 - **Cherrypick itself slows down in huge directories**, most likely because its texture atlas holds every
   thumbnail for the current folder. Copying the pattern wholesale copies that. (The cause is Juha's reading,
   2026-08-13, not a measurement — profile before designing around it.)
+  - A second candidate cause worth profiling alongside it: `ThumbnailGrid._rebuild` materializes a group, a
+    drawlist, a label and a tooltip for *every* entry passing the filter, "visible" there meaning "not
+    filtered out" rather than "on screen". That is the same full-materialization shape the file dialog had,
+    and the file dialog's escape — `clipper=True` — is a table feature with no counterpart for a grid of
+    drawlists, so the grid would need real windowing.
 - **A file dialog needs the *last few* folders, not just the current one.** Navigating up and back down is the
   normal way to use a picker, so re-decoding every thumbnail on the way back is the case that will actually be
   felt. Hold thumbnail atlases for a couple of recent directories and evict beyond that.
 
-**Do this with the slow-open item, not before it.** Naively — decode per row at build time — thumbnails make
-that item strictly worse: a directory of a thousand images goes from a two-second open to unusable. And the
-laziness thumbnails need anyway (build the rows first, fill textures from a background task, only for rows
-actually visible) *is* most of the virtualization the other item wants. One design, two symptoms.
+**The budget is now known, which makes the design constraint sharp rather than vague.** Opening a
+2520-entry directory costs 0.19 s of row building, about 60 µs per row
+(`investigations/filedialog-performance/`). Decoding a thumbnail per row at build time would add
+milliseconds *each* — three orders of magnitude over the current per-row cost — so a naive version turns a
+fifth of a second into a minute. The laziness that avoids it (build the rows first, fill textures from a
+background task, and only for rows actually on screen) is not an optimization to add later; it is the only
+version of this feature that can exist.
+
+Note the render side is already handled: the table clips to the visible rows, so off-screen thumbnails cost
+no frame time once built. The open question is how to *ask* which rows are on screen, so the background job
+knows what to decode first. `dpg.is_item_visible` on a row is the obvious candidate — it reports what was
+rendered in the last frame, which under a clipper should be exactly the on-screen set — but that is a guess
+and wants one probe before any design leans on it.
 
 Whether thumbnails appear only under an image-typed filter is now a live choice rather than the obvious one:
 grouped filters landed 2026-08-13, so "the filter is image-typed" is a real predicate — but keying off the

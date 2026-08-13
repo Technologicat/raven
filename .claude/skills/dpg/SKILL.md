@@ -59,7 +59,9 @@ commentary in a trailing `(…)`. `·` separates targets. That shape is not deco
 | scroll programmatically, or follow a growing log | *Scrolling* → Three input paths move a scroll position, and DPG surfaces them differently · *Scrolling* → `max_y_scroll` moves when content is added |
 | set a window's size, or a tooltip's padding, or fight z-order | *Window sizing* (all of it) |
 | touch fonts, icons, super/subscripts or `dpg_markdown` | *Font atlas limits* (all of it) |
+| build a table, or wonder why a long listing costs frame time | *Tables* → Rows are submitted every frame unless the table clips |
 | write a test that drives DPG | *Testing DPG code* → DPG runs without a mapped window, so GUI code is unit-testable (mind the headless ceiling: no `render_dearpygui_frame`, so no layout) |
+| benchmark two GUI configurations, or otherwise build a second context in one process | *Testing DPG code* → Context recreation is not reliably safe once real widgets have rendered |
 | start a new app, or wire its startup sequence | *Raven DPG app structure* → Startup sequence · *Raven DPG app structure* → Layout and GUI |
 
 ## Adjacent material, not in the notes

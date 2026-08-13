@@ -742,7 +742,7 @@ Create the context once per module: it is not cheap, and DPG holds global state,
 
 **A shared context means widget tags have to be unique across the module**, not merely within a test — a duplicate ID takes the process down rather than raising (pitfall 5). Parameterize the tag on `request.node.name` where a fixture builds the same widget for every test.
 
-**And watch for class-level caches of DPG items, which outlive the context they were created in.** DPG itself is well-behaved here — the failure surfaces as `SystemError: Texture not found` from the first `add_image`, not as silent corruption — but the *cache* is application code, and a "have I initialized yet?" boolean is not the same question as "do my items still exist?". Nothing resets such a flag on `destroy_context`, so the second context finds it set and every cached tag dangling. An app never meets this, holding one context for its whole life; a test suite meets it on the second context it builds. (Live case: the adopted `file_dialog` cached its icon textures, themes and handler registry behind `_class_initialized`. Fixed by having the guard ask the context — `if cls._class_initialized and dpg.does_item_exist("ico_home")` — rather than trusting the flag. Bare `create_context` / `destroy_context` cycles with no such cache were measured to be fine, so this is about the cache and not about context recreation.)
+**And watch for class-level caches of DPG items, which outlive the context they were created in.** DPG itself is well-behaved here — the failure surfaces as `SystemError: Texture not found` from the first `add_image`, not as silent corruption — but the *cache* is application code, and a "have I initialized yet?" boolean is not the same question as "do my items still exist?". Nothing resets such a flag on `destroy_context`, so the second context finds it set and every cached tag dangling. An app never meets this, holding one context for its whole life; a test suite meets it on the second context it builds. (Live case: the adopted `file_dialog` cached its icon textures, themes and handler registry behind `_class_initialized`. Fixed by having the guard ask the context — `if cls._class_initialized and dpg.does_item_exist("ico_home")` — rather than trusting the flag. Bare `create_context` / `destroy_context` cycles with no such cache were measured to be fine, so this is about the cache.)
 
 **These run in CI, on all three platforms** (since 2026-08-12; `dearpygui` and `mistletoe` are in `.github/workflows/requirements-ci.txt`). The open question was whether GLFW could get a context on a runner with no display server, and it can — ubuntu, macOS and Windows alike, 2090 → 2147 tests passing per platform. Keep the `importorskip` anyway: it costs nothing and it is what lets the suite run in an environment that genuinely lacks the toolkit.
 
@@ -765,6 +765,20 @@ Two different registrations are in play, and only the first is universal:
 
 First use: `raven/common/gui/tests/test_animation.py`, covering `WidgetFlash`'s color/theme restoration and its ghost-vs-reified de-duplication — both of which had latent bugs that no amount of looking at the screen would have revealed.
 
+## Context recreation is not reliably safe once real widgets have rendered
+
+The cache paragraph above says bare cycles are fine, and they are — including 60 rendered frames on a shown viewport, clean over 8 trials. **That result does not extend to a cycle with an application's widgets in it**, which is the shape a benchmark reaches for when comparing two configurations in one process.
+
+Measured 2026-08-13, two contexts per process, a `FileDialog` built in each, 8 trials per configuration: **3/8 to 8/8 of runs died with `SIGSEGV`** on the second context. Nondeterministic, and not monotonic in anything tried — one configuration crashed 5/8 in one script and 0/8 in another that differed only in leaving vsync alone. Bisecting by dropping one ingredient at a time is therefore useless at this sample size, and the first attempt produced a table that read as if *removing* ingredients caused the crash.
+
+**The mechanism is not identified.** Waiting half a second before `destroy_context`, and calling `stop_dearpygui` first, both changed nothing — but only in a configuration that was not crashing anyway, so neither is evidence. Candidates not ruled out: work still queued on the callback thread, pending texture uploads, driver-side teardown.
+
+Consequences, which are small:
+
+- **An app never meets this**, holding one context for its whole life.
+- **The test suite does not either**, using one module-scoped context and never rendering a frame (see the ceiling above).
+- **A benchmark or probe must use one process per context.** Run configurations as subprocesses and compare their printed output. This is cheap, and it is the only reason the constraint matters at all.
+
 ## Introspection gaps to expect
 
 `dpg.get_item_configuration(item)["color"]` reports color as **normalized floats** while `dpg.configure_item(item, color=...)` takes **0–255**, so a read-modify-write round trip has to scale. An unset color reads back as the sentinel `[-1.0, 0.0, 0.0, 1.0]`, and writing that sentinel back (scaled) correctly restores "unset".
@@ -772,3 +786,23 @@ First use: `raven/common/gui/tests/test_animation.py`, covering `WidgetFlash`'s 
 `dpg.get_item_theme(item)` returns `None` for an unbound widget, and `dpg.bind_item_theme(item, None)` unbinds — so capture-and-restore of a theme is symmetric with no special case. (`0` also unbinds; prefer `None`.)
 
 There is **no getter for theme contents** — you cannot ask a theme for its colors or spacings. Code that needs to restore a themed value therefore tends to hardcode a measured literal instead; see the audit item in `TODO_DEFERRED.md`. Where a *per-widget* getter exists (as for a text widget's own color), use it — the gap is theme state specifically, not all of DPG.
+
+# Tables
+
+## Rows are submitted every frame unless the table clips
+
+`dpg.add_table` takes `clipper` (default `False`). Without it, ImGui walks and submits *every* row each frame regardless of how few are on screen, so per-frame cost grows with the row count rather than with the viewport.
+
+Measured 2026-08-13 on the adopted `file_dialog`'s listing, vsync off, median over 200 frames:
+
+| rows | `clipper=False` | `clipper=True` |
+|---|---|---|
+| 0 | 0.74 ms | 0.77 ms |
+| 500 | 1.10 ms | 1.01 ms |
+| 2500 | 3.76 ms | 0.68 ms |
+
+At 2500 rows the clipped table costs what an *empty* one costs: the row count stops appearing in the frame time at all. Sorting, scroll extent and row alignment were checked by screenshot afterwards and are unaffected — the clipper changes what is submitted, not what the table contains.
+
+**Its one requirement is uniform row height**, which is why it cannot simply be switched on everywhere: a table whose rows vary in height needs each cell created with an explicit matching height first. The file dialog qualifies because every cell already passes `height=self.selec_height`.
+
+Worth knowing what this does *not* fix: building the rows still costs what it costs (~60 µs/row there, so ~0.19 s for 2500), and deleting them likewise. The clipper is about the frames after the build, not the build.
