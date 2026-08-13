@@ -27,6 +27,12 @@ logger = logging.getLogger(__name__)
 
 # File extensions for formats supported by this module's `decode`.
 # Used by file-browser / directory-scan code to filter image candidates.
+#
+# Deliberately our own list, and deliberately much shorter than what Pillow can open (67 extensions, via
+# `PIL.Image.registered_extensions()` filtered by `Image.OPEN`). Deriving it from Pillow would make the answer
+# to "is this file an image?" a property of whichever Pillow happens to be installed — so a file could stop
+# being an image because a dependency moved underneath us, and a picker or a directory scan would quietly
+# change what it offers. A fixed list changes only when we change it.
 IMAGE_EXTENSIONS = frozenset({".png", ".jpg", ".jpeg", ".qoi",
                               ".bmp", ".tiff", ".tif", ".webp"})
 
