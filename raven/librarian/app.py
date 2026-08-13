@@ -708,9 +708,10 @@ def _attach_callback(selected_files) -> None:
 
     Documents attach on any model (whatever `docextract` can read). Images need a vision model; on a *confirmed* text-only
     model (`model_is_vlm is False`) a picked image is rejected with a dialog, since the model could not use it.
-    This routing-time image gate is interim: once FileDialog can offer multiple extension groups as one labelled
-    filter, the picker can simply not offer image types on a text-only model (see TODO_DEFERRED), so wrong types
-    can't be picked in the first place.
+
+    The picker steers away from that case — `_attach_filter_list` offers no image formats on a text-only model —
+    but this rejection remains the enforcement, because "All files" is still offered and a drag'n'drop does not
+    go through the picker at all.
     """
     logger.debug(f"_attach_callback: {len(selected_files)} file(s) selected.")
     rejected_images = []
@@ -746,23 +747,41 @@ def show_attach_dialog() -> None:
                                text="chat_attach_tooltip_text",  # tag
                                message="Opening the file browser…",  # shown in the tooltip while it's hovered during the flash
                                duration=gui_config.acknowledgment_duration)
+    _filedialog_attach.set_filter_list(_attach_filter_list())  # the loaded model may have changed since the dialog was built
     _filedialog_attach.show_file_dialog()
 
 # The attach dialog manages its own window (created outside any window context).
 #
 # The filters are grouped rather than one item per extension: the default shows everything that can actually be
-# attached and nothing else, and the two narrower items are there for when you know which kind you are after.
+# attached and nothing else, and the narrower items are there for when you know which kind you are after.
 # Both sets are asked for at startup rather than written out, so the picker cannot drift from what the ingester
 # and the image store will accept.
 _attachable_image_extensions = imagestore.supported_extensions()
 _attachable_document_extensions = docextract.supported_extensions()
+
+def _attach_filter_list() -> list:
+    """The file type filters to offer, given what the loaded model can currently read.
+
+    On a *confirmed* text-only model, image formats are not offered, so the common way of picking one no
+    longer leads to a rejection. Recomputed per open rather than fixed at construction: `llmclient.reconnect`
+    updates `model_is_vlm` in place when a model is loaded, so the answer changes while the app runs.
+
+    "All files" stays offered either way — an unusual extension is a real thing to want, and taking it away
+    would trade one refusal for another. So `_attach_callback` keeps its rejection as the backstop; what
+    changes is that reaching it now takes a deliberate detour rather than being the default path.
+    """
+    if llm_settings.model_is_vlm is False:  # confirmed text-only
+        return [("Documents", _attachable_document_extensions),
+                ".*"]
+    return [("Documents and images", (*_attachable_document_extensions, *_attachable_image_extensions)),
+            ("Documents", _attachable_document_extensions),
+            ("Images", _attachable_image_extensions),
+            ".*"]
+
 _filedialog_attach = FileDialog(title="Attach file(s) [Ctrl+click to multi-select]",
                                 tag="attach_file_dialog",
                                 callback=_attach_callback,
-                                filter_list=[("Documents and images", (*_attachable_document_extensions, *_attachable_image_extensions)),
-                                             ("Documents", _attachable_document_extensions),
-                                             ("Images", _attachable_image_extensions),
-                                             ".*"],
+                                filter_list=_attach_filter_list(),
                                 multi_selection=True,
                                 default_path=os.path.expanduser("~"))
 

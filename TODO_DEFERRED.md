@@ -1569,23 +1569,6 @@ directories).
 
 Discovered during brief-03 Half-2 multimodal work (2026-07-17, flagged by Juha).
 
-## Librarian's attach dialog could gate the offered types by model capability
-
-*Cluster: filedialog · Cost: ? · Gate: ? · Filed: 2026-07-18 · See also: "FileDialog: keyboard accessibility"*
-
-The half of the multi-extension filter item that did not ship with it (Juha, 2026-07-18). The attach picker now
-offers "Documents and images", "Documents" and "Images", but offers all three regardless of what the loaded
-model can read. On a text-only model it should offer "Documents" alone, so an image cannot be picked at all.
-
-Today the gating happens at *routing* time instead: `app._attach_callback` rejects an image on a confirmed
-text-only model with a dialog. Picker-level filtering would replace that after-the-fact rejection with up-front
-unavailability.
-
-The picker side is now trivial — `FileDialog.set_type_filter` selects an item by label, and the filter list is
-built at construction. What is not settled is where the capability answer comes from and when it is known:
-vision support is *confirmed* rather than declared, so the dialog would have to be rebuilt or its filter list
-narrowed when that confirmation changes.
-
 ## FileDialog: keyboard accessibility
 
 *Cluster: filedialog · Cost: ? · Gate: ? · Filed: 2026-08-13*

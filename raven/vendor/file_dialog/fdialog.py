@@ -230,30 +230,41 @@ class FileDialog:
         self._initialize_class()
 
         # File type filter.
-        self._filters = [_normalize_filter(entry) for entry in self.filter_list]
-        self._filter_labels = [label for label, _extensions in self._filters]
-        self._filter_extensions = dict(self._filters)
-        # Every extension any filter knows of. Save mode uses this to decide whether a typed filename already
-        # carries an extension, so it accepts any offered one rather than only the active filter's.
-        self._all_extensions = tuple(sorted({ext
-                                             for _label, extensions in self._filters if extensions is not None
-                                             for ext in extensions}))
-
         def _set_type_filter(label: str) -> None:
             self.file_filter = label
             if label in self._filter_extensions:
                 self._active_extensions = self._filter_extensions[label]
             else:  # not one of the offered items; read it as a literal extension, as the single-extension form did
                 self._active_extensions = None if label == ".*" else (label.lower(),)
-        # `None` means "the first item", which is what a caller listing the types it wants almost always means.
-        _set_type_filter(self._filter_labels[0] if self.file_filter is None else self.file_filter)
 
-        # A save dialog's default extension is nearly always the one extension its filter names, so derive it
-        # rather than making the caller write it a third time. Only for a filter naming exactly one: among
-        # several there is no principled choice, and silently picking the first would be a rule nobody could
-        # predict from a call site.
-        if self.default_file_extension is None and self._active_extensions is not None and len(self._active_extensions) == 1:
-            self.default_file_extension = self._active_extensions[0]
+        # Whether the caller named a save extension. If not, it is derived from the filter, and so has to be
+        # re-derived whenever the offered filters change.
+        self._default_file_extension_was_given = (default_file_extension is not None)
+
+        def _install_filters(filter_list, file_filter=None) -> None:
+            """Recompute the offered file type filters. Touches no widgets; callers refresh the GUI."""
+            self.filter_list = list(filter_list)
+            self._filters = [_normalize_filter(entry) for entry in self.filter_list]
+            self._filter_labels = [label for label, _extensions in self._filters]
+            self._filter_extensions = dict(self._filters)
+            # Every extension any filter knows of. Save mode uses this to decide whether a typed filename already
+            # carries an extension, so it accepts any offered one rather than only the active filter's.
+            self._all_extensions = tuple(sorted({ext
+                                                 for _label, extensions in self._filters if extensions is not None
+                                                 for ext in extensions}))
+            # `None` means "the first item", which is what a caller listing the types it wants almost always means.
+            _set_type_filter(self._filter_labels[0] if file_filter is None else file_filter)
+
+            # A save dialog's default extension is nearly always the one extension its filter names, so derive
+            # it rather than making the caller write it a third time. Only for a filter naming exactly one:
+            # among several there is no principled choice, and silently picking the first would be a rule
+            # nobody could predict from a call site.
+            if not self._default_file_extension_was_given:
+                if self._active_extensions is not None and len(self._active_extensions) == 1:
+                    self.default_file_extension = self._active_extensions[0]
+                else:
+                    self.default_file_extension = None
+        _install_filters(self.filter_list, self.file_filter)
 
         def _matches_type_filter(file_name: str) -> bool:
             if self._active_extensions is None:  # ".*"
@@ -594,6 +605,31 @@ class FileDialog:
             dpg.set_value(self.text_file_filter_extensions, _describe_type_filter(self.file_filter))
             reset_dir(default_path=os.getcwd())
         self.set_type_filter = set_type_filter  # needs to be accessible from the outside; uses closure data from this scope, so shouldn't be injected as an instance method (on the class); inject as a regular function *on the instance*.
+
+        def set_filter_list(filter_list, file_filter=None):
+            """Replace the offered file type filters, as `filter_list` in the constructor.
+
+            For an app whose acceptable types depend on state that can change while it runs — a Librarian
+            that offers image formats only while a vision model is loaded. Call it before
+            `show_file_dialog`, so what is offered reflects the answer at the moment of opening rather than
+            at construction.
+
+            `file_filter` selects one of the new labels; `None` takes the first, as in the constructor.
+
+            The listing is rebuilt only if the dialog is already open. Called just before `show_file_dialog`,
+            which is the intended use, rebuilding here would be work thrown away: that call rebuilds anyway,
+            and on a directory of thousands each rebuild is the couple of seconds the dialog is already slow by.
+            """
+            _install_filters(filter_list, file_filter)
+            dpg.configure_item(self.combo_file_filter, items=self._filter_labels)
+            dpg.set_value(self.combo_file_filter, self.file_filter)  # `default_value` is creation-time only; the live value is a `set_value`
+            dpg.set_value(self.text_file_filter_extensions, _describe_type_filter(self.file_filter))
+            # The *configured* show flag, not `is_visible`: the latter answers "did the user see it in the last
+            # rendered frame", which is False for a window shown microseconds ago and False always with no
+            # render loop. The question here is whether a listing exists to be brought up to date.
+            if dpg.get_item_configuration(self.tag)["show"]:  # tag
+                reset_dir(default_path=os.getcwd())
+        self.set_filter_list = set_filter_list  # instance-injected for the same reason as `set_type_filter` above.
 
         def filter_combo_selector(sender, app_data):
             set_type_filter(dpg.get_value(sender))

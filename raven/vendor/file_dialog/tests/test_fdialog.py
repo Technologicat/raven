@@ -217,6 +217,58 @@ def test_find_field_ands_fragments_in_any_order(dialog):
     assert shown(dialog) == ["paper.pdf"]
 
 
+def test_replacing_the_filter_list_re_filters_an_open_listing(dialog):
+    """For an app whose acceptable types depend on state that changes while it runs.
+
+    `dpg.show_item` rather than `show_file_dialog`, which calls `dpg.split_frame` and would hang a test
+    suite that has no render loop to satisfy the wait.
+    """
+    dpg.show_item(dialog.tag)
+    dialog.set_filter_list([("Text-ish", [".md", ".txt"]), ".*"])
+    assert shown(dialog) == ["notes.md"]
+    assert dialog.file_filter == "Text-ish"
+
+
+def test_replacing_the_filter_list_leaves_a_closed_listing_alone(dialog):
+    """Opening rebuilds anyway, and on a large directory that rebuild is seconds — so don't do it twice."""
+    before = shown(dialog)
+    dialog.set_filter_list([("Text-ish", [".md", ".txt"]), ".*"])
+    assert dialog.file_filter == "Text-ish"  # the selection is applied...
+    assert shown(dialog) == before  # ...but the stale listing is left for the next open to replace
+
+
+def test_replacing_the_filter_list_updates_the_offered_labels(dialog):
+    """The combo has to forget the old items, or the user can still pick a filter that no longer exists."""
+    dialog.set_filter_list([("Documents", [".md", ".pdf"]), ".*"])
+    assert dpg.get_item_configuration(dialog.combo_file_filter)["items"] == ["Documents", ".*"]
+    assert dpg.get_value(dialog.combo_file_filter) == "Documents"
+
+
+def test_replacing_the_filter_list_can_select_a_later_item(dialog):
+    """Shown first, so the listing assertion tests the new filter rather than agreeing with the old one."""
+    dpg.show_item(dialog.tag)
+    dialog.set_filter_list([("Documents", [".md", ".pdf"]), ".png"], file_filter=".png")
+    assert dialog.file_filter == ".png"
+    assert shown(dialog) == ["photo.png"]
+
+
+def test_replacing_the_filter_list_re_derives_the_save_extension(make_dialog):
+    """A derived extension belongs to the filter that produced it, so it cannot outlive that filter."""
+    picker = make_dialog(filter_list=[".png"], save_mode=True)
+    assert picker.default_file_extension == ".png"
+    picker.set_filter_list([".json"])
+    assert picker.default_file_extension == ".json"
+    picker.set_filter_list([("Images", [".png", ".jpg"])])
+    assert picker.default_file_extension is None  # no principled choice among several
+
+
+def test_replacing_the_filter_list_leaves_an_explicit_save_extension_alone(make_dialog):
+    """What the caller stated is the caller's, and no filter change may quietly overwrite it."""
+    picker = make_dialog(filter_list=[".png"], save_mode=True, default_file_extension=".bak")
+    picker.set_filter_list([".json"])
+    assert picker.default_file_extension == ".bak"
+
+
 def test_find_field_and_type_filter_compose(dialog):
     """Two independent concerns; a row has to survive both."""
     dialog.set_type_filter("Images")
