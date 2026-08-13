@@ -1614,6 +1614,7 @@ one sentence rather than a table of special cases.
 | Ctrl+F | focus the find field (exists) |
 | Ctrl+L | focus the path field; Enter navigates, Esc returns to find |
 | Ctrl+1 … Ctrl+9 | select the Nth offered type filter |
+| Ctrl+T | focus the type filter combo; Up / Down / Home / End then cycle it — see below |
 | Tab | complete in the field — see below |
 
 **Why Ctrl+Up exists alongside the standard Alt+Up.** On a Nordic layout Alt sits only to the *left* of
@@ -1621,6 +1622,17 @@ space — the right-hand key is AltGr, which is a different key — so Alt+Up ne
 on both sides, so right Ctrl and the arrow cluster are both under the right hand. Alt+Up was the only
 two-handed chord in the table: Ctrl+Enter, Ctrl+Home and Ctrl+End already fall under the right hand, and
 Ctrl+F / Ctrl+L / Ctrl+Space / Ctrl+1…9 are all reachable with the left alone. One alias fixes the set.
+
+**The type filter follows the Raven combo idiom, not only Ctrl+1…9.** DPG combos have no keyboard operation
+at all, so Raven supplies its own: a hotkey focuses the combo, and while it is focused Up / Down / Home / End
+cycle the choices. `raven-avatar-settings-editor` is the reference implementation — a `combobox_choice_map`
+of `{widget: (choices, callback)}`, and a bare-key branch that dispatches on `dpg.get_focused_item()`. Copy
+that shape rather than inventing one. Ctrl+1…9 stays as the direct-jump shortcut, useful because the filter
+list here is short and labelled.
+
+This means bare Up / Down mean different things depending on what holds focus — the listing cursor from the
+find field, the filter choices from the combo — which is the idiom's normal behaviour and is why the handler
+dispatches on the focused item rather than on a mode flag. Esc or Ctrl+F returns to the find field.
 
 **Ctrl+Enter rather than a double-Enter in `dirs_only` mode.** A timing window penalizes exactly the users
 this item exists to serve. The existing overwrite confirmation survives that objection because it is a
@@ -1653,8 +1665,12 @@ click path calls `_update_search()` explicitly after `set_value`, which is right
 arrows.
 
 **Cursor and selection are different things** once Ctrl+Space exists, so they need different looks. Selection
-keeps the selectable's `True` highlight; the cursor gets a bound theme painting `mvThemeCol_HeaderHovered`,
-which reads as "hovered" — the right affordance for a cursor. The cursor is an index into `shown_items`,
+keeps the selectable's `True` highlight; the proposal for the cursor is a bound theme painting
+`mvThemeCol_HeaderHovered`, on the reasoning that "hovered" is the affordance a cursor wants. **Whether the
+two are actually distinguishable at a glance has to be looked at**, not argued — they are adjacent greys in
+the default theme, and a cursor that reads as a weak selection is worse than either. Render a row in each
+state side by side and pick from that; if the hovered colour is too close, the fallback is a border or a
+distinct text colour rather than a third fill. The cursor is an index into `shown_items`,
 re-anchored **by path** after every rebuild and clamped if that path is gone; every keystroke in the find
 field rebuilds the listing, so this is the common case rather than an edge one.
 
@@ -1663,15 +1679,21 @@ own config setting (Librarian already has both).
 
 **Save mode keeps its double-Enter overwrite confirmation**, unchanged.
 
-### Three things to verify live before trusting the table
+### What still needs checking, and what no longer does
+
+**`dpg.set_value` does not fire the widget's callback** — measured 2026-08-13 on a combo and on an
+`InputText`, both silent while the value did change. So the save-mode arrow-fill can write the field without
+re-running the filter, which is what that rule needs, and the combo idiom can set a choice and call the
+callback itself. Two places in the tree already relied on this in comments; it is now measured.
+
+Still open:
 
 - **Page Up / Page Down arrive as `517` / `518`**, not `mvKey_Prior` / `mvKey_Next` — this dialog is exactly
   where that trap bites. Compare against the literals.
 - **Whether Ctrl+Enter, Alt+Up and Ctrl+Up reach a DPG handler while a single-line `InputText` holds the
   caret.** Unverified. The window manager may eat Alt; Ctrl+Up is the fallback for that too.
-- **Whether `dpg.set_value` fires the widget's callback.** The existing click path calls `_update_search()`
-  explicitly right after a `set_value`, which implies it does not — but that is an inference from code, not a
-  measurement, and the arrow-fill rule above depends on it.
+- **Whether the cursor and the selection are visually distinguishable** — see above; a looking question, not
+  an arguing one.
 
 **Out of scope, worth recording**: an audio cue for the overwrite warning, and for whatever other warnings the
 dialog grows. Visual-only feedback is a gap for the same audience this item is about.
