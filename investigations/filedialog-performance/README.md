@@ -91,9 +91,12 @@ on the opener while the previous close was still rebuilding waited out that clos
 before its own open began, with an unclipped table costing frame time throughout. That is a hypothesis
 assembled after the fix rather than a measurement taken before it, and it is recorded here as one.
 
-One factor remains untested: a **cold page cache**. Even the first visit to the papers directory logged
-`list 0.001 s`, so the cache was warm; `drop_caches` needs root and was not exercised. Since nothing is
-slow, this is a loose end rather than a lead.
+**A cold page cache was carried as a candidate through this investigation and should not have been.** Every
+measurement here is warm — even the first visit to the papers directory logged `list 0.001 s` — but the
+storage is NVMe, where the cold case is metadata reads for a few thousand entries at microsecond-scale
+latencies. That cannot reach the seconds this was trying to explain, whatever the cache state, so the
+untested case was never worth testing. Noted because the candidate survived several rounds of writing on
+plausibility alone, when one sentence about the hardware would have dropped it at the start.
 
 ## A DPG hazard found on the way
 
