@@ -1653,7 +1653,29 @@ narrowed it; `ead` gives nothing and flashes, since `headers.h` is still shown. 
 complete fully when unique, and append the separator when the unique result is a directory — which gives
 Tab-descent for free.
 
-**Nothing but Tab writes the field**, which is what keeps save mode honest: `ok()` already takes the field
+**The path field completes too, by the same rule against a different candidate set.** It already exists and
+is already typable — `ex_path_input_*`, an `InputText` with `on_enter=True` whose callback `chdir`s to what
+was typed — so Ctrl+L has a real target rather than needing one built. What it lacks is completion, and
+without that a Ctrl+L that lands you in a field where you must type an absolute path by hand is worse than
+no Ctrl+L.
+
+Tab there completes the **last path component** against the directory named by everything before it, using
+the same prefix-preferred-else-all rule and the same smart-case matcher as the find field. Two differences
+from the find field, both falling out of what the field is for:
+
+- **Only directories are candidates.** The callback `chdir`s, so a file path can only produce the "not a
+  directory" message box. Completing to one would be completing to a dead end.
+- **There is no listing to fall back on**, since typing here filters nothing. The candidate set is read from
+  the filesystem for the directory named by the typed prefix, on each Tab.
+
+Append the separator after a completed component, as bash does, so repeated Tab walks down the tree.
+
+**Esc in the path field returns to the find field** rather than cancelling the dialog, restoring the field to
+the current directory on the way — the browser's Ctrl+L behaviour. Cancelling then takes a second Esc, which
+is a consequence of the rule rather than a timing window: focus is back in the find field, where Esc cancels
+as always.
+
+**Nothing but Tab writes the find field**, which is what keeps save mode honest: `ok()` already takes the field
 verbatim, so `readm` saves as `readm` with `readme.txt` sitting right there. Implicit completion is the only
 thing that could break that, so there is none.
 

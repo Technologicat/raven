@@ -622,7 +622,7 @@ class FileDialog:
             """
             _install_filters(filter_list, file_filter)
             dpg.configure_item(self.combo_file_filter, items=self._filter_labels)
-            dpg.set_value(self.combo_file_filter, self.file_filter)  # `default_value` is creation-time only; the live value is a `set_value`
+            dpg.set_value(self.combo_file_filter, self.file_filter)
             dpg.set_value(self.text_file_filter_extensions, _describe_type_filter(self.file_filter))
             # The *configured* show flag, not `is_visible`: the latter answers "did the user see it in the last
             # rendered frame", which is False for a window shown microseconds ago and False always with no
