@@ -108,8 +108,13 @@ keep an artifact with what produced it — applied wherever the artifact happens
   however carefully it was written. See `investigations/README.md`.
 
   This is why `reference/` holds no measurements of ours: the audits and the context-inject sweep moved out to
-  their bundles on 2026-08-03. What stays in `reference/` is material we *consult* rather than produced — the
-  test is whether we ran something to find out.
+  their bundles on 2026-08-03. What stays in `reference/` is what gets *consulted* rather than completed.
+
+  **Authorship is not the test, and reading it as one gets `reference/` wrong.** We produced most of what is
+  in there — the AI Act summary was written from the EU's own materials, the keycode table came out of our own
+  investigation. The test is what the document *is*: a lookup table stays useful and unfinished forever, while
+  the measurement that produced it belongs with its scripts. Where both exist, both are kept, in their own
+  places — `dpg-keycodes.md` is the table you consult; the probes that established it are not filed beside it.
 - **`TODO.md`** for planned work and **`TODO_DEFERRED.md`** for things noticed mid-task and set aside. Where
   a brief depends on one, it names it.
 - **`dpg-notes.md`** (repo root) is the DearPyGui reference, kept at the root because it is consulted
