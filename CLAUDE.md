@@ -38,8 +38,9 @@ index.
   named for its scope (currently `librarian-extension/` and `researchers-night/`), `done/` for closed briefs
   and closed sprints, `reference/` for **durable knowledge** — documents that describe how something *is*
   rather than what to build, and so are consulted rather than finished (the EU AI Act summary, the DPG keycode
-  table, an archived style snapshot). Who wrote them is not the test: we produced most of `reference/`
-  ourselves. Our *measurements* go to `investigations/`, with the apparatus that produced them. A sprint folder is a working set: it holds its own `README.md`
+  table, an archived style snapshot). Who wrote them is not the test: **every document in
+  `reference/` is ours**, written or compiled here. Our *measurements* go to `investigations/`, with the
+  apparatus that produced them. A sprint folder is a working set: it holds its own `README.md`
   and `done/`, and unnumbered briefs alongside any numbered ones. **Numbering is discontinued** — the 01–16
   run is historical, and new briefs are named for what they are. `briefs/README.md` is authoritative, and
   explains why a single `active/` folder was tried and rejected on 2026-08-07.
