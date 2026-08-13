@@ -74,7 +74,7 @@ from .triage import TriageState, TriageManager
 from .history import TriageHistory
 from ..common.image.thumbnails import ThumbnailPipeline
 from .imageview import ImageView
-from .grid import ThumbnailGrid, FilterMode
+from .grid import TriageGrid, FilterMode
 from ..common.gui.gridnav import resolve_undo_nav_target
 from .preload import PreloadCache, mip_scale_for_zoom
 from .compare import CompareMode
@@ -1636,7 +1636,7 @@ def main() -> int:
             _app_state["image_view"] = image_view
 
             # Thumbnail grid.
-            grid = ThumbnailGrid(
+            grid = TriageGrid(
                 parent="cherrypick_columns",
                 width=max(1, grid_w), height=max(1, grid_h),
                 tile_size=args.tile_size,

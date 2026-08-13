@@ -1,0 +1,781 @@
+"""Scrollable thumbnail grid: tiles with labels, click selection, and lazily filled images.
+
+Each tile is a small DPG drawlist (for full control over borders, image and overlays) plus a text label.
+Layout is computed manually rather than read back from DPG, which is what makes hit detection O(1) from a
+mouse position — and what makes the arithmetic testable without a GUI.
+
+Thumbnails arrive asynchronously via `set_thumbnail`; until one does, a tile shows a placeholder from the
+pool set by `set_noise_pool`. Producing the images is not this widget's job — see
+`raven.common.image.thumbnails.ThumbnailPipeline` for the decoder both current callers use.
+
+**Extending it.** Two hooks, both no-ops here, let an owner decorate tiles without this module learning what
+the decoration means:
+
+- `draw_overlay(idx, drawlist_tag)` — draw on top of a finished tile. Cherrypick puts its triage icons,
+  compare badges and beacon here.
+- `border_color_for(idx)` — the tile's border colour. Cherrypick colours it by triage state.
+
+Whatever those hooks draw is redrawn whenever the tile is, so an owner changing the state behind them calls
+`refresh_tile(idx)` and needs to know nothing else.
+
+Thread-safe: all public methods and mouse handlers are guarded by an `RLock` (reentrant, because public
+methods call each other internally).
+"""
+
+__all__ = ["ThumbnailGrid"]
+
+import logging
+import threading
+from collections.abc import Callable, Sequence
+from typing import Optional
+
+import numpy as np
+import dearpygui.dearpygui as dpg
+
+from . import utils as guiutils
+from .gridnav import resolve_nav_target
+
+logger = logging.getLogger(__name__)
+
+# Counter for unique DPG tags.
+_tag_counter = 0
+_tag_lock = threading.Lock()
+
+
+def _next_tag(prefix: str) -> str:
+    global _tag_counter
+    with _tag_lock:
+        _tag_counter += 1
+        return f"grid_{prefix}_{_tag_counter}"
+
+
+# Spacing between tiles (pixels).
+_TILE_SPACING = 4
+
+
+class ThumbnailGrid:
+    """Scrollable thumbnail grid with click selection.
+
+    Create once, then call `set_entries` after opening a folder. The render loop must call `update` every
+    frame.
+
+    The grid knows how many entries there are and which of them to show; it does not know what they *are*.
+    The owner keeps the paths, decides the order, and supplies thumbnails as they become available.
+    """
+
+    def __init__(self, parent: str | int,
+                 width: int, height: int,
+                 tile_size: int = 128,
+                 icon_font=None,
+                 on_current_changed: Optional[Callable] = None,
+                 on_selection_changed: Optional[Callable] = None,
+                 on_double_click: Optional[Callable] = None,
+                 label_height: int = 18,
+                 font_size: int = 20,
+                 frame_padding_y: int = 3,
+                 item_spacing_x: int = 8,
+                 item_spacing_y: int = 4,
+                 scrollbar_size: int = 14,
+                 selection_tint: tuple = (255, 255, 255, 40),
+                 current_color: tuple = (80, 160, 255, 255),
+                 border_color: tuple = (60, 60, 65, 255),
+                 empty_tile_color: tuple = (55, 55, 58, 255),
+                 show_position_numbers: bool = True,
+                 debug: bool = False):
+        """
+        *parent*: DPG parent container.
+        *width*, *height*: initial grid panel size in pixels.
+        *tile_size*: thumbnail tile size (square, pixels).
+        *icon_font*: DPG font ID for icon glyphs an overlay may draw (optional).
+        *on_current_changed*: callback ``f(idx)`` when the current entry changes.
+        *on_selection_changed*: callback ``f()`` when the multi-selection changes.
+        *on_double_click*: callback ``f(idx)`` on double-click.
+        *label_height*: height reserved for the filename label below each tile.
+        *font_size*, *frame_padding_y*, *item_spacing_x*, *item_spacing_y*, *scrollbar_size*: DPG's own
+            metrics, which the layout arithmetic has to match because it is computed rather than measured.
+            The defaults are Raven's standard theme; pass the app's values if it differs.
+        *selection_tint*, *current_color*, *border_color*, *empty_tile_color*: tile colours.
+        *show_position_numbers*: draw each tile's 1-based position in its corner.
+        *debug*: log click positions.
+        """
+        self._lock = threading.RLock()
+
+        self._parent = parent
+        self._width = width
+        self._height = height
+        self._tile_size = tile_size
+        self._icon_font = icon_font
+        self._on_current_changed = on_current_changed
+        self._on_selection_changed = on_selection_changed
+        self._on_double_click = on_double_click
+        self._debug = debug
+
+        self._label_height = label_height
+        self._font_size = font_size
+        self._frame_padding_y = frame_padding_y
+        self._item_spacing_x = item_spacing_x
+        self._item_spacing_y = item_spacing_y
+        self._scrollbar_size = scrollbar_size
+        self._selection_tint = selection_tint
+        self._current_color = current_color
+        self._border_color = border_color
+        self._empty_tile_color = empty_tile_color
+        self._show_position_numbers = show_position_numbers
+
+        # Data.
+        self._labels: list[str] = []
+        self._n_entries: int = 0
+
+        # View state.
+        self._visible: list[int] = []  # entry indices currently shown, in display order
+        self._current: int = -1
+        self._selected: set[int] = set()
+
+        # DPG textures for thumbnails.  idx -> texture tag.
+        self._textures: dict[int, str] = {}
+
+        # Placeholder textures (shared pool), shown until a thumbnail arrives.
+        self._noise_textures: list[str] = []
+
+        # Layout state.
+        self._n_cols: int = 1
+        self._col_width: float = 0.0
+        self._row_height: float = 0.0
+
+        # DPG items.
+        self._child_window_tag = _next_tag("child")
+        dpg.add_child_window(parent=parent, tag=self._child_window_tag,
+                             width=width, height=height, border=False)
+
+        # Per-tile drawlists.  Maps visible-list position -> drawlist tag.
+        self._tile_drawlists: dict[int, str] = {}
+        self._tile_labels: dict[int, str] = {}
+
+        self._needs_rebuild = False
+        # Deferred scroll after rebuild: counts down frames to retry.
+        # DPG needs at least one render frame after item creation before
+        # get_y_scroll_max reflects the new content height; sometimes two.
+        self._scroll_countdown: int = 0
+
+        # Deferred callbacks — fired from update() outside the lock.
+        # Prevents the lock from being held across expensive owner-side work, which would block the main
+        # loop and deadlock with split_frame() waiters.
+        self._pending_current_changed: Optional[int] = None
+        self._pending_double_click: Optional[int] = None
+
+        # Mouse handlers.
+        self._handler_tag = _next_tag("handlers")
+        with dpg.handler_registry(tag=self._handler_tag):
+            dpg.add_mouse_click_handler(button=dpg.mvMouseButton_Left,
+                                        callback=self._on_click)
+            dpg.add_mouse_double_click_handler(button=dpg.mvMouseButton_Left,
+                                               callback=self._on_double_click_handler)
+
+        self._last_click_idx: int = -1  # for shift+click range selection
+        self.input_enabled: bool = True
+
+    # ------------------------------------------------------------------
+    # Hooks for owners
+    # ------------------------------------------------------------------
+
+    def draw_underlay(self, idx: int, drawlist_tag: str) -> None:
+        """Draw over entry `idx`'s image but *under* its tint, border and number. No-op here.
+
+        For decoration the tile's own furniture should stay legible through — a dimming wash over a
+        de-emphasized entry, say, which must not also dim the border that says why.
+        """
+
+    def draw_overlay(self, idx: int, drawlist_tag: str) -> None:
+        """Draw anything extra on top of entry `idx`'s finished tile. No-op here; override to decorate.
+
+        Called at the end of every tile draw, with the tile's image, selection tint and border already in
+        place, and the drawlist's origin at the tile's top-left corner (so coordinates run 0..`tile_size`).
+        """
+
+    def border_color_for(self, idx: int) -> tuple:
+        """The border colour for entry `idx`. Override to colour tiles by state."""
+        return self._border_color
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    def set_entries(self, labels: Sequence[str]) -> None:
+        """Set the entry labels, and show all of them. Call after opening a folder.
+
+        Resets the current entry to the first, clears the selection and drops every thumbnail — the indices
+        now mean something else, so a texture kept from before would be a picture of the wrong file.
+        """
+        with self._lock:
+            self._labels = list(labels)
+            self._n_entries = len(self._labels)
+            self._current = 0 if self._n_entries > 0 else -1
+            self._selected = set()  # no auto-select; the user selects explicitly
+            self._last_click_idx = -1
+            self._clear_textures()
+            self._visible = list(range(self._n_entries))
+            self._needs_rebuild = True
+
+    def set_visible(self, indices: Sequence[int]) -> None:
+        """Show only `indices`, in the given order — the grid's filtering and sorting surface.
+
+        The grid does not know what any filter *means*; an owner computes the list and hands it over.
+        """
+        with self._lock:
+            new_visible = list(indices)
+            if new_visible == self._visible:
+                return
+            self._visible = new_visible
+            self._needs_rebuild = True
+
+    def set_thumbnail(self, idx: int, flat_rgba) -> None:
+        """Update the thumbnail for entry *idx*.
+
+        *flat_rgba*: flat float32 array (tile_size * tile_size * 4).
+        Creates or updates the DPG texture, then redraws the tile if visible.
+        Stale thumbnails from a previous tile size are silently discarded.
+        """
+        with self._lock:
+            ts = self._tile_size
+            expected = ts * ts * 4
+            if len(flat_rgba) != expected:
+                return  # stale thumbnail from previous tile size — discard
+            if idx in self._textures:
+                dpg.set_value(self._textures[idx], flat_rgba)
+            else:
+                tex_tag = _next_tag("thumb_tex")
+                with dpg.texture_registry():
+                    dpg.add_dynamic_texture(ts, ts,
+                                            default_value=flat_rgba,
+                                            tag=tex_tag)
+                self._textures[idx] = tex_tag
+
+            # Redraw tile if it's currently visible in the grid.
+            if idx in self._visible:
+                vis_pos = self._visible.index(idx)
+                if vis_pos in self._tile_drawlists:
+                    self._draw_tile(idx, self._tile_drawlists[vis_pos])
+
+    def has_thumbnail(self, idx: int) -> bool:
+        """Whether entry `idx` already has its image, so an owner can avoid asking for it twice."""
+        with self._lock:
+            return idx in self._textures
+
+    def set_tile_size(self, size: int) -> None:
+        """Change the tile size.  Clears all textures (caller must restart its thumbnail production).
+
+        Also clears the placeholder pool — the caller should call `set_noise_pool` with new tiles matching
+        the new size.
+        """
+        with self._lock:
+            self._tile_size = size
+            self._clear_textures()
+            self._clear_noise_pool()
+            self._needs_rebuild = True
+
+    def set_noise_pool(self, tiles: list[np.ndarray]) -> None:
+        """Set placeholder textures from DPG-flat float32 arrays, shown until a thumbnail arrives.
+
+        Each entry must be a flat array of ``tile_size * tile_size * 4`` floats. Old placeholder textures
+        are deleted immediately.
+
+        Generate tiles with `raven.common.video.postprocessor.vhs_noise_pool`.
+        """
+        with self._lock:
+            self._clear_noise_pool()
+            ts = self._tile_size
+            for flat in tiles:
+                tag = _next_tag("noise_tex")
+                with dpg.texture_registry():
+                    dpg.add_dynamic_texture(ts, ts, default_value=flat, tag=tag)
+                self._noise_textures.append(tag)
+            logger.info(f"ThumbnailGrid.set_noise_pool: instance 0x{id(self):x}: {len(tiles)} tiles loaded")
+
+    def set_size(self, width: int, height: int) -> None:
+        """Resize the grid panel (call from viewport resize callback)."""
+        with self._lock:
+            self._width = width
+            self._height = height
+            dpg.configure_item(self._child_window_tag, width=width, height=height)
+            self._needs_rebuild = True
+
+    def set_current(self, idx: int) -> None:
+        """Set the current entry.
+
+        The ``on_current_changed`` callback is deferred to ``update()`` (outside the lock) to avoid holding
+        the lock across whatever the owner does in response.
+        """
+        with self._lock:
+            if idx == self._current:
+                return
+            old = self._current
+            self._current = idx
+            self._redraw_tile_by_idx(old)
+            self._redraw_tile_by_idx(idx)
+            self._scroll_to_current()
+            self._pending_current_changed = idx
+
+    def refresh_tile(self, idx: int) -> None:
+        """Redraw entry `idx`'s tile — how an owner reflects a change behind `draw_overlay`."""
+        with self._lock:
+            self._redraw_tile_by_idx(idx)
+
+    @property
+    def current(self) -> int:
+        """Index of the current entry, or -1."""
+        with self._lock:
+            return self._current
+
+    @property
+    def selected(self) -> set[int]:
+        """Set of multi-selected indices."""
+        with self._lock:
+            return set(self._selected)
+
+    @property
+    def visible_count(self) -> int:
+        with self._lock:
+            return len(self._visible)
+
+    @property
+    def visible(self) -> list[int]:
+        with self._lock:
+            return list(self._visible)
+
+    @property
+    def n_cols(self) -> int:
+        with self._lock:
+            return self._n_cols
+
+    @property
+    def tile_size(self) -> int:
+        with self._lock:
+            return self._tile_size
+
+    # ------------------------------------------------------------------
+    # Navigation
+    # ------------------------------------------------------------------
+
+    def navigate_next(self) -> Optional[int]:
+        with self._lock:
+            return self._navigate_by(1)
+
+    def navigate_prev(self) -> Optional[int]:
+        with self._lock:
+            return self._navigate_by(-1)
+
+    def navigate_row_down(self) -> Optional[int]:
+        with self._lock:
+            return self._navigate_by(self._n_cols)
+
+    def navigate_row_up(self) -> Optional[int]:
+        with self._lock:
+            return self._navigate_by(-self._n_cols)
+
+    def navigate_page_down(self) -> Optional[int]:
+        with self._lock:
+            return self._navigate_by(self._n_cols * self._rows_per_page())
+
+    def navigate_page_up(self) -> Optional[int]:
+        with self._lock:
+            return self._navigate_by(-self._n_cols * self._rows_per_page())
+
+    def navigate_first(self) -> Optional[int]:
+        with self._lock:
+            if not self._visible:
+                return None
+            self.set_current(self._visible[0])
+            return self._visible[0]
+
+    def navigate_last(self) -> Optional[int]:
+        with self._lock:
+            if not self._visible:
+                return None
+            self.set_current(self._visible[-1])
+            return self._visible[-1]
+
+    # ------------------------------------------------------------------
+    # Selection
+    # ------------------------------------------------------------------
+
+    def _notify_selection_changed(self) -> None:
+        if self._on_selection_changed is not None:
+            self._on_selection_changed()
+
+    def select_all(self) -> None:
+        with self._lock:
+            self._selected = set(self._visible)
+            self._needs_rebuild = True
+            self._notify_selection_changed()
+
+    def deselect_all(self) -> None:
+        with self._lock:
+            if not self._selected:
+                return
+            self._selected = set()
+            self._needs_rebuild = True
+            self._notify_selection_changed()
+
+    def invert_selection(self) -> None:
+        with self._lock:
+            self._selected = set(self._visible) - self._selected
+            self._needs_rebuild = True
+            self._notify_selection_changed()
+
+    def toggle_select(self, idx: int) -> None:
+        with self._lock:
+            if idx in self._selected:
+                self._selected.discard(idx)
+            else:
+                self._selected.add(idx)
+            self._redraw_tile_by_idx(idx)
+            self._notify_selection_changed()
+
+    # ------------------------------------------------------------------
+    # Render loop
+    # ------------------------------------------------------------------
+
+    def update(self) -> None:
+        """Call from the render loop every frame.
+
+        Fires deferred ``on_current_changed`` / ``on_double_click`` callbacks *outside* the lock. This is
+        critical: an owner's callback may do expensive work or wait for a frame, and holding the lock across
+        that would block the main loop and deadlock with `split_frame` waiters.
+        """
+        pending_current = None
+        pending_dblclick = None
+        with self._lock:
+            if self._needs_rebuild:
+                self._rebuild()
+                self._needs_rebuild = False
+            elif self._scroll_countdown > 0:
+                # Deferred scroll: retry for a few frames after rebuild,
+                # giving DPG time to settle get_y_scroll_max.
+                self._scroll_to_current()
+                self._scroll_countdown -= 1
+            if self._pending_current_changed is not None:
+                pending_current = self._pending_current_changed
+                self._pending_current_changed = None
+            if self._pending_double_click is not None:
+                pending_dblclick = self._pending_double_click
+                self._pending_double_click = None
+        # Callbacks fire outside the lock.
+        if pending_current is not None and self._on_current_changed is not None:
+            self._on_current_changed(pending_current)
+        if pending_dblclick is not None and self._on_double_click is not None:
+            self._on_double_click(pending_dblclick)
+
+    def visible_on_screen(self) -> list[int]:
+        """Entry indices whose tiles were actually rendered in the last frame.
+
+        What a lazy fill asks before deciding which thumbnails to produce: `visible` is everything the
+        filter admits, which in a large folder is mostly off-screen and mostly not worth decoding.
+
+        Ask a *tile*, never the scrolling container — see `dpg-notes.md`, "To find which rows are on
+        screen". Needs at least one rendered frame; before that, everything reads as not visible.
+        """
+        with self._lock:
+            on_screen = []
+            for vis_pos, idx in enumerate(self._visible):
+                tag = self._tile_drawlists.get(vis_pos)
+                if tag is not None and dpg.does_item_exist(tag) and dpg.is_item_visible(tag):  # tag
+                    on_screen.append(idx)
+            return on_screen
+
+    # ------------------------------------------------------------------
+    # Cleanup
+    # ------------------------------------------------------------------
+
+    def destroy(self) -> None:
+        """Remove all DPG items.  Call on app shutdown."""
+        with self._lock:
+            self._clear_textures()
+            self._clear_noise_pool()
+            guiutils.maybe_delete_item(self._handler_tag)
+            guiutils.maybe_delete_item(self._child_window_tag)
+
+    # ------------------------------------------------------------------
+    # Internal: texture management
+    # ------------------------------------------------------------------
+
+    def _clear_textures(self) -> None:
+        """Delete all thumbnail DPG textures."""
+        for tex_tag in self._textures.values():
+            guiutils.maybe_delete_item(tex_tag)
+        self._textures.clear()
+
+    def _clear_noise_pool(self) -> None:
+        """Delete all placeholder textures."""
+        for tex_tag in self._noise_textures:
+            guiutils.maybe_delete_item(tex_tag)
+        self._noise_textures.clear()
+
+    # ------------------------------------------------------------------
+    # Internal: layout
+    # ------------------------------------------------------------------
+
+    def _compute_layout(self) -> None:
+        """Compute grid layout parameters from current width and tile size.
+
+        Must match the actual DPG-rendered layout: DPG adds `item_spacing` between sibling widgets
+        automatically, and the arithmetic here is what hit detection and scrolling both trust.
+        """
+        ts = self._tile_size
+        self._col_width = ts + self._item_spacing_x
+        # Row = drawlist + spacing + text (with frame padding) + spacing (between rows).
+        text_h = self._font_size + 2 * self._frame_padding_y
+        self._row_height = ts + self._item_spacing_y + text_h + self._item_spacing_y
+        usable = self._width - self._scrollbar_size
+        self._n_cols = max(1, int(usable / self._col_width))
+
+    def _rows_per_page(self) -> int:
+        """How many whole rows fit in the panel — the step for page-wise navigation."""
+        if self._row_height <= 0:
+            return 1
+        return max(1, int(self._height / self._row_height))
+
+    def _rebuild(self) -> None:
+        """Tear down and re-create all tile DPG items."""
+        dpg.delete_item(self._child_window_tag, children_only=True)
+        self._tile_drawlists.clear()
+        self._tile_labels.clear()
+        self._compute_layout()
+
+        ts = self._tile_size
+        n_cols = self._n_cols
+        row_tag = None
+
+        for vis_pos, idx in enumerate(self._visible):
+            col = vis_pos % n_cols
+            if col == 0:
+                row_tag = _next_tag("row")
+                dpg.add_group(horizontal=True, parent=self._child_window_tag,
+                              tag=row_tag)
+
+            # Tile group.
+            tile_tag = _next_tag("tile")
+            dpg.add_group(parent=row_tag, tag=tile_tag)
+
+            # Drawlist for image + borders + overlays.
+            dl_tag = _next_tag("tile_dl")
+            dpg.add_drawlist(width=ts, height=ts,
+                             parent=tile_tag, tag=dl_tag)
+            self._tile_drawlists[vis_pos] = dl_tag
+
+            # Label — truncate to fit tile width.
+            # At font size 20, ~9px average character width (variable-width font).
+            max_chars = max(4, ts // 9)
+            name = self._labels[idx]
+            if len(name) > max_chars:
+                name = name[:max_chars - 1] + "…"
+            label_tag = _next_tag("label")
+            dpg.add_text(name, parent=tile_tag, tag=label_tag, wrap=ts)
+            self._tile_labels[vis_pos] = label_tag
+
+            # Tooltip with the full label (on the tile group, not the drawlist).
+            with dpg.tooltip(tile_tag):
+                dpg.add_text(self._labels[idx])
+
+            # Draw tile contents.
+            self._draw_tile(idx, dl_tag)
+
+        # Defer scroll — DPG needs a render frame (sometimes two) after
+        # item creation before get_y_scroll_max reflects the new content.
+        # Retry for a few frames to be safe.
+        self._scroll_countdown = 3
+
+    def _draw_tile(self, idx: int, drawlist_tag: str) -> None:
+        """Draw a single tile's contents on its drawlist."""
+        dpg.delete_item(drawlist_tag, children_only=True)
+        ts = self._tile_size
+
+        # Thumbnail image (or placeholder).
+        if idx in self._textures:
+            dpg.draw_image(self._textures[idx],
+                           pmin=(0, 0), pmax=(ts, ts),
+                           parent=drawlist_tag)
+        elif self._noise_textures:
+            dpg.draw_image(self._noise_textures[idx % len(self._noise_textures)],
+                           pmin=(0, 0), pmax=(ts, ts),
+                           parent=drawlist_tag)
+        else:
+            dpg.draw_rectangle(pmin=(0, 0), pmax=(ts, ts),
+                               fill=self._empty_tile_color,
+                               parent=drawlist_tag)
+
+        self.draw_underlay(idx, drawlist_tag)
+
+        # Selection tint.
+        if idx in self._selected:
+            dpg.draw_rectangle(pmin=(0, 0), pmax=(ts - 1, ts - 1),
+                               fill=self._selection_tint,
+                               parent=drawlist_tag)
+
+        # Border.
+        dpg.draw_rectangle(pmin=(0, 0), pmax=(ts - 1, ts - 1),
+                           color=self.border_color_for(idx), thickness=2,
+                           parent=drawlist_tag)
+
+        # Current-entry indicator (inner border).
+        if idx == self._current:
+            dpg.draw_rectangle(pmin=(3, 3), pmax=(ts - 4, ts - 4),
+                               color=self._current_color, thickness=2,
+                               parent=drawlist_tag)
+
+        # Position number (lower-left corner).
+        if self._show_position_numbers and idx in self._visible:
+            vis_pos = self._visible.index(idx)
+            num_text = str(vis_pos + 1)
+            num_size = max(10, min(14, ts // 8))
+            # Positioned inside the border (2px) with a small margin.
+            nx = 4
+            ny = ts - num_size - 4
+            dpg.draw_text((nx, ny), num_text,
+                          color=(255, 255, 255, 120), size=num_size,
+                          parent=drawlist_tag)
+
+        self.draw_overlay(idx, drawlist_tag)
+
+    # ------------------------------------------------------------------
+    # Internal: navigation helpers
+    # ------------------------------------------------------------------
+
+    def _navigate_by(self, delta: int) -> Optional[int]:
+        """Move current by *delta* positions in the visible list.
+
+        Respects the filter: when the current entry is hidden, navigation resolves from its gap position in
+        the visible list. See `gridnav.resolve_nav_target`.
+        """
+        new_idx = resolve_nav_target(self._visible, self._current, delta)
+        if new_idx is None:
+            return None
+        self.set_current(new_idx)
+        return new_idx
+
+    def _scroll_to_current(self) -> None:
+        """Scroll the grid to make the current tile visible."""
+        if self._current < 0 or self._current not in self._visible:
+            return
+        vis_pos = self._visible.index(self._current)
+        row = vis_pos // self._n_cols
+        row_y = row * self._row_height
+
+        # Scroll so the row is visible (with some margin).
+        scroll_y = dpg.get_y_scroll(self._child_window_tag)
+        max_scroll = dpg.get_y_scroll_max(self._child_window_tag)
+        if row_y < scroll_y:
+            dpg.set_y_scroll(self._child_window_tag, max(0, row_y - _TILE_SPACING))
+        elif row_y + self._row_height > scroll_y + self._height:
+            target = row_y + self._row_height - self._height + _TILE_SPACING
+            dpg.set_y_scroll(self._child_window_tag, min(target, max_scroll))
+
+    def _redraw_tile_by_idx(self, idx: int) -> None:
+        """Redraw a single tile (if it's visible) after a state change."""
+        if idx < 0 or idx not in self._visible:
+            return
+        vis_pos = self._visible.index(idx)
+        if vis_pos in self._tile_drawlists:
+            self._draw_tile(idx, self._tile_drawlists[vis_pos])
+
+    # ------------------------------------------------------------------
+    # Internal: hit detection
+    # ------------------------------------------------------------------
+
+    def _hit_test(self) -> Optional[int]:
+        """O(1) hit test: return the entry index under the mouse, or None."""
+        if not guiutils.is_mouse_inside_widget(self._child_window_tag):
+            return None
+
+        local_x, local_y = guiutils.get_mouse_relative_pos(self._child_window_tag)
+        content_y = local_y + dpg.get_y_scroll(self._child_window_tag)
+
+        return self.hit_test_at(local_x, content_y)
+
+    def hit_test_at(self, local_x: float, content_y: float) -> Optional[int]:
+        """Which entry sits at panel-local `local_x` and content-space `content_y`, if any.
+
+        Split out from the mouse handler so the arithmetic can be tested without a mouse or a rendered
+        frame — this is the part that silently goes wrong when a layout constant drifts.
+        """
+        if self._col_width <= 0 or self._row_height <= 0:
+            return None
+
+        col = int(local_x / self._col_width)
+        row = int(content_y / self._row_height)
+
+        if col >= self._n_cols or col < 0 or row < 0:
+            return None
+
+        vis_pos = row * self._n_cols + col
+        if vis_pos < 0 or vis_pos >= len(self._visible):
+            return None
+
+        # Check that the position is on the tile, not in the spacing around it.
+        tile_x = local_x - col * self._col_width
+        tile_y = content_y - row * self._row_height
+        if tile_x > self._tile_size or tile_y > self._tile_size:
+            return None
+
+        return self._visible[vis_pos]
+
+    # ------------------------------------------------------------------
+    # Internal: mouse handlers
+    # ------------------------------------------------------------------
+
+    def _on_click(self, sender, app_data) -> None:
+        """Handle single click on a tile."""
+        with self._lock:
+            if not self.input_enabled:
+                return
+
+            if self._debug and guiutils.is_mouse_inside_widget(self._child_window_tag):
+                local_x, local_y = guiutils.get_mouse_relative_pos(self._child_window_tag)
+                content_y = local_y + dpg.get_y_scroll(self._child_window_tag)
+                logger.info(f"ThumbnailGrid._on_click: local=({local_x:.0f},{local_y:.0f}) "
+                            f"content_y={content_y:.0f} row_h={self._row_height:.0f} "
+                            f"col_w={self._col_width:.0f} "
+                            f"row={int(content_y / self._row_height)} "
+                            f"col={int(local_x / self._col_width)}")
+
+            idx = self._hit_test()
+            if idx is None:
+                return
+
+            ctrl = (dpg.is_key_down(dpg.mvKey_LControl)
+                    or dpg.is_key_down(dpg.mvKey_RControl))
+            shift = (dpg.is_key_down(dpg.mvKey_LShift)
+                     or dpg.is_key_down(dpg.mvKey_RShift))
+
+            if shift and self._last_click_idx >= 0 and self._last_click_idx in self._visible:
+                # Range select from last click to this click (in visible order).
+                a = self._visible.index(self._last_click_idx)
+                b = self._visible.index(idx) if idx in self._visible else a
+                lo, hi = min(a, b), max(a, b)
+                self._selected = set(self._visible[lo:hi + 1])
+                self._needs_rebuild = True  # many tiles changed
+                self._notify_selection_changed()
+            elif ctrl:
+                self.toggle_select(idx)  # already notifies
+            else:
+                # Bare click: set current and replace selection with this one entry.
+                old_selected = self._selected
+                self._selected = {idx}
+                if old_selected != self._selected:
+                    self._needs_rebuild = True
+                    self._notify_selection_changed()
+                self.set_current(idx)
+
+            self._last_click_idx = idx
+
+    def _on_double_click_handler(self, sender, app_data) -> None:
+        """Handle double-click on a tile."""
+        with self._lock:
+            if not self.input_enabled:
+                return
+            idx = self._hit_test()
+            if idx is None:
+                return
+            self._selected.clear()
+            self.set_current(idx)
+            # Deferred — fires from update() outside the lock.
+            self._pending_double_click = idx
