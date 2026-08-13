@@ -37,7 +37,6 @@ with timer() as tim:
     import sys
     import time
     from collections.abc import Callable
-    from typing import Tuple, Union
 
     # WORKAROUND: Deleting a texture or image widget causes DPG to segfault on Nvidia/Linux.
     # https://github.com/hoffstadt/DearPyGui/issues/554
@@ -398,7 +397,7 @@ ATTACHMENT_FAILED = sym("attachment_failed")          # nothing usable in it; ch
 _staged_image_texture_registry = dpg.add_texture_registry(tag="librarian_staged_image_textures")  # tag
 _staged_image_counter = 0  # monotonic; keeps thumbnail widget/texture tags unique even across remove-then-re-add
 
-def _decode_staged_thumbnail(raw: bytes) -> Tuple[str, int, int]:
+def _decode_staged_thumbnail(raw: bytes) -> tuple[str, int, int]:
     """Decode `raw` image bytes to a strip-height thumbnail texture. Return `(texture_tag, width, height)`."""
     global _staged_image_counter
     from ..common.image import codec, lanczos  # deferred: pulls torch / Pillow only on an actual attach
@@ -454,7 +453,7 @@ backend_status_task_manager = bgtask.TaskManager(name="librarian_backend_status"
 
 _backend_pill_shown = False  # mirrors the row's visibility; `_refresh_composer_layout` sizes the field from it
 
-def _describe_backend_status(status: sym) -> Tuple[str, str, str]:
+def _describe_backend_status(status: sym) -> tuple[str, str, str]:
     """Return `(icon, label, tooltip)` for the composer's status row in `status`.
 
     The three states get distinct wording because the user can act on the difference: starting a server and
@@ -940,23 +939,23 @@ with timer() as tim:
         #
         # The dynamic panel sizes are not available at startup, until the GUI is rendered at least once,
         # so we must compute the initial sizes explicitly. These is also needed for dynamic resizing.
-        def _get_chat_panel_base_size() -> Tuple[int, int]:  # at initial view, with the window at its design size
+        def _get_chat_panel_base_size() -> tuple[int, int]:  # at initial view, with the window at its design size
             w = gui_config.chat_panel_w + 16  # 16 = round border (8 on each side)
             h = gui_config.main_window_h - (gui_config.ai_warning_h + 16) - (gui_config.chat_controls_h + 16) + 8
             return w, h
-        def _get_chat_panel_size(main_window_w: int, main_window_h: int) -> Tuple[int, int]:  # at current window size
+        def _get_chat_panel_size(main_window_w: int, main_window_h: int) -> tuple[int, int]:  # at current window size
             extra_w = main_window_w - gui_config.main_window_w
             extra_h = main_window_h - gui_config.main_window_h
             base_w, base_h = _get_chat_panel_base_size()
             w = base_w + extra_w
             h = base_h + extra_h
             return w, h
-        def _get_avatar_panel_base_size() -> Tuple[int, int]:
+        def _get_avatar_panel_base_size() -> tuple[int, int]:
             chat_panel_base_w, chat_panel_base_h = _get_chat_panel_base_size()
             w = (gui_config.main_window_w - chat_panel_base_w - 3 * 8)  # the 3 * 8 are the outer borders outside the panels (between panel and window edge, and between the panels)
             h = chat_panel_base_h
             return w, h
-        def _get_avatar_panel_size(main_window_w: int, main_window_h: int) -> Tuple[int, int]:
+        def _get_avatar_panel_size(main_window_w: int, main_window_h: int) -> tuple[int, int]:
             extra_w = 0  # avatar panel keeps the same width
             extra_h = main_window_h - gui_config.main_window_h
             base_w, base_h = _get_avatar_panel_base_size()
@@ -972,12 +971,12 @@ with timer() as tim:
             base_w = _get_chat_field_base_width()
             w = base_w + extra_w
             return w
-        def _get_chat_controls_base_size() -> Tuple[int, int]:
+        def _get_chat_controls_base_size() -> tuple[int, int]:
             chat_panel_base_w, chat_panel_base_h = _get_chat_panel_base_size()
             w = chat_panel_base_w
             h = gui_config.chat_controls_h
             return w, h
-        def _get_chat_controls_size(main_window_w: int, main_window_h: int) -> Tuple[int, int]:
+        def _get_chat_controls_size(main_window_w: int, main_window_h: int) -> tuple[int, int]:
             extra_w = main_window_w - gui_config.main_window_w
             extra_h = 0
             base_w, base_h = _get_chat_controls_base_size()
@@ -1664,7 +1663,7 @@ hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focu
                env(key_indent=0, key="F1", action_indent=0, action="Open this Help card", notes=""),
                )
 def render_help_extras(self: helpcard.HelpWindow,
-                       gui_parent: Union[str, int]) -> None:
+                       gui_parent: str | int) -> None:
     """Render app-specific extra information into the help card.
 
     Called by `HelpWindow` when the help card is first rendered.
@@ -2098,7 +2097,7 @@ chat_controller = DPGChatController(llm_settings=llm_settings,
                                     is_any_modal_window_visible=is_any_modal_window_visible,
                                     executor=bg)
 
-def _get_cleanup_roots() -> Tuple[str, ...]:
+def _get_cleanup_roots() -> tuple[str, ...]:
     """The node IDs a cleanup must keep everything reachable from: **every** root, each of which is a system
     prompt node holding the chats that were written under it.
 
