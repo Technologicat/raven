@@ -4235,6 +4235,27 @@ grounds that an honest "code is not supported" beats a feature that half-works w
 
 Raised by Juha (2026-08-07), reviewing the supported-format list.
 
+## OS file drag-and-drop is not advertised anywhere
+
+`raven.common.gui.filedrop` shipped 2026-08-10 and `filedrop.install` runs in all six GUI apps —
+Visualizer, Librarian, Cherrypick, both Avatar editors, and the XDot viewer. Nothing tells the user it is
+there. Checked 2026-08-13: no in-app string mentions it, and neither the root `README.md` nor the per-app
+READMEs do. The nearest miss is Librarian's "drop files in this folder for the AI to search" tooltip, which
+is about the documents *directory* for RAG rather than about dropping onto the window — close enough in
+wording to be read as covering this, and it does not.
+
+So the only way to find the feature is to guess that it exists and try it.
+
+Two halves, separable:
+
+- **In-app.** The shape of the affordance is undecided — a line in each app's help window, a hint in or
+  beside the file dialog, an overlay while a drag hovers, or some combination. Whatever is chosen has to be
+  accurate per app: each `filedrop.install` call carries its own `DropRule` list, so what an app accepts
+  differs, and a generic "drop files here" would be wrong about most of them.
+- **Docs.** The root `README.md`, plus the per-app READMEs that have a matching section.
+
+Raised by Juha (2026-08-13), for discussion before building — the in-app cue is the open question.
+
 ## Declined
 
 Items closed without doing. A reason is recorded so the decision stays made — an undocumented discard gets
