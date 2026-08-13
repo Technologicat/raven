@@ -7,16 +7,23 @@ __all__ = ["approx",
            "make_docx",
            "make_pptx",
            "make_odt",
-           "make_odp"]
+           "make_odp",
 
+           "make_demo_image",
+           "write_demo_image_folder"]
+
+import colorsys
 import io
-from typing import Callable
+import pathlib
+from typing import Callable, Union
 
 import docx
 import odf.draw
 import odf.opendocument
 import odf.style
 import odf.text
+import PIL.Image
+import PIL.ImageDraw
 import pptx
 import pptx.util
 
@@ -155,6 +162,38 @@ def make_odp(slides: list[list[str]]) -> bytes:
         for text in paragraphs:
             textbox.addElement(odf.text.P(text=text))
     return _to_bytes(document.write)
+
+
+def make_demo_image(index: int, width: int = 900, height: int = 600) -> bytes:
+    """Build a distinctive PNG for testing anything that shows images. Returns the file bytes.
+
+    Each index gets its own hue and its number painted on it, so a grid of them can be read at a glance:
+    which tile is which, whether they arrived in order, and whether any is showing the wrong picture.
+    """
+    r, g, b = (int(255 * c) for c in colorsys.hsv_to_rgb((index % 12) / 12.0, 0.55, 0.9))
+    image = PIL.Image.new("RGB", (width, height), (r, g, b))
+    draw = PIL.ImageDraw.Draw(image)
+    draw.rectangle((20, 20, width - 20, height - 20), outline=(255, 255, 255), width=8)
+    draw.text((width // 2 - 30, height // 2 - 10), f"#{index:02d}", fill=(255, 255, 255))
+    return _to_bytes(lambda buffer: image.save(buffer, "PNG"))
+
+
+def write_demo_image_folder(directory: Union[str, pathlib.Path], n: int = 14) -> list[pathlib.Path]:
+    """Fill `directory` with `n` demo images, and return their paths in order.
+
+    **Orientation alternates** between landscape and portrait on purpose. A grid letterboxes non-square
+    images into square tiles, and a folder of uniformly-shaped images cannot show whether it does — which
+    is exactly the sort of thing that looks right until real photographs arrive.
+    """
+    directory = pathlib.Path(directory)
+    directory.mkdir(parents=True, exist_ok=True)
+    paths = []
+    for i in range(n):
+        width, height = (900, 600) if i % 2 == 0 else (600, 900)
+        path = directory / f"demo_{i:02d}.png"
+        path.write_bytes(make_demo_image(i, width, height))
+        paths.append(path)
+    return paths
 
 
 def _to_bytes(save: Callable[[io.BytesIO], None]) -> bytes:
