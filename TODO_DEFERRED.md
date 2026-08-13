@@ -684,8 +684,19 @@ net for when the skill does not fire, or duplicated attention cost in an always-
 DPG tasks without being asked for. If it does, cut the index to a single pointer. If it does not, the index is
 carrying the load and the skill's description needs widening instead.
 
-There is no measurement yet either way — the premise that a description-matched skill fires more reliably than
-an always-in-context instruction is the whole bet, and it is untested.
+**First observation, 2026-08-13 (one data point, with a caveat).** The skill fired unasked at the start of the
+session that followed its creation: the request was "let's continue with the FileDialog open/close performance
+and the image thumbnail preview", which names no skill, and the skill was invoked before any code was read.
+Over the session it routed to `Threading` → callback dispatch, `Testing DPG code`, and `Window sizing`, and
+gained three new sections of its own.
+
+**`CLAUDE.md`'s numbered index was not consulted once** in that session, on a day spent almost entirely in DPG
+code. That is the first evidence that it is duplicated cost rather than a safety net.
+
+The caveat that stops this from settling it: **the session was primed.** The skill had been built the day
+before, by the same agent, and its description sat in the available-skills list. The clean test is a session
+with no such history — a fresh context arriving at DPG work cold. Worth one more observation before cutting
+the index, since cutting it is the irreversible direction.
 
 ## The 8/3 pass: bare DPG margins should name themselves
 
