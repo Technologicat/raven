@@ -1,8 +1,9 @@
-"""Pure navigation arithmetic for raven-cherrypick's thumbnail grid.
+"""Pure navigation arithmetic for a thumbnail grid: where does a keypress move the cursor?
 
-Separated from the DPG-bound `grid` widget so the algorithm layer is testable
-without the GUI stack (the test CI installs a minimal, dearpygui-free dependency
-subset). See `resolve_nav_target`.
+Separated from the DPG-bound grid widget so the algorithm layer is testable without the GUI stack (the test
+CI installs a minimal, dearpygui-free dependency subset). See `resolve_nav_target`.
+
+Used by `raven.common.gui.thumbnailgrid`, and through it by every grid in the constellation.
 """
 
 __all__ = ["resolve_nav_target", "resolve_undo_nav_target"]

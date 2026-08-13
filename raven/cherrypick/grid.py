@@ -22,7 +22,7 @@ import dearpygui.dearpygui as dpg
 from ..common.gui import utils as guiutils
 from ..vendor.IconsFontAwesome6 import IconsFontAwesome6 as fa
 from . import config
-from .gridnav import resolve_nav_target
+from ..common.gui.gridnav import resolve_nav_target
 from .triage import TriageState
 
 logger = logging.getLogger(__name__)

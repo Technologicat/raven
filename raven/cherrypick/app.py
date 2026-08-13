@@ -75,7 +75,7 @@ from .history import TriageHistory
 from ..common.image.thumbnails import ThumbnailPipeline
 from .imageview import ImageView
 from .grid import ThumbnailGrid, FilterMode
-from .gridnav import resolve_undo_nav_target
+from ..common.gui.gridnav import resolve_undo_nav_target
 from .preload import PreloadCache, mip_scale_for_zoom
 from .compare import CompareMode
 from ..common.image import utils as imageutils

@@ -1,4 +1,4 @@
-"""Tests for raven.cherrypick.gridnav navigation arithmetic.
+"""Tests for raven.common.gui.gridnav navigation arithmetic.
 
 Covers `resolve_nav_target`, the pure core of relative grid navigation. The
 focus is the filtered-view case: when the current image has been tagged out of
@@ -11,7 +11,7 @@ dependency subset (the `grid` widget itself imports dearpygui).
 
 import pytest
 
-from raven.cherrypick.gridnav import resolve_nav_target, resolve_undo_nav_target
+from raven.common.gui.gridnav import resolve_nav_target, resolve_undo_nav_target
 
 
 # ---------------------------------------------------------------------------
