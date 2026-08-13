@@ -271,3 +271,41 @@ def test_install_needs_show_viewport_and_succeeds_right_after_it():
     finally:
         filedrop.uninstall()
         dpg.destroy_context()
+
+
+@pytest.mark.gui
+def test_install_is_refused_in_a_fresh_context_after_an_earlier_one_was_shown():
+    """The same refusal as above, but with a destroyed viewport behind it — where GLFW alone gets it wrong.
+
+    `glfwGetCurrentContext()` is not cleared by `dpg.destroy_context()`: it keeps returning the destroyed
+    window's handle until the next `show_viewport` replaces it. So a guard reading only GLFW answers "has a
+    window ever been current on this thread", says yes here, and installs the drop callback against freed
+    memory.
+
+    No app can reach this, holding one context for its life. The suite can, and did: this file passes alone
+    and used to fail when run after `test_focus_semantics.py`, which maps and destroys five viewports. That
+    ordering only stayed hidden because `test_filedrop` sorts first.
+    """
+    dpg.create_context()
+    try:
+        dpg.create_viewport(title="raven filedrop stale context test", width=320, height=200)
+        dpg.setup_dearpygui()
+        dpg.show_viewport()
+    finally:
+        dpg.destroy_context()
+
+    dpg.create_context()
+    try:
+        dpg.create_viewport(title="raven filedrop stale context test 2", width=320, height=200)
+        dpg.setup_dearpygui()
+        with dpg.window(tag="main"):  # tag
+            dpg.add_text("installing an OS file drop handler")
+        dpg.set_primary_window("main", True)  # tag
+
+        assert filedrop.install(lambda paths: None) is False, "the previous context's window is gone, however GLFW answers"
+
+        dpg.show_viewport()
+        assert filedrop.install(lambda paths: None) is True
+    finally:
+        filedrop.uninstall()
+        dpg.destroy_context()

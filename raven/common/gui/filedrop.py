@@ -140,7 +140,8 @@ def install(handler: Callable[[list], None]) -> bool:
 
     Call **on the render thread, after `dpg.show_viewport()`** — that call is what makes DPG's window the
     calling thread's current GLFW context, and there is no other way to reach the handle. Called too early,
-    or from another thread, this logs an error and returns `False`.
+    or from another thread, this logs an error and returns `False`. "Too early" is judged against DPG's own
+    viewport state rather than GLFW's, which cannot tell a live window from a destroyed one.
 
     `handler` receives a `list` of `str`, each an absolute path, and runs on a worker thread, so it may
     show dialogs and wait for frames. Exceptions from it are logged, not propagated.
@@ -160,6 +161,14 @@ def install(handler: Callable[[list], None]) -> bool:
 
     lib = _bind()
     if lib is None:
+        return False
+
+    # Ask DPG whether a viewport is up before trusting GLFW's answer. `glfwGetCurrentContext` is not
+    # cleared by `dpg.destroy_context()` — measured: it keeps returning the destroyed window's handle
+    # until the next `show_viewport` replaces it — so on its own it answers "has a window ever been
+    # current on this thread", and a second context would install against freed memory.
+    if not dpg.is_viewport_ok():
+        logger.error("install: no viewport is up — call this after `dpg.show_viewport()`. Not installing.")
         return False
 
     window = lib.glfwGetCurrentContext()
