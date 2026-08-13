@@ -285,7 +285,7 @@ every tier, chosen on measurements rather than reputation.
 
 - **[Low]** Make clustering hyperparameters configurable, preferably in the GUI. Put defaults into `raven.visualizer.config`.
 
-- **[Low]** fdialog improvements. Five further FileDialog items live in `TODO_DEFERRED.md` (slow open + teardown input-dead-window on huge directories, smart-case Find, image thumbnail previews, multi-extension filter as one labelled item, reduce per-use-site boilerplate); treat the whole set as one work package rather than picking at it from two lists.
+- **[Low]** fdialog improvements. Three further FileDialog items live in `TODO_DEFERRED.md` (slow open + teardown input-dead-window on huge directories, image thumbnail previews, keyboard accessibility); treat the whole set as one work package rather than picking at it from two lists. Slow open and thumbnails interact — both are about what a listing row costs to build — so they want doing together.
   - Add "go up to parent directory" button
   - Change the "go to default directory" icon to something less confusing
   - In save mode: if the user has picked a unique file extension in the filter combo, use that as the default extension. If multiple extensions or wildcards, use the API-provided default.
@@ -783,7 +783,9 @@ every tier, chosen on measurements rather than reputation.
 
 - **[High]** Unit tests. Currently very sparse. Would significantly improve confidence in refactoring.
 
-- **[Low]** Post PR of vendored FileDialog fixes upstream. Raven's extensions have genuine added value worth sharing. Upstream is likely inactive but the PR is worth filing.
+- **[Low]** Post PR of adopted FileDialog fixes upstream. Raven's extensions have genuine added value worth sharing. Upstream is likely inactive but the PR is worth filing.
+  - **The obstacle is not the patch, it is the dependency.** `fdialog` now imports `raven.common.gui.animation` for its button-flash acknowledgments and `raven.common.utils` for the Find field's matching, so the changes cannot be lifted out as a diff. Upstreaming means either reworking those two call sites to stand alone, or offering the animation framework alongside — which DPG lacks entirely, and which is why it exists here.
+  - Worth deciding *what* to offer before doing the work: the parts that stand alone (multi-extension type filters, case-insensitive extension matching, the drives-list fix, the sortable table, the save-mode overwrite confirmation) are separable from the parts that do not.
 
 - **[Low]** Fork kokoro/misaki and bump their Python upper bound (`<3.13` → `<3.15`), then test on 3.13+. The `<3.13` cap may be precautionary rather than reflecting real incompatibility. kokoro appears effectively abandoned upstream, and it's the only TTS engine that provides timestamped phoneme data (required for avatar lipsync). Currently Raven's `requires-python` is narrowed to `<3.13` to accommodate this.
   - **Consider forced alignment before forking anything (noted 2026-07-28, unverified).** The requirement is not "a TTS that reports phoneme timings" but "phoneme timings", and those can be recovered after synthesis: align the generated audio against the text it was generated from, and read the boundaries off the alignment. torchaudio ships a forced-alignment API for this. If it works, **the constraint that pins this whole item disappears** — engine choice reopens to whatever sounds best or runs smallest, kokoro stops being load-bearing, and the Python cap can be lifted by swapping the engine rather than by forking an abandoned one. It would fit the three-layer pattern cleanly (alignment is `raven.common`, engine-agnostic) and the lipsync driver already consumes `WordTiming` objects rather than anything Kokoro-shaped, so its input contract would not change.

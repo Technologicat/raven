@@ -1548,16 +1548,6 @@ a reopen is instant and there is no thousands-of-widgets teardown to block on.
 
 Discovered during the document-attach test-drive (2026-07-18, Juha).
 
-## FileDialog: smart-case the Find (search) field
-
-*Cluster: filedialog · Cost: ? · Gate: ? · Filed: 2026-07-18*
-
-The `FileDialog` search/filter field matches case-sensitively, which is the wrong default for a file finder. Make
-it smart-case: case-insensitive when the query is all-lowercase, case-sensitive when it contains an uppercase
-letter (the Emacs / ripgrep convention).
-
-Discovered during the document-attach test-drive (2026-07-18, Juha).
-
 ## FileDialog: image thumbnail previews (Lanczos'd)
 
 *Cluster: filedialog · Cost: ? · Gate: ? · Filed: 2026-07-17*
@@ -1579,38 +1569,22 @@ directories).
 
 Discovered during brief-03 Half-2 multimodal work (2026-07-17, flagged by Juha).
 
-## FileDialog: multi-extension filter as one labelled item
+## Librarian's attach dialog could gate the offered types by model capability
 
-*Cluster: filedialog · Cost: ? · Gate: ? · Filed: 2026-07-17*
+*Cluster: filedialog · Cost: ? · Gate: ? · Filed: 2026-07-18 · See also: "FileDialog: keyboard accessibility"*
 
-The vendored `FileDialog`'s type filter is single-extension: each `filter_list` entry matches exactly one
-extension (`.png`), and the "show everything" option is the bare `.*`. There is no way to offer a single filter
-item that matches a *set* of extensions under a descriptive label — e.g. "All images (`.png .jpg .jpeg .webp
-.bmp .gif .tiff`)". Librarian's image-attach dialog works around this by defaulting to `.*` (so images of every
-type show at once, at the cost of also listing non-images). Add multi-extension filter items with custom labels:
-a `filter_list` entry should be able to carry a label plus a set of extensions, and the listing filter should
-match any extension in the set. Then image pickers can offer one "All images" item instead of `.*`.
+The half of the multi-extension filter item that did not ship with it (Juha, 2026-07-18). The attach picker now
+offers "Documents and images", "Documents" and "Images", but offers all three regardless of what the loaded
+model can read. On a text-only model it should offer "Documents" alone, so an image cannot be picked at all.
 
-Once this exists, it also lets the Librarian **attach** dialog gate the *offered* types by model capability
-(Juha, 2026-07-18): show "All files (images + documents)" with a vision model, "Documents only" with a text-only
-model — so wrong types can't be picked at all. Today the attach dialog offers everything and does the image
-gating at *routing* time (`app._attach_callback` rejects an image on a confirmed text-only model with a dialog);
-picker-level filtering would replace that after-the-fact rejection with up-front unavailability.
+Today the gating happens at *routing* time instead: `app._attach_callback` rejects an image on a confirmed
+text-only model with a dialog. Picker-level filtering would replace that after-the-fact rejection with up-front
+unavailability.
 
-Discovered during brief-03 Half-2 multimodal work (2026-07-17, flagged by Juha).
-
-## FileDialog: reduce per-use-site boilerplate
-
-*Cluster: filedialog · Cost: ? · Gate: ? · Filed: 2026-07-17*
-
-Every `FileDialog` use site repeats a verbose constructor (title, tag, callback, modal, `filter_list`,
-`file_filter`, `multi_selection`/`save_mode`/`dirs_only`, `allow_drag`, `default_path`, …) plus a `.show_file_dialog()`
-call and a `selected_files` callback. Recurring across `raven-visualizer`, `raven-cherrypick`, and the avatar
-pose/settings editors — and it was about to be repeated in `raven-librarian`. Wrap the common shapes (open-file,
-open-files, save-file, pick-dir) into thin helpers so a use site is roughly one call. Long-standing "meaning to
-fix this" item (Juha).
-
-Discovered during brief-03 Half-2 multimodal work (2026-07-17, flagged by Juha).
+The picker side is now trivial — `FileDialog.set_type_filter` selects an item by label, and the filter list is
+built at construction. What is not settled is where the capability answer comes from and when it is known:
+vision support is *confirmed* rather than declared, so the dialog would have to be rebuilt or its filter list
+narrowed when that confirmation changes.
 
 ## FileDialog: keyboard accessibility
 
@@ -1664,6 +1638,35 @@ is primary.
 warnings the dialog grows. Visual-only feedback is a gap for the same audience this item is about.
 
 Discovered during the FileDialog UX work (2026-08-13, raised by Juha).
+
+## Paths into `raven/avatar/assets/` are rebuilt by hand at 23 sites
+
+*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-08-13*
+
+Every consumer of the avatar assets tree spells out the same incantation, differing only in how many `".."`
+it needs to climb back to `raven/avatar/`:
+
+```python
+pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "characters")).expanduser().resolve()
+```
+
+Counted 2026-08-13: `avatar/pose_editor/app.py` 8, `avatar/settings_editor/app.py` 8, `librarian/config.py` 3,
+`server/modules/avatar.py` 2, `librarian/app.py` 1, `client/tests/conftest.py` 1. The `".."` count varies by
+the caller's depth — one from the avatar apps, two from the server module and the client tests — so each site
+encodes its own position in the tree, and moving a module silently breaks its asset paths with no import error
+to catch it.
+
+A single `raven.avatar.assets_path(*parts)` would collapse all of them and remove the depth-counting entirely,
+since it would resolve from its own location rather than the caller's. The obvious home is
+`raven/avatar/__init__.py`, which currently holds nothing.
+
+**Not done inline** because it crosses four subsystems including the server, and the placement is a decision
+rather than a mechanical edit. Cheap and mostly find-replace once that is settled; the invariant to check
+afterwards is that every resolved path is unchanged, which a script can assert directly by importing both
+spellings and comparing.
+
+Discovered while sweeping the `FileDialog` call sites (2026-08-13) — four of the avatar-app occurrences are
+`default_path=` arguments, and they are what is left of those constructors now that the rest has gone.
 
 ## Librarian's help card has no room to describe attachments
 
