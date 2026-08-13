@@ -120,11 +120,11 @@ class FileDialog:
         default_file_extension=None,
         default_path=os.getcwd(),
         filter_list=[".*", ".exe", ".bat", ".sh", ".msi", ".apk", ".bin", ".cmd", ".com", ".jar", ".out", ".py", ".pyl", ".phs", ".js", ".json", ".java", ".c", ".cpp", ".cs", ".h", ".rs", ".vbs", ".php", ".pl", ".rb", ".go", ".swift", ".ts", ".asm", ".lua", ".sh", ".bat", ".r", ".dart", ".ps1", ".html", ".htm", ".xml", ".css", ".ini", ".yaml", ".yml", ".config", ".md", ".rst", ".txt", ".rtf", ".doc", ".docx", ".pdf", ".odt", ".tex", ".log", ".csv", ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tiff", ".svg", ".webp", ".ico", ".psd", ".ai", ".eps", ".tga", ".wav", ".mp3", ".ogg", ".flac", ".aac", ".m4a", ".wma", ".aiff", ".mid", ".midi", ".opus", ".mp4", ".mkv", ".avi", ".mov", ".wmv", ".flv", ".webm", ".mpeg", ".mpg", ".3gp", ".m4v", ".blend", ".fbx", ".obj", ".stl", ".3ds", ".dae", ".ply", ".glb", ".gltf", ".csv", ".sql", ".db", ".dbf", ".mdb", ".accdb", ".sqlite", ".xml", ".json", ".zip", ".rar", ".7z", ".tar", ".gz", ".iso", ".bz2", ".xz", ".tgz", ".cab", ".vdi", ".vmdk", ".vhd", ".vhdx", ".ova", ".ovf", ".qcow2", ".dockerfile", ".bak", ".old", ".sav", ".tmp", ".bk", ".ppack", ".mlt", ".torrent", ".ics"],
-        file_filter=".*",
+        file_filter=None,
         callback=None,
         show_dir_size=False,
-        allow_drag=True,
-        multi_selection=True,
+        allow_drag=False,
+        multi_selection=False,
         show_shortcuts_menu=True,
         no_resize=True,
         modal=True,
@@ -141,7 +141,16 @@ class FileDialog:
             dirs_only:              When True, only directories will be listed.
             save_mode:              When True, asks for a filename to save as, instead of selecting file(s) to open.
                                     In the GUI, the "Search files" field becomes the filename field. (Searching is still enabled, to help avoid accidental overwriting.)
-            default_file_extension: Only used when save_mode is True. If not None, and the user specifies no file extension for the "save as" filename, this extension (e.g. ".png") is automatically added.
+            default_file_extension: Only used when save_mode is True. The extension (e.g. ".png") automatically added
+                                    when the user names a "save as" file without one.
+
+                                    `None` (the default) derives it from the selected file type filter, when that
+                                    filter names exactly one extension — which is the usual shape of a save dialog,
+                                    and saves every such caller from repeating the extension a third time. A filter
+                                    naming several (or none) leaves this at "add nothing", there being no principled
+                                    choice among them; say which one explicitly if you want one.
+
+                                    Pass "" to add nothing regardless.
             default_path:           str, The default path when file_dialog starts, if it's the string 'cwd', the default path will be the current working directory.
             filter_list:            The items offered in the file type filter. Each item is either:
 
@@ -159,6 +168,8 @@ class FileDialog:
                                     ".png" matches "PHOTO.PNG".
             file_filter:            str, The file type filter selected when the dialog is opened. This is an item's
                                     *label*, e.g. ".py" for a bare-string item or "Images" for a pair.
+                                    `None` (the default) selects the first item of `filter_list`, which is what a
+                                    caller listing the types it wants almost always means.
             callback:               callable, When the OK or Cancel button is pressed, the file dialog will call this, sending the list of selected files. Upon cancel, the list is empty.
 
                                     The argument is a `list` of `str`, each an absolute path. (Not `pathlib.Path`.)
@@ -168,8 +179,11 @@ class FileDialog:
                                     reference stashed for later reads as empty. Copy it if you need to keep it.
             show_dir_size:          If True, directories will be listed with the size of the directory and its sub-directories and files. Not recommended.
             allow_drag:             If True, the files and folders in the dialog act as a DPG drag source, so you can set up a drop target to accept them as drag'n'drops in your app. See source code for details.
+                                    Off by default: it costs a drag payload and an icon widget per row, which is
+                                    worth paying only where something is actually listening for the drop.
             multi_selection:        If True, the user can select multiple files and folders by holding down Ctrl and clicking. If False, only one file/folder can be selected, and Ctrl does nothing.
                                     Ignored when save_mode is True.
+                                    Off by default, so that a picker multi-selects only where the caller asked for it.
             show_shortcuts_menu:    if True, show a child window (side panel) containing different shortcuts (like desktop and downloads), and the external and internal drives.
             no_resize:              If True, the window will not be resizable.
             modal:                  If True, use DPG modal mode; a sort of popup effect. Can cause problems if the file dialog is opened by a modal window.
@@ -231,7 +245,15 @@ class FileDialog:
                 self._active_extensions = self._filter_extensions[label]
             else:  # not one of the offered items; read it as a literal extension, as the single-extension form did
                 self._active_extensions = None if label == ".*" else (label.lower(),)
-        _set_type_filter(self.file_filter)
+        # `None` means "the first item", which is what a caller listing the types it wants almost always means.
+        _set_type_filter(self._filter_labels[0] if self.file_filter is None else self.file_filter)
+
+        # A save dialog's default extension is nearly always the one extension its filter names, so derive it
+        # rather than making the caller write it a third time. Only for a filter naming exactly one: among
+        # several there is no principled choice, and silently picking the first would be a rule nobody could
+        # predict from a call site.
+        if self.default_file_extension is None and self._active_extensions is not None and len(self._active_extensions) == 1:
+            self.default_file_extension = self._active_extensions[0]
 
         def _matches_type_filter(file_name: str) -> bool:
             if self._active_extensions is None:  # ".*"
@@ -875,6 +897,14 @@ class FileDialog:
         dpg.set_item_width(self.spacer_notification, new_width)
 
         dpg.focus_item(self.search_field)
+
+    def is_visible(self):
+        """Return whether the dialog is currently on screen.
+
+        Apps ask this to suppress hotkeys and drops while a modal picker is up. Having it here is what keeps
+        `tag` from having to be known outside the constructor that set it.
+        """
+        return dpg.is_item_visible(self.tag)  # tag
 
     def refresh(self):
         cwd = os.getcwd()

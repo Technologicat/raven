@@ -108,9 +108,68 @@ def dialog(dpg_context, tmp_path, request):
     os.chdir(old_cwd)
 
 
+@pytest.fixture
+def make_dialog(dpg_context, tmp_path, request):
+    """Build a `FileDialog` over an empty temporary directory, with arbitrary keyword arguments.
+
+    For the tests that are about what the *constructor* decides rather than about what gets listed. Same
+    per-test tag and working-directory care as `dialog`; the counter distinguishes several dialogs built
+    within one test.
+    """
+    old_cwd = os.getcwd()
+    built = 0
+
+    def build(**kwargs):
+        nonlocal built
+        built += 1
+        return FileDialog(tag=f"test_file_dialog_{request.node.name}_{built}",
+                          default_path=str(tmp_path),
+                          **kwargs)
+    yield build
+    os.chdir(old_cwd)
+
+
 def shown(dialog):
     """The basenames the dialog is currently listing."""
     return sorted(os.path.basename(path) for path in dialog.shown_items)
+
+
+def test_file_filter_defaults_to_the_first_offered_item(make_dialog):
+    """Every call site passed the first item's own label, so the constructor may as well say it."""
+    assert make_dialog(filter_list=[".xdot", ".dot", ".gv"]).file_filter == ".xdot"
+    assert make_dialog(filter_list=[("Images", [".png"]), ".*"]).file_filter == "Images"
+
+
+def test_an_explicit_file_filter_still_wins(make_dialog):
+    assert make_dialog(filter_list=[".xdot", ".dot", ".gv"], file_filter=".gv").file_filter == ".gv"
+
+
+def test_save_extension_is_derived_from_a_single_extension_filter(make_dialog):
+    """The usual shape of a save dialog: one filter, one extension, previously written a third time."""
+    assert make_dialog(filter_list=[".png"], save_mode=True).default_file_extension == ".png"
+
+
+def test_save_extension_is_not_derived_from_a_multi_extension_filter(make_dialog):
+    """There is no principled choice among several, so nothing is added rather than an unpredictable one."""
+    assert make_dialog(filter_list=[("Images", [".png", ".jpg"])], save_mode=True).default_file_extension is None
+
+
+def test_save_extension_is_not_derived_from_the_catch_all(make_dialog):
+    assert make_dialog(filter_list=[".*"], save_mode=True).default_file_extension is None
+
+
+def test_an_explicit_save_extension_still_wins(make_dialog):
+    """Including the empty string, which is how a caller says "add nothing" against a single-extension filter."""
+    assert make_dialog(filter_list=[".png"], save_mode=True, default_file_extension=".jpg").default_file_extension == ".jpg"
+    assert make_dialog(filter_list=[".png"], save_mode=True, default_file_extension="").default_file_extension == ""
+
+
+def test_selection_and_drag_are_off_unless_asked_for(make_dialog):
+    """Both defaults were the other way round, and all sixteen call sites had to say so."""
+    picker = make_dialog(filter_list=[".png"])
+    assert picker.multi_selection is False
+    assert picker.allow_drag is False
+    assert make_dialog(filter_list=[".png"], multi_selection=True).multi_selection is True
 
 
 def test_catch_all_filter_shows_everything(dialog):

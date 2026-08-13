@@ -468,7 +468,7 @@ def is_open_dialog_visible() -> bool:
     """
     if _filedialog_open is None:
         return False
-    return dpg.is_item_visible("cherrypick_open_dialog")  # tag
+    return _filedialog_open.is_visible()
 
 
 def is_any_modal_window_visible() -> bool:
@@ -1406,10 +1406,7 @@ def main() -> int:
         title="Open image folder",
         tag="cherrypick_open_dialog",
         callback=_open_file_dialog_callback,
-        modal=True,
         dirs_only=True,
-        multi_selection=False,
-        allow_drag=False,
         default_path=os.getcwd(),
     )
 

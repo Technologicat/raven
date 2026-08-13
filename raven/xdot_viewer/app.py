@@ -104,7 +104,7 @@ def is_open_file_dialog_visible() -> bool:
     """
     if _filedialog_open is None:
         return False
-    return dpg.is_item_visible("open_file_dialog")  # tag
+    return _filedialog_open.is_visible()
 
 
 def is_any_modal_window_visible() -> bool:
@@ -647,11 +647,7 @@ def main() -> int:
     _filedialog_open = FileDialog(title="Open graph file",
                                   tag="open_file_dialog",
                                   callback=_open_file_dialog_callback,
-                                  modal=True,
                                   filter_list=[".xdot", ".dot", ".gv"],
-                                  file_filter=".xdot",
-                                  multi_selection=False,
-                                  allow_drag=False,
                                   default_path=cwd)
 
     # --- Build GUI ---

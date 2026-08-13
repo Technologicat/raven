@@ -184,48 +184,28 @@ def initialize_filedialogs():  # called at app startup
     filedialog_open_input_image = FileDialog(title="Open character image",
                                              tag="open_input_image_dialog",
                                              callback=_open_input_image_callback,
-                                             modal=True,
                                              filter_list=[".png"],
-                                             file_filter=".png",
-                                             multi_selection=False,
-                                             allow_drag=False,
                                              default_path=pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "characters")).expanduser().resolve())
     filedialog_open_backdrop_image = FileDialog(title="Open backdrop image",
                                                 tag="open_backdrop_image_dialog",
                                                 callback=_open_backdrop_image_callback,
-                                                modal=True,
                                                 filter_list=[".png", ".jpg"],
-                                                file_filter=".png",
-                                                multi_selection=False,
-                                                allow_drag=False,
                                                 default_path=pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "backdrops")).expanduser().resolve())
     filedialog_open_json = FileDialog(title="Open emotion templates",
                                       tag="open_json_dialog",
                                       callback=_open_json_callback,
-                                      modal=True,
                                       filter_list=[".json"],
-                                      file_filter=".json",
-                                      multi_selection=False,
-                                      allow_drag=False,
                                       default_path=pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "emotions")).expanduser().resolve())
     filedialog_open_animator_settings = FileDialog(title="Open animator settings",
                                                    tag="open_animator_settings_dialog",
                                                    callback=_open_animator_settings_callback,
-                                                   modal=True,
                                                    filter_list=[".json"],
-                                                   file_filter=".json",
-                                                   multi_selection=False,
-                                                   allow_drag=False,
                                                    default_path=pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "settings")).expanduser().resolve())
     filedialog_save_animator_settings = FileDialog(title="Save animator settings",
                                                    tag="save_animator_settings_dialog",
                                                    callback=_save_animator_settings_callback,
-                                                   modal=True,
                                                    filter_list=[".json"],
-                                                   file_filter=".json",
                                                    save_mode=True,
-                                                   default_file_extension=".json",  # used if the user does not provide a file extension when naming the save-as
-                                                   allow_drag=False,
                                                    default_path=cwd)
 
 # --------------------------------------------------------------------------------
@@ -261,7 +241,7 @@ def is_open_input_image_dialog_visible():
     """
     if filedialog_open_input_image is None:
         return False
-    return dpg.is_item_visible("open_input_image_dialog")  # tag
+    return filedialog_open_input_image.is_visible()
 
 # --------------------------------------------------------------------------------
 # "Open backdrop image" dialog
@@ -296,7 +276,7 @@ def is_open_backdrop_image_dialog_visible():
     """
     if filedialog_open_backdrop_image is None:
         return False
-    return dpg.is_item_visible("open_backdrop_image_dialog")  # tag
+    return filedialog_open_backdrop_image.is_visible()
 
 # --------------------------------------------------------------------------------
 # "Open JSON" dialog (emotion templates)
@@ -331,7 +311,7 @@ def is_open_json_dialog_visible():
     """
     if filedialog_open_json is None:
         return False
-    return dpg.is_item_visible("open_json_dialog")  # tag
+    return filedialog_open_json.is_visible()
 
 # --------------------------------------------------------------------------------
 # "Open JSON" dialog (animator settings)
@@ -366,7 +346,7 @@ def is_animator_settings_dialog_visible():
     """
     if filedialog_open_animator_settings is None:
         return False
-    return dpg.is_item_visible("open_animator_settings_dialog")  # tag
+    return filedialog_open_animator_settings.is_visible()
 
 # --------------------------------------------------------------------------------
 # "Save JSON" dialog (animator settings)
@@ -401,7 +381,7 @@ def is_save_animator_settings_dialog_visible():
     """
     if filedialog_save_animator_settings is None:
         return False
-    return dpg.is_item_visible("save_animator_settings_dialog")  # tag
+    return filedialog_save_animator_settings.is_visible()
 
 # --------------------------------------------------------------------------------
 # Avatar video recording

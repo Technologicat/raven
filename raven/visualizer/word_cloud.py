@@ -248,7 +248,7 @@ def is_save_dialog_visible():
     """
     if app_state.filedialog_save is None:
         return False
-    return dpg.is_item_visible("save_word_cloud_dialog")
+    return app_state.filedialog_save.is_visible()
 
 
 def clear_tasks(wait=False):

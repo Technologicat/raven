@@ -240,41 +240,25 @@ def initialize_filedialogs():  # called at app startup
     filedialog_open_image = FileDialog(title="Open character image",
                                        tag="open_image_dialog",
                                        callback=_open_image_callback,
-                                       modal=True,
                                        filter_list=[".png"],
-                                       file_filter=".png",
-                                       multi_selection=False,
-                                       allow_drag=False,
                                        default_path=pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "characters")).expanduser().resolve())
     filedialog_save_image = FileDialog(title="Save posed image",
                                        tag="save_image_dialog",
                                        callback=_save_image_callback,
-                                       modal=True,
                                        filter_list=[".png"],
-                                       file_filter=".png",
                                        save_mode=True,
-                                       default_file_extension=".png",  # used if the user does not provide a file extension when naming the save-as
-                                       allow_drag=False,
                                        default_path=cwd)
     filedialog_open_json = FileDialog(title="Open emotion temmplates",
                                       tag="open_json_dialog",
                                       callback=_open_json_callback,
-                                      modal=True,
                                       filter_list=[".json"],
-                                      file_filter=".json",
-                                      multi_selection=False,
-                                      allow_drag=False,
                                       default_path=pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "emotions")).expanduser().resolve())
     filedialog_save_all_emotions = FileDialog(title="Save all emotion templates",
                                               tag="save_all_emotions_dialog",
                                               callback=_save_all_emotions_callback,
-                                              modal=True,
                                               filter_list=[""],
-                                              file_filter="",
                                               dirs_only=True,  # *directory* picker mode
                                               save_mode=True,
-                                              default_file_extension="",  # used if the user does not provide a file extension when naming the save-as
-                                              allow_drag=False,
                                               default_path=cwd)
 
 # --------------------------------------------------------------------------------
@@ -310,7 +294,7 @@ def is_open_image_dialog_visible():
     """
     if filedialog_open_image is None:
         return False
-    return dpg.is_item_visible("open_image_dialog")  # tag
+    return filedialog_open_image.is_visible()
 
 # --------------------------------------------------------------------------------
 # "Save image" dialog
@@ -347,7 +331,7 @@ def is_save_image_dialog_visible():
     """
     if filedialog_save_image is None:
         return False
-    return dpg.is_item_visible("save_image_dialog")  # tag
+    return filedialog_save_image.is_visible()
 
 # --------------------------------------------------------------------------------
 # "Open JSON" dialog
@@ -382,7 +366,7 @@ def is_open_json_dialog_visible():
     """
     if filedialog_open_json is None:
         return False
-    return dpg.is_item_visible("open_json_dialog")  # tag
+    return filedialog_open_json.is_visible()
 
 # --------------------------------------------------------------------------------
 # "Save all emotions" dialog
@@ -419,7 +403,7 @@ def is_save_all_emotions_dialog_visible():
     """
     if filedialog_save_all_emotions is None:
         return False
-    return dpg.is_item_visible("save_all_emotions_dialog")  # tag
+    return filedialog_save_all_emotions.is_visible()
 
 # --------------------------------------------------------------------------------
 # GUI controls

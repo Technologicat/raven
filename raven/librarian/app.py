@@ -759,14 +759,11 @@ _attachable_document_extensions = docextract.supported_extensions()
 _filedialog_attach = FileDialog(title="Attach file(s) [Ctrl+click to multi-select]",
                                 tag="attach_file_dialog",
                                 callback=_attach_callback,
-                                modal=True,
                                 filter_list=[("Documents and images", (*_attachable_document_extensions, *_attachable_image_extensions)),
                                              ("Documents", _attachable_document_extensions),
                                              ("Images", _attachable_image_extensions),
                                              ".*"],
-                                file_filter="Documents and images",
                                 multi_selection=True,
-                                allow_drag=False,
                                 default_path=os.path.expanduser("~"))
 
 # --------------------------------------------------------------------------------
@@ -1665,7 +1662,7 @@ def is_attach_file_dialog_visible() -> bool:
     """
     if _filedialog_attach is None:
         return False
-    return dpg.is_item_visible("attach_file_dialog")  # tag
+    return _filedialog_attach.is_visible()
 
 def is_any_modal_window_visible() -> bool:
     """Return whether *some* modal window is open.
