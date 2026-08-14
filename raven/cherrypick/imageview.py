@@ -139,6 +139,11 @@ class ImageView:
         self._mip_loading = False  # True while background mip task is running
         self._mips_lock = threading.Lock()
         self._mips_generation = 0  # incremented on each image switch
+        # Which image switch each mip list belongs to. Meaningful only while that list is non-empty, which
+        # is also the only time anything reads them. Kept so the debug log can say *which* image a frame
+        # drew, rather than only that it drew something.
+        self._mips_gen = 0
+        self._old_mips_gen = 0
 
         # Texture pool: reuse textures across same-size images via set_value
         # instead of creating/deleting (avoids DPG OpenGL glitches).
@@ -653,6 +658,7 @@ class ImageView:
                 for _s, old_tag in self._old_mips:
                     self._release_texture(old_tag)
                 self._old_mips = list(self._mips)
+                self._old_mips_gen = self._mips_gen
                 self._old_img_w = self._img_w
                 self._old_img_h = self._img_h
                 self._old_zoom = self._zoom
@@ -742,10 +748,17 @@ class ImageView:
         # upload-before-render ordering within a single frame.
         # During shutdown, the render loop may have already exited — in that
         # case split_frame raises, and we bail (textures won't be needed).
+        #
+        # Logged unconditionally, not under `e.debug`: `_bridge_old_mips` has already emptied `_mips`, so
+        # bailing here leaves the previous image showing through the bridge with no new one behind it. That
+        # is indistinguishable, from the outside, from a frame that was simply never requested — and the
+        # sibling abandonment paths in `_bg_mip_task` and `_bg_augment_task` both announce themselves.
         try:
             dpg.split_frame()
             dpg.split_frame()
-        except (SystemError, Exception):
+        except Exception as exc:  # noqa: BLE001 -- teardown races surface as several unrelated types
+            logger.warning(f"ImageView._bg_preloaded_task: instance {e.task_name}: split_frame failed, "
+                           f"abandoning {len(new_mips)} mips: {type(exc)}: {exc}")
             for _s, tag in new_mips:
                 self._release_texture(tag)
             return
@@ -765,6 +778,7 @@ class ImageView:
                 self._release_texture(old_tag)
             self._old_mips.clear()
             self._mips = new_mips
+            self._mips_gen = e.generation
             self._mip_arrays = new_arrays
 
         self._set_mip_loading(False)
@@ -956,6 +970,7 @@ class ImageView:
                 if not inserted:
                     self._mips.append((mip_scale, tex_tag))
                     self._mip_arrays.append((mip_scale, mw, mh, flat))
+                self._mips_gen = e.generation
                 # Release old textures to pool once we have something new.
                 if self._old_mips:
                     for _s, old_tag in self._old_mips:
@@ -1011,16 +1026,28 @@ class ImageView:
         with self._mips_lock:
             if self._mips:
                 active_mips = list(self._mips)
+                source, source_gen = "mips", self._mips_gen
                 img_w, img_h = self._img_w, self._img_h
                 zoom = self._zoom
                 pan_cx, pan_cy = self._pan_cx, self._pan_cy
             elif self._old_mips:
                 active_mips = list(self._old_mips)
+                source, source_gen = "bridge", self._old_mips_gen
                 img_w, img_h = self._old_img_w, self._old_img_h
                 zoom = self._old_zoom
                 pan_cx, pan_cy = self._old_pan_cx, self._old_pan_cy
             else:
                 return
+            current_gen = self._mips_generation
+
+        # What this frame actually put on screen, against what the controller believes it asked for.
+        # `source_gen` identifies the image whose pixels are being drawn; `current_gen` is the most recent
+        # request; `overlay` is the compare-mode number drawn beside it. A frame where `source_gen` lags
+        # `current_gen` is the bridge doing its job for a load still in flight — normal, and brief. A whole
+        # compare cycle in which some generation never appears as `source_gen` is the bug.
+        if self._debug:
+            logger.info(f"ImageView._render: source={source} gen={source_gen} current_gen={current_gen} "
+                        f"overlay={self._overlay_number} img={img_w}x{img_h}")
 
         # Select the best mip level for current zoom.
         mip_scale, tex_tag = self._select_mip_from(active_mips)
