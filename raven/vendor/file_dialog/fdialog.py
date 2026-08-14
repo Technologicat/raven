@@ -754,7 +754,13 @@ class FileDialog:
         self.sort_by = sort_by  # instance-injected for the same reason as `set_type_filter` above.
 
         def _make_sort_row():
-            """The sort buttons, plus the view toggle at the right end of the same row."""
+            """The sort buttons, plus the view toggle, on one row above the listing.
+
+            The toggle sits next to them rather than off at the right edge, because the case it exists for
+            is a filter that selects images *and* something else — Librarian's "Documents and images", say —
+            where the automatic rule deliberately does not fire and the user has to find this. Next to the
+            controls they are already using is where they will.
+            """
             with dpg.group(horizontal=True):
                 dpg.add_text("Sort by")
                 for sort_key, label in _SORT_CRITERIA:
@@ -764,7 +770,7 @@ class FileDialog:
                                        callback=lambda s, a, u: sort_by(u))
                         drawlist = dpg.add_drawlist(width=14, height=self.selec_height + 10)
                         _sort_indicators[sort_key] = drawlist
-                self.spacer_view_toggle = dpg.add_spacer(width=1)
+                self.spacer_view_toggle = dpg.add_spacer(width=16)
                 self.checkbox_thumbnails = dpg.add_checkbox(label="Thumbnails",
                                                             default_value=self._grid_mode,
                                                             show=_grid_is_available(),
