@@ -111,6 +111,36 @@ move and would rename the app.
 Do at the same time, since they are the same decision: the sibling item recording that the *fleet* name
 `corvid` is likewise taken, and the distribution there is `corvid-lab`.
 
+## Find a UI font that renders subscripts *and* has symbol coverage
+
+*Cluster: ? · Cost: M · Gate: ? · Filed: 2026-08-14 · See also: `briefs/reference/font-glyph-coverage.md`*
+
+Neither shipped font is satisfactory, and the measurements make the tradeoff exact (2026-08-14, tables and
+script in the reference doc):
+
+- **OpenSans**, the default, renders subscripts correctly — below the baseline, distinct from superscripts
+  — and has **no dingbats whatsoever**: no arrows in any direction, no triangles, no check mark, no cross,
+  no warning sign, in 1010 glyphs. It also lacks subscript `x` (U+2093), which chemical formulae want.
+- **InterTight** has all those symbols, and 28/29 of the subscript block against OpenSans's 22/29 — and
+  **draws subscripts at superscript height**, `two.subs` and `two.sups` being identical outlines in
+  identical positions. H2O renders as H²O. Disqualifying for a research tool.
+
+So a UI label wanting an arrow currently gets `»` instead (`filelisting.format_kind`), and anything wanting
+a check mark or a warning sign has to go through the FontAwesome icon font — which, since binding a font
+applies to the whole widget, cannot mix a glyph with prose.
+
+**What a candidate has to pass**, both mechanical, both scripted in the reference doc:
+
+1. Subscript and superscript glyphs at *different* vertical positions. Compare the bounding boxes of
+   U+2082 and U+00B2; identical bounds is an immediate reject, and is the check that would have caught
+   InterTight before it shipped.
+2. The subscript block U+2080–209C including U+2093, the superscripts, and the symbols in the coverage
+   table — arrows at least.
+
+Licensing has to allow redistribution, since Raven ships its fonts. Worth checking whether a *pair* is the
+answer instead: a text font that renders correctly, plus a symbol font bound to the widgets that need one,
+which is what the FontAwesome path already is in miniature.
+
 ## A file-type icon set of our own, covering the formats Raven actually opens
 
 *Cluster: filedialog · Cost: M · Gate: ? · Filed: 2026-08-14 · See also: `briefs/researchers-night/filedialog-thumbnails-brief.md`*
