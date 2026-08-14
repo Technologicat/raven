@@ -1794,6 +1794,19 @@ chatlog does it (`chat_controller.py`, `wrap=chat_text_w`). The help card simply
 direction. Note also that the chat graph view will want an entry here plus a hotkey-shaped gesture of its
 own, so the redesign should be able to take one more feature without another shape decision.
 
+**State as of 2026-08-14, after the prediction above came true.** Adding one hotkey row (Ctrl+Shift+O, for
+the attach dialog) pushed the card past its height, exactly as "the next addition of any size" was expected
+to. Bought back by deleting the separator row between Ctrl+S and Ctrl+Right — a stopgap that costs a group
+boundary the eye was using, and that the *next* row will exhaust again. What is left, checked by looking:
+
+- **Vertical fit is recovered but has no margin.** The last prose line sits against the bottom edge.
+- **The right edge now clips too**, which the height fix did not touch and cannot: "…and ask what time it
+  is" is cut mid-word. That is the missing `wrap=` described above, and it is the cheaper half — the
+  renderer wraps when told to.
+
+So the shape decision is still the item. The horizontal clipping is worth doing first regardless of how that
+decision goes, since wrapping is needed under every shape.
+
 ## Modernize the Librarian system prompt / character card
 
 *Cluster: ? · Cost: ? · Gate: next · Filed: 2026-07-30 · See also: "Make the canned AI greeting optional", "System prompt templating: the user should choose where the per-turn facts go", `briefs/researchers-night/done/15_headless-agent-driver-brief.md` (final section)*
