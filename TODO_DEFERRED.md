@@ -143,7 +143,7 @@ which is what the FontAwesome path already is in miniature.
 
 ## A file-type icon set of our own, covering the formats Raven actually opens
 
-*Cluster: filedialog · Cost: M · Gate: ? · Filed: 2026-08-14 · See also: `briefs/researchers-night/filedialog-thumbnails-brief.md`*
+*Cluster: filedialog · Cost: M · Gate: RN2026 · Filed: 2026-08-14 · See also: `briefs/researchers-night/filedialog-thumbnails-brief.md`*
 
 `raven/vendor/file_dialog/images/` is the upstream set, and it has no icon for a **presentation**
 (`.pptx`, `.odp`) or a **spreadsheet** (`.xlsx`, `.ods` — support planned, see "Spreadsheets in the docs DB
@@ -180,6 +180,17 @@ was a judgement call rather than an obvious grouping.
 
 **Generate at 512 and downscale.** DPG scales textures nearest-neighbor, so every size below the source has
 to be resampled with Lanczos rather than handed to DPG; the brief covers the mechanics.
+
+**The grid view makes the size gap visible right now** (Juha, 2026-08-14, from a folder of mixed documents).
+Only three of the 34 assets are 94×94 — `folder`, `document`, `big_picture` — and the rest are 16×16, so at
+a 128 px tile the first group is a 1.4× enlargement and looks deliberate while the second is 8× and looks
+like a mistake. The tell in a real folder: a PDF falls through to `document` (94 px, crisp) while a `.txt`
+or `.md` gets `note` (16 px, mush), so the same listing shows both, side by side, in the same size tile.
+
+A cheap partial fix exists and was **not** taken: mapping `note` to the large `document` for tiles only
+would remove the commonest blurry case, at the cost of a text file and a PDF becoming indistinguishable.
+That is trading one visible wrongness for another, in a feature whose whole point is telling files apart by
+looking, and the real set is close enough that it is not worth spending the distinction.
 
 ## `--qr`: a "Get Raven" QR code overlay for demoing at an exhibit
 
