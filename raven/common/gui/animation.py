@@ -1162,6 +1162,20 @@ class ScrollEndFlasher(Overlay, Animation):
 
         Returns which end was flashed (one of "top", "bottom", "both"),
         or `None` if `target_y_scroll` was not at either end.
+
+        **With less than a screenful the answer is "both", and that is a decision, not a shortcut.** It has
+        now been arrived at twice, so here is the argument. A directional answer is not available in this
+        case: by the time a flash is dispatched, all that is left of the request is a position. A page-down
+        that clamped to 0 and a page-up that clamped to 0 are the same call, and a scroll that was already
+        where it was asked to go has no direction at all. Supplying one would mean threading the original
+        request's direction through `SmoothScrolling` to here, and still answering "both" wherever there
+        was no direction to thread.
+
+        It is also the better answer. Both arrows say *"nothing above, nothing below - you are seeing all
+        of it"*, which is a different fact from "you have reached the bottom" and the one worth having in
+        the case where a view has no hidden content. Callers that flash from something other than a
+        position - a refused cursor move, say - should match this rule rather than report their own
+        direction, or one widget's keyboard ends up disagreeing with its own mouse wheel.
         """
         max_y_scroll = dpg.get_y_scroll_max(self.target)  # tag
 
