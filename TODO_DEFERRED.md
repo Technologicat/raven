@@ -3678,7 +3678,26 @@ about, since a mode that merely hides the avatar panel saves nothing that matter
 
 ## The file dialog's grid view fails on Windows: "negative dimensions are not allowed"
 
-*Cluster: filedialog · Cost: ? · Gate: RN2026 · Filed: 2026-08-14 · **CI is red on `main` for this***
+*Cluster: filedialog · Cost: S · Gate: RN2026 · Filed: 2026-08-14 · **Fix pushed 2026-08-14, awaiting a
+Windows CI run to confirm***
+
+**Located.** The traceback, once `reset_dir` stopped swallowing it:
+
+    File "raven/common/gui/tileicons.py", line 82, in add
+        arr = np.asarray(rgba, dtype=np.float32)
+    ValueError: negative dimensions are not allowed
+
+`dpg.load_image` returns its pixels as a buffer-like object, and on Windows numpy reads that buffer's length
+as *negative* — a complaint about how the object describes itself rather than about the arguments. Linux and
+macOS take the identical call without comment, so it is DPG's Windows build and not the caller.
+
+**Fixed by not letting numpy guess**: `np.fromiter(rgba, dtype=np.float32, count=width * height * 4)`, which
+sidesteps the buffer protocol and knows the length anyway. **Not verified on Windows** — there is no Windows
+machine here, so CI is the test; if it is still red, this is where to look and the reasoning above is what to
+doubt.
+
+The rest of this entry is the diagnosis as it stood, kept because it says what the symptom looks like from
+the outside.
 
 Five of the grid-view tests fail on **windows-latest only** (`raven/vendor/file_dialog/tests/test_fdialog.py`
 — `test_selecting_in_the_grid_reaches_the_dialog` and the four beside it). Ubuntu and macOS pass. The

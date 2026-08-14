@@ -79,8 +79,18 @@ class TileIconCache:
         *rgba*: flat RGBA floats in [0, 1], ``width * height * 4`` of them — what `dpg.load_image` returns
         as its fourth value.
         """
-        arr = np.asarray(rgba, dtype=np.float32)
+        # Built by iteration with an explicit count, rather than `np.asarray(rgba)`.
+        #
+        # `dpg.load_image` returns its pixels as a buffer-like object, and on Windows numpy reads that
+        # buffer's length as *negative*: `ValueError: negative dimensions are not allowed`, which is not a
+        # complaint about the arguments so much as about how the object describes itself. Linux and macOS
+        # take the same call without comment, so this is DPG's Windows build and not the caller. Iterating
+        # sidesteps the buffer protocol entirely, and the count is known anyway.
         expected = width * height * 4
+        try:
+            arr = np.fromiter(rgba, dtype=np.float32, count=expected)
+        except ValueError as exc:  # `fromiter` raises when the source runs out before `count`
+            raise ValueError(f"TileIconCache.add: '{name}': expected {expected} floats for {width}x{height} RGBA: {exc}") from exc
         if arr.size != expected:
             raise ValueError(f"TileIconCache.add: '{name}': expected {expected} floats for {width}x{height} RGBA, got {arr.size}")
         with self._lock:
