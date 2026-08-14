@@ -1195,13 +1195,13 @@ with timer() as tim:
                                 # One text widget under one tag (only one branch runs), so the click-flash can
                                 # briefly swap in an "opening…" acknowledgment and restore the help text after.
                                 if model_is_vlm is True:
-                                    dpg.add_text("Attach file(s) to your message.\n\n"
+                                    dpg.add_text("Attach file(s) to your message [Ctrl+Shift+O].\n\n"
                                                  "Documents and images are both accepted.\n"
                                                  f"    Documents: {_ATTACH_DOC_EXTS_TEXT}\n"
                                                  f"    Images: {_ATTACH_IMAGE_EXTS_TEXT}",
                                                  tag="chat_attach_tooltip_text")
                                 elif model_is_vlm is None:
-                                    dpg.add_text("Attach file(s) to your message.\n\n"
+                                    dpg.add_text("Attach file(s) to your message [Ctrl+Shift+O].\n\n"
                                                  f"    Documents: {_ATTACH_DOC_EXTS_TEXT}\n"
                                                  f"    Images: {_ATTACH_IMAGE_EXTS_TEXT}\n\n"
                                                  "Documents work with any model. Images require a vision model —\n"
@@ -1210,7 +1210,7 @@ with timer() as tim:
                                                  "Studio reports the flag, so it can confirm capability up front.",
                                                  tag="chat_attach_tooltip_text")
                                 else:  # False — confirmed text-only; listing image formats would only offer what is refused
-                                    dpg.add_text("Attach file(s) to your message.\n\n"
+                                    dpg.add_text("Attach file(s) to your message [Ctrl+Shift+O].\n\n"
                                                  f"    Documents: {_ATTACH_DOC_EXTS_TEXT}\n\n"
                                                  "Documents work with any model. The loaded model is text-only, so\n"
                                                  "images can't be attached — load a vision model (VLM) at your LLM backend for those.",
@@ -1643,6 +1643,7 @@ hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focu
                env(key_indent=1, key=_newline_keys_label(), action_indent=0, action="Insert a new line", notes="While writing a message"),
                env(key_indent=1, key="Esc", action_indent=0, action="Clear text and cancel", notes="While writing a message"),
                env(key_indent=0, key="Ctrl+Shift+Enter", action_indent=0, action="Speak to AI using your mic", notes=f"Device: {audio_recorder.require().device_name}"),
+               env(key_indent=0, key="Ctrl+Shift+O", action_indent=0, action="Attach file(s) to your message", notes="Documents, and images on a vision model"),
                helpcard.hotkey_blank_entry,
                env(key_indent=0, key="Ctrl+T", action_indent=0, action="Show/hide last thinking trace", notes="For thinking models"),
                env(key_indent=0, key="Ctrl+S", action_indent=0, action="Speak last AI message / stop speaking", notes=""),
@@ -1927,6 +1928,10 @@ def librarian_hotkeys_callback(sender, app_data):
             fire_event_if_exists("prev10")
         elif key == dpg.mvKey_Right:
             fire_event_if_exists("next10")
+        elif key == dpg.mvKey_O:
+            # Shift, so that plain Ctrl+O stays free for opening a chat datastore — a deferred item, and
+            # the meaning a reader will expect of the unshifted chord.
+            show_attach_dialog()
 
         # Some hidden debug features. Mnemonic: "Mr. T Lite" (Ctrl + Shift + M, R, T, L)
         elif key == dpg.mvKey_M:

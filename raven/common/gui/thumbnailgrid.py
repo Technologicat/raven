@@ -826,10 +826,20 @@ class ThumbnailGrid:
         if vis_pos < 0 or vis_pos >= len(self._visible):
             return None
 
-        # Check that the position is on the tile, not in the spacing around it.
+        # Check that the position is on the entry, not in the spacing around it.
+        #
+        # **The label counts as part of the entry.** Rejecting anything below the image made the filename a
+        # dead strip 26 px tall, directly under the picture and visually part of it — so clicking a file
+        # *by its name*, which is what a lifetime of file managers trains, did nothing at all. Nothing
+        # errors and nothing moves, which is the worst shape a bug can take in a picker.
+        #
+        # The spacing between cells stays dead. That is a gap rather than a target, and a click landing
+        # there is more plausibly a miss than a choice.
         tile_x = local_x - col * self._col_width
         tile_y = content_y - row * self._row_height
-        if tile_x > self._tile_size or tile_y > self._tile_size:
+        text_h = self._font_size + 2 * self._frame_padding_y
+        cell_height = self._tile_size + self._item_spacing_y + text_h
+        if tile_x > self._tile_size or tile_y > cell_height:
             return None
 
         return self._visible[vis_pos]

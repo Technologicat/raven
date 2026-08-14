@@ -416,13 +416,41 @@ DPG_SCROLLBAR_SIZE = 14  # mvStyleVar_ScrollbarSize; the width a vertical scroll
 def get_widget_pos(widget: Union[str, int]) -> Tuple[int, int]:
     """Return `widget`'s (DPG tag or ID) position `(x0, y0)`, in viewport coordinates.
 
-    This papers over the fact that most items support `dpg.get_item_rect_min`,
-    but e.g. with child windows, one needs to use `dpg.get_item_pos` instead.
+    This papers over the fact that most items support `dpg.get_item_rect_min`, but windows and child
+    windows do not — measured 2026-08-14, with a mapped viewport and rendered frames, so this is a
+    property of those item types rather than of a missing frame.
+
+    For those, `dpg.get_item_pos` answers a *different question*: it is the position relative to the
+    parent container. One level below a window at the origin the two agree, which is why using it directly
+    went unnoticed — and why the failure appears only in deeply nested layouts, where it is total. In a
+    modal dialog three levels down it reported `(0, 0)` for a widget at `(46, 149)`, which turned the file
+    dialog's thumbnail grid into a listing whose tiles could not be clicked.
+
+    So the position is accumulated up the parent chain. Verified against two independent references: a
+    button's `rect_min` (a real item, so a true viewport position) and a group's, both of which the sum
+    reproduces exactly.
+
+    **The one case this does not cover is a scrolled ancestor.** `get_item_pos` is a layout position and
+    knows nothing of how far its container has been scrolled, so a widget inside a scrolling child window
+    reports where it would be at scroll zero. No current caller is in that position; if one arises, the
+    exact answer is to read `rect_min` off a child item that has one and subtract that child's own
+    `get_item_pos`.
     """
     try:
         x0, y0 = dpg.get_item_rect_min(widget)
-    except KeyError:  # some items don't have `rect_min` (e.g. child windows)
-        x0, y0 = dpg.get_item_pos(widget)
+        return x0, y0
+    except KeyError:  # windows and child windows have no `rect_min`
+        pass
+    x0 = y0 = 0
+    item = widget
+    while item:
+        try:
+            px, py = dpg.get_item_pos(item)
+        except (KeyError, SystemError):  # ran past the top of the tree
+            break
+        x0 += px
+        y0 += py
+        item = dpg.get_item_parent(item)
     return x0, y0
 
 def get_widget_size(widget: Union[str, int]) -> Tuple[int, int]:

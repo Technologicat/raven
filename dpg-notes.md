@@ -789,6 +789,34 @@ Consequences, which are small:
 
 There is **no getter for theme contents** — you cannot ask a theme for its colors or spacings. Code that needs to restore a themed value therefore tends to hardcode a measured literal instead; see the audit item in `TODO_DEFERRED.md`. Where a *per-widget* getter exists (as for a text widget's own color), use it — the gap is theme state specifically, not all of DPG.
 
+## Windows and child windows have no `rect_min`, and `get_item_pos` answers a different question
+
+Measured 2026-08-14, with a mapped viewport and thirty rendered frames, so this is a property of those item
+types rather than of a missing frame:
+
+- `dpg.get_item_rect_min(item)` raises `KeyError: 'rect_min'` for a window or a child window. Ordinary items
+  — buttons, text, drawlists — and **groups** do have it, and for them it is a true viewport position.
+- `dpg.get_item_pos(item)` works for everything, but it is the position **relative to the parent
+  container**, which is not the same thing and is not interchangeable.
+
+**The trap is that the two agree in the easy case.** One level below a window sitting at the origin, a
+child window's parent-relative position *is* its viewport position, so code that reaches for `get_item_pos`
+when `rect_min` is missing looks correct for as long as every layout is shallow. In a modal dialog three
+levels down it reported `(0, 0)` for a widget at `(46, 149)` — and since the value feeds hit testing, the
+symptom was a grid of thumbnails that could not be clicked, with nothing logged and nothing raised.
+
+**Use `guiutils.get_widget_pos`, which accumulates `get_item_pos` up the parent chain.** Verified against
+two independent references: a button's `rect_min` and a group's, both of which the sum reproduces exactly.
+Its one gap is a *scrolled* ancestor — `get_item_pos` is a layout position and knows nothing of scroll — for
+which the exact answer is to read `rect_min` off a child item that has one and subtract that child's own
+`get_item_pos`.
+
+Reproduction: build `window(pos=(30, 70)) -> child_window -> child_window -> group -> child_window ->
+button`, render ten frames, and compare `get_widget_pos` of the innermost child window against
+`get_item_rect_min(button) - get_item_pos(button)`. It is the `gui`-marked
+`test_get_widget_pos_is_viewport_coordinates_however_deeply_nested` in
+`raven/common/gui/tests/test_utils.py`.
+
 # Drawlists
 
 ## Never size a drawlist to a scroll extent — it will take the X session down

@@ -92,8 +92,21 @@ def test_hit_test_maps_positions_to_the_expected_tiles(make_grid):
 def test_hit_test_misses_the_gaps_between_tiles(make_grid):
     """A tile is `tile_size` wide inside a wider column; the remainder is spacing and must not select."""
     grid = make_grid(width=500)
-    assert grid.hit_test_at(TILE + 4, 10) is None                # horizontal spacing after tile 0
-    assert grid.hit_test_at(10, TILE + 4) is None                # the label strip below tile 0
+    assert grid.hit_test_at(TILE + 4, 10) is None                        # horizontal spacing after tile 0
+    assert grid.hit_test_at(10, EXPECTED_ROW_HEIGHT - 2) is None         # vertical spacing below the label
+
+
+def test_hit_test_includes_the_label(make_grid):
+    """Clicking a file *by its name* is what a lifetime of file managers trains, and it must work.
+
+    The label sits directly under the picture and reads as part of it, so treating it as dead space made a
+    click there do nothing at all — no error, no movement. Found in live testing of the file dialog's grid
+    view; the previous version of this test asserted the defect.
+    """
+    grid = make_grid(width=500)
+    label_y = TILE + 4 + 10  # inside the text row: tile, then item spacing, then the label
+    assert label_y < EXPECTED_ROW_HEIGHT
+    assert grid.hit_test_at(10, label_y) == 0
 
 
 def test_hit_test_misses_past_the_last_column_and_the_last_entry(make_grid):

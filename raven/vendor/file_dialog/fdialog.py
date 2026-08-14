@@ -22,6 +22,7 @@ from unpythonic import timer
 from ...common import filelisting
 from ...common import utils as common_utils
 from ...common.gui import animation as gui_animation
+from ...common.gui import utils as guiutils
 
 
 # The icon assets, by name. `ico_<name>` holds the loaded pixels and `img_<name>` the texture, both set on
@@ -903,7 +904,7 @@ class FileDialog:
             """
             if self._grid is None:
                 return
-            width, height = dpg.get_item_rect_size(f"listing_area_{self.instance_tag}")  # tag
+            width, height = guiutils.get_widget_size(f"listing_area_{self.instance_tag}")  # tag
             size = (max(64, int(width) - 4), max(64, int(height) - 4))
             if size != self._grid_size:
                 self._grid_size = size

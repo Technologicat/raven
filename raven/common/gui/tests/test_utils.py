@@ -80,3 +80,45 @@ def test_recenter_window_degrades_instead_of_raising(dpg_context):
     with dpg.window(autosize=True) as thewindow:
         dpg.add_text("centered on the reference")
     guiutils.recenter_window(thewindow, reference_window=reference_window)  # must not raise
+
+
+# --------------------------------------------------------------------------------
+# Widget position, in viewport coordinates
+
+@pytest.mark.gui
+def test_get_widget_pos_is_viewport_coordinates_however_deeply_nested(dpg_context):
+    """A child window's position must be where it is on screen, not where it is inside its parent.
+
+    Windows and child windows have no `rect_min`, so this cannot be read off DPG directly — and
+    `get_item_pos`, the obvious substitute, answers a different question. One level below a window at the
+    origin the two agree, which is what let the difference go unnoticed until a modal dialog three levels
+    deep reported `(0, 0)` for a widget that was nowhere near it, and its thumbnail grid stopped responding
+    to clicks.
+
+    A *button* does have `rect_min`, and that is a true viewport position — so it serves as the reference
+    the nesting is checked against.
+
+    Carries the `gui` marker: rendered frames are needed for any of these to have a position at all, and
+    DPG aborts the process if asked to render without a mapped viewport. So this one maps a window and
+    takes keyboard focus.
+    """
+    dpg.show_viewport()
+    try:
+        with dpg.window(tag="probe_window", pos=(30, 70), width=500, height=400, no_title_bar=True):
+            with dpg.child_window(tag="probe_outer", width=460, height=340):
+                dpg.add_spacer(height=40)
+                with dpg.child_window(tag="probe_inner", width=-1, height=-1, border=False):
+                    with dpg.group(tag="probe_group"):
+                        with dpg.child_window(tag="probe_deep", width=300, height=150):
+                            dpg.add_button(tag="probe_button", label="X")
+        for _ in range(10):
+            dpg.render_dearpygui_frame()
+
+        deep_x, deep_y = guiutils.get_widget_pos("probe_deep")  # tag
+        button_x, button_y = dpg.get_item_rect_min("probe_button")  # tag  # a real item: viewport coords
+        pad_x, pad_y = dpg.get_item_pos("probe_button")  # tag  # the child window's own content padding
+
+        assert (deep_x, deep_y) == (button_x - pad_x, button_y - pad_y)
+        assert deep_x > 30 and deep_y > 70  # inside the window, which is not at the origin
+    finally:
+        dpg.delete_item("probe_window")  # tag
