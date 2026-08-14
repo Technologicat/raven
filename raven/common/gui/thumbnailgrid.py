@@ -8,9 +8,11 @@ Thumbnails arrive asynchronously via `set_thumbnail`; until one does, a tile sho
 pool set by `set_noise_pool`. Producing the images is not this widget's job — see
 `raven.common.image.thumbnails.ThumbnailPipeline` for the decoder both current callers use.
 
-**Extending it.** Two hooks, both no-ops here, let an owner decorate tiles without this module learning what
-the decoration means:
+**Extending it.** Three hooks, all no-ops here, let an owner decorate tiles without this module learning what
+the decoration means. Draw order is load-bearing, so the two drawing hooks are not interchangeable:
 
+- `draw_underlay(idx, drawlist_tag)` — draw over the image but *under* the tile's tint, border and number,
+  for decoration those must stay legible through.
 - `draw_overlay(idx, drawlist_tag)` — draw on top of a finished tile. Cherrypick puts its triage icons,
   compare badges and beacon here.
 - `border_color_for(idx)` — the tile's border colour. Cherrypick colours it by triage state.
