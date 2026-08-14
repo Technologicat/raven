@@ -367,6 +367,18 @@ Same shape applies to `nlp` (`nlptools` ↔ `natlang`), `stt`, `embeddings`, `sa
 - `raven/common/audio/` - Player, recorder, codec (PyAV streaming)
 - `raven/common/gui/` - Custom DearPyGui widgets (VU meter, GUI animation framework, messagebox)
 
+**"Every app does X" belongs in `raven/common/gui/`, as a component each app opts into with one call.** Not
+a base class to inherit and not a copy per app: `filedrop.install(...)` in all six GUI apps and
+`ThumbnailGrid` under Cherrypick's `TriageGrid` are the worked examples, and the planned `--qr` overlay
+follows them. Extension is by subclass hooks or callbacks, and *policy stays with the app* — the grid takes
+a list of visible indices and knows nothing about what admitted them, which is what lets both a triage tool
+and a file dialog drive it.
+
+Two things this buys, both observed rather than predicted: **one fix serves every consumer** (the grid's
+windowing problem is now one bug in one place), and **the second consumer finds the API gaps the first one
+hid** — wiring the grid into a second app surfaced three missing pieces in `raven.common.gui.animation`
+within an hour, none of them grid-specific.
+
 ### Vendored / adopted dependencies (`raven/vendor/`)
 
 **`raven/vendor/` is *adopted* code — effectively ours to fix and extend, not pristine upstream snapshots.**
