@@ -241,6 +241,18 @@ class FileGrid(ThumbnailGrid):
             return None
     current_entry = property(fget=get_current_entry, doc="The entry the cursor is on, or `None`.")
 
+    def set_selected_paths(self, paths) -> None:
+        """Select exactly the listed entries whose path is in `paths`, ignoring any that are not listed.
+
+        How a selection survives a re-listing: the indices have moved, so the owner hands back the paths it
+        remembered and gets the selection re-made against the new order. Paths that the listing no longer
+        shows are dropped, which is the honest answer — a filter that hides a file has unselected it.
+        """
+        with self._lock:
+            wanted = set(paths)
+            self._apply_selection({idx for idx, entry in enumerate(self._entries)
+                                   if entry.path in wanted and self.is_selectable(idx)})
+
     def get_selected_entries(self) -> list[FileEntry]:
         with self._lock:
             return [self._entries[idx] for idx in sorted(self._selected) if idx < len(self._entries)]

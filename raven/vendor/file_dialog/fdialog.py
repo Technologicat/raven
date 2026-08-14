@@ -545,11 +545,14 @@ class FileDialog:
                 return None
             return _icon_name_for_extension(entry.name) or "document"
 
-        def _make_row(entry, callback, parent=f"explorer_{self.instance_tag}"):
+        def _make_row(entry, callback, parent=f"explorer_{self.instance_tag}", selected_paths=()):
             """Build one table row from a `filelisting.FileEntry`.
 
             The entry carries everything the row needs, so nothing here consults the filesystem and nothing
             has to be read back off the widgets later.
+
+            `selected_paths`: which paths were selected before this rebuild. A row for one of them comes up
+            already selected, so a selection survives a re-listing instead of quietly evaporating.
             """
             # `..` is the way out of the directory rather than something in it: one spanning cell, and no
             # date/type/size.
@@ -574,6 +577,12 @@ class FileDialog:
                 cell_time = dpg.add_selectable(label=filelisting.format_mtime(entry.mtime), **kwargs_cell)
                 cell_type = dpg.add_selectable(label=filelisting.format_kind(entry), **kwargs_cell)
                 cell_size = dpg.add_selectable(label=filelisting.format_size(entry.size), **kwargs_cell)
+
+                # Restore the selection: only the name cell is set, since every cell spans the columns and
+                # setting all four would stack the tint on itself.
+                if entry.path in selected_paths and _is_choosable(entry):
+                    dpg.set_value(cell_name, True)
+                    self.selected_files.append(entry.path)
 
                 if self.allow_drag:
                     drag_payload = dpg.add_drag_payload(parent=cell_name, payload_type=self.PAYLOAD_TYPE)
@@ -662,6 +671,11 @@ class FileDialog:
             # Phase timings, so a slow open says *which* phase is slow rather than only that it was. Reading
             # the directory, deleting the old rows and creating the new ones have entirely different fixes,
             # and a report of "a couple of seconds" does not distinguish them.
+            # What was selected, so it can be restored against the new listing. A rebuild happens on every
+            # keystroke in the find field and on every view switch, and until 2026-08-14 each of those
+            # silently dropped the selection: the *cursor* was re-anchored by path and the selection was
+            # not, so switching to the grid and back left the file chosen but no longer shown as chosen.
+            previously_selected = set(self.selected_files)
             self.selected_files.clear()
             self.shown_items.clear()
             try:
@@ -690,10 +704,14 @@ class FileDialog:
 
                 with timer() as tim_build:
                     if self._grid_mode:
-                        _the_grid().set_listing(entries)
+                        grid = _the_grid()
+                        grid.set_listing(entries)
+                        # Re-made against the new order, and the grid's own callback puts the survivors
+                        # back into `selected_files`.
+                        grid.set_selected_paths(previously_selected)
                     else:
                         for entry in entries:
-                            _make_row(entry, open_file)
+                            _make_row(entry, open_file, selected_paths=previously_selected)
 
                 logger.debug(f"reset_dir: instance '{self.tag}' ({self.instance_tag}), {len(self.shown_items)} entries "
                              f"as {'tiles' if self._grid_mode else 'rows'}: "

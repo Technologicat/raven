@@ -487,6 +487,52 @@ def test_selecting_everything_in_the_grid_skips_what_cannot_be_returned(make_dia
     assert "photo.png" in chosen
 
 
+def test_the_selection_survives_a_view_switch(dialog):
+    """Stated as a requirement: switching views must not change anything.
+
+    The cursor was re-anchored by path and the selection was not, so a file chosen in the grid came back
+    from the toggle still chosen but no longer *shown* as chosen.
+    """
+    dialog.set_type_filter(".*")
+    dialog.set_grid_mode(True)
+    chosen = next(entry for entry in dialog._grid.entries if not entry.is_dir)
+    dialog._grid.set_selected_paths([chosen.path])
+    assert dialog.selected_files == [chosen.path]
+
+    dialog.set_grid_mode(False)
+    assert dialog.selected_files == [chosen.path]
+
+    dialog.set_grid_mode(True)
+    assert dialog.selected_files == [chosen.path]
+
+
+def test_the_selection_survives_a_find_field_keystroke(dialog):
+    """A rebuild per keystroke must not quietly unselect what the user picked a moment ago."""
+    dialog.set_type_filter(".*")
+    dialog.reset_dir(default_path=os.getcwd())
+    chosen = os.path.join(os.getcwd(), "photo.png")
+    dialog.selected_files.append(chosen)
+
+    dialog.reset_dir(file_name_filter="photo", default_path=os.getcwd())  # still matches
+
+    assert dialog.selected_files == [chosen]
+
+
+def test_a_selection_filtered_out_of_the_listing_is_dropped(dialog):
+    """What is selected is what you can see selected — no state hiding behind the find field.
+
+    The alternative, remembering it until the filter widens again, would let OK return files the user can
+    no longer see and may have forgotten choosing.
+    """
+    dialog.set_type_filter(".*")
+    dialog.reset_dir(default_path=os.getcwd())
+    dialog.selected_files.append(os.path.join(os.getcwd(), "photo.png"))
+
+    dialog.reset_dir(file_name_filter="notes", default_path=os.getcwd())  # no longer matches
+
+    assert dialog.selected_files == []
+
+
 def test_the_hidden_view_is_left_empty(dialog):
     """A stale listing behind the shown one is both memory and, on a switch back, the wrong answer."""
     dialog.set_grid_mode(True)
