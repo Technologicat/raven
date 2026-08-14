@@ -216,11 +216,18 @@ def _update_title() -> None:
     base = f"raven-cherrypick {__version__}"
     triage = _app_state["triage"]
     grid = _app_state["grid"]
+    iv = _app_state["image_view"]
     if triage is None or grid is None or len(triage) == 0:
         dpg.set_viewport_title(base)
         return
     folder_name = triage.base_dir.name
-    idx = grid.current
+    # Named after what is on screen rather than after the grid cursor, so compare mode's title tracks the
+    # cycle instead of naming the image you left behind. The two agree everywhere else.
+    #
+    # This does mean the title bar changes at the cycle rate, up to a few times a second. If that reads as
+    # flicker rather than as information, reverting to `grid.current` here is the whole change — compare
+    # mode's own call to this function then becomes a harmless no-op.
+    idx = iv.image_key if iv is not None and isinstance(iv.image_key, int) else grid.current
     if 0 <= idx < len(triage):
         dpg.set_viewport_title(f"{base} — {folder_name} — {triage[idx].filename}")
     else:
@@ -742,6 +749,12 @@ _COMPARE_DISABLE_ITEMS = [
     "cherrypick_clear_mark_btn",
     "cherrypick_filter_combo",
     "cherrypick_tile_size_combo",
+    # Undo and redo move files and then navigate to what they moved, which fights a running cycle and
+    # leaves the grid pointing somewhere the loop did not choose. `_on_compare_exit` hands these two back
+    # to `_refresh_history_buttons` rather than simply re-enabling them, since whether they *should* be
+    # enabled depends on the history, not on compare mode.
+    "cherrypick_undo_btn",
+    "cherrypick_redo_btn",
 ]
 
 
@@ -776,6 +789,7 @@ def _on_compare_exit() -> None:
     # Re-enable toolbar items.
     for tag in _COMPARE_DISABLE_ITEMS:
         dpg.enable_item(tag)
+    _refresh_history_buttons()  # undo/redo are enabled by the history, not by leaving compare mode
     # Re-enable grid input.
     grid = _app_state["grid"]
     if grid is not None:
@@ -863,14 +877,17 @@ def _ensure_mips_for_zoom(zoom: float) -> None:
     zoom-in; the loaded-vs-needed guard keeps it from re-firing or thrashing.
     """
     iv = _app_state["image_view"]
-    grid = _app_state["grid"]
     triage = _app_state["triage"]
-    if iv is None or grid is None or triage is None:
+    if iv is None or triage is None:
         return
     if not iv.has_image or iv.mip_loading:
         return
-    idx = grid.current
-    if not (0 <= idx < len(triage)):
+    # The file to read more of is the one the view is *showing*, which `grid.current` does not always
+    # name: compare mode cycles frames through the view without moving it. Reading the wrong file here
+    # would splice one image's fine mip levels into another image's chain, so zooming in would sharpen
+    # into a different picture.
+    idx = iv.image_key
+    if not isinstance(idx, int) or not (0 <= idx < len(triage)):
         return
     if iv.loaded_max_scale < mip_scale_for_zoom(zoom):
         iv.augment_mips(triage[idx].path)
@@ -992,9 +1009,16 @@ def _on_key(sender, app_data) -> None:
             iv.zoom_to_fit()
         return
     # Ctrl+Shift: winner commit + debug keys.
+    #
+    # This block runs *before* the compare-mode interception below, so the entries that touch triage or
+    # history need their own guard — the blanket "all other keys suppressed" does not reach them. The
+    # debug keys deliberately stay live during compare: inspecting a running cycle is exactly when they
+    # are wanted, and none of them touch a file.
+    compare_running = compare is not None and compare.active
     if ctrl and shift:
         if key == dpg.mvKey_C:
-            _mark_winner()
+            if not compare_running:
+                _mark_winner()
         elif key == dpg.mvKey_M:
             dpg.show_metrics()
             global _debug
@@ -1012,7 +1036,8 @@ def _on_key(sender, app_data) -> None:
         elif key == dpg.mvKey_L:
             dpg.show_style_editor()
         elif key == dpg.mvKey_Z:
-            _redo()
+            if not compare_running:
+                _redo()
         return
 
     # --- Compare mode active: intercept most keys ---
@@ -1654,6 +1679,7 @@ def main() -> int:
         load_image_fn=_compare_load_image,
         set_status_fn=_set_status,
         update_status_fn=_update_status,
+        update_title_fn=_update_title,
     )
 
     # --- Input handlers ---

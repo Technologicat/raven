@@ -13,7 +13,7 @@ __all__ = ["CompareMode"]
 import logging
 import time
 from collections.abc import Sequence
-from typing import Callable
+from typing import Callable, Optional
 
 from ..common.gui import animation as gui_animation
 from . import config
@@ -38,7 +38,8 @@ class CompareMode:
                  get_triage,
                  load_image_fn: Callable[[int], None],
                  set_status_fn: Callable[[str], None],
-                 update_status_fn: Callable[[], None]):
+                 update_status_fn: Callable[[], None],
+                 update_title_fn: Optional[Callable[[], None]] = None):
         """
         All ``get_*`` parameters are zero-argument callables returning
         the current component (or ``None``). This avoids holding stale
@@ -47,6 +48,9 @@ class CompareMode:
         *load_image_fn*: ``f(idx)`` — set grid.current and load image.
         *set_status_fn*: ``f(text)`` — set status bar text directly.
         *update_status_fn*: ``f()`` — rebuild normal status bar.
+        *update_title_fn*: ``f()`` — rebuild the window title, called once per displayed frame so a title
+            naming the image on screen keeps up with the cycle. Optional: a caller whose title does not
+            name the image has nothing to refresh.
         """
         self._get_iv = get_image_view
         self._get_grid = get_grid
@@ -55,6 +59,7 @@ class CompareMode:
         self._load_image = load_image_fn
         self._set_status = set_status_fn
         self._update_status = update_status_fn
+        self._update_title = update_title_fn
 
         # State.
         self.active: bool = False
@@ -308,6 +313,9 @@ class CompareMode:
         grid = self._get_grid()
         if grid is not None:
             iv.set_image_number(grid.position_of(img_idx))
+
+        if self._update_title is not None:
+            self._update_title()
 
         self._update_compare_status()
 
