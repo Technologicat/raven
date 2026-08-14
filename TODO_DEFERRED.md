@@ -3676,6 +3676,40 @@ What the mode adds on top of that view: not loading the avatar at all. That is w
 saving come from, and it is a startup-path decision rather than a hide/show toggle — worth being explicit
 about, since a mode that merely hides the avatar panel saves nothing that matters here.
 
+## Cherrypick's compare mode stalls on the image when the sizes differ
+
+*Cluster: cherrypick · Cost: ? · Gate: next · Filed: 2026-08-14*
+
+Observed by Juha 2026-08-14, comparing three images of differing dimensions: the cycle advances — the
+overlay number goes to 3 — but the image view keeps showing frame 2. Same-sized images are fine, which is
+the whole clue. Pre-existing: `compare.py`, `imageview.py` and `preload.py` were untouched by that day's
+grid work, and compare's grid API surface was not among what changed.
+
+**Not a cache miss.** `CompareMode._show_frame` logs `cache miss for idx=` when `preload.take` comes back
+empty, and would then leave the image alone while still setting the overlay number — exactly the reported
+symptom. The log had *zero* of those across four reproductions, so the arrays do reach
+`ImageView.set_preloaded_arrays` on every cycle. Worth stating because it is the obvious first guess and it
+is wrong.
+
+**Where the size-dependence lives.** `ImageView._acquire_texture` pools textures by `(w, h)`:
+
+- equal sizes hit the pool and go through `dpg.set_value`, which is fast and creates no OpenGL texture;
+- differing sizes miss it and `add_dynamic_texture` per mip instead.
+
+`set_preloaded_arrays` hands that work to a background task and keeps the previous image visible meanwhile
+(`_bridge_old_mips`), guarded by `_mips_generation`. So a task that does not finish inside one compare frame
+(333 ms at the default 3 FPS) is cancelled by the next cycle's `clear()`, its result dropped by the
+generation guard, and the bridged old image stays up — which would look precisely like this.
+
+**That last paragraph is a hypothesis, not a finding.** It does not explain persistence: after one full
+cycle the pool should be warm for all three sizes, so the misses should stop. Something else is going on,
+or the pool is not being refilled the way `take_mip_arrays` suggests.
+
+**How to settle it without guessing further:** the timing instrumentation already exists — `--debug`, or
+**Ctrl+Shift+M at runtime**, logs decode/mip/total ms per image switch (added in `9b5a787`). Reproduce with
+it on and read whether the per-switch time exceeds the frame period, and whether it stays high after the
+first cycle.
+
 ## Raven's global theme sets three of ImGui's seven rounding vars
 
 *Cluster: polish · Cost: S · Gate: next · Filed: 2026-08-14*
