@@ -104,6 +104,20 @@ data no longer has. Set `no_sort=True` on the columns — measured 2026-08-14 as
 see `dpg-notes.md` — and the second source of truth is gone by construction rather than by keeping two
 things in step.
 
+**The requirement this serves, stated by Juha 2026-08-14: switching views must not change anything.** The
+sort order carries over, and the cursor stays on the same file. Both fall out of the refactor rather than
+needing work here — the sort criterion becomes app state that a view switch does not touch, and the cursor
+is already specified as re-anchored *by path* after every rebuild (`filedialog-keyboard-brief.md`), because
+typing in the find field rebuilds the listing constantly. A view switch is one more rebuild.
+
+**A fake header styled to look like the real one was considered and rejected**, having been the natural
+answer: replace `header_row` with our own buttons, and the familiar gesture survives. It does not survive
+the column widths. `resizable`, `reorderable` and `hideable` are all header-drag gestures, so removing the
+header removes all three — and while reordering and hiding are dispensable here, **resizing is not**:
+filename lengths vary enormously between users and directories, which is exactly when a fixed Name column
+hurts. `no_sort` is a per-column *sorting* flag and leaves resizing alone, so keeping the real header and
+moving only the sort out of it is what preserves the gesture that matters.
+
 It costs the familiar click-the-header gesture, and buys three things:
 
 - **The disagreement cannot happen.** A guarantee, where synchronizing would be a hope. Whether reconfiguring
@@ -114,6 +128,11 @@ It costs the familiar click-the-header gesture, and buys three things:
   which that brief already works around with a focus-then-arrows idiom. Buttons are focusable; a header is
   not.
 - **One place to learn.** The control does not move or change when the view does.
+
+**Switch `reorderable` and `hideable` off while here** (Juha, 2026-08-14). Both are on today and neither
+earns its place in a file dialog with four fixed columns — and both are gestures on a header that no longer
+sorts, so leaving them is a header that responds to three drags and ignores the click everyone tries first.
+`resizable` stays on.
 
 ## The folder tile needs a large icon, and it must be resampled rather than scaled
 
