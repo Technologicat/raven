@@ -365,6 +365,14 @@ class ImageView:
         self._set_mip_loading(True)
         self._needs_render = True
 
+        # Paired with the `img=` field of the `_render` line for the same generation. The two disagreeing
+        # means `_img_w`/`_img_h` were written between the request and the draw — by something other than
+        # the caller, since nothing else legitimately touches them for a generation already in flight.
+        if self._debug:
+            largest = mip_arrays[0][1:3] if mip_arrays else None
+            logger.info(f"ImageView.set_preloaded_arrays: gen={self._mips_generation} "
+                        f"img={img_w}x{img_h} largest_mip={largest}")
+
         task_env = env(mip_arrays=mip_arrays,
                        generation=self._mips_generation,
                        submitted_ns=time.perf_counter_ns(),
