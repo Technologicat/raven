@@ -32,7 +32,7 @@ Public API (all called from `app.py` after the GUI layout exists):
     `select_cluster_by_id`, `select_current_cluster`.
   - Dimmer overlay: `create_dimmer_overlay`, `rebuild_dimmer_overlay`
     (only called from the resize handler; show/hide is internal).
-  - Scroll-end flasher: `flash_scroll_end_by_position(y_scroll)` — tiny wrapper
+  - Scroll-end flasher: `note_wheel_scroll()` — tiny wrapper
     used by `app.mouse_wheel_callback`.
 
 Public state (guarded by `content_lock`; swapped atomically by the worker):
@@ -94,7 +94,7 @@ __all__ = ["content_lock",
            "select_current_cluster",
            "create_dimmer_overlay",
            "rebuild_dimmer_overlay",
-           "flash_scroll_end_by_position"]
+           "note_wheel_scroll"]
 
 import functools
 import gc
@@ -226,10 +226,15 @@ def build_window():
                                                          text_bottom=fa.ICON_ARROWS_DOWN_TO_LINE)
 
 
-def flash_scroll_end_by_position(y_scroll):
-    """Show the scroll-end flasher at the given scroll position, if the flasher exists."""
+def note_wheel_scroll():
+    """Announce the info panel's scroll ends when the mouse wheel reaches or presses against one.
+
+    The wheel is the one movement path `SmoothScrolling` cannot see, DPG scrolling the child window
+    internally. Reading the position here would catch only a wheel turned while *already* at an end,
+    because a wheel handler runs before DPG applies the event — so the flasher does the two-stage check.
+    """
     if _scroll_end_flasher is not None:
-        _scroll_end_flasher.show_by_position(y_scroll)
+        _scroll_end_flasher.note_wheel_scroll()
 
 
 # --------------------------------------------------------------------------------

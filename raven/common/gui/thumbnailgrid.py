@@ -737,9 +737,16 @@ class ThumbnailGrid:
         nothing for `SmoothScrolling` to detect. *Arriving* at an end is announced by the scroll itself,
         which is where the other views announce it too — the flasher says "here is the wall" as you reach
         it, not only once you have walked into it.
+
+        With less than a screenful there is nothing to scroll, and both ends are where you are — so both
+        are flashed, whichever direction was refused. That is `show_by_position`'s own rule for this case,
+        which is what the wheel path and Visualizer's info panel already do.
         """
-        if self._scroll_end_flasher is not None:
-            self._scroll_end_flasher.show(where=where)
+        if self._scroll_end_flasher is None:
+            return
+        if dpg.get_y_scroll_max(self._child_window_tag) == 0:  # tag
+            where = "both"
+        self._scroll_end_flasher.show(where=where)
 
     def _redraw_tile_by_idx(self, idx: int) -> None:
         """Redraw a single tile (if it's visible) after a state change."""
@@ -844,17 +851,14 @@ class ThumbnailGrid:
 
         The wheel is a third way to move this view, and the only one nothing of ours sees: DPG scrolls the
         child window internally, so there is no animation to carry the flasher and no navigation to refuse.
-        Visualizer's info panel hooks the wheel for the same reason. See `ScrollEndFlasher`.
-
-        The position read here is the one *before* DPG applies this event, so what this catches is a wheel
-        turned while already at an end rather than the turn that arrives there.
+        `note_wheel_scroll` handles the two-stage check that needs; see `ScrollEndFlasher`.
         """
         with self._lock:
             if not self.input_enabled or self._scroll_end_flasher is None:
                 return
             if not guiutils.is_mouse_inside_widget(self._child_window_tag):  # tag
                 return
-            self._scroll_end_flasher.show_by_position(dpg.get_y_scroll(self._child_window_tag))  # tag
+            self._scroll_end_flasher.note_wheel_scroll()
 
     def _on_double_click_handler(self, sender, app_data) -> None:
         """Handle double-click on a tile."""

@@ -1561,8 +1561,7 @@ def mouse_wheel_callback(sender, app_data):
     # If we reach the end of the info panel, flash it.
     if mouse_inside_info_panel():
         # direction = app_data  # -1 = down, +1 = up  # for documentation only
-        current_y_scroll = dpg.get_y_scroll("item_information_panel")  # tag
-        info_panel.flash_scroll_end_by_position(current_y_scroll)
+        info_panel.note_wheel_scroll()
 
     # Zooming in the plotter may change which data points are under the cursor within the tooltip-trigger pixel distance.
     if mouse_inside_plot_widget():

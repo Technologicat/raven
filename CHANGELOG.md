@@ -52,7 +52,11 @@
 - the chat datastore is now `chat.json`, with its attachments in `chat.sidecars/` beside it. They were `data.json` and `data.images/` — the first said nothing about what was in it, and the second was named when images were the only thing you could attach, which stopped being true once documents could be. **Both are renamed on first start, together**, so there is nothing to do.
   - A `data.json` is adopted only if it actually reads as a chat datastore. The name is generic enough to belong to something else entirely, and the file is looked for beside whatever datastore path you configured — so if you have pointed Raven at a directory of your own, an unrelated `data.json` there is left alone.
 
+- **the chat log now marks its ends when you reach them with the mouse wheel**, as it already did when you got there with the keyboard. The wheel is scrolled by the GUI toolkit itself, so nothing in Raven was watching it.
+
 *Raven-visualizer*
+
+- the info panel marks its ends when the wheel *arrives* at one, where previously it only did so once you were already there and turned the wheel again. A single click of the wheel onto the end used to be silent.
 
 - the importer's two LLM steps — cluster keyword extraction and abstract summarization — no longer run as a conversation with the assistant character. Both outputs are parsed by the importer rather than read by a person, while the character card asks for Markdown, for a reported train of thought, and for conversational prose — all of which had to be undone before the result could be used. Each of the two prompts already states its own task, so what the character contributed was only the part working against it. Expect cleaner keyword lists, and summaries that start with the summary.
 

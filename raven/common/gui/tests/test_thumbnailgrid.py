@@ -172,7 +172,17 @@ class _RecordingFlasher:
         self.shown.append(where)
 
 
-def test_navigation_refused_at_an_end_flashes_that_end(make_grid):
+@pytest.fixture
+def scrollable(monkeypatch):
+    """Report a nonzero scroll extent, so the grid takes its "content is taller than the pane" branch.
+
+    Headless DPG lays nothing out, so `get_y_scroll_max` always reads 0 — which is the grid's *content
+    fits* case. Without this the directional branch is unreachable in a test.
+    """
+    monkeypatch.setattr(dpg, "get_y_scroll_max", lambda _tag: 500)
+
+
+def test_navigation_refused_at_an_end_flashes_that_end(make_grid, scrollable):
     """The gesture a scroll-side trigger cannot see.
 
     Navigation clamps and `set_current` returns early on an unchanged index, so pressing past the last row
@@ -187,6 +197,20 @@ def test_navigation_refused_at_an_end_flashes_that_end(make_grid):
     grid.navigate_last()  # a move, not a refusal
     grid.navigate_next()  # now there is no further
     assert flasher.shown == ["top", "bottom"]
+
+
+def test_with_less_than_a_screenful_a_refusal_flashes_both_ends(make_grid):
+    """Nothing to scroll means both ends are where you already are, whichever way was refused.
+
+    `show_by_position`'s rule for this case, so the wheel path and Visualizer's info panel already behave
+    this way; matching it is what keeps one widget's keyboard from disagreeing with its own mouse.
+    """
+    flasher = _RecordingFlasher()
+    grid = make_grid(n_entries=12, scroll_end_flasher=flasher)  # headless: get_y_scroll_max reads 0
+
+    grid.navigate_prev()
+
+    assert flasher.shown == ["both"]
 
 
 def test_a_move_does_not_fire_the_refusal_flash(make_grid):
@@ -206,7 +230,7 @@ def test_a_move_does_not_fire_the_refusal_flash(make_grid):
     assert flasher.shown == []
 
 
-def test_jumping_to_an_end_already_there_flashes(make_grid):
+def test_jumping_to_an_end_already_there_flashes(make_grid, scrollable):
     """End-at-the-end is as much a refused request as Down-at-the-end."""
     flasher = _RecordingFlasher()
     grid = make_grid(n_entries=12, scroll_end_flasher=flasher)

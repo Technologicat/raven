@@ -309,6 +309,16 @@ def _on_any_input(*_args) -> None:
     global _last_input_ns
     _last_input_ns = time.monotonic_ns()
 
+def _on_mouse_wheel(*args) -> None:
+    """Idle-throttle bookkeeping, plus the chat log's scroll-end flash.
+
+    The wheel needs its own handling for the flash: DPG scrolls a child window internally, so no scroll
+    animation exists to notice that the end was reached.
+    """
+    _on_any_input(*args)
+    if "chat_controller" in globals() and guiutils.is_mouse_inside_widget(chat_controller.view.gui_parent):
+        chat_controller.view.note_wheel_scroll()
+
 # --------------------------------------------------------------------------------
 # Connect to servers, load datastores
 
@@ -2046,7 +2056,7 @@ with dpg.handler_registry(tag="librarian_handler_registry"):  # global (whole vi
     # Input tracking for idle throttle. Mouse-move covers slider drags, scrolling, and general activity.
     dpg.add_mouse_move_handler(callback=_on_any_input)
     dpg.add_mouse_click_handler(callback=_on_any_input)
-    dpg.add_mouse_wheel_handler(callback=_on_any_input)
+    dpg.add_mouse_wheel_handler(callback=_on_mouse_wheel)
 
 # --------------------------------------------------------------------------------
 # Start the app

@@ -5,7 +5,7 @@ __all__ = ["Animator", "animator",  # controller and its global instance (need o
            "Dimmer",  # overlays
            "WidgetFlash", "flash_button", "highlight_widget",  # the flash animation, and its two conveniences
            "SmoothScrolling", "PulsatingColor",  # animations
-           "ScrollEndFlasher",  # animated overlay
+           "ScrollEndFlasher", "WHEEL_SETTLE_FRAMES",  # animated overlay, and the wheel-settle delay it uses
            "pulsation_envelope",  # utility: the cosine-squared curve used by pulsating animations
            "action_continue", "action_finish", "action_cancel"]  # return values for `render_frame`
 
@@ -1055,6 +1055,32 @@ class PulsatingColor(Animation):
 # --------------------------------------------------------------------------------
 # Animated overlay
 
+# Frames to wait after a mouse-wheel event before asking where the scroll ended up. DPG applies the wheel
+# scroll internally, during the frame, so a wheel handler runs too early to see the result.
+WHEEL_SETTLE_FRAMES = 1
+
+
+class _WheelSettleCheck(Animation):
+    """One-shot: a frame after the wheel moved a scrollable, ask its flasher where the scroll landed.
+
+    Registered with the animator rather than driven by a per-app tick, so a view gets this from the
+    animator its app already runs, with nothing added to any render loop. See
+    `ScrollEndFlasher.note_wheel_scroll`.
+    """
+
+    def __init__(self, flasher: "ScrollEndFlasher"):
+        super().__init__()
+        self.flasher = flasher
+        self.remaining = WHEEL_SETTLE_FRAMES
+
+    def render_frame(self, t: int) -> sym:
+        self.remaining -= 1
+        if self.remaining > 0:
+            return action_continue
+        self.flasher.show_by_position(dpg.get_y_scroll(self.flasher.target))  # tag
+        return action_finish
+
+
 # Inherit from `Overlay` first, so that `super().__init__(...)` passes its arguments where we want it to.
 # Then the `super().__init__()` call inside `Overlay.__init__` will initialize the `Animation` part.
 class ScrollEndFlasher(Overlay, Animation):
@@ -1304,6 +1330,24 @@ class ScrollEndFlasher(Overlay, Animation):
         self.animation_running = False
         self.where = None
         self.hide()
+
+    def note_wheel_scroll(self) -> None:
+        """Call this from a mouse-wheel handler over the scrollable this flasher watches.
+
+        The wheel is the movement path nothing else here can see: DPG scrolls a child window internally,
+        so no `SmoothScrolling` exists to carry the flasher. Every view with a scrollbar needs this, and it
+        is easy to miss precisely because the view visibly scrolls and so looks handled.
+
+        **Checks twice**, because a wheel handler runs before DPG has applied the event. The immediate
+        check catches a wheel turned while already at an end; a one-shot animation re-checks once the
+        scroll has landed, catching the turn that *arrives* at one. Without the second, a lone tick onto
+        the end is silent — a burst hides that, since the next tick reports it, but a single tick does not.
+
+        During a burst each event schedules its own re-check, which is what keeps the overlay lit for as
+        long as the wheel keeps turning.
+        """
+        self.show_by_position(dpg.get_y_scroll(self.target))  # tag
+        animator.add(_WheelSettleCheck(self))
 
     def destroy(self) -> None:
         """Stop this flasher and delete its overlay windows. For a flasher that outlives its usefulness.

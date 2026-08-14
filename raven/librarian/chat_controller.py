@@ -2066,6 +2066,18 @@ class DPGLinearizedChatView:
                                                                   text_top=fa.ICON_ARROWS_UP_TO_LINE,
                                                                   text_bottom=fa.ICON_ARROWS_DOWN_TO_LINE)
 
+    def note_wheel_scroll(self) -> None:
+        """Announce this view's scroll ends when the mouse wheel reaches or presses against one.
+
+        Call from a mouse-wheel handler, having checked the pointer is over this view. The wheel is the one
+        movement path `SmoothScrolling` cannot see, DPG scrolling the child window internally, so without
+        this a reader who wheels to the end of the log is told nothing while one who pages there is.
+
+        No `user_initiated` gate here, unlike `_start_scroll_animation`: a wheel event *is* the reader.
+        """
+        if self._scroll_end_flasher is not None:
+            self._scroll_end_flasher.note_wheel_scroll()
+
     def should_follow_tail(self, verbose: bool = True) -> bool:
         """Whether new content should pull the view along with it.
 
