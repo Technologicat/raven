@@ -1,8 +1,17 @@
 # FileDialog: image thumbnail previews
 
-**Status: foundations built and shipped, integration designed and unbuilt.** The shared grid widget, its
-decoder and the extension hooks landed on 2026-08-13, with Cherrypick ported onto them as the proving
-ground. What remains is the file dialog's own view. Moved out of `TODO_DEFERRED.md` on 2026-08-13.
+**Status: everything except the dialog's grid view is built.** What remains is the view itself — the toggle,
+the tiles, the lazy decode, the sort buttons.
+
+- **The shared grid widget**, its decoder and its extension hooks landed 2026-08-13, with Cherrypick ported
+  onto them as the proving ground. Smooth scrolling and the scroll-end flasher followed on 2026-08-14.
+- **The listing refactor this brief calls for is done** (2026-08-14). `raven.common.filelisting` produces
+  the ordered entries as data — `FileEntry` objects, `..` and the directories among them — and the dialog
+  builds its table rows from them. The sort no longer walks the widget tree, and the sort criterion is
+  state that a rebuild reproduces. That was the enabling change; the grid can now consume the same list.
+  Live-tested in Visualizer and Librarian.
+
+Moved out of `TODO_DEFERRED.md` on 2026-08-13.
 
 One of the two final FileDialog pieces for Researchers' Night, with `filedialog-keyboard-brief.md`. They
 touch the same widget and should be built with each other in view: the grid needs the cursor and selection
