@@ -924,6 +924,13 @@ class FileDialog:
             def tick_loop():
                 while not self._ticker_stop.wait(_GRID_TICK_INTERVAL):
                     try:
+                        # The app closing with the picker still open is the one exit this thread is not
+                        # told about, and the one that races `destroy_context`. The render loop stops
+                        # first, so this reads False well before the context goes — and it is only ever
+                        # consulted from a thread that started while a *visible* dialog was rendering,
+                        # which is what makes False mean "stopped" here rather than "not started yet".
+                        if not dpg.is_dearpygui_running():
+                            return
                         if self._grid is None or not self._grid_mode or not self.is_visible():
                             continue
                         _resize_grid()
