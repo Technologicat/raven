@@ -19,6 +19,7 @@ import dearpygui.dearpygui as dpg
 
 from unpythonic import timer
 
+from ...common import filelisting
 from ...common import utils as common_utils
 from ...common.gui import animation as gui_animation
 
@@ -224,6 +225,11 @@ class FileDialog:
         self.selected_files = []
         self.shown_items = []  # for selection by search filter upon pressing ok
         self.selec_height = 16
+        # The listing's order, held as data rather than as the table's row order. A rebuild reproduces it,
+        # which is what lets the listing be re-rendered — re-filtered, or shown a different way — without
+        # the sort having to be recovered from the widgets it produced.
+        self._sort_key = filelisting.SortKey.NAME
+        self._sort_descending = False
         self.image_transparency = 100
         self.last_click_time = 0
         self.last_ok_time = 0
@@ -300,44 +306,6 @@ class FileDialog:
         def delete_table():
             for child in dpg.get_item_children(f"explorer_{self.instance_tag}", 1):
                 dpg.delete_item(child)
-
-        def get_file_size(file_path):
-            # Get the file size in bytes
-            if os.path.isdir(file_path):
-                if self.show_dir_size:
-                    total = 0
-                    for path, dirs, files in os.walk(file_path):
-                        for f in files:
-                            fp = os.path.join(path, f)
-                            total += os.path.getsize(fp)
-                    file_size_bytes = total
-                else:
-                    file_size_bytes = "-"
-            elif os.path.isfile(file_path):
-                file_size_bytes = os.path.getsize(file_path)
-
-            # Define the units and their respective sizes
-            size_units = [
-                ("TB", 2**40),  # Terabyte
-                ("GB", 2**30),  # Gigabyte
-                ("MB", 2**20),  # Megabyte
-                ("KB", 2**10),  # Kilobyte
-                ("B", 1),       # Byte
-            ]
-
-            # Determine the appropriate unit for formatting
-            if not file_size_bytes == "-":  # noqa: SIM201 -- vendored upstream code, leave as-is
-                for unit, size_limit in size_units:
-                    if file_size_bytes >= size_limit:
-                        # Calculate the size in the selected unit
-                        file_size = file_size_bytes / size_limit
-                        # Return the formatted size with the unit
-                        return file_size_bytes, f"{file_size:.0f} {unit}"
-            else:
-                return 0, "-"
-
-            # If the file size is smaller than 1 byte or unknown
-            return 0, "0 B"  # or "Unknown" or any other desired default
 
         def on_path_enter():
             try:
@@ -448,138 +416,95 @@ class FileDialog:
 
             return directory_path
 
-        def _is_hidden(filepath):
-            name = os.path.basename(os.path.abspath(filepath))
-            return name.startswith('.') or (os.name == 'nt' and _has_hidden_attribute(filepath))
+        # Extension -> row icon. Built once here rather than inside the row builder: it is twenty tuples,
+        # and rebuilding it per entry is work proportional to the size of the directory for no gain.
+        _ext_icons = {
+            # Binary blobs: shared libraries, and the model-weight formats, which are the same kind of
+            # thing to a file picker — something opaque that a program loads.
+            (".dll", ".a", ".o", ".so", ".ko",
+             ".safetensors", ".gguf", ".ckpt", ".pt", ".pth", ".onnx"): self.img_gears,
+            (".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff", ".avif", ".qoi"): self.img_picture,
+            (".msi", ".exe", ".bat", ".bin", ".elf", ".appimage", ".desktop"): self.img_app,
+            (".iso",): self.img_iso,
+            (".zip", ".deb", ".rpm", ".tar.gz", ".tgz", ".tar", ".gz", ".xz", ".bz2", ".zst",
+             ".lzo", ".lz4", ".7z", ".rar", ".whl", ".ppack"): self.img_zip,
+            (".py", ".pyo", ".pyw", ".pyi", ".pyc", ".pyz", ".pyd", ".pyx", ".pxd"): self.img_python,
+            (".c",): self.img_c,
+            (".js", ".json", ".cs", ".cpp", ".h", ".hpp", ".sh", ".pyl", ".rs", ".vbs", ".cmd",
+             ".ts", ".go", ".rb", ".lua", ".jl", ".java", ".yaml", ".yml", ".toml", ".ini", ".cfg",
+             ".xml", ".html", ".css"): self.img_script,
+            (".url",): self.img_url,
+            (".lnk",): self.img_link,
+            # Prose and tabular text. `.bib` and `.tex` earn their place here: this dialog is how a
+            # bibliography or a paper source gets picked, which is most of what Raven opens.
+            (".txt", ".md", ".rst", ".bib", ".tex", ".log", ".csv", ".tsv"): self.img_note,
+            (".mp3", ".ogg", ".wav", ".flac", ".m4a", ".opus", ".aac"): self.img_music_note,
+            (".mp4", ".mov", ".mkv", ".webm", ".avi", ".m4v", ".wmv"): self.img_video,
+            (".obj", ".fbx", ".blend"): self.img_object,
+            (".svg",): self.img_vector,
+        }
 
-        def _has_hidden_attribute(filepath):
-            try:
-                import ctypes
-                FILE_ATTRIBUTE_HIDDEN = 0x2
-                attrs = ctypes.windll.kernel32.GetFileAttributesW(str(filepath))
-                return FILE_ATTRIBUTE_HIDDEN & attrs
-            except Exception:
-                return False
+        def _icon_for(entry) -> Union[str, int]:
+            """The small icon shown at the left of `entry`'s row.
 
-        def _makedir(item, callback, parent=f"explorer_{self.instance_tag}", size=False):
-            # logger.debug(f"_makedir: instance '{self.tag}' ({self.instance_tag}), making table entry for directory '{item}' with callback {callback}")  # don't keep enabled, to avoid leaking user private data to debug log
+            Matched case-insensitively, so `PHOTO.JPG` gets the picture icon that `photo.jpg` does.
+            """
+            if entry.is_dir:
+                return self.img_mini_folder
+            if entry.kind == filelisting.KIND_BROKEN_LINK:
+                return self.img_mini_error
+            name = entry.name.lower()
+            for extensions, image in _ext_icons.items():
+                if name.endswith(extensions):  # `str.endswith` takes a tuple
+                    return image
+            return self.img_mini_document
 
-            file_name = os.path.basename(item)
-            full_path = os.path.join(os.getcwd(), file_name)
-            self.shown_items.append(full_path)
+        def _make_row(entry, callback, parent=f"explorer_{self.instance_tag}"):
+            """Build one table row from a `filelisting.FileEntry`.
 
-            modification_time_value = os.path.getmtime(item)
-            modification_time_label = time.ctime(modification_time_value)
+            The entry carries everything the row needs, so nothing here consults the filesystem and nothing
+            has to be read back off the widgets later.
+            """
+            # `..` is the way out of the directory rather than something in it: one spanning cell, no
+            # date/type/size, and it stays out of `shown_items` because it is not a candidate for the
+            # unique-match shortcut in `ok`.
+            if entry.is_parent:
+                with dpg.table_row(parent=parent):
+                    with dpg.group(horizontal=True):
+                        dpg.add_image(self.img_mini_folder, tint_color=[255, 255, 255, 255], user_data=entry.kind)
+                        dpg.add_selectable(label=entry.name, callback=_go_up_one_level,
+                                           span_columns=True, height=self.selec_height)
+                return
 
-            item_type = "Dir"
-            item_size_value, item_size_label = get_file_size(item)
+            self.shown_items.append(entry.path)
 
-            kwargs_cell = {'callback': callback, 'span_columns': True, 'height': self.selec_height, 'user_data': [file_name, full_path, modification_time_value, item_size_value]}
-            kwargs_file = {'tint_color': [255, 255, 255, 255]}
+            # `user_data` shape is `open_file`'s contract: [name, full path, mtime, size].
+            kwargs_cell = {'callback': callback, 'span_columns': True, 'height': self.selec_height,
+                           'user_data': [entry.name, entry.path, entry.mtime, entry.size or 0]}
+            alpha = self.image_transparency if entry.is_hidden else 255
+            kwargs_image = {'tint_color': [255, 255, 255, alpha], 'user_data': entry.kind}
+
             with dpg.table_row(parent=parent):
                 with dpg.group(horizontal=True):
-                    if item_type == "Dir":
-                        if _is_hidden(file_name):
-                            kwargs_file = {'tint_color': [255, 255, 255, self.image_transparency], 'user_data': item_type}
-                        else:
+                    dpg.add_image(_icon_for(entry), **kwargs_image)
+                    cell_name = dpg.add_selectable(label=entry.name, **kwargs_cell)
+                cell_time = dpg.add_selectable(label=filelisting.format_mtime(entry.mtime), **kwargs_cell)
+                cell_type = dpg.add_selectable(label=entry.kind, **kwargs_cell)
+                cell_size = dpg.add_selectable(label=filelisting.format_size(entry.size), **kwargs_cell)
 
-                            kwargs_file = {'tint_color': [255, 255, 255, 255], 'user_data': item_type}
-
-                        dpg.add_image(self.img_mini_folder, **kwargs_file)
-                    elif item_type == "File":
-                        dpg.add_image(self.img_mini_document, **kwargs_file)
-
-                    cell_name = dpg.add_selectable(label=file_name, **kwargs_cell)
-                cell_time = dpg.add_selectable(label=modification_time_label, **kwargs_cell)
-                cell_type = dpg.add_selectable(label=item_type, **kwargs_cell)
-                cell_size = dpg.add_selectable(label=str(item_size_label), **kwargs_cell)
-
-                if self.allow_drag is True:
+                if self.allow_drag:
                     drag_payload = dpg.add_drag_payload(parent=cell_name, payload_type=self.PAYLOAD_TYPE)
                 dpg.bind_item_theme(cell_name, self.selec_alignt)
                 dpg.bind_item_theme(cell_time, self.selec_alignt)
                 dpg.bind_item_theme(cell_type, self.selec_alignt)
                 dpg.bind_item_theme(cell_size, self.size_alignt)
-                if self.allow_drag is True:
-                    if file_name.endswith((".png", ".jpg")):
+                if self.allow_drag:
+                    if entry.name.lower().endswith((".png", ".jpg")):
                         dpg.add_image(self.img_big_picture, parent=drag_payload)
-                    elif item_type == "Dir":
+                    elif entry.is_dir:
                         dpg.add_image(self.img_folder, parent=drag_payload)
-                    elif item_type == "File":
+                    else:
                         dpg.add_image(self.img_document, parent=drag_payload)
-
-        def _makefile(item, callback, parent=f"explorer_{self.instance_tag}"):
-            # logger.debug(f"_makefile: instance '{self.tag}' ({self.instance_tag}), making table entry for file '{item}' with callback {callback}")  # don't keep enabled, to avoid leaking user private data to debug log
-
-            if _matches_type_filter(item):
-                file_name = os.path.basename(item)
-                full_path = os.path.join(os.getcwd(), file_name)
-                self.shown_items.append(full_path)
-
-                modification_time_value = os.path.getmtime(item)
-                modification_time_label = time.ctime(modification_time_value)
-
-                item_type = "File"
-                item_size_value, item_size_label = get_file_size(item)
-
-                kwargs_cell = {'callback': callback, 'span_columns': True, 'height': self.selec_height, 'user_data': [file_name, full_path, modification_time_value, item_size_value]}
-                kwargs_file = {'tint_color': [255, 255, 255, self.image_transparency], 'user_data': item_type}
-
-                with dpg.table_row(parent=parent):
-                    with dpg.group(horizontal=True):
-
-                        if item_type == "Dir":
-                            dpg.add_image(self.img_mini_folder, **kwargs_file)
-                        elif item_type == "File":
-
-                            if _is_hidden(file_name):
-                                kwargs_file = {'tint_color': [255, 255, 255, self.image_transparency], 'user_data': item_type}
-                            else:
-                                kwargs_file = {'tint_color': [255, 255, 255, 255], 'user_data': item_type}
-
-                            ext_icons = {
-                                (".dll", ".a", ".o", ".so", ".ko"): self.img_gears,
-                                (".png", ".jpg", ".jpeg"): self.img_picture,
-                                (".msi", ".exe", ".bat", ".bin", ".elf"): self.img_app,
-                                (".iso",): self.img_iso,
-                                (".zip", ".deb", ".rpm", ".tar.gz", ".tar", ".gz", ".lzo", ".lz4", ".7z", ".ppack"): self.img_zip,
-                                (".py", ".pyo", ".pyw", ".pyi", ".pyc", ".pyz", ".pyd"): self.img_python,
-                                (".c",): self.img_c,
-                                (".js", ".json", ".cs", ".cpp", ".h", ".hpp", ".sh", ".pyl", ".rs", ".vbs", ".cmd"): self.img_script,
-                                (".url",): self.img_url,
-                                (".lnk",): self.img_link,
-                                (".txt",): self.img_note,
-                                (".mp3", ".ogg", ".wav"): self.img_music_note,
-                                (".mp4", ".mov"): self.img_video,
-                                (".obj", ".fbx", ".blend"): self.img_object,
-                                (".svg",): self.img_vector,
-                            }
-
-                            for exts, img in ext_icons.items():
-                                if any(file_name.endswith(ext) for ext in exts):
-                                    dpg.add_image(img, **kwargs_file)
-                                    break
-                            else:
-                                dpg.add_image(self.img_mini_document, **kwargs_file)
-
-                        cell_name = dpg.add_selectable(label=file_name, **kwargs_cell)
-                    cell_time = dpg.add_selectable(label=modification_time_label, **kwargs_cell)
-                    cell_type = dpg.add_selectable(label=item_type, **kwargs_cell)
-                    cell_size = dpg.add_selectable(label=str(item_size_label), **kwargs_cell)
-
-                    if self.allow_drag is True:
-                        drag_payload = dpg.add_drag_payload(parent=cell_name, payload_type=self.PAYLOAD_TYPE)
-                    dpg.bind_item_theme(cell_name, self.selec_alignt)
-                    dpg.bind_item_theme(cell_time, self.selec_alignt)
-                    dpg.bind_item_theme(cell_type, self.selec_alignt)
-                    dpg.bind_item_theme(cell_size, self.size_alignt)
-                    if self.allow_drag is True:
-                        if file_name.endswith((".png", ".jpg")):
-                            dpg.add_image(self.img_big_picture, parent=drag_payload)
-                        elif item_type == "Dir":
-                            dpg.add_image(self.img_folder, parent=drag_payload)
-                        elif item_type == "File":
-                            dpg.add_image(self.img_document, parent=drag_payload)
 
         def _go_up_one_level(sender, app_data, user_data):
             """GUI callback: if this item double-clicked, go up one level."""
@@ -656,49 +581,28 @@ class FileDialog:
             self.shown_items.clear()
             try:
                 dpg.configure_item(f"ex_path_input_{self.instance_tag}", default_value=os.getcwd())
-                with timer() as tim_list:
-                    _dir = os.listdir(default_path)
-                with timer() as tim_delete:
-                    delete_table()
-
-                # Separate directories and files
-                dirs = [file for file in _dir if os.path.isdir(file)]
-                files = [file for file in _dir if os.path.isfile(file)]
-
-                dirs = list(sorted(dirs))
-                files = list(sorted(files))
-
                 # Compiled once per rebuild rather than per entry: on a directory of thousands, the split is
                 # the part worth hoisting out of the loop.
                 matches_name_filter = common_utils.make_search_matcher(file_name_filter or "")
 
+                # Enumerating, filtering and sorting all happen here, on data, before a widget is touched.
+                with timer() as tim_list:
+                    entries = filelisting.list_directory(default_path,
+                                                         show_hidden=self.show_hidden_files,
+                                                         dirs_only=self.dirs_only,
+                                                         name_filter=matches_name_filter,
+                                                         type_filter=_matches_type_filter,
+                                                         sort_key=self._sort_key,
+                                                         descending=self._sort_descending)
+                with timer() as tim_delete:
+                    delete_table()
+
                 with timer() as tim_build:
-                    # 'special directory' that sends back to the previous directory
-                    with dpg.table_row(parent=f"explorer_{self.instance_tag}"):
-                        with dpg.group(horizontal=True):
-                            kwargs_file = {'tint_color': [255, 255, 255, 255], 'user_data': 'Dir'}
-                            dpg.add_image(self.img_mini_folder, **kwargs_file)
-                            dpg.add_selectable(label="..", callback=_go_up_one_level, span_columns=True, height=self.selec_height)
-
-                    # dir list
-                    for _dir in dirs:
-                        if not _is_hidden(_dir) or self.show_hidden_files:
-                            if matches_name_filter(_dir):  # noqa: SIM102 -- two separate concerns: is it visible at all, and does the Find query select it
-                                _makedir(_dir, open_file)
-
-                    # file list
-                    if not self.dirs_only:
-                        for file in files:
-                            if (not _is_hidden(file)) or self.show_hidden_files:
-                                if matches_name_filter(file):  # noqa: SIM102 -- two separate concerns: is it visible at all, and does the Find query select it
-                                    _makefile(file, open_file)
-
-                with timer() as tim_sort:
-                    reapply_latest_sort()  # apply the latest sort criterion (if any) explicitly (the sort callback doesn't get called automatically when we rebuild the table)
+                    for entry in entries:
+                        _make_row(entry, open_file)
 
                 logger.debug(f"reset_dir: instance '{self.tag}' ({self.instance_tag}), {len(self.shown_items)} rows: "
-                             f"list {tim_list.dt:.3f}s, delete {tim_delete.dt:.3f}s, "
-                             f"build {tim_build.dt:.3f}s, sort {tim_sort.dt:.3f}s")
+                             f"list {tim_list.dt:.3f}s, delete {tim_delete.dt:.3f}s, build {tim_build.dt:.3f}s")
 
             # exceptions
             except FileNotFoundError:
@@ -707,89 +611,36 @@ class FileDialog:
                 message_box("File dialog - Error", f"An unknown error has occured when listing the items, More info:\n{e}")
         self.reset_dir = reset_dir  # needs to be accessible from the outside; uses closure data from this scope, so shouldn't be injected as an instance method (on the class); inject as a regular function *on the instance*.
 
-        # Adapted from the table sorting example in the DPG API docs:
-        #     https://dearpygui.readthedocs.io/en/latest/documentation/tables.html#sorting
-        self._sort_last_sender = None
-        self._sort_last_specs = None
-        def reapply_latest_sort():  # need to do this manually when we rebuild the table
-            if self._sort_last_sender is not None and self._sort_last_specs is not None:
-                table_sort_callback(self._sort_last_sender, self._sort_last_specs)
+        # Which `SortKey` each column header asks for. Keyed by tag rather than by position, so reordering
+        # the columns cannot silently sort by the wrong one.
+        _column_sort_keys = {f"ex_name_{self.instance_tag}": filelisting.SortKey.NAME,  # tag
+                             f"ex_date_{self.instance_tag}": filelisting.SortKey.DATE,  # tag
+                             f"ex_type_{self.instance_tag}": filelisting.SortKey.KIND,  # tag
+                             f"ex_size_{self.instance_tag}": filelisting.SortKey.SIZE}  # tag
 
         def table_sort_callback(sender, sort_specs):
-            # sort_specs scenarios:
-            #   1. no sorting -> sort_specs == None
-            #   2. single sorting -> sort_specs == [[column_id, direction]]
-            #   3. multi sorting -> sort_specs == [[column_id, direction], [column_id, direction], ...]
-            #
-            # notes:
-            #   1. direction is ascending if == 1
-            #   2. direction is descending if == -1
+            """Record what the header asked for, and rebuild the listing in that order.
 
-            self._sort_last_sender = sender
-            self._sort_last_specs = sort_specs
+            `sort_specs` is `None` for the header's no-sort state, else `[[column_id, direction]]`, with
+            direction 1 ascending and -1 descending. Multi-column sort is not offered.
 
-            # no sorting case
-            if sort_specs is None:
+            The order is applied to the *entries*, by `filelisting.list_directory`, and the rows are built
+            from them. Nothing is read back out of the widgets and no rows are reordered: the values being
+            sorted by are the ones the rows were built from, and they are still in hand.
+            """
+            if sort_specs is None:  # header's no-sort state; leave the order as it stands
                 return
             assert len(sort_specs) == 1  # multi sort not supported
 
             column_id, direction = sort_specs[0]
-            columns = dpg.get_item_children(sender, 0)  # -> list of DPG IDs; table columns use slot 0
-            rows = dpg.get_item_children(sender, 1)  # -> list of DPG IDs
+            sort_key = _column_sort_keys.get(dpg.get_item_alias(column_id))
+            if sort_key is None:
+                logger.warning(f"table_sort_callback: instance '{self.tag}' ({self.instance_tag}), sort requested on unrecognized column {column_id}, ignoring")
+                return
 
-            # print(column_id, dpg.get_item_label(column_id))  # this is the table column widget that was clicked  # DEBUG
-            # print(sender, dpg.get_item_type(sender), dpg.get_item_alias(sender))  # the sender is the table widget itself  # DEBUG
-            # print([dpg.get_item_type(x) for x in dpg.get_item_children(sender, 0)])  # table columns use slot 0  # DEBUG
-
-            do_reverse = sort_specs[0][1] < 0
-            if not do_reverse:
-                item_type_to_sort_key = {"Dir": 0, "File": 1}
-            else:
-                item_type_to_sort_key = {"Dir": 1, "File": 0}  # make directories go first also in reversed sort order
-            column_idx = columns.index(column_id)
-
-            # Create a list that can be sorted based on a cell value, keeping track of row and value used to sort.
-            sortable_list = []
-            for row in rows[1:]:  # ignore the magic "..", it always goes first
-                # for the magic "..": ['mvAppItemType::mvGroup']
-                # for all others:     ['mvAppItemType::mvGroup', 'mvAppItemType::mvSelectable', 'mvAppItemType::mvSelectable', 'mvAppItemType::mvSelectable']
-                # print([dpg.get_item_type(x) for x in dpg.get_item_children(row, 1)])  # DEBUG
-                cells = dpg.get_item_children(row, 1)  # in this row
-
-                icon_widget, filename_widget = dpg.get_item_children(cells[0], 1)  # unpack the group widget
-                item_type = dpg.get_item_user_data(icon_widget)  # `reset_dir`, `_makedir`, `_makefile` stash the item type here
-                if column_idx == 0:  # name
-                    file_name, full_path, modification_time_value, item_size_value = dpg.get_item_user_data(filename_widget)  # see `_makedir`, `_makefile`; for column 0, this is inside the group
-                else:
-                    file_name, full_path, modification_time_value, item_size_value = dpg.get_item_user_data(cells[column_idx])  # for other columns, the selectable is the only widget in the table cell
-
-                # pick the sort key
-                if column_idx == 0:  # name
-                    data_sort_key = file_name
-                elif column_idx == 1:  # date
-                    data_sort_key = modification_time_value
-                elif column_idx == 2:  # type
-                    data_sort_key = item_type
-                elif column_idx == 3:  # size
-                    data_sort_key = item_size_value
-
-                # print(icon, dpg.get_item_type(icon), dpg.get_item_user_data(icon))  # DEBUG
-                sortable_list.append([row, item_type_to_sort_key[item_type], data_sort_key])
-
-            # We'll read off the rows after we're done.
-            def _sorter(elt):
-                row, item_type_sort_key, data_sort_key = elt
-                return (item_type_sort_key, data_sort_key)
-
-            sortable_list.sort(key=_sorter, reverse=do_reverse)
-
-            # create list of just sorted row ids
-            new_order = [rows[0]]  # the magic ".."
-            for elt in sortable_list:
-                row, item_type_sort_key, filename = elt
-                new_order.append(row)
-
-            dpg.reorder_items(sender, 1, new_order)
+            self._sort_key = sort_key
+            self._sort_descending = (direction < 0)
+            self._update_search()  # re-lists the current directory under the current find query
 
         # main file dialog header
         with dpg.window(label=self.title, tag=self.tag, on_close=self.cancel, no_resize=self.no_resize, show=False, modal=self.modal, width=self.width, height=self.height, min_size=self.min_size, no_collapse=True, pos=(50, 50)):

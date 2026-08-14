@@ -226,9 +226,12 @@ def test_directory_sizes_are_computed_on_request(tree):
 @pytest.mark.parametrize("size, expected", [(None, "-"),
                                             (0, "0 B"),
                                             (512, "512 B"),
-                                            (2**20, "1 MB"),
-                                            (3 * 2**30, "3 GB")])
+                                            (1023, "1023 B"),
+                                            (1024, "1.0 KiB"),
+                                            (2**20, "1.0 MiB"),
+                                            (3 * 2**30, "3.0 GiB")])
 def test_format_size(size, expected):
+    """IEC prefixes, and a space before the unit in both the prefixed and unprefixed cases."""
     assert filelisting.format_size(size) == expected
 
 

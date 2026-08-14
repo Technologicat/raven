@@ -30,6 +30,8 @@ import time
 from collections.abc import Callable
 from typing import Optional
 
+from unpythonic import si_prefix
+
 logger = logging.getLogger(__name__)
 
 # The `Type` column's values. Strings rather than a bool so they can be displayed and sorted as-is, and
@@ -93,13 +95,20 @@ def is_hidden(path: str) -> bool:
 
 
 def format_size(size: Optional[int]) -> str:
-    """Render a byte count for display: `"1 MB"`, `"512 B"`, or `"-"` when there is no answer."""
+    """Render a byte count for display: `"1.5 MiB"`, `"512 B"`, or `"-"` when there is no answer.
+
+    IEC binary prefixes, since that is what the number actually is — the units a file manager labels "KB"
+    are almost always powers of 1024, which is `KiB`. Below one `KiB` the count is a whole number of bytes
+    and is shown as one; above, one decimal is enough to tell 1.5 MiB from 1.9 MiB without noise.
+    """
     if size is None:
         return "-"
-    for unit, size_limit in (("TB", 2**40), ("GB", 2**30), ("MB", 2**20), ("KB", 2**10), ("B", 1)):
-        if size >= size_limit:
-            return f"{size / size_limit:.0f} {unit}"
-    return "0 B"
+    formatted = si_prefix(size, precision=(1 if size >= 1024 else 0), binary=True)
+    # `si_prefix` emits `"1.5 Ki"` with a space and `"512"` without one, since there is no prefix to
+    # separate — so the unit is appended differently in the two cases to land on `"1.5 KiB"` and `"512 B"`.
+    # A separator parameter upstream in `unpythonic` would remove this; every caller today wants the space,
+    # which is why there is none yet.
+    return f"{formatted}B" if " " in formatted else f"{formatted} B"
 
 
 def format_mtime(mtime: Optional[float]) -> str:

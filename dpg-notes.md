@@ -864,6 +864,27 @@ Row 0's appearance in the clipped answer is unexplained; it was not chased, beca
 
 **Rendered frames are required before any of this means anything** — visibility is a property of the last frame drawn, so it is unavailable headless (see "Testing DPG code"), and unavailable for a window shown microseconds ago.
 
+## What a sort callback receives
+
+A `sortable=True` table's `callback` is called as `callback(sender, sort_specs)`, where `sender` is the
+table itself and `sort_specs` is one of:
+
+| `sort_specs` | meaning |
+|---|---|
+| `None` | no sorting — the header's third state, reached by cycling past descending |
+| `[[column_id, direction]]` | sorted by one column |
+| `[[column_id, direction], …]` | sorted by several, when the table has `sort_multi=True` |
+
+`direction` is **`1` for ascending and `-1` for descending**. `column_id` is the column's DPG ID, so
+`dpg.get_item_alias(column_id)` recovers the tag it was created with — which is what to key on, since a
+`reorderable` table lets the user move columns and any position-based mapping then sorts by the wrong one.
+
+Multi-column sorting only ever arrives if the table asked for it: `sort_multi` defaults to `False`, and
+`dpg.get_item_configuration(table)` reports it along with `sortable` and `sort_tristate`.
+
+None of this is discoverable from a DPG traceback — a callback that ignores the `None` case simply
+misbehaves in the state the user reaches by clicking one header three times.
+
 ## A column's sort flags are settable after creation; whether the header arrow follows is not known
 
 Measured 2026-08-14, headless. `dpg.configure_item` accepts `default_sort`, `prefer_sort_ascending`,
