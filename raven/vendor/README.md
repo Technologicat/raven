@@ -33,8 +33,15 @@ see [`raven/fonts/LICENSE.md`](../fonts/LICENSE.md).
 Everything here **except** `IconsFontAwesome6.py` has diverged from upstream, deliberately: these are treated
 as Raven's to fix and extend rather than as pristine snapshots. `tha3` swaps `no_grad` for `inference_mode`
 in the hot paths, `DearPyGui_Markdown` is substantially robustified for background-threaded rendering,
-`file_dialog` gained sorting and other extensions, `anime4k` was cleaned up, and `kokoro_fastapi`'s writer
-differs from its upstream commit by some 70 lines.
+`anime4k` was cleaned up, and `kokoro_fastapi`'s writer differs from its upstream commit by some 70 lines.
+
+**`file_dialog` is the far end of that spectrum, and is best read as a fork.** Measured 2026-08-14: 58
+commits over 20 months against an 1130-line module, the first in December 2024. Sorting, grouped and
+multi-extension type filters, smart-case fragment search, an animated OK button, click-twice overwrite
+confirmation, row clipping for large directories, per-phase open timing — and more is planned, including a
+thumbnail grid view. Upstreaming any of it stopped being realistic a while ago, so nothing here is shaped
+to keep that option open; new first-party logic is put *outside* this tree rather than added to it, for
+the licensing reason below as much as for tidiness.
 
 That has a licensing consequence worth stating: Raven-authored code lives inside these directories, and it is
 under **their** licences rather than Raven's, because a modification to a work carries the work's terms.
