@@ -739,15 +739,24 @@ class ThumbnailGrid:
             # Draw tile contents.
             self._draw_tile(idx, dl_tag)
 
-        # The swap. New shown *before* old is hidden, deliberately: a frame caught between the two then
-        # renders both, and since the old content comes first the viewport shows it unchanged. The other
-        # order risks a frame rendering neither, which is the blank flash this exists to remove.
+        # The swap. Old hidden *first*, then new shown — the order Visualizer's info panel and annotation
+        # tooltip already use, and arrived at here the long way round.
+        #
+        # Showing the new one first looks safer on paper: a frame caught between the two calls renders
+        # both, and since the old content comes first the viewport shows it "unchanged". That reasoning
+        # holds only while the two contents are the same. When they are not — a filter change, a new
+        # folder — "unchanged" means *stale*, and the user sees the previous listing for a frame after
+        # clicking. Observed in Cherrypick, filter-switching a folder of a hundred images.
+        #
+        # This order can instead render neither for a frame. That is a blank flash rather than a wrong
+        # one, and it is bounded by two adjacent calls rather than by the build, which is what the hidden
+        # build already took care of. A frame of nothing beats a frame of the wrong thing.
         self._tile_drawlists = tile_drawlists
         self._tile_labels = tile_labels
         self._content_tag = new_content
-        dpg.configure_item(new_content, show=True)
         if old_content is not None and dpg.does_item_exist(old_content):  # tag
             dpg.configure_item(old_content, show=False)
+        dpg.configure_item(new_content, show=True)
         # Retired rather than deleted here, and collected on the next `update`. Visualizer's version of this
         # waits for a frame and then deletes, which it can because it always runs off the render thread —
         # this widget cannot assume that, since Cherrypick drives `update` *from* the render loop, where
