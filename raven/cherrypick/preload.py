@@ -10,7 +10,7 @@ they are not drawn. DPG textures are created only on ``take()``, by the
 caller (ImageView), using its texture pool for fast ``set_value`` reuse.
 """
 
-__all__ = ["PreloadCache", "mip_scale_for_zoom"]
+__all__ = ["PreloadCache", "donate_outgoing_image", "mip_scale_for_zoom"]
 
 import concurrent.futures
 import logging
@@ -28,6 +28,7 @@ from ..common.image import codec as imagecodec
 from ..common.image import lanczos
 from ..common.image import utils as imageutils
 from . import config
+from .imageview import ImageView
 
 logger = logging.getLogger(__name__)
 
@@ -416,6 +417,39 @@ class PreloadCache:
         entry = self._cache.pop(idx, None)
         if entry is not None:
             self._ram_used -= entry.ram_bytes
+
+
+def donate_outgoing_image(iv: ImageView | None, cache: PreloadCache | None) -> None:
+    """Hand the image *iv* is holding to *cache*, so navigating back to it is instant.
+
+    *iv*: an `ImageView`, or `None` before one exists.
+    *cache*: a `PreloadCache`, or `None` if preloading is off.
+
+    Does nothing if the viewer has no complete image to give: a mip set still loading is partial, and
+    donating one of those displays wrongly when it is taken again.
+
+    **The donation is keyed by `ImageView.image_key`** — the identity that arrived with those pixels —
+    rather than by any index the caller tracks. The two part company whenever something other than the
+    caller loads an image into the viewer, and Cherrypick's compare mode does exactly that: it drives the
+    viewer frame by frame, so an index the app remembers still names the image from before compare mode
+    started, while the pixels on hand are the frame it was cancelled on. Keying on the remembered index
+    files those pixels under another image's key, and the cache then serves the wrong image for that key
+    until something reloads it from disk — a corruption that outlives the compare session, and the folder
+    view, and gives no sign of itself anywhere near where it happened. Carrying the key with the data is
+    what makes that unrepresentable rather than merely avoided.
+
+    Lives here rather than in `raven.cherrypick.app`, which is an OS entry point rather than a library
+    module — reusable behaviour belongs beside the thing it operates on.
+    """
+    if iv is None or cache is None or iv.mip_loading:
+        return
+    donated = iv.take_mip_arrays()
+    if donated is None:
+        return
+    arrays, img_w, img_h, image_key = donated
+    if image_key is None:  # loaded by a caller that did not identify it; nothing safe to key on
+        return
+    cache.donate(image_key, arrays, img_w, img_h)
 
 
 def _preload_one(e: env) -> None:

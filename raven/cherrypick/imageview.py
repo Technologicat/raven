@@ -23,7 +23,7 @@ import logging
 import pathlib
 import threading
 import time
-from typing import Callable, Optional, Union
+from typing import Any, Callable, Optional, Union
 
 import dearpygui.dearpygui as dpg
 import numpy as np
@@ -144,6 +144,11 @@ class ImageView:
         # drew, rather than only that it drew something.
         self._mips_gen = 0
         self._old_mips_gen = 0
+        # Caller-supplied identity of the image currently held, travelling with the pixels rather than
+        # being tracked alongside them. `take_mip_arrays` hands it back, so a caller donating the outgoing
+        # image to a cache files it under what the view *has*, not under what the caller last asked for —
+        # those differ whenever something drives the view without going through that caller.
+        self._image_key: Any = None
 
         # Texture pool: reuse textures across same-size images via set_value
         # instead of creating/deleting (avoids DPG OpenGL glitches).
@@ -226,12 +231,14 @@ class ImageView:
     # Public API
     # ------------------------------------------------------------------
 
-    def set_image(self, rgba: np.ndarray) -> None:
+    def set_image(self, rgba: np.ndarray, *, image_key: Any = None) -> None:
         """Load a new image from an ``(H, W, 4)`` RGBA uint8 numpy array.
 
         Returns immediately. Mip chain generation and DPG texture creation
         happen in a background thread. The render loop shows the best
         available mip at each frame.
+
+        *image_key*: caller's identity for this image, returned later by `take_mip_arrays`. See `image_key`.
         """
         # Cancel any in-progress mip loading (both full pipeline and augment).
         # No wait — the old task uses split_frame(), so waiting from the
@@ -244,6 +251,7 @@ class ImageView:
         self._bridge_old_mips()
 
         self._img_h, self._img_w = rgba.shape[:2]
+        self._image_key = image_key
         self._set_mip_loading(True)
         self._needs_render = True
 
@@ -257,7 +265,8 @@ class ImageView:
         self._mip_task_mgr.submit(self._bg_mip_task, task_env)
 
     def load_from_file(self, path: Union[pathlib.Path, str],
-                       old_size: tuple[int, int] = (0, 0)) -> None:
+                       old_size: tuple[int, int] = (0, 0),
+                       *, image_key: Any = None) -> None:
         """Load an image from *path* entirely in a background thread.
 
         Decode, mip generation, and DPG texture creation all happen off
@@ -266,6 +275,8 @@ class ImageView:
 
         The old image remains visible (via the texture bridge) until the
         first new mip is ready — no blank flash.
+
+        *image_key*: caller's identity for this image, returned later by `take_mip_arrays`. See `image_key`.
         """
         self._augment_task_mgr.clear()
         self._mip_task_mgr.clear()
@@ -275,6 +286,7 @@ class ImageView:
 
         # Don't clear _img_w/_img_h — the old-texture bridge render path
         # uses _old_img_w/h, and these fields get overwritten after decode.
+        self._image_key = image_key
         self._set_mip_loading(True)
         self._needs_render = True
 
@@ -342,7 +354,8 @@ class ImageView:
             self.load_from_file(path, old_size=self.image_size)
 
     def set_preloaded_arrays(self, mip_arrays: list[tuple[float, int, int, np.ndarray]],
-                             img_w: int, img_h: int) -> None:
+                             img_w: int, img_h: int,
+                             *, image_key: Any = None) -> None:
         """Display pre-computed mip arrays from the preload cache.
 
         *mip_arrays*: list of ``(scale, w, h, flat_array)``, largest-first.
@@ -353,6 +366,8 @@ class ImageView:
         before they're rendered. The ``_old_mips`` bridge keeps the
         previous image visible for one frame during the upload — no blank
         flash, no stale-data flash.
+
+        *image_key*: caller's identity for this image, returned later by `take_mip_arrays`. See `image_key`.
         """
         self._augment_task_mgr.clear()
         self._mip_task_mgr.clear()
@@ -362,6 +377,7 @@ class ImageView:
 
         self._img_w = img_w
         self._img_h = img_h
+        self._image_key = image_key
         self._set_mip_loading(True)
         self._needs_render = True
 
@@ -379,12 +395,16 @@ class ImageView:
                        debug=self._debug)
         self._mip_task_mgr.submit(self._bg_preloaded_task, task_env)
 
-    def take_mip_arrays(self) -> Optional[tuple[list, int, int]]:
+    def take_mip_arrays(self) -> Optional[tuple[list, int, int, Any]]:
         """Return stored flat arrays for donation to preload cache.
 
-        Returns ``(mip_arrays, img_w, img_h)`` or ``None`` if unavailable.
+        Returns ``(mip_arrays, img_w, img_h, image_key)`` or ``None`` if unavailable.
         *mip_arrays* is a list of ``(scale, w, h, flat_array)``.
         The DPG textures are released to the pool. No GPU readback.
+
+        The fourth element is whatever `image_key` accompanied the data now being handed back — file the
+        donation under *that*, so a cache keyed by the caller's own bookkeeping cannot be given one image's
+        pixels under another image's key.
         """
         if not self.has_image or not self._mip_arrays:
             return None
@@ -394,7 +414,7 @@ class ImageView:
                 self._release_texture(tex_tag)
             self._mips = []
             self._mip_arrays = []
-        return mip_arrays, self._img_w, self._img_h
+        return mip_arrays, self._img_w, self._img_h, self._image_key
 
     def clear(self) -> None:
         """Remove the current image."""
@@ -405,8 +425,23 @@ class ImageView:
         self._mip_arrays = []
         self._img_w = 0
         self._img_h = 0
+        self._image_key = None
         self._set_mip_loading(False)
         self._needs_render = True
+
+    def get_image_key(self) -> Any:
+        return self._image_key
+    image_key = property(fget=get_image_key,
+                         doc="""Caller's identity for the image currently held, or `None`.
+
+                         Set by whichever of `set_image`, `load_from_file` or `set_preloaded_arrays` last
+                         loaded an image, and handed back by `take_mip_arrays`. The view never interprets
+                         it — its whole purpose is to let a caller that donates the outgoing image to a
+                         cache key that donation by what the view actually holds.
+
+                         That matters when more than one party loads images into the view: a caller's own
+                         notion of "the current image" goes stale the moment somebody else loads one, and
+                         a donation keyed on the stale value files the wrong pixels under a live key.""")
 
     def set_size(self, width: int, height: int) -> None:
         """Resize the drawlist (call from viewport resize callback)."""

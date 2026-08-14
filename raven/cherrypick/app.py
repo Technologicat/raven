@@ -75,7 +75,7 @@ from ..common.image import thumbnails
 from .imageview import ImageView
 from .grid import TriageGrid, FilterMode
 from ..common.gui.gridnav import resolve_undo_nav_target
-from .preload import PreloadCache, mip_scale_for_zoom
+from .preload import PreloadCache, donate_outgoing_image, mip_scale_for_zoom
 from .compare import CompareMode
 
 from unpythonic import namelambda
@@ -100,7 +100,6 @@ _filedialog_open = None
 _help_window = None
 _debug = False
 _preload_pending = False
-_prev_current_idx = -1
 _noise_pool_pending_size = None  # deferred noise pool regeneration (tile size)
 _beacon_start_ns: int = 0  # monotonic_ns timestamp of last resize (0 = inactive)
 _pending_nav: "Callable[[], None] | None" = None  # deferred keyboard navigation; applied once per frame
@@ -379,20 +378,14 @@ def _load_current_image() -> None:
         if cached is not None:
             t_cached_start = time.perf_counter_ns()
 
-            # Donate the outgoing image's mip arrays to the preload cache
-            # so navigating back is also instant. Don't donate if mips
-            # are still loading — partial mip sets cause display bugs.
-            if _prev_current_idx >= 0 and not iv.mip_loading:
-                donated = iv.take_mip_arrays()
-                if donated is not None and preload is not None:
-                    arrays, dw, dh = donated
-                    preload.donate(_prev_current_idx, arrays, dw, dh)
+            donate_outgoing_image(iv, preload)
 
             t_donated = time.perf_counter_ns()
 
             new_size = (cached.img_w, cached.img_h)
             iv.set_preloaded_arrays(cached.mips,
-                                    cached.img_w, cached.img_h)
+                                    cached.img_w, cached.img_h,
+                                    image_key=idx)
 
             t_set_mips = time.perf_counter_ns()
 
@@ -426,7 +419,7 @@ def _load_current_image() -> None:
             # Cache miss — decode + mip generation on background thread.
             # zoom_to_fit handled inside load_from_file when dimensions
             # are known (after decode).
-            iv.load_from_file(entry.path, old_size=old_size)
+            iv.load_from_file(entry.path, old_size=old_size, image_key=idx)
 
             if _debug:
                 logger.info(f"_load_current_image: {entry.filename} MISS "
@@ -838,11 +831,9 @@ def _request_nav(action: Callable[[], None]) -> None:
 
 def _on_current_changed(idx: int) -> None:
     """Called by the grid when the current tile changes."""
-    global _prev_current_idx
     _load_current_image()
     _sync_triage_mark()
     _update_title()
-    _prev_current_idx = idx
 
 
 def _on_double_click(idx: int) -> None:

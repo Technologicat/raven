@@ -285,7 +285,8 @@ class CompareMode:
         # Load from preload cache.
         cached = preload.take(img_idx)
         if cached is not None:
-            iv.set_preloaded_arrays(cached.mips, cached.img_w, cached.img_h)
+            iv.set_preloaded_arrays(cached.mips, cached.img_w, cached.img_h,
+                                    image_key=img_idx)
             # Re-donate immediately so subsequent cycles still hit the cache.
             preload.donate(img_idx, cached.mips, cached.img_w, cached.img_h)
         else:

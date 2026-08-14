@@ -431,6 +431,13 @@ All new and modified code must follow `raven-style-guide.md` (in the project roo
 ### DearPyGui App Structure
 See `dpg-notes.md` "Raven DPG app structure" section for layout patterns, startup sequence, background work, thread safety, DPG item management, and texture handling.
 
+**An `app.py` is an OS entry point, not a library module.** Most are wiring skeletons: parse the command line, build the GUI, instantiate the objects, run the DPG render loop (the manual `while dpg.is_dearpygui_running()` form, so the animator can be ticked). Anything that would be worth calling from elsewhere — or worth testing — belongs in another module, beside the thing it operates on.
+
+Two consequences worth stating, because both were learned the expensive way:
+
+- **Behaviour that lands in `app.py` is untested behaviour.** An `app.py` runs `parser.parse_args()` at module scope, so importing it under pytest fails on pytest's own argv. That is a fine property for an entry point and a fatal one for anything else: a function put there cannot be exercised at all. `raven.cherrypick.preload.donate_outgoing_image` lives where it does for this reason.
+- **App-level state that mirrors a component's state will drift.** A module-level "the current image is N" tracked beside the widget that holds it is correct only while the app is the sole writer, and it fails silently the moment anything else drives that widget. Ask the component instead, or give it the datum to carry (`ImageView.image_key` is the worked example). The corruption this produced outlived the session that caused it, and gave no sign of itself anywhere near where it happened.
+
 ### Avatar Lipsync
 TTS (Kokoro) provides timestamped phonemes → mapped to mouth morphs → THA3 animator. Audio playback occurs on the client side.
 This coupling limits TTS engine choices (most don't expose timestamped phoneme data).
