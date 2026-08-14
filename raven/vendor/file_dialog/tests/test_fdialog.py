@@ -18,6 +18,7 @@ import pytest
 
 dpg = pytest.importorskip("dearpygui.dearpygui", reason="dearpygui not installed")
 
+from raven.common import filelisting  # noqa: E402 -- after importorskip by design
 from raven.vendor.file_dialog.fdialog import FileDialog, _normalize_filter  # noqa: E402 -- after importorskip by design
 
 
@@ -321,3 +322,83 @@ def test_closing_forgets_the_selection(dialog):
     dialog.ok()
     assert dialog.selected_files == []
     assert dialog.shown_items == []
+
+
+# --------------------------------------------------------------------------------
+# Sorting, which both views share
+
+def test_clicking_the_same_criterion_reverses_it(dialog):
+    """The table header's own semantics, moved to a button: click to sort, click again to reverse.
+
+    A listing opens sorted by name ascending, so the *first* click on Name reverses it — which is what a
+    file manager does with its already-active column, and is why the test does not start there.
+    """
+    dialog.sort_by(filelisting.SortKey.SIZE)
+    assert (dialog._sort_key, dialog._sort_descending) == (filelisting.SortKey.SIZE, False)
+    dialog.sort_by(filelisting.SortKey.SIZE)
+    assert dialog._sort_descending is True
+
+
+def test_a_different_criterion_starts_ascending(dialog):
+    dialog.sort_by(filelisting.SortKey.NAME)
+    dialog.sort_by(filelisting.SortKey.NAME)  # now descending
+    dialog.sort_by(filelisting.SortKey.SIZE)
+    assert (dialog._sort_key, dialog._sort_descending) == (filelisting.SortKey.SIZE, False)
+
+
+def test_the_sort_order_survives_a_view_switch(dialog):
+    """Stated as a requirement: switching views must not change anything else."""
+    dialog.sort_by(filelisting.SortKey.DATE)
+    dialog.sort_by(filelisting.SortKey.DATE)  # descending
+    dialog.set_grid_mode(True)
+    assert (dialog._sort_key, dialog._sort_descending) == (filelisting.SortKey.DATE, True)
+    dialog.set_grid_mode(False)
+    assert (dialog._sort_key, dialog._sort_descending) == (filelisting.SortKey.DATE, True)
+
+
+# --------------------------------------------------------------------------------
+# Which view comes up
+
+def test_an_image_typed_filter_brings_up_the_grid(dialog):
+    """Picking an image by name is close to useless — generated images have hashes for filenames."""
+    dialog.set_type_filter("Images")
+    assert dialog._grid_mode is True
+
+
+def test_the_catch_all_filter_does_not(dialog):
+    """".*" selects images *among* everything; a directory of source code as thumbnails is a wall of icons."""
+    dialog.set_type_filter("Images")
+    dialog.set_type_filter(".*")
+    assert dialog._grid_mode is False
+
+
+def test_a_hand_set_view_overrides_the_automatic_one(dialog):
+    """In either direction, and until the user sets it again."""
+    dialog.set_grid_mode(False)
+    dialog.set_type_filter("Images")
+    assert dialog._grid_mode is False
+    dialog.set_grid_mode(True)
+    dialog.set_type_filter("Documents")
+    assert dialog._grid_mode is True
+
+
+def test_a_directory_picker_has_no_grid_view(make_dialog):
+    """With no files listed every tile would be the same folder icon. `raven-cherrypick` opens it this way."""
+    d = make_dialog(dirs_only=True, filter_list=[("Images", [".png", ".jpg"])], show_thumbnails=True)
+    assert d._grid_mode is False
+    d.set_grid_mode(True)
+    assert d._grid_mode is False
+
+
+def test_both_views_list_the_same_entries(dialog):
+    """The unique-match shortcut in `ok` reads `shown_items`, which must not depend on the view."""
+    dialog.set_type_filter(".*")
+    as_rows = shown(dialog)
+    dialog.set_grid_mode(True)
+    assert shown(dialog) == as_rows
+
+
+def test_the_hidden_view_is_left_empty(dialog):
+    """A stale listing behind the shown one is both memory and, on a switch back, the wrong answer."""
+    dialog.set_grid_mode(True)
+    assert dpg.get_item_children(f"explorer_{dialog.instance_tag}", 1) == []  # tag

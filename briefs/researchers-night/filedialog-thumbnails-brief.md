@@ -1,15 +1,23 @@
 # FileDialog: image thumbnail previews
 
-**Status: everything except the dialog's grid view is built.** What remains is the view itself — the toggle,
-the tiles, the lazy decode, the sort buttons.
+**Status: built, 2026-08-14, and not yet live-tested.** What is left is judging it by looking — tile size,
+how the lazy decode feels while scrolling, and whether a recent-directory cache is needed — plus the real
+tileset, which is Juha's to generate.
 
 - **The shared grid widget**, its decoder and its extension hooks landed 2026-08-13, with Cherrypick ported
   onto them as the proving ground. Smooth scrolling and the scroll-end flasher followed on 2026-08-14.
 - **The listing refactor this brief calls for is done** (2026-08-14). `raven.common.filelisting` produces
-  the ordered entries as data — `FileEntry` objects, `..` and the directories among them — and the dialog
-  builds its table rows from them. The sort no longer walks the widget tree, and the sort criterion is
-  state that a rebuild reproduces. That was the enabling change; the grid can now consume the same list.
-  Live-tested in Visualizer and Librarian.
+  the ordered entries as data — `FileEntry` objects, `..` and the directories among them — and both views
+  build from that same list. The sort no longer walks the widget tree, and the sort criterion is state that
+  a rebuild reproduces. That was the enabling change. Live-tested in Visualizer and Librarian.
+- **The view itself** landed the same day: `raven.common.gui.filegrid.FileGrid` joins a listing to a grid,
+  `raven.common.gui.tileicons.TileIconCache` resamples the icons to tile size, and the dialog carries the
+  toggle, the shared sort-button row and its own tick thread.
+
+Two things to look at first when testing, because they are the ones no test can answer: whether the tiles
+appear fast enough while scrolling, and whether the column *resize* gesture still works now that the header
+no longer sorts (`resizable` and `sortable` are separate flags, but that is read from the API rather than
+measured).
 
 Moved out of `TODO_DEFERRED.md` on 2026-08-13.
 
@@ -216,16 +224,26 @@ That in turn loosens the auto-on rule above: a grid that shows documents legibly
 image-typed filters, so **which filters turn it on automatically is worth re-deciding once the tileset
 exists** and it can be judged by looking rather than argued.
 
-## The budget, which is what forces the design
+## The budget, and a correction to it
 
 Measured live on a real 1625-entry directory (`investigations/filedialog-performance/`): a full open costs
 0.32 s, of which 0.26 s is building the rows — about 60 µs each. Decoding a thumbnail per row at build time
-would add *milliseconds* each, three orders of magnitude over that, so a naive version turns a third of a
-second into minutes.
+would add *milliseconds* each, three orders of magnitude over that.
 
-The laziness that avoids it — build the tiles first, fill textures from a background task, and only for tiles
-actually on screen — is not an optimization to add later. It is the only version of this feature that can
-exist.
+**That arithmetic is right and the conclusion drawn from it was overstated** (Juha, 2026-08-14). Image
+directories typically hold *hundreds* of images, not thousands, and Cherrypick decodes a whole folder at
+once with a perfectly good user experience — which is the empirical answer to the question the arithmetic
+was being used to settle. So lazy decode is worth having and is not the only version that could exist.
+
+It is built, so the thing to do is measure it rather than re-argue it. What would send it back:
+
+- It is **more machinery**, and the settle-then-restart scheduler has three separate refusals it has to get
+  right (see `FileGrid`). Whole-folder decoding has none of that.
+- A grid that fills only what you look at **shows its seams when you scroll fast**, where a folder decoded
+  up front simply is done.
+
+What keeps it: it is the only version that degrades gracefully into the thousands, and the visible-set
+machinery is what a recent-directory cache would sit on top of anyway.
 
 The dialog logs its phases at DEBUG (`list / delete / build / sort`, plus `show_file_dialog`'s frame wait),
 so a before-and-after is one `--log-level DEBUG` run away.
@@ -237,6 +255,22 @@ two apps. That means the VHS-noise placeholder standing in for "not loaded yet"
 (`raven.common.video.postprocessor.vhs_noise_pool`, tuned by `PLACEHOLDER_*` in `raven/cherrypick/config.py`),
 and the texture-upload glitch when the real thumbnail arrives from the background job — which started as an
 artifact and is now intentional.
+
+## A refinement worth having: folder tiles that preview what is inside
+
+Raised 2026-08-14. A file manager shows a folder holding pictures as a folder *with pictures in it*, and
+that is a better tile than a generic icon in exactly the case this feature is for — hunting through a tree
+of image directories, where the folder names are as uninformative as the filenames.
+
+It also settles a question the build had to answer in the meantime: **the grid view is currently switched
+off entirely for a directory picker** (`dirs_only`, which is how `raven-cherrypick` opens the dialog),
+because every tile would be the same folder icon and the grid would cost space and legibility for nothing.
+A previewing folder tile overturns that, which is why it is a predicate in the code (`_grid_is_available`)
+rather than an assumption baked into the layout.
+
+Cost: read the first few image entries of each listed directory and compose them into one tile. Cheap per
+folder, but it is a directory read per tile, so it wants the same visible-set laziness the images already
+get, and probably a cap on how deep it looks.
 
 ## An open question for after the feature works: is one size enough?
 
@@ -269,6 +303,13 @@ own widget beside the grid rather than anything the grid needs to know about.
 - **A file dialog needs the *last few* folders, not just the current one.** Navigating up and back down is
   the normal way to use a picker, so re-decoding every thumbnail on the way back is the case that will
   actually be felt. Hold thumbnails for a couple of recent directories and evict beyond that.
+  - **The two apps are used differently, and this is where it shows** (Juha, 2026-08-14). In Cherrypick the
+    user opens one folder and stays in it for a long time; in the dialog they go back and forth between
+    folders looking for the right one. So the cost Cherrypick never pays — decoding the same directory
+    again — is the dialog's ordinary case, and it is the one thing here that the shared grid does not
+    already solve.
+  - Whether it is *needed* depends on how fast the built version turns out to be, so it waits on the live
+    test rather than on an argument.
 
 ## Testing
 

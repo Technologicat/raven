@@ -20,7 +20,7 @@ Librarian features and 11 is Visualizer, sitting side by side here because of wh
 | `11_visualizer-importer-rework-brief.md` | Nomic migration, PCA preprocessing, cosine-to-medoid outlier assignment, Procrustes alignment | Its item 1 carries **a fork that needs deciding** — `nomic-embed-text-v1.5` buys a shared image-text space, `v2-moe` buys multilingual, and no v2-aligned vision encoder appears to exist. That decision reaches brief 12 |
 | `14_chat-search-brief.md` | Search within the chat log | v0.2.9. The match unit is the **message**, which is what keeps v1 cheap — it sidesteps in-text highlighting, whose Visualizer implementation rebuilds the whole panel and so does not transfer to an incrementally-built chat log |
 | `filedialog-keyboard-brief.md` | Operating the file dialog without a pointing device | Researchers' Night. **Designed in full, unbuilt.** An equality consideration first; the bar is bash completion and a file manager's arrow navigation. Three live checks remain, one of them the 517/518 keycode trap this dialog is precisely where it bites |
-| `filedialog-thumbnails-brief.md` | Image previews in the file dialog, as a toggled grid view | Researchers' Night. **Everything but the view itself is built** — the shared grid widget (2026-08-13), and the listing refactor it needed (`raven.common.filelisting`, 2026-08-14), which was the enabling change. **This is the next thing to do** |
+| `filedialog-thumbnails-brief.md` | Image previews in the file dialog, as a toggled grid view | Researchers' Night. **Built 2026-08-14, awaiting live testing.** What is left is judging it by looking, plus the real tileset. The brief carries a correction to its own budget argument, and the one thing the shared grid does not solve: the dialog revisits folders where Cherrypick dwells in one |
 
 ## Closed
 
@@ -70,12 +70,12 @@ deadline actually binds; everything else could slip past September without anyth
 Ordering decided with Juha: **the grid view next, then keyboard access**, the latter expected to spill past
 the weekend, which is fine — nothing else is waiting on it.
 
-Everything under both briefs is built except those two. In order, what landed: the shared `ThumbnailGrid`
-and Cherrypick's port onto it (08-13), smooth scrolling and the scroll-end flasher (08-14), and
-`raven.common.filelisting` with the dialog rewired onto it (08-14). That last one is the piece the grid
-view was waiting for — the listing is now data, so a second view can render it without touching the table.
+**Only keyboard access is left.** In order, what landed: the shared `ThumbnailGrid` and Cherrypick's port
+onto it (08-13), smooth scrolling and the scroll-end flasher (08-14), `raven.common.filelisting` with the
+dialog rewired onto it (08-14), and the grid view itself (08-14).
 
-All of it is live-tested: the dialog in Visualizer and Librarian, the grid in Cherrypick.
+Live-tested so far: the dialog's table in Visualizer and Librarian, the grid in Cherrypick. **The dialog's
+grid view is not yet live-tested**, which is the next thing to do with a running app.
 
 ### Two of these are power multipliers, and it is worth naming the category
 

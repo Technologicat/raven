@@ -24,6 +24,61 @@ from ...common import utils as common_utils
 from ...common.gui import animation as gui_animation
 
 
+# The icon assets, by name. `ico_<name>` holds the loaded pixels and `img_<name>` the texture, both set on
+# the class; the grid view resamples the former to tile size and the table draws the latter.
+_ICON_NAMES = [
+    "document", "home", "add_folder", "add_file", "mini_folder", "folder", "mini_document",
+    "mini_error", "refresh", "hard_disk", "picture", "big_picture", "picture_folder",
+    "desktop", "videos", "music_folder", "downloads", "document_folder", "search", "back",
+    "c", "gears", "music_note", "note", "object", "python", "script", "video", "link",
+    "url", "vector", "zip", "app", "iso"
+]
+
+# Extensions this dialog can show a *picture* of rather than an icon for — everything
+# `raven.common.image.codec` decodes. Also what makes a file type filter "image-typed", which is what turns
+# the grid view on by itself.
+_DECODABLE_IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff",
+                               ".avif", ".qoi")
+
+# Extension -> icon name, shared by both views: the table draws the 16px asset of that name, the grid the
+# tile-sized one. Module level rather than per instance, since it is twenty tuples that never vary.
+_EXTENSION_ICONS = {
+    # Binary blobs: shared libraries, and the model-weight formats, which are the same kind of thing to a
+    # file picker — something opaque that a program loads.
+    (".dll", ".a", ".o", ".so", ".ko",
+     ".safetensors", ".gguf", ".ckpt", ".pt", ".pth", ".onnx"): "gears",
+    _DECODABLE_IMAGE_EXTENSIONS: "picture",
+    (".msi", ".exe", ".bat", ".bin", ".elf", ".appimage", ".desktop"): "app",
+    (".iso",): "iso",
+    (".zip", ".deb", ".rpm", ".tar.gz", ".tgz", ".tar", ".gz", ".xz", ".bz2", ".zst",
+     ".lzo", ".lz4", ".7z", ".rar", ".whl", ".ppack"): "zip",
+    (".py", ".pyo", ".pyw", ".pyi", ".pyc", ".pyz", ".pyd", ".pyx", ".pxd"): "python",
+    (".c",): "c",
+    (".js", ".json", ".cs", ".cpp", ".h", ".hpp", ".sh", ".pyl", ".rs", ".vbs", ".cmd",
+     ".ts", ".go", ".rb", ".lua", ".jl", ".java", ".yaml", ".yml", ".toml", ".ini", ".cfg",
+     ".xml", ".html", ".htm", ".css"): "script",
+    (".url",): "url",
+    (".lnk",): "link",
+    # Prose, in whatever container. `.bib` and `.tex` earn their place because this dialog is how a
+    # bibliography or a paper source gets picked; `.docx` / `.odt` / `.org` because Raven's document
+    # database reads them (`llm_docs_exts`), so they turn up here as things to open.
+    #
+    # Deliberately absent: `.pdf`, `.pptx`, `.odp`. There is no icon for a presentation, and the fallback —
+    # the generic document — is already the right picture for all three.
+    (".txt", ".md", ".rst", ".org", ".bib", ".tex", ".docx", ".odt",
+     ".log", ".csv", ".tsv"): "note",
+    (".mp3", ".ogg", ".wav", ".flac", ".m4a", ".opus", ".aac"): "music_note",
+    (".mp4", ".mov", ".mkv", ".webm", ".avi", ".m4v", ".wmv"): "video",
+    (".obj", ".fbx", ".blend"): "object",
+    (".svg",): "vector",
+}
+
+# How often the grid's own tick runs while it is on screen. `FileDialog` is a widget inside apps that own
+# their render loops, so requiring every host app to call something would be a landmine — the app that
+# forgets is the one whose thumbnails never appear.
+_GRID_TICK_INTERVAL = 1.0 / 60
+
+
 def _normalize_filter(entry: Union[str, tuple[str, Iterable[str]]]) -> tuple[str, Optional[tuple[str, ...]]]:
     """Normalize one `FileDialog` `filter_list` entry to a `(label, extensions)` pair.
 
@@ -93,20 +148,12 @@ class FileDialog:
                     dpg.add_theme_style(dpg.mvStyleVar_SelectableTextAlign, x=1, y=.5)
 
             # texture loading
-            image_names = [
-                "document", "home", "add_folder", "add_file", "mini_folder", "folder", "mini_document",
-                "mini_error", "refresh", "hard_disk", "picture", "big_picture", "picture_folder",
-                "desktop", "videos", "music_folder", "downloads", "document_folder", "search", "back",
-                "c", "gears", "music_note", "note", "object", "python", "script", "video", "link",
-                "url", "vector", "zip", "app", "iso"
-            ]
-
-            for img in image_names:
+            for img in _ICON_NAMES:
                 width, height, _, data = dpg.load_image(os.path.join(cls.fd_img_path, f"{img}.png"))
                 setattr(cls, f"ico_{img}", [width, height, data])
 
             with dpg.texture_registry():
-                for img in image_names:
+                for img in _ICON_NAMES:
                     width, height, data = getattr(cls, f"ico_{img}")
                     dpg.add_static_texture(width=width, height=height, default_value=data, tag=f"ico_{img}")
                     setattr(cls, f"img_{img}", f"ico_{img}")
@@ -132,6 +179,9 @@ class FileDialog:
         no_resize=True,
         modal=True,
         show_hidden_files=False,
+        show_thumbnails=None,
+        thumbnail_size=128,
+        thumbnail_device="gpu",
         user_style=0
     ):
         """
@@ -191,6 +241,25 @@ class FileDialog:
             no_resize:              If True, the window will not be resizable.
             modal:                  If True, use DPG modal mode; a sort of popup effect. Can cause problems if the file dialog is opened by a modal window.
             show_hidden_files:      If True, the dialog shows also hidden files and folders.
+            show_thumbnails:        Whether to open in the thumbnail grid view instead of the table.
+
+                                    `None` (the default) decides per file type filter: the grid comes up
+                                    when the selected filter names image formats and nothing else, which is
+                                    when picking by name is close to useless — generated and photographed
+                                    images have hashes and timestamps for filenames.
+
+                                    The checkbox in the dialog overrides this in either direction, and goes
+                                    on overriding it until the user sets it again.
+
+                                    Both views list the same entries, directories included, and share one
+                                    sort order and one cursor; switching between them changes nothing else.
+            thumbnail_size:         int, edge of a grid tile in pixels. Larger tiles show more of each
+                                    image and fewer of them.
+            thumbnail_device:       str, where thumbnails are decoded and resized. The literal "gpu" (the
+                                    default) is `raven.common.deviceinfo`'s autodetect: whichever GPU
+                                    backend this machine has, or CPU when it has none. Name one explicitly
+                                    ("cuda:0", "cpu") to pin thumbnails to a particular device, or to keep
+                                    them off one already busy with inference.
             user_style:             int, different graphical styles for file_dialog. Currently available values: 0 (full), 1 (compact).
         Returns:
             None
@@ -216,7 +285,18 @@ class FileDialog:
         self.no_resize = no_resize
         self.modal = modal
         self.show_hidden_files = show_hidden_files
+        self.thumbnail_size = thumbnail_size
+        self.thumbnail_device = thumbnail_device
         self.user_style = user_style
+
+        # Grid view. Built on first use — see `_the_grid` — so a dialog only ever used as a list never
+        # loads the thumbnail decoder.
+        self._grid = None
+        self._grid_mode = bool(show_thumbnails) and not dirs_only
+        self._grid_mode_chosen_by_user = (show_thumbnails is not None)
+        self._grid_size = (400, 300)  # replaced by a measurement as soon as the dialog has rendered
+        self._ticker = None
+        self._ticker_stop = threading.Event()
 
         self.instance_tag = f"0x{id(self):x}"  # for making unique DPG tags
         self.last_path = default_path  # for returning to last used directory when the dialog is closed and later re-opened
@@ -416,53 +496,45 @@ class FileDialog:
 
             return directory_path
 
-        # Extension -> row icon. Built once here rather than inside the row builder: it is twenty tuples,
-        # and rebuilding it per entry is work proportional to the size of the directory for no gain.
-        _ext_icons = {
-            # Binary blobs: shared libraries, and the model-weight formats, which are the same kind of
-            # thing to a file picker — something opaque that a program loads.
-            (".dll", ".a", ".o", ".so", ".ko",
-             ".safetensors", ".gguf", ".ckpt", ".pt", ".pth", ".onnx"): self.img_gears,
-            (".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff", ".avif", ".qoi"): self.img_picture,
-            (".msi", ".exe", ".bat", ".bin", ".elf", ".appimage", ".desktop"): self.img_app,
-            (".iso",): self.img_iso,
-            (".zip", ".deb", ".rpm", ".tar.gz", ".tgz", ".tar", ".gz", ".xz", ".bz2", ".zst",
-             ".lzo", ".lz4", ".7z", ".rar", ".whl", ".ppack"): self.img_zip,
-            (".py", ".pyo", ".pyw", ".pyi", ".pyc", ".pyz", ".pyd", ".pyx", ".pxd"): self.img_python,
-            (".c",): self.img_c,
-            (".js", ".json", ".cs", ".cpp", ".h", ".hpp", ".sh", ".pyl", ".rs", ".vbs", ".cmd",
-             ".ts", ".go", ".rb", ".lua", ".jl", ".java", ".yaml", ".yml", ".toml", ".ini", ".cfg",
-             ".xml", ".html", ".htm", ".css"): self.img_script,
-            (".url",): self.img_url,
-            (".lnk",): self.img_link,
-            # Prose, in whatever container. `.bib` and `.tex` earn their place because this dialog is how a
-            # bibliography or a paper source gets picked; `.docx` / `.odt` / `.org` because Raven's document
-            # database reads them (`llm_docs_exts`), so they turn up here as things to open.
-            #
-            # Deliberately absent: `.pdf`, `.pptx`, `.odp`. There is no icon for a presentation, and the
-            # fallback — the generic document — is already the right picture for all three.
-            (".txt", ".md", ".rst", ".org", ".bib", ".tex", ".docx", ".odt",
-             ".log", ".csv", ".tsv"): self.img_note,
-            (".mp3", ".ogg", ".wav", ".flac", ".m4a", ".opus", ".aac"): self.img_music_note,
-            (".mp4", ".mov", ".mkv", ".webm", ".avi", ".m4v", ".wmv"): self.img_video,
-            (".obj", ".fbx", ".blend"): self.img_object,
-            (".svg",): self.img_vector,
-        }
+        def _icon_name_for_extension(file_name: str) -> Optional[str]:
+            """Which icon `file_name`'s extension asks for, or `None` for a type with no icon of its own.
+
+            Matched case-insensitively, so `PHOTO.JPG` gets the picture icon that `photo.jpg` does. The
+            answer is an icon *name*, not a texture: the table draws it small and the grid draws it at tile
+            size, so the two views share this table and pick their own assets from it.
+            """
+            file_name = file_name.lower()
+            for extensions, icon_name in _EXTENSION_ICONS.items():
+                if file_name.endswith(extensions):  # `str.endswith` takes a tuple
+                    return icon_name
+            return None
 
         def _icon_for(entry) -> Union[str, int]:
-            """The small icon shown at the left of `entry`'s row.
-
-            Matched case-insensitively, so `PHOTO.JPG` gets the picture icon that `photo.jpg` does.
-            """
+            """The small icon shown at the left of `entry`'s row."""
             if entry.is_dir:
                 return self.img_mini_folder
             if entry.kind == filelisting.KIND_BROKEN_LINK:
                 return self.img_mini_error
-            name = entry.name.lower()
-            for extensions, image in _ext_icons.items():
-                if name.endswith(extensions):  # `str.endswith` takes a tuple
-                    return image
-            return self.img_mini_document
+            icon_name = _icon_name_for_extension(entry.name)
+            if icon_name is None:
+                return self.img_mini_document
+            return getattr(self, f"img_{icon_name}")
+
+        def _tile_icon_for(entry) -> Optional[str]:
+            """Which icon `entry`'s *tile* gets in grid view, or `None` to decode the image itself.
+
+            `None` is what puts an entry in the thumbnail queue, so it is the answer for exactly the files
+            worth looking at — which is the whole reason the grid view exists. Everything else gets a
+            picture of its type, because a picker that shows only what it can preview is lying about the
+            contents of the directory.
+            """
+            if entry.is_dir:
+                return "folder"  # the large one; `mini_folder` is 16px and unusable at tile size
+            if entry.kind == filelisting.KIND_BROKEN_LINK:
+                return "mini_error"
+            if entry.name.lower().endswith(_DECODABLE_IMAGE_EXTENSIONS):
+                return None
+            return _icon_name_for_extension(entry.name) or "document"
 
         def _make_row(entry, callback, parent=f"explorer_{self.instance_tag}"):
             """Build one table row from a `filelisting.FileEntry`.
@@ -470,9 +542,8 @@ class FileDialog:
             The entry carries everything the row needs, so nothing here consults the filesystem and nothing
             has to be read back off the widgets later.
             """
-            # `..` is the way out of the directory rather than something in it: one spanning cell, no
-            # date/type/size, and it stays out of `shown_items` because it is not a candidate for the
-            # unique-match shortcut in `ok`.
+            # `..` is the way out of the directory rather than something in it: one spanning cell, and no
+            # date/type/size.
             if entry.is_parent:
                 with dpg.table_row(parent=parent):
                     with dpg.group(horizontal=True):
@@ -480,8 +551,6 @@ class FileDialog:
                         dpg.add_selectable(label=entry.name, callback=_go_up_one_level,
                                            span_columns=True, height=self.selec_height)
                 return
-
-            self.shown_items.append(entry.path)
 
             # `user_data` shape is `open_file`'s contract: [name, full path, mtime, size].
             kwargs_cell = {'callback': callback, 'span_columns': True, 'height': self.selec_height,
@@ -535,6 +604,7 @@ class FileDialog:
             _set_type_filter(label)
             dpg.set_value(self.combo_file_filter, self.file_filter)  # keep the GUI in sync when called programmatically
             dpg.set_value(self.text_file_filter_extensions, _describe_type_filter(self.file_filter))
+            _apply_automatic_grid_mode(rebuild=False)  # the listing is about to be rebuilt anyway
             reset_dir(default_path=os.getcwd())
         self.set_type_filter = set_type_filter  # needs to be accessible from the outside; uses closure data from this scope, so shouldn't be injected as an instance method (on the class); inject as a regular function *on the instance*.
 
@@ -556,6 +626,7 @@ class FileDialog:
             dpg.configure_item(self.combo_file_filter, items=self._filter_labels)
             dpg.set_value(self.combo_file_filter, self.file_filter)
             dpg.set_value(self.text_file_filter_extensions, _describe_type_filter(self.file_filter))
+            _apply_automatic_grid_mode(rebuild=False)
             # The *configured* show flag, not `is_visible`: the latter answers "did the user see it in the last
             # rendered frame", which is False for a window shown microseconds ago and False always with no
             # render loop. The question here is whether a listing exists to be brought up to date.
@@ -599,14 +670,24 @@ class FileDialog:
                                                          type_filter=_matches_type_filter,
                                                          sort_key=self._sort_key,
                                                          descending=self._sort_descending)
+                # `..` stays out: it is the way out of the directory rather than a candidate for the
+                # unique-match shortcut in `ok`.
+                self.shown_items.extend(entry.path for entry in entries if not entry.is_parent)
+
+                # Only the view on screen is built. The other one is emptied rather than left holding a
+                # stale listing, which would be both the memory and, on a switch back, the wrong answer.
                 with timer() as tim_delete:
                     delete_table()
 
                 with timer() as tim_build:
-                    for entry in entries:
-                        _make_row(entry, open_file)
+                    if self._grid_mode:
+                        _the_grid().set_listing(entries)
+                    else:
+                        for entry in entries:
+                            _make_row(entry, open_file)
 
-                logger.debug(f"reset_dir: instance '{self.tag}' ({self.instance_tag}), {len(self.shown_items)} rows: "
+                logger.debug(f"reset_dir: instance '{self.tag}' ({self.instance_tag}), {len(self.shown_items)} entries "
+                             f"as {'tiles' if self._grid_mode else 'rows'}: "
                              f"list {tim_list.dt:.3f}s, delete {tim_delete.dt:.3f}s, build {tim_build.dt:.3f}s")
 
             # exceptions
@@ -616,36 +697,245 @@ class FileDialog:
                 message_box("File dialog - Error", f"An unknown error has occured when listing the items, More info:\n{e}")
         self.reset_dir = reset_dir  # needs to be accessible from the outside; uses closure data from this scope, so shouldn't be injected as an instance method (on the class); inject as a regular function *on the instance*.
 
-        # Which `SortKey` each column header asks for. Keyed by tag rather than by position, so reordering
-        # the columns cannot silently sort by the wrong one.
-        _column_sort_keys = {f"ex_name_{self.instance_tag}": filelisting.SortKey.NAME,  # tag
-                             f"ex_date_{self.instance_tag}": filelisting.SortKey.DATE,  # tag
-                             f"ex_type_{self.instance_tag}": filelisting.SortKey.KIND,  # tag
-                             f"ex_size_{self.instance_tag}": filelisting.SortKey.SIZE}  # tag
+        # --------------------------------------------------------------------------------
+        # Sorting.
+        #
+        # One row of buttons above the listing, serving both views, with the table header's own semantics:
+        # click to sort ascending, click again for descending.
+        #
+        # Not "buttons for the grid, header clicks for the table", which was the first shape and is wrong.
+        # ImGui draws the header's sort arrow from its *own* state, so a sort chosen in grid view would
+        # leave the header asserting an order the data no longer has. Turning the header's sorting off
+        # removes the second source of truth by construction rather than by keeping two things in step.
+        #
+        # It costs the familiar click-the-header gesture and buys two things beyond that guarantee: sorting
+        # becomes keyboard-operable, which ImGui's header sorting is not at all, and the control does not
+        # move when the view does.
+        #
+        # The header itself stays, because `resizable` is a header-drag gesture and filename lengths vary
+        # enormously between users and directories — which is exactly when a fixed Name column hurts.
+        _SORT_CRITERIA = [(filelisting.SortKey.NAME, "Name"),
+                          (filelisting.SortKey.DATE, "Date"),
+                          (filelisting.SortKey.KIND, "Type"),
+                          (filelisting.SortKey.SIZE, "Size")]
+        _sort_indicators = {}  # SortKey -> drawlist tag
 
-        def table_sort_callback(sender, sort_specs):
-            """Record what the header asked for, and rebuild the listing in that order.
+        def _draw_sort_indicators():
+            """Redraw the triangle marking which criterion is active, and which way it points.
 
-            `sort_specs` is `None` for the header's no-sort state, else `[[column_id, direction]]`, with
-            direction 1 ascending and -1 descending. Multi-column sort is not offered.
-
-            The order is applied to the *entries*, by `filelisting.list_directory`, and the rows are built
-            from them. Nothing is read back out of the widgets and no rows are reordered: the values being
-            sorted by are the ones the rows were built from, and they are still in hand.
+            Drawn rather than written: Raven's UI font is OpenSans, which has no triangle or arrow glyphs
+            at all, so a text label would render a missing-glyph box. Ten lines of drawlist is cheaper than
+            binding the icon font to a button, which would apply to its whole label.
             """
-            if sort_specs is None:  # header's no-sort state; leave the order as it stands
-                return
-            assert len(sort_specs) == 1  # multi sort not supported
+            for sort_key, drawlist in _sort_indicators.items():
+                dpg.delete_item(drawlist, children_only=True)
+                if sort_key is not self._sort_key:
+                    continue
+                color = (210, 210, 210, 255)
+                if self._sort_descending:
+                    points = [(2, 10), (12, 10), (7, 18)]
+                else:
+                    points = [(2, 18), (12, 18), (7, 10)]
+                dpg.draw_triangle(*points, color=color, fill=color, parent=drawlist)
 
-            column_id, direction = sort_specs[0]
-            sort_key = _column_sort_keys.get(dpg.get_item_alias(column_id))
-            if sort_key is None:
-                logger.warning(f"table_sort_callback: instance '{self.tag}' ({self.instance_tag}), sort requested on unrecognized column {column_id}, ignoring")
-                return
+        def sort_by(sort_key, descending=None):
+            """Order the listing by `sort_key`, and rebuild it.
 
+            `descending`: `None` (the default) is the click semantics — asking for the criterion already in
+            force reverses it, and any other criterion starts ascending. Pass a bool to say which way
+            outright, which is what restoring a remembered order wants.
+            """
+            if descending is None:
+                descending = (not self._sort_descending) if sort_key is self._sort_key else False
             self._sort_key = sort_key
-            self._sort_descending = (direction < 0)
+            self._sort_descending = descending
+            _draw_sort_indicators()
             self._update_search()  # re-lists the current directory under the current find query
+        self.sort_by = sort_by  # instance-injected for the same reason as `set_type_filter` above.
+
+        def _make_sort_row():
+            """The sort buttons, plus the view toggle at the right end of the same row."""
+            with dpg.group(horizontal=True):
+                dpg.add_text("Sort by")
+                for sort_key, label in _SORT_CRITERIA:
+                    with dpg.group(horizontal=True):
+                        dpg.add_button(label=label, width=70,
+                                       user_data=sort_key,
+                                       callback=lambda s, a, u: sort_by(u))
+                        drawlist = dpg.add_drawlist(width=14, height=self.selec_height + 10)
+                        _sort_indicators[sort_key] = drawlist
+                self.spacer_view_toggle = dpg.add_spacer(width=1)
+                self.checkbox_thumbnails = dpg.add_checkbox(label="Thumbnails",
+                                                            default_value=self._grid_mode,
+                                                            show=_grid_is_available(),
+                                                            callback=_thumbnails_checkbox_callback)
+                with dpg.tooltip(self.checkbox_thumbnails):
+                    dpg.add_text("Show the listing as image thumbnails instead of a table.\n"
+                                 "Turns itself on when the file type filter selects images;\n"
+                                 "setting it by hand overrides that until you set it again.")
+            _draw_sort_indicators()
+
+        # --------------------------------------------------------------------------------
+        # Grid view.
+
+        def _grid_is_available() -> bool:
+            """Whether this dialog offers the grid view at all.
+
+            A directory picker does not, *as things stand*: with no files listed, every tile would be the
+            same folder icon, so the grid would cost space and legibility and show nothing the table does
+            not. `raven-cherrypick` opens the dialog this way, which is what makes this worth stating
+            rather than leaving to the automatic rule below.
+
+            What would overturn it is a folder tile that previews what is *inside* the folder, which is
+            worth having and is the reason this is a predicate rather than an assertion baked into the
+            layout.
+            """
+            return not self.dirs_only
+
+        def _filter_is_image_typed(label) -> bool:
+            """Whether the named file type filter selects images and nothing else.
+
+            The catch-all does not count: ".*" selects images *among* everything, and a directory of source
+            code shown as thumbnails would be a wall of identical icons.
+            """
+            extensions = self._filter_extensions.get(label)
+            if not extensions:
+                return False
+            return all(ext in _DECODABLE_IMAGE_EXTENSIONS for ext in extensions)
+
+        def _the_grid():
+            """The grid view, built on first use.
+
+            Deferred because building it costs the thumbnail decoder and its device — several seconds of
+            torch import for an app that may never switch views. A dialog used only as a list pays none of
+            it.
+            """
+            if self._grid is None:
+                # Imported here for the same reason: `raven.common.gui.filegrid` reaches torch, and every
+                # app with a file dialog would otherwise pay that at startup.
+                from ...common.gui import filegrid
+
+                icon_assets = {name: tuple(getattr(self, f"ico_{name}")) for name in _ICON_NAMES}
+                self._grid = filegrid.FileGrid(parent=f"grid_host_{self.instance_tag}",  # tag
+                                               width=self._grid_size[0], height=self._grid_size[1],
+                                               icon_assets=icon_assets,
+                                               icon_name_for=_tile_icon_for,
+                                               tile_size=self.thumbnail_size,
+                                               thumbnail_device=self.thumbnail_device,
+                                               on_current_entry_changed=_grid_current_changed,
+                                               on_activate=_grid_activate)
+            return self._grid
+
+        def _grid_current_changed(entry):
+            """Single click in the grid: select, exactly as clicking a row does."""
+            if entry is None or entry.is_parent:
+                return
+            if entry.is_dir and not self.dirs_only:
+                return  # a directory is navigated into, not chosen — same as in the table
+            self.selected_files.clear()
+            self.selected_files.append(entry.path)
+            if self.save_mode:
+                basename, _ext = os.path.splitext(entry.name)
+                dpg.set_value(f"ex_search_{self.instance_tag}", basename)
+                self._update_search()
+
+        def _grid_activate(entry):
+            """Double click in the grid: descend into the directory, or accept the file."""
+            if entry.is_dir:
+                dpg.set_value(f"ex_search_{self.instance_tag}", "")
+                chdir(entry.path)
+                return
+            if entry.kind == filelisting.KIND_BROKEN_LINK:
+                return  # nothing to open through it
+            self.selected_files.clear()
+            self.selected_files.append(entry.path)
+            self.ok()
+
+        def set_grid_mode(enabled, remember=True, rebuild=True):
+            """Switch between the table and the thumbnail grid.
+
+            `remember`: whether this counts as the user's own choice, which then overrides the automatic
+            switching until they choose again. The automatic path passes `False`.
+            `rebuild`: whether to re-list into the new view. `False` where the caller is about to re-list
+            anyway, so a filter change does not build the listing twice.
+
+            **Switching views changes nothing else**: the sort order is app state that a view switch does
+            not touch, and the cursor is re-anchored by path on every rebuild, a view switch included.
+            """
+            enabled = bool(enabled) and _grid_is_available()
+            if remember:
+                self._grid_mode_chosen_by_user = True
+            if enabled == self._grid_mode:
+                dpg.set_value(self.checkbox_thumbnails, enabled)  # in case a refused request left it on
+                return
+            self._grid_mode = enabled
+            dpg.set_value(self.checkbox_thumbnails, enabled)
+            dpg.configure_item(f"grid_host_{self.instance_tag}", show=enabled)  # tag
+            dpg.configure_item(f"explorer_{self.instance_tag}", show=not enabled)  # tag
+            if enabled:
+                _resize_grid()
+                if self.is_visible():
+                    _start_grid_ticker()
+            if rebuild:
+                self._update_search()  # rebuild into the view that is now on screen
+        self.set_grid_mode = set_grid_mode  # instance-injected for the same reason as `set_type_filter` above.
+
+        def _thumbnails_checkbox_callback(sender, app_data):
+            set_grid_mode(app_data)
+
+        def _apply_automatic_grid_mode(rebuild=True):
+            """Turn the grid on for an image-typed filter, unless the user has said otherwise."""
+            if self._grid_mode_chosen_by_user:
+                return
+            set_grid_mode(_filter_is_image_typed(self.file_filter), remember=False, rebuild=rebuild)
+
+        def _resize_grid():
+            """Match the grid to the area the table would have filled.
+
+            Measured rather than computed: the shortcuts panel is resizable, so the listing's width is not
+            known at construction and changes while the dialog is open.
+            """
+            if self._grid is None:
+                return
+            width, height = dpg.get_item_rect_size(f"listing_area_{self.instance_tag}")  # tag
+            size = (max(64, int(width) - 4), max(64, int(height) - 4))
+            if size != self._grid_size:
+                self._grid_size = size
+                self._grid.set_size(*size)
+
+        def _start_grid_ticker():
+            """Run the grid's per-frame work on a thread of the dialog's own, for as long as it is on screen.
+
+            The grid needs `update()` every frame and the decoder needs polling, and `FileDialog` is a
+            widget inside apps that own their render loops — so requiring every host app to call something
+            would be a landmine: the app that forgets is the one whose thumbnails never appear. DPG permits
+            item work from any thread, and `visible_on_screen` reads what the last frame drew.
+
+            **It exists only while the dialog is up, and closing it joins the thread**, which is the part
+            that is not merely tidy. A thread that calls DPG cannot outlive the DPG context: after
+            `destroy_context` every call into the library is into freed memory, and the failure is a
+            segfault rather than an exception — the guard would have to be a DPG call itself. Tying the
+            thread's life to the dialog being visible keeps it inside a window where the context provably
+            exists. (Found by the test suite, which builds and tears down contexts for a living.)
+            """
+            if self._ticker is not None and self._ticker.is_alive():
+                return
+
+            def tick_loop():
+                while not self._ticker_stop.wait(_GRID_TICK_INTERVAL):
+                    try:
+                        if self._grid is None or not self._grid_mode or not self.is_visible():
+                            continue
+                        _resize_grid()
+                        self._grid.tick()
+                    except Exception as exc:
+                        logger.error(f"tick_loop: instance '{self.tag}' ({self.instance_tag}): {type(exc)}: {exc}")
+
+            self._ticker_stop.clear()
+            self._ticker = threading.Thread(target=tick_loop, daemon=True,
+                                            name=f"fdialog_grid_tick_{self.instance_tag}")
+            self._ticker.start()
+        self._start_grid_ticker = _start_grid_ticker  # instance-injected for the same reason as `set_type_filter` above.
 
         # main file dialog header
         with dpg.window(label=self.title, tag=self.tag, on_close=self.cancel, no_resize=self.no_resize, show=False, modal=self.modal, width=self.width, height=self.height, min_size=self.min_size, no_collapse=True, pos=(50, 50)):
@@ -740,44 +1030,59 @@ class FileDialog:
                             search_hint = "Search files [Ctrl+F]" if not save_mode else "Filename to save as [Ctrl+F]"  # TODO: move the hotkey handler for this dialog here
                             self.search_field = dpg.add_input_text(hint=search_hint, callback=self._update_search, tag=f"ex_search_{self.instance_tag}", width=-1)
 
-                        # main explorer table header
-                        with dpg.table(
-                            tag=f'explorer_{self.instance_tag}',
-                            height=-1,
-                            width=-1,
-                            resizable=True,
-                            policy=dpg.mvTable_SizingStretchProp,
-                            borders_innerV=True,
-                            reorderable=True,
-                            hideable=True,
-                            sortable=True,
-                            callback=table_sort_callback,
-                            scrollX=True,
-                            scrollY=True,
-                            # ImGui submits every row of a table each frame unless the table clips to the
-                            # visible range. Measured on a 2500-row listing: 3.76 ms per frame without,
-                            # 0.68 ms with — the latter being what an empty listing costs, i.e. the row
-                            # count stops mattering. The clipper requires uniform row height, which holds
-                            # here because every cell is created with `height=self.selec_height`.
-                            clipper=True,
-                        ):
-                            # Proportional weights (the table's policy is `mvTable_SizingStretchProp`), so
-                            # what matters is the ratios rather than the numbers. Tuned by looking, on a
-                            # directory of papers with long filenames.
-                            #
-                            # `Size` and `Type` are sized to their *widest* value and no wider, since every
-                            # pixel here comes out of the filename: `239.5 KiB` for size — IEC prefixes are
-                            # a character wider than the old `240 KB` and carry a decimal — and `Link»File`
-                            # for type, which is why that column cannot go back to what it was. `Date` gave
-                            # up a little as well; it had slack the eye does not miss.
-                            iwow_name = 100
-                            iwow_date = 40
-                            iwow_type = 15
-                            iwow_size = 17
-                            dpg.add_table_column(label='Name', init_width_or_weight=iwow_name, tag=f"ex_name_{self.instance_tag}")
-                            dpg.add_table_column(label='Date', init_width_or_weight=iwow_date, tag=f"ex_date_{self.instance_tag}")
-                            dpg.add_table_column(label='Type', init_width_or_weight=iwow_type, tag=f"ex_type_{self.instance_tag}")
-                            dpg.add_table_column(label='Size', init_width_or_weight=iwow_size, width=10, tag=f"ex_size_{self.instance_tag}")
+                        _make_sort_row()
+
+                        # Both views live here, one shown at a time. A container of their own, so the grid
+                        # can be sized to the area the table would have filled — which is not known at
+                        # construction, the shortcuts panel being resizable.
+                        with dpg.child_window(tag=f"listing_area_{self.instance_tag}",  # tag
+                                              width=-1, height=-1, border=False, no_scrollbar=True):
+                            dpg.add_group(tag=f"grid_host_{self.instance_tag}", show=self._grid_mode)  # tag
+
+                            # main explorer table header
+                            with dpg.table(
+                                tag=f'explorer_{self.instance_tag}',
+                                show=not self._grid_mode,
+                                height=-1,
+                                width=-1,
+                                resizable=True,
+                                policy=dpg.mvTable_SizingStretchProp,
+                                borders_innerV=True,
+                                # Reordering and hiding are header-drag gestures that earn nothing in a
+                                # picker with four fixed columns; sorting has moved to the button row above.
+                                # `resizable` stays, and is why the header itself does: filename lengths
+                                # vary enormously between users and directories.
+                                reorderable=False,
+                                hideable=False,
+                                sortable=False,
+                                scrollX=True,
+                                scrollY=True,
+                                # ImGui submits every row of a table each frame unless the table clips to
+                                # the visible range. Measured on a 2500-row listing: 3.76 ms per frame
+                                # without, 0.68 ms with — the latter being what an empty listing costs,
+                                # i.e. the row count stops mattering. The clipper requires uniform row
+                                # height, which holds here because every cell is created with
+                                # `height=self.selec_height`.
+                                clipper=True,
+                            ):
+                                # Proportional weights (the table's policy is `mvTable_SizingStretchProp`),
+                                # so what matters is the ratios rather than the numbers. Tuned by looking,
+                                # on a directory of papers with long filenames.
+                                #
+                                # `Size` and `Type` are sized to their *widest* value and no wider, since
+                                # every pixel here comes out of the filename: `239.5 KiB` for size — IEC
+                                # prefixes are a character wider than the old `240 KB` and carry a decimal
+                                # — and `Link»File` for type, which is why that column cannot go back to
+                                # what it was. `Date` gave up a little as well; it had slack the eye does
+                                # not miss.
+                                iwow_name = 100
+                                iwow_date = 40
+                                iwow_type = 15
+                                iwow_size = 17
+                                dpg.add_table_column(label='Name', init_width_or_weight=iwow_name, tag=f"ex_name_{self.instance_tag}")
+                                dpg.add_table_column(label='Date', init_width_or_weight=iwow_date, tag=f"ex_date_{self.instance_tag}")
+                                dpg.add_table_column(label='Type', init_width_or_weight=iwow_type, tag=f"ex_type_{self.instance_tag}")
+                                dpg.add_table_column(label='Size', init_width_or_weight=iwow_size, width=10, tag=f"ex_size_{self.instance_tag}")
 
             with dpg.group(horizontal=True):
                 dpg.add_spacer(width=480)
@@ -796,6 +1101,9 @@ class FileDialog:
                 self.btn_ok = dpg.add_button(label="OK", width=100, tag=self.tag + "_return", callback=self.ok)
                 self.btn_cancel = dpg.add_button(label="Cancel", width=100, callback=self.cancel)
 
+            # After the widgets exist, since it may flip the view: an image-typed filter comes up as a grid
+            # unless the caller said otherwise. `rebuild=False` because `chdir` below lists the directory.
+            _apply_automatic_grid_mode(rebuild=False)
             chdir(self.default_path)
 
     # high-level functions
@@ -825,7 +1133,35 @@ class FileDialog:
         dpg.set_item_width(self.spacer_okcancel, new_width)
         dpg.set_item_width(self.spacer_notification, new_width)
 
+        if self._grid_mode:
+            self._start_grid_ticker()
+
         dpg.focus_item(self.search_field)
+
+    def _stop_grid_ticker(self):
+        """Stop the grid's tick thread and wait for it to notice.
+
+        Waiting matters: the thread calls DPG, and a DPG call after the context is destroyed is a segfault
+        rather than an exception. The timeout is a few tick intervals, so a wedged thread does not hold the
+        GUI — at which point it is a daemon and the process can still exit.
+        """
+        self._ticker_stop.set()
+        ticker, self._ticker = self._ticker, None
+        if ticker is not None and ticker.is_alive():
+            ticker.join(timeout=1.0)
+            if ticker.is_alive():
+                logger.warning(f"_stop_grid_ticker: instance '{self.tag}' ({self.instance_tag}), tick thread did not stop within the timeout")
+
+    def destroy(self):
+        """Release what the dialog holds outside its widget tree. Call before destroying the DPG context.
+
+        Only the grid view holds anything: a thumbnail decoder with its own threads, and the tick thread
+        that feeds it. A dialog that was never switched to the grid has nothing to do here.
+        """
+        self._stop_grid_ticker()
+        if self._grid is not None:
+            self._grid.destroy()
+            self._grid = None
 
     def is_visible(self):
         """Return whether the dialog is currently on screen.
@@ -849,9 +1185,13 @@ class FileDialog:
 
         The rows themselves stay, and cost nothing while the window is hidden: a hidden window renders
         nothing, and `reset_dir` starts by deleting them on the next open.
+
+        The grid's tick thread is the exception, and does stop: it costs whether or not anyone is looking,
+        and it must not be running when the app tears the DPG context down.
         """
         self.selected_files.clear()
         self.shown_items.clear()
+        self._stop_grid_ticker()
 
     def refresh(self):
         cwd = os.getcwd()
