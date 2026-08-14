@@ -3676,6 +3676,47 @@ What the mode adds on top of that view: not loading the avatar at all. That is w
 saving come from, and it is a startup-path decision rather than a hide/show toggle — worth being explicit
 about, since a mode that merely hides the avatar panel saves nothing that matters here.
 
+## Cherrypick's mip loader has one worker, and cancelling cannot free it
+
+*Cluster: cherrypick · Cost: M · Gate: next · Filed: 2026-08-14*
+
+The second cause of compare mode skipping an image. The first — a render request cleared after the render
+rather than before, so one arriving mid-render was discarded — was fixed 2026-08-14; this one survived it,
+and Juha saw a frame still go missing occasionally afterwards.
+
+**What the log shows.** One task in twenty-five reports `discarding 4 mips (cancelled=True, task gen=142
+current gen=143)` and took **318 ms**, where the others take 52–95 ms and the compare cycle is 333 ms. So
+that task was still running when the next frame started, was cancelled, and its image was never drawn.
+
+**Why a task can overrun.** `ImageView` runs its mip loading on a `ThreadPoolExecutor(max_workers=1)`, and
+`_mip_task_mgr` and `_augment_task_mgr` *share* it. A task spends most of its life inside two
+`dpg.split_frame()` calls, waiting for the render loop — and cancellation sets a flag, which cannot
+interrupt that wait. So a cancelled task keeps the only worker until its waits return, the next task cannot
+start meanwhile, and a task that starts late enough is cancelled in its turn. Self-sustaining once entered,
+and it recovers on its own, which is why it is occasional rather than constant.
+
+**It is load-sensitive, which is what makes it look random.** A task's cost is dominated by two waits for a
+render frame, so it scales with the frame rate: measured the same afternoon at **25 fps with Librarian and
+its avatar running alongside, and 45 fps with Cherrypick alone** — about 80 ms versus 44 ms of waiting,
+against a compare cycle fixed at 333 ms. So the same folder skips frames on a busy machine and not on an
+idle one, and any attempt to reproduce it needs the machine in the state where it happened. This is also why
+it first read as depending on image size: it does not, it depends on what else is running.
+
+**Established:** the single worker, the shared executor, that cancellation does not interrupt `split_frame`,
+and the 318 ms outlier against a 333 ms budget. **Not established:** which task held the worker in that
+instance. `_augment_task_mgr` (the full-res mip that follows a preloaded image) is the obvious candidate
+since `_mip_task_mgr.clear()` does not touch it, but the log does not say.
+
+**The fix is a design decision, not a patch**, which is why this is filed rather than done:
+
+- *More workers* lets a new task start while the old one drains — but `_acquire_texture` and the texture
+  pool would then be touched concurrently, and they are not obviously guarded for that.
+- *Fewer waits*: the two `split_frame`s exist to guarantee the texture upload before the mips are
+  referenced. Whether both are needed, and whether a compare cycle can share one wait across its frames, is
+  the question worth measuring.
+- *Cancellation that reaches a waiting task* is the general form, and the one that would help every
+  `split_frame`-blocking task in the codebase.
+
 ## The thumbnail grid's textures are dynamic, and probably need not be
 
 *Cluster: performance · Cost: S · Gate: next · Filed: 2026-08-14*
