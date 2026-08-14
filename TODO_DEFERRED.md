@@ -154,6 +154,21 @@ rather than an exotic one.
 Since `file_dialog` is a fork in all but name (see `raven/vendor/README.md`), there is no upstream to stay
 compatible with, and drawing our own set is open.
 
+**And the current set is not ours to redraw from.** Checked 2026-08-14: `raven/vendor/file_dialog/README.md`
+credits them to **icons8, "3D Fluency"** (https://icons8.it/icons/3d-fluency). The upstream repo's MIT
+licence covers its *code*; the icons carry that separate credit, so they are third-party assets under
+whatever icons8's terms are, and "the repo is MIT" does not reach them. Raven ships them in the wheel.
+
+That decides between the two ways of getting a 512×512 set (weighed with Juha, 2026-08-14):
+
+- **Upscaling the existing icons with a generative model** would keep the look, and is the *legally* worse
+  option: an AI upscale is a derivative work of an icons8 asset, so it inherits whatever the original
+  permits rather than escaping it. Anyone taking that route has to read icons8's terms first, not after.
+- **Drawing a new set from scratch** costs the same day or two, covers the missing formats by construction,
+  and removes a third-party asset dependency from the wheel instead of deepening it.
+
+So: **new set**, and the licensing is a second reason on top of the missing formats. Neither is v1.
+
 **Do it once, for both sizes.** `filedialog-thumbnails-brief.md` already asks for a 512×512 tileset so the
 grid view can show non-image files as tiles; the row icons are the same concepts at 16×16. One design pass
 producing both is a great deal less work than two, and is the only way they end up looking like one set.
