@@ -209,18 +209,65 @@ def scroll_target(dpg_context):
                 dpg.add_text(f"line {i}")
     animation.SmoothScrolling.instances.clear()
     yield child
+    animation.animator.clear()  # `scroll` registers with the animator; the by-hand `_scroll` does not
     animation.SmoothScrolling.instances.clear()
     dpg.delete_item(window)
 
 
 def _scroll(target, **kwargs):
-    """A `SmoothScrolling` with the boilerplate defaulted; not registered with the animator."""
+    """A started `SmoothScrolling`, boilerplate defaulted; not registered with the animator.
+
+    Constructed and started by hand rather than through `SmoothScrolling.scroll`, because that classmethod
+    returns the *running* instance and never a ghost — and the ghost is half of what these tests are about.
+    """
     kwargs.setdefault("target_y_scroll", 100)
-    return animation.SmoothScrolling(target_child_window=target, **kwargs)
+    scrolling = animation.SmoothScrolling(target_child_window=target, **kwargs)
+    scrolling.start()
+    return scrolling
 
 
 class _FakeFlasher:
     """Stands in for `ScrollEndFlasher`; identity is all these tests need."""
+
+
+class TestSmoothScrollingScrollEntryPoint:
+    """`scroll` is the supported way in, and exists so that callers never handle a ghost themselves."""
+
+    def test_returns_the_running_instance_rather_than_the_ghost(self, scroll_target):
+        """The point of the classmethod: a caller keeps the returned object in order to stop that scroll
+        later, and stopping a ghost would stop nothing while the view kept moving.
+        """
+        first = animation.SmoothScrolling.scroll(target_child_window=scroll_target, target_y_scroll=100)
+        second = animation.SmoothScrolling.scroll(target_child_window=scroll_target, target_y_scroll=200)
+
+        assert second is first
+        assert second.reified is True
+        assert second.target_y_scroll == 200  # the running instance took the new request
+
+    def test_registers_one_animation_per_window_however_many_requests(self, scroll_target):
+        """A retarget re-aims the running animation, so a second request must not add a second one.
+
+        Counted as a delta rather than against zero: the animator is a process-wide singleton, so an
+        absolute count would also be measuring anything else that happens to be running.
+        """
+        before = animation.animator.active_count
+
+        animation.SmoothScrolling.scroll(target_child_window=scroll_target, target_y_scroll=100)
+        animation.SmoothScrolling.scroll(target_child_window=scroll_target, target_y_scroll=200)
+        animation.SmoothScrolling.scroll(target_child_window=scroll_target, target_y_scroll=300)
+
+        assert animation.animator.active_count - before == 1
+
+    def test_constructing_one_does_not_start_it(self, scroll_target):
+        """Construction packages a request and does nothing with it.
+
+        This is what makes the object safe to build in order to inspect or hand around — the property the
+        old constructor-calls-`start` shape did not have.
+        """
+        scrolling = animation.SmoothScrolling(target_child_window=scroll_target, target_y_scroll=100)
+
+        assert scrolling.reified is False
+        assert scroll_target not in animation.SmoothScrolling.instances
 
 
 class TestSmoothScrollingRetarget:
@@ -353,11 +400,12 @@ class TestSmoothScrollingFinishCallbacks:
 
 class TestSmoothScrollingTeardown:
     def test_a_ghost_finishing_leaves_the_running_instance_alone(self, scroll_target):
-        """Reachable via `Animator.clear`, which finalizes every registered animation.
+        """A ghost owns nothing — its request was handed to the running instance — so tearing down as
+        though it did would evict the instance that is actually animating.
 
-        A caller writing `animator.add(SmoothScrolling(...))` registers whichever of the two it got, so
-        ghosts do end up in the animator. A ghost owns nothing — its request was handed to the running
-        instance — so tearing down as though it did would evict the instance that is actually animating.
+        `SmoothScrolling.scroll` registers only the reified instance, so a ghost no longer reaches the
+        animator by that route. The no-op is what lets the ghost stay an internal detail rather than
+        something every caller has to know about, and `finish` is public regardless.
         """
         calls = []
         first = _scroll(scroll_target, finish_callback=lambda: calls.append("first"))

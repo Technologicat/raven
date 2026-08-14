@@ -635,42 +635,6 @@ already lives; two design constraints from that work are recorded there and stil
 test must be sampled *before* new content lands, and `ScrollEndFlasher` shares the predicate's form but not
 its timing, so the two must not be folded into one helper.
 
-## `SmoothScrolling` commits during construction, so it cannot be built without being fired
-
-*Cluster: ? · Cost: ? · Gate: 0.2.9 · Filed: 2026-08-03*
-
-`raven/common/gui/animation.py`. `SmoothScrolling.__init__` ends by calling `self.start()`, which is not a
-start at all — it is the deduplication step: under `class_lock`, it either retargets the instance already
-animating that window (this one becoming an inert ghost) or registers this one as the live one. Three
-consequences, all verified 2026-08-03 rather than reasoned from the shape:
-
-- **Constructing one has global side effects.** The live scroll is retargeted during construction, before
-  `animator.add` is reached. There is no way to build an instance in order to inspect it, hand it somewhere,
-  or decide whether to use it — building it has committed it.
-- **The caller cannot tell a live instance from a ghost**, and registers whichever it got. Correctness then
-  rests on `finish` no-op'ing for ghosts, which it does deliberately (`Animator.clear` finalizes everything
-  registered) but which is a subtlety propping up the API from underneath.
-- **The locking contract is invisible at the signature and load-bearing.** `class_lock` is an `RLock`, and
-  that choice is what makes current usage work: both call sites wrap construct-and-add in `class_lock` while
-  `start` acquires the same lock internally, so a plain `Lock` would deadlock. Meanwhile the natural
-  spelling, `animator.add(SmoothScrolling(...))` — which the class's own prose suggests — is racy: another
-  thread can interleave between the retarget-or-register decision and the registration.
-
-Nothing is broken today: the only two construction sites (`raven/librarian/chat_controller.py`,
-`raven/visualizer/info_panel.py`) both hold the lock. The hazard is that the API is easy to use wrongly and
-silent when you do, and a third caller is the likely trigger.
-
-The shape to move to is a classmethod — `SmoothScrolling.scroll(target_child_window=..., target_y_scroll=...,
-...)` — taking the class lock once and either retargeting the running instance or constructing, registering
-and adding a new one. Callers never see a ghost, construction becomes inert, the lock stops being the
-caller's problem, and the ghost concept may leave the public surface entirely.
-
-Deferred rather than done because it is a pure refactor of code both GUI apps' scrolling runs through, with
-no user-visible change, raised while the chat-view scrolling was still under live test. Do it once that work
-is confirmed stable. Note the 2026-08-11 follow-tail fix went *around* `self.start()` rather than into it, so
-the construction-time commit is untouched and this is still exactly as filed. Raised by Juha, who asked whether the design was dangerous; agreed worth fixing
-(2026-08-03).
-
 ## Does `CLAUDE.md`'s DPG pitfall index still earn its place?
 
 *Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-08-13*

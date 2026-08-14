@@ -611,9 +611,14 @@ class SmoothScrolling(Animation):
                  commanded_y_scroll: Optional[box] = None):
         """Scroll a child window, optionally smoothly.
 
+        **Prefer the `scroll` classmethod**, which is the supported way to start one of these. Constructing
+        an instance is inert - it packages a request and does nothing with it. `scroll` then takes the class
+        lock once, hands the request to whichever instance will run it, and registers that one with the
+        animator.
+
         Each GUI element (determined by `target_child_window`) can only have one `SmoothScrolling`
-        animation running at a time. If an instance already exists, constructing another one **retargets
-        it** rather than starting a second animation, and the new instance becomes an inert ghost.
+        animation running at a time. If one is already running on it, `start` **retargets** that instance
+        rather than starting a second animation, and this instance becomes an inert ghost.
         Retargeting adopts the new request *whole* - see `start` for exactly what that means and why.
 
         `target_child_window`: DPG tag or ID, the child window to scroll.
@@ -698,7 +703,43 @@ class SmoothScrolling(Animation):
         self._sv = SmoothInt(value=0, rate=smooth_step)
         self.reified = False  # `True`: running; `False`: ghost mode, update other instance and exit.
 
-        self.start()
+    @classmethod
+    def scroll(cls,
+               target_child_window: Union[str, int],
+               target_y_scroll: int,
+               smooth: bool = True,
+               smooth_step: float = 0.8,
+               flasher: Optional["ScrollEndFlasher"] = None,
+               finish_callback: Optional[Callable] = None,
+               commanded_y_scroll: Optional[box] = None) -> "SmoothScrolling":
+        """Scroll `target_child_window` to `target_y_scroll`. Returns the animation that will do it.
+
+        This is how a scroll is started. Arguments are the constructor's, which see.
+
+        Safe to call while a scroll is already running on the same window: the running animation adopts the
+        new request whole and keeps its subpixel position, so the movement bends toward the new target
+        instead of jumping.
+
+        The returned instance is always the one actually animating, so a caller may keep it in order to
+        stop that scroll later. It may be an instance an *earlier* caller created, because a retarget
+        re-aims the running animation rather than replacing it - which is why `finish_callback`, and not
+        the return value, is what tells a holder its reference has died.
+        """
+        with cls.class_lock:
+            request = cls(target_child_window=target_child_window,
+                          target_y_scroll=target_y_scroll,
+                          smooth=smooth,
+                          smooth_step=smooth_step,
+                          flasher=flasher,
+                          finish_callback=finish_callback,
+                          commanded_y_scroll=commanded_y_scroll)
+            request.start()
+            if request.reified:
+                return animator.add(request)
+            # A ghost: `start` gave the request to the instance already running on this window, and that one
+            # is registered with the animator already. The lookup cannot miss - `finish` takes `class_lock`
+            # to deregister, and we are holding it.
+            return cls.instances[target_child_window]
 
     def _set_y_scroll(self, new_y_scroll: int) -> None:
         """Move the scrollbar, and record where we put it.
@@ -806,7 +847,7 @@ class SmoothScrolling(Animation):
         return action
 
     def start(self) -> None:
-        """Internal method, called automatically by constructor.
+        """Hand this instance's request to whichever animation will run it. Called by `scroll`.
 
         Manages de-duplication (when added to the same GUI element as an existing animation of this type).
 

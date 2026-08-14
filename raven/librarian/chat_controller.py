@@ -2392,13 +2392,12 @@ class DPGLinearizedChatView:
         # Retargeting keeps the gate honest without any help here, because a retarget adopts the incoming
         # request wholesale: a follow scroll landing on a reader's in-flight one carries `None` and so takes
         # the flasher back off, and a reader's scroll landing on a follow puts one on. Latest asker wins.
-        with gui_animation.SmoothScrolling.class_lock:
-            gui_animation.animator.add(gui_animation.SmoothScrolling(target_child_window=self.gui_parent,
-                                                                     target_y_scroll=y_scroll,
-                                                                     smooth=(gui_config.smooth_scrolling if smooth is None else smooth),
-                                                                     smooth_step=gui_config.smooth_scrolling_step_parameter,
-                                                                     flasher=(self._scroll_end_flasher if user_initiated else None),
-                                                                     commanded_y_scroll=self._commanded_y_scroll))
+        gui_animation.SmoothScrolling.scroll(target_child_window=self.gui_parent,
+                                             target_y_scroll=y_scroll,
+                                             smooth=(gui_config.smooth_scrolling if smooth is None else smooth),
+                                             smooth_step=gui_config.smooth_scrolling_step_parameter,
+                                             flasher=(self._scroll_end_flasher if user_initiated else None),
+                                             commanded_y_scroll=self._commanded_y_scroll)
 
     def scroll_view(self,
                     max_wait_frames: int = 10,

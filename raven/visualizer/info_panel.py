@@ -363,14 +363,12 @@ def scroll_to_position(target_y_scroll):
 
     global _scroll_animation
     with _scroll_animation_lock:
-        with gui_animation.SmoothScrolling.class_lock:
-            gui_animation.animator.add(gui_animation.SmoothScrolling(target_child_window="item_information_panel",  # tag
-                                                                     target_y_scroll=target_y_scroll,
-                                                                     smooth=gui_config.smooth_scrolling,
-                                                                     smooth_step=gui_config.smooth_scrolling_step_parameter,
-                                                                     flasher=_scroll_end_flasher,
-                                                                     finish_callback=_clear_scroll_animation_reference))
-            _scroll_animation = gui_animation.SmoothScrolling.instances["item_information_panel"]  # reified instance
+        _scroll_animation = gui_animation.SmoothScrolling.scroll(target_child_window="item_information_panel",  # tag
+                                                                 target_y_scroll=target_y_scroll,
+                                                                 smooth=gui_config.smooth_scrolling,
+                                                                 smooth_step=gui_config.smooth_scrolling_step_parameter,
+                                                                 flasher=_scroll_end_flasher,
+                                                                 finish_callback=_clear_scroll_animation_reference)
 
     return target_y_scroll
 
