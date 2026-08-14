@@ -53,6 +53,30 @@ in Emacs least, with an unaffected baseline in the same repo to compare against.
 ranking of hygiene work, which is normally deferred precisely because it is local and cosmetic. It is
 neither, now.
 
+## Annotation tooltip build makes the selection pulsation choppy on a large dataset
+
+*Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-08-14*
+
+Observed by Juha on a ~12k-entry dataset (`out.pickle`, hydrogen abstracts), live: moving the mouse over
+the plot builds the hover annotation tooltip, and while that runs the selection-pulsating animation
+visibly stutters. Small datasets do not show it.
+
+**It is already on a background thread** — checked rather than assumed, because that is the first thing
+anyone will want to rule out. `annotation.update` submits `_render_worker` as a `bgtask.ManagedTask`
+through the module's own `TaskManager`; nothing about the build runs on the GUI event thread. So the
+obvious fix is not available, and re-checking this costs nothing to skip.
+
+What is left is a *contention* explanation rather than a *scheduling* one: the worker builds DPG widgets
+in a loop, which is Python-side work holding the GIL in small bites, while the render loop needs the GIL
+every frame to advance the pulsation. That is plausible and **unmeasured** — do not write it down as the
+cause without checking.
+
+What would settle it: `py-spy top --pid <visualizer>` while hovering over a dense region, to see where the
+render thread is actually waiting. Note that needs `kernel.yama.ptrace_scope=0`, which needs a password,
+so Juha has to run the sysctl. If it is GIL contention, the lever is making the tooltip build cheaper
+rather than moving it — the existing item *Annotation tooltip help section rebuilt every time (could be
+static with show/hide)* is the obvious first cut, since the help section is identical on every rebuild.
+
 ## The `flake8` → `ruff` migration dropped indentation checking
 
 *Cluster: hygiene-sweep · Cost: S · Gate: 0.2.9 · Filed: 2026-08-10 · See also: "Assert the linter actually runs the rules we rely on"*
