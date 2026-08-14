@@ -163,12 +163,14 @@ def decode(stream: BinaryIO,
         # of these fields; omit any missing field from the log line rather than rendering a
         # "?" placeholder, which tends to read as "the software is broken".
         parts = [f"container type '{container.format.name}'"]
+        # `always_separate` so the unit is spaced the same whether or not the magnitude took a prefix:
+        # without it, a short clip reports "size 512.00B" where a longer one reports "size 1.50 MB".
         if container.bit_rate:
-            parts.append(f"bitrate {si_prefix(container.bit_rate)}bps")
+            parts.append(f"bitrate {si_prefix(container.bit_rate, always_separate=True)}bps")
         if container.duration is not None:
             parts.append(f"duration {container.duration / av.time_base:0.6g}s")
         if container.size:
-            parts.append(f"size {si_prefix(container.size)}B")
+            parts.append(f"size {si_prefix(container.size, always_separate=True)}B")
         logger.info(f"decode: Detected {', '.join(parts)}.")
         for packet in container.demux():
             for frame in packet.decode():

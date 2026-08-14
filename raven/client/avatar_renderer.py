@@ -786,7 +786,9 @@ class DPGAvatarRenderer:
                 avg_bytes = int(self.frame_size_statistics.average())
                 pixels = video_height * video_width
 
-                line1 = f"RX (avg) {si_prefix(avg_fps * avg_bytes)}B/s @ {avg_fps:0.2f} FPS; avg {si_prefix(avg_bytes)}B per frame ({video_width}x{video_height}, {si_prefix(pixels)}px, {video_format})"
+                # `always_separate` so the unit is spaced the same whether or not the magnitude took a
+                # prefix: without it, "1.50 kB/s" and "42.00B/s" come out of the same format string.
+                line1 = f"RX (avg) {si_prefix(avg_fps * avg_bytes, always_separate=True)}B/s @ {avg_fps:0.2f} FPS; avg {si_prefix(avg_bytes, always_separate=True)}B per frame ({video_width}x{video_height}, {si_prefix(pixels, always_separate=True)}px, {video_format})"
                 if server_stats is None:
                     return line1
                 # Second line: per-phase server-side timings from the X-Server-Stats header.
