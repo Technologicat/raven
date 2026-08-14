@@ -466,25 +466,37 @@ class ThumbnailGrid:
         if self._on_selection_changed is not None:
             self._on_selection_changed()
 
+    def _apply_selection(self, new_selected: set[int]) -> None:
+        """Replace the selection, redrawing only the tiles whose state actually changed.
+
+        **Never a rebuild.** A selection change alters what is *drawn on* a tile, not which tiles exist or
+        where they sit, so tearing the lattice down and re-creating it is work proportional to the whole
+        directory in order to change the appearance of two tiles. It is also visible: on a few hundred
+        entries the grid blanks and re-populates over a couple of frames, worst where the click was — near
+        the end of a long listing, since the tiles are rebuilt from the top.
+
+        The symmetric difference is what makes this exact: a click that moves the selection touches the
+        tile gaining it and the one losing it, and a range selection touches only the ends that changed.
+        """
+        changed = self._selected ^ new_selected
+        if not changed:
+            return
+        self._selected = new_selected
+        for idx in changed:
+            self._redraw_tile_by_idx(idx)
+        self._notify_selection_changed()
+
     def select_all(self) -> None:
         with self._lock:
-            self._selected = set(self._visible)
-            self._needs_rebuild = True
-            self._notify_selection_changed()
+            self._apply_selection(set(self._visible))
 
     def deselect_all(self) -> None:
         with self._lock:
-            if not self._selected:
-                return
-            self._selected = set()
-            self._needs_rebuild = True
-            self._notify_selection_changed()
+            self._apply_selection(set())
 
     def invert_selection(self) -> None:
         with self._lock:
-            self._selected = set(self._visible) - self._selected
-            self._needs_rebuild = True
-            self._notify_selection_changed()
+            self._apply_selection(set(self._visible) - self._selected)
 
     def toggle_select(self, idx: int) -> None:
         with self._lock:
@@ -877,18 +889,12 @@ class ThumbnailGrid:
                 a = self._visible.index(self._last_click_idx)
                 b = self._visible.index(idx) if idx in self._visible else a
                 lo, hi = min(a, b), max(a, b)
-                self._selected = set(self._visible[lo:hi + 1])
-                self._needs_rebuild = True  # many tiles changed
-                self._notify_selection_changed()
+                self._apply_selection(set(self._visible[lo:hi + 1]))
             elif ctrl:
                 self.toggle_select(idx)  # already notifies
             else:
                 # Bare click: set current and replace selection with this one entry.
-                old_selected = self._selected
-                self._selected = {idx}
-                if old_selected != self._selected:
-                    self._needs_rebuild = True
-                    self._notify_selection_changed()
+                self._apply_selection({idx})
                 self.set_current(idx)
 
             self._last_click_idx = idx

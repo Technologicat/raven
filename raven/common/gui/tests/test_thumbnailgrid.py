@@ -152,6 +152,24 @@ def test_an_empty_grid_has_no_current_entry(make_grid):
     assert make_grid(n_entries=0).current == -1
 
 
+def test_changing_the_selection_never_rebuilds_the_grid(make_grid):
+    """A selection change alters what is drawn *on* tiles, not which tiles exist or where they sit.
+
+    Rebuilding for it is work proportional to the whole directory in order to change the appearance of two
+    tiles, and it is visible: on a few hundred entries the grid blanks and re-populates over a couple of
+    frames. Found in live testing of the file dialog, worst when clicking near the end of a long listing.
+    """
+    grid = make_grid(n_entries=12)
+    grid.update()  # perform the pending rebuild, so a later one would be ours
+    for act in (lambda: grid.select_all(),
+                lambda: grid.invert_selection(),
+                lambda: grid.toggle_select(3),
+                lambda: grid.deselect_all()):
+        grid._needs_rebuild = False
+        act()
+        assert grid._needs_rebuild is False
+
+
 def test_selection_operations_act_on_the_visible_set(make_grid):
     grid = make_grid(n_entries=10)
     grid.set_visible([1, 3, 5])
