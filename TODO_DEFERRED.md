@@ -3676,51 +3676,93 @@ What the mode adds on top of that view: not loading the avatar at all. That is w
 saving come from, and it is a startup-path decision rather than a hide/show toggle — worth being explicit
 about, since a mode that merely hides the avatar panel saves nothing that matters here.
 
-## Cherrypick's mip loader has one worker, and cancelling cannot free it
+## The file dialog's grid view fails on Windows: "negative dimensions are not allowed"
+
+*Cluster: filedialog · Cost: ? · Gate: RN2026 · Filed: 2026-08-14 · **CI is red on `main` for this***
+
+Five of the grid-view tests fail on **windows-latest only** (`raven/vendor/file_dialog/tests/test_fdialog.py`
+— `test_selecting_in_the_grid_reaches_the_dialog` and the four beside it). Ubuntu and macOS pass. The
+symptom is that `dialog._grid` is `None`, because `reset_dir` raised while building the view:
+
+    WARNING fdialog: message_box: Cannot display message box while file_dialog is in modal.
+    File dialog - Error: An unknown error has occured when listing the items, More info:
+    negative dimensions are not allowed
+
+**`negative dimensions are not allowed` is numpy's**, raised when an array is allocated with a negative
+shape — so something in the grid-construction path computes a size and gets it wrong on Windows. The
+candidates are the paths that turn a size into an allocation: `TileIconCache._build` (which reshapes the
+icon and resamples it to tile size), and `raven.common.image.thumbnails.placeholder_tiles` — though the
+latter is caught and logged as a warning by `FileGrid._refresh_placeholders`, so it should not be able to
+propagate this far.
+
+**Where it is *not* is worth stating**, because the obvious suspects are guarded: `_resize_grid` clamps with
+`max(64, …)`, and the grid is constructed at the default `(400, 300)` before any measurement happens, on
+every platform alike.
+
+**Next step is already in flight.** `reset_dir`'s catch-all now calls `logger.exception` before the message
+box, so the next Windows CI run prints the traceback instead of one line of prose. Read that first; it
+should name the line directly. The whole reason this is an open item rather than a fix is that the original
+handler discarded the stack.
+
+**This is a real platform bug, not a test artifact** — the same code path runs when a Windows user opens the
+attach dialog with an image filter, so it is gated RN2026 rather than "next". Do not silence the tests to
+green `main`; they are reporting something true.
+
+## Cherrypick's compare mode skips one image per loop, in the *rendering*
 
 *Cluster: cherrypick · Cost: M · Gate: next · Filed: 2026-08-14*
 
-The second cause of compare mode skipping an image. The first — a render request cleared after the render
-rather than before, so one arriving mid-render was discarded — was fixed 2026-08-14; this one survived it,
-and Juha saw a frame still go missing occasionally afterwards.
+Compare three images; the cycle advances — overlay number and grid badge both change — but one of the three
+is never drawn, the same one each loop. Timing-dependent: Juha had to start and cancel compare several times
+on the *same* three images before a run reproduced it.
 
-**What the log shows.** One task in twenty-five reports `discarding 4 mips (cancelled=True, task gen=142
-current gen=143)` and took **318 ms**, where the others take 52–95 ms and the compare cycle is 333 ms. So
-that task was still running when the next frame started, was cancelled, and its image was never drawn.
+**One cause was found and fixed** (2026-08-14, in `ImageView.update`): `_needs_render` was cleared *after*
+`_render()` rather than before, so a request arriving from the background thread mid-render was discarded
+and the mips it announced were never drawn. That was real, and the bug survives it.
 
-**Why a task can overrun.** `ImageView` runs its mip loading on a `ThreadPoolExecutor(max_workers=1)`, and
-`_mip_task_mgr` and `_augment_task_mgr` *share* it. A task spends most of its life inside two
-`dpg.split_frame()` calls, waiting for the render loop — and cancellation sets a flag, which cannot
-interrupt that wait. So a cancelled task keeps the only worker until its waits return, the next task cannot
-start meanwhile, and a task that starts late enough is cancelled in its turn. Self-sustaining once entered,
-and it recovers on its own, which is why it is occasional rather than constant.
+### What has been eliminated, with evidence
 
-**It is frame-rate-sensitive, which is what makes it look random.** A task's cost is dominated by two waits
-for a render frame, so it scales with how fast frames arrive: two waits are ~80 ms at 25 fps and ~44 ms at
-45 fps, against a compare cycle fixed at 333 ms. Cherrypick was measured at **both** rates on the same
-afternoon, on the same folder.
+Every one of these was a plausible hypothesis that the instrumentation killed. Recorded so nobody spends the
+afternoon again:
 
-**What made that difference is not known.** Two explanations were offered and both were wrong — Librarian
-running alongside, then `raven-server`'s THA3 inference for its avatar, which was not running at all: the
-avatar had auto-paused after 15 s idle, and the screenshots said "[Video is off]" in plain sight. So the
-reproduction recipe is missing its most important ingredient, and finding it belongs to this item rather
-than preceding it — the fix cannot be judged without being able to put the machine back into the slow state.
-What is *not* the cause is image size, which is where this investigation started.
+- **Not a preload cache miss.** `CompareMode._show_frame` logs one, and would then leave the image alone
+  while still advancing the overlay number — exactly the symptom. Zero across every reproduction.
+- **Not image size.** It first appeared with mixed sizes, then reproduced with the middle image the *same*
+  size as the first.
+- **Not the `(w, h)` texture pool.** Equal sizes reuse a pooled texture and differing sizes create one, which
+  is a real size-dependence — but the symptom is not size-dependent, so it is not this.
+- **Not worker contention.** `ImageView` runs mip loading on a `ThreadPoolExecutor(max_workers=1)` shared by
+  two task managers, and cancellation cannot interrupt a `dpg.split_frame()` wait, so a cancelled task can
+  hold the only worker. Instrumented with a `queued=` figure: **28 of 29 tasks start at `queued=0ms`.**
+- **Not task overrun.** Task durations across four compare sessions: n=47, min 45 ms, median 57 ms, **max
+  172 ms** — against a 345 ms cycle. Nothing comes close to overrunning.
+- **Not a dropped frame on the loading side.** Every session shows a complete cycle in the log
+  (`take: hit idx=15 16 20` repeating, one 22-frame session included). The only `discarding` line in a clean
+  run is `CompareMode.exit: restore=True` cancelling the last in-flight load, which is correct.
 
-**Established:** the single worker, the shared executor, that cancellation does not interrupt `split_frame`,
-and the 318 ms outlier against a 333 ms budget. **Not established:** which task held the worker in that
-instance. `_augment_task_mgr` (the full-res mip that follows a preloaded image) is the obvious candidate
-since `_mip_task_mgr.clear()` does not touch it, but the log does not say.
+### Where it must therefore be
 
-**The fix is a design decision, not a patch**, which is why this is filed rather than done:
+The image view **receives all three images every cycle and draws only two**. So the fault is downstream of
+`set_preloaded_arrays`, in the render path — `_needs_render`, `_render`, `_bridge_old_mips`, `_mips` /
+`_old_mips`, or the interaction between them.
 
-- *More workers* lets a new task start while the old one drains — but `_acquire_texture` and the texture
-  pool would then be touched concurrently, and they are not obviously guarded for that.
-- *Fewer waits*: the two `split_frame`s exist to guarantee the texture upload before the mips are
-  referenced. Whether both are needed, and whether a compare cycle can share one wait across its frames, is
-  the question worth measuring.
-- *Cancellation that reaches a waiting task* is the general form, and the one that would help every
-  `split_frame`-blocking task in the codebase.
+The bridge is the part to look at hardest. `_show_frame` calls `set_preloaded_arrays`, which
+`_bridge_old_mips()`: the previous image's mips move to `_old_mips` and `_mips` becomes `[]`. `_render`
+draws `_old_mips` while `_mips` is empty, so **an image is only visible between its task installing `_mips`
+and the next `_show_frame` bridging it away**. Anything that leaves `_mips` empty, or leaves the bridge
+stale, shows the previous image for a whole cycle — which is the symptom exactly.
+
+### How to carry on
+
+- Run with `--debug` (or Ctrl+Shift+M at runtime) and reproduce; the log then carries per-task `queued=`,
+  `total=` and `discarding … after Nms`.
+- The missing instrumentation is on the *draw* side: log, per `_render`, whether it used `_mips` or
+  `_old_mips` and which image that was. That distinguishes "never installed", "installed and not drawn" and
+  "drawn from the bridge" — which is the question left.
+- Reproducing needs the machine in the right state: Cherrypick was measured at 25 fps and at 45 fps on the
+  same afternoon and the same folder, and **what made that difference is not known** — two explanations were
+  offered and both were wrong (Librarian running alongside; then its avatar's THA3 inference, which had
+  auto-paused after 15 s idle).
 
 ## The thumbnail grid's textures are dynamic, and probably need not be
 
