@@ -720,8 +720,14 @@ class FileDialog:
             # exceptions
             except FileNotFoundError:
                 logger.error(f"reset_dir: instance '{self.tag}' ({self.instance_tag}), invalid path: '{str(default_path)}'")
-            except Exception as e:
-                message_box("File dialog - Error", f"An unknown error has occured when listing the items, More info:\n{e}")
+            except Exception as exc:
+                # Logged with its traceback *before* the message box, which shows only `str(exc)`. A listing
+                # error is otherwise reduced to one line with no stack — and where the dialog is modal the
+                # box cannot even be shown, so the line goes to the log stripped of everything that would
+                # locate it. Cost a CI round on a Windows-only failure that said "negative dimensions are
+                # not allowed" and nothing about where.
+                logger.exception(f"reset_dir: instance '{self.tag}' ({self.instance_tag}), failed to list '{str(default_path)}'")
+                message_box("File dialog - Error", f"An unknown error has occured when listing the items, More info:\n{exc}")
         self.reset_dir = reset_dir  # needs to be accessible from the outside; uses closure data from this scope, so shouldn't be injected as an instance method (on the class); inject as a regular function *on the instance*.
 
         # --------------------------------------------------------------------------------

@@ -362,6 +362,7 @@ class ImageView:
 
         task_env = env(mip_arrays=mip_arrays,
                        generation=self._mips_generation,
+                       submitted_ns=time.perf_counter_ns(),
                        debug=self._debug)
         self._mip_task_mgr.submit(self._bg_preloaded_task, task_env)
 
@@ -713,6 +714,14 @@ class ImageView:
         """
         t0 = time.perf_counter_ns()
 
+        # How long this waited for the single worker before running at all. A cancelled predecessor keeps
+        # that worker until its `split_frame` waits return — cancellation cannot interrupt one — so a task
+        # can miss its slot without being slow itself. Reported separately for exactly that reason: the
+        # interval between two log lines conflates the two, and they have different fixes.
+        if e.debug:
+            queued_ms = (t0 - e.submitted_ns) / 1e6
+            logger.info(f"ImageView._bg_preloaded_task: instance {e.task_name}: starting, queued={queued_ms:.0f}ms")
+
         new_mips = []
         new_arrays = []
         for scale, w, h, flat in e.mip_arrays:
@@ -744,7 +753,9 @@ class ImageView:
         with self._mips_lock:
             if e.cancelled or self._mips_generation != e.generation:
                 if e.debug:
+                    t_total = (time.perf_counter_ns() - t0) / 1e6
                     logger.info(f"ImageView._bg_preloaded_task: instance {e.task_name}: discarding {len(new_mips)} mips "
+                                f"after {t_total:.0f}ms "
                                 f"(cancelled={e.cancelled}, task gen={e.generation} current gen={self._mips_generation})")
                 for _s, tag in new_mips:
                     self._release_texture(tag)
