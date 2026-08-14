@@ -151,7 +151,14 @@ def _make_entry(directory: str, name: str, *, dir_sizes: bool) -> Optional[FileE
             kind = KIND_BROKEN_LINK
             size = None
             mtime = os.lstat(path).st_mtime  # the link's own timestamp; the target has none to ask for
-        else:  # socket, fifo, device node, or gone since we listed the directory
+        else:
+            # Sockets, fifos, device nodes — and entries that vanished between the directory read and here.
+            # **Omitted on purpose, not by oversight.** A picker exists to name a thing to open, and none of
+            # these can be opened or usefully described; a broken link is shown precisely because it *is*
+            # describable and someone may be hunting for it. File managers do list them (Nemo does), so this
+            # is a judgement about pickers rather than a rule about listings. To change it, give them a kind
+            # of their own here and a label in the views — the grouping already ranks on `is_dir`, so it
+            # needs nothing else.
             return None
     except OSError as exc:
         logger.debug(f"_make_entry: cannot stat '{path}', omitting it: {type(exc)}: {exc}")
