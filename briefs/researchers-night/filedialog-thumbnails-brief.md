@@ -282,9 +282,19 @@ Settled 2026-08-14, after two glitches that looked identical and were not.
 
 **The first was spurious work and is fixed.** A bare click set `_needs_rebuild`, tearing down and re-creating
 every tile in the directory in order to change which two had a border. Eliminating the work was the right
-fix; papering over it would have been the wrong one. Cherrypick shared the defect — introduced when the grid
-was extracted, which changed a bare click from *clearing* the selection to *setting* it, so a rebuild that
-had been conditional became unconditional.
+fix; papering over it would have been the wrong one.
+
+Cherrypick shared the defect, and **not because of the extraction** — a claim made here on 2026-08-14 and
+withdrawn the same day, having been read off `1a66dba` without checking whether a later commit superseded it.
+Two did. `e0f7168` changed a bare click from *clearing* the selection to *setting* it, deliberately and for
+a stated reason ("provides a way to clear multi-selection with the mouse"), and made the rebuild
+unconditional in the same stroke. That is March 2026, months before the grid became shared, and the
+extraction carried both across unchanged. So there is no semantic drift to decide about — only a glitch
+Cherrypick has had all along, now fixed for both.
+
+The general form, since this cost a wrong causal story in a durable document: **reading behaviour out of a
+commit proves what that commit did, not what the code does.** `git log -- <path>` first, then read the
+newest.
 
 **The second is real work, and wants the swap.** A keystroke in the Find field genuinely re-lists the
 directory, so the tiles really are all different, and `_rebuild` deletes the old ones before the new ones
