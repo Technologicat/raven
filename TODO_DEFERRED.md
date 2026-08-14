@@ -53,6 +53,25 @@ in Emacs least, with an unaffected baseline in the same repo to compare against.
 ranking of hygiene work, which is normally deferred precisely because it is local and cosmetic. It is
 neither, now.
 
+## Sweep `## Declined` for decisions whose follow-through was never filed
+
+*Cluster: hygiene-sweep · Cost: S · Gate: next · Filed: 2026-08-14*
+
+`## Declined` was originally built — by claude.ai, at the start of the project — as a section for
+*completed or already-decided* items, and only later corrected to its stated meaning of *considered and
+rejected*. Entries filed under the looser reading may still be there. Two were caught on 2026-08-12 and
+removed as finished work; the naming entry was caught on 2026-08-14 and was a third kind, a decision that
+chose something and left work behind that nobody had queued.
+
+**Read for the chosen-not-rejected shape specifically.** A rejected idea is genuinely closed. A *decision*
+closes only the argument: it settles what to do, and then something has to do it. The naming entry did not
+look different from its neighbours — it argued a position at length and ended "(Declined 2026-08-12.)" like
+the rest — so this needs reading each entry and asking "does this imply an action, and is that action filed
+anywhere?", not scanning for a marker.
+
+The section preamble now states the rule, so new entries should be fine; this is about the backlog of old
+ones.
+
 ## Rename the distribution to `raven-lab` — before the first PyPI upload, not after
 
 *Cluster: ? · Cost: S · Gate: 0.2.9, and hard-blocking the first PyPI upload · Filed: 2026-08-14 · See also: "Decide the public name" (Declined — the decision is recorded there)*
@@ -4287,6 +4306,12 @@ deleted, git being the history; only something *considered and rejected* belongs
 filed here on 2026-08-10 under the looser reading and removed on 2026-08-12 with the rest of the finished
 work.
 
+**An entry that settles a question by *choosing* something must name where the doing was filed.** Rejecting
+an idea closes it outright; choosing one closes only the argument, and leaves work behind. Everything in
+this section reads as closed, so a chosen-not-rejected entry hides its own follow-through — which is exactly
+what the naming entry did for two days while `pyproject.toml` kept the old distribution name. If an entry
+has no live item to point at, it does not belong here yet.
+
 - **torch.compile for the postprocessor** — measured and answered: ~6% on THA3 for 37s of compilation, and it
   hung in the server. A finding rather than a task; the write-up is
   `investigations/tha3-performance/tha3-performance-audit.md`, with `debug_torch_compile.py` beside it.
@@ -4314,6 +4339,11 @@ work.
   and HCI, currently applied to literature management, a reading that survives a change of application area
   where the "lab computer" framing in `briefs/design/product-identity-sketch.md` explicitly may not.
   The same qualified-form move is available for `corvid`, which is also taken. (Declined 2026-08-12.)
+  - **The decision is closed; the work it implies is not.** Carrying it out is the live item *Rename the
+    distribution to `raven-lab`*, filed 2026-08-14 — two days late, because this entry read as
+    self-contained and nothing pointed out that `pyproject.toml` still said otherwise. An entry here that
+    settles a question **by choosing something** has to say where the doing was filed, or it silently
+    becomes a decision nobody enacted.
 - **Updating the vendored FontAwesome means both files, not just the header** — filed against a belief the
   measurement refuted, so there is nothing to fix. Header and shipped fonts are **exactly in sync**:
   `fa-solid-900.ttf` carries 1969 codepoints over 1395 distinct glyph names, the header names all 1395, and
