@@ -3650,6 +3650,32 @@ What the mode adds on top of that view: not loading the avatar at all. That is w
 saving come from, and it is a startup-path decision rather than a hide/show toggle — worth being explicit
 about, since a mode that merely hides the avatar panel saves nothing that matters here.
 
+## Visualizer's content swap hides the old group before showing the new one
+
+*Cluster: ? · Cost: S · Gate: next · Filed: 2026-08-14*
+
+`raven.visualizer.annotation`'s `_render_worker` swaps like this:
+
+```python
+dpg.hide_item(_current_group)
+dpg.show_item(annotation_target_group)
+dpg.split_frame()
+dpg.delete_item(_current_group)
+```
+
+Hide-then-show leaves a moment in which *neither* group is shown, so a frame landing there renders an empty
+panel — which is the flash the swap exists to remove. Show-then-hide leaves a moment in which *both* are,
+and since the old content comes first the viewport shows it unchanged. The second looks strictly better on
+that reasoning, and it is what `raven.common.gui.thumbnailgrid` does for the same reason.
+
+**But the reasoning is not a measurement, and the tooltip may have had a reason.** It also hides the whole
+tooltip window across the swap when the item set changes, which would mask a blank frame entirely — so the
+order may simply not matter there, or may have been chosen against a symptom nobody wrote down. The info
+panel (`app.py`'s `_update_info_panel`) is the second instance and should be checked at the same time.
+
+Worth settling because the two now differ, and a reader comparing them will not be able to tell which is
+deliberate. Noticed by Juha 2026-08-14, on reading the grid's version.
+
 ## Visualizer's importer should read the document database, not just `.bib` files
 
 *Cluster: ? · Cost: ? · Gate: next · Filed: 2026-07-29*
