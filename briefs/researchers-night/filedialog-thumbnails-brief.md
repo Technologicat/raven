@@ -98,14 +98,25 @@ Size — with the table's semantics: click to sort ascending, click the same but
 a triangle on the active button showing which way. The point is that a user who has learned the table
 header has learned this too.
 
-## The folder tile needs a large icon
+## The folder tile needs a large icon, and it must be resampled rather than scaled
 
 For prototyping, reuse the dialog's own `folder.png` (`self.img_folder`, 94×94 RGBA) — the one it already
 uses for drag payloads. It is *not* the 16×16 `mini_folder.png` the table rows carry, which would be
 unusable at tile size.
 
-94 px covers the two smallest tile sizes and is soft at 128 and above, so it is a prototype and not the
-answer. Juha will generate a large folder icon for the final version.
+**DPG scales textures nearest-neighbor**, so handing it a 94×94 icon and asking for 256 gives visible
+blocking. Any image drawn at tile size therefore has to be resampled by us, with
+`raven.common.image.lanczos.resize` — **at load, and again whenever the tile size changes.** The result
+caches per tile size; the sizes are a small fixed set. This is the same treatment the photo thumbnails
+already get, so a folder tile and an image tile end up looking equally deliberate rather than the folder
+looking like a mistake.
+
+**Generate the final icon at 512×512**, the largest tile size. Then every tile size is a *downscale*, which
+is what Lanczos is good at; the prototype's 94 px is a 5.4× enlargement at that size, and no resampler
+invents the detail that is not there.
+
+The same rule covers anything else that ends up drawn at tile size — a per-filetype icon for non-image
+files, say, if the grid ever grows one.
 
 ## The budget, which is what forces the design
 
