@@ -440,6 +440,11 @@ def get_widget_pos(widget: Union[str, int]) -> Tuple[int, int]:
     would be at scroll zero. Subtracting each ancestor's own scroll recovers the true position — measured
     against `rect_min` at three scroll offsets, exact at each. The widget's *own* scroll is deliberately not
     subtracted: that moves its contents, not the widget.
+
+    **The `rect_min` answer above needs no such correction, and that is not an oversight.** `rect_min` is a
+    *rendered* position, so it has already moved with every scroll between the widget and the viewport;
+    `get_item_pos` is a layout position and has not. That difference is what the whole accumulation exists
+    to make up for, and it is asserted in the tests rather than assumed.
     """
     try:
         x0, y0 = dpg.get_item_rect_min(widget)

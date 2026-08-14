@@ -1647,7 +1647,6 @@ hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focu
                helpcard.hotkey_blank_entry,
                env(key_indent=0, key="Ctrl+T", action_indent=0, action="Show/hide last thinking trace", notes="For thinking models"),
                env(key_indent=0, key="Ctrl+S", action_indent=0, action="Speak last AI message / stop speaking", notes=""),
-               helpcard.hotkey_blank_entry,
                env(key_indent=0, key="Ctrl+Right", action_indent=0, action="Next sibling of last message", notes=""),
                env(key_indent=1, key="Ctrl+Shift+Right", action_indent=1, action="Same, but jump 10", notes=""),
                env(key_indent=0, key="Ctrl+Left", action_indent=0, action="Previous sibling of last message", notes=""),

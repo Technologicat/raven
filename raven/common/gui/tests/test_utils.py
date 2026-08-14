@@ -136,6 +136,7 @@ def test_get_widget_pos_is_viewport_coordinates_however_deeply_nested(dpg_contex
         # `probe_inner` is shorter than what it holds, so it can be scrolled; the widget's own scroll is
         # deliberately not corrected for, because that moves its contents rather than the widget.
         dpg.configure_item("probe_inner", height=100)  # tag  # now shorter than `probe_deep`
+        seen = []
         for scroll in (30, 80):
             dpg.set_y_scroll("probe_inner", scroll)  # tag
             for _ in range(5):
@@ -144,5 +145,14 @@ def test_get_widget_pos_is_viewport_coordinates_however_deeply_nested(dpg_contex
             button_y = dpg.get_item_rect_min("probe_button")[1]  # tag
             pad_y = dpg.get_item_pos("probe_button")[1]  # tag
             assert deep_y == button_y - pad_y
+
+            # The other path through the function, and the reason it needs no scroll correction of its
+            # own: an item that *has* `rect_min` is answered from it directly, and `rect_min` is a
+            # rendered position that already moved with the scroll — where `get_item_pos`, being layout,
+            # did not. Asserted rather than inferred, since the whole correction rests on the difference.
+            assert guiutils.get_widget_pos("probe_button") == tuple(dpg.get_item_rect_min("probe_button"))  # tag
+            assert dpg.get_item_pos("probe_button") == [pad_x, pad_y]  # tag  # unmoved by the scroll
+            seen.append(button_y)
+        assert seen[0] != seen[1]  # ...and the rendered position really did move
     finally:
         dpg.delete_item("probe_window")  # tag
