@@ -72,8 +72,10 @@ find field, the filter choices from the combo — which is the idiom's normal be
 dispatches on the focused item rather than on a mode flag.
 
 **Esc means "give me back the find field" wherever focus has been parked, and cancels the dialog only when
-it is already there.** One rule covering the path field and the combo alike, and it is what keeps Esc from
-being a mode-dependent surprise.
+it is already there.** One rule covering the path field, the combo and the places panel alike, and it is
+what keeps Esc from being a mode-dependent surprise. Note that in save mode that widget is the **filename
+entry** — the same field under its other name, so Esc lands you back where you were typing the name, and
+"returns to the find field" below should be read that way throughout.
 
 What does *not* generalize is restoring on the way out. The path field holds a **draft** — typing there does
 nothing until Enter — so Esc discards it and puts the current directory back. Combo cycling **applies on
