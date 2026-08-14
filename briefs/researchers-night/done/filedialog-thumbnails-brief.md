@@ -14,19 +14,27 @@ tileset, which is Juha's to generate.
   `raven.common.gui.tileicons.TileIconCache` resamples the icons to tile size, and the dialog carries the
   toggle, the shared sort-button row and its own tick thread.
 
-**Live-tested 2026-08-14**, in Librarian, against a real generated-image folder. Confirmed working: the grid
-and its tiles, single and double click, the sort row, the view toggle, column resizing (so `resizable` and
-`sortable` are indeed independent), the per-opening view override, and — after the cache landed — typing in
-the find field, re-sorting, and folder round-trips all without re-decoding.
+**Closed 2026-08-14.** Live-tested in Librarian against a real generated-image folder, and in Cherrypick for
+the shared widget underneath. Confirmed working: the grid and its tiles, single and double click, Ctrl+click
+multi-selection, the sort row, the view toggle, column resizing (so `resizable` and `sortable` are indeed
+independent), the per-opening view override, selection surviving a view switch, and — after the thumbnail
+cache landed — typing in the find field, re-sorting and folder round-trips all without re-decoding.
 
-**What is left, and it is not the view:**
+**The two questions this brief left open are answered, both by looking rather than by argument:**
 
-- **The real 512×512 tileset** (Juha to generate). What ships now is the existing 16 px and 94 px assets
-  resampled up, which is the prototype the brief called for and looks like it at large tile sizes.
-- **The label truncation**, parked for last: at 128 px tiles a name is cut to ~14 characters, so a folder of
-  `Screenshot from …` reads as fourteen identical tiles. Showing the *tail* of the name, or wrapping to two
-  lines, are the cheap options; the full name is in the tooltip either way.
-- **Keyboard access**, which is `filedialog-keyboard-brief.md` and was always going to be separate.
+- **One tile size is enough, and there is no preview pane.** The question was whether a tile can be small
+  enough to navigate by and large enough to see by. At 128 px it can, so a pane would cost horizontal space
+  for nothing.
+- **The label truncation stands as it is** — ~14 characters at 128 px, with the full name in the tooltip.
+
+**What outlives this brief**, each with an item of its own:
+
+- **The real 512×512 tileset**, now gated RN2026, and no longer only for looks: the current icons turn out
+  to be third-party icons8 assets rather than MIT art, so a set of our own removes a licensing question as
+  well as covering the formats these lack. `TODO_DEFERRED.md`, "A file-type icon set of our own".
+- **Folder tiles that preview their contents** (below), which would also give a directory picker a reason to
+  offer the grid at all.
+- **Keyboard access**, which is `filedialog-keyboard-brief.md`, and was always separate.
 
 Moved out of `TODO_DEFERRED.md` on 2026-08-13.
 

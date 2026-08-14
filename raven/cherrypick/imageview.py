@@ -546,9 +546,14 @@ class ImageView:
                                    pos=(8, self._spinner_bottom_y(self._view_h)))
 
         # The background thread sets _needs_render when a new mip is ready.
+        #
+        # **Cleared before the render, not after.** `_render` takes a frame's worth of work, and the flag is
+        # set from another thread — so clearing it afterwards discards any request that arrived *during* the
+        # render, and the mips that request was announcing are then never drawn. The cost of this ordering
+        # is at worst one redundant redraw; the cost of the other is a frame that silently never appears.
         if self._needs_render:
-            self._render()
             self._needs_render = False
+            self._render()
 
     # ------------------------------------------------------------------
     # Compare mode overlay

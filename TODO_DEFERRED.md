@@ -3676,39 +3676,30 @@ What the mode adds on top of that view: not loading the avatar at all. That is w
 saving come from, and it is a startup-path decision rather than a hide/show toggle — worth being explicit
 about, since a mode that merely hides the avatar panel saves nothing that matters here.
 
-## Cherrypick's compare mode stalls on the image when the sizes differ
+## The thumbnail grid's textures are dynamic, and probably need not be
 
-*Cluster: cherrypick · Cost: ? · Gate: next · Filed: 2026-08-14*
+*Cluster: performance · Cost: S · Gate: next · Filed: 2026-08-14*
 
-Observed by Juha 2026-08-14, comparing three images of differing dimensions: the cycle advances — the
-overlay number goes to 3 — but the image view keeps showing frame 2. Same-sized images are fine, which is
-the whole clue. Pre-existing: `compare.py`, `imageview.py` and `preload.py` were untouched by that day's
-grid work, and compare's grid API surface was not among what changed.
+`ThumbnailGrid.set_thumbnail` creates a **dynamic** DPG texture per thumbnail, so a Cherrypick folder of a
+few hundred images registers a few hundred of them. `raven.cherrypick.preload`'s own docstring records the
+reason that matters, measured when that cache was written:
 
-**Not a cache miss.** `CompareMode._show_frame` logs `cache miss for idx=` when `preload.take` comes back
-empty, and would then leave the image alone while still setting the overlay number — exactly the reported
-symptom. The log had *zero* of those across four reproductions, so the arrays do reach
-`ImageView.set_preloaded_arrays` on every cycle. Worth stating because it is the obvious first guess and it
-is wrong.
+> DPG has O(n) cost per registered dynamic texture, even if they're not drawn.
 
-**Where the size-dependence lives.** `ImageView._acquire_texture` pools textures by `(w, h)`:
+Which makes the whole folder's thumbnails a per-frame cost whether or not any of them is on screen.
+Cherrypick measures ~25 fps with 133 images loaded (Juha, 2026-08-14, from the metrics window), and this is
+a candidate for a good part of that — alongside the missing clipper, which is the other item.
 
-- equal sizes hit the pool and go through `dpg.set_value`, which is fast and creates no OpenGL texture;
-- differing sizes miss it and `add_dynamic_texture` per mip instead.
+**A thumbnail is written once and never changes**, which is exactly when a static texture is the right kind,
+and is why `raven.common.gui.filegrid`'s cache already uses static ones. The obstacle is that `set_thumbnail`
+*can* be called again for the same index, and answers that with `dpg.set_value` — which a static texture
+does not support. Replacing the texture instead, as the file grid's cache does, costs one delete and one
+create on a path that is rare.
 
-`set_preloaded_arrays` hands that work to a background task and keeps the previous image visible meanwhile
-(`_bridge_old_mips`), guarded by `_mips_generation`. So a task that does not finish inside one compare frame
-(333 ms at the default 3 FPS) is cancelled by the next cycle's `clear()`, its result dropped by the
-generation guard, and the bridged old image stays up — which would look precisely like this.
-
-**That last paragraph is a hypothesis, not a finding.** It does not explain persistence: after one full
-cycle the pool should be warm for all three sizes, so the misses should stop. Something else is going on,
-or the pool is not being refilled the way `take_mip_arrays` suggests.
-
-**How to settle it without guessing further:** the timing instrumentation already exists — `--debug`, or
-**Ctrl+Shift+M at runtime**, logs decode/mip/total ms per image switch (added in `9b5a787`). Reproduce with
-it on and read whether the per-switch time exceeds the frame period, and whether it stays high after the
-first cycle.
+**Measure before and after**, on the same folder: this is a claim about DPG's per-frame accounting, taken
+from a note rather than from a profile of *this* code, and "probably" is doing real work in the title until
+someone checks. The tile size matters to the answer too — the cost may scale with texture count, with total
+texture memory, or with both.
 
 ## Raven's global theme sets three of ImGui's seven rounding vars
 
