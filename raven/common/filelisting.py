@@ -104,10 +104,11 @@ def format_size(size: Optional[int]) -> str:
     if size is None:
         return "-"
     formatted = si_prefix(size, precision=(1 if size >= 1024 else 0), binary=True)
-    # `si_prefix` emits `"1.5 Ki"` with a space and `"512"` without one, since there is no prefix to
-    # separate — so the unit is appended differently in the two cases to land on `"1.5 KiB"` and `"512 B"`.
-    # A separator parameter upstream in `unpythonic` would remove this; every caller today wants the space,
-    # which is why there is none yet.
+    # `si_prefix` emits `"1.5 Ki"` with a space and `"512"` without one, there being no prefix to separate
+    # from — so the unit is appended differently in the two cases to land on `"1.5 KiB"` and `"512 B"`.
+    # `unpythonic` 2.3.0 adds `always_separate=True` for exactly this, which reduces the whole thing to
+    # `f"{si_prefix(size, ..., always_separate=True)}B"`. Waiting on that release; bump the requirement in
+    # `pyproject.toml` when it lands and this branch goes away.
     return f"{formatted}B" if " " in formatted else f"{formatted} B"
 
 
