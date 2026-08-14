@@ -70,6 +70,43 @@ For reference, Cherrypick pins `cuda:0` in `config.gpu_config["thumbnails"]` wit
 still passes it through `deviceinfo.validate`, which checks availability and falls back to CPU — so its
 hardcoded string is not the portability hazard it looks like.
 
+## Sorting, and the refactor it forces
+
+Settled 2026-08-14, on finding that the grid cannot inherit the table's sorting.
+
+**The table's sort exists only as widget order.** `table_sort_callback` reads its keys back *out of DPG* —
+walking `get_item_children` into each row, unpacking the group, pulling `user_data` off the selectable —
+builds a list of row IDs, and calls `dpg.reorder_items`. There is no sorted list of entries anywhere. A
+grid has no table, no rows and nothing to reorder, so none of it transfers, and a grid without sorting
+would be a serious step down from the listing it replaces.
+
+So:
+
+- **Extract "produce the ordered list of entries" from "make table rows out of them"**, and let both views
+  consume the same list. This is the enabling change, and it is worth doing on its own merits: it also
+  makes the listing testable, which it is not while the entries exist only as widgets.
+- **The sort criterion becomes shared state rather than DPG state**, so switching views keeps the order.
+  Watch for the table's own header arrows disagreeing with it once the data is authoritative — DPG draws
+  those itself, and they are driven by the header clicks rather than by us.
+- **`..` and the directories travel as data.** `..` is currently special-cased in three places: built
+  inline in `reset_dir` rather than through `_makedir`, skipped by `rows[1:]` in the sort, and
+  re-prepended as `new_order[0]`. The grid needs it as much as the table does, so the shared list has to
+  carry it rather than each view inventing it.
+
+**The grid gets a row of sort buttons above it**, one per criterion the table offers — Name, Date, Type,
+Size — with the table's semantics: click to sort ascending, click the same button again for descending, and
+a triangle on the active button showing which way. The point is that a user who has learned the table
+header has learned this too.
+
+## The folder tile needs a large icon
+
+For prototyping, reuse the dialog's own `folder.png` (`self.img_folder`, 94×94 RGBA) — the one it already
+uses for drag payloads. It is *not* the 16×16 `mini_folder.png` the table rows carry, which would be
+unusable at tile size.
+
+94 px covers the two smallest tile sizes and is soft at 128 and above, so it is a prototype and not the
+answer. Juha will generate a large folder icon for the final version.
+
 ## The budget, which is what forces the design
 
 Measured live on a real 1625-entry directory (`investigations/filedialog-performance/`): a full open costs
