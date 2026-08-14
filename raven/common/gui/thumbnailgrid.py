@@ -430,6 +430,18 @@ class ThumbnailGrid:
         with self._lock:
             return list(self._visible)
 
+    def position_of(self, idx: int) -> Optional[int]:
+        """Where *idx* sits among the visible items, counting from 1 — or `None` if it is filtered out.
+
+        The number a tile shows and the number a caller would print as "*n* of *m*", so that both come
+        from the same place rather than from each caller's own arithmetic over `visible`.
+        """
+        with self._lock:
+            try:
+                return self._visible.index(idx) + 1
+            except ValueError:
+                return None
+
     @property
     def n_cols(self) -> int:
         with self._lock:

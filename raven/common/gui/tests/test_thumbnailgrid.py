@@ -266,6 +266,21 @@ def test_selection_operations_act_on_the_visible_set(make_grid):
     assert grid.selected == set()
 
 
+def test_position_of_counts_within_the_visible_list(make_grid):
+    """Callers display this to a person, so it counts from 1 and ignores the filtered-out entries."""
+    grid = make_grid(n_entries=10)
+    grid.set_visible([1, 3, 5])
+    assert [grid.position_of(i) for i in (1, 3, 5)] == [1, 2, 3]
+
+
+def test_position_of_reports_a_filtered_out_entry_as_absent(make_grid):
+    """`None` rather than 0 or -1: callers hide the indicator entirely, so it must not read as a position."""
+    grid = make_grid(n_entries=10)
+    grid.set_visible([1, 3, 5])
+    assert grid.position_of(2) is None
+    assert grid.position_of(99) is None
+
+
 def test_navigation_walks_the_visible_list(make_grid):
     grid = make_grid(n_entries=12, width=500)  # 4 columns
     grid.set_visible([2, 4, 6, 8, 10])

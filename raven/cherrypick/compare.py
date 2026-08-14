@@ -302,6 +302,13 @@ class CompareMode:
         frame_num = self.frame_idx + 1
         iv.set_overlay_number(frame_num)
 
+        # And the corner number, which names the frame's place in the grid rather than in the cycle. The
+        # app sets it from `grid.current`, which compare mode does not move — so without this it keeps
+        # naming whichever image was current when compare mode started, for every frame of the loop.
+        grid = self._get_grid()
+        if grid is not None:
+            iv.set_image_number(grid.position_of(img_idx))
+
         self._update_compare_status()
 
     def _update_compare_status(self) -> None:

@@ -241,13 +241,11 @@ def _update_status() -> None:
         # position also drives the image-number indicator in the main view
         # (hidden when the current image isn't in the filtered set).
         if 0 <= idx < len(triage):
-            if grid is not None and idx in grid.visible:
-                pos = grid.visible.index(idx) + 1
+            pos = grid.position_of(idx) if grid is not None else None
+            if pos is not None:
                 parts.append(f"[{pos} / {grid.visible_count}]")
-                if iv is not None:
-                    iv.set_image_number(pos)
-            elif iv is not None:
-                iv.set_image_number(None)
+            if iv is not None:
+                iv.set_image_number(pos)
 
         # Image dimensions and aspect ratio.
         if iv is not None and iv.has_image:
