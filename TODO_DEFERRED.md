@@ -74,12 +74,25 @@ ones.
 
 ## Rename the distribution to `raven-lab` — before the first PyPI upload, not after
 
-*Cluster: ? · Cost: S · Gate: 0.2.9, and hard-blocking the first PyPI upload · Filed: 2026-08-14 · See also: "Decide the public name" (Declined — the decision is recorded there)*
+*Cluster: ? · Cost: S · Gate: 0.2.9, and hard-blocking the first PyPI upload · Filed: 2026-08-14*
 
 `pyproject.toml` still says `name = "raven-visualizer"`. The name was **settled on 2026-08-12** — the
 distribution is `raven-lab`, the import package stays `raven` — but that decision was recorded in
 `## Declined` and no item was ever filed to carry it out. `Declined` is the anti-re-litigation section, so
-a decision parked there reads as closed work; this is what that looks like when it goes wrong.
+a decision parked there reads as closed work; this is what that looks like when it goes wrong. (That entry
+has since been folded into this one, its user-facing half already living in the repo-root `README.md`,
+under "The Raven constellation".)
+
+**Why the qualified form**, kept here so the choice is not re-argued while the work is still open: `raven`
+on PyPI is Sentry's legacy client — 187 releases, none yanked, still installable, and its wheel ships a
+top-level `raven/` — so the index name is squatted by a tombstone and cannot be had. `raven-lab` → `raven`
+is a qualified form of the same name rather than an opaque mapping like `cv2` from `opencv-python`; the
+qualifier exists only because the index forced it. *lab* because Raven is one, a reading that survives a
+change of application area where the "lab computer" framing in
+`briefs/design/product-identity-sketch.md` explicitly may not. The import collision is real but confined to
+shared environments, and the venv requirement is the mitigation — already stated in the repo-root
+`README.md` under "The Raven constellation", which is where a user meets this and why nothing more is
+needed in the docs.
 
 **The gate is hard.** A distribution name cannot be corrected after publishing — the old name stays on the
 index forever, and anyone who installed it keeps a package that is no longer the one being developed. So
@@ -1443,7 +1456,7 @@ Discovered while fixing the zero-segment TTS crash (2026-07-28, reported by Juha
 
 ## The licensing story is accurate only in a subdirectory README
 
-*Cluster: discoverability · Cost: ? · Gate: 0.2.9, with the first PyPI upload · Filed: 2026-08-03 · See also: "Decide the public name" (Declined — the decision is recorded there)*
+*Cluster: discoverability · Cost: ? · Gate: 0.2.9, with the first PyPI upload · Filed: 2026-08-03 · See also: "Rename the distribution to `raven-lab`" (which carries the naming decision)*
 
 Raven ships under **three** licences, and none of the three places a reader would look says so. Verified in
 the tree 2026-08-03:
@@ -2170,7 +2183,7 @@ Discovered during raven-cherrypick compare mode planning (2026-03-30).
 
 ## Extract `raven.common` into an upstream library ("corvid")
 
-*Cluster: ? · Cost: ? · Gate: next (or —); nothing is waiting on it · Filed: 2026-04-03 · See also: "Decide the public name" (Declined — the naming decision is recorded there)*
+*Cluster: ? · Cost: ? · Gate: next (or —); nothing is waiting on it · Filed: 2026-04-03 · See also: "Rename the distribution to `raven-lab`" (same decision, applied to Raven; do the two together)*
 
 Raven's `common/` package has grown into a general-purpose DPG toolkit: GUI widgets (file dialog, markdown, helpcard, xdot widget, animation framework, VU meter), video/audio processing, networking utils, bgtask infrastructure. This creates a gravitational well — new apps land in Raven because the batteries are there, even when they have nothing to do with NLP/ML.
 
@@ -4327,23 +4340,6 @@ has no live item to point at, it does not belong here yet.
   independently too: `k=50` shipped on measurement and is most of what the reranker was wanted for.
   **Does not strike "VLM reranking of mixed-modality search results"**, which that item argues on its own
   grounds. (Declined 2026-08-12.)
-- **Decide the public name: "Raven" is taken** — decided rather than dropped, so the question stops being
-  open: the distribution is **`raven-lab`** and the import package stays **`raven`**. `raven` on PyPI is
-  Sentry's legacy client — 187 releases, none yanked, still installable, and its wheel ships a top-level
-  `raven/` — so the index name is squatted by a tombstone and cannot be had. The import collision is real but
-  confined to shared environments, and Raven installs into a venv as ML/AI applications generally must, so
-  **the venv requirement is the mitigation and belongs prominently in the README** (it is there now, with
-  the three-part etymology this item was holding). `raven-lab` → `raven` is a qualified form of the same
-  name rather than an opaque mapping like `cv2` from `opencv-python`; the qualifier exists only because the
-  index forced it. *lab* because Raven is one — a repo of experimental research prototypes across AI, LLMs
-  and HCI, currently applied to literature management, a reading that survives a change of application area
-  where the "lab computer" framing in `briefs/design/product-identity-sketch.md` explicitly may not.
-  The same qualified-form move is available for `corvid`, which is also taken. (Declined 2026-08-12.)
-  - **The decision is closed; the work it implies is not.** Carrying it out is the live item *Rename the
-    distribution to `raven-lab`*, filed 2026-08-14 — two days late, because this entry read as
-    self-contained and nothing pointed out that `pyproject.toml` still said otherwise. An entry here that
-    settles a question **by choosing something** has to say where the doing was filed, or it silently
-    becomes a decision nobody enacted.
 - **Updating the vendored FontAwesome means both files, not just the header** — filed against a belief the
   measurement refuted, so there is nothing to fix. Header and shipped fonts are **exactly in sync**:
   `fa-solid-900.ttf` carries 1969 codepoints over 1395 distinct glyph names, the header names all 1395, and
