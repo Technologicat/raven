@@ -1405,7 +1405,7 @@ Discovered while fixing the zero-segment TTS crash (2026-07-28, reported by Juha
 
 ## The licensing story is accurate only in a subdirectory README
 
-*Cluster: ? · Cost: ? · Gate: 0.2.9, with the first PyPI upload · Filed: 2026-08-03 · See also: "Decide the public name" (Declined — the decision is recorded there)*
+*Cluster: discoverability · Cost: ? · Gate: 0.2.9, with the first PyPI upload · Filed: 2026-08-03 · See also: "Decide the public name" (Declined — the decision is recorded there)*
 
 Raven ships under **three** licences, and none of the three places a reader would look says so. Verified in
 the tree 2026-08-03:
@@ -1656,7 +1656,7 @@ the three live checks that remain.
 
 ## Librarian's help card has no room to describe attachments
 
-*Cluster: ? · Cost: ? · Gate: next · Filed: 2026-08-05 · See also: "Fleet audit: every hotkey discoverable in a tooltip + help card"*
+*Cluster: discoverability · Cost: ? · Gate: next · Filed: 2026-08-05 · See also: "Fleet audit: every hotkey discoverable in a tooltip + help card"*
 
 The prose was brought up to date 2026-08-04 — five tools instead of one, the real ingested file types, and
 the two "this is a tech demo" claims gone. **Attachments are still not mentioned at all**, though they are
@@ -2175,7 +2175,7 @@ Discovered during postprocessor chain ordering redesign (2026-04-09).
 
 ## raven.papers user manual
 
-*Cluster: ? · Cost: ? · Gate: 0.2.9, with the README correctness sweep · Filed: 2026-04-13*
+*Cluster: discoverability · Cost: ? · Gate: 0.2.9, with the README correctness sweep · Filed: 2026-04-13*
 
 The `raven.papers` tool collection has grown to the point where it deserves its own user manual, like Visualizer, Librarian and Server already have.
 
@@ -2892,7 +2892,7 @@ Discovered during cherrypick WASD navigation work (2026-06-07).
 
 ## Fleet audit: every hotkey discoverable in a tooltip + help card
 
-*Cluster: ? · Cost: ? · Gate: next · Filed: 2026-06-07 · See also: "Librarian's help card has no room to describe attachments"*
+*Cluster: discoverability · Cost: ? · Gate: next · Filed: 2026-06-07 · See also: "Librarian's help card has no room to describe attachments"*
 
 Policy (now in `raven-style-guide.md`, "Hotkey discoverability"): every hotkey must be surfaced both in the `F1` help card *and* in the tooltip of the GUI control it triggers (bracketed, e.g. `"Open folder [Ctrl+O]"`). Most apps in the wild miss the tooltip half; Raven apps shouldn't.
 
@@ -4236,6 +4236,8 @@ grounds that an honest "code is not supported" beats a feature that half-works w
 Raised by Juha (2026-08-07), reviewing the supported-format list.
 
 ## OS file drag-and-drop is not advertised anywhere
+
+*Cluster: discoverability · Cost: S · Gate: RN2026 · Filed: 2026-08-13 · See also: `briefs/done/os-drag-and-drop.md`*
 
 `raven.common.gui.filedrop` shipped 2026-08-10 and `filedrop.install` runs in all six GUI apps —
 Visualizer, Librarian, Cherrypick, both Avatar editors, and the XDot viewer. Nothing tells the user it is
