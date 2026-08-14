@@ -3695,12 +3695,17 @@ interrupt that wait. So a cancelled task keeps the only worker until its waits r
 start meanwhile, and a task that starts late enough is cancelled in its turn. Self-sustaining once entered,
 and it recovers on its own, which is why it is occasional rather than constant.
 
-**It is load-sensitive, which is what makes it look random.** A task's cost is dominated by two waits for a
-render frame, so it scales with the frame rate: measured the same afternoon at **25 fps with Librarian and
-its avatar running alongside, and 45 fps with Cherrypick alone** — about 80 ms versus 44 ms of waiting,
-against a compare cycle fixed at 333 ms. So the same folder skips frames on a busy machine and not on an
-idle one, and any attempt to reproduce it needs the machine in the state where it happened. This is also why
-it first read as depending on image size: it does not, it depends on what else is running.
+**It is frame-rate-sensitive, which is what makes it look random.** A task's cost is dominated by two waits
+for a render frame, so it scales with how fast frames arrive: two waits are ~80 ms at 25 fps and ~44 ms at
+45 fps, against a compare cycle fixed at 333 ms. Cherrypick was measured at **both** rates on the same
+afternoon, on the same folder.
+
+**What made that difference is not known.** Two explanations were offered and both were wrong — Librarian
+running alongside, then `raven-server`'s THA3 inference for its avatar, which was not running at all: the
+avatar had auto-paused after 15 s idle, and the screenshots said "[Video is off]" in plain sight. So the
+reproduction recipe is missing its most important ingredient, and finding it belongs to this item rather
+than preceding it — the fix cannot be judged without being able to put the machine back into the slow state.
+What is *not* the cause is image size, which is where this investigation started.
 
 **Established:** the single worker, the shared executor, that cancellation does not interrupt `split_frame`,
 and the 318 ms outlier against a 333 ms budget. **Not established:** which task held the worker in that
