@@ -374,13 +374,44 @@ def test_the_catch_all_filter_does_not(dialog):
 
 
 def test_a_hand_set_view_overrides_the_automatic_one(dialog):
-    """In either direction, and until the user sets it again."""
+    """In either direction, and across filter changes within the same opening.
+
+    Having said "not this time", the user should not have to say it again for every filter they try.
+    """
     dialog.set_grid_mode(False)
     dialog.set_type_filter("Images")
     assert dialog._grid_mode is False
     dialog.set_grid_mode(True)
     dialog.set_type_filter("Documents")
     assert dialog._grid_mode is True
+
+
+def test_a_hand_set_view_does_not_outlive_the_opening(dialog):
+    """It cannot, because the dialog does not close: one instance serves the whole app run.
+
+    An override that survived an opening would survive the session — tick the box once and the automatic
+    switching is gone until the app restarts, which is a one-way door rather than an override.
+    """
+    dialog.set_type_filter("Images")
+    assert dialog._grid_mode is True  # automatic: an image-typed filter
+    dialog.set_grid_mode(False)  # ...overridden by hand
+    dialog.cancel()
+
+    dialog.show_file_dialog()
+    assert dialog._grid_mode is True  # the automatic rule decides again
+    dialog.cancel()
+
+
+def test_an_explicit_view_is_what_each_opening_resets_to(make_dialog):
+    """An app that asked for a view asked for it every time, not only the first."""
+    d = make_dialog(filter_list=[("Images", [".png", ".jpg"]), ".*"], show_thumbnails=False)
+    assert d._grid_mode is False  # not the grid, despite an image-typed filter
+    d.set_grid_mode(True)
+    d.cancel()
+
+    d.show_file_dialog()
+    assert d._grid_mode is False  # back to what the caller asked for, not to the automatic rule
+    d.cancel()
 
 
 def test_a_directory_picker_has_no_grid_view(make_dialog):

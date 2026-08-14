@@ -249,8 +249,12 @@ class FileDialog:
                                     when picking by name is close to useless — generated and photographed
                                     images have hashes and timestamps for filenames.
 
-                                    The checkbox in the dialog overrides this in either direction, and goes
-                                    on overriding it until the user sets it again.
+                                    The checkbox in the dialog overrides this in either direction, **for as
+                                    long as that opening lasts**. The next opening resets to this argument,
+                                    so an app that asked for a view gets it every time, and a `None` lets
+                                    the automatic rule decide afresh. The override cannot outlive an opening
+                                    because the dialog cannot: one instance serves the whole app run, so a
+                                    stickier override would be a one-way door out of the automatic mode.
 
                                     Both views list the same entries, directories included, and share one
                                     sort order and one cursor; switching between them changes nothing else.
@@ -293,6 +297,7 @@ class FileDialog:
         # Grid view. Built on first use — see `_the_grid` — so a dialog only ever used as a list never
         # loads the thumbnail decoder.
         self._grid = None
+        self._show_thumbnails_default = show_thumbnails  # what each opening resets to; `None` = decide automatically
         self._grid_mode = bool(show_thumbnails) and not dirs_only
         self._grid_mode_chosen_by_user = (show_thumbnails is not None)
         self._grid_size = (400, 300)  # replaced by a measurement as soon as the dialog has rendered
@@ -404,7 +409,10 @@ class FileDialog:
                         with dpg.group(horizontal=True):
                             dpg.add_button(label="Ok", width=-1, user_data=(modal_id, True), callback=lambda: dpg.delete_item(modal_id))
 
-                dpg.split_frame()
+                # Waited for so the box can be centered on geometry that exists. Not required: an
+                # off-center message box beats a hang with no traceback, which is what a bare
+                # `dpg.split_frame` gives when there is no render loop to wait for.
+                guiutils.split_frame(operation="file dialog: centering a message box", required=False)
                 width = dpg.get_item_width(modal_id)
                 height = dpg.get_item_height(modal_id)
                 dpg.set_item_pos(modal_id, [viewport_width // 2 - width // 2, viewport_height // 2 - height // 2])
@@ -779,7 +787,7 @@ class FileDialog:
                 with dpg.tooltip(self.checkbox_thumbnails):
                     dpg.add_text("Show the listing as image thumbnails instead of a table.\n"
                                  "Turns itself on when the file type filter selects images;\n"
-                                 "setting it by hand overrides that until you set it again.")
+                                 "setting it by hand overrides that until you close the dialog.")
             _draw_sort_indicators()
 
         # --------------------------------------------------------------------------------
@@ -895,6 +903,27 @@ class FileDialog:
             if self._grid_mode_chosen_by_user:
                 return
             set_grid_mode(_filter_is_image_typed(self.file_filter), remember=False, rebuild=rebuild)
+
+        def _reset_grid_mode_for_opening():
+            """Forget a hand-set view, so the automatic rule gets to decide again. Called on each opening.
+
+            **The checkbox is per-opening**, and it has to be: a `FileDialog` is built once and lives as long
+            as the app, so an override that outlived one opening would outlive the whole session — tick the
+            box once and the automatic switching is gone until the app restarts. That is not an override,
+            it is a one-way door.
+
+            Within an opening the choice does hold, filter changes included: having said "not this time",
+            the user should not have to say it again for every filter they try.
+
+            What it resets *to* is the caller's `show_thumbnails`, not "no preference": an app that asked
+            for a particular view asked for it every time, not only the first.
+            """
+            self._grid_mode_chosen_by_user = (self._show_thumbnails_default is not None)
+            if self._show_thumbnails_default is not None:
+                set_grid_mode(self._show_thumbnails_default, remember=True, rebuild=False)
+            else:
+                _apply_automatic_grid_mode(rebuild=False)
+        self._reset_grid_mode_for_opening = _reset_grid_mode_for_opening  # instance-injected, as `set_type_filter` above.
 
         def _resize_grid():
             """Match the grid to the area the table would have filled.
@@ -1127,6 +1156,8 @@ class FileDialog:
         # entry line also timestamps the moment this callback got to run, which is the other candidate: DPG
         # runs callbacks one at a time, so a click can be waiting behind whatever ran before it.
         logger.debug(f"show_file_dialog: instance '{self.tag}' ({self.instance_tag}), entered")
+        # Before the listing is built, so it is built into the view this opening will actually show.
+        self._reset_grid_mode_for_opening()
         with timer() as tim_listing:
             self.chdir(self.last_path)
         dpg.show_item(self.tag)
@@ -1134,9 +1165,11 @@ class FileDialog:
         global visible_dialog_instance
         visible_dialog_instance = self
 
-        # Align the OK/Cancel buttons to the right
+        # Align the OK/Cancel buttons to the right. The wait is for the geometry to exist, and is not
+        # required: buttons a few pixels off beat an app that hangs with no traceback, which is what a bare
+        # `dpg.split_frame` does when nothing will render a frame — a test suite, or startup before the loop.
         with timer() as tim_frame:
-            dpg.split_frame()
+            guiutils.split_frame(operation="file dialog: aligning the OK/Cancel buttons", required=False)
         logger.debug(f"show_file_dialog: instance '{self.tag}' ({self.instance_tag}), "
                      f"listing {tim_listing.dt:.3f}s, waited {tim_frame.dt:.3f}s for a frame")
         old_width = dpg.get_item_width(self.spacer_okcancel)
