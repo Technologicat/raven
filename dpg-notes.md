@@ -516,6 +516,24 @@ Reference patterns for building DearPyGui apps in Raven (Librarian as primary re
   - So a "why is my callback not firing?" and a "why did my programmatic write cascade?" are the same fact seen from two sides. Neither is a bug.
 - **`configure_item(item, default_value=...)` *does* change the live value** — on `add_input_text` and `add_combo` alike, measured the same day. The name is the trap: "default" reads as creation-time-only, and reasoning from the name gives exactly the wrong answer. `fdialog`'s path field has always relied on this to track the current directory. Prefer `set_value` for a pure value write anyway, since it says what it does; use `configure_item` when the value changes *along with* other configuration, as when a combo's `items` are replaced.
 
+- **Swapping content in: build hidden, then hide the old one *before* showing the new one.** Three widgets
+  do this — Visualizer's annotation tooltip and info panel, and `raven.common.gui.thumbnailgrid` — and the
+  order is not arbitrary. Deleting the old content first leaves every frame until the new content exists
+  rendering an empty panel, which on a few hundred items is a visible blank-and-repopulate; so the
+  replacement is built into a fresh hidden container and swapped for the old one.
+  - Given that, showing the new before hiding the old *looks* safer: a frame caught between the two calls
+    then renders both, and since the old content comes first the viewport shows it unchanged. **That
+    reasoning holds only while the two contents are the same**, which is never the case a rebuild exists
+    for. Tried in the grid on 2026-08-14 and reverted the same day: switching filters showed a few frames of
+    the *previous* listing. A frame of nothing beats a frame of the wrong thing.
+  - Two further reasons, each from one of the other two call sites. Showing both means **laying out both**,
+    and neither the info panel's 400 abstracts nor a grid of unclipped tiles is free for a frame. And with
+    both shown the new container is *displaced*, so any position measured in it is wrong — which the info
+    panel depends on, since it restores scroll anchors by measuring widgets after the swap.
+  - Deleting the old container is a third step, after a `split_frame` (Visualizer, which always runs off the
+    render thread) or after a tick (the grid, which cannot assume that — Cherrypick drives its `update`
+    *from* the render loop, where waiting for a frame can never succeed).
+
 ## Textures
 
 - **DPG texture buffer sizes**: When a pipeline produces textures asynchronously and the expected size changes (e.g. tile size switch), stale pipeline output can arrive with wrong dimensions. `dpg.add_dynamic_texture(w, h, data)` with undersized data causes a buffer overread → heap corruption → segfault or "double free" later. Guard with a size check before creating/updating textures. This bug is insidious because the crash often manifests far from the overflow (during an unrelated texture delete or render call).

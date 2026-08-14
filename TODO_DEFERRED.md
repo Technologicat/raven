@@ -3721,44 +3721,6 @@ once, which wants a fresh-eyes pass across the apps rather than a one-line chang
 screenshot. The popup one was safe to take on its own because it was visibly wrong and affects one widget
 kind.
 
-## Visualizer's content swap hides the old group before showing the new one
-
-*Cluster: ? · Cost: S · Gate: next · Filed: 2026-08-14*
-
-`raven.visualizer.annotation`'s `_render_worker` swaps like this:
-
-```python
-dpg.hide_item(_current_group)
-dpg.show_item(annotation_target_group)
-dpg.split_frame()
-dpg.delete_item(_current_group)
-```
-
-Hide-then-show leaves a moment in which *neither* group is shown, so a frame landing there renders an empty
-panel — which is the flash the swap exists to remove. Show-then-hide leaves a moment in which *both* are,
-and since the old content comes first the viewport shows it unchanged. The second looks strictly better on
-that reasoning, and it is what `raven.common.gui.thumbnailgrid` does for the same reason.
-
-**But the reasoning is not a measurement, and there is a good candidate reason for the other order** (Juha,
-2026-08-14): showing both means both are *laid out*, and the info panel's content can be 400 abstracts at a
-quarter page each. Two of those piled up for a frame is not a free instant — it is a doubled layout pass
-over the most expensive content the app renders, which could easily cost more than the blank frame it
-avoids.
-
-**Settled for the grid, 2026-08-14, by live testing — and the existing order won.** The grid briefly used
-show-then-hide, and Juha saw the consequence immediately when switching filters in Cherrypick: a few frames
-of the *previous* listing after the click. The "viewport shows it unchanged" argument holds only while the
-two contents are the same; when they differ, which is every case a rebuild exists for, "unchanged" means
-stale. `thumbnailgrid` now hides first, like the tooltip. A frame of nothing beats a frame of the wrong
-thing, and the blank window is two adjacent calls rather than the whole build, which the hidden build
-already took care of.
-
-Juha's layout-cost objection stands as a second reason: showing both means laying out both, and neither the
-info panel's 400 abstracts nor a grid of thousands of unclipped tiles is free for a frame.
-
-**What is still open is the info panel** (`app.py`'s `_update_info_panel`), which was never checked against
-the tooltip and may differ from it. That is the remaining half of this item.
-
 ## Visualizer's importer should read the document database, not just `.bib` files
 
 *Cluster: ? · Cost: ? · Gate: next · Filed: 2026-07-29*
