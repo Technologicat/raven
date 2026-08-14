@@ -285,11 +285,19 @@ class FileGrid(ThumbnailGrid):
     def _store_thumbnail(self, idx: int, flat_rgba) -> None:
         """Take a decoded thumbnail from the pipeline: cache it by path, and show it.
 
-        A **static** texture, and one the cache owns. Static because DPG carries a per-frame cost for every
-        registered *dynamic* texture whether or not it is drawn, and a cache exists precisely to hold
-        textures nothing is currently drawing — the same reason Cherrypick's preload cache keeps flat arrays
-        rather than textures. Owned by the cache because `ThumbnailGrid` discards its own textures whenever
-        the entries change, which here is every keystroke.
+        A **static** texture, and one the cache owns.
+
+        Static costs nothing here: it cannot be updated after creation, and a cached thumbnail is written
+        once and never changes. (`ThumbnailGrid.set_thumbnail` uses a dynamic one because it genuinely does
+        update, when the same index is decoded again.) The reason to prefer it is that DPG carries a
+        per-frame cost for every registered *dynamic* texture whether or not it is drawn — measured for this
+        project in `raven.cherrypick.preload`, which keeps flat arrays rather than textures for that reason —
+        and a cache exists precisely to hold textures nothing is currently drawing. That static textures
+        escape that cost is inferred from the same note rather than separately measured; if they do not, this
+        is merely no worse.
+
+        Owned by the cache because `ThumbnailGrid` discards its own textures whenever the entries change,
+        which here is every keystroke.
         """
         with self._lock:
             if not (0 <= idx < len(self._entries)):
@@ -301,6 +309,11 @@ class FileGrid(ThumbnailGrid):
             tag = _next_tag()
             with dpg.texture_registry():
                 dpg.add_static_texture(ts, ts, default_value=flat_rgba, tag=tag)
+            # A path decoded twice would otherwise strand the first texture: nothing else refers to it, and
+            # the cache is the only thing that would have deleted it.
+            previous = self._thumbnail_cache.get(path)
+            if previous is not None and previous != tag:
+                guiutils.maybe_delete_item(previous)
             self._thumbnail_cache[path] = tag
             self.set_shared_image(idx, tag)
 

@@ -320,6 +320,23 @@ def test_eviction_never_takes_a_thumbnail_the_listing_is_showing(make_grid):
     assert shown[1].path in grid._thumbnail_cache
 
 
+def test_decoding_a_path_twice_does_not_strand_the_first_texture(make_grid):
+    """Nothing else refers to it, so the cache is the only thing that would ever have deleted it."""
+    grid = make_grid(on_screen=[0])
+    entries = [_entry("a.png")]
+    grid.set_listing(entries)
+    grid.tick()
+    grid.tick()
+    grid._pipeline.finish(results=[0])
+    grid.tick()
+    first = grid._thumbnail_cache[entries[0].path]
+
+    grid._store_thumbnail(0, [0.0] * (TILE * TILE * 4))  # as a re-decode of the same file would
+
+    assert grid._thumbnail_cache[entries[0].path] != first
+    assert not dpg.does_item_exist(first)  # tag
+
+
 def test_changing_the_tile_size_empties_the_cache(make_grid):
     """Every cached tile is the wrong size afterwards, and a wrong-sized one is worse than none."""
     grid = make_grid(on_screen=[0])
