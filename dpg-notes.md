@@ -811,10 +811,12 @@ also reports a position of its own. So accumulating positions naively counts eve
 16 × 35 px of overshoot on one dialog's layout, which is enough to put a panel's believed origin below the
 content the user is clicking.
 
-**Use `guiutils.get_widget_pos`, which accumulates `get_item_pos` up the parent chain and skips groups.**
-Verified against `rect_min` — a true viewport position — at two depths of the same tree. Its one gap is a
-*scrolled* ancestor: `get_item_pos` is a layout position and knows nothing of scroll, for which the exact
-answer is to read `rect_min` off a child item that has one and subtract that child's own `get_item_pos`.
+**Use `guiutils.get_widget_pos`, which accumulates `get_item_pos` up the parent chain, skips groups, and
+subtracts each ancestor's scroll.** Verified against `rect_min` — a true viewport position — at two depths
+of the same tree, and at three scroll offsets. A layout position knows nothing of scroll, so a widget inside
+a scrolled container would otherwise report where it sits at scroll zero; the *widget's own* scroll is not
+subtracted, since that moves its contents rather than the widget. `get_x_scroll` / `get_y_scroll` raise a
+bare `Exception` on an item that cannot scroll (a group, a button), so asking is cheap but must be guarded.
 
 **The first-position trap, worth knowing before writing a probe for anything like this.** A group that is
 the *first* item in its parent has offset `(0, 0)`, so double-counting it adds nothing and the bug is

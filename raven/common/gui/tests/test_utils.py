@@ -131,5 +131,18 @@ def test_get_widget_pos_is_viewport_coordinates_however_deeply_nested(dpg_contex
         assert (deep_x, deep_y) == (button_x - pad_x, button_y - pad_y)
         # Past the side panel and below the header rows, so a sum that lost or doubled a link would show.
         assert deep_x > 170 and deep_y > 100
+
+        # And it has to follow a *scrolled* ancestor, since a layout position knows nothing of scroll.
+        # `probe_inner` is shorter than what it holds, so it can be scrolled; the widget's own scroll is
+        # deliberately not corrected for, because that moves its contents rather than the widget.
+        dpg.configure_item("probe_inner", height=100)  # tag  # now shorter than `probe_deep`
+        for scroll in (30, 80):
+            dpg.set_y_scroll("probe_inner", scroll)  # tag
+            for _ in range(5):
+                dpg.render_dearpygui_frame()
+            deep_y = guiutils.get_widget_pos("probe_deep")[1]  # tag
+            button_y = dpg.get_item_rect_min("probe_button")[1]  # tag
+            pad_y = dpg.get_item_pos("probe_button")[1]  # tag
+            assert deep_y == button_y - pad_y
     finally:
         dpg.delete_item("probe_window")  # tag

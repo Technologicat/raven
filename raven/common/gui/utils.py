@@ -435,11 +435,11 @@ def get_widget_pos(widget: Union[str, int]) -> Tuple[int, int]:
 
     Verified against `rect_min` — a true viewport position — at two different depths of the same tree.
 
-    **The one case this does not cover is a scrolled ancestor.** `get_item_pos` is a layout position and
-    knows nothing of how far its container has been scrolled, so a widget inside a scrolling child window
-    reports where it would be at scroll zero. No current caller is in that position; if one arises, the
-    exact answer is to read `rect_min` off a child item that has one and subtract that child's own
-    `get_item_pos`.
+    **A scrolled ancestor is corrected for, not merely warned about.** `get_item_pos` is a layout position
+    and knows nothing of how far its container has been scrolled, so on its own it reports where the widget
+    would be at scroll zero. Subtracting each ancestor's own scroll recovers the true position — measured
+    against `rect_min` at three scroll offsets, exact at each. The widget's *own* scroll is deliberately not
+    subtracted: that moves its contents, not the widget.
     """
     try:
         x0, y0 = dpg.get_item_rect_min(widget)
@@ -448,12 +448,20 @@ def get_widget_pos(widget: Union[str, int]) -> Tuple[int, int]:
         pass
     x0 = y0 = 0
     item = widget
+    is_the_widget_itself = True
     while item:
         try:
             if not dpg.get_item_type(item).endswith("mvGroup"):  # a group carries no coordinate space
                 px, py = dpg.get_item_pos(item)
                 x0 += px
                 y0 += py
+            if not is_the_widget_itself:
+                try:
+                    x0 -= dpg.get_x_scroll(item)
+                    y0 -= dpg.get_y_scroll(item)
+                except Exception:  # noqa: BLE001 -- DPG raises a bare Exception for a non-scrollable type
+                    pass  # groups, and anything else that cannot scroll
+            is_the_widget_itself = False
             item = dpg.get_item_parent(item)
         except (KeyError, SystemError):  # ran past the top of the tree
             break
