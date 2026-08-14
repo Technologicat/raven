@@ -3668,13 +3668,26 @@ panel — which is the flash the swap exists to remove. Show-then-hide leaves a 
 and since the old content comes first the viewport shows it unchanged. The second looks strictly better on
 that reasoning, and it is what `raven.common.gui.thumbnailgrid` does for the same reason.
 
-**But the reasoning is not a measurement, and the tooltip may have had a reason.** It also hides the whole
-tooltip window across the swap when the item set changes, which would mask a blank frame entirely — so the
-order may simply not matter there, or may have been chosen against a symptom nobody wrote down. The info
-panel (`app.py`'s `_update_info_panel`) is the second instance and should be checked at the same time.
+**But the reasoning is not a measurement, and there is a good candidate reason for the other order** (Juha,
+2026-08-14): showing both means both are *laid out*, and the info panel's content can be 400 abstracts at a
+quarter page each. Two of those piled up for a frame is not a free instant — it is a doubled layout pass
+over the most expensive content the app renders, which could easily cost more than the blank frame it
+avoids.
 
-Worth settling because the two now differ, and a reader comparing them will not be able to tell which is
-deliberate. Noticed by Juha 2026-08-14, on reading the grid's version.
+**That reverses the argument for the grid as well, and the grid is the one that shipped with the untested
+order.** A grid of a few hundred tiles has no clipper (see the windowing item), so every tile is submitted
+every frame; showing two content groups at once doubles exactly the cost that already makes large
+directories slow. The blank frame is visible and the doubled frame is a hitch, both last one frame, and
+nobody has measured which is worse.
+
+So this is one question with two call sites and three implementations to reconcile — the tooltip, the info
+panel (`app.py`'s `_update_info_panel`), and `raven.common.gui.thumbnailgrid`. The tooltip additionally
+hides its whole window across the swap when the item set changes, which would mask a blank frame entirely,
+so the order may not matter there at all.
+
+**How to settle it:** the swap is one frame either way, so this wants a frame-time measurement on the worst
+case each side owns — a 400-abstract info panel, and a directory of a couple of thousand tiles — not more
+argument. Noticed by Juha 2026-08-14, on reading the grid's version.
 
 ## Visualizer's importer should read the document database, not just `.bib` files
 
