@@ -61,6 +61,11 @@ Settled 2026-08-13 (Juha and Claude).
   preview pane was also rejected: it shows one image, and the point is picking by looking across many.
 - **Auto-on whenever the selected type filter is image-typed, with a manual toggle that overrides in either
   direction.** Grouped filters landed 2026-08-13, so "the filter is image-typed" is a real predicate.
+  - **Open: there is no way back to automatic** (Juha, 2026-08-14). As built, touching the checkbox makes
+    the choice sticky for the dialog's lifetime, so a user who tried the grid once never gets the automatic
+    switching again. The alternatives — forget the override on a filter change, or offer a third
+    "automatic" state — each trade that for a different surprise, so this waits on how the sticky version
+    actually feels before being changed.
 - **The grid must list directories too**, as folder tiles before the image tiles, mirroring the table's
   order. Otherwise switching to grid mode removes the only way to navigate — which is the obvious version of
   this feature, and wrong.
