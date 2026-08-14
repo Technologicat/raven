@@ -1380,9 +1380,13 @@ def _update_info_panel(*, task_env=None, env=None):
         # Finalize (if not cancelled)
         if task_env is None or not task_env.cancelled:
             # About to swap the whole content — stop the scroll animation if running.
+            #
+            # `cancel`, not `finish`: `finish` runs this class's teardown but leaves the animation
+            # registered with the animator, which goes on calling its `render_frame` — so the view keeps
+            # scrolling into the content we are about to replace. Measured 2026-08-14.
             with _scroll_animation_lock:
                 if _scroll_animation is not None:
-                    _scroll_animation.finish()
+                    gui_animation.animator.cancel(_scroll_animation)
                     _scroll_animation = None
 
             # Anchor the scroll position from old data just before swapping in new content, so
