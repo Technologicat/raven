@@ -53,7 +53,31 @@ in Emacs least, with an unaffected baseline in the same repo to compare against.
 ranking of hygiene work, which is normally deferred precisely because it is local and cosmetic. It is
 neither, now.
 
-## `--qr`: a "Get Raven" QR code overlay for demoing at an exhibit
+## Rename the distribution to `raven-lab` — before the first PyPI upload, not after
+
+*Cluster: ? · Cost: S · Gate: 0.2.9, and hard-blocking the first PyPI upload · Filed: 2026-08-14 · See also: "Decide the public name" (Declined — the decision is recorded there)*
+
+`pyproject.toml` still says `name = "raven-visualizer"`. The name was **settled on 2026-08-12** — the
+distribution is `raven-lab`, the import package stays `raven` — but that decision was recorded in
+`## Declined` and no item was ever filed to carry it out. `Declined` is the anti-re-litigation section, so
+a decision parked there reads as closed work; this is what that looks like when it goes wrong.
+
+**The gate is hard.** A distribution name cannot be corrected after publishing — the old name stays on the
+index forever, and anyone who installed it keeps a package that is no longer the one being developed. So
+this must land before the first upload, and it is cheap only while that is still true.
+
+Raised in priority by Juha, 2026-08-14, on noticing the name had begun leaking into runtime code: the
+planned `--qr` overlay reads `importlib.metadata.metadata("raven-visualizer")`, and every such call is
+another site that has to be found later.
+
+**The trap: `raven-visualizer` is also the console script, and that must not change.** The app is *called*
+Raven-visualizer, and the name appears throughout `README.md`, `raven/common/logsetup.py`,
+`raven/visualizer/config.py` and `raven/visualizer/importer.py` in exactly that sense. Checked 2026-08-14:
+**only `pyproject.toml` line 2 is the distribution name.** A find-replace across the tree is the wrong
+move and would rename the app.
+
+Do at the same time, since they are the same decision: the sibling item recording that the *fleet* name
+`corvid` is likewise taken, and the distribution there is `corvid-lab`.
 
 *Cluster: ? · Cost: S · Gate: RN2026 · Filed: 2026-08-14*
 
