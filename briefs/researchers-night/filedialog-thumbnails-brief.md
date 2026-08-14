@@ -93,10 +93,27 @@ So:
   re-prepended as `new_order[0]`. The grid needs it as much as the table does, so the shared list has to
   carry it rather than each view inventing it.
 
-**The grid gets a row of sort buttons above it**, one per criterion the table offers — Name, Date, Type,
-Size — with the table's semantics: click to sort ascending, click the same button again for descending, and
-a triangle on the active button showing which way. The point is that a user who has learned the table
-header has learned this too.
+**One row of sort buttons, above the listing, serving both views** — Name, Date, Type, Size, with the table
+header's own semantics: click to sort ascending, click again for descending, a triangle on the active
+button showing which way.
+
+Not "sort buttons for the grid, header clicks for the table", which was the first shape and is wrong. Two
+controls over one order means two things that can disagree, and they will: ImGui draws the header's sort
+arrow from its *own* state, so a sort chosen in grid mode leaves the table header asserting an order the
+data no longer has. Set `no_sort=True` on the columns — measured 2026-08-14 as settable on a live column,
+see `dpg-notes.md` — and the second source of truth is gone by construction rather than by keeping two
+things in step.
+
+It costs the familiar click-the-header gesture, and buys three things:
+
+- **The disagreement cannot happen.** A guarantee, where synchronizing would be a hope. Whether reconfiguring
+  `default_sort` actually moves the drawn arrow is *unknown* and needs a rendered frame to find out, so the
+  synchronizing design rests on an unverified assumption; this one does not.
+- **Sorting becomes keyboard-operable**, which `filedialog-keyboard-brief.md` needs and would otherwise have
+  to solve on its own. ImGui's header sorting has no keyboard path at all — the same hole as its combos,
+  which that brief already works around with a focus-then-arrows idiom. Buttons are focusable; a header is
+  not.
+- **One place to learn.** The control does not move or change when the view does.
 
 ## The folder tile needs a large icon, and it must be resampled rather than scaled
 
@@ -115,8 +132,23 @@ looking like a mistake.
 is what Lanczos is good at; the prototype's 94 px is a 5.4× enlargement at that size, and no resampler
 invents the detail that is not there.
 
-The same rule covers anything else that ends up drawn at tile size — a per-filetype icon for non-image
-files, say, if the grid ever grows one.
+**The grid shows every entry, not only the images** — decided 2026-08-14. A directory gets the folder tile,
+an image gets its thumbnail, and anything else gets an icon for its file type. The alternative, showing only
+what has a thumbnail, silently hides files that are *there*, and a picker that lies about the contents of a
+directory is worse than one that is plain. It also matters for the case Librarian actually presents: "images
+and documents" is one filter, and a grid with the documents missing from it would be the common view rather
+than an edge case.
+
+So this wants **a full tileset, one icon per file type the dialog distinguishes** — Juha to generate,
+512×512 as above. The dialog already has the type→icon mapping to follow: `_makefile` picks from a table
+keyed by extension groups (`.dll`/`.so` → gears, `.png`/`.jpg` → picture, `.iso` → disc, archives, Python,
+and so on), so the tileset's contents are that list rather than a fresh decision. Prototype with those same
+16×16 and 94×94 assets Lanczos'd up — ugly at large tile sizes, which is the point of calling it a
+prototype.
+
+That in turn loosens the auto-on rule above: a grid that shows documents legibly is useful for more than
+image-typed filters, so **which filters turn it on automatically is worth re-deciding once the tileset
+exists** and it can be judged by looking rather than argued.
 
 ## The budget, which is what forces the design
 

@@ -863,3 +863,21 @@ So the cell answers the question and the row does not, under either configuratio
 Row 0's appearance in the clipped answer is unexplained; it was not chased, because the cell-side answer is what the feature needs.
 
 **Rendered frames are required before any of this means anything** — visibility is a property of the last frame drawn, so it is unavailable headless (see "Testing DPG code"), and unavailable for a window shown microseconds ago.
+
+## A column's sort flags are settable after creation; whether the header arrow follows is not known
+
+Measured 2026-08-14, headless. `dpg.configure_item` accepts `default_sort`, `prefer_sort_ascending`,
+`prefer_sort_descending` and `no_sort` on a column that already exists, and `get_item_configuration` reads
+each back changed. So a table's sortability, and its nominal sort column, can be driven from code rather
+than only from a header click.
+
+**What was not established is whether ImGui redraws the header's sort arrow to match.** The sort state
+proper lives in ImGui's own table state, and `default_sort` is a flag consulted when a table first
+establishes its sort specs — so a later change may be inert as far as the drawn arrow is concerned. Seeing
+that needs a rendered frame; do not assume either answer.
+
+The reason this matters, and the reason `no_sort` is the useful one: an app that sorts its own data (a
+listing shared between a table view and something else, say) can end up with the header's arrow asserting
+an order the data no longer has. Making the columns `no_sort=True` and supplying one's own sort control
+removes the second source of truth entirely, which is a guarantee rather than a hope — and it has a second
+payoff, since ImGui's header sorting has no keyboard operation at all, exactly like its combos.
