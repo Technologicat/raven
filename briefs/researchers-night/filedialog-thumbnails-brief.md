@@ -14,10 +14,19 @@ tileset, which is Juha's to generate.
   `raven.common.gui.tileicons.TileIconCache` resamples the icons to tile size, and the dialog carries the
   toggle, the shared sort-button row and its own tick thread.
 
-Two things to look at first when testing, because they are the ones no test can answer: whether the tiles
-appear fast enough while scrolling, and whether the column *resize* gesture still works now that the header
-no longer sorts (`resizable` and `sortable` are separate flags, but that is read from the API rather than
-measured).
+**Live-tested 2026-08-14**, in Librarian, against a real generated-image folder. Confirmed working: the grid
+and its tiles, single and double click, the sort row, the view toggle, column resizing (so `resizable` and
+`sortable` are indeed independent), the per-opening view override, and — after the cache landed — typing in
+the find field, re-sorting, and folder round-trips all without re-decoding.
+
+**What is left, and it is not the view:**
+
+- **The real 512×512 tileset** (Juha to generate). What ships now is the existing 16 px and 94 px assets
+  resampled up, which is the prototype the brief called for and looks like it at large tile sizes.
+- **The label truncation**, parked for last: at 128 px tiles a name is cut to ~14 characters, so a folder of
+  `Screenshot from …` reads as fourteen identical tiles. Showing the *tail* of the name, or wrapping to two
+  lines, are the cheap options; the full name is in the tooltip either way.
+- **Keyboard access**, which is `filedialog-keyboard-brief.md` and was always going to be separate.
 
 Moved out of `TODO_DEFERRED.md` on 2026-08-13.
 
@@ -61,11 +70,13 @@ Settled 2026-08-13 (Juha and Claude).
   preview pane was also rejected: it shows one image, and the point is picking by looking across many.
 - **Auto-on whenever the selected type filter is image-typed, with a manual toggle that overrides in either
   direction.** Grouped filters landed 2026-08-13, so "the filter is image-typed" is a real predicate.
-  - **Open: there is no way back to automatic** (Juha, 2026-08-14). As built, touching the checkbox makes
-    the choice sticky for the dialog's lifetime, so a user who tried the grid once never gets the automatic
-    switching again. The alternatives — forget the override on a filter change, or offer a third
-    "automatic" state — each trade that for a different surprise, so this waits on how the sticky version
-    actually feels before being changed.
+  - **Settled 2026-08-14: the override lasts one opening.** It was briefly sticky for the dialog's
+    lifetime, which cannot work — a `FileDialog` is built once and lives as long as the app, so an override
+    outliving one opening outlived the whole session, and one tick of the box took the automatic switching
+    away until restart. A one-way door, not an override. Within an opening the choice does hold, filter
+    changes included: having said "not this time", the user should not have to say it again for every
+    filter they try. What each opening resets *to* is the caller's `show_thumbnails`, not "no preference" —
+    an app that asked for a view asked for it every time.
 - **The grid must list directories too**, as folder tiles before the image tiles, mirroring the table's
   order. Otherwise switching to grid mode removes the only way to navigate — which is the obvious version of
   this feature, and wrong.
@@ -122,9 +133,13 @@ button showing which way.
 Not "sort buttons for the grid, header clicks for the table", which was the first shape and is wrong. Two
 controls over one order means two things that can disagree, and they will: ImGui draws the header's sort
 arrow from its *own* state, so a sort chosen in grid mode leaves the table header asserting an order the
-data no longer has. Set `no_sort=True` on the columns — measured 2026-08-14 as settable on a live column,
-see `dpg-notes.md` — and the second source of truth is gone by construction rather than by keeping two
-things in step.
+data no longer has. Removing the header's sorting removes the second source of truth by construction,
+rather than by keeping two things in step.
+
+**As built, that is `sortable=False` on the table, not `no_sort=True` per column.** The brief specified the
+per-column flag because it had just been measured as settable on a live column; the table-level flag reaches
+the same guarantee in one place, and `resizable` is a separate flag which live testing confirms still works.
+Recorded because the two differ on the page and a reader would otherwise wonder which was meant.
 
 **The requirement this serves, stated by Juha 2026-08-14: switching views must not change anything.** The
 sort order carries over, and the cursor stays on the same file. Both fall out of the refactor rather than
@@ -330,16 +345,22 @@ own widget beside the grid rather than anything the grid needs to know about.
   - Do **not** reach for one drawlist sized to the whole scroll extent. Measured 2026-08-13: it renders the
     X session unusable, recoverable only from a text terminal. See `dpg-notes.md`, "Never size a drawlist to
     a scroll extent".
-- **A file dialog needs the *last few* folders, not just the current one.** Navigating up and back down is
-  the normal way to use a picker, so re-decoding every thumbnail on the way back is the case that will
-  actually be felt. Hold thumbnails for a couple of recent directories and evict beyond that.
+- ~~**A file dialog needs the *last few* folders, not just the current one.**~~ **Done 2026-08-14**, and it
+  turned out to be needed for a nearer reason than folder revisits. Navigating up and back down is the
+  normal way to use a picker, so re-decoding on the way back is the case that would actually be felt — but
+  what forced it was the *find field*: the dialog re-lists on every keystroke, which went through
+  `set_entries` and discarded every texture, so each letter typed re-decoded the visible tiles.
   - **The two apps are used differently, and this is where it shows** (Juha, 2026-08-14). In Cherrypick the
-    user opens one folder and stays in it for a long time; in the dialog they go back and forth between
-    folders looking for the right one. So the cost Cherrypick never pays — decoding the same directory
-    again — is the dialog's ordinary case, and it is the one thing here that the shared grid does not
-    already solve.
-  - Whether it is *needed* depends on how fast the built version turns out to be, so it waits on the live
-    test rather than on an argument.
+    user opens one folder and stays in it; in the dialog they go back and forth looking for the right one.
+    So the cost Cherrypick never pays — decoding the same directory again — is the dialog's ordinary case,
+    and it is the one thing here the shared grid did not already solve.
+  - The fix is a **path-keyed** cache in `FileGrid`, not an index-keyed one: the entry a file occupies moves
+    whenever the listing is re-filtered or re-sorted, so a texture remembered by index would be a picture of
+    the wrong file. One mechanism covers all three cases — keystroke, re-sort, and folder revisit — and all
+    three are live-tested.
+  - It is in `FileGrid` rather than the shared grid deliberately, and the module docstring says why: the
+    grid has no notion of entry identity, and Cherrypick has the opposite problem (unbounded growth, which
+    an evicting cache makes worse).
 
 ## Testing
 
