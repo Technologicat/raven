@@ -103,6 +103,11 @@ class FileGrid(ThumbnailGrid):
         self._dtype = dtype
         self._lanczos_order = lanczos_order
 
+        # A file listing has no ordinal identity worth drawing. Cherrypick's does — triage is a pass over a
+        # numbered sequence, and "image 47" is a thing its user says — but a folder is a set of *names*, and
+        # a number in the corner of every tile reads as a joke to anyone who has seen the convention where
+        # it belongs. Overridable like any other grid setting.
+        grid_kwargs.setdefault("show_position_numbers", False)
         super().__init__(parent, width, height,
                          tile_size=tile_size,
                          on_current_changed=self._current_changed,

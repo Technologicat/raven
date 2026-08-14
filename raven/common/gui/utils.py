@@ -426,9 +426,14 @@ def get_widget_pos(widget: Union[str, int]) -> Tuple[int, int]:
     modal dialog three levels down it reported `(0, 0)` for a widget at `(46, 149)`, which turned the file
     dialog's thumbnail grid into a listing whose tiles could not be clicked.
 
-    So the position is accumulated up the parent chain. Verified against two independent references: a
-    button's `rect_min` (a real item, so a true viewport position) and a group's, both of which the sum
-    reproduces exactly.
+    So the position is accumulated up the parent chain, **skipping groups**. That exception is the whole
+    subtlety: a group is a layout container with no coordinate space of its own, so an item inside one
+    reports its position relative to the enclosing *window* — while the group also reports a position of its
+    own, and adding both counts the group twice. Measured 2026-08-14; with a group in the chain the sum
+    overshot by 16 x 35 px, which put a file dialog's grid origin below the tiles the user was clicking, so
+    the top band of the grid rejected every click as "outside the widget".
+
+    Verified against `rect_min` — a true viewport position — at two different depths of the same tree.
 
     **The one case this does not cover is a scrolled ancestor.** `get_item_pos` is a layout position and
     knows nothing of how far its container has been scrolled, so a widget inside a scrolling child window
@@ -445,12 +450,13 @@ def get_widget_pos(widget: Union[str, int]) -> Tuple[int, int]:
     item = widget
     while item:
         try:
-            px, py = dpg.get_item_pos(item)
+            if not dpg.get_item_type(item).endswith("mvGroup"):  # a group carries no coordinate space
+                px, py = dpg.get_item_pos(item)
+                x0 += px
+                y0 += py
+            item = dpg.get_item_parent(item)
         except (KeyError, SystemError):  # ran past the top of the tree
             break
-        x0 += px
-        y0 += py
-        item = dpg.get_item_parent(item)
     return x0, y0
 
 def get_widget_size(widget: Union[str, int]) -> Tuple[int, int]:

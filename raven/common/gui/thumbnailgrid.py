@@ -866,16 +866,29 @@ class ThumbnailGrid:
             if not self.input_enabled:
                 return
 
-            if self._debug and guiutils.is_mouse_inside_widget(self._child_window_tag):
+            idx = self._hit_test()
+
+            if self._debug:
+                # Logged whatever the outcome, and with the outcome in it: a click that selects the wrong
+                # tile and one that selects nothing have entirely different causes, and a line that only
+                # appears on success cannot tell them apart.
+                inside = guiutils.is_mouse_inside_widget(self._child_window_tag)
                 local_x, local_y = guiutils.get_mouse_relative_pos(self._child_window_tag)
                 content_y = local_y + dpg.get_y_scroll(self._child_window_tag)
-                logger.info(f"ThumbnailGrid._on_click: local=({local_x:.0f},{local_y:.0f}) "
+                logger.info(f"ThumbnailGrid._on_click: inside={inside} local=({local_x:.0f},{local_y:.0f}) "
+                            f"y_scroll={dpg.get_y_scroll(self._child_window_tag):.0f} "
                             f"content_y={content_y:.0f} row_h={self._row_height:.0f} "
                             f"col_w={self._col_width:.0f} "
                             f"row={int(content_y / self._row_height)} "
-                            f"col={int(local_x / self._col_width)}")
+                            f"col={int(local_x / self._col_width)} "
+                            f"-> idx={idx} (current={self._current})")
+                # Where the panel is believed to be, against where the mouse actually was. An offset
+                # between the two is invisible in the numbers above — every click simply misses — and it
+                # is the failure this pair exists to make legible.
+                logger.info(f"ThumbnailGrid._on_click: mouse={dpg.get_mouse_pos(local=False)} "
+                            f"widget_pos={guiutils.get_widget_pos(self._child_window_tag)} "
+                            f"widget_size={guiutils.get_widget_size(self._child_window_tag)}")
 
-            idx = self._hit_test()
             if idx is None:
                 return
 

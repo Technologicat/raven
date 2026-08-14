@@ -104,13 +104,23 @@ def test_get_widget_pos_is_viewport_coordinates_however_deeply_nested(dpg_contex
     """
     dpg.show_viewport()
     try:
-        with dpg.window(tag="probe_window", pos=(30, 70), width=500, height=400, no_title_bar=True):
-            with dpg.child_window(tag="probe_outer", width=460, height=340):
-                dpg.add_spacer(height=40)
-                with dpg.child_window(tag="probe_inner", width=-1, height=-1, border=False):
-                    with dpg.group(tag="probe_group"):
-                        with dpg.child_window(tag="probe_deep", width=300, height=150):
-                            dpg.add_button(tag="probe_button", label="X")
+        # The nesting matters, and each part of it earns its place. A title bar, so the window's own offset
+        # is not simply its position. A *horizontal* group holding a sibling before the branch we measure,
+        # so the x offset is real. And a group that is **not the first item in its parent** — that is the
+        # case a simpler tree misses, because a first-position group's own offset is zero and a
+        # double-counting bug then adds nothing.
+        with dpg.window(tag="probe_window", pos=(50, 50), width=700, height=500):
+            with dpg.group(horizontal=True):
+                dpg.add_child_window(tag="probe_side", width=120, height=400)
+                with dpg.child_window(tag="probe_outer", width=520, height=400):
+                    with dpg.group(tag="probe_wrapper"):
+                        dpg.add_input_text(tag="probe_row", width=-1)
+                        with dpg.group(horizontal=True, tag="probe_sortrow"):  # a non-first group
+                            dpg.add_button(tag="probe_sortbutton", label="Name")
+                        with dpg.child_window(tag="probe_inner", width=-1, height=-1, border=False):
+                            with dpg.group(tag="probe_group"):
+                                with dpg.child_window(tag="probe_deep", width=300, height=150):
+                                    dpg.add_button(tag="probe_button", label="X")
         for _ in range(10):
             dpg.render_dearpygui_frame()
 
@@ -119,6 +129,7 @@ def test_get_widget_pos_is_viewport_coordinates_however_deeply_nested(dpg_contex
         pad_x, pad_y = dpg.get_item_pos("probe_button")  # tag  # the child window's own content padding
 
         assert (deep_x, deep_y) == (button_x - pad_x, button_y - pad_y)
-        assert deep_x > 30 and deep_y > 70  # inside the window, which is not at the origin
+        # Past the side panel and below the header rows, so a sum that lost or doubled a link would show.
+        assert deep_x > 170 and deep_y > 100
     finally:
         dpg.delete_item("probe_window")  # tag

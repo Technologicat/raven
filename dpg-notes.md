@@ -805,11 +805,21 @@ when `rect_min` is missing looks correct for as long as every layout is shallow.
 levels down it reported `(0, 0)` for a widget at `(46, 149)` — and since the value feeds hit testing, the
 symptom was a grid of thumbnails that could not be clicked, with nothing logged and nothing raised.
 
-**Use `guiutils.get_widget_pos`, which accumulates `get_item_pos` up the parent chain.** Verified against
-two independent references: a button's `rect_min` and a group's, both of which the sum reproduces exactly.
-Its one gap is a *scrolled* ancestor — `get_item_pos` is a layout position and knows nothing of scroll — for
-which the exact answer is to read `rect_min` off a child item that has one and subtract that child's own
-`get_item_pos`.
+**A group is not a coordinate space, and this is the part that bites.** An item inside a group reports its
+position relative to the enclosing *window or child window*, skipping the group entirely — while the group
+also reports a position of its own. So accumulating positions naively counts every group twice. Measured
+16 × 35 px of overshoot on one dialog's layout, which is enough to put a panel's believed origin below the
+content the user is clicking.
+
+**Use `guiutils.get_widget_pos`, which accumulates `get_item_pos` up the parent chain and skips groups.**
+Verified against `rect_min` — a true viewport position — at two depths of the same tree. Its one gap is a
+*scrolled* ancestor: `get_item_pos` is a layout position and knows nothing of scroll, for which the exact
+answer is to read `rect_min` off a child item that has one and subtract that child's own `get_item_pos`.
+
+**The first-position trap, worth knowing before writing a probe for anything like this.** A group that is
+the *first* item in its parent has offset `(0, 0)`, so double-counting it adds nothing and the bug is
+invisible. The first probe written for this had groups only in first position and pronounced the sum
+correct. A tree that can discriminate needs a group with a sibling before it.
 
 Reproduction: build `window(pos=(30, 70)) -> child_window -> child_window -> group -> child_window ->
 button`, render ten frames, and compare `get_widget_pos` of the innermost child window against
