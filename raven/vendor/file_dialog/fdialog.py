@@ -1158,13 +1158,21 @@ class FileDialog:
         Waiting matters: the thread calls DPG, and a DPG call after the context is destroyed is a segfault
         rather than an exception. The timeout is a few tick intervals, so a wedged thread does not hold the
         GUI — at which point it is a daemon and the process can still exit.
+
+        **Except when the tick thread is the one closing the dialog**, which is the ordinary way to choose a
+        file in grid view: a double-click is dispatched from the grid's own `update`, so `ok` runs *on* the
+        tick thread and joining it would be joining the caller. Python raises `RuntimeError` for that, and
+        the exception landed mid-`ok` — after the file had been handed to the app, before the selection was
+        cleared — leaving state behind for the next `ok` to act on. Setting the flag is enough here: the
+        loop is already on its way out and will see it on the next pass.
         """
         self._ticker_stop.set()
         ticker, self._ticker = self._ticker, None
-        if ticker is not None and ticker.is_alive():
-            ticker.join(timeout=1.0)
-            if ticker.is_alive():
-                logger.warning(f"_stop_grid_ticker: instance '{self.tag}' ({self.instance_tag}), tick thread did not stop within the timeout")
+        if ticker is None or not ticker.is_alive() or ticker is threading.current_thread():
+            return
+        ticker.join(timeout=1.0)
+        if ticker.is_alive():
+            logger.warning(f"_stop_grid_ticker: instance '{self.tag}' ({self.instance_tag}), tick thread did not stop within the timeout")
 
     def destroy(self):
         """Release what the dialog holds outside its widget tree. Call before destroying the DPG context.

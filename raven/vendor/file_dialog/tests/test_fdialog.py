@@ -13,6 +13,7 @@ that the dialog routes the Find field through it.
 
 import os
 import pathlib
+import threading
 
 import pytest
 
@@ -402,3 +403,19 @@ def test_the_hidden_view_is_left_empty(dialog):
     """A stale listing behind the shown one is both memory and, on a switch back, the wrong answer."""
     dialog.set_grid_mode(True)
     assert dpg.get_item_children(f"explorer_{dialog.instance_tag}", 1) == []  # tag
+
+
+def test_closing_from_the_tick_thread_does_not_try_to_join_it(dialog):
+    """Choosing a file in grid view closes the dialog *from* the tick thread, which cannot join itself.
+
+    A double-click is dispatched from the grid's own `update`, so `ok` runs on that thread. Joining it there
+    raises `RuntimeError`, and the exception landed mid-`ok` — after the file had been handed to the app,
+    before the selection was cleared — leaving state behind for the next `ok` to act on. The failure was
+    caught in a log rather than by anything stopping, which is why it wants a test.
+    """
+    dpg.show_item(dialog.tag)
+    dialog._ticker = threading.current_thread()  # stand in for being called from the ticker
+    dialog.reset_dir(file_name_filter="photo", default_path=os.getcwd())
+    dialog.ok()  # must not raise
+    assert dialog.selected_files == []
+    assert dialog.shown_items == []
