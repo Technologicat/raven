@@ -134,6 +134,44 @@ earns its place in a file dialog with four fixed columns — and both are gestur
 sorts, so leaving them is a header that responds to three drags and ignores the click everyone tries first.
 `resizable` stays on.
 
+## Where each piece lives
+
+Settled 2026-08-14, before writing any of it, because this is cheap to decide now and expensive once the
+code exists. The test applied throughout: has sibling code already committed to this problem class?
+
+**`raven/common/filelisting.py` — new, and DPG-free.** The listing logic: enumerate a directory, apply the
+hidden-file policy, the name filter and the type filter, sort by name / date / type / size in either
+direction, and yield the entries — `..` and the directories among them, as *data*. Nothing here imports
+`dearpygui`.
+
+Two reasons, and the second is the one that decides it:
+
+- The semantics are generic file-browser semantics, not dialog semantics. Nothing in the above is about
+  being a dialog.
+- **`fdialog.py` imports `dearpygui` at module level**, so logic living there cannot be tested without a
+  GUI context — which is why the current listing has no tests and why the sort callback has to walk the
+  widget tree to recover data it created itself. This is the `cleanup.py` / `cleanup_dialog.py` split the
+  project already names as its worked example: separating the operation from its dialog is what makes the
+  operation testable at all.
+
+A third reason applies to the location specifically: `raven/vendor/file_dialog/` is *adopted* code, so
+editing it in place is fine, but new first-party logic is better outside the vendor tree than inside it.
+
+**Tile-sized icon resampling and caching — with `ThumbnailGrid`, in `raven.common.gui`.** "Resample an
+image asset to the current tile size, cache per size, redo it when the tile size changes" is a property of
+drawing into the grid, not of being a file dialog, and the grid already owns the tile-size concept. Any
+later grid consumer that shows non-thumbnail tiles needs exactly this.
+
+**The sort button row — inline in the dialog, but written so it can leave.** It takes a list of criteria
+and a callback rather than reaching into dialog state, so promoting it later is a move rather than a
+rewrite. Inline for now because nothing else sorts today — but **Cherrypick is a likely second consumer**
+(Juha, 2026-08-14): its grid is unsorted only because his ComfyUI workflows embed the datetime in the
+filename and conference photos arrive in timestamp order, so the files happen to arrive pre-sorted the way
+he wants them. That is a property of his current inputs, not a decision, and it will stop holding. Written
+movable for that reason, not on speculation.
+
+**The view toggle — inline.** Dialog-specific by nature.
+
 ## The folder tile needs a large icon, and it must be resampled rather than scaled
 
 For prototyping, reuse the dialog's own `folder.png` (`self.img_folder`, 94×94 RGBA) — the one it already
