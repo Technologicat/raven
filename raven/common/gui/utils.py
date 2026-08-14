@@ -286,6 +286,11 @@ def setup_themes() -> env:
             dpg.add_theme_style(dpg.mvStyleVar_FrameRounding, 6, category=dpg.mvThemeCat_Core)
             dpg.add_theme_style(dpg.mvStyleVar_WindowRounding, 8, category=dpg.mvThemeCat_Core)
             dpg.add_theme_style(dpg.mvStyleVar_ChildRounding, 8, category=dpg.mvThemeCat_Core)
+            # A combo's dropdown list is a *popup*, not a frame and not a window, so it took none of the
+            # three above and fell back to ImGui's default of no rounding at all — square corners hanging
+            # off a rounded control. Matched to the frame rather than the window, since the list reads as
+            # an extension of the box it drops out of.
+            dpg.add_theme_style(dpg.mvStyleVar_PopupRounding, 6, category=dpg.mvThemeCat_Core)
     dpg.bind_theme(global_theme)  # set this theme as the default
 
     # Tight text layout

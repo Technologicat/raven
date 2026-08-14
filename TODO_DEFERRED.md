@@ -3650,6 +3650,26 @@ What the mode adds on top of that view: not loading the avatar at all. That is w
 saving come from, and it is a startup-path decision rather than a hide/show toggle — worth being explicit
 about, since a mode that merely hides the avatar panel saves nothing that matters here.
 
+## Raven's global theme sets three of ImGui's seven rounding vars
+
+*Cluster: polish · Cost: S · Gate: next · Filed: 2026-08-14*
+
+`raven.common.gui.utils.setup_themes` sets `FrameRounding` 6, `WindowRounding` 8, `ChildRounding` 8, and
+**`PopupRounding` 6 as of 2026-08-14** — added because a combo's dropdown list is a popup, so it took none
+of the other three and fell back to ImGui's default of none at all: square corners hanging off a rounded
+control. Noticed by Juha in the file dialog's file-type combo.
+
+Still unset, and therefore still at ImGui's defaults:
+
+- **`ScrollbarRounding`** — the widest blast radius by far. Every scrolling panel in every app has one.
+- **`GrabRounding`** — slider and scrollbar grabs.
+- **`TabRounding`** — tab bars.
+
+Deliberately not swept in with the popup fix (Juha, 2026-08-14): they change the look of all six GUI apps at
+once, which wants a fresh-eyes pass across the apps rather than a one-line change judged from a single
+screenshot. The popup one was safe to take on its own because it was visibly wrong and affects one widget
+kind.
+
 ## Visualizer's content swap hides the old group before showing the new one
 
 *Cluster: ? · Cost: S · Gate: next · Filed: 2026-08-14*

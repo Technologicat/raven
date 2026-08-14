@@ -1128,8 +1128,12 @@ class FileDialog:
                                 dpg.add_table_column(label='Size', init_width_or_weight=iwow_size, width=10, tag=f"ex_size_{self.instance_tag}")
 
             with dpg.group(horizontal=True):
-                dpg.add_spacer(width=480)
-                dpg.add_text('File type filter')
+                # The combo's right edge needs no tuning: `width=-1` takes it to the container's edge, which
+                # is the table's. What the spacer sets is where the *label* starts, and therefore how wide
+                # the combo ends up — so it was retuned when the label was shortened, to keep the combo the
+                # width the filter names actually need rather than letting it sprawl.
+                dpg.add_spacer(width=610)
+                dpg.add_text('Show')
                 self.combo_file_filter = dpg.add_combo(items=self._filter_labels,
                                                        callback=filter_combo_selector, default_value=self.file_filter, width=-1)
                 with dpg.tooltip(self.combo_file_filter):
