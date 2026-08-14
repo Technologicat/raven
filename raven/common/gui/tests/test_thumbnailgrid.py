@@ -152,6 +152,89 @@ def test_an_empty_grid_has_no_current_entry(make_grid):
     assert make_grid(n_entries=0).current == -1
 
 
+def test_a_rebuild_swaps_content_in_rather_than_tearing_it_down_first(make_grid):
+    """The old tiles must still exist, and be the shown ones, right up until the new ones are ready.
+
+    Tearing down first leaves every frame until the new content exists rendering an empty panel, which on a
+    few hundred tiles is a visible blank-and-repopulate. Found in live testing of the file dialog, on the
+    listing rebuild that a keystroke in the Find field triggers.
+    """
+    grid = make_grid(n_entries=6)
+    grid.update()
+    first_content = grid._content_tag
+    assert dpg.get_item_configuration(first_content)["show"] is True  # tag
+
+    grid.set_visible([0, 1, 2])
+    grid.update()
+
+    second_content = grid._content_tag
+    assert second_content != first_content
+    assert dpg.get_item_configuration(second_content)["show"] is True  # tag
+    # The old group is hidden but still alive: it is retired for the *next* tick to collect, so no frame
+    # can fall between its destruction and the new content appearing.
+    assert dpg.does_item_exist(first_content)  # tag
+    assert dpg.get_item_configuration(first_content)["show"] is False  # tag
+    assert grid._retired_content == first_content
+
+    grid.update()
+    assert not dpg.does_item_exist(first_content)  # tag  # ...and it does get collected
+    assert grid._retired_content is None
+
+
+def test_clearing_the_textures_takes_the_retired_content_with_them(make_grid):
+    """A folder change deletes the textures *before* the rebuild, so retired tiles would dangle.
+
+    Every image the retired group draws is one of the textures being deleted, and DPG answers a missing
+    texture with a hard error rather than a blank tile. Nothing is lost by collecting it early: it is
+    already hidden, and its replacement is up.
+    """
+    grid = make_grid(n_entries=6)
+    grid.update()
+    grid.set_visible([0, 1, 2])
+    grid.update()  # retires the first content group
+    retired = grid._retired_content
+    assert retired is not None
+
+    grid.set_entries(["a", "b"])  # what a folder change does: clears textures, then asks for a rebuild
+    assert grid._retired_content is None
+    assert not dpg.does_item_exist(retired)  # tag
+
+
+def test_a_rebuild_after_clearing_textures_does_not_retire_the_old_tiles(make_grid):
+    """The ordering that actually bites, and the one the guard above does *not* cover.
+
+    A folder change clears the textures while no group is retired yet, so it is the *shown* tiles that end
+    up dangling — the rebuild would retire them for a tick, each one drawing from a texture that no longer
+    exists. They have to go as soon as their replacement is up, which costs nothing, the replacement being
+    shown first either way.
+    """
+    grid = make_grid(n_entries=6)
+    grid.update()
+    shown = grid._content_tag
+    assert grid._retired_content is None  # nothing retired: this is the state a folder change starts from
+
+    grid.set_entries(["a", "b"])  # clears the textures the shown tiles draw from
+    grid.update()  # rebuilds
+
+    assert grid._content_tag != shown
+    assert grid._retired_content is None  # not retired...
+    assert not dpg.does_item_exist(shown)  # tag  # ...deleted outright
+
+
+def test_the_container_survives_a_rebuild(make_grid):
+    """`SmoothScrolling` instances are keyed by the child window and the scroll-end flasher targets it.
+
+    A swap that replaced the container would strand both, so the tiles move and the container does not.
+    """
+    grid = make_grid(n_entries=6)
+    grid.update()
+    container = grid._child_window_tag
+    grid.set_visible([0, 1])
+    grid.update()
+    assert grid._child_window_tag == container
+    assert dpg.does_item_exist(container)  # tag
+
+
 def test_changing_the_selection_never_rebuilds_the_grid(make_grid):
     """A selection change alters what is drawn *on* tiles, not which tiles exist or where they sit.
 

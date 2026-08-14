@@ -190,6 +190,14 @@ class ThumbnailGrid:
         self._tile_drawlists: dict[int, str] = {}
         self._tile_labels: dict[int, str] = {}
 
+        # The group currently holding the tiles. A rebuild builds its replacement hidden, shows it, and
+        # retires this one for the next `update` to collect — see `_rebuild`.
+        self._content_tag: Optional[str] = None
+        self._retired_content: Optional[str] = None
+        # Whether the textures the shown tiles draw from have been deleted since they were built. If they
+        # have, those tiles are dangling references and must not be retired — see `_rebuild`.
+        self._textures_cleared_since_rebuild = False
+
         self._needs_rebuild = False
         # Deferred scroll after rebuild: counts down frames to retry.
         # DPG needs at least one render frame after item creation before
@@ -521,6 +529,11 @@ class ThumbnailGrid:
         pending_current = None
         pending_dblclick = None
         with self._lock:
+            # Collect the content group a previous rebuild swapped out. A tick has passed since it was
+            # hidden, so the replacement is on screen and destroying this cannot leave a gap.
+            if self._retired_content is not None:
+                guiutils.maybe_delete_item(self._retired_content)
+                self._retired_content = None
             if self._needs_rebuild:
                 self._rebuild()
                 self._needs_rebuild = False
@@ -584,7 +597,24 @@ class ThumbnailGrid:
         The shared ones are dropped rather than deleted — they belong to the owner. Dropping them is right
         at every call site: the indices have been reassigned, or the tile size has changed, so a mapping
         kept from before would put the wrong picture on the tile or one of the wrong size.
+
+        **Any tiles drawn from these textures go with them, or are marked not to outlive them.** Every image
+        a tile draws is one of the textures being deleted here, so a tile group left alive afterwards is a
+        set of dangling references — which DPG answers with a hard error rather than a blank tile. Two
+        groups can be in that position, and they need different handling because they are at different
+        stages:
+
+        - A group already *retired* by an earlier rebuild is deleted here and now. It is hidden and its
+          replacement is up, so nothing is lost by taking it a tick early.
+        - The group currently *shown* cannot be taken here — it is what the user is looking at until the
+          rebuild lands. Instead the rebuild is told not to retire it, and deletes it as soon as its
+          replacement is shown. That is the ordering a folder change takes, and the one that actually bites:
+          at the moment this runs there is usually no retired group at all.
         """
+        self._textures_cleared_since_rebuild = True
+        if self._retired_content is not None:
+            guiutils.maybe_delete_item(self._retired_content)
+            self._retired_content = None
         for tex_tag in self._textures.values():
             guiutils.maybe_delete_item(tex_tag)
         self._textures.clear()
@@ -621,11 +651,30 @@ class ThumbnailGrid:
         return max(1, int(self._height / self._row_height))
 
     def _rebuild(self) -> None:
-        """Tear down and re-create all tile DPG items."""
-        dpg.delete_item(self._child_window_tag, children_only=True)
-        self._tile_drawlists.clear()
-        self._tile_labels.clear()
+        """Re-create all tile DPG items, and swap them in when they are ready.
+
+        **Built into a fresh hidden group, then swapped** — the pattern Visualizer's info panel and
+        annotation tooltip already use, for the reason they use it: tearing the old content down first
+        leaves every frame until the new content exists rendering an empty panel, and on a few hundred tiles
+        that is a visible blank-and-repopulate.
+
+        The child window itself keeps its identity across the swap. That is load-bearing rather than
+        incidental: `SmoothScrolling` instances are keyed by it and the scroll-end flasher targets it, so a
+        swap that replaced the container would strand both.
+
+        Every tag comes from the module-level monotonic counter, so the new group cannot collide with an old
+        one that DPG has not collected yet — a duplicate ID takes the process down rather than raising.
+        """
         self._compute_layout()
+
+        old_content = self._content_tag
+        new_content = _next_tag("content")
+        dpg.add_group(parent=self._child_window_tag, tag=new_content, show=False)
+
+        # Built into local maps and swapped in with the widgets: until the swap, what is on screen is still
+        # the old content, and anything asking which tiles are visible should be told about *those*.
+        tile_drawlists: dict[int, str] = {}
+        tile_labels: dict[int, str] = {}
 
         ts = self._tile_size
         n_cols = self._n_cols
@@ -635,7 +684,7 @@ class ThumbnailGrid:
             col = vis_pos % n_cols
             if col == 0:
                 row_tag = _next_tag("row")
-                dpg.add_group(horizontal=True, parent=self._child_window_tag,
+                dpg.add_group(horizontal=True, parent=new_content,
                               tag=row_tag)
 
             # Tile group.
@@ -646,7 +695,7 @@ class ThumbnailGrid:
             dl_tag = _next_tag("tile_dl")
             dpg.add_drawlist(width=ts, height=ts,
                              parent=tile_tag, tag=dl_tag)
-            self._tile_drawlists[vis_pos] = dl_tag
+            tile_drawlists[vis_pos] = dl_tag
 
             # Label — truncate to fit tile width.
             # At font size 20, ~9px average character width (variable-width font).
@@ -656,7 +705,7 @@ class ThumbnailGrid:
                 name = name[:max_chars - 1] + "…"
             label_tag = _next_tag("label")
             dpg.add_text(name, parent=tile_tag, tag=label_tag, wrap=ts)
-            self._tile_labels[vis_pos] = label_tag
+            tile_labels[vis_pos] = label_tag
 
             # Tooltip with the full label (on the tile group, not the drawlist).
             with dpg.tooltip(tile_tag):
@@ -664,6 +713,38 @@ class ThumbnailGrid:
 
             # Draw tile contents.
             self._draw_tile(idx, dl_tag)
+
+        # The swap. New shown *before* old is hidden, deliberately: a frame caught between the two then
+        # renders both, and since the old content comes first the viewport shows it unchanged. The other
+        # order risks a frame rendering neither, which is the blank flash this exists to remove.
+        self._tile_drawlists = tile_drawlists
+        self._tile_labels = tile_labels
+        self._content_tag = new_content
+        dpg.configure_item(new_content, show=True)
+        if old_content is not None and dpg.does_item_exist(old_content):  # tag
+            dpg.configure_item(old_content, show=False)
+        # Retired rather than deleted here, and collected on the next `update`. Visualizer's version of this
+        # waits for a frame and then deletes, which it can because it always runs off the render thread —
+        # this widget cannot assume that, since Cherrypick drives `update` *from* the render loop, where
+        # waiting for a frame can never succeed. Letting a tick pass costs one hidden group and needs no
+        # such assumption; a hidden group renders nothing, so it is free until it goes.
+        #
+        # **It pins no textures.** A drawlist *references* a texture; the textures belong to `_textures`,
+        # `_shared_images` and the placeholder pool. A re-filter or a re-sort does not touch those — that is
+        # what makes it cheap, since the thumbnails already in hand are not decoded again — so the retired
+        # tiles and the new ones point at the same textures, and what is duplicated for one tick is the DPG
+        # item structures, on the CPU side.
+        #
+        # A *folder change* is the other case: it clears the textures before the rebuild, so the old tiles
+        # reference deleted ones and must not outlive this call. Deleting them now costs nothing — the
+        # replacement is already shown, which is what the tick of grace was protecting against in the first
+        # place.
+        if self._textures_cleared_since_rebuild:
+            guiutils.maybe_delete_item(old_content)
+            self._retired_content = None
+        else:
+            self._retired_content = old_content
+        self._textures_cleared_since_rebuild = False
 
         # Defer scroll — DPG needs a render frame (sometimes two) after
         # item creation before get_y_scroll_max reflects the new content.
