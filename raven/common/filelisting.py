@@ -15,7 +15,8 @@ consults `os.getcwd()` for some of its answers and its argument for the rest is 
 agree, and reports a directory's contents with every entry misclassified when they do not.
 """
 
-__all__ = ["FileEntry", "SortKey",
+__all__ = ["KIND_DIR", "KIND_FILE", "KIND_BROKEN_LINK",
+           "FileEntry", "SortKey",
            "list_directory",
            "format_size", "format_mtime",
            "is_hidden"]
@@ -35,6 +36,10 @@ logger = logging.getLogger(__name__)
 # because this is what the dialog has always shown.
 KIND_DIR = "Dir"
 KIND_FILE = "File"
+# A symlink whose target does not exist. Listed rather than skipped: it *is* in the directory, and a picker
+# that quietly omits things is worse than one that shows them and says what they are — the same reason the
+# grid view shows non-image files. Nothing can be opened through it, which is the view's problem to signal.
+KIND_BROKEN_LINK = "Broken link"
 
 
 class SortKey(enum.Enum):
@@ -125,23 +130,29 @@ def _directory_size(path: str) -> Optional[int]:
 
 
 def _make_entry(directory: str, name: str, *, dir_sizes: bool) -> Optional[FileEntry]:
-    """Build one `FileEntry`, or `None` if the entry cannot be classified.
+    """Build one `FileEntry`, or `None` if the entry cannot be classified at all.
 
-    Returns `None` rather than raising for a broken symlink or a file that vanished between the directory
-    read and this call, both of which are ordinary rather than exceptional in a directory someone else is
-    also writing to.
+    A dangling symlink is classified, as `KIND_BROKEN_LINK` — it is a thing in the directory, and the user
+    may well be looking for exactly it. What returns `None` is an entry that is neither directory, file nor
+    link (a socket, a fifo, a device node) or one that vanished between the directory read and this call,
+    which is ordinary rather than exceptional in a directory someone else is also writing to.
     """
     path = os.path.join(directory, name)
     try:
         if os.path.isdir(path):
             kind = KIND_DIR
             size = _directory_size(path) if dir_sizes else None
+            mtime = os.path.getmtime(path)
         elif os.path.isfile(path):
             kind = KIND_FILE
             size = os.path.getsize(path)
-        else:  # broken symlink, socket, device node, or gone since we listed the directory
+            mtime = os.path.getmtime(path)
+        elif os.path.islink(path):  # a link whose target is missing: `isdir`/`isfile` follow it and say no
+            kind = KIND_BROKEN_LINK
+            size = None
+            mtime = os.lstat(path).st_mtime  # the link's own timestamp; the target has none to ask for
+        else:  # socket, fifo, device node, or gone since we listed the directory
             return None
-        mtime = os.path.getmtime(path)
     except OSError as exc:
         logger.debug(f"_make_entry: cannot stat '{path}', omitting it: {type(exc)}: {exc}")
         return None
@@ -186,8 +197,10 @@ def list_directory(directory: str,
         does and what the dialog has always done.
     `dir_sizes`: compute directory sizes by walking each subtree. Off by default, and expensive.
 
-    Unreadable or vanished entries are omitted with a debug log rather than raising, so a directory
-    containing one broken symlink still lists.
+    A **dangling symlink is listed**, with `kind` `KIND_BROKEN_LINK` and no size — it is in the directory,
+    and omitting it makes the listing disagree with the filesystem. It groups with the files, since it is
+    not somewhere you can go. Entries that are neither directory, file nor link, and entries that vanish
+    mid-listing, are omitted with a debug log rather than raising.
     """
     entries = []
     for name in os.listdir(directory):  # OSError propagates: the caller knows which directory it asked for
@@ -206,9 +219,13 @@ def list_directory(directory: str,
         entries.append(entry)
 
     # Directories first in both directions. `reverse=True` flips the whole ordering, so the group rank is
-    # flipped alongside it to leave the groups where they were.
-    dir_rank = {KIND_DIR: 1, KIND_FILE: 0} if descending else {KIND_DIR: 0, KIND_FILE: 1}
-    entries.sort(key=lambda entry: (dir_rank[entry.kind], _sort_value(entry, sort_key)),
+    # flipped alongside it to leave the groups where they were. Ranked on `is_dir` rather than on the kind
+    # string, so a kind that is neither (a broken link) needs no entry in a table to be forgotten from.
+    def group_rank(entry: FileEntry) -> int:
+        rank = 0 if entry.is_dir else 1
+        return (1 - rank) if descending else rank
+
+    entries.sort(key=lambda entry: (group_rank(entry), _sort_value(entry, sort_key)),
                  reverse=descending)
 
     if include_parent:

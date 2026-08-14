@@ -162,17 +162,45 @@ def test_dirs_only_omits_files(tree):
 # --------------------------------------------------------------------------------
 # Entries that cannot be read
 
-def test_a_broken_symlink_is_omitted_rather_than_raising(tree):
-    """One unreadable entry must not cost the whole listing; a directory someone else writes to has these."""
+@pytest.fixture
+def dangling_link(tree):
+    """A symlink whose target does not exist, or a skip where the platform will not make one."""
     try:
         (tree / "dangling").symlink_to(tree / "nonexistent")
     except (OSError, NotImplementedError):
         pytest.skip("symlinks not available here")
+    return tree
 
-    entries = filelisting.list_directory(str(tree), include_parent=False)
 
-    assert "dangling" not in names(entries)
-    assert "b.txt" in names(entries)
+def test_a_broken_link_is_listed_and_says_so(dangling_link):
+    """It is in the directory, so omitting it makes the listing disagree with the filesystem — and it is
+    exactly the thing a user goes looking for when a file they expected seems to be missing.
+    """
+    entries = filelisting.list_directory(str(dangling_link), include_parent=False)
+    by_name = {entry.name: entry for entry in entries}
+
+    assert by_name["dangling"].kind == filelisting.KIND_BROKEN_LINK
+    assert by_name["dangling"].size is None
+    assert by_name["dangling"].mtime is not None  # the link's own timestamp; the target has none
+
+
+def test_a_broken_link_does_not_cost_the_rest_of_the_listing(dangling_link):
+    """The failure this prevents: one unreadable entry raising out of the whole directory read."""
+    assert "b.txt" in names(filelisting.list_directory(str(dangling_link), include_parent=False))
+
+
+def test_a_broken_link_groups_with_the_files(dangling_link):
+    """It is not somewhere you can navigate to, so it does not belong among the directories."""
+    entries = filelisting.list_directory(str(dangling_link), include_parent=False)
+    kinds = [entry.kind for entry in entries]
+
+    assert kinds.index(filelisting.KIND_BROKEN_LINK) > kinds.index(filelisting.KIND_DIR)
+
+
+def test_dirs_only_omits_broken_links(dangling_link):
+    """A directory picker offers directories; a broken link is not one, whatever it points at."""
+    entries = filelisting.list_directory(str(dangling_link), include_parent=False, dirs_only=True)
+    assert names(entries) == ["sub"]
 
 
 def test_sizes_are_none_for_directories_unless_asked_for(tree):
