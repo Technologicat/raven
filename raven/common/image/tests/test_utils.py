@@ -135,3 +135,16 @@ class TestLetterbox:
         t = torch.rand(1, 4, 64, 64, device=device)
         result = letterbox(t, 64, order=DEFAULT_ORDER)
         assert result.shape == (1, 4, 64, 64)
+
+    def test_per_channel_background(self, device):
+        """One value per channel — how an RGBA tile gets *transparent* bars rather than a gray wash."""
+        t = torch.ones(1, 4, 50, 200, device=device)
+        result = letterbox(t, 64, order=DEFAULT_ORDER, bg_value=(1.0, 0.0, 0.0, 0.0))
+        corner = result[0, :, 0, 0]
+        assert corner[0].item() == pytest.approx(1.0, abs=0.1)
+        assert corner[3].item() == pytest.approx(0.0, abs=0.1)
+
+    def test_wrong_number_of_background_values_is_rejected(self, device):
+        t = torch.ones(1, 4, 50, 200, device=device)
+        with pytest.raises(ValueError):
+            letterbox(t, 64, order=DEFAULT_ORDER, bg_value=(0.0, 0.0, 0.0))

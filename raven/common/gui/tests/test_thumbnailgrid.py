@@ -268,6 +268,51 @@ def test_a_thumbnail_of_the_wrong_size_is_discarded(make_grid):
 
 
 # --------------------------------------------------------------------------------
+# Shared images
+
+
+def _a_texture(tag):
+    """A tile-sized texture standing in for an owner's icon."""
+    with dpg.texture_registry():
+        dpg.add_static_texture(TILE, TILE, default_value=[0.0] * (TILE * TILE * 4), tag=tag)
+    return tag
+
+
+def test_a_shared_image_is_drawn_and_can_be_taken_away(make_grid):
+    grid = make_grid(n_entries=3)
+    tag = _a_texture("shared_icon_drawn")
+    grid.set_shared_image(0, tag)
+    assert grid._shared_images[0] == tag
+    grid.set_shared_image(0, None)
+    assert 0 not in grid._shared_images
+
+
+def test_a_shared_image_is_not_deleted_with_the_grid_state(make_grid):
+    """One texture typically stands in for many entries, so deleting it with the first would blank the rest.
+
+    It is also the owner's, and outlives any one listing.
+    """
+    grid = make_grid(n_entries=3)
+    tag = _a_texture("shared_icon_survives")
+    grid.set_shared_image(0, tag)
+    grid.set_entries(["a", "b", "c"])
+    assert 0 not in grid._shared_images  # the mapping goes: index 0 is a different entry now
+    assert dpg.does_item_exist(tag)  # tag  # ...but the texture is not ours to delete
+
+
+def test_a_thumbnail_wins_over_a_shared_image(make_grid):
+    """An owner may seed a tile with an icon and replace it once the real picture arrives."""
+    grid = make_grid(n_entries=3)
+    grid.update()  # performs the pending rebuild, so the tiles exist to be drawn into
+    grid.set_shared_image(0, _a_texture("shared_icon_outranked"))
+    grid.set_thumbnail(0, [0.0] * (TILE * TILE * 4))
+    dl = grid._tile_drawlists[grid._visible.index(0)]
+    drawn = [dpg.get_item_configuration(item).get("texture_tag")
+             for item in dpg.get_item_children(dl, 2)]
+    assert grid._textures[0] in drawn
+
+
+# --------------------------------------------------------------------------------
 # The extension hooks
 
 def test_the_draw_hooks_are_called_for_every_tile_drawn(make_grid):

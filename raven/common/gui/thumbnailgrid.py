@@ -6,7 +6,9 @@ mouse position — and what makes the arithmetic testable without a GUI.
 
 Thumbnails arrive asynchronously via `set_thumbnail`; until one does, a tile shows a placeholder from the
 pool set by `set_noise_pool`. Producing the images is not this widget's job — see
-`raven.common.image.thumbnails.ThumbnailPipeline` for the decoder both current callers use.
+`raven.common.image.thumbnails.ThumbnailPipeline` for the decoder both current callers use. An entry whose
+picture needs no decoding — a folder, a file type with an icon — takes `set_shared_image` instead, which
+draws one texture on any number of tiles.
 
 **Extending it.** Three hooks, all no-ops here, let an owner decorate tiles without this module learning what
 the decoration means. Draw order is load-bearing, so the two drawing hooks are not interchangeable:
@@ -155,6 +157,11 @@ class ThumbnailGrid:
         # DPG textures for thumbnails.  idx -> texture tag.
         self._textures: dict[int, str] = {}
 
+        # Textures belonging to somebody else, drawn in a tile's place.  idx -> texture tag.
+        # Separate from `_textures` because these are *not* ours to delete: one icon texture typically
+        # stands in for many entries, so deleting it with the first of them would blank the rest.
+        self._shared_images: dict[int, str] = {}
+
         # Placeholder textures (shared pool), shown until a thumbnail arrives.
         self._noise_textures: list[str] = []
 
@@ -288,6 +295,26 @@ class ThumbnailGrid:
                 vis_pos = self._visible.index(idx)
                 if vis_pos in self._tile_drawlists:
                     self._draw_tile(idx, self._tile_drawlists[vis_pos])
+
+    def set_shared_image(self, idx: int, texture_tag: Optional[str]) -> None:
+        """Draw an existing texture as entry *idx*'s image, instead of a placeholder.
+
+        For entries whose picture is known without decoding anything — a file-type icon, a folder — where
+        one texture serves many entries and creating a copy per entry would be a texture per file.
+
+        The texture stays the owner's: this widget draws it and never deletes it, and the owner is
+        responsible for it still existing while any tile refers to it. It must be `tile_size` square, like
+        a thumbnail. Pass `None` to go back to the placeholder.
+
+        A thumbnail set later for the same entry takes precedence, so an owner may seed a tile with an icon
+        and replace it once the real image arrives.
+        """
+        with self._lock:
+            if texture_tag is None:
+                self._shared_images.pop(idx, None)
+            else:
+                self._shared_images[idx] = texture_tag
+            self._redraw_tile_by_idx(idx)
 
     def has_thumbnail(self, idx: int) -> bool:
         """Whether entry `idx` already has its image, so an owner can avoid asking for it twice."""
@@ -540,10 +567,16 @@ class ThumbnailGrid:
     # ------------------------------------------------------------------
 
     def _clear_textures(self) -> None:
-        """Delete all thumbnail DPG textures."""
+        """Delete all thumbnail DPG textures, and forget any shared ones.
+
+        The shared ones are dropped rather than deleted — they belong to the owner. Dropping them is right
+        at every call site: the indices have been reassigned, or the tile size has changed, so a mapping
+        kept from before would put the wrong picture on the tile or one of the wrong size.
+        """
         for tex_tag in self._textures.values():
             guiutils.maybe_delete_item(tex_tag)
         self._textures.clear()
+        self._shared_images.clear()
 
     def _clear_noise_pool(self) -> None:
         """Delete all placeholder textures."""
@@ -630,9 +663,13 @@ class ThumbnailGrid:
         dpg.delete_item(drawlist_tag, children_only=True)
         ts = self._tile_size
 
-        # Thumbnail image (or placeholder).
+        # Thumbnail image (or owner-supplied icon, or placeholder).
         if idx in self._textures:
             dpg.draw_image(self._textures[idx],
+                           pmin=(0, 0), pmax=(ts, ts),
+                           parent=drawlist_tag)
+        elif idx in self._shared_images:
+            dpg.draw_image(self._shared_images[idx],
                            pmin=(0, 0), pmax=(ts, ts),
                            parent=drawlist_tag)
         elif self._noise_textures:

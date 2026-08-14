@@ -14,6 +14,7 @@ __all__ = ["ensure_rgba",
            "fit_contain", "fit_cover", "letterbox"]
 
 import logging
+from collections.abc import Sequence
 from typing import Union
 
 import numpy as np
@@ -186,7 +187,7 @@ def fit_cover(tensor: torch.Tensor,
 def letterbox(tensor: torch.Tensor,
               tile_size: int,
               order: int = lanczos.DEFAULT_ORDER,
-              bg_value: float = 0.3,
+              bg_value: Union[float, Sequence[float]] = 0.3,
               allow_upscale: bool = True) -> torch.Tensor:
     """Resize *tensor* to fit within ``tile_size × tile_size``, letterbox the rest.
 
@@ -195,6 +196,10 @@ def letterbox(tensor: torch.Tensor,
 
     Preserves aspect ratio.  Non-image area is filled with *bg_value* (0.3 =
     dark gray, looks reasonable in both light and dark mode).
+
+    *bg_value* may instead be one value per channel, which is how an RGBA image gets *transparent* padding:
+    a single 0.3 sets the alpha channel to 0.3 as well, so the bars come out as a translucent gray wash
+    rather than as nothing. ``(0, 0, 0, 0)`` is what a tile drawn over the panel's own background wants.
 
     *tensor*: ``(1, C, H, W)`` float32 on any device.
     *allow_upscale*: as in `fit_contain`, but defaulting the other way: a tile that is mostly padding reads as
@@ -207,8 +212,16 @@ def letterbox(tensor: torch.Tensor,
     resized = fit_contain(tensor, tile_size, tile_size, allow_upscale=allow_upscale, order=order)
     new_h, new_w = int(resized.shape[2]), int(resized.shape[3])
 
-    result = torch.full((1, C, tile_size, tile_size), bg_value,
-                        device=tensor.device, dtype=tensor.dtype)
+    if isinstance(bg_value, (int, float)):
+        result = torch.full((1, C, tile_size, tile_size), float(bg_value),
+                            device=tensor.device, dtype=tensor.dtype)
+    else:
+        if len(bg_value) != C:
+            raise ValueError(f"letterbox: expected one background value per channel ({C}), got {len(bg_value)}")
+        result = (torch.as_tensor(bg_value, device=tensor.device, dtype=tensor.dtype)
+                  .reshape(1, C, 1, 1)
+                  .expand(1, C, tile_size, tile_size)
+                  .clone())
     y_off = (tile_size - new_h) // 2
     x_off = (tile_size - new_w) // 2
     result[:, :, y_off:y_off + new_h, x_off:x_off + new_w] = resized
