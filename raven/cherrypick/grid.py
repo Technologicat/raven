@@ -71,6 +71,9 @@ class TriageGrid(ThumbnailGrid):
                          selection_tint=config.SELECTION_TINT,
                          current_color=config.CURRENT_COLOR,
                          border_color=config.NEUTRAL_BORDER_COLOR,
+                         smooth_scrolling=config.SMOOTH_SCROLLING,
+                         smooth_scrolling_step_parameter=config.SMOOTH_SCROLLING_STEP_PARAMETER,
+                         scroll_end_flash_duration=config.SCROLL_ENDS_HERE_DURATION,
                          debug=debug)
 
     # ------------------------------------------------------------------
