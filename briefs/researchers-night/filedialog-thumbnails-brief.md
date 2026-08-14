@@ -261,6 +261,31 @@ two apps. That means the VHS-noise placeholder standing in for "not loaded yet"
 and the texture-upload glitch when the real thumbnail arrives from the background job — which started as an
 artifact and is now intentional.
 
+## Decided in live testing: the grid needs build-then-swap for genuine rebuilds
+
+Settled 2026-08-14, after two glitches that looked identical and were not.
+
+**The first was spurious work and is fixed.** A bare click set `_needs_rebuild`, tearing down and re-creating
+every tile in the directory in order to change which two had a border. Eliminating the work was the right
+fix; papering over it would have been the wrong one. Cherrypick shared the defect — introduced when the grid
+was extracted, which changed a bare click from *clearing* the selection to *setting* it, so a rebuild that
+had been conditional became unconditional.
+
+**The second is real work, and wants the swap.** A keystroke in the Find field genuinely re-lists the
+directory, so the tiles really are all different, and `_rebuild` deletes the old ones before the new ones
+exist — leaving frames that render an empty grid. That is the same problem Visualizer solves for its info
+panel and annotation tooltip: **keep the old widget tree, build the new one, then swap.**
+
+Shape it takes here: the grid's child window keeps its identity — `SmoothScrolling` instances and the
+scroll-end flasher are keyed by that tag, and a swap that changed it would strand both — and gains an inner
+*content group*. A rebuild populates a new, hidden group, then shows it and deletes the old one. Two
+`configure_item` calls instead of a teardown, so the window in which a frame can render nothing shrinks to
+the gap between them.
+
+Worth noting the rule this instance illustrates, since the two glitches presented the same way: **remove the
+work if it is unnecessary, hide the latency only if it is not.** Reaching for the swap first would have left
+the click path rebuilding the whole directory forever, merely invisibly.
+
 ## A refinement worth having: folder tiles that preview what is inside
 
 Raised 2026-08-14. A file manager shows a folder holding pictures as a folder *with pictures in it*, and
