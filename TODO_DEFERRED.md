@@ -3676,6 +3676,28 @@ What the mode adds on top of that view: not loading the avatar at all. That is w
 saving come from, and it is a startup-path decision rather than a hide/show toggle — worth being explicit
 about, since a mode that merely hides the avatar panel saves nothing that matters here.
 
+## Cherrypick: crown the winner without leaving the compare cycle
+
+*Cluster: cherrypick · Cost: S · Gate: next · Filed: 2026-08-14*
+
+`Ctrl+Shift+C` is `_mark_winner`: cherry the current image, lemon the rest of the selection. Its docstring
+says it is "designed for committing a compare-mode choice", and the sequence it was built for is *press the
+digit of the frame you want, which exits onto it, then crown it*.
+
+During the cycle the chord did something else entirely — it acted on `grid.current`, which compare mode never
+moves, so it crowned the image you had been on before comparing and lemoned the set. Since marking moves
+files, that was a real one, and it is now suppressed while comparing (2026-08-14).
+
+**Suppressed is correct but not obviously best.** The natural gesture while watching a cycle is "*this* one" —
+crown the frame on screen and leave — and that is now one line to implement, since `ImageView.image_key`
+names the displayed image. Against it: the frame advances a few times a second, so the chord would land on
+whichever frame the key happened to arrive during, which is a wrong-file hazard of a different kind. Pausing
+first (Space) removes that, which suggests the gesture should only be live while paused.
+
+So the shape to try is: **while paused, `Ctrl+Shift+C` crowns the displayed frame and exits; while cycling, it
+stays inert.** Wants trying rather than arguing — it is a question about whether the pause requirement reads
+as a safeguard or as a nuisance.
+
 ## The thumbnail grid's textures are dynamic, and probably need not be
 
 *Cluster: performance · Cost: S · Gate: next · Filed: 2026-08-14*
