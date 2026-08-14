@@ -430,6 +430,46 @@ def test_both_views_list_the_same_entries(dialog):
     assert shown(dialog) == as_rows
 
 
+def test_selecting_in_the_grid_reaches_the_dialog(make_dialog, tmp_path):
+    """Without this the dialog knew only about the cursor, so OK returned one file however many were marked.
+
+    Librarian's attach dialog is `multi_selection=True` and says so in its own title, which is exactly where
+    marking five images and getting one would land.
+    """
+    for name in DIRECTORY_CONTENTS:
+        pathlib.Path(tmp_path, name).touch()
+    d = make_dialog(filter_list=[("Images", [".png", ".jpg"])], multi_selection=True, show_thumbnails=True)
+    grid = d._grid
+    assert grid is not None
+
+    images = [idx for idx, entry in enumerate(grid.entries) if not entry.is_dir]
+    assert len(images) >= 2
+    for idx in images:
+        grid.toggle_select(idx)
+
+    assert sorted(d.selected_files) == sorted(grid.entries[idx].path for idx in images)
+
+
+def test_a_single_selection_dialog_does_not_offer_multi_select_in_the_grid(make_dialog, tmp_path):
+    """Letting the user mark five and then honouring one is worse than not letting them mark five."""
+    for name in DIRECTORY_CONTENTS:
+        pathlib.Path(tmp_path, name).touch()
+    d = make_dialog(filter_list=[("Images", [".png", ".jpg"])], multi_selection=False, show_thumbnails=True)
+    assert d._grid._allow_multi_select is False
+
+
+def test_the_grid_does_not_offer_dot_dot_as_a_selection(make_dialog, tmp_path):
+    """It is the way out of the directory, not a thing in it."""
+    for name in DIRECTORY_CONTENTS:
+        pathlib.Path(tmp_path, name).touch()
+    d = make_dialog(filter_list=[("Images", [".png", ".jpg"])], multi_selection=True, show_thumbnails=True)
+    grid = d._grid
+    parent = [idx for idx, entry in enumerate(grid.entries) if entry.is_parent]
+    assert parent  # it is listed, and navigable...
+    grid.toggle_select(parent[0])
+    assert d.selected_files == []  # ...but not choosable
+
+
 def test_the_hidden_view_is_left_empty(dialog):
     """A stale listing behind the shown one is both memory and, on a switch back, the wrong answer."""
     dialog.set_grid_mode(True)

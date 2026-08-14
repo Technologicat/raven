@@ -87,6 +87,7 @@ class ThumbnailGrid:
                  border_color: tuple = (60, 60, 65, 255),
                  empty_tile_color: tuple = (55, 55, 58, 255),
                  show_position_numbers: bool = True,
+                 allow_multi_select: bool = True,
                  smooth_scrolling: bool = True,
                  smooth_scrolling_step_parameter: float = 0.8,
                  scroll_end_flash_duration: float = 0.5,
@@ -106,6 +107,10 @@ class ThumbnailGrid:
             The defaults are Raven's standard theme; pass the app's values if it differs.
         *selection_tint*, *current_color*, *border_color*, *empty_tile_color*: tile colours.
         *show_position_numbers*: draw each tile's 1-based position in its corner.
+        *allow_multi_select*: whether Ctrl-click and Shift-click extend the selection. `False` makes every
+            click select exactly one entry, for an owner that can only act on one — a file dialog opened
+            without multi-selection, say, where letting the user mark five and then honouring one would be
+            worse than not letting them mark five.
         *smooth_scrolling*: glide to the current tile instead of jumping to it. A rebuild still repositions
             instantly — see `_scroll_to_current`.
         *smooth_scrolling_step_parameter*: nondimensional rate in (0, 1], independent of the render FPS.
@@ -140,6 +145,7 @@ class ThumbnailGrid:
         self._border_color = border_color
         self._empty_tile_color = empty_tile_color
         self._show_position_numbers = show_position_numbers
+        self._allow_multi_select = allow_multi_select
         self._smooth_scrolling = smooth_scrolling
         self._smooth_scrolling_step_parameter = smooth_scrolling_step_parameter
         self._scroll_end_flasher = scroll_end_flasher
@@ -973,10 +979,10 @@ class ThumbnailGrid:
             if idx is None:
                 return
 
-            ctrl = (dpg.is_key_down(dpg.mvKey_LControl)
-                    or dpg.is_key_down(dpg.mvKey_RControl))
-            shift = (dpg.is_key_down(dpg.mvKey_LShift)
-                     or dpg.is_key_down(dpg.mvKey_RShift))
+            ctrl = self._allow_multi_select and (dpg.is_key_down(dpg.mvKey_LControl)
+                                                 or dpg.is_key_down(dpg.mvKey_RControl))
+            shift = self._allow_multi_select and (dpg.is_key_down(dpg.mvKey_LShift)
+                                                  or dpg.is_key_down(dpg.mvKey_RShift))
 
             if shift and self._last_click_idx >= 0 and self._last_click_idx in self._visible:
                 # Range select from last click to this click (in visible order).

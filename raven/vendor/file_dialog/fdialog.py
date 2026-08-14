@@ -837,18 +837,43 @@ class FileDialog:
                                                icon_name_for=_tile_icon_for,
                                                tile_size=self.thumbnail_size,
                                                thumbnail_device=self.thumbnail_device,
+                                               allow_multi_select=self.multi_selection,
                                                on_current_entry_changed=_grid_current_changed,
+                                               on_selection_changed_entries=_grid_selection_changed,
                                                on_activate=_grid_activate)
             return self._grid
 
-        def _grid_current_changed(entry):
-            """Single click in the grid: select, exactly as clicking a row does."""
+        def _is_choosable(entry) -> bool:
+            """Whether `entry` is a thing this dialog can return.
+
+            A directory is navigated into rather than chosen, except in a directory picker where it is the
+            only thing there is to choose. `..` is never a choice, and a broken link leads nowhere.
+            """
             if entry is None or entry.is_parent:
-                return
-            if entry.is_dir and not self.dirs_only:
-                return  # a directory is navigated into, not chosen — same as in the table
+                return False
+            if entry.kind == filelisting.KIND_BROKEN_LINK:
+                return False
+            return self.dirs_only if entry.is_dir else True
+
+        def _grid_selection_changed(entries):
+            """The grid's selection is the dialog's, filtered to what can actually be returned.
+
+            This is what makes Ctrl+click mean in the grid what it means in the table. Without it the
+            dialog knew only about the *cursor*, so a user could mark five images, press OK, and get one —
+            which is worse than not offering the gesture, and is what `allow_multi_select` denies outright
+            when the dialog was not opened for multi-selection.
+            """
             self.selected_files.clear()
-            self.selected_files.append(entry.path)
+            self.selected_files.extend(entry.path for entry in entries if _is_choosable(entry))
+
+        def _grid_current_changed(entry):
+            """Single click in the grid: select, exactly as clicking a row does.
+
+            The selection callback has already recorded the click; what is left is save mode's habit of
+            offering the clicked name as the name to save as.
+            """
+            if not _is_choosable(entry):
+                return
             if self.save_mode:
                 basename, _ext = os.path.splitext(entry.name)
                 dpg.set_value(f"ex_search_{self.instance_tag}", basename)
@@ -860,8 +885,8 @@ class FileDialog:
                 dpg.set_value(f"ex_search_{self.instance_tag}", "")
                 chdir(entry.path)
                 return
-            if entry.kind == filelisting.KIND_BROKEN_LINK:
-                return  # nothing to open through it
+            if not _is_choosable(entry):
+                return  # a broken link leads nowhere, and `..` was handled above
             self.selected_files.clear()
             self.selected_files.append(entry.path)
             self.ok()

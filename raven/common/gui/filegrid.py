@@ -94,6 +94,7 @@ class FileGrid(ThumbnailGrid):
                  thumbnail_cache_size: int = 512,
                  settle_time: float = 0.15,
                  on_current_entry_changed: Optional[Callable[[Optional[FileEntry]], None]] = None,
+                 on_selection_changed_entries: Optional[Callable[[list[FileEntry]], None]] = None,
                  on_activate: Optional[Callable[[FileEntry], None]] = None,
                  **grid_kwargs):
         """
@@ -117,9 +118,10 @@ class FileGrid(ThumbnailGrid):
             bounds what is kept for folders no longer on screen.
         *settle_time*: seconds the on-screen set must hold still before decoding starts. What stops a scroll
             from cancelling and restarting the decoder on the way past every row.
-        *on_current_entry_changed*, *on_activate*: as `ThumbnailGrid`'s `on_current_changed` and
-            `on_double_click`, but handed the `FileEntry` rather than an index. `on_activate` is what a
-            double-click means here: descend into the directory, or choose the file.
+        *on_current_entry_changed*, *on_selection_changed_entries*, *on_activate*: as `ThumbnailGrid`'s
+            `on_current_changed`, `on_selection_changed` and `on_double_click`, but handed `FileEntry`
+            objects rather than indices. `on_activate` is what a double-click means here: descend into the
+            directory, or choose the file.
 
         Remaining keyword arguments go to `ThumbnailGrid`.
         """
@@ -127,6 +129,7 @@ class FileGrid(ThumbnailGrid):
         self._icon_name_for = icon_name_for
         self._decodable: set[int] = set()
         self._on_current_entry_changed = on_current_entry_changed
+        self._on_selection_changed_entries = on_selection_changed_entries
         self._on_activate = on_activate
 
         device_string, dtype = deviceinfo.get_device_and_dtype({"device_string": thumbnail_device,
@@ -143,6 +146,7 @@ class FileGrid(ThumbnailGrid):
         super().__init__(parent, width, height,
                          tile_size=tile_size,
                          on_current_changed=self._current_changed,
+                         on_selection_changed=self._selection_changed,
                          on_double_click=self._double_clicked,
                          **grid_kwargs)
 
@@ -354,6 +358,10 @@ class FileGrid(ThumbnailGrid):
     def _current_changed(self, idx: int) -> None:
         if self._on_current_entry_changed is not None:
             self._on_current_entry_changed(self.current_entry)
+
+    def _selection_changed(self) -> None:
+        if self._on_selection_changed_entries is not None:
+            self._on_selection_changed_entries(self.selected_entries)
 
     def _double_clicked(self, idx: int) -> None:
         if self._on_activate is None:
