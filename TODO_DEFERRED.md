@@ -1762,7 +1762,7 @@ the three live checks that remain.
 
 ## Librarian's help card has no room to describe attachments
 
-*Cluster: discoverability · Cost: ? · Gate: next · Filed: 2026-08-05 · See also: "Fleet audit: every hotkey discoverable in a tooltip + help card"*
+*Cluster: discoverability · Cost: ? · Gate: RN2026 · Filed: 2026-08-05 · See also: "Fleet audit: every hotkey discoverable in a tooltip + help card"*
 
 The prose was brought up to date 2026-08-04 — five tools instead of one, the real ingested file types, and
 the two "this is a tech demo" claims gone. **Attachments are still not mentioned at all**, though they are
