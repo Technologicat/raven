@@ -210,10 +210,10 @@ def test_format_kind_names_both_the_link_and_its_target(working_links):
     assert filelisting.format_kind(by_name["b.txt"]) == "File"
 
 
-def test_format_kind_does_not_say_link_twice(dangling_link):
-    """"Broken link" already says it is a link, and there is no target to name."""
+def test_format_kind_keeps_the_broken_link_in_the_same_shape(dangling_link):
+    """`?` where the target kind would go, so the Type column's widest value stays `Link»File`."""
     by_name = {e.name: e for e in filelisting.list_directory(str(dangling_link), include_parent=False)}
-    assert filelisting.format_kind(by_name["dangling"]) == "Broken link"
+    assert filelisting.format_kind(by_name["dangling"]) == "Link»?"
 
 
 def test_a_broken_link_is_listed_and_says_so(dangling_link):

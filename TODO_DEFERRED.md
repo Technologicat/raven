@@ -3927,6 +3927,15 @@ Fleet policy is that libraries don't commit `pdm.lock` and applications do — a
 deployment reproducible, and Raven is an application. Raven's `.gitignore` has ignored it since early on
 and nobody decided to; it is an inconsistency, not a documented exception.
 
+**A live instance of the hazard, 2026-08-14.** Raising the `unpythonic` floor to `>=2.3.0` in
+`pyproject.toml` is not enough on its own: the lock still pinned 2.2.0, so a plain `pdm install` would have
+*downgraded* the package and broken the code that had just been written against the new version. The
+correct move is `pdm update unpythonic`, which refreshes the lock entry. This is not an argument for
+committing the lockfile — it would bite the same way if committed — but it is the concrete shape of "the
+lock is a second source of truth that nobody looks at", and worth having in hand when the question is
+settled. The invisibility is the part that bites: an ignored file is not in `git status`, so nothing
+prompts anyone to notice it disagreeing with `pyproject.toml`.
+
 **What blocks simply committing it: the CUDA wheels.** Raven resolves `torch`/`torchvision`/`torchaudio`
 from a dedicated `pytorch-cu128` index as a matched `+cu128` set, and it is not established what a lock
 generated on a CUDA machine does to an installer who is on macOS or CPU-only. The possibilities differ

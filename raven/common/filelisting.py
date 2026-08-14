@@ -41,6 +41,10 @@ KIND_FILE = "File"
 # A symlink whose target does not exist. Listed rather than skipped: it *is* in the directory, and a picker
 # that quietly omits things is worse than one that shows them and says what they are — the same reason the
 # grid view shows non-image files. Nothing can be opened through it, which is the view's problem to signal.
+#
+# This is the *data* value. `format_kind` renders it as `Link»?` — the same shape as `Link»Dir` and
+# `Link»File`, with `?` where the target kind would be, since there is no target to name. That keeps the
+# Type column's widest value at `Link»File` rather than at a phrase twice as long.
 KIND_BROKEN_LINK = "Broken link"
 
 
@@ -107,13 +111,9 @@ def format_size(size: Optional[int]) -> str:
     """
     if size is None:
         return "-"
-    formatted = si_prefix(size, precision=(1 if size >= 1024 else 0), binary=True)
-    # `si_prefix` emits `"1.5 Ki"` with a space and `"512"` without one, there being no prefix to separate
-    # from — so the unit is appended differently in the two cases to land on `"1.5 KiB"` and `"512 B"`.
-    # `unpythonic` 2.3.0 adds `always_separate=True` for exactly this, which reduces the whole thing to
-    # `f"{si_prefix(size, ..., always_separate=True)}B"`. Waiting on that release; bump the requirement in
-    # `pyproject.toml` when it lands and this branch goes away.
-    return f"{formatted}B" if " " in formatted else f"{formatted} B"
+    # `always_separate` puts the space in even where the magnitude needs no prefix, so appending the unit
+    # lands on both `"1.5 KiB"` and `"512 B"` without a special case here.
+    return f"{si_prefix(size, precision=(1 if size >= 1024 else 0), binary=True, always_separate=True)}B"
 
 
 def format_kind(entry: "FileEntry") -> str:
@@ -134,7 +134,7 @@ def format_kind(entry: "FileEntry") -> str:
     if not entry.is_link:
         return entry.kind
     if entry.kind == KIND_BROKEN_LINK:
-        return KIND_BROKEN_LINK  # already says it is a link; there is no target to name
+        return "Link»?"  # same shape; `?` stands where the target kind would be, there being no target
     return f"Link»{entry.kind}"
 
 
