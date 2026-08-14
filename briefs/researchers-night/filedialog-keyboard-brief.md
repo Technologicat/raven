@@ -51,6 +51,7 @@ one sentence rather than a table of special cases.
 | Ctrl+L | focus the path field; Enter navigates, Esc returns to find |
 | Ctrl+1 … Ctrl+9 | select the Nth offered type filter |
 | Ctrl+T | focus the type filter combo; Up / Down / Home / End then cycle it — see below |
+| Ctrl+B | focus the places panel — the folder shortcuts and drives; Up / Down / Home / End then move within it, Enter goes there — see below |
 | Tab | complete in the field — see below |
 
 **Why Ctrl+Up exists alongside the standard Alt+Up.** On a Nordic layout Alt sits only to the *left* of
@@ -147,6 +148,40 @@ distinct text colour rather than a third fill. The cursor is an index into `show
 re-anchored **by path** after every rebuild and clamped if that path is gone; every keystroke in the find
 field rebuilds the listing, so this is the common case rather than an edge one.
 
+### The places panel
+
+Added 2026-08-14 (Juha). The side panel holding **Home, Desktop, Downloads, Images, Documents, Music,
+Videos**, a separator, and then one entry per mount point, is reachable only by mouse. That makes the whole
+of "start somewhere else entirely" a pointer-only operation, which is the gap this brief exists to close —
+and it is not a small one, since jumping to a mount point is how you reach anything outside your home
+directory without typing its path.
+
+It takes the same shape as the type filter, so it adds an entry point rather than a mechanism: **Ctrl+B
+focuses the panel; bare Up / Down / Home / End then move within it; Enter goes to the highlighted place;
+Esc returns to the find field**, per the universal rule. `B` for *bookmarks*, which is what a browser and
+GTK's own file chooser call this panel's key.
+
+Four things to settle while building it:
+
+- **One list, not two.** The folder shortcuts and the drives are visually separated, but a cursor should run
+  through them as a single sequence and treat the separator as scenery. Two sub-lists would need a key to
+  cross between them and would buy nothing.
+- **The entries are `dpg.add_menu_item`, and whether `dpg.focus_item` works on one is unverified.** DPG's
+  focus model has already produced two surprises here — a child window cannot be focused, while a button
+  can — so a menu item is a third case and needs a probe, not an assumption. If it cannot hold focus, the
+  cursor is drawn rather than real, exactly as the listing's cursor already is; the panel's *own* focus can
+  then rest on any focusable widget inside it.
+- **Enter should return focus to the find field** after changing directory. The reason to jump to a place is
+  to look at what is in it, so leaving focus in the panel would cost a Ctrl+F on every use.
+- **The mount list is built once, when the dialog is built** (`_get_all_drives`, from
+  `psutil.disk_partitions()`). So unlike the listing — which rebuilds on every keystroke in the find field
+  and needs its cursor re-anchored by path — this list is static for the dialog's lifetime and its cursor is
+  a plain index. A USB stick inserted while the dialog is open will not appear, which is pre-existing
+  behaviour and out of scope here.
+
+Raven passes neither `user_style` nor `show_shortcuts_menu`, so it always gets style 0 with the panel
+shown; the compact style-1 variant is unused and need not be designed for.
+
 ### Odds and ends
 
 **Constructor parameters**: `smooth_scrolling` and `smooth_scrolling_step_parameter`, so each app passes its
@@ -169,6 +204,9 @@ Still open:
   caret.** Unverified. The window manager may eat Alt; Ctrl+Up is the fallback for that too.
 - **Whether the cursor and the selection are visually distinguishable** — see above; a looking question, not
   an arguing one.
+- **Whether `dpg.focus_item` can focus a `menu_item`**, which the places panel is built from. A child window
+  cannot be focused and a button can, so this is a third case and neither answer is safe to assume. One
+  headless probe settles it.
 
 **Out of scope, worth recording**: an audio cue for the overwrite warning, and for whatever other warnings the
 dialog grows. Visual-only feedback is a gap for the same audience this brief is about.
