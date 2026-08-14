@@ -1074,12 +1074,23 @@ class ScrollEndFlasher(Overlay, Animation):
         that flashed only on refusal was tried in the thumbnail grid on 2026-08-14 and rejected on sight -
         it also made that widget inconsistent with the other two.
 
-        Where the widget's movement *is* the scroll position - Visualizer's info panel, Librarian's chat
-        log - `SmoothScrolling` covers both jobs by itself, which is why it takes a `flasher`: it flashes
-        when a scroll lands on an end, and a refused scroll is a scroll that lands on the end it is already
-        at. A widget whose movement is a *cursor* and whose scrolling merely follows it gets arrival from
-        the same place, but must announce refusal itself, because a cursor clamped at the last row requests
-        no scroll for the animation to see. `raven.common.gui.thumbnailgrid` is the worked example.
+        **Budget one trigger per way the user can move the view, and check that list rather than assuming
+        the scroll animation covers it.** `SmoothScrolling` only knows about movements it performs, so it
+        covers exactly the paths that go through it:
+
+        - *Keys and programmatic scrolls* go through it, so pass it a `flasher` and both jobs are done: it
+          flashes when a scroll lands on an end, and a refused scroll is a scroll landing on the end it is
+          already at.
+        - *The mouse wheel does not.* DPG scrolls a child window internally, so no animation exists and
+          nothing fires. **This is the one that gets missed**, because the view visibly scrolls and looks
+          handled. Hook the wheel and call `show_by_position` with the window's current scroll position -
+          Visualizer's info panel and `raven.common.gui.thumbnailgrid` both do. Note the position reads
+          *before* DPG applies the event, so this catches a wheel turned while already at an end.
+        - *A cursor whose scrolling merely follows it* does not either, on the refusal side: a cursor
+          clamped at the last row requests no scroll for the animation to see. Arrival still comes from the
+          scroll. `thumbnailgrid` is the worked example.
+
+        Librarian's chat log has only the first of the three, which is why it needs only the `flasher`.
 
         `target`: DPG ID or tag. The child window for which to build the overlay.
         `tag`: DPG tag, for naming the overlay.

@@ -202,6 +202,7 @@ class ThumbnailGrid:
                                         callback=self._on_click)
             dpg.add_mouse_double_click_handler(button=dpg.mvMouseButton_Left,
                                                callback=self._on_double_click_handler)
+            dpg.add_mouse_wheel_handler(callback=self._on_wheel)
 
         self._last_click_idx: int = -1  # for shift+click range selection
         self.input_enabled: bool = True
@@ -837,6 +838,23 @@ class ThumbnailGrid:
                 self.set_current(idx)
 
             self._last_click_idx = idx
+
+    def _on_wheel(self, sender, app_data) -> None:
+        """Flash the end when the wheel is turned against it.
+
+        The wheel is a third way to move this view, and the only one nothing of ours sees: DPG scrolls the
+        child window internally, so there is no animation to carry the flasher and no navigation to refuse.
+        Visualizer's info panel hooks the wheel for the same reason. See `ScrollEndFlasher`.
+
+        The position read here is the one *before* DPG applies this event, so what this catches is a wheel
+        turned while already at an end rather than the turn that arrives there.
+        """
+        with self._lock:
+            if not self.input_enabled or self._scroll_end_flasher is None:
+                return
+            if not guiutils.is_mouse_inside_widget(self._child_window_tag):  # tag
+                return
+            self._scroll_end_flasher.show_by_position(dpg.get_y_scroll(self._child_window_tag))  # tag
 
     def _on_double_click_handler(self, sender, app_data) -> None:
         """Handle double-click on a tile."""
