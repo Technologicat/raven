@@ -173,10 +173,10 @@ class _RecordingFlasher:
 
 
 def test_navigation_refused_at_an_end_flashes_that_end(make_grid):
-    """The gesture the flasher exists for, and the one a scroll-side trigger cannot see.
+    """The gesture a scroll-side trigger cannot see.
 
     Navigation clamps and `set_current` returns early on an unchanged index, so pressing past the last row
-    requests no scroll at all — a flasher handed to `SmoothScrolling` would never fire here.
+    requests no scroll at all, and the flasher the scroll carries never fires.
     """
     flasher = _RecordingFlasher()
     grid = make_grid(n_entries=12, scroll_end_flasher=flasher)
@@ -189,8 +189,13 @@ def test_navigation_refused_at_an_end_flashes_that_end(make_grid):
     assert flasher.shown == ["top", "bottom"]
 
 
-def test_navigation_that_moves_does_not_flash(make_grid):
-    """Arriving at an end is a move that succeeded; flashing it would fire on every trip to the end."""
+def test_a_move_does_not_fire_the_refusal_flash(make_grid):
+    """A move that succeeded is not a refusal, so this path stays quiet.
+
+    Arriving at an end *is* announced — by the scroll animation, which flashes when it lands on the top or
+    bottom. That needs rendered frames to complete and so is not exercised here; what this pins is that the
+    refusal path does not double up on it.
+    """
     flasher = _RecordingFlasher()
     grid = make_grid(n_entries=12, scroll_end_flasher=flasher)
 

@@ -487,7 +487,7 @@ class ThumbnailGrid:
             elif self._scroll_countdown > 0:
                 # Deferred scroll: retry for a few frames after rebuild,
                 # giving DPG time to settle get_y_scroll_max. Instant, not smooth — see `_scroll_to_current`.
-                self._scroll_to_current(smooth=False)
+                self._scroll_to_current(smooth=False, flash_ends=False)
                 self._scroll_countdown -= 1
             if self._pending_current_changed is not None:
                 pending_current = self._pending_current_changed
@@ -694,14 +694,16 @@ class ThumbnailGrid:
         self.set_current(new_idx)  # no-op when unchanged
         return new_idx
 
-    def _scroll_to_current(self, smooth: Optional[bool] = None) -> None:
+    def _scroll_to_current(self, smooth: Optional[bool] = None, flash_ends: bool = True) -> None:
         """Scroll the grid to make the current tile visible.
 
         *smooth*: `None` uses the widget's configured setting; `False` forces an instant reposition.
+        *flash_ends*: announce arrival at the top or bottom of the scroll, as the other scrolling views do.
 
-        The rebuild path forces `False`: for a frame or two after items are created `get_y_scroll_max` is
-        stale, so the target clamps to the wrong place and is corrected on a later retry. A jump lands
-        wrong invisibly; a glide would animate *toward* wrong first.
+        The rebuild path forces `smooth=False`: for a frame or two after items are created
+        `get_y_scroll_max` is stale, so the target clamps to the wrong place and is corrected on a later
+        retry. A jump lands wrong invisibly; a glide would animate *toward* wrong first. It also passes
+        `flash_ends=False`, since a repositioning nobody asked for has arrived nowhere.
         """
         if self._current < 0 or self._current not in self._visible:
             return
@@ -719,21 +721,21 @@ class ThumbnailGrid:
         else:  # already fully on screen
             return
 
-        # No flasher here, deliberately: see `_flash_scroll_end`.
         gui_animation.SmoothScrolling.scroll(target_child_window=self._child_window_tag,
                                              target_y_scroll=int(target),
                                              smooth=(self._smooth_scrolling if smooth is None else smooth),
-                                             smooth_step=self._smooth_scrolling_step_parameter)
+                                             smooth_step=self._smooth_scrolling_step_parameter,
+                                             flasher=(self._scroll_end_flasher if flash_ends else None))
 
     def _flash_scroll_end(self, where: str) -> None:
         """Say "you asked to go further and there is no further", if the owner gave us a flasher.
 
         *where*: "top" or "bottom".
 
-        Fired here rather than by handing the flasher to `SmoothScrolling` as the info panel and chat log
-        do. Not a second mechanism: the flash means "a movement request was refused", and each widget
-        detects that wherever its movement lives. There it is the scroll position, so the animation sees
-        the clamp itself; here it is the cursor, and a cursor clamped at the last row requests no scroll.
+        Covers the case the scroll cannot: a cursor clamped at the last row requests no scroll, so there is
+        nothing for `SmoothScrolling` to detect. *Arriving* at an end is announced by the scroll itself,
+        which is where the other views announce it too — the flasher says "here is the wall" as you reach
+        it, not only once you have walked into it.
         """
         if self._scroll_end_flasher is not None:
             self._scroll_end_flasher.show(where=where)

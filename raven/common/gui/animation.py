@@ -1068,11 +1068,18 @@ class ScrollEndFlasher(Overlay, Animation):
                  custom_finish_pred: Optional[Callable] = None):
         """Flasher to indicate when the end of a scrollable area has been reached.
 
-        What it actually asserts is *"a movement request was refused"*, and a caller triggers it wherever
-        its widget's movement lives. Where that is the scroll position - Visualizer's info panel,
-        Librarian's chat log - `SmoothScrolling` can spot the clamp in passing, which is why it takes a
-        `flasher`. A widget whose movement is a cursor, and whose scrolling merely follows it, has no clamp
-        there to see and calls `show` itself; `raven.common.gui.thumbnailgrid` is the worked example.
+        **It has two jobs, and both are deliberate.** It announces *arrival* at an end, and it marks a
+        *refused* request to go further. Firing on arrival is not noise to be trimmed: half the point is to
+        show the wall as you reach it, so nobody has to walk into it once to discover it is there. A design
+        that flashed only on refusal was tried in the thumbnail grid on 2026-08-14 and rejected on sight -
+        it also made that widget inconsistent with the other two.
+
+        Where the widget's movement *is* the scroll position - Visualizer's info panel, Librarian's chat
+        log - `SmoothScrolling` covers both jobs by itself, which is why it takes a `flasher`: it flashes
+        when a scroll lands on an end, and a refused scroll is a scroll that lands on the end it is already
+        at. A widget whose movement is a *cursor* and whose scrolling merely follows it gets arrival from
+        the same place, but must announce refusal itself, because a cursor clamped at the last row requests
+        no scroll for the animation to see. `raven.common.gui.thumbnailgrid` is the worked example.
 
         `target`: DPG ID or tag. The child window for which to build the overlay.
         `tag`: DPG tag, for naming the overlay.

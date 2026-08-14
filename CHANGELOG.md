@@ -58,7 +58,7 @@
 
 *Raven-cherrypick*
 
-- **the thumbnail grid scrolls smoothly**, and flashes an arrow at the top or bottom edge when you press past the end. It was the last view in the constellation that jumped. A rebuild — changing the filter, or the tile size — still repositions instantly, since gliding there would animate toward a position that is about to be corrected.
+- **the thumbnail grid scrolls smoothly**, and flashes an arrow at the top or bottom edge as you arrive there, and again if you press further. It was the last view in the constellation that jumped. A rebuild — changing the filter, or the tile size — still repositions instantly, since gliding there would animate toward a position that is about to be corrected.
   - `SMOOTH_SCROLLING`, `SMOOTH_SCROLLING_STEP_PARAMETER` and `SCROLL_ENDS_HERE_DURATION` in `raven/cherrypick/config.py` tune or disable both.
 
 *Raven-pdf2bib*
