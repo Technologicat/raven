@@ -250,6 +250,20 @@ class ThumbnailGrid:
         """The border colour for entry `idx`. Override to colour tiles by state."""
         return self._border_color
 
+    def is_selectable(self, idx: int) -> bool:
+        """Whether entry `idx` may be part of the selection. Always, here; override to exclude some.
+
+        The cursor still moves onto an excluded entry — it has to, or there would be no way to reach it
+        with the keyboard, and nothing to double-click. What it cannot join is the *selection*, so a bulk
+        action never sees it.
+
+        For an owner whose list holds entries that are not candidates for whatever the selection feeds: a
+        file dialog listing `..` and the directories you navigate through, none of which it can return.
+        Showing them selected while ignoring them is the failure this prevents, and it reads as a bug
+        rather than as a rule.
+        """
+        return True
+
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
@@ -500,9 +514,12 @@ class ThumbnailGrid:
             self._redraw_tile_by_idx(idx)
         self._notify_selection_changed()
 
+    def _selectable_visible(self) -> set[int]:
+        return {idx for idx in self._visible if self.is_selectable(idx)}
+
     def select_all(self) -> None:
         with self._lock:
-            self._apply_selection(set(self._visible))
+            self._apply_selection(self._selectable_visible())
 
     def deselect_all(self) -> None:
         with self._lock:
@@ -510,10 +527,12 @@ class ThumbnailGrid:
 
     def invert_selection(self) -> None:
         with self._lock:
-            self._apply_selection(set(self._visible) - self._selected)
+            self._apply_selection(self._selectable_visible() - self._selected)
 
     def toggle_select(self, idx: int) -> None:
         with self._lock:
+            if not self.is_selectable(idx):
+                return
             if idx in self._selected:
                 self._selected.discard(idx)
             else:
@@ -989,12 +1008,15 @@ class ThumbnailGrid:
                 a = self._visible.index(self._last_click_idx)
                 b = self._visible.index(idx) if idx in self._visible else a
                 lo, hi = min(a, b), max(a, b)
-                self._apply_selection(set(self._visible[lo:hi + 1]))
+                self._apply_selection({i for i in self._visible[lo:hi + 1] if self.is_selectable(i)})
             elif ctrl:
-                self.toggle_select(idx)  # already notifies
+                self.toggle_select(idx)  # already notifies; a no-op on an unselectable entry
             else:
-                # Bare click: set current and replace selection with this one entry.
-                self._apply_selection({idx})
+                # Bare click: set current, and replace the selection with this one entry — unless it is not
+                # a candidate for selection, in which case the cursor moves and the selection is left as it
+                # was. Clearing it would be the click doing something the user did not ask for.
+                if self.is_selectable(idx):
+                    self._apply_selection({idx})
                 self.set_current(idx)
 
             self._last_click_idx = idx

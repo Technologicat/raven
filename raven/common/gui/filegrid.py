@@ -86,6 +86,7 @@ class FileGrid(ThumbnailGrid):
                  *,
                  icon_assets: Mapping[str, tuple[int, int, Sequence[float]]],
                  icon_name_for: Callable[[FileEntry], Optional[str]],
+                 selectable_for: Optional[Callable[[FileEntry], bool]] = None,
                  tile_size: int = 128,
                  thumbnail_device: str = "gpu",
                  thumbnail_dtype: torch.dtype = torch.float32,
@@ -103,6 +104,11 @@ class FileGrid(ThumbnailGrid):
         *icon_name_for*: which icon an entry gets, by name. Returning `None` means "this one has a picture
             worth decoding", and is what puts an entry in the thumbnail queue. A name with no asset behind
             it draws the placeholder, which is a tolerable answer for a type nobody has drawn an icon for.
+        *selectable_for*: which entries may join the selection. `None` admits all of them. The cursor still
+            reaches an excluded entry — it must, or a directory could be neither reached by keyboard nor
+            double-clicked — but a bulk action never sees one, and neither does the selection tint. For a
+            picker the exclusions are `..` and the directories: it cannot return them, so showing them
+            selected would read as a bug rather than as a rule.
         *thumbnail_device*: where decoded images are resized. The literal `"gpu"` is `deviceinfo`'s
             autodetect — the single available GPU backend, or CPU when there is none — and is the default
             *because an app that innocently wants a file picker must not have to know about torch devices*.
@@ -127,6 +133,7 @@ class FileGrid(ThumbnailGrid):
         """
         self._entries: list[FileEntry] = []
         self._icon_name_for = icon_name_for
+        self._selectable_for = selectable_for
         self._decodable: set[int] = set()
         self._on_current_entry_changed = on_current_entry_changed
         self._on_selection_changed_entries = on_selection_changed_entries
@@ -362,6 +369,14 @@ class FileGrid(ThumbnailGrid):
     def _selection_changed(self) -> None:
         if self._on_selection_changed_entries is not None:
             self._on_selection_changed_entries(self.selected_entries)
+
+    def is_selectable(self, idx: int) -> bool:
+        """Whether entry `idx` may join the selection, per the owner's `selectable_for`."""
+        if self._selectable_for is None:
+            return True
+        if not (0 <= idx < len(self._entries)):
+            return False
+        return self._selectable_for(self._entries[idx])
 
     def _double_clicked(self, idx: int) -> None:
         if self._on_activate is None:

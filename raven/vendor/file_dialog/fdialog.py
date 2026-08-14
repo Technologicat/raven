@@ -835,6 +835,7 @@ class FileDialog:
                                                width=self._grid_size[0], height=self._grid_size[1],
                                                icon_assets=icon_assets,
                                                icon_name_for=_tile_icon_for,
+                                               selectable_for=_is_choosable,
                                                tile_size=self.thumbnail_size,
                                                thumbnail_device=self.thumbnail_device,
                                                allow_multi_select=self.multi_selection,

@@ -468,6 +468,23 @@ def test_the_grid_does_not_offer_dot_dot_as_a_selection(make_dialog, tmp_path):
     assert parent  # it is listed, and navigable...
     grid.toggle_select(parent[0])
     assert d.selected_files == []  # ...but not choosable
+    assert grid.selected == set()  # ...and not even *shown* selected, which would read as a bug
+
+
+def test_selecting_everything_in_the_grid_skips_what_cannot_be_returned(make_dialog, tmp_path):
+    """`..` and the directories are listed so they can be navigated, not so they can be picked."""
+    for name in DIRECTORY_CONTENTS:
+        pathlib.Path(tmp_path, name).touch()
+    pathlib.Path(tmp_path, "subdir").mkdir()
+    d = make_dialog(filter_list=[".*"], multi_selection=True, show_thumbnails=True)
+    grid = d._grid
+
+    grid.select_all()
+
+    chosen = {entry.name for entry in grid.selected_entries}
+    assert ".." not in chosen
+    assert "subdir" not in chosen
+    assert "photo.png" in chosen
 
 
 def test_the_hidden_view_is_left_empty(dialog):
