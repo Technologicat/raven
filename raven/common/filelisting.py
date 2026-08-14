@@ -18,7 +18,7 @@ agree, and reports a directory's contents with every entry misclassified when th
 __all__ = ["KIND_DIR", "KIND_FILE", "KIND_BROKEN_LINK",
            "FileEntry", "SortKey",
            "list_directory",
-           "format_size", "format_mtime",
+           "format_size", "format_mtime", "format_kind",
            "is_hidden"]
 
 import ctypes
@@ -65,11 +65,15 @@ class FileEntry:
     """
     name: str
     path: str
-    kind: str  # KIND_DIR or KIND_FILE
+    kind: str  # KIND_DIR, KIND_FILE or KIND_BROKEN_LINK
     is_hidden: bool
     mtime: Optional[float]
     size: Optional[int]
     is_parent: bool = False  # the ".." entry, which sorts first and is nobody's file
+    # Whether this entry is a symlink. Orthogonal to `kind`, which describes what the link *points at* —
+    # opening a link to a directory takes you into a directory, so that is what a picker has to sort and
+    # navigate by. `format_kind` composes the two for display.
+    is_link: bool = False
 
     def get_is_dir(self) -> bool:
         return self.kind == KIND_DIR
@@ -110,6 +114,28 @@ def format_size(size: Optional[int]) -> str:
     # `f"{si_prefix(size, ..., always_separate=True)}B"`. Waiting on that release; bump the requirement in
     # `pyproject.toml` when it lands and this branch goes away.
     return f"{formatted}B" if " " in formatted else f"{formatted} B"
+
+
+def format_kind(entry: "FileEntry") -> str:
+    """What to show in a `Type` column: `"Dir"`, `"File"`, `"Link»Dir"`, `"Link»File"`, `"Broken link"`.
+
+    Says both things about a symlink — that it is one, and what it leads to — which is what a file manager
+    does and what `kind` alone cannot, since `kind` is the *target's*. Without this the listing mentions
+    linkness only when the link is broken, which reads as an oversight rather than as the deliberate
+    "describe the target where there is one" that it is.
+
+    **`»`, and not an arrow, for want of a glyph.** A file manager writes "Link to directory", which does
+    not fit a column sharing its width with a filename. `"Link→Dir"` would, but Raven's UI font is OpenSans
+    (`guiutils.bootup`), and it has *no arrow glyphs at all* — checked 2026-08-14: none of U+2190–2193, no
+    triangles, no pointers, out of 1010 glyphs. `→` would render as a missing-glyph box. `»` is the
+    directional mark OpenSans does have, it is the conventional "goes to" in breadcrumbs, and it costs the
+    same eight characters.
+    """
+    if not entry.is_link:
+        return entry.kind
+    if entry.kind == KIND_BROKEN_LINK:
+        return KIND_BROKEN_LINK  # already says it is a link; there is no target to name
+    return f"Link»{entry.kind}"
 
 
 def format_mtime(mtime: Optional[float]) -> str:
@@ -175,7 +201,8 @@ def _make_entry(directory: str, name: str, *, dir_sizes: bool) -> Optional[FileE
         return None
 
     return FileEntry(name=name, path=os.path.abspath(path), kind=kind,
-                     is_hidden=is_hidden(path), mtime=mtime, size=size)
+                     is_hidden=is_hidden(path), mtime=mtime, size=size,
+                     is_link=os.path.islink(path))
 
 
 def _sort_value(entry: FileEntry, sort_key: SortKey):

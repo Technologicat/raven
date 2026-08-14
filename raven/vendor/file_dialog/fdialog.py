@@ -494,7 +494,7 @@ class FileDialog:
                     dpg.add_image(_icon_for(entry), **kwargs_image)
                     cell_name = dpg.add_selectable(label=entry.name, **kwargs_cell)
                 cell_time = dpg.add_selectable(label=filelisting.format_mtime(entry.mtime), **kwargs_cell)
-                cell_type = dpg.add_selectable(label=entry.kind, **kwargs_cell)
+                cell_type = dpg.add_selectable(label=filelisting.format_kind(entry), **kwargs_cell)
                 cell_size = dpg.add_selectable(label=filelisting.format_size(entry.size), **kwargs_cell)
 
                 if self.allow_drag:
@@ -761,10 +761,17 @@ class FileDialog:
                             # here because every cell is created with `height=self.selec_height`.
                             clipper=True,
                         ):
-                            iwow_name = 100
-                            iwow_date = 50
-                            iwow_type = 10
-                            iwow_size = 10
+                            # Proportional weights (the table's policy is `mvTable_SizingStretchProp`), so
+                            # what matters is the ratios rather than the numbers. Widened from 100/50/10/10
+                            # for the two columns whose widest content grew: `Size` now reads `239.5 KiB`
+                            # rather than `240 KB` — IEC prefixes are a character wider and carry a decimal
+                            # — and `Type` has to fit `Broken link` alongside `Dir` and `File`. `Name` gives
+                            # up the difference; it had the most slack, being sized for long filenames that
+                            # the user can still widen by dragging if a directory has them.
+                            iwow_name = 84
+                            iwow_date = 48
+                            iwow_type = 18
+                            iwow_size = 20
                             dpg.add_table_column(label='Name', init_width_or_weight=iwow_name, tag=f"ex_name_{self.instance_tag}")
                             dpg.add_table_column(label='Date', init_width_or_weight=iwow_date, tag=f"ex_date_{self.instance_tag}")
                             dpg.add_table_column(label='Type', init_width_or_weight=iwow_type, tag=f"ex_type_{self.instance_tag}")

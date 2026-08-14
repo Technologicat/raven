@@ -76,9 +76,17 @@ def bootup(font_size: int,
             `font_basename="OpenSans"`: https://fonts.google.com/specimen/Open+Sans
             `font_basename="InterTight"`: https://fonts.google.com/specimen/Inter+Tight
 
-        For scientific text, OpenSans is otherwise better (e.g. has a subscript "x" glyph for chemical formulas),
-        but it confuses subscripts and superscripts. InterTight is missing that subscript "x" glyph. No better options
-        have been found so far.
+        **OpenSans is the default because InterTight draws subscripts at superscript height** - its
+        subscript and superscript glyphs are the same outlines in the same positions, so H2O and x1 come out
+        as H²O and x¹. That is disqualifying for scientific text.
+
+        Coverage runs the other way and is the trap here: InterTight has *more* of the subscript block than
+        OpenSans, which lacks subscript "x" (U+2093) among others. So comparing which codepoints each font
+        has recommends InterTight, and looking at what it draws rules it out.
+
+        InterTight does carry symbols OpenSans has none of - arrows, triangles, check marks - which is worth
+        knowing when a label wants one. `briefs/reference/font-glyph-coverage.md` has the measurements, the
+        coverage table, and what to use instead. No better options have been found so far.
 
     Returns an `unpythonic.env` with the following attributes:
         - `icon_font_regular` (DPG font ID)

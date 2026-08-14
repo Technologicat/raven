@@ -172,6 +172,50 @@ def dangling_link(tree):
     return tree
 
 
+@pytest.fixture
+def working_links(tree):
+    """Symlinks to a real file and a real directory, or a skip where the platform will not make them."""
+    try:
+        (tree / "link_to_file").symlink_to(tree / "b.txt")
+        (tree / "link_to_dir").symlink_to(tree / "sub")
+    except (OSError, NotImplementedError):
+        pytest.skip("symlinks not available here")
+    return tree
+
+
+def test_a_working_link_reports_its_targets_kind(working_links):
+    """What you get on opening it is the target, so that is what `kind` says and what sorting follows."""
+    by_name = {e.name: e for e in filelisting.list_directory(str(working_links), include_parent=False)}
+
+    assert by_name["link_to_dir"].kind == filelisting.KIND_DIR
+    assert by_name["link_to_dir"].is_dir is True
+    assert by_name["link_to_file"].kind == filelisting.KIND_FILE
+    assert by_name["link_to_dir"].is_link is True
+    assert by_name["b.txt"].is_link is False
+
+
+def test_a_link_to_a_directory_groups_with_the_directories(working_links):
+    """Following it lands you in a directory, so it belongs where the directories are."""
+    entries = filelisting.list_directory(str(working_links), include_parent=False)
+    assert entries[0].is_dir and entries[1].is_dir  # `sub` and `link_to_dir`, in some order
+
+
+def test_format_kind_names_both_the_link_and_its_target(working_links):
+    """`kind` alone would mention linkness only when the link is broken, which reads as an oversight."""
+    by_name = {e.name: e for e in filelisting.list_directory(str(working_links), include_parent=False)}
+
+    assert filelisting.format_kind(by_name["link_to_dir"]) == "Link»Dir"
+    assert filelisting.format_kind(by_name["link_to_file"]) == "Link»File"
+    assert filelisting.format_kind(by_name["sub"]) == "Dir"
+    assert filelisting.format_kind(by_name["b.txt"]) == "File"
+
+
+def test_format_kind_does_not_say_link_twice(dangling_link):
+    """"Broken link" already says it is a link, and there is no target to name."""
+    by_name = {e.name: e for e in filelisting.list_directory(str(dangling_link), include_parent=False)}
+    assert filelisting.format_kind(by_name["dangling"]) == "Broken link"
+
+
 def test_a_broken_link_is_listed_and_says_so(dangling_link):
     """It is in the directory, so omitting it makes the listing disagree with the filesystem — and it is
     exactly the thing a user goes looking for when a file they expected seems to be missing.
