@@ -79,6 +79,8 @@ move and would rename the app.
 Do at the same time, since they are the same decision: the sibling item recording that the *fleet* name
 `corvid` is likewise taken, and the distribution there is `corvid-lab`.
 
+## `--qr`: a "Get Raven" QR code overlay for demoing at an exhibit
+
 *Cluster: ? · Cost: S · Gate: RN2026 · Filed: 2026-08-14*
 
 A CLI flag for the GUI apps that puts a short line of text — "Get Raven", or something better — and a QR

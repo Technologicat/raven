@@ -15,6 +15,7 @@ directory is for.
 | Script | What it answers |
 |---|---|
 | `check_ci_imports.py` | Which test modules would fail to *collect* in CI, whose dependency list is hand-picked and hand-maintained. Walks the unguarded tests and their first-party imports, and reports any module-level third-party import that `requirements-ci.txt` and the workflows' inline `pip install` lines do not provide. |
+| `check_todo_structure.py` | Whether `TODO_DEFERRED.md` still parses as a list of items. Catches an item whose `##` heading an edit removed — its body then reads as part of the item above and it vanishes from every future scan of the headings, silently — plus duplicate titles (items are cited by title), missing metadata fields, and headings without a blank line before them. |
 
 **One checker deliberately lives elsewhere**, and is indexed here so that this table stays the place to look:
 `.claude/skills/dpg/check_router.py` verifies that the `dpg` skill's router still names sections that exist in
