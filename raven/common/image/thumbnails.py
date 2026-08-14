@@ -14,12 +14,13 @@ The pipeline is managed via ``raven.common.bgtask.TaskManager`` for cooperative 
 caller moves on (a new folder, a new visible range).
 """
 
-__all__ = ["ThumbnailPipeline"]
+__all__ = ["ThumbnailPipeline", "placeholder_tiles"]
 
 import concurrent.futures
 import logging
 import pathlib
 import queue
+from typing import Union
 
 import numpy as np
 import torch
@@ -27,6 +28,8 @@ import torch
 from unpythonic.env import env
 
 from .. import bgtask
+from ..video import colorspace
+from ..video import postprocessor
 from . import codec as imagecodec
 from . import lanczos
 from . import utils as imageutils
@@ -35,6 +38,35 @@ logger = logging.getLogger(__name__)
 
 # How long each thread waits on a queue before re-checking the cancellation flag.
 _QUEUE_TIMEOUT_S = 0.5
+
+
+def placeholder_tiles(n: int,
+                      tile_size: int,
+                      *,
+                      device: Union[torch.device, str],
+                      dtype: torch.dtype = torch.float32,
+                      tint: tuple[float, float, float] = (0.92, 0.92, 1.0),
+                      brightness: tuple[float, float] = (0.04, 0.40),
+                      mode: str = "PAL") -> list[np.ndarray]:
+    """Generate *n* VHS-noise tiles for a grid to show until the real thumbnails arrive.
+
+    Returns flat float32 RGBA arrays of ``tile_size * tile_size * 4``, which is what
+    `raven.common.gui.thumbnailgrid.ThumbnailGrid.set_noise_pool` takes.
+
+    Here rather than in each app because the noise *is* the look: two grids in the same constellation
+    showing different placeholders would read as two different pieces of software. The parameters are
+    exposed anyway, since an app with a different palette may want to match it.
+
+    `tint`, `brightness`, `mode`: see `raven.common.video.postprocessor.vhs_noise_pool`.
+    """
+    tiles = postprocessor.vhs_noise_pool(n, tile_size, tile_size,
+                                         device=device, dtype=dtype,
+                                         tint=tint, brightness=brightness, mode=mode)
+    for tile in tiles:
+        # Colour channels only — alpha is coverage, not light, and gamma-encoding it would make the tiles
+        # translucent.
+        tile[:3] = colorspace.linear_to_srgb(tile[:3])
+    return [imageutils.tensor_to_dpg_flat(tile.unsqueeze(0)) for tile in tiles]
 
 
 class ThumbnailPipeline:
@@ -78,6 +110,23 @@ class ThumbnailPipeline:
 
         self._total: int = 0
         self._completed: int = 0
+
+    def set_tile_size(self, tile_size: int) -> None:
+        """Change the output tile size, cancelling any batch in progress.
+
+        Cancelling is the point: whatever is in flight is being resized to the old size, and a thumbnail of
+        the wrong size is not merely late — the consumer has to recognize and discard it. Restart the batch
+        after this if the images are still wanted.
+        """
+        if tile_size == self._tile_size:
+            return
+        self.cancel()
+        self._tile_size = tile_size
+
+    @property
+    def tile_size(self) -> int:
+        """Edge of the square tiles this pipeline produces, in pixels."""
+        return self._tile_size
 
     @property
     def total(self) -> int:

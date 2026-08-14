@@ -5,7 +5,9 @@ Input/output is Torch tensor in [c, h, w] format.
 This module is licensed under the 2-clause BSD license.
 """
 
-__all__ = ["rgb_to_yuv", "yuv_to_rgb", "luminance", "hex_to_rgb"]
+__all__ = ["rgb_to_yuv", "yuv_to_rgb", "luminance",
+           "linear_to_srgb", "srgb_to_linear",
+           "hex_to_rgb"]
 
 from typing import Tuple
 
@@ -106,6 +108,50 @@ _RGB_TO_Y = _RGB_TO_YCBCR[0, :]
 def luminance(image: torch.tensor) -> torch.tensor:
     """RGB (linear 0...1) -> Y (true relative luminance)"""
     return torch.einsum("c,cij->ij", (_RGB_TO_Y.to(image.dtype).to(image.device), image))
+
+# --------------------------------------------------------------------------------
+# sRGB transfer function
+#
+# The conversions above work in *linear* RGB, which is where light adds up the way physics says it does —
+# so that is where filtering, blending and resampling belong. A display, and every image file feeding one,
+# instead stores sRGB: the same values passed through a roughly-gamma-2.2 curve that spends more of the
+# available precision on the dark end, where the eye is more sensitive.
+#
+# So anything generated or computed in linear light needs `linear_to_srgb` before it is shown, and anything
+# read from an ordinary image file needs `srgb_to_linear` before it is computed with. Skipping either is not
+# a subtle error: mid-gray comes out at the wrong brightness and gradients bunch up at one end.
+#
+# The curve is linear near black and a power law above it, the joint chosen so both value and slope match.
+#   https://en.wikipedia.org/wiki/SRGB
+#   https://www.color.org/chardata/rgb/srgb.xalter (IEC 61966-2-1)
+
+_SRGB_LINEAR_SLOPE = 12.92
+_SRGB_ENCODED_CUTOFF = 0.04045  # where the encoded side switches from the linear segment to the power law
+# The linear-light cutoff is derived rather than quoted. The standard rounds it to 0.0031308, which puts a
+# discontinuity of about 1e-8 in the curve; dividing keeps the two segments meeting exactly, and matches the
+# constant every other implementation of this ends up with.
+_SRGB_LINEAR_CUTOFF = _SRGB_ENCODED_CUTOFF / _SRGB_LINEAR_SLOPE
+_SRGB_ALPHA = 0.055
+_SRGB_GAMMA = 2.4
+
+def linear_to_srgb(image: torch.tensor) -> torch.tensor:
+    """Linear RGB in [0, 1] -> sRGB-encoded in [0, 1]. Apply before displaying computed-in-linear pixels.
+
+    Shape-agnostic and elementwise, so it takes an `[c, h, w]` image, a single channel, or a whole batch.
+    Feed it colour channels only: an alpha channel is a coverage fraction rather than a light intensity,
+    and is not gamma-encoded.
+    """
+    image = torch.clamp(image, 0.0, 1.0)
+    # `clamp(min=...)` before the fractional power: at exactly zero its derivative is infinite, so autograd
+    # and some backends produce a NaN for a value the `where` is going to discard anyway.
+    high = (1.0 + _SRGB_ALPHA) * torch.clamp(image, min=1e-8) ** (1.0 / _SRGB_GAMMA) - _SRGB_ALPHA
+    return torch.where(image <= _SRGB_LINEAR_CUTOFF, image * _SRGB_LINEAR_SLOPE, high)
+
+def srgb_to_linear(image: torch.tensor) -> torch.tensor:
+    """Inverse of `linear_to_srgb`, which see. Apply to pixels read from an ordinary image file."""
+    image = torch.clamp(image, 0.0, 1.0)
+    high = ((image + _SRGB_ALPHA) / (1.0 + _SRGB_ALPHA)) ** _SRGB_GAMMA
+    return torch.where(image <= _SRGB_ENCODED_CUTOFF, image / _SRGB_LINEAR_SLOPE, high)
 
 def hex_to_rgb(hex: str) -> Tuple[int]:
     """HTML hex color '#rrggbb' or '#rrggbbaa' to tuple of integers in [0, 255]."""

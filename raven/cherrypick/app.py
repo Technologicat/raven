@@ -67,19 +67,16 @@ from ..common.gui import animation as gui_animation
 from ..common import utils as common_utils
 from ..vendor.file_dialog.fdialog import FileDialog
 from ..vendor.IconsFontAwesome6 import IconsFontAwesome6 as fa
-from ..vendor.tha3.util import torch_linear_to_srgb
 
 from . import config
 from .triage import TriageState, TriageManager
 from .history import TriageHistory
-from ..common.image.thumbnails import ThumbnailPipeline
+from ..common.image import thumbnails
 from .imageview import ImageView
 from .grid import TriageGrid, FilterMode
 from ..common.gui.gridnav import resolve_undo_nav_target
 from .preload import PreloadCache, mip_scale_for_zoom
 from .compare import CompareMode
-from ..common.image import utils as imageutils
-from ..common.video import postprocessor
 
 from unpythonic import namelambda
 from unpythonic.env import env
@@ -1263,18 +1260,11 @@ def _on_filter_combo(sender, app_data) -> None:
 def _generate_noise_pool(tile_size: int) -> List[np.ndarray]:
     """Generate VHS noise placeholder tiles for the thumbnail grid."""
     n = config.PLACEHOLDER_POOL_SIZES[tile_size]  # KeyError → fail-fast for missing entry in config
-    tensors = postprocessor.vhs_noise_pool(
-        n,
-        tile_size, tile_size,
-        device=_device, dtype=_dtype,
-        tint=config.PLACEHOLDER_TINT,
-        brightness=config.PLACEHOLDER_BRIGHTNESS,
-        mode=config.PLACEHOLDER_VHS_MODE,
-    )
-    # Convert linear → sRGB for display (RGB channels only, not alpha).
-    for t in tensors:
-        t[:3] = torch_linear_to_srgb(t[:3])
-    return [imageutils.tensor_to_dpg_flat(t.unsqueeze(0)) for t in tensors]
+    return thumbnails.placeholder_tiles(n, tile_size,
+                                        device=_device, dtype=_dtype,
+                                        tint=config.PLACEHOLDER_TINT,
+                                        brightness=config.PLACEHOLDER_BRIGHTNESS,
+                                        mode=config.PLACEHOLDER_VHS_MODE)
 
 
 def _change_tile_size(new_size: int) -> None:
@@ -1297,7 +1287,7 @@ def _change_tile_size(new_size: int) -> None:
 
     # Restart pipeline at the new size.
     if pipeline is not None and triage is not None and len(triage) > 0:
-        pipeline._tile_size = new_size
+        pipeline.set_tile_size(new_size)
         paths = [e.path for e in triage.images]
         pipeline.start(paths)
 
@@ -1411,9 +1401,9 @@ def main() -> int:
     )
 
     # --- Thumbnail pipeline ---
-    pipeline = ThumbnailPipeline(device=_device, dtype=_dtype,
-                                 tile_size=args.tile_size,
-                                 lanczos_order=config.THUMBNAIL_LANCZOS_ORDER)
+    pipeline = thumbnails.ThumbnailPipeline(device=_device, dtype=_dtype,
+                                            tile_size=args.tile_size,
+                                            lanczos_order=config.THUMBNAIL_LANCZOS_ORDER)
     _app_state["pipeline"] = pipeline
 
     # --- Preload cache ---

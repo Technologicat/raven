@@ -2,7 +2,8 @@
 
 import torch
 
-from raven.common.video.colorspace import rgb_to_yuv, yuv_to_rgb, luminance, hex_to_rgb
+from raven.common.video.colorspace import (rgb_to_yuv, yuv_to_rgb, luminance, hex_to_rgb,
+                                           linear_to_srgb, srgb_to_linear)
 
 
 # ---------------------------------------------------------------------------
@@ -233,3 +234,66 @@ class TestLuminanceRange:
         y = luminance(rgb)
         assert y.min() >= -1e-6
         assert y.max() <= 1.0 + 1e-6
+
+
+# ---------------------------------------------------------------------------
+# Tests: sRGB transfer function
+# ---------------------------------------------------------------------------
+
+class TestSrgbTransfer:
+    """`linear_to_srgb` / `srgb_to_linear` against the values IEC 61966-2-1 fixes."""
+
+    def test_endpoints_are_fixed_points(self):
+        """Black and white are the same in both encodings, in both directions."""
+        ends = torch.tensor([0.0, 1.0], dtype=torch.float64)
+        assert torch.allclose(linear_to_srgb(ends), ends, atol=1e-12)
+        assert torch.allclose(srgb_to_linear(ends), ends, atol=1e-12)
+
+    def test_mid_gray(self):
+        """Linear 0.5 encodes to ~0.7354 — the whole reason the conversion cannot be skipped."""
+        assert torch.allclose(linear_to_srgb(torch.tensor(0.5, dtype=torch.float64)),
+                              torch.tensor(0.735356, dtype=torch.float64), atol=1e-5)
+
+    def test_round_trip(self):
+        x = torch.linspace(0.0, 1.0, 4097, dtype=torch.float64)
+        assert torch.allclose(srgb_to_linear(linear_to_srgb(x)), x, atol=1e-12)
+        assert torch.allclose(linear_to_srgb(srgb_to_linear(x)), x, atol=1e-12)
+
+    def test_segments_meet(self):
+        """The linear segment and the power law agree at the joint, from both sides.
+
+        This is what the derived cutoff buys: quoting the standard's rounded 0.0031308 instead leaves a
+        small step in the curve.
+        """
+        cutoff = 0.04045 / 12.92
+        eps = 1e-9
+        below = linear_to_srgb(torch.tensor(cutoff - eps, dtype=torch.float64))
+        above = linear_to_srgb(torch.tensor(cutoff + eps, dtype=torch.float64))
+        assert torch.allclose(below, above, atol=1e-8)
+
+    def test_monotonic(self):
+        x = torch.linspace(0.0, 1.0, 1025, dtype=torch.float64)
+        assert (linear_to_srgb(x).diff() > 0).all()
+        assert (srgb_to_linear(x).diff() > 0).all()
+
+    def test_no_nan_at_zero(self):
+        """The fractional power has an infinite derivative at zero; the result must still be finite."""
+        assert torch.isfinite(linear_to_srgb(torch.zeros(4, 4))).all()
+        assert torch.isfinite(srgb_to_linear(torch.zeros(4, 4))).all()
+
+    def test_out_of_range_is_clamped(self):
+        x = torch.tensor([-0.5, 1.5], dtype=torch.float64)
+        assert torch.allclose(linear_to_srgb(x), torch.tensor([0.0, 1.0], dtype=torch.float64), atol=1e-12)
+        assert torch.allclose(srgb_to_linear(x), torch.tensor([0.0, 1.0], dtype=torch.float64), atol=1e-12)
+
+    def test_shape_agnostic(self):
+        """Elementwise, so a channel, an image and a batch all work."""
+        for shape in [(7,), (3, 4, 4), (2, 3, 4, 4)]:
+            x = torch.rand(shape)
+            assert linear_to_srgb(x).shape == x.shape
+
+    def test_preserves_dtype(self):
+        for dt in (torch.float32, torch.float64):
+            x = torch.rand(4, 4, dtype=dt)
+            assert linear_to_srgb(x).dtype == dt
+            assert srgb_to_linear(x).dtype == dt
