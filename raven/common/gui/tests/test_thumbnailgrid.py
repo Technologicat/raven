@@ -162,6 +162,66 @@ def test_navigation_walks_the_visible_list(make_grid):
     assert grid.navigate_last() == 10
 
 
+class _RecordingFlasher:
+    """Stands in for `ScrollEndFlasher`; only `show` is reached from the grid."""
+
+    def __init__(self):
+        self.shown = []
+
+    def show(self, where):
+        self.shown.append(where)
+
+
+def test_navigation_refused_at_an_end_flashes_that_end(make_grid):
+    """The gesture the flasher exists for, and the one a scroll-side trigger cannot see.
+
+    Navigation clamps and `set_current` returns early on an unchanged index, so pressing past the last row
+    requests no scroll at all — a flasher handed to `SmoothScrolling` would never fire here.
+    """
+    flasher = _RecordingFlasher()
+    grid = make_grid(n_entries=12, scroll_end_flasher=flasher)
+
+    grid.navigate_prev()  # already on the first entry
+    assert flasher.shown == ["top"]
+
+    grid.navigate_last()  # a move, not a refusal
+    grid.navigate_next()  # now there is no further
+    assert flasher.shown == ["top", "bottom"]
+
+
+def test_navigation_that_moves_does_not_flash(make_grid):
+    """Arriving at an end is a move that succeeded; flashing it would fire on every trip to the end."""
+    flasher = _RecordingFlasher()
+    grid = make_grid(n_entries=12, scroll_end_flasher=flasher)
+
+    grid.navigate_next()
+    grid.navigate_row_down()
+    grid.navigate_last()  # lands on the last entry, having moved
+
+    assert flasher.shown == []
+
+
+def test_jumping_to_an_end_already_there_flashes(make_grid):
+    """End-at-the-end is as much a refused request as Down-at-the-end."""
+    flasher = _RecordingFlasher()
+    grid = make_grid(n_entries=12, scroll_end_flasher=flasher)
+
+    grid.navigate_first()  # already there
+    grid.navigate_last()
+    grid.navigate_last()  # already there
+
+    assert flasher.shown == ["top", "bottom"]
+
+
+def test_a_grid_without_a_flasher_navigates_normally(make_grid):
+    """The flasher is optional, and refusing to move must not depend on having one."""
+    grid = make_grid(n_entries=12)
+
+    grid.navigate_prev()
+
+    assert grid.current == 0
+
+
 def test_replacing_the_entries_drops_the_thumbnails(make_grid):
     """Indices mean something else afterwards, so a kept texture would be a picture of the wrong file."""
     grid = make_grid(n_entries=3)

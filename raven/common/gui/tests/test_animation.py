@@ -270,6 +270,35 @@ class TestSmoothScrollingScrollEntryPoint:
         assert scroll_target not in animation.SmoothScrolling.instances
 
 
+class TestSmoothScrollingStop:
+    def test_stop_deregisters_from_the_animator_so_the_scroll_really_ends(self, scroll_target):
+        """The distinction `stop` exists for: leaving it in the animator means it keeps being rendered,
+        which means it keeps scrolling — a "stop" that does not stop.
+        """
+        scrolling = animation.SmoothScrolling.scroll(target_child_window=scroll_target, target_y_scroll=400)
+        animation.animator.render_frame()
+
+        animation.SmoothScrolling.stop(scroll_target)
+
+        assert scrolling not in animation.animator._animations
+        assert scroll_target not in animation.SmoothScrolling.instances
+
+    def test_stop_runs_the_finish_callbacks(self, scroll_target):
+        """A caller holding the instance has to be told it died, or its reference dangles at a corpse."""
+        calls = []
+        animation.SmoothScrolling.scroll(target_child_window=scroll_target, target_y_scroll=400,
+                                         finish_callback=lambda: calls.append("told"))
+
+        animation.SmoothScrolling.stop(scroll_target)
+
+        assert calls == ["told"]
+
+    def test_stopping_an_idle_window_is_harmless(self, scroll_target):
+        """Idempotent, so a teardown path need not first ask whether anything is running."""
+        animation.SmoothScrolling.stop(scroll_target)
+        animation.SmoothScrolling.stop(scroll_target)
+
+
 class TestSmoothScrollingRetarget:
     def test_the_second_request_does_not_start_a_second_animation(self, scroll_target):
         first = _scroll(scroll_target)

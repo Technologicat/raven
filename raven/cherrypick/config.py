@@ -148,6 +148,17 @@ COMPARE_PAUSED_PULSE_DURATION = 2.0  # seconds, full 1→0→1 cycle when paused
 PAGE_JUMP_ROWS = 0
 
 # ---------------------------------------------------------------------------
+# Scrolling (grid)
+# ---------------------------------------------------------------------------
+
+SMOOTH_SCROLLING = True
+# Nondimensional rate in the half-open interval (0, 1], independent of the render FPS.
+# See `raven.common.gui.animation.SmoothScrolling`.
+SMOOTH_SCROLLING_STEP_PARAMETER = 0.8
+# Seconds, fadeout of the "there is no further this way" overlay. 0 disables it.
+SCROLL_ENDS_HERE_DURATION = 0.5
+
+# ---------------------------------------------------------------------------
 # Help
 # ---------------------------------------------------------------------------
 

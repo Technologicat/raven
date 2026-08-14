@@ -741,6 +741,33 @@ class SmoothScrolling(Animation):
             # to deregister, and we are holding it.
             return cls.instances[target_child_window]
 
+    @classmethod
+    def stop(cls, target_child_window: Union[str, int]) -> None:
+        """Abandon the scroll running on `target_child_window`, if any. Idempotent.
+
+        **The view stays where the glide had got to**; the remaining distance is not travelled. To instead
+        complete the movement at once, retarget with `smooth=False` - a retarget adopts the new request
+        wholesale, so it jumps to the target and ends. Keeping those separate is the point: "jump there
+        now" is expressible either way, and "give up here" would not be.
+
+        Finish callbacks run, so a caller holding a reference is told the object died.
+        `commanded_y_scroll` needs no fixing up - it carries every position written, so it already names
+        where the view was left.
+
+        Use this rather than calling `finish` on an instance. `finish` performs *this class's* teardown -
+        it deregisters from `instances` and runs the finish callbacks - but leaves the animation registered
+        with the animator, which goes on calling its `render_frame`, which goes on scrolling. Only
+        `Animator.cancel` removes it from that list. Measured 2026-08-14; both spellings look like "stop"
+        and only one is.
+
+        A caller holding the instance may equivalently call `animator.cancel(instance)` itself; this exists
+        for callers that have only the window.
+        """
+        with cls.class_lock:
+            instance = cls.instances.get(target_child_window)
+            if instance is not None:
+                animator.cancel(instance)
+
     def _set_y_scroll(self, new_y_scroll: int) -> None:
         """Move the scrollbar, and record where we put it.
 
@@ -1041,6 +1068,12 @@ class ScrollEndFlasher(Overlay, Animation):
                  custom_finish_pred: Optional[Callable] = None):
         """Flasher to indicate when the end of a scrollable area has been reached.
 
+        What it actually asserts is *"a movement request was refused"*, and a caller triggers it wherever
+        its widget's movement lives. Where that is the scroll position - Visualizer's info panel,
+        Librarian's chat log - `SmoothScrolling` can spot the clamp in passing, which is why it takes a
+        `flasher`. A widget whose movement is a cursor, and whose scrolling merely follows it, has no clamp
+        there to see and calls `show` itself; `raven.common.gui.thumbnailgrid` is the worked example.
+
         `target`: DPG ID or tag. The child window for which to build the overlay.
         `tag`: DPG tag, for naming the overlay.
         `duration`: float, fadeout animation duration in seconds.
@@ -1253,3 +1286,19 @@ class ScrollEndFlasher(Overlay, Animation):
         self.animation_running = False
         self.where = None
         self.hide()
+
+    def destroy(self) -> None:
+        """Stop this flasher and delete its overlay windows. For a flasher that outlives its usefulness.
+
+        `finish` only *hides* the overlay, which is right for an animation that has ended and may run
+        again. An app-lifetime flasher never needs more than that, which is why the two other users do not
+        call this; a flasher belonging to a widget that gets rebuilt does, or its windows accumulate.
+        """
+        animator.cancel(self, finalize=True)
+        for window in (self.window_top, self.window_bottom):
+            if window is not None and dpg.does_item_exist(window):  # tag
+                dpg.delete_item(window)
+        self.window_top = None
+        self.window_bottom = None
+        self.drawlist_top = None
+        self.drawlist_bottom = None

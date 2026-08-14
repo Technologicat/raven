@@ -34,6 +34,8 @@ from typing import Optional
 import numpy as np
 import dearpygui.dearpygui as dpg
 
+from ...vendor.IconsFontAwesome6 import IconsFontAwesome6 as fa
+from . import animation as gui_animation
 from . import utils as guiutils
 from .gridnav import resolve_nav_target
 
@@ -83,6 +85,10 @@ class ThumbnailGrid:
                  border_color: tuple = (60, 60, 65, 255),
                  empty_tile_color: tuple = (55, 55, 58, 255),
                  show_position_numbers: bool = True,
+                 smooth_scrolling: bool = True,
+                 smooth_scrolling_step_parameter: float = 0.8,
+                 scroll_end_flash_duration: float = 0.5,
+                 scroll_end_flasher: Optional[gui_animation.ScrollEndFlasher] = None,
                  debug: bool = False):
         """
         *parent*: DPG parent container.
@@ -98,6 +104,15 @@ class ThumbnailGrid:
             The defaults are Raven's standard theme; pass the app's values if it differs.
         *selection_tint*, *current_color*, *border_color*, *empty_tile_color*: tile colours.
         *show_position_numbers*: draw each tile's 1-based position in its corner.
+        *smooth_scrolling*: glide to the current tile instead of jumping to it. A rebuild still repositions
+            instantly — see `_scroll_to_current`.
+        *smooth_scrolling_step_parameter*: nondimensional rate in (0, 1], independent of the render FPS.
+            See `raven.common.gui.animation.SmoothScrolling`.
+        *scroll_end_flash_duration*: fadeout seconds for the "there is no further this way" overlay. One is
+            built automatically when *icon_font* is given, since the overlay targets a child window only
+            this widget knows about. Pass 0 to do without.
+        *scroll_end_flasher*: use this overlay instead of building one. For an app wanting different icons
+            or a `custom_finish_pred`.
         *debug*: log click positions.
         """
         self._lock = threading.RLock()
@@ -123,6 +138,10 @@ class ThumbnailGrid:
         self._border_color = border_color
         self._empty_tile_color = empty_tile_color
         self._show_position_numbers = show_position_numbers
+        self._smooth_scrolling = smooth_scrolling
+        self._smooth_scrolling_step_parameter = smooth_scrolling_step_parameter
+        self._scroll_end_flasher = scroll_end_flasher
+        self._owns_scroll_end_flasher = False  # only tear down one we built ourselves
 
         # Data.
         self._labels: list[str] = []
@@ -148,6 +167,17 @@ class ThumbnailGrid:
         self._child_window_tag = _next_tag("child")
         dpg.add_child_window(parent=parent, tag=self._child_window_tag,
                              width=width, height=height, border=False)
+
+        # Built here rather than by the owner: the overlay targets the child window above, which nothing
+        # outside this class has a reason to know the tag of.
+        if self._scroll_end_flasher is None and icon_font is not None and scroll_end_flash_duration > 0:
+            self._scroll_end_flasher = gui_animation.ScrollEndFlasher(target=self._child_window_tag,  # tag
+                                                                      tag=_next_tag("scroll_end_flasher"),
+                                                                      duration=scroll_end_flash_duration,
+                                                                      font=icon_font,
+                                                                      text_top=fa.ICON_ARROWS_UP_TO_LINE,
+                                                                      text_bottom=fa.ICON_ARROWS_DOWN_TO_LINE)
+            self._owns_scroll_end_flasher = True
 
         # Per-tile drawlists.  Maps visible-list position -> drawlist tag.
         self._tile_drawlists: dict[int, str] = {}
@@ -386,14 +416,18 @@ class ThumbnailGrid:
         with self._lock:
             if not self._visible:
                 return None
-            self.set_current(self._visible[0])
+            if self._visible[0] == self._current:
+                self._flash_scroll_end("top")
+            self.set_current(self._visible[0])  # no-op when unchanged
             return self._visible[0]
 
     def navigate_last(self) -> Optional[int]:
         with self._lock:
             if not self._visible:
                 return None
-            self.set_current(self._visible[-1])
+            if self._visible[-1] == self._current:
+                self._flash_scroll_end("bottom")
+            self.set_current(self._visible[-1])  # no-op when unchanged
             return self._visible[-1]
 
     # ------------------------------------------------------------------
@@ -452,8 +486,8 @@ class ThumbnailGrid:
                 self._needs_rebuild = False
             elif self._scroll_countdown > 0:
                 # Deferred scroll: retry for a few frames after rebuild,
-                # giving DPG time to settle get_y_scroll_max.
-                self._scroll_to_current()
+                # giving DPG time to settle get_y_scroll_max. Instant, not smooth — see `_scroll_to_current`.
+                self._scroll_to_current(smooth=False)
                 self._scroll_countdown -= 1
             if self._pending_current_changed is not None:
                 pending_current = self._pending_current_changed
@@ -491,6 +525,10 @@ class ThumbnailGrid:
     def destroy(self) -> None:
         """Remove all DPG items.  Call on app shutdown."""
         with self._lock:
+            # Before the child window goes: a scroll still in flight would keep writing to a deleted item.
+            gui_animation.SmoothScrolling.stop(self._child_window_tag)
+            if self._owns_scroll_end_flasher:
+                self._scroll_end_flasher.destroy()
             self._clear_textures()
             self._clear_noise_pool()
             guiutils.maybe_delete_item(self._handler_tag)
@@ -651,11 +689,20 @@ class ThumbnailGrid:
         new_idx = resolve_nav_target(self._visible, self._current, delta)
         if new_idx is None:
             return None
-        self.set_current(new_idx)
+        if new_idx == self._current:  # `resolve_nav_target` clamped: we are at that end already
+            self._flash_scroll_end("bottom" if delta > 0 else "top")
+        self.set_current(new_idx)  # no-op when unchanged
         return new_idx
 
-    def _scroll_to_current(self) -> None:
-        """Scroll the grid to make the current tile visible."""
+    def _scroll_to_current(self, smooth: Optional[bool] = None) -> None:
+        """Scroll the grid to make the current tile visible.
+
+        *smooth*: `None` uses the widget's configured setting; `False` forces an instant reposition.
+
+        The rebuild path forces `False`: for a frame or two after items are created `get_y_scroll_max` is
+        stale, so the target clamps to the wrong place and is corrected on a later retry. A jump lands
+        wrong invisibly; a glide would animate *toward* wrong first.
+        """
         if self._current < 0 or self._current not in self._visible:
             return
         vis_pos = self._visible.index(self._current)
@@ -666,10 +713,30 @@ class ThumbnailGrid:
         scroll_y = dpg.get_y_scroll(self._child_window_tag)
         max_scroll = dpg.get_y_scroll_max(self._child_window_tag)
         if row_y < scroll_y:
-            dpg.set_y_scroll(self._child_window_tag, max(0, row_y - _TILE_SPACING))
+            target = max(0, row_y - _TILE_SPACING)
         elif row_y + self._row_height > scroll_y + self._height:
-            target = row_y + self._row_height - self._height + _TILE_SPACING
-            dpg.set_y_scroll(self._child_window_tag, min(target, max_scroll))
+            target = min(row_y + self._row_height - self._height + _TILE_SPACING, max_scroll)
+        else:  # already fully on screen
+            return
+
+        # No flasher here, deliberately: see `_flash_scroll_end`.
+        gui_animation.SmoothScrolling.scroll(target_child_window=self._child_window_tag,
+                                             target_y_scroll=int(target),
+                                             smooth=(self._smooth_scrolling if smooth is None else smooth),
+                                             smooth_step=self._smooth_scrolling_step_parameter)
+
+    def _flash_scroll_end(self, where: str) -> None:
+        """Say "you asked to go further and there is no further", if the owner gave us a flasher.
+
+        *where*: "top" or "bottom".
+
+        Fired here rather than by handing the flasher to `SmoothScrolling` as the info panel and chat log
+        do. Not a second mechanism: the flash means "a movement request was refused", and each widget
+        detects that wherever its movement lives. There it is the scroll position, so the animation sees
+        the clamp itself; here it is the cursor, and a cursor clamped at the last row requests no scroll.
+        """
+        if self._scroll_end_flasher is not None:
+            self._scroll_end_flasher.show(where=where)
 
     def _redraw_tile_by_idx(self, idx: int) -> None:
         """Redraw a single tile (if it's visible) after a state change."""

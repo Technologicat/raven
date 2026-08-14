@@ -1644,6 +1644,9 @@ def main() -> int:
                 on_current_changed=_on_current_changed,
                 on_selection_changed=_on_selection_changed,
                 on_double_click=_on_double_click,
+                smooth_scrolling=config.SMOOTH_SCROLLING,
+                smooth_scrolling_step_parameter=config.SMOOTH_SCROLLING_STEP_PARAMETER,
+                scroll_end_flash_duration=config.SCROLL_ENDS_HERE_DURATION,
                 debug=_debug,
             )
             _app_state["grid"] = grid

@@ -92,6 +92,22 @@ two apps. That means the VHS-noise placeholder standing in for "not loaded yet"
 and the texture-upload glitch when the real thumbnail arrives from the background job — which started as an
 artifact and is now intentional.
 
+## An open question for after the feature works: is one size enough?
+
+Raised by Juha, 2026-08-14, explicitly as something to prototype *after* the rest of this lands rather than
+to design now.
+
+A grid tile has two jobs in tension — small enough to navigate a directory at a glance, large enough to
+actually see what is in the image. A **separate preview pane** showing the selected image larger is the
+obvious answer, and may not be the right one: there may be a tile size that serves both well enough, in
+which case a pane costs horizontal space for nothing. Cherrypick is the evidence *for* a pane (it has a
+full image view beside its grid) and also the evidence against reading too much into that, since triage
+there is about judging one image at a time, where a picker is about finding one among many.
+
+So: settle it by trying tile sizes first, and treat the pane as the fallback if none of them work. Nothing
+in the design above forecloses either — `set_tile_size` already exists, and a pane would be the dialog's
+own widget beside the grid rather than anything the grid needs to know about.
+
 ## Two things the Cherrypick pattern does not solve
 
 - **Cherrypick itself slows down in huge directories.** Its grid materializes a tile for every entry passing

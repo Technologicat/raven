@@ -708,49 +708,20 @@ Note that xdot_viewer's derived sizes carry empirical fudge terms (`-13`, "+2 em
 leading/rounding)"). Those are not margins misnamed, they are unexplained residue — worth a separate look at
 whether the model behind them is wrong, but not part of this pass.
 
-## Smooth scrolling in Cherrypick too, now that Librarian has it
+## Smooth pan and zoom in Cherrypick's image view — a call to make by trying it
 
-*Cluster: ? · Cost: ? · Gate: 0.2.9 · Filed: 2026-08-03*
+*Cluster: ? · Cost: L · Gate: ? · Filed: 2026-08-03*
 
-**The precondition is met** (2026-08-03): Librarian's chat panel has `SmoothScrolling`, the reader-driven
-keys, and the `ScrollEndFlasher`, all live-tested. So three apps now glide — Visualizer, Librarian, and the
-XDot viewer, the last by a different mechanism (see the survey below, and do not go looking for
-`SmoothScrolling` in it) — and Cherrypick's grid is the one that teleports. The odd one out reads as
-unfinished rather than as a decision. Raised by Juha, 2026-07-30, and again on seeing the flasher land.
-(Cherrypick's *image view* looks like it belongs in the same breath and turns out not to; see below.)
+**The grid half of this shipped 2026-08-14**, in `raven.common.gui.thumbnailgrid` rather than in Cherrypick,
+so the file dialog's coming grid view inherits it. What is left is the image view, which was always a
+separate decision — on cost, not on principle.
 
-The flasher is part of the ask now, not just the glide. It is what made the Visualizer and Librarian feel
-like one product rather than two apps that scroll smoothly, so the grid wants both. (The XDot viewer has no
-counterpart and needs none: it pans and zooms a graph, where there is no "end of the content" to arrive at.)
-
-**Where things actually stand**, checked 2026-08-03 rather than recalled:
-
-- **Visualizer's info panel** — `raven.common.gui.animation.SmoothScrolling` plus `ScrollEndFlasher`; the
-  original, and the shape to port.
-- **Librarian's chat panel** — the same two, as of 2026-08-03, with one addition the grid will not need: the
-  flasher is gated on `user_initiated`, because Librarian has content arriving on its own and an ungated
-  flasher strobes once per streamed chunk. Cherrypick's grid scrolls only in response to the user, so it can
-  pass the flasher unconditionally, as the Visualizer does.
-- **XDot viewer** — smooth already, but by a different mechanism, so nobody should go looking for
-  `SmoothScrolling` in it and conclude it is missing. Pan and zoom are `raven.common.smoothvalue.SmoothValue`
-  instances on `xdotwidget.viewport.Viewport`, and the `animate=True` parameter threaded through `zoom_to_fit`
-  / `zoom_to_bbox` / `pan_to_point` chooses `.target` over `.set_immediate`. The two mechanisms are the same
-  idea at different layers: `SmoothScrolling` is a `SmoothInt` accumulator driving `dpg.set_y_scroll`.
-- **Cherrypick's grid** — `grid._scroll_to_current` calls `dpg.set_y_scroll` outright. It does already carry a
-  deferred-scroll countdown (`_scroll_countdown = 3`) for the `get_y_scroll_max` settle lag, i.e. it met the
-  same DPG behaviour the chat view did and worked around it independently.
-- **Cherrypick's image view** — `imageview.pan_by` and the zoom methods assign `_pan_cx` / `_pan_cy` / `_zoom`
-  directly.
-
-**The grid is the item. The image view is a separate decision, on cost rather than on principle.**
-
-The grid is a small port of the Visualizer shape, and the consistency argument applies to it directly: same
-mechanism, same widget kind, `dpg.set_y_scroll` on a child window.
-
-The image view is pan and zoom over a texture, so it would be the *XDot* shape — `SmoothValue` targets — which
-is a rework of its view-state model rather than a port of anything. Done right that would deliver the same
-feel; XDot's pan and zoom are proof that the shape works. So this is not an argument that the motive fails to
-carry. It is that the price is much higher here than for the grid, and the payoff is genuinely uncertain:
+`imageview.pan_by` and the zoom methods assign `_pan_cx` / `_pan_cy` / `_zoom` directly. Smoothing them is
+the *XDot* shape rather than the grid's: `raven.common.smoothvalue.SmoothValue` targets on the view state,
+as `xdotwidget.viewport.Viewport` does, with an `animate=` parameter choosing `.target` over
+`.set_immediate`. That is a rework of the view-state model rather than a port of anything. Done right it
+would deliver the same feel — XDot's pan and zoom are proof the shape works — so this is not an argument
+that the motive fails to carry. The price is much higher here, and the payoff is genuinely uncertain:
 
 - **Cherrypick is a triage tool, where the point is speed.** An animation the user routinely outruns is a tax
   rather than a polish. The grid has no such tension because scrolling there follows selection; the image view
@@ -759,13 +730,9 @@ carry. It is that the price is much higher here than for the grid, and the payof
 - **Nothing about that is decidable on paper.** It depends on the step parameter, the size of the pan steps,
   and how it sits under sustained keying — i.e. on trying it.
 
-So: do the grid on the strength of the consistency argument alone. Take the image view as a separate call,
-prototyped and felt in the actual triage workflow before committing, and be willing to throw the prototype away
-— the rework is large enough that "it turned out to feel worse" is a real outcome worth being ready for.
-
-Consistency includes the knobs, not just the behavior. Visualizer and Librarian both now expose
-`smooth_scrolling`, `smooth_scrolling_step_parameter` and `scroll_ends_here_duration` in their `config.py`;
-Cherrypick has none of the three.
+So: prototype it and feel it in the actual triage workflow before committing, and be willing to throw the
+prototype away — the rework is large enough that "it turned out to feel worse" is a real outcome worth being
+ready for.
 
 ## `replace_last_paragraph`'s `dpg.mutex()` is disabled because it hangs the app
 
