@@ -432,12 +432,17 @@ class FileDialog:
             (".c",): self.img_c,
             (".js", ".json", ".cs", ".cpp", ".h", ".hpp", ".sh", ".pyl", ".rs", ".vbs", ".cmd",
              ".ts", ".go", ".rb", ".lua", ".jl", ".java", ".yaml", ".yml", ".toml", ".ini", ".cfg",
-             ".xml", ".html", ".css"): self.img_script,
+             ".xml", ".html", ".htm", ".css"): self.img_script,
             (".url",): self.img_url,
             (".lnk",): self.img_link,
-            # Prose and tabular text. `.bib` and `.tex` earn their place here: this dialog is how a
-            # bibliography or a paper source gets picked, which is most of what Raven opens.
-            (".txt", ".md", ".rst", ".bib", ".tex", ".log", ".csv", ".tsv"): self.img_note,
+            # Prose, in whatever container. `.bib` and `.tex` earn their place because this dialog is how a
+            # bibliography or a paper source gets picked; `.docx` / `.odt` / `.org` because Raven's document
+            # database reads them (`llm_docs_exts`), so they turn up here as things to open.
+            #
+            # Deliberately absent: `.pdf`, `.pptx`, `.odp`. There is no icon for a presentation, and the
+            # fallback — the generic document — is already the right picture for all three.
+            (".txt", ".md", ".rst", ".org", ".bib", ".tex", ".docx", ".odt",
+             ".log", ".csv", ".tsv"): self.img_note,
             (".mp3", ".ogg", ".wav", ".flac", ".m4a", ".opus", ".aac"): self.img_music_note,
             (".mp4", ".mov", ".mkv", ".webm", ".avi", ".m4v", ".wmv"): self.img_video,
             (".obj", ".fbx", ".blend"): self.img_object,

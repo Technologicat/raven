@@ -111,6 +111,31 @@ move and would rename the app.
 Do at the same time, since they are the same decision: the sibling item recording that the *fleet* name
 `corvid` is likewise taken, and the distribution there is `corvid-lab`.
 
+## A file-type icon set of our own, covering the formats Raven actually opens
+
+*Cluster: filedialog · Cost: M · Gate: ? · Filed: 2026-08-14 · See also: `briefs/researchers-night/filedialog-thumbnails-brief.md`*
+
+`raven/vendor/file_dialog/images/` is the upstream set, and it has no icon for a **presentation**
+(`.pptx`, `.odp`) or a **spreadsheet** (`.xlsx`, `.ods` — support planned, see "Spreadsheets in the docs DB
+and attachments"). Both currently fall back to the generic document, which is not wrong so much as
+uninformative: Raven's document database reads presentations today, so they are a format a user picks here
+rather than an exotic one.
+
+Since `file_dialog` is a fork in all but name (see `raven/vendor/README.md`), there is no upstream to stay
+compatible with, and drawing our own set is open.
+
+**Do it once, for both sizes.** `filedialog-thumbnails-brief.md` already asks for a 512×512 tileset so the
+grid view can show non-image files as tiles; the row icons are the same concepts at 16×16. One design pass
+producing both is a great deal less work than two, and is the only way they end up looking like one set.
+
+What the set has to cover is not a fresh decision: it is the `_ext_icons` table in `fdialog.py`, which now
+runs to ~110 extensions in sixteen groups, plus the two missing ones above. Worth reviewing whether some of
+those groups should split while drawing them — model weights currently share the shared-library icon, which
+was a judgement call rather than an obvious grouping.
+
+**Generate at 512 and downscale.** DPG scales textures nearest-neighbor, so every size below the source has
+to be resampled with Lanczos rather than handed to DPG; the brief covers the mechanics.
+
 ## `--qr`: a "Get Raven" QR code overlay for demoing at an exhibit
 
 *Cluster: ? · Cost: S · Gate: RN2026 · Filed: 2026-08-14*
