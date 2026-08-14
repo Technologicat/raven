@@ -250,10 +250,86 @@ def test_a_new_listing_asks_again(make_grid):
 def test_a_result_is_routed_to_the_entry_that_asked_for_it(make_grid):
     """The pipeline counts positions within its batch, which are not entry indices."""
     grid = make_grid(on_screen=[1, 3])
-    grid.set_listing([_entry("a.txt"), _entry("b.png"), _entry("c.txt"), _entry("d.png")])
+    entries = [_entry("a.txt"), _entry("b.png"), _entry("c.txt"), _entry("d.png")]
+    grid.set_listing(entries)
     grid.tick()
     grid.tick()
     grid._pipeline.finish(results=[1])  # the second image of the batch, i.e. entry 3
     grid.tick()
-    assert grid.has_thumbnail(3)
-    assert not grid.has_thumbnail(1)
+    assert entries[3].path in grid._thumbnail_cache
+    assert entries[1].path not in grid._thumbnail_cache
+
+
+# --------------------------------------------------------------------------------
+# The thumbnail cache
+
+def test_a_re_listing_reuses_the_decoded_thumbnails(make_grid):
+    """The find field re-lists on every keystroke; decoding again each time is the cost this removes.
+
+    Keyed by path, because the index a file occupies moves whenever the listing is re-filtered or re-sorted
+    — a texture remembered by index would be a picture of the wrong file.
+    """
+    grid = make_grid(on_screen=[0])
+    entries = [_entry("a.png"), _entry("b.png")]
+    grid.set_listing(entries)
+    grid.tick()
+    grid.tick()
+    grid._pipeline.finish(results=[0])
+    grid.tick()
+    texture = grid._thumbnail_cache[entries[0].path]
+
+    # Re-list with the order reversed, as a re-sort would: the same file, a different index.
+    grid.set_listing([entries[1], entries[0]])
+    assert grid._shared_images.get(1) == texture   # re-attached at its new index...
+    assert grid._thumbnail_cache[entries[0].path] == texture   # ...from the same texture as before
+
+
+def test_a_cached_thumbnail_is_not_decoded_again(make_grid):
+    """Having the picture already is what keeps it out of the decode queue."""
+    grid = make_grid(on_screen=[0])
+    entries = [_entry("a.png")]
+    grid.set_listing(entries)
+    grid.tick()
+    grid.tick()
+    grid._pipeline.finish(results=[0])
+    grid.tick()
+    batches_after_first_decode = len(grid._pipeline.batches)
+
+    grid.set_listing(entries)  # what a keystroke in the find field does
+    for _ in range(4):
+        grid.tick()
+    assert len(grid._pipeline.batches) == batches_after_first_decode
+
+
+def test_eviction_never_takes_a_thumbnail_the_listing_is_showing(make_grid):
+    """Evicting an on-screen tile would blank it and decode it again, which is the opposite of the point.
+
+    So a directory larger than the limit still displays in full; the limit bounds what is kept for folders
+    that are no longer on screen.
+    """
+    grid = make_grid(on_screen=[0])
+    grid._thumbnail_cache_limit = 1
+    old = _entry("gone.png")
+    shown = [_entry("here1.png"), _entry("here2.png")]
+    grid._thumbnail_cache = {old.path: "tex_old", shown[0].path: "tex_1", shown[1].path: "tex_2"}
+
+    grid.set_listing(shown)
+
+    assert old.path not in grid._thumbnail_cache          # the one not on screen went...
+    assert shown[0].path in grid._thumbnail_cache         # ...and the shown ones stayed, over the limit
+    assert shown[1].path in grid._thumbnail_cache
+
+
+def test_changing_the_tile_size_empties_the_cache(make_grid):
+    """Every cached tile is the wrong size afterwards, and a wrong-sized one is worse than none."""
+    grid = make_grid(on_screen=[0])
+    entries = [_entry("a.png")]
+    grid.set_listing(entries)
+    grid.tick()
+    grid.tick()
+    grid._pipeline.finish(results=[0])
+    grid.tick()
+    assert grid._thumbnail_cache
+
+    grid.set_tile_size(TILE * 2)
+    assert grid._thumbnail_cache == {}

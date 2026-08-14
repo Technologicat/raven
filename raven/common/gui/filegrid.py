@@ -17,26 +17,52 @@ than two — a grid with the documents missing from it would be the common view 
 
 Not a widget for one app: the owner supplies the entries and the icon vocabulary, and gets back a grid.
 What makes it a *file* grid rather than a thumbnail grid is only that it speaks `FileEntry`.
+
+**Why the thumbnail cache lives here and not in `ThumbnailGrid`.** The grid deliberately knows nothing about
+what an entry *is* — labels and indices, and no notion of identity — while a cache needs a stable key, which
+here is the path. Pushing it down would mean widening the shared API with a "key for this index" hook for a
+single consumer.
+
+And the need is not shared either. Cherrypick sets its entries once per folder and filters with
+`set_visible`, so its indices never move and it never re-decodes; what bites it is *unbounded* texture
+growth in a huge folder, which an evicting cache would make worse rather than better. The reusable half is
+already shared: `ThumbnailGrid.set_shared_image`, the hook that lets an owner hold textures of its own
+across a rebuild.
 """
 
 __all__ = ["FileGrid"]
 
 import logging
 import pathlib
+import threading
 import time
 from collections.abc import Callable, Mapping, Sequence
 from typing import Optional, Union
 
 import torch
 
+import dearpygui.dearpygui as dpg
+
 from .. import deviceinfo
 from ..filelisting import FileEntry
 from ..image import lanczos
 from ..image import thumbnails
+from . import utils as guiutils
 from .thumbnailgrid import ThumbnailGrid
 from .tileicons import TileIconCache
 
 logger = logging.getLogger(__name__)
+
+# Counter for unique DPG tags.
+_tag_counter = 0
+_tag_lock = threading.Lock()
+
+
+def _next_tag() -> str:
+    global _tag_counter
+    with _tag_lock:
+        _tag_counter += 1
+        return f"filegrid_thumb_tex_{_tag_counter}"
 
 # Roughly how much placeholder texture memory to keep, as tile_size² × count. Constant-ish by design: small
 # tiles need many distinct noise tiles before the repetition shows, large ones need few, and this is what
@@ -65,6 +91,7 @@ class FileGrid(ThumbnailGrid):
                  thumbnail_dtype: torch.dtype = torch.float32,
                  lanczos_order: int = lanczos.DEFAULT_ORDER,
                  placeholder_count: Optional[int] = None,
+                 thumbnail_cache_size: int = 512,
                  settle_time: float = 0.15,
                  on_current_entry_changed: Optional[Callable[[Optional[FileEntry]], None]] = None,
                  on_activate: Optional[Callable[[FileEntry], None]] = None,
@@ -83,6 +110,11 @@ class FileGrid(ThumbnailGrid):
         *placeholder_count*: how many distinct noise tiles stand in for the not-yet-decoded images. `None`
             scales it to the tile size so the memory stays about constant; 0 does without them, leaving a
             flat colour.
+        *thumbnail_cache_size*: how many decoded thumbnails to keep, by path, across re-listings. Costs
+            `tile_size² × 4` floats each — a quarter of a megabyte at 128 px — and buys a free re-filter, a
+            free re-sort, and a free return to a folder visited a moment ago. Entries currently on the
+            listing are never evicted, so a directory larger than this still shows every tile; the limit
+            bounds what is kept for folders no longer on screen.
         *settle_time*: seconds the on-screen set must hold still before decoding starts. What stops a scroll
             from cancelling and restarting the decoder on the way past every row.
         *on_current_entry_changed*, *on_activate*: as `ThumbnailGrid`'s `on_current_changed` and
@@ -131,6 +163,10 @@ class FileGrid(ThumbnailGrid):
         self._settle_time = settle_time
         self._placeholder_count = placeholder_count
 
+        # Decoded thumbnails, by path. Insertion-ordered, so the oldest is the first key.
+        self._thumbnail_cache: dict[str, str] = {}
+        self._thumbnail_cache_limit = thumbnail_cache_size
+
         self._refresh_placeholders()
 
     # ------------------------------------------------------------------
@@ -143,6 +179,12 @@ class FileGrid(ThumbnailGrid):
         The cursor is re-anchored **by path**, so a listing rebuilt under a changed filter or a changed sort
         leaves it on the same file. It falls to the first entry when that file is no longer listed, which is
         the only honest answer.
+
+        **Thumbnails already decoded are re-attached, not decoded again.** A file dialog re-lists constantly
+        — every keystroke in the find field is a new listing of the same directory — and the entries a file
+        occupies move under it each time, so a texture remembered by index would be a picture of the wrong
+        file. Remembering by path costs a dictionary and makes a re-filter, a re-sort and a return to a
+        recently visited folder all free.
         """
         with self._lock:
             previous_path = self._current_path()
@@ -160,10 +202,15 @@ class FileGrid(ThumbnailGrid):
                 name = self._icon_name_for(entry)
                 if name is None:
                     self._decodable.add(idx)
+                    cached = self._thumbnail_cache.get(entry.path)
+                    if cached is not None:
+                        self.set_shared_image(idx, cached)
                     continue
                 texture = self._icons.texture(name)
                 if texture is not None:
                     self.set_shared_image(idx, texture)
+
+            self._evict_thumbnails()
 
             if previous_path is not None:
                 for idx, entry in enumerate(self._entries):
@@ -198,7 +245,7 @@ class FileGrid(ThumbnailGrid):
         """
         for position, flat_rgba in self._pipeline.poll():
             if 0 <= position < len(self._batch):
-                self.set_thumbnail(self._batch[position], flat_rgba)
+                self._store_thumbnail(self._batch[position], flat_rgba)
         self.update()
         self._pump_decoding()
 
@@ -210,6 +257,7 @@ class FileGrid(ThumbnailGrid):
             super().set_tile_size(size)  # drops every texture, ours and the icons' mapping alike
             self._icons.set_tile_size(size)
             self._pipeline.set_tile_size(size)
+            self._clear_thumbnail_cache()  # every cached tile is now the wrong size
             self._batch = []
             self._batch_finished = True
             self._attempted = set()
@@ -227,7 +275,59 @@ class FileGrid(ThumbnailGrid):
         with self._lock:
             self._pipeline.shutdown()
             self._icons.destroy()
+            self._clear_thumbnail_cache()
             super().destroy()
+
+    # ------------------------------------------------------------------
+    # Internal: the thumbnail cache
+    # ------------------------------------------------------------------
+
+    def _store_thumbnail(self, idx: int, flat_rgba) -> None:
+        """Take a decoded thumbnail from the pipeline: cache it by path, and show it.
+
+        A **static** texture, and one the cache owns. Static because DPG carries a per-frame cost for every
+        registered *dynamic* texture whether or not it is drawn, and a cache exists precisely to hold
+        textures nothing is currently drawing — the same reason Cherrypick's preload cache keeps flat arrays
+        rather than textures. Owned by the cache because `ThumbnailGrid` discards its own textures whenever
+        the entries change, which here is every keystroke.
+        """
+        with self._lock:
+            if not (0 <= idx < len(self._entries)):
+                return
+            path = self._entries[idx].path
+            ts = self._tile_size
+            if len(flat_rgba) != ts * ts * 4:
+                return  # stale: the tile size changed while this was in flight
+            tag = _next_tag()
+            with dpg.texture_registry():
+                dpg.add_static_texture(ts, ts, default_value=flat_rgba, tag=tag)
+            self._thumbnail_cache[path] = tag
+            self.set_shared_image(idx, tag)
+
+    def _evict_thumbnails(self) -> None:
+        """Drop the oldest cached thumbnails, down to the limit.
+
+        **Never one the current listing shows**, however old: evicting a tile that is on screen would blank
+        it and then decode it again, which is the opposite of the point. So a directory larger than the
+        limit still displays in full — what the limit bounds is how much is kept for folders that are not on
+        screen any more, which is what makes going back to one free.
+        """
+        excess = len(self._thumbnail_cache) - self._thumbnail_cache_limit
+        if excess <= 0:
+            return
+        in_use = {entry.path for entry in self._entries}
+        for path in list(self._thumbnail_cache):  # insertion order: oldest first
+            if excess <= 0:
+                break
+            if path in in_use:
+                continue
+            guiutils.maybe_delete_item(self._thumbnail_cache.pop(path))
+            excess -= 1
+
+    def _clear_thumbnail_cache(self) -> None:
+        for tag in self._thumbnail_cache.values():
+            guiutils.maybe_delete_item(tag)
+        self._thumbnail_cache.clear()
 
     # ------------------------------------------------------------------
     # Internal
@@ -283,7 +383,10 @@ class FileGrid(ThumbnailGrid):
                 self._attempted.update(self._batch)
 
             wanted = [idx for idx in self.visible_on_screen()
-                      if idx in self._decodable and idx not in self._textures and idx not in self._attempted]
+                      # `_shared_images` is where a decoded thumbnail lands, the cache owning the texture —
+                      # so an entry already in it has its picture, whether from this listing or a previous
+                      # one that put it in the cache.
+                      if idx in self._decodable and idx not in self._shared_images and idx not in self._attempted]
             now = time.monotonic()
             if wanted != self._wanted:
                 self._wanted = wanted
