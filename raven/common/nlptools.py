@@ -14,7 +14,7 @@ Backends:
   - machine translation (seq2seq models)
 """
 
-__all__ = {"default_stopwords",
+__all__ = ["default_stopwords",
            "load_spacy_pipeline", "spacy_analyze",
            "serialize_spacy_pipeline", "deserialize_spacy_pipeline",
            "serialize_spacy_docs", "deserialize_spacy_docs",
@@ -23,7 +23,7 @@ __all__ = {"default_stopwords",
            "load_embedder", "embed_sentences",
            "load_translator", "translate",
            "count_frequencies", "detect_named_entities",
-           "suggest_keywords"}
+           "suggest_keywords"]
 
 import logging
 logger = logging.getLogger(__name__)
