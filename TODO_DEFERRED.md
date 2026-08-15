@@ -13,6 +13,31 @@ importer first. Recorded here rather than in that item because a trigger nobody 
 the tool for finding things in the backlog cannot be gated on someone remembering to look for it *in* the
 backlog. The recurring moment to ask is the triage step in the release procedure.
 
+## Should `raven/common/__init__.py` re-export its submodules?
+
+*Cluster: hygiene-sweep · Cost: ? · Gate: needs a measurement · Filed: 2026-08-16*
+
+`raven/common/__init__.py` is empty, so none of the 17 submodules under it are re-exported. Juha's read is
+that this is an oversight (2026-08-16); the fleet convention is a star-import re-export per submodule, and
+`pyproject.toml`'s per-file-ignores already allow `F401`/`F403` in `__init__.py` for exactly that.
+
+**Two things have to be settled before changing it, and the first may dissolve the item.**
+
+- **It may not be an oversight.** `CLAUDE.md:414` prefers dotted imports — `import module` +
+  `module.func()`, with an alias where the name is ambiguous. Under that convention nothing ever writes
+  `from raven.common import X`, so a re-export buys only REPL star-import convenience, which `CLAUDE.md:413`
+  already provides at the *module* level via `__all__`. If the dotted-import rule is the real intent, the
+  empty `__init__.py` is consistent with it and should stay, with a comment saying so.
+- **The import cost is real and unmeasured.** `common/deviceinfo.py:14` imports `torch` at module level, and
+  `nlptools` pulls the NLP stack. An eager star-import makes every `import raven.common` pay for all of it,
+  including on CLI startup paths that currently touch only the light modules. Measure `python -X importtime`
+  on `import raven.common` as-is versus with the re-exports in, and check which entry points import the
+  package at all, before deciding.
+
+A middle option if the measurement bites: re-export only the dependency-light modules and leave the heavy
+ones to dotted imports. That is a defensible split, but it is an asymmetry a future reader will trip over,
+so it needs the reason written at the site.
+
 ## Two things a triage pass should know
 
 Written down 2026-08-12, after a pass over the whole file, because both change how the remaining items read.
@@ -862,6 +887,23 @@ The caveat that stops this from settling it: **the session was primed.** The ski
 before, by the same agent, and its description sat in the available-skills list. The clean test is a session
 with no such history — a fresh context arriving at DPG work cold. Worth one more observation before cutting
 the index, since cutting it is the irreversible direction.
+
+**A distinction worth applying to the result, 2026-08-16.** Skills split by where their trigger lives, and
+the two kinds cannot be judged by the same evidence:
+
+- **Domain-keyed** — the subject matter appears in what Juha asks for. `dpg` is one: "FileDialog",
+  "thumbnail preview" *are* DPG vocabulary, so the request carries the trigger and description matching
+  can do the work.
+- **Method-keyed** — the trigger is a technique the agent chooses, and no request will ever name it. The
+  `callgraph` skill is one: a session opens with "let's continue with the FileDialog work", never with
+  "explore the codebase", so exploration is a means, not the ask. Its description already carries the
+  right vocabulary and it still does not fire. No wording fixes that; a method-keyed skill needs an
+  always-loaded trigger, which `~/.claude/CLAUDE.md` now carries under "The codebase is bigger than what
+  you have read".
+
+So a `callgraph` pointer earning its place in an always-loaded file says nothing about whether the DPG
+index does. The question here stays exactly as posed — it just should not be settled by generalizing from
+the other case.
 
 ## The 8/3 pass: bare DPG margins should name themselves
 
