@@ -895,13 +895,13 @@ the two kinds cannot be judged by the same evidence:
   "thumbnail preview" *are* DPG vocabulary, so the request carries the trigger and description matching
   can do the work.
 - **Method-keyed** — the trigger is a technique the agent chooses, and no request will ever name it. The
-  `callgraph` skill is one: a session opens with "let's continue with the FileDialog work", never with
+  `code-exploration` skill is one: a session opens with "let's continue with the FileDialog work", never with
   "explore the codebase", so exploration is a means, not the ask. Its description already carries the
   right vocabulary and it still does not fire. No wording fixes that; a method-keyed skill needs an
   always-loaded trigger, which `~/.claude/CLAUDE.md` now carries under "The codebase is bigger than what
   you have read".
 
-So a `callgraph` pointer earning its place in an always-loaded file says nothing about whether the DPG
+So a `code-exploration` pointer earning its place in an always-loaded file says nothing about whether the DPG
 index does. The question here stays exactly as posed — it just should not be settled by generalizing from
 the other case.
 
