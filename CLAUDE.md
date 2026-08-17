@@ -197,10 +197,11 @@ on the Librarian backend).
 | `raven-qoi2png` | image format conversion |
 | `raven-check-cuda`, `raven-check-audio-devices` | environment diagnostics |
 
-**To see what an app is doing, use its own flags: `--log-level DEBUG` and `--log PATH`.** Every GUI app and
-the server takes both — pose editor, settings editor, cherrypick, conference timer, librarian, minichat,
-visualizer, its importer CLI, xdot viewer, server. `--log` writes the log where you ask instead of leaving
-you to redirect a stream you also want to watch.
+**To see what an app is doing, use its own flags: `--log-level DEBUG` and `--log PATH`.** Every app with a
+frontend takes both — the GUI apps (pose editor, settings editor, cherrypick, conference timer, librarian,
+visualizer, xdot viewer), `raven-minichat` (a terminal REPL, not a GUI), the visualizer's importer CLI, and
+the server. `--log` writes the log where you ask instead of leaving you to redirect a stream you also want
+to watch.
 
 - **`--debug` is not a logging flag.** In `raven-cherrypick` it turns on debug *overlays* — pan/zoom
   coordinates, click positions — and does nothing to the log level. Reaching for it and finding an empty

@@ -13,6 +13,23 @@ importer first. Recorded here rather than in that item because a trigger nobody 
 the tool for finding things in the backlog cannot be gated on someone remembering to look for it *in* the
 backlog. The recurring moment to ask is the triage step in the release procedure.
 
+## String quotes: sweep the tree onto double quotes
+
+*Cluster: hygiene-sweep · Cost: mechanical · Gate: none · Filed: 2026-08-17*
+
+The style guide now states the preference (double quotes, single ones only where the value itself contains
+a double quote). The tree does not follow it: measured 2026-08-17, `add_argument` alone has 46 single-quoted
+flags against 83 double-quoted, so this is a repo-wide inconsistency rather than a few slips.
+
+Mechanical and checkable, which is what makes it safe to do in one pass rather than opportunistically:
+`ruff format` normalizes quotes, and the invariant — nothing changed but quote characters — is provable by
+comparing the parsed AST before and after, or by `ruff check` staying green on an otherwise untouched diff.
+Reading the diff would not verify it; the check would.
+
+Worth doing when nothing else is in flight, since it touches many files and would collide with any open
+branch. Discovered while auditing which entry points offer `--log` (2026-08-17): a grep for `"--log"` missed
+`raven-cherrypick`, which declares `'--log'`.
+
 ## Should `raven/common/__init__.py` re-export its submodules?
 
 *Cluster: hygiene-sweep · Cost: ? · Gate: needs a measurement · Filed: 2026-08-16*

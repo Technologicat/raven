@@ -96,6 +96,10 @@ This wraps all imports in a `timer` block to measure and log startup time. Impor
 - **Nonce objects**: `gensym("label")` when you need unique identity with readability.
 - **Config modules**: Module-level variables, lowercase, with detailed comments.
 - **DPG widget tags**: String literals, `snake_case`, commented with `# tag` on the same line for searchability.
+- **String quotes**: double, `"like this"`. Single quotes are for the case that earns them — a value that
+  itself contains a double quote, where `'he said "no"'` beats escaping. Not a rule anybody should have to
+  think about; it exists so that greps for a literal find it. (The omission of this line let the tree drift
+  to roughly a third single-quoted; a sweep is filed in `TODO_DEFERRED.md`.)
 
 ## Docstrings
 
