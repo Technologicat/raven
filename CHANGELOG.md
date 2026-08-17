@@ -65,8 +65,8 @@
 - **the thumbnail grid scrolls smoothly**, and flashes an arrow at the top or bottom edge as you arrive there, and again if you press or wheel further. It was the last view in the constellation that jumped. A rebuild — changing the filter, or the tile size — still repositions instantly, since gliding there would animate toward a position that is about to be corrected.
   - `SMOOTH_SCROLLING`, `SMOOTH_SCROLLING_STEP_PARAMETER` and `SCROLL_ENDS_HERE_DURATION` in `raven/cherrypick/config.py` tune or disable both.
 
-- **"Open image folder" now shows you the pictures.** It opens in the thumbnail grid, and a folder's images are listed as you browse — so you can tell the right folder from the one next to it by looking, instead of by remembering what the name meant. Walk into a folder and press **Pick folder** to take the one you are looking at; clicking a folder and pressing the button still takes that one. The line above the buttons names whichever it would be.
-  - The images are there to be looked at, not picked — they are how you judge whether this is the right folder. So they are dimmed and do not respond to clicks, the answer this dialog gives being a folder.
+- **"Open image folder" now shows you the pictures.** It opens in the thumbnail grid, listing a folder's images as you browse. Walk into a folder and press **Pick folder** to take the one you are looking at; clicking a folder and pressing the button still takes that one, and the line above the buttons names whichever it would be.
+  - The images are there to be looked at, not picked — they are how you judge whether this is the right folder, instead of remembering what its name meant. So they are dimmed and do not respond to clicks, the answer this dialog gives being a folder.
 
 *Raven-pdf2bib*
 
