@@ -197,6 +197,19 @@ on the Librarian backend).
 | `raven-qoi2png` | image format conversion |
 | `raven-check-cuda`, `raven-check-audio-devices` | environment diagnostics |
 
+**To see what an app is doing, use its own flags: `--log-level DEBUG` and `--log PATH`.** Every GUI app and
+the server takes both — pose editor, settings editor, cherrypick, conference timer, librarian, minichat,
+visualizer, its importer CLI, xdot viewer, server. `--log` writes the log where you ask instead of leaving
+you to redirect a stream you also want to watch.
+
+- **`--debug` is not a logging flag.** In `raven-cherrypick` it turns on debug *overlays* — pan/zoom
+  coordinates, click positions — and does nothing to the log level. Reaching for it and finding an empty
+  log is a two-minute detour that has been taken at least once.
+- **Twelve of the twenty-four console scripts still lack them**, all of them the smaller CLI tools:
+  `raven-indexer`, the arXiv four, `raven-burstbib`, `raven-fixbib`, `raven-dehyphenate`, `raven-qoi2png`,
+  the two `raven-check-*`, and `raven-pdf2bib` (which has `--log-level` but not `--log`). Audited
+  2026-08-17. That is a gap to close rather than a convention with exceptions.
+
 ### Running Tests
 
 ```bash
