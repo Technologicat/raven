@@ -5,9 +5,12 @@ to mean the same thing in both. The grid has had a cursor since it was written; 
 under the same method names, so the key handler picks a navigator once and stops caring which view is up.
 
 What this class owns is the *state*: which entry the cursor is on, where it goes on a keypress, and where
-it lands when the listing is rebuilt underneath it. What it deliberately does not own is how a row *looks* —
-that arrives as a paint callback, because a row's appearance already depends on things this class has no
-business knowing (a `..` entry, an unselectable file, a selection).
+it lands when the listing is rebuilt underneath it. What it does not own is how a row *looks* or where it
+*sits* — both arrive as callbacks, because both already depend on things this class has no business
+knowing: whether a row is `..`, whether it is an unselectable file, whether it is selected, how tall the
+header above it is.
+
+The result is that nothing here imports DPG, so the rules can be tested by stating them.
 
 The rebuild policy is `gridnav.reanchor_cursor`, shared with the grid so two views of one listing cannot
 disagree about where the cursor went.
@@ -18,11 +21,8 @@ __all__ = ["TableCursor"]
 import logging
 import threading
 from collections.abc import Callable, Sequence
-from typing import Any, Optional, Union
+from typing import Any, Optional
 
-import dearpygui.dearpygui as dpg
-
-from . import utils as guiutils
 from .gridnav import reanchor_cursor
 
 logger = logging.getLogger(__name__)
@@ -37,28 +37,35 @@ class TableCursor:
 
     def __init__(self, *,
                  on_paint: Callable[[int, bool], None],
-                 scroll_target: Optional[Union[str, int]] = None,
-                 row_height: int = 0,
+                 on_scroll_into_view: Optional[Callable[[int], None]] = None,
+                 page_size: Optional[Callable[[], int]] = None,
                  on_current_changed: Optional[Callable[[Optional[int]], None]] = None):
         """
         *on_paint*: ``f(idx, is_cursor)`` — draw entry `idx` as the cursor row, or as an ordinary one.
             Called for the row the cursor left and the row it arrived at, so an owner that paints by
             binding a theme has only to bind the cursor's theme or the row's usual one.
 
-        *scroll_target*: the scrolling container holding the rows, if the view should follow the cursor.
-            `None` leaves scrolling alone, which is what a list short enough to be wholly visible wants.
+        *on_scroll_into_view*: ``f(idx)`` — bring row `idx` into view. `None` for a list short enough to be
+            wholly visible, which wants no scrolling at all.
 
-        *row_height*: pixels per row, for turning a cursor index into a scroll offset and for sizing a page.
-            Required for scrolling; ignored without a *scroll_target*.
+        *page_size*: ``f() -> int`` — how many rows a page key moves. `None` moves one row, which at least
+            still moves.
 
         *on_current_changed*: ``f(idx)`` — the cursor moved, by any route. `None` when the cursor arrives
             nowhere (an empty listing).
+
+        Geometry arrives as callbacks for the same reason painting does: it is the owner's, and guessing at
+        it from here goes wrong quietly. A DPG table reports no `rect_size` at all and answers
+        `get_widget_size` with its *configured* `(-1, -1)`, so arithmetic against "the view's height" reads
+        -1 and scrolls on the third keypress; and a row's pitch is not the height the cells were created
+        with — asking for 16 produced 18-pixel cells at a 22-pixel pitch, below a header that is itself an
+        offset. Every one of those is measurable by the owner and a guess from here.
         """
         self._lock = threading.RLock()
         self._on_paint = on_paint
         self._on_current_changed = on_current_changed
-        self._scroll_target = scroll_target
-        self._row_height = row_height
+        self._on_scroll_into_view = on_scroll_into_view
+        self._page_size = page_size
 
         self._keys: list = []
         self._current: int = -1
@@ -68,9 +75,6 @@ class TableCursor:
         # keeping the two apart is what lets the cursor return when its entry comes back. Same distinction
         # as `FileGrid.set_current`.
         self._anchor_key: Any = None
-        # The scroll offset last written, not the one last read: DPG does not report a commanded scroll
-        # back for a frame or more, so reading the position to decide the next one compounds the lag.
-        self._commanded_y_scroll: float = 0.0
 
     # ------------------------------------------------------------------
     # Listing
@@ -176,18 +180,13 @@ class TableCursor:
             return last
 
     def rows_per_page(self) -> int:
-        """How far a page key moves: most of a screenful, keeping a row of context.
-
-        One row short of a full page deliberately, so paging leaves something recognisable on screen to
-        read the new position against — the same rule the Librarian chat log and the Visualizer info panel
-        follow. Falls back to one row when the view cannot be measured, which at least still moves.
-        """
-        with self._lock:
-            if self._scroll_target is None or self._row_height <= 0:
-                return 1
-            with guiutils.nonexistent_ok():
-                _, height = guiutils.get_widget_size(self._scroll_target)
-                return max(1, int(height / self._row_height) - 1)
+        """How far a page key moves. One row when the owner supplies no answer, which at least still moves."""
+        if self._page_size is None:
+            return 1
+        try:
+            return max(1, int(self._page_size()))
+        except Exception as exc:  # noqa: BLE001 -- an unmeasurable view must not make the key dead
+            logger.error(f"TableCursor.rows_per_page: instance 0x{id(self):x}: {type(exc)}: {exc}")
             return 1
 
     # ------------------------------------------------------------------
@@ -217,32 +216,9 @@ class TableCursor:
             logger.error(f"TableCursor._notify: instance 0x{id(self):x}: {type(exc)}: {exc}")
 
     def _scroll_to_current(self) -> None:
-        """Bring the cursor row into view, moving the least that does so.
-
-        Scrolling only when the row is actually outside the visible band is what keeps arrow navigation
-        from yanking the view on every keypress: within the band, the cursor moves and the listing holds
-        still, which is what a reader expects.
-        """
-        if self._scroll_target is None or self._row_height <= 0 or self._current < 0:
+        if self._on_scroll_into_view is None or self._current < 0:
             return
-        with guiutils.nonexistent_ok():
-            _, height = guiutils.get_widget_size(self._scroll_target)
-            if not height:
-                return
-            row_top = self._current * self._row_height
-            row_bottom = row_top + self._row_height
-
-            # Against the offset last commanded rather than the one DPG reports: a scroll issued on the
-            # previous keypress is not visible in `get_y_scroll` yet, so reading it back would compute this
-            # move from a stale position and fall a row behind on every repeat.
-            view_top = self._commanded_y_scroll
-            if row_top < view_top:
-                new_top = row_top
-            elif row_bottom > view_top + height:
-                new_top = row_bottom - height
-            else:
-                return
-
-            new_top = max(0.0, float(new_top))
-            self._commanded_y_scroll = new_top
-            dpg.set_y_scroll(self._scroll_target, new_top)
+        try:
+            self._on_scroll_into_view(self._current)
+        except Exception as exc:  # noqa: BLE001 -- a view that will not scroll must not strand the cursor
+            logger.error(f"TableCursor._scroll_to_current: instance 0x{id(self):x}: {type(exc)}: {exc}")

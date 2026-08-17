@@ -26,7 +26,7 @@ Thread-safe: all public methods and mouse handlers are guarded by an `RLock` (re
 methods call each other internally).
 """
 
-__all__ = ["ThumbnailGrid"]
+__all__ = ["CURSOR_COLOR", "ThumbnailGrid"]
 
 import logging
 import threading
@@ -58,6 +58,13 @@ def _next_tag(prefix: str) -> str:
 # Spacing between tiles (pixels).
 _TILE_SPACING = 4
 
+# The colour that means "the cursor is here", wherever a cursor is drawn. Exported because a listing can be
+# shown as a grid or as a table, and one mark meaning one thing across both is what lets a reader glance at
+# either and know what they are looking at. The grid draws it as an inner border and a table as text colour
+# — different marks because the two widgets have different channels free, the same hue because it is the
+# same idea.
+CURSOR_COLOR = (80, 160, 255, 255)
+
 
 class ThumbnailGrid:
     """Scrollable thumbnail grid with click selection.
@@ -83,7 +90,7 @@ class ThumbnailGrid:
                  item_spacing_y: int = 4,
                  scrollbar_size: int = 14,
                  selection_tint: tuple = (255, 255, 255, 40),
-                 current_color: tuple = (80, 160, 255, 255),
+                 current_color: tuple = CURSOR_COLOR,
                  border_color: tuple = (60, 60, 65, 255),
                  empty_tile_color: tuple = (55, 55, 58, 255),
                  show_position_numbers: bool = True,

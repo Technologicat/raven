@@ -875,6 +875,12 @@ Consequences, which are small:
 
 `dpg.get_item_theme(item)` returns `None` for an unbound widget, and `dpg.bind_item_theme(item, None)` unbinds — so capture-and-restore of a theme is symmetric with no special case. (`0` also unbinds; prefer `None`.)
 
+**A `mvTable` has no `rect_size` in its item state, and `guiutils.get_widget_size` answers `-1` for one rather than failing.** The helper falls back to the item's *configuration* when `rect_size` is missing, which is right for a child window and wrong here: a table created `width=-1, height=-1` reports exactly that back, so arithmetic against "the view's height" quietly computes against −1. A guard like `if not height` does not catch it, −1 being truthy. Measured 2026-08-17 while giving the file dialog's table a keyboard cursor, where it scrolled the listing on the third arrow keypress.
+
+Measure the **enclosing child window** instead — it reports a real size — and keep scrolling the table, which is what `y_scroll` and `max_y_scroll` work on. Both halves were measured on the same widget pair: table `get_widget_size=(-1, -1)` with `max_y_scroll=588.0`, its `listing_area` child window `(1159, 581)` with `max_y_scroll=0.0`.
+
+**Row pitch is not the height you asked for, either.** Cells created with `height=16` came out 18 px tall at a 22 px pitch, below a header occupying the first 26 px. So a row's position is worth reading off the row (`get_item_pos` on a cell, which answers in content coordinates, exactly what `set_y_scroll` wants) rather than computed from the height that was requested.
+
 There is **no getter for theme contents** — you cannot ask a theme for its colors or spacings. Code that needs to restore a themed value therefore tends to hardcode a measured literal instead; see the audit item in `TODO_DEFERRED.md`. Where a *per-widget* getter exists (as for a text widget's own color), use it — the gap is theme state specifically, not all of DPG.
 
 ## Windows and child windows have no `rect_min`, and `get_item_pos` answers a different question

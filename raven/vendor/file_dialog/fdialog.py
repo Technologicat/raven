@@ -22,7 +22,17 @@ from unpythonic import timer
 from ...common import filelisting
 from ...common import utils as common_utils
 from ...common.gui import animation as gui_animation
+from ...common.gui import thumbnailgrid
 from ...common.gui import utils as guiutils
+from ...common.gui.tablecursor import TableCursor
+
+
+# Page Up and Page Down as a key handler actually receives them. `dpg.mvKey_Prior` and `dpg.mvKey_Next`
+# are stale DPG-1.x values (266, 267) that no longer match anything delivered, so comparing against the
+# constants silently never fires. Confirmed against the live enum: Tab=512, Up=515, Down=516, **517**,
+# **518**, Home=519, End=520 — the pair sits exactly where the sequence says it should.
+_KEY_PAGE_UP = 517
+_KEY_PAGE_DOWN = 518
 
 
 # The icon assets, by name. `ico_<name>` holds the loaded pixels and `img_<name>` the texture, both set on
@@ -145,6 +155,30 @@ class FileDialog:
             with dpg.theme() as cls.unreturnable_text_theme:
                 with dpg.theme_component(dpg.mvAll):
                     dpg.add_theme_color(dpg.mvThemeCol_Text, guiutils.DISABLED_TEXT_COLOR, category=dpg.mvThemeCat_Core)
+
+            # A cursor twin for every theme a row cell can wear. Only one theme binds per item, so the
+            # cursor's colour cannot be *added* to a cell that already carries an alignment — each base
+            # theme needs a variant saying the same thing plus "the cursor is here".
+            #
+            # That is a product, and products grow: it stays affordable only because both axes are fixed
+            # and small — three alignments, cursor or not. A third axis would be six more themes, and would
+            # be the moment to stop binding whole themes per cell and find another way.
+            #
+            # Both enabled states, because a theme component covers one of them. A file in a folder picker
+            # is a *disabled* selectable, and the cursor must stay visible as it travels over one —
+            # otherwise it would vanish over exactly the rows such a picker is mostly made of.
+            def _cursor_variant(align_x):
+                with dpg.theme() as theme:
+                    for enabled in (True, False):
+                        with dpg.theme_component(dpg.mvAll, enabled_state=enabled):
+                            dpg.add_theme_color(dpg.mvThemeCol_Text, thumbnailgrid.CURSOR_COLOR,
+                                                category=dpg.mvThemeCat_Core)
+                            if align_x is not None:
+                                dpg.add_theme_style(dpg.mvStyleVar_SelectableTextAlign, x=align_x, y=.5)
+                return theme
+            cls.selec_alignt_cursor = _cursor_variant(0)
+            cls.size_alignt_cursor = _cursor_variant(1)
+            cls.unreturnable_text_theme_cursor = _cursor_variant(None)
 
             # texture loading
             for img in _ICON_NAMES:
@@ -343,6 +377,13 @@ class FileDialog:
         self.PAYLOAD_TYPE = 'ws_' + self.tag
         self.selected_files = []
         self.shown_items = []  # for selection by search filter upon pressing ok
+
+        # The rows the table is currently showing, in display order, and the cells of each with the themes
+        # they wear normally and as the cursor. Both include `..`, which `shown_items` deliberately does
+        # not: the cursor has to be able to reach it — arrowing up to `..` and pressing Enter is how you
+        # leave a directory from the keyboard — while `ok`'s unique-match shortcut must never select it.
+        self._row_entries = []
+        self._row_themes = []
         self.selec_height = 16
         # The listing's order, held as data rather than as the table's row order. A rebuild reproduces it,
         # which is what lets the listing be re-rendered — re-filtered, or shown a different way — without
@@ -603,6 +644,9 @@ class FileDialog:
                         parent_cell = dpg.add_selectable(label=entry.name, callback=_go_up_one_level,
                                                          span_columns=True, height=self.selec_height)
                         dpg.bind_item_theme(parent_cell, self.unreturnable_text_theme)
+                        self._row_themes.append([(parent_cell,
+                                                  self.unreturnable_text_theme,
+                                                  self.unreturnable_text_theme_cursor)])
                 return
 
             # Shown, but nothing can be done with it: not an answer this dialog returns, and not somewhere
@@ -647,6 +691,14 @@ class FileDialog:
                 dpg.bind_item_theme(cell_time, self.selec_alignt)
                 dpg.bind_item_theme(cell_type, self.selec_alignt)
                 dpg.bind_item_theme(cell_size, self.size_alignt)
+
+                # Each cell with the theme it wears normally and the one it wears as the cursor, so moving
+                # the cursor is a rebind of four cells rather than a rebuild of the listing. Kept in row
+                # order, matching `shown_items`, which is what the cursor indexes.
+                self._row_themes.append([(cell_name, self.selec_alignt, self.selec_alignt_cursor),
+                                         (cell_time, self.selec_alignt, self.selec_alignt_cursor),
+                                         (cell_type, self.selec_alignt, self.selec_alignt_cursor),
+                                         (cell_size, self.size_alignt, self.size_alignt_cursor)])
                 if self.allow_drag:
                     if entry.name.lower().endswith((".png", ".jpg")):
                         dpg.add_image(self.img_big_picture, parent=drag_payload)
@@ -735,6 +787,8 @@ class FileDialog:
             previously_selected = set(self.selected_files)
             self.selected_files.clear()
             self.shown_items.clear()
+            self._row_entries = []
+            self._row_themes = []
 
             # What this is a listing *of*. A rebuild of the same directory and a move to a different one
             # look identical from here, and the cursor wants opposite things from them — hold its place
@@ -775,6 +829,10 @@ class FileDialog:
                     else:
                         for entry in entries:
                             _make_row(entry, open_file, selected_paths=previously_selected)
+                        # After the rows exist, since the cursor paints itself onto one of them.
+                        self._row_entries = list(entries)
+                        self._table_cursor.set_listing([entry.path for entry in entries],
+                                                       listing_key=listed_dir)
 
                 logger.debug(f"reset_dir: instance '{self.tag}' ({self.instance_tag}), {len(self.shown_items)} entries "
                              f"as {'tiles' if self._grid_mode else 'rows'}: "
@@ -1098,6 +1156,94 @@ class FileDialog:
         self._start_grid_ticker = _start_grid_ticker  # instance-injected for the same reason as `set_type_filter` above.
 
         # --------------------------------------------------------------------------------
+        # The table's keyboard cursor. The grid brings its own; this gives the other view one under the
+        # same method names, so `_handle_key` picks a navigator and stops caring which view is up.
+
+        def _paint_row(idx, is_cursor):
+            """Draw row `idx` as the cursor row, or as an ordinary one.
+
+            Rebinding themes rather than rebuilding the row: a listing can be thousands of rows deep and a
+            cursor move touches two of them.
+            """
+            if not (0 <= idx < len(self._row_themes)):
+                return
+            with guiutils.nonexistent_ok():
+                for cell, base_theme, cursor_theme in self._row_themes[idx]:
+                    dpg.bind_item_theme(cell, cursor_theme if is_cursor else base_theme)
+
+        def _row_extent(idx):
+            """Where row `idx` sits inside the table's scrollable content, as `(top, height)`.
+
+            Measured off the row's own first cell rather than computed from `selec_height`, because the two
+            disagree: cells asked to be 16 px come out 18 and sit at a 22 px pitch, under a header that adds
+            an offset of its own. Every one of those is a number this can read and could only have guessed.
+            """
+            if not (0 <= idx < len(self._row_themes)) or not self._row_themes[idx]:
+                return None
+            cell = self._row_themes[idx][0][0]
+            with guiutils.nonexistent_ok():
+                _, top = dpg.get_item_pos(cell)
+                _, height = dpg.get_item_rect_size(cell)
+                return top, height
+            return None
+
+        def _view_height():
+            """The visible height of the listing, measured on the container that reports one.
+
+            Not the table: a DPG table has no `rect_size` in its state at all, so `get_widget_size` falls
+            through to its *configuration* and answers with the `-1` it was created with. The enclosing
+            child window reports the real number, and the table is what scrolls inside it.
+            """
+            with guiutils.nonexistent_ok():
+                _, height = guiutils.get_widget_size(f"listing_area_{self.instance_tag}")  # tag
+                return height if height > 0 else 0
+            return 0
+
+        def _scroll_row_into_view(idx):
+            """Move the least that puts row `idx` on screen, and nothing at all when it already is.
+
+            Scrolling only when the row is outside the visible band is what keeps arrow navigation from
+            yanking the listing on every keypress.
+            """
+            extent = _row_extent(idx)
+            height = _view_height()
+            if extent is None or not height:
+                return
+            row_top, row_height = extent
+            table = f"explorer_{self.instance_tag}"  # tag
+            with guiutils.nonexistent_ok():
+                view_top = dpg.get_y_scroll(table)
+                if row_top < view_top:
+                    new_top = row_top
+                elif row_top + row_height > view_top + height:
+                    new_top = row_top + row_height - height
+                else:
+                    return
+                dpg.set_y_scroll(table, max(0.0, float(new_top)))
+
+        def _rows_per_page():
+            """Most of a screenful, keeping one row of context to read the new position against."""
+            height = _view_height()
+            extent = _row_extent(self._table_cursor.current)
+            if not height or extent is None or extent[1] <= 0:
+                return 1
+            return max(1, int(height / extent[1]) - 1)
+
+        self._table_cursor = TableCursor(on_paint=_paint_row,
+                                         on_scroll_into_view=_scroll_row_into_view,
+                                         page_size=_rows_per_page)
+
+        def _navigator():
+            """Whichever view is on screen, as the thing that answers to `navigate_*`.
+
+            The two are interchangeable by construction rather than by adaptor — `TableCursor` was written
+            to the interface `ThumbnailGrid` already had — so a key handler names a movement once and both
+            views do the right thing with it.
+            """
+            return self._grid if (self._grid_mode and self._grid is not None) else self._table_cursor
+        self._navigator = _navigator
+
+        # --------------------------------------------------------------------------------
         # Hotkeys.
 
         def _handle_key(key: int) -> None:
@@ -1112,9 +1258,21 @@ class FileDialog:
             ctrl = dpg.is_key_down(dpg.mvKey_LControl) or dpg.is_key_down(dpg.mvKey_RControl)
 
             # TODO (briefs/researchers-night/filedialog-keyboard-brief.md): the rest of the keyboard —
-            # TODO: cursor movement, Tab between field and listing, the focus-parking chords, sorting.
-            # This function is where they go; making that possible is what the split above was for.
-            if key == dpg.mvKey_Return:
+            # TODO: Tab between field and listing, the focus-parking chords, sorting, hidden files.
+            nav = self._navigator()
+            if key == dpg.mvKey_Up:
+                nav.navigate_row_up()
+            elif key == dpg.mvKey_Down:
+                nav.navigate_row_down()
+            elif key == _KEY_PAGE_UP:
+                nav.navigate_page_up()
+            elif key == _KEY_PAGE_DOWN:
+                nav.navigate_page_down()
+            elif key == dpg.mvKey_Home and not ctrl:
+                nav.navigate_first()
+            elif key == dpg.mvKey_End:
+                nav.navigate_last()
+            elif key == dpg.mvKey_Return:
                 self.ok()
             elif key == dpg.mvKey_Escape:
                 self.cancel()
