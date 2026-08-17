@@ -211,6 +211,19 @@ The tiebreak rule in concrete form, since "usefulness wins" needs a shape to be 
   gets stronger there — once tool calls can change the GUI, those transitions have to be animated, because the
   party that has to follow the change is a human who did not initiate it. However, an animation the user
   routinely outruns is a cost. A successful product strikes a balance.
+  - **Continuous motion on live state is the second kind, and it is admitted on the same grounds.** A
+    transition animates a *change*; a pulsating selection animates a *condition* — this is the thing you have
+    picked, this is where the cursor rests, this is the set a search matched. It aids the same reader for the
+    same reason, and the Visualizer has done it since long before this document existed: `PlotterPulsatingGlow`
+    breathes the search results and the selection at opposite phases, so the two stay distinguishable where they
+    overlap. Librarian pulsates its recording, indexing and backend-caution indicators through the shared
+    `PulsatingColor` in `raven.common.gui.animation`.
+  - **It also happens to be the register's clearest tell, which is why it is worth spreading rather than
+    merely keeping.** An immediate-mode toolkit redraws every frame whether or not anything moved, so a
+    breathing highlight costs nothing beyond the theme edit — while a conventional desktop GUI, redrawing on
+    invalidation, would have to be *made* to do it and therefore does not. A programmer who notices a selection
+    that breathes has learned something true about what this is built on, without being told. The naming rule
+    applies unchanged: it has to earn its place as a readability cue first, and it does.
 
 ## The product does not explain itself
 
@@ -229,6 +242,10 @@ From the aesthetic half:
   document makes, and already scoped there as a scripting task over existing filters.
 - **Smooth scrolling across the constellation** (`TODO_DEFERRED.md`). The same principle in its least
   glamorous register: things that move should move alike.
+- **Pulsating cursor and selection in `FileDialog`.** The keyboard work of 2026-08-17 gave the listing a cursor
+  and a selection on separate visual axes (text colour and fill), both currently static. Making them breathe
+  brings the dialog into line with the Visualizer's plotter, and `PulsatingColor` already does the work — the
+  open part is which axis pulsates, and whether the two want opposite phases the way the plotter's do.
 
 From the channels, where the effect is a reclassification rather than a new task — each of these is already on
 a list, filed as maintenance:
@@ -241,8 +258,10 @@ a list, filed as maintenance:
 
 ## Open questions
 
-- **How far into the working surfaces does the register reach?** Palette and typography are agreed; the
-  boundary past that is undrawn.
+- **How far into the working surfaces does the register reach?** Palette, typography and live-state motion are
+  agreed; the boundary past that is undrawn. What the motion answer suggests is a shape for the rest of it —
+  an effect gets in when it is doing a reader's job, and the aesthetic reading is a bonus a genre-savvy user
+  collects on their own.
 - **Where does any of this get said out loud** — README, talk, or nowhere, and only enacted?
 - **What is the permission model once the tool surface is user-extensible?** Brief 04 covers the adapter,
   transports, namespacing and lifecycle, but has no gating section. "It reports rather than acting on its own
