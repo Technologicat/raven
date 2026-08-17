@@ -62,6 +62,7 @@ one sentence rather than a table of special cases.
 | Ctrl+1 … Ctrl+9 | select the Nth offered type filter |
 | Ctrl+Shift+F | focus the type filter combo; Up / Down / Home / End then cycle it — see below |
 | Ctrl+H | toggle showing hidden files and folders — see below |
+| Ctrl+T | toggle the thumbnail grid — see below |
 | Ctrl+B | focus the places panel — the folder shortcuts and drives; Up / Down / Home / End then move within it, Enter goes there — see below |
 | Ctrl+Shift+1 … Ctrl+Shift+4 | sort by the Nth criterion — Name, Date, Type, Size — see below |
 | F1 | open the dialog's help card — see below |
@@ -127,6 +128,20 @@ at all.
 
 Each chord does exactly what clicking that button does, by calling the same `sort_by(sort_key)`: asking for
 the criterion already in force reverses it, any other starts ascending. No separate key for direction.
+
+### The thumbnail toggle
+
+Added 2026-08-17 (Juha), and it was missing rather than deferred: the grid view arrived from
+`filedialog-thumbnails-brief.md` after this table was written, so its checkbox is the one control in the
+dialog that no key reached.
+
+**Ctrl+T**, which is available precisely because this brief took it *away* from the type filter — the combo's
+label is `Show`, so `T` named nothing there, while the control it does name is labelled "Thumbnails". The
+letter freed by one decision turns out to be the right one for the control the same decision left stranded.
+
+**Silently ignored where the grid is not on offer.** A `"dir"` picker lists no files and so has nothing to
+make tiles of; its checkbox is hidden, and a key that acts where its control is invisible is worse than one
+that does nothing. Same predicate the checkbox uses, so the two cannot drift apart.
 
 ### Hidden files
 

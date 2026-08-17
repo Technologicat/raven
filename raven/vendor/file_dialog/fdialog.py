@@ -1340,7 +1340,22 @@ class FileDialog:
             ctrl = dpg.is_key_down(dpg.mvKey_LControl) or dpg.is_key_down(dpg.mvKey_RControl)
 
             # TODO (briefs/researchers-night/filedialog-keyboard-brief.md): the rest of the keyboard —
-            # TODO: Tab between field and listing, the focus-parking chords, sorting, hidden files.
+            # TODO: Tab between field and listing, the focus-parking chords, hidden files.
+            shift = dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)
+
+            # Ctrl and a number picks the Nth type filter; add Shift and it picks the Nth sort criterion.
+            # One indexed rule for two labelled rows, which is what makes them worth remembering — and what
+            # keeps the criteria off letters they cannot have, `Ctrl+Shift+S` reading as a Save variant in a
+            # dialog that saves and `Ctrl+Shift+N` being *new folder* in every file manager.
+            if ctrl and dpg.mvKey_1 <= key <= dpg.mvKey_9:
+                n = key - dpg.mvKey_1
+                if shift:
+                    if n < len(_SORT_CRITERIA):
+                        sort_by(_SORT_CRITERIA[n][0])
+                elif n < len(self._filter_labels):
+                    set_type_filter(self._filter_labels[n])
+                return
+
             nav = self._navigator()
             if key == dpg.mvKey_Up:
                 nav.navigate_row_up()
@@ -1366,6 +1381,14 @@ class FileDialog:
                 self.back_to_default_path()
             elif ctrl and key == dpg.mvKey_F:
                 dpg.focus_item(self.search_field)
+            elif ctrl and key == dpg.mvKey_T:
+                # `T` for Thumbnails, and free to mean it: the type filter gave the letter up when its label
+                # became `Show`, which left the dialog's one unlabelled-by-key control holding the one
+                # mnemonic that fits it. Silently ignored where the grid is not on offer — a directory
+                # picker listing no files has nothing to make tiles of — since the checkbox is hidden there
+                # too and a key that acts where its control is invisible is worse than one that does not.
+                if _grid_is_available():
+                    set_grid_mode(not self._grid_mode)
         self._handle_key = _handle_key  # instance-injected, as above.
 
         # main file dialog header
