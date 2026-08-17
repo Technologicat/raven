@@ -161,9 +161,12 @@ case. If the cursor was sitting on a hidden entry when it is switched off, the c
 
 A hotkey nobody knows about has not been added. Three tiers, in descending order of how much they buy:
 
-- **Tooltips wherever a widget exists** — sort buttons, type filter, thumbnails checkbox, places entries.
-  Nearly free, and already the house pattern here (`"Refresh the current folder listing [F5]"`). Covers
-  roughly half the table.
+- **Tooltips wherever a widget exists** — sort buttons, type filter, thumbnails checkbox, places entries,
+  OK/Cancel. Nearly free, and already the house pattern here (`"Refresh the current folder listing [F5]"`).
+  Covers roughly half the table. **Done 2026-08-17** for every key that exists; the rest arrive with theirs.
+  - OK and Cancel were not on the original list and should have been. Bare Enter used to press OK; now it
+    descends into the cursor's folder and Ctrl+Enter commits — a change that silently invalidates what a
+    returning user knows, which is exactly the case a tooltip is for.
 - **F1 opens the dialog's help card**, built on `raven.common.gui.helpcard.HelpWindow` like the six apps
   that already have one. This is the load-bearing tier, because the listing keys — Up/Down, Enter,
   Ctrl+Space, Tab — have no widget to hang a tooltip on, and they are what this brief is for. It is also
@@ -479,8 +482,14 @@ that from the code.
   the entry you chose, else hold position, else start at the top somewhere new. The *chosen* entry is
   remembered apart from the displayed one, so a filtered-out file gets its cursor back when it returns.
 
+- **Tooltips name every key that exists** — the sort buttons (with the fact that pressing again reverses),
+  the thumbnails checkbox, refresh, back-to-default, and OK/Cancel. The last of those matter most: bare
+  Enter used to press OK, and now it descends, so a user who learned the old behaviour needs telling.
+  - The tier is therefore *complete rather than finished*: every remaining tooltip belongs to a key that
+    does not exist yet, so each lands with its key rather than as a separate pass. Nothing to come back for.
+
 **Not built:** Tab, Ctrl+Space, Alt+Up, Ctrl+Up, Ctrl+L, Ctrl+Shift+F, Ctrl+B, Ctrl+H, F1, the places-panel
-migration, tooltips.
+migration.
 
 **Take Tab next**, and not only because it is the largest. Three things are waiting on it and on nothing
 else: grid view is *incomplete* without it (Up/Down move a whole row of tiles, so every column but the first
