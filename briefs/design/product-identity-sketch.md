@@ -246,6 +246,12 @@ From the aesthetic half:
   and a selection on separate visual axes (text colour and fill), both currently static. Making them breathe
   brings the dialog into line with the Visualizer's plotter, and `PulsatingColor` already does the work — the
   open part is which axis pulsates, and whether the two want opposite phases the way the plotter's do.
+  - **The dialog is the sharpest case because it is already halfway there**, which is what makes the missing
+    half legible as an omission rather than as a road not taken. Its thumbnail view resizes through
+    `raven.common.image.lanczos` on the GPU and stands undecoded tiles in with VHS noise from
+    `postprocessor.vhs_noise_pool` — the register is in the pixels already. What it has is the still frame of
+    it; a file browser that grades its thumbnails through a video pipeline and then holds the selection
+    perfectly still is showing its hand in one place and hiding it in the other.
 
 From the channels, where the effect is a reclassification rather than a new task — each of these is already on
 a list, filed as maintenance:
