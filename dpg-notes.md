@@ -980,6 +980,12 @@ At 2500 rows the clipped table costs what an *empty* one costs: the row count st
 
 Worth knowing what this does *not* fix: building the rows still costs what it costs (~60 µs/row there, so ~0.19 s for 2500), and deleting them likewise. The clipper is about the frames after the build, not the build.
 
+**A clipped-away row has no geometry, and says so as `0` rather than as an error.** ImGui never submits it, so `get_item_pos` and `get_item_rect_size` on one of its cells return zeros — indistinguishable from a row that is genuinely at the top, and from a row that has simply not been laid out yet (which is what every row reads as during the build that creates it). Measured 2026-08-17 giving the file dialog's table a keyboard cursor: Page Down asked where row 28 was, got `0`, concluded it was already on screen, and did not scroll.
+
+The sting is that **the row you cannot measure is always the row you want**: anything scrolling *to* a position is by definition aimed off screen. So do not ask the destination where it is. Measure the *pitch* instead — two adjacent rows, while they happen to be visible — and compute from it. That is sound precisely because the clipper already requires uniform row height, and both the pitch and the header's origin are constants of the table's styling rather than of its contents, so one measurement serves for the widget's life. In `fdialog` this reads `origin=26, pitch=22` for cells created with `height=16`.
+
+The bug it produces is a memorable shape: the scroll appears broken until you happen to scroll the target row into view by mouse, after which it works — because now the row has geometry to report.
+
 ## To find which rows are on screen, ask a cell — never the row
 
 Any "fill this in only for what the user can see" feature needs to know which rows are visible. `dpg.is_item_visible` is the right call and the `table_row` is the wrong thing to call it on, which is the trap: the row is what the clipper is clipping, so it is what a reader reaches for.

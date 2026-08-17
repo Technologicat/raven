@@ -32,8 +32,12 @@ entry it leaves *up and down* free for the listing; left and right stay with the
 a table row is a whole entry, so horizontal movement means nothing there, but a grid row holds several
 tiles and stepping between them is the obvious gesture. So the keys are not unwanted, they are *occupied* —
 and only while the field has the caret. Once Tab hands focus to the listing they are free, and
-`navigate_next` / `navigate_prev` (a single entry either way) are already waiting for them. Until then,
-Left and Right doing nothing in grid view is the design working rather than a gap in it. Nothing Tab-cycles. Two other widgets are reachable, each
+`navigate_next` / `navigate_prev` (a single entry either way) are already waiting for them.
+
+**So grid view is not merely missing a convenience until Tab lands — it is incomplete.** Up and Down move a
+whole row of tiles, so with no horizontal step every column but the first is unreachable from the keyboard
+altogether. In a table that would be nothing; in a grid it is most of the listing. Worth knowing when
+judging how finished the keyboard is: the table is usable now, the grid is not. Nothing Tab-cycles. Two other widgets are reachable, each
 by explicit key rather than by a focus order.
 
 **The governing rule for Enter: *Enter goes as deep as it can; Ctrl+Enter stops here.*** Uniform across all

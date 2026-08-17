@@ -384,6 +384,10 @@ class FileDialog:
         # leave a directory from the keyboard — while `ok`'s unique-match shortcut must never select it.
         self._row_entries = []
         self._row_themes = []
+        # `(origin, pitch)` once two rows have been seen laid out; see `_row_metrics`. Not cleared on
+        # rebuild: both are constants of the table's styling rather than of its contents, and the rows that
+        # could re-measure them are exactly the ones a clipping table may not have drawn.
+        self._row_metrics_cache = None
         self.selec_height = 16
         # The listing's order, held as data rather than as the table's row order. A rebuild reproduces it,
         # which is what lets the listing be re-rendered — re-filtered, or shown a different way — without
@@ -1171,21 +1175,42 @@ class FileDialog:
                 for cell, base_theme, cursor_theme in self._row_themes[idx]:
                     dpg.bind_item_theme(cell, cursor_theme if is_cursor else base_theme)
 
-        def _row_extent(idx):
-            """Where row `idx` sits inside the table's scrollable content, as `(top, height)`.
+        def _row_metrics():
+            """`(origin, pitch)` for the listing's rows — where row 0 starts, and how far apart rows sit.
 
-            Measured off the row's own first cell rather than computed from `selec_height`, because the two
-            disagree: cells asked to be 16 px come out 18 and sit at a 22 px pitch, under a header that adds
-            an offset of its own. Every one of those is a number this can read and could only have guessed.
+            Measured, because neither number is the one that was asked for: cells created at
+            `selec_height` = 16 come out 18 px tall at a 22 px pitch, below a header contributing an origin
+            of its own.
+
+            Measured *once*, because the row being scrolled *to* can never be measured. The table clips —
+            `clipper=True`, which is what keeps a thousand-row listing cheap — so ImGui never submits a row
+            outside the visible range, and its position reads back as 0. That is exactly the row a scroll
+            is aimed at, so asking it where it is returns zero and the view never moves. Both numbers are
+            constants for the dialog's life (uniform row height is the clipper's own requirement), so two
+            adjacent rows measured while they happen to be on screen answer for every row afterwards.
             """
-            if not (0 <= idx < len(self._row_themes)) or not self._row_themes[idx]:
+            if self._row_metrics_cache is not None:
+                return self._row_metrics_cache
+            if len(self._row_themes) < 2:
                 return None
-            cell = self._row_themes[idx][0][0]
             with guiutils.nonexistent_ok():
-                _, top = dpg.get_item_pos(cell)
-                _, height = dpg.get_item_rect_size(cell)
-                return top, height
+                _, first = dpg.get_item_pos(self._row_themes[0][0][0])
+                _, second = dpg.get_item_pos(self._row_themes[1][0][0])
+                pitch = second - first
+                if pitch > 0:  # both were laid out; zeros mean "not rendered yet" or "clipped away"
+                    self._row_metrics_cache = (first, pitch)
+                    logger.debug(f"_row_metrics: instance '{self.tag}' ({self.instance_tag}), "
+                                 f"origin={first}, pitch={pitch}")
+                    return self._row_metrics_cache
             return None
+
+        def _row_extent(idx):
+            """Where row `idx` sits inside the table's scrollable content, as `(top, height)`."""
+            metrics = _row_metrics()
+            if metrics is None or not (0 <= idx < len(self._row_themes)):
+                return None
+            origin, pitch = metrics
+            return origin + idx * pitch, pitch
 
         def _view_height():
             """The visible height of the listing, measured on the container that reports one.
@@ -1207,10 +1232,12 @@ class FileDialog:
             """
             extent = _row_extent(idx)
             height = _view_height()
+            table = f"explorer_{self.instance_tag}"  # tag
             if extent is None or not height:
+                logger.debug(f"_scroll_row_into_view: instance '{self.tag}' ({self.instance_tag}), "
+                             f"row {idx}: no geometry (extent={extent}, view height={height})")
                 return
             row_top, row_height = extent
-            table = f"explorer_{self.instance_tag}"  # tag
             with guiutils.nonexistent_ok():
                 view_top = dpg.get_y_scroll(table)
                 if row_top < view_top:
@@ -1218,16 +1245,22 @@ class FileDialog:
                 elif row_top + row_height > view_top + height:
                     new_top = row_top + row_height - height
                 else:
+                    logger.debug(f"_scroll_row_into_view: instance '{self.tag}' ({self.instance_tag}), "
+                                 f"row {idx} at {row_top}+{row_height} already inside "
+                                 f"{view_top}..{view_top + height}, not scrolling")
                     return
+                logger.debug(f"_scroll_row_into_view: instance '{self.tag}' ({self.instance_tag}), "
+                             f"row {idx} at {row_top}+{row_height}, view {view_top}..{view_top + height}, "
+                             f"scrolling to {max(0.0, float(new_top))}")
                 dpg.set_y_scroll(table, max(0.0, float(new_top)))
 
         def _rows_per_page():
             """Most of a screenful, keeping one row of context to read the new position against."""
             height = _view_height()
-            extent = _row_extent(self._table_cursor.current)
-            if not height or extent is None or extent[1] <= 0:
+            metrics = _row_metrics()
+            if not height or metrics is None:
                 return 1
-            return max(1, int(height / extent[1]) - 1)
+            return max(1, int(height / metrics[1]) - 1)
 
         self._table_cursor = TableCursor(on_paint=_paint_row,
                                          on_scroll_into_view=_scroll_row_into_view,
