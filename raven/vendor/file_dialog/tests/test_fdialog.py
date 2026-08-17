@@ -415,11 +415,31 @@ def test_an_explicit_view_is_what_each_opening_resets_to(make_dialog):
 
 
 def test_a_directory_picker_has_no_grid_view(make_dialog):
-    """With no files listed every tile would be the same folder icon. `raven-cherrypick` opens it this way."""
-    d = make_dialog(dirs_only=True, filter_list=[("Images", [".png", ".jpg"])], show_thumbnails=True)
+    """With no files listed every tile would be the same folder icon, so `pick="dir"` refuses the grid."""
+    d = make_dialog(pick="dir", filter_list=[("Images", [".png", ".jpg"])], show_thumbnails=True)
     assert d._grid_mode is False
     d.set_grid_mode(True)
     assert d._grid_mode is False
+
+
+def test_dir_with_contents_has_a_grid_view(make_dialog):
+    """The mode exists to be looked at, so it gets the grid the plain directory picker refuses."""
+    d = make_dialog(pick="dir-with-contents", filter_list=[("Images", [".png", ".jpg"])], show_thumbnails=True)
+    assert d._grid_mode is True
+
+
+def test_pick_splits_what_is_returned_from_what_is_listed(make_dialog):
+    """The two axes `pick` separates, which used to be one flag."""
+    assert (make_dialog(pick="file").returns_dir, make_dialog(pick="file").lists_files) == (False, True)
+    assert (make_dialog(pick="dir").returns_dir, make_dialog(pick="dir").lists_files) == (True, False)
+    d = make_dialog(pick="dir-with-contents")
+    assert (d.returns_dir, d.lists_files) == (True, True)
+
+
+def test_unknown_pick_mode_is_rejected(make_dialog):
+    """A typo in a mode string is otherwise a dialog that silently behaves as a file picker."""
+    with pytest.raises(ValueError):
+        make_dialog(pick="directory")
 
 
 def test_both_views_list_the_same_entries(dialog):

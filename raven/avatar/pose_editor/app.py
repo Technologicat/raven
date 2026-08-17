@@ -258,7 +258,7 @@ def initialize_filedialogs():  # called at app startup
                                               tag="save_all_emotions_dialog",
                                               callback=_save_all_emotions_callback,
                                               filter_list=[""],
-                                              dirs_only=True,  # *directory* picker mode
+                                              pick="dir",  # *directory* picker mode: a place to write to, so nothing to look at
                                               save_mode=True,
                                               default_path=cwd)
 

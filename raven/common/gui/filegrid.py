@@ -87,6 +87,7 @@ class FileGrid(ThumbnailGrid):
                  icon_assets: Mapping[str, tuple[int, int, Sequence[float]]],
                  icon_name_for: Callable[[FileEntry], Optional[str]],
                  selectable_for: Optional[Callable[[FileEntry], bool]] = None,
+                 unselectable_wash: tuple = (0, 0, 0, 128),
                  tile_size: int = 128,
                  thumbnail_device: str = "gpu",
                  thumbnail_dtype: torch.dtype = torch.float32,
@@ -109,6 +110,10 @@ class FileGrid(ThumbnailGrid):
             double-clicked — but a bulk action never sees one, and neither does the selection tint. For a
             picker the exclusions are `..` and the directories: it cannot return them, so showing them
             selected would read as a bug rather than as a rule.
+        *unselectable_wash*: RGBA fill drawn over entries `selectable_for` rejects, under the tile's tint
+            and border so the cursor stays readable through it. What it buys is that "shown but not an
+            answer" *looks* like a rule: a tile identical to a selectable one that does nothing when
+            clicked reads as a broken grid. Pass a fully transparent colour to switch it off.
         *thumbnail_device*: where decoded images are resized. The literal `"gpu"` is `deviceinfo`'s
             autodetect — the single available GPU backend, or CPU when there is none — and is the default
             *because an app that innocently wants a file picker must not have to know about torch devices*.
@@ -134,6 +139,7 @@ class FileGrid(ThumbnailGrid):
         self._entries: list[FileEntry] = []
         self._icon_name_for = icon_name_for
         self._selectable_for = selectable_for
+        self._unselectable_wash = unselectable_wash
         self._decodable: set[int] = set()
         self._on_current_entry_changed = on_current_entry_changed
         self._on_selection_changed_entries = on_selection_changed_entries
@@ -389,6 +395,21 @@ class FileGrid(ThumbnailGrid):
         if not (0 <= idx < len(self._entries)):
             return False
         return self._selectable_for(self._entries[idx])
+
+    def draw_underlay(self, idx: int, drawlist_tag: str) -> None:
+        """Dim entries the owner will not accept, so the grid shows what is *choosable* at a glance.
+
+        A folder picker showing its files wants them visible for judging the folder and inert as answers,
+        which is a distinction a listing has no other way to make: a tile that looks exactly like a
+        selectable one, and does nothing when clicked, reads as a broken grid rather than as a deliberate
+        one. Under the tint and border, so the cursor and the selection stay readable through the wash.
+        """
+        if self.is_selectable(idx):
+            return
+        ts = self._tile_size
+        dpg.draw_rectangle(pmin=(0, 0), pmax=(ts - 1, ts - 1),
+                           fill=self._unselectable_wash,
+                           parent=drawlist_tag)
 
     def _double_clicked(self, idx: int) -> None:
         if self._on_activate is None:

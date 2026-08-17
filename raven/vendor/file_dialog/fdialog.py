@@ -166,7 +166,7 @@ class FileDialog:
         width=1400,
         height=820,
         min_size=(900, 400),
-        dirs_only=False,
+        pick="file",
         save_mode=False,
         default_file_extension=None,
         default_path=os.getcwd(),
@@ -199,7 +199,26 @@ class FileDialog:
                                     Thumbnails checkbox is clipped off the right edge. Measured at
                                     `font_size=20`, which every app in the constellation uses; raise it if
                                     yours does not.
-            dirs_only:              When True, only directories will be listed.
+            pick:                   What this dialog returns, and what it lists on the way there. Two axes
+                                    that used to be one flag, because a folder picker that lets you *look*
+                                    at a folder before choosing it needs them apart.
+
+                                    "file" (the default): returns file(s). Directories are listed and are
+                                    navigated into rather than chosen.
+
+                                    "dir": returns a directory. Only directories are listed, so there is
+                                    nothing on screen but the choices. The right mode for picking a place to
+                                    write to.
+
+                                    "dir-with-contents": returns a directory, but lists its files too, shown
+                                    dimmed and not selectable. For picking a folder *by what is in it* — an
+                                    image tool wants the thumbnail grid here, so `show_thumbnails` becomes
+                                    available where "dir" refuses it.
+
+                                    In both directory modes, OK with nothing selected returns the directory
+                                    currently being shown, so descending into a folder and accepting is a
+                                    way of choosing it. Clicking a folder and pressing OK still returns that
+                                    folder. The notification line names whichever one OK would return.
             save_mode:              When True, asks for a filename to save as, instead of selecting file(s) to open.
                                     In the GUI, the "Search files" field becomes the filename field. (Searching is still enabled, to help avoid accidental overwriting.)
             default_file_extension: Only used when save_mode is True. The extension (e.g. ".png") automatically added
@@ -286,7 +305,13 @@ class FileDialog:
         self.width = width
         self.height = height
         self.min_size = min_size
-        self.dirs_only = dirs_only
+        if pick not in ("file", "dir", "dir-with-contents"):
+            raise ValueError(f"FileDialog: unknown `pick` mode '{pick}'; expected 'file', 'dir' or 'dir-with-contents'.")
+        self.pick = pick
+        # The two axes `pick` separates, named for what each one decides, so no call site has to re-derive
+        # them from the mode string.
+        self.returns_dir = (pick != "file")
+        self.lists_files = (pick != "dir")
         self.save_mode = save_mode
         self.default_file_extension = default_file_extension
         self.default_path = os.getcwd() if default_path == "cwd" else default_path
@@ -308,7 +333,7 @@ class FileDialog:
         # loads the thumbnail decoder.
         self._grid = None
         self._show_thumbnails_default = show_thumbnails  # what each opening resets to; `None` = decide automatically
-        self._grid_mode = bool(show_thumbnails) and not dirs_only
+        self._grid_mode = bool(show_thumbnails) and self.lists_files
         self._grid_mode_chosen_by_user = (show_thumbnails is not None)
         self._grid_size = (400, 300)  # replaced by a measurement as soon as the dialog has rendered
         self._ticker = None
@@ -473,7 +498,9 @@ class FileDialog:
                             self.ok()
                             return user_data[1]
                 else:
-                    if os.path.isfile(user_data[1]) or (self.dirs_only and os.path.isdir(user_data[1])):
+                    # Only what this dialog can return responds to a click. In "dir-with-contents" the file
+                    # rows are built disabled, so this is a second line of defence rather than the only one.
+                    if os.path.isdir(user_data[1]) if self.returns_dir else os.path.isfile(user_data[1]):
                         _deselect_recursive(f"explorer_{self.instance_tag}")  # unselect others
                         dpg.set_value(sender, True)  # and select this item
                         # Save mode: populate file name field from clicked file, without file extension
@@ -483,6 +510,7 @@ class FileDialog:
                             self._update_search()
                         self.selected_files.clear()
                         self.selected_files.append(user_data[1])
+                        self._refresh_target_notification()
 
         def get_directory_path(directory_name):
             try:
@@ -574,10 +602,26 @@ class FileDialog:
                                            span_columns=True, height=self.selec_height)
                 return
 
+            # Shown, but nothing can be done with it: not an answer this dialog returns, and not somewhere
+            # to go either. Directories stay live in every mode — a file picker cannot *choose* one but must
+            # let you walk into it — so the rule is choosability plus navigability, not choosability alone.
+            # Files in a directory picker are the case this exists for; a broken link falls out of it too,
+            # having been inert in practice all along without looking it.
+            inert = not _is_choosable(entry) and not entry.is_dir
+
             # `user_data` shape is `open_file`'s contract: [name, full path, mtime, size].
             kwargs_cell = {'callback': callback, 'span_columns': True, 'height': self.selec_height,
+                           'enabled': not inert,
                            'user_data': [entry.name, entry.path, entry.mtime, entry.size or 0]}
-            alpha = self.image_transparency if entry.is_hidden else 255
+            # Two independent reasons to recede, so they compound rather than saturate: a hidden file you
+            # also cannot choose is less relevant than either alone, and one fixed alpha for "some reason
+            # applies" would flatten that back out.
+            dimming = 1.0
+            if entry.is_hidden:
+                dimming *= self.image_transparency / 255
+            if inert:
+                dimming *= self.image_transparency / 255
+            alpha = round(255 * dimming)
             kwargs_image = {'tint_color': [255, 255, 255, alpha], 'user_data': entry.kind}
 
             with dpg.table_row(parent=parent):
@@ -698,7 +742,7 @@ class FileDialog:
                 with timer() as tim_list:
                     entries = filelisting.list_directory(default_path,
                                                          show_hidden=self.show_hidden_files,
-                                                         dirs_only=self.dirs_only,
+                                                         dirs_only=not self.lists_files,
                                                          name_filter=matches_name_filter,
                                                          type_filter=_matches_type_filter,
                                                          sort_key=self._sort_key,
@@ -738,6 +782,10 @@ class FileDialog:
                 # not allowed" and nothing about where.
                 logger.exception(f"reset_dir: instance '{self.tag}' ({self.instance_tag}), failed to list '{str(default_path)}'")
                 message_box("File dialog - Error", f"An unknown error has occured when listing the items, More info:\n{exc}")
+
+            # Every path into here changes something the promised target depends on — which directory is
+            # shown, and what survives the find field — so this is the one place that has to refresh it.
+            self._refresh_target_notification()
         self.reset_dir = reset_dir  # needs to be accessible from the outside; uses closure data from this scope, so shouldn't be injected as an instance method (on the class); inject as a regular function *on the instance*.
 
         # --------------------------------------------------------------------------------
@@ -830,16 +878,13 @@ class FileDialog:
         def _grid_is_available() -> bool:
             """Whether this dialog offers the grid view at all.
 
-            A directory picker does not, *as things stand*: with no files listed, every tile would be the
-            same folder icon, so the grid would cost space and legibility and show nothing the table does
-            not. `raven-cherrypick` opens the dialog this way, which is what makes this worth stating
-            rather than leaving to the automatic rule below.
-
-            What would overturn it is a folder tile that previews what is *inside* the folder, which is
-            worth having and is the reason this is a predicate rather than an assertion baked into the
-            layout.
+            The question is whether there are files to show, not whether files can be *chosen*. A `"dir"`
+            picker lists none, so every tile would be the same folder icon and the grid would cost space
+            and legibility to show nothing the table does not. `"dir-with-contents"` lists them precisely
+            so they can be looked at, which is the whole reason that mode exists — so it gets the grid even
+            though what it returns is a directory.
             """
-            return not self.dirs_only
+            return self.lists_files
 
         def _filter_is_image_typed(label) -> bool:
             """Whether the named file type filter selects images and nothing else.
@@ -881,14 +926,16 @@ class FileDialog:
         def _is_choosable(entry) -> bool:
             """Whether `entry` is a thing this dialog can return.
 
-            A directory is navigated into rather than chosen, except in a directory picker where it is the
-            only thing there is to choose. `..` is never a choice, and a broken link leads nowhere.
+            One kind is returnable and the other is scenery, and which is which is `pick`'s whole job: a
+            file picker navigates into directories rather than choosing them, and a directory picker shows
+            files (in `"dir-with-contents"`) so the folder can be judged by them, without either becoming
+            an answer. `..` is never a choice, and a broken link leads nowhere.
             """
             if entry is None or entry.is_parent:
                 return False
             if entry.kind == filelisting.KIND_BROKEN_LINK:
                 return False
-            return self.dirs_only if entry.is_dir else True
+            return self.returns_dir if entry.is_dir else not self.returns_dir
 
         def _grid_selection_changed(entries):
             """The grid's selection is the dialog's, filtered to what can actually be returned.
@@ -900,6 +947,7 @@ class FileDialog:
             """
             self.selected_files.clear()
             self.selected_files.extend(entry.path for entry in entries if _is_choosable(entry))
+            self._refresh_target_notification()
 
         def _grid_current_changed(entry):
             """Single click in the grid: select, exactly as clicking a row does.
@@ -1193,10 +1241,21 @@ class FileDialog:
                 # the combo ends up — so it was retuned when the label was shortened, to keep the combo the
                 # width the filter names actually need rather than letting it sprawl.
                 #
+                # A borderless child window rather than a spacer, because this gap is the only wide, empty,
+                # already-existing place to say which folder OK would return. A child *clips* what it holds,
+                # so a path longer than the gap is cut off inside it instead of running under the combo or
+                # off the window — which is what a bare `add_text` here would do, at whatever depth the user
+                # happened to navigate to. Adding a row of its own was the other option, and it pushed the
+                # buttons off the bottom: the listing is `height=-1`, so anything after it overflows.
+                #
                 # Sized here for the construction width and re-sized by `_relayout` for whatever the window
                 # measures later. Derived rather than written out, so it cannot go stale against the
                 # construction width the way the literal it replaced did.
-                self.spacer_type_filter = dpg.add_spacer(width=max(0, self.width - self._TYPE_FILTER_ROW_TAIL))
+                with dpg.child_window(tag=f"target_area_{self.instance_tag}",  # tag
+                                      width=max(0, self.width - self._TYPE_FILTER_ROW_TAIL),
+                                      height=self.selec_height + 8,
+                                      border=False, no_scrollbar=True, no_scroll_with_mouse=True):
+                    self.text_target = dpg.add_text("", show=self.returns_dir)
                 dpg.add_text('Show')
                 self.combo_file_filter = dpg.add_combo(items=self._filter_labels,
                                                        callback=filter_combo_selector, default_value=self.file_filter, width=-1)
@@ -1209,7 +1268,10 @@ class FileDialog:
 
             with dpg.group(horizontal=True):
                 self.spacer_okcancel = dpg.add_spacer(width=int(self.width * 0.5))
-                self.btn_ok = dpg.add_button(label="OK", width=100, tag=self.tag + "_return", callback=self.ok)
+                # "Use folder" rather than "OK" where OK does not need a selection: the label is the shortest
+                # place to say that pressing it now, with nothing picked, is a complete action.
+                self.btn_ok = dpg.add_button(label="Use folder" if (self.returns_dir and not save_mode) else "OK",
+                                             width=100, tag=self.tag + "_return", callback=self.ok)
                 self.btn_cancel = dpg.add_button(label="Cancel", width=100, callback=self.cancel)
 
             # After the widgets exist, since it may flip the view: an image-typed filter comes up as a grid
@@ -1232,6 +1294,44 @@ class FileDialog:
     _TYPE_FILTER_ROW_TAIL = 540
     _OKCANCEL_ROW_PADDING = 33  # matches the default theme: 3 * (8 outer + 3 inner)?
 
+    def _effective_target(self) -> Optional[str]:
+        """What OK would return right now in a directory-picking mode. `None` in a file picker, which has
+        no such notion — there, OK with nothing selected is a question rather than an answer.
+
+        Three ways to name a folder, in the order a user's intent narrows:
+
+        1. One they clicked. An explicit choice outranks everything.
+        2. The only choosable thing left on screen — typing into the find field until a single folder
+           survives is a way of picking it, and predates this method.
+        3. The directory being shown. Descending into a folder and accepting is how you choose a folder
+           you wanted to look inside first, which is the whole point of `"dir-with-contents"`.
+
+        Exists so that the notification line and `ok` cannot disagree: the line promises what this returns,
+        and `ok` returns it. Two copies of this reasoning would drift the first time one of them grew a
+        case.
+        """
+        if not self.returns_dir:
+            return None
+        if self.selected_files:
+            return self.selected_files[0]
+        choosable = [path for path in self.shown_items if os.path.isdir(path)]
+        if len(choosable) == 1:
+            return choosable[0]
+        return os.getcwd()
+
+    def _refresh_target_notification(self) -> None:
+        """Keep the notification line naming the folder OK would return.
+
+        The affordance is otherwise invisible — nothing on screen says that OK with no selection means
+        "this one" — and an invisible affordance is one nobody uses. Naming the folder also doubles as
+        confirmation of what is about to be handed back, which is worth having even once you know the rule.
+        """
+        if not self.returns_dir:
+            return
+        target = self._effective_target()
+        with guiutils.nonexistent_ok():
+            dpg.set_value(self.text_target, f"Will open: {target}" if target else "")
+
     def _relayout(self) -> None:
         """Re-align the bottom rows against the window's *current* width.
 
@@ -1252,7 +1352,7 @@ class FileDialog:
                                          self._OKCANCEL_ROW_PADDING))
         dpg.set_item_width(self.spacer_okcancel, okcancel_width)
         dpg.set_item_width(self.spacer_notification, okcancel_width)
-        dpg.set_item_width(self.spacer_type_filter, max(0, width - self._TYPE_FILTER_ROW_TAIL))
+        dpg.set_item_width(f"target_area_{self.instance_tag}", max(0, width - self._TYPE_FILTER_ROW_TAIL))  # tag
 
     # high-level functions
     def show_file_dialog(self):
@@ -1395,7 +1495,14 @@ class FileDialog:
                     return
                 full_path = os.path.join(os.getcwd(), save_as_file_name)
                 self.selected_files.append(full_path)
-            else:  # "open file" (or directory) mode
+            elif self.returns_dir:
+                # A directory picker always has an answer: the folder being shown, if nothing narrower was
+                # said. So it never rejects the OK, and the notification line has been promising this exact
+                # path the whole time.
+                target = self._effective_target()
+                logger.debug(f"ok: instance '{self.tag}' ({self.instance_tag}), directory picker; returning {target}.")
+                self.selected_files.append(target)
+            else:  # "open file" mode
                 logger.debug(f"ok: instance '{self.tag}' ({self.instance_tag}), this dialog is in 'open file' mode; checking if we can select all item(s) shown.")
                 if len(self.shown_items) == 1:  # This allows typing into search until there is a unique match, and then pressing ok to open that item.
                     logger.debug(f"ok: instance '{self.tag}' ({self.instance_tag}), exactly one item is shown; selecting that item.")

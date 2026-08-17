@@ -1410,7 +1410,10 @@ def main() -> int:
         title="Open image folder",
         tag="cherrypick_open_dialog",
         callback=_open_file_dialog_callback,
-        dirs_only=True,
+        # The folder is the answer, but its images are what tells you it is the right folder — so they are
+        # listed, dimmed and inert, and the grid comes up so you are looking at pictures rather than names.
+        pick="dir-with-contents",
+        show_thumbnails=True,
         default_path=os.getcwd(),
     )
 
