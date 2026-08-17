@@ -49,6 +49,54 @@ read 266 and 267.
 window never appeared — `is_item_visible` stayed `False` for the eight seconds observed, with the first
 modal still up.
 
+## Writing the field while the user is typing in it
+
+`probe_setvalue.py`, added the same day, after the question came up: both Tab completion and the save-mode
+arrow-fill write the find field *while it holds the caret*, and ImGui keeps its own edit buffer for an
+active `InputText`. F2 writes the field, F3/F4/F5 try progressively more patient versions of the
+unfocus → write → refocus dance, and the edit callback is logged so the revert is visible.
+
+**On an inactive field, `set_value` works and fires nothing** — the baseline, and what the 2026-08-13
+measurement recorded. Typing afterwards continues from the written value.
+
+**On an active field the write is undone.** `get_value` immediately after `set_value` reports the new
+string, and the *next frame* writes the old buffer back and fires the edit callback while doing so:
+
+```
+F2 set_value: before='abc' after='SETVALUE' active=1
+CALLBACK app_data='abc' get_value='abc'      <- 17 ms later, ImGui reverting
+```
+
+Typing `Z` then yields `abcZ`. So both recorded rules invert on an active field: the write does not take,
+and a callback fires anyway.
+
+**The caret is not released on the calling frame.** Polling `is_item_active` once per frame after
+`focus_item` on a button gives `[1, 0, 0, 0, 0, 0]` — but that is one sample on an idle app, and it is not
+a bound. `focus_item` queues a change ImGui applies on its next NewFrame, so the number of *rendered*
+frames it costs moves with what else is queued and where the vsyncs land. Code that waits a fixed number
+of frames is a race that passes here and fails on a loaded app; poll `is_item_active` instead, bounded.
+
+The easy walk-in: `focus_item` not taking effect until the next frame is already documented, so spending
+one `split_frame` on it feels like the job is done.
+
+**But refocusing arms select-all**, and that is the part with no answer yet. After the full dance the field
+genuinely held `DANCED3`; the next typed character left it holding `Y`. For a completion this is the wrong
+behaviour outright, and DPG exposes no caret or selection API to correct it.
+
+## Is the dialog resizable if you ask it to be?
+
+`probe_fd_resize.py` builds a real `FileDialog` with `no_resize=False` — which the parameter allows and no
+Raven caller has ever passed — and the grip gets dragged both ways. Findings and the resulting work item are
+in `TODO.md` under the fdialog work package; the short version is that enlarging works (the thumbnail grid
+reflows for free, since `_resize_grid` measures instead of computing) and shrinking below the construction
+width pushes the OK and Cancel buttons off the edge.
+
+**Run it with `PROBE_FONT=1`.** Without it the dialog renders in DPG's built-in ProggyClean, which is
+ASCII-only, and the grid's `…` truncation marker becomes a missing-glyph box. That looks exactly like a
+Raven bug and is not one — it cost a detour here before `fontTools` confirmed OpenSans carries U+2026 and a
+re-run with the font showed the ellipsis rendering correctly. `PROBE_PATH` and `PROBE_THUMBS=1` open a
+picture directory in grid mode, which is the case worth watching during a resize.
+
 ## Two ways this probe lies to you, both found the hard way
 
 **Synthetic chords lose their modifier unless it is held across frames.** `is_key_down` is sampled when

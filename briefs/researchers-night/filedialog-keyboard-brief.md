@@ -50,7 +50,8 @@ one sentence rather than a table of special cases.
 | Ctrl+F | focus the find field (exists) |
 | Ctrl+L | focus the path field; Enter navigates, Esc returns to find |
 | Ctrl+1 … Ctrl+9 | select the Nth offered type filter |
-| Ctrl+T | focus the type filter combo; Up / Down / Home / End then cycle it — see below |
+| Ctrl+Shift+F | focus the type filter combo; Up / Down / Home / End then cycle it — see below |
+| Ctrl+H | toggle showing hidden files and folders — see below |
 | Ctrl+B | focus the places panel — the folder shortcuts and drives; Up / Down / Home / End then move within it, Enter goes there — see below |
 | Ctrl+Shift+1 … Ctrl+Shift+4 | sort by the Nth criterion — Name, Date, Type, Size — see below |
 | F1 | open the dialog's help card — see below |
@@ -68,6 +69,14 @@ cycle the choices. `raven-avatar-settings-editor` is the reference implementatio
 of `{widget: (choices, callback)}`, and a bare-key branch that dispatches on `dpg.get_focused_item()`. Copy
 that shape rather than inventing one. Ctrl+1…9 stays as the direct-jump shortcut, useful because the filter
 list here is short and labelled.
+
+**Ctrl+Shift+F focuses it, not Ctrl+T.** The combo's label is `Show`, so it reads as "Show [Documents and
+images]" — which leaves *Type* naming only the sort criterion, and a Ctrl+T pointing at the filter would name
+the wrong control. Ctrl+Shift+F carries the mnemonic instead of a label: Ctrl+F filters the listing by name
+fragment, Ctrl+Shift+F filters it by type. Same listing, two filters, and nothing to re-learn if the label
+changes again. Ctrl+S is out for Save, which this dialog has a mode for; Ctrl+H is reserved below; and Ctrl+0
+was rejected so that thumbnail zoom can have it (`ThumbnailGrid.set_tile_size` exists, so Ctrl+plus / minus /
+0 is a plausible addition to the grid view).
 
 This means bare Up / Down mean different things depending on what holds focus — the listing cursor from the
 find field, the filter choices from the combo — which is the idiom's normal behaviour and is why the handler
@@ -101,12 +110,27 @@ date is how you find what you just downloaded.
 
 **Ctrl+Shift+1 … Ctrl+Shift+4 pick the Nth criterion**, parallel to Ctrl+1…9 for the type filter: *Ctrl and
 a number picks the Nth filter; add Shift and it picks the Nth sort criterion.* Bare Ctrl+numbers are already
-spoken for, which is what makes the Shift necessary rather than decorative. Numbers also dodge a collision
-the letter form walks into — `T` is the type-filter combo, while *Type* is also a sort criterion, and the
-two have nothing to do with each other.
+spoken for, which is what makes the Shift necessary rather than decorative. Numbers also avoid the letters
+the criteria would otherwise want: Ctrl+Shift+S for *Size* reads as a Save variant in a dialog that saves,
+and Ctrl+Shift+N is *new folder* in every file manager. One indexed rule for both rows costs no mnemonics
+at all.
 
 Each chord does exactly what clicking that button does, by calling the same `sort_by(sort_key)`: asking for
 the criterion already in force reverses it, any other starts ascending. No separate key for direction.
+
+### Hidden files
+
+Added 2026-08-17 (Juha). `show_hidden_files` is already a constructor parameter (`fdialog.py:182`), passed
+through to the listing as `show_hidden`, but it is fixed for the dialog's lifetime and has no control at
+all — so a user who needs to reach a dotfile cannot, by keyboard or by mouse.
+
+**Ctrl+H toggles it, and a checkbox on the sort row does the same**, next to Thumbnails. Ctrl+H is what
+every GTK and GNOME file chooser binds this to, which is the whole argument for it; the checkbox is what
+makes it discoverable, and the two share one callback exactly as the thumbnails pair will.
+
+The toggle re-lists the current directory, so it goes through the same rebuild path as a sort or a filter
+change — meaning the cursor is re-anchored by path and clamped like any other rebuild, with no special
+case. If the cursor was sitting on a hidden entry when it is switched off, the clamp handles it.
 
 ### Discoverability
 
@@ -119,7 +143,11 @@ A hotkey nobody knows about has not been added. Three tiers, in descending order
   that already have one. This is the load-bearing tier, because the listing keys — Up/Down, Enter,
   Ctrl+Space, Tab — have no widget to hang a tooltip on, and they are what this brief is for. It is also
   the only place the governing rule can be stated as a sentence rather than inferred from a table.
-- **Not a permanent hint bar under the listing.** Vertical space in a file dialog is what shows you files.
+- **Not a permanent hint bar under the listing.** Vertical space in a file dialog is what shows you files —
+  and the dialog is **fixed-size**, so there is no getting it back. `no_resize=True` is the constructor
+  default and no caller overrides it, the layout computes three spacers from `self.width` at build time, and
+  there is no resize handler in the file. A row spent is spent for good, which is the argument against a
+  permanent one and *for* the card that appears only when asked.
 
 Two mechanics to get right:
 
@@ -133,9 +161,11 @@ Two mechanics to get right:
   are the app's hooks for suspending its own viewport-level things (Visualizer's overlay) and should not
   fire for a card belonging to a dialog that is itself already modal.
 
-Write the card's hotkey text as "Up / Down", never "↑↓": Raven's UI font is OpenSans, which has no arrow
-glyphs, so the arrows render as missing-glyph boxes. It is why the sort indicators are drawn as triangles
-rather than written.
+Write the card's hotkey text as "Up / Down" rather than "↑↓", and check the UI font before assuming
+otherwise. Arrows are not safe by default: OpenSans, the current default, has no arrow or triangle glyphs
+at all, so they render as missing-glyph boxes — which is why the sort indicators are drawn rather than
+written. InterTight *does* carry them (`raven/common/gui/utils.py`), so if the UI font moves the constraint
+lifts; the spelled-out words are correct either way, which is the reason to prefer them here.
 
 ### Tab completion, and how it coexists with the fragment search
 
@@ -243,6 +273,33 @@ own config setting (Librarian already has both).
 `InputText`, both silent while the value did change. So the save-mode arrow-fill can write the field without
 re-running the filter, which is what that rule needs, and the combo idiom can set a choice and call the
 callback itself. Two places in the tree already relied on this in comments; it is now measured.
+
+**…but only while the field is inactive, and both features here write it while the user is typing in it.**
+Measured 2026-08-17 (`investigations/dpg-keyboard-chords/`). ImGui's own edit buffer owns an active
+`InputText`: `set_value` looks like it worked — `get_value` immediately after reports the new string — and
+the next frame writes the old buffer back *and fires the edit callback while doing so*. Typing `abc`,
+writing `SETVALUE`, then typing `Z` leaves `abcZ`.
+
+This lands squarely on **Tab completion** and on the **save-mode arrow-fill**, both of which write the field
+with the caret in it, and it is not a detail to code around later — it decides whether they are buildable as
+specified. What is known so far:
+
+- The unfocus → write → refocus dance does work, but the caret is not released on the calling frame — with
+  `focus_item` on another widget, `is_item_active` read `[1, 0, 0, 0, 0, 0]` per frame. That is one sample
+  on an idle app and **not a frame count to build on**; how many rendered frames the queued focus change
+  costs depends on what else is in flight. So the dance polls `is_item_active` with `split_frame` until it
+  goes false, bounded and logged, rather than waiting a fixed number of frames.
+- **Refocusing then arms ImGui's select-all**, so the next character the user types replaces the whole
+  field instead of extending it — which is precisely the wrong behaviour for a completion. DPG exposes no
+  caret or selection API to undo it.
+
+So the open question is not "how do we write the field" but "how do we hand it back with the caret at the
+end". Until that is answered, Tab completion is designed but not buildable, and the save-mode arrow-fill
+needs the same answer — with the mitigating detail that arrow navigation happens when the user is browsing
+rather than mid-word, so a select-all there is less destructive.
+
+Worth re-reading the *"nothing but Tab writes the find field"* rule above in this light: it was written to
+keep save mode honest, and it now also bounds how much of the dialog this problem touches.
 
 **Every chord in the table reaches a key handler while the find field holds the caret** — measured
 2026-08-17, probe write-up in `investigations/dpg-keyboard-chords/`. Ctrl+Enter, Alt+Up, Ctrl+Up,
