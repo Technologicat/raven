@@ -1586,9 +1586,12 @@ class FileDialog:
                 # accepting one. Anybody who learned the old behaviour learned it silently, and will
                 # un-learn it the same way unless the button says so.
                 with dpg.tooltip(self.btn_ok):
-                    if self.returns_dir and not save_mode:
-                        dpg.add_text("Pick the folder named above. [Ctrl+Enter]\n"
-                                     "Enter descends into the folder under the cursor instead of picking it.")
+                    if self.returns_dir:
+                        # Same first line whether or not this is a save: the dialog picks a folder either
+                        # way, and what the caller then does with it is not the dialog's to describe.
+                        second = ("Enter descends into the folder under the cursor." if save_mode else
+                                  "Enter descends into the folder under the cursor instead of picking it.")
+                        dpg.add_text(f"Pick the folder named above. [Ctrl+Enter]\n{second}")
                     else:
                         dpg.add_text("Accept the selection. [Ctrl+Enter]\n"
                                      "Enter descends into the folder under the cursor, or picks a file.")
@@ -1637,6 +1640,12 @@ class FileDialog:
         """
         if not self.returns_dir:
             return None
+        if self.save_mode:
+            # Save mode answers from the name field, not from the listing — `ok` joins what was typed onto
+            # the current directory, and creating a folder that does not exist yet is the usual reason to
+            # be here. Nothing typed means nothing promised.
+            typed = dpg.get_value(f"ex_search_{self.instance_tag}")  # tag
+            return os.path.join(os.getcwd(), typed) if typed else None
         if self.selected_files:
             return self.selected_files[0]
         entry = self._cursor_entry()
@@ -1658,7 +1667,10 @@ class FileDialog:
             return
         target = self._effective_target()
         with guiutils.nonexistent_ok():
-            dpg.set_value(self.text_target, f"Will open: {target}" if target else "")
+            # "Pick" rather than "open" or "save": the dialog hands a path back and has no idea what the
+            # caller does with it. `raven-cherrypick` opens the folder, the pose editor batch-writes into
+            # it — same dialog, and neither verb is the dialog's to claim.
+            dpg.set_value(self.text_target, f"Will pick: {target}" if target else "")
 
     def _relayout(self) -> None:
         """Re-align the bottom rows against the window's *current* width.
