@@ -290,6 +290,26 @@ and Ctrl+B working by the rule Ctrl+Shift+F works by. The one wrinkle is that a 
 a menu item is an action, so a click has to clear the value afterwards — which the listing already does, so
 it is an established pattern here rather than a new one.
 
+**The panel has a cursor and no selection at all** (Juha, 2026-08-17), which is what makes the toggle-vs-
+action wrinkle go away rather than needing to be managed. You never *select* a place, you jump to one, so a
+highlight left behind afterwards would assert a state that does not exist. Concretely:
+
+- **Clicking** applies — go there — clears the highlight, and puts focus back in the find field.
+- **Keyboard** moves a cursor through the panel; **Enter** does exactly what a click does, including the
+  return to the find field. No special case needed for it: the governing rule is *Enter goes as deep as it
+  can*, and for a place, going there is the deepest thing there is.
+- So **both exits lead home** — Esc without applying, Enter with — which is the universal Esc rule and the
+  universal Enter rule meeting, rather than two panel-specific behaviours.
+
+**Focus now has three homes**: the find field, the listing, and this panel. Tab bounces between the first
+two; Ctrl+B reaches the third and it hands focus straight back on use, so it is a visit rather than a place
+to be.
+
+*A looking question this raises*: if the panel draws its cursor as the selectable's own highlight — which it
+can, having no selection to confuse it with — then that highlight means "selected" in the listing and
+"cursor" here, side by side on screen. Unambiguous within each panel and possibly confusing across them.
+Settle it with the cursor-vs-selection question below, by rendering them together rather than by arguing.
+
 **Build it with the cursor rather than before or after it.** The cursor is what both panels need, and a
 component's second consumer is what finds the gaps the first one hid — `ThumbnailGrid` gained three missing
 pieces within an hour of being wired into a second app. **With GUI tests** (Juha, 2026-08-17): this is the
