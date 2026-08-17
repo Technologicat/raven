@@ -70,6 +70,12 @@
 - the same for all eight extraction steps — authors, title, keywords, abstract and the rest — which now run without the character, on prompts that already tell the model its answer "will be sent to a computer program that cannot understand natural language". The per-step progress letters on stderr are unchanged.
   - when a step fails, the error report shows the model's thinking trace and its final answer laid out the way Librarian's export buttons lay them out, so a trace in an error report and a trace in an exported chat read the same way. The usual cause of an empty step is the model overthinking until the token budget runs out, which is what the trace shows.
 
+*Constellation-wide*
+
+- **the file dialog is resizable, and opens larger.** Drag its border when a directory warrants more rows than the default shows; every app that opens a file browser gets this. The new default is chosen so that reaching for the border should be the exception rather than the routine.
+  - It will not shrink past the point where its own controls stop fitting — the sort buttons are fixed-width and cannot reflow, so below that size the Thumbnails checkbox would be clipped off the edge.
+  - In the thumbnail view, the tiles reflow to fill the new width as you drag.
+
 **Fixed**:
 
 *Raven-librarian*

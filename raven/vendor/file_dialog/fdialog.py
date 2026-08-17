@@ -163,9 +163,9 @@ class FileDialog:
         self,
         title="File dialog",
         tag="file_dialog",
-        width=1150,
-        height=650,
-        min_size=(460, 320),
+        width=1400,
+        height=820,
+        min_size=(900, 400),
         dirs_only=False,
         save_mode=False,
         default_file_extension=None,
@@ -177,7 +177,7 @@ class FileDialog:
         allow_drag=False,
         multi_selection=False,
         show_shortcuts_menu=True,
-        no_resize=True,
+        no_resize=False,
         modal=True,
         show_hidden_files=False,
         show_thumbnails=None,
@@ -189,9 +189,16 @@ class FileDialog:
         Arguments:
             title:                  str, File dialog window title.
             tag:                    str, File dialog window DPG tag.
-            width:                  int, File dialog window width (pixels).
+            width:                  int, File dialog window width (pixels). The default is chosen to show a
+                                    useful number of files without the user reaching for the border, while
+                                    still fitting at the window's (50, 50) position inside the smallest
+                                    viewport in the constellation.
             height:                 int, File dialog window height (pixels).
-            min_size:               (int, int), File dialog minimum size.
+            min_size:               (int, int), File dialog minimum size. The floor exists because the sort
+                                    row is fixed-width buttons that cannot reflow: below roughly 800 px the
+                                    Thumbnails checkbox is clipped off the right edge. Measured at
+                                    `font_size=20`, which every app in the constellation uses; raise it if
+                                    yours does not.
             dirs_only:              When True, only directories will be listed.
             save_mode:              When True, asks for a filename to save as, instead of selecting file(s) to open.
                                     In the GUI, the "Search files" field becomes the filename field. (Searching is still enabled, to help avoid accidental overwriting.)
@@ -239,7 +246,10 @@ class FileDialog:
                                     Ignored when save_mode is True.
                                     Off by default, so that a picker multi-selects only where the caller asked for it.
             show_shortcuts_menu:    if True, show a child window (side panel) containing different shortcuts (like desktop and downloads), and the external and internal drives.
-            no_resize:              If True, the window will not be resizable.
+            no_resize:              If True, the window will not be resizable. Defaults to False, so the user
+                                    can trade screen space for rows when a directory warrants it; `min_size`
+                                    is what stops the layout being shrunk past the point where its controls
+                                    fit.
             modal:                  If True, use DPG modal mode; a sort of popup effect. Can cause problems if the file dialog is opened by a modal window.
             show_hidden_files:      If True, the dialog shows also hidden files and folders.
             show_thumbnails:        Whether to open in the thumbnail grid view instead of the table.
@@ -1182,7 +1192,11 @@ class FileDialog:
                 # is the table's. What the spacer sets is where the *label* starts, and therefore how wide
                 # the combo ends up — so it was retuned when the label was shortened, to keep the combo the
                 # width the filter names actually need rather than letting it sprawl.
-                dpg.add_spacer(width=610)
+                #
+                # Sized here for the construction width and re-sized by `_relayout` for whatever the window
+                # measures later. Derived rather than written out, so it cannot go stale against the
+                # construction width the way the literal it replaced did.
+                self.spacer_type_filter = dpg.add_spacer(width=max(0, self.width - self._TYPE_FILTER_ROW_TAIL))
                 dpg.add_text('Show')
                 self.combo_file_filter = dpg.add_combo(items=self._filter_labels,
                                                        callback=filter_combo_selector, default_value=self.file_filter, width=-1)
@@ -1202,6 +1216,43 @@ class FileDialog:
             # unless the caller said otherwise. `rebuild=False` because `chdir` below lists the directory.
             _apply_automatic_grid_mode(rebuild=False)
             chdir(self.default_path)
+
+        # Outside the window's `with`, so the registry is not parented into it. Held by ID rather than by
+        # tag: nothing looks it up, and it lives as long as the window it is bound to.
+        with dpg.item_handler_registry() as resize_registry:
+            dpg.add_item_resize_handler(callback=lambda *_: self._relayout())
+        dpg.bind_item_handler_registry(self.tag, resize_registry)  # tag
+
+    # Widths reserved at the right end of the two bottom rows, so both can be re-aligned against a window
+    # width that is not the one they were built at.
+    #
+    # `_TYPE_FILTER_ROW_TAIL` preserves what the literal spacer encodes: at the construction default of
+    # 1150 px, a 610 px spacer leaves 540 for the `Show` label and its combo. Holding that constant is the
+    # point — the combo is meant to be as wide as the filter names need, not as wide as the window.
+    _TYPE_FILTER_ROW_TAIL = 540
+    _OKCANCEL_ROW_PADDING = 33  # matches the default theme: 3 * (8 outer + 3 inner)?
+
+    def _relayout(self) -> None:
+        """Re-align the bottom rows against the window's *current* width.
+
+        Three spacers push the type-filter combo and the OK/Cancel buttons to the right edge, and all
+        three used to be sized from the width the dialog was constructed at — which is correct exactly
+        once. Everything else in the layout is elastic already (`width=-1`), so these were the only
+        things standing between the dialog and a resizable window: below the construction width they
+        pushed the OK and Cancel buttons off the edge entirely, leaving no way to accept or dismiss it.
+
+        Safe to call before any geometry exists; it does nothing, and the first `show_file_dialog` runs
+        it again once there is a window to measure.
+        """
+        width = dpg.get_item_width(self.tag)  # tag
+        if not width:
+            return
+        okcancel_width = max(0, width - (dpg.get_item_width(self.btn_ok) +
+                                         dpg.get_item_width(self.btn_cancel) +
+                                         self._OKCANCEL_ROW_PADDING))
+        dpg.set_item_width(self.spacer_okcancel, okcancel_width)
+        dpg.set_item_width(self.spacer_notification, okcancel_width)
+        dpg.set_item_width(self.spacer_type_filter, max(0, width - self._TYPE_FILTER_ROW_TAIL))
 
     # high-level functions
     def show_file_dialog(self):
@@ -1226,13 +1277,7 @@ class FileDialog:
             guiutils.split_frame(operation="file dialog: aligning the OK/Cancel buttons", required=False)
         logger.debug(f"show_file_dialog: instance '{self.tag}' ({self.instance_tag}), "
                      f"listing {tim_listing.dt:.3f}s, waited {tim_frame.dt:.3f}s for a frame")
-        old_width = dpg.get_item_width(self.spacer_okcancel)
-        new_width = self.width - (dpg.get_item_width(self.btn_ok) +
-                                  dpg.get_item_width(self.btn_cancel) +
-                                  33)  # 33: magical constant matching the default theme, to align the buttons to the right edge of the file type picker. 3 * (8 (outer padding) + 3 (inner padding))?
-        logger.debug(f"show_file_dialog: instance '{self.tag}' ({self.instance_tag}), window width = {self.width}, spacer old width = {old_width}, new width = {new_width}")
-        dpg.set_item_width(self.spacer_okcancel, new_width)
-        dpg.set_item_width(self.spacer_notification, new_width)
+        self._relayout()
 
         if self._grid_mode:
             self._start_grid_ticker()
