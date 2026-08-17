@@ -150,6 +150,18 @@ def test_moving_the_cursor_adopts_the_new_entry(make_cursor):
     assert cursor.current_key == "c"
 
 
+def test_set_listing_reports_whether_the_cursor_started_over(make_cursor):
+    """The owner needs this to apply its own fresh-listing policy without recomputing the answer.
+
+    The file dialog's is to skip `..`: a directory opens with the cursor on its first real entry, since
+    "type a few characters, then Enter" would otherwise leave the directory rather than open the match.
+    """
+    cursor = make_cursor()
+    assert cursor.set_listing(["a", "b"], listing_key="/here") is True
+    assert cursor.set_listing(["a", "b", "c"], listing_key="/here") is False
+    assert cursor.set_listing(["x"], listing_key="/elsewhere") is True
+
+
 def test_a_different_listing_starts_at_the_top(make_cursor):
     cursor = make_cursor()
     cursor.set_listing(["a", "b", "c"], listing_key="/here")

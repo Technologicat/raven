@@ -835,8 +835,14 @@ class FileDialog:
                             _make_row(entry, open_file, selected_paths=previously_selected)
                         # After the rows exist, since the cursor paints itself onto one of them.
                         self._row_entries = list(entries)
-                        self._table_cursor.set_listing([entry.path for entry in entries],
-                                                       listing_key=listed_dir)
+                        fresh = self._table_cursor.set_listing([entry.path for entry in entries],
+                                                               listing_key=listed_dir)
+                        # A new directory opens with the cursor on its first *real* entry rather than on
+                        # `..`. Starting on the way out is a poor offer, and it misreads the commonest
+                        # keyboard opening: type a few characters, press Enter — which on `..` would leave
+                        # the directory instead of opening the match. `..` is one Up away.
+                        if fresh and entries and entries[0].is_parent and len(entries) > 1:
+                            self._table_cursor.set_current(1)
 
                 logger.debug(f"reset_dir: instance '{self.tag}' ({self.instance_tag}), {len(self.shown_items)} entries "
                              f"as {'tiles' if self._grid_mode else 'rows'}: "
@@ -1026,6 +1032,9 @@ class FileDialog:
             The selection callback has already recorded the click; what is left is save mode's habit of
             offering the clicked name as the name to save as.
             """
+            # Before the choosability test: the promised target follows the cursor wherever it lands, and
+            # a cursor sitting on something unreturnable is exactly when the line has to say so.
+            self._refresh_target_notification()
             if not _is_choosable(entry):
                 return
             if self.save_mode:
@@ -1264,7 +1273,43 @@ class FileDialog:
 
         self._table_cursor = TableCursor(on_paint=_paint_row,
                                          on_scroll_into_view=_scroll_row_into_view,
-                                         page_size=_rows_per_page)
+                                         page_size=_rows_per_page,
+                                         # The promised target follows the cursor now, so it has to be
+                                         # rewritten whenever the cursor moves — including by a rebuild.
+                                         on_current_changed=lambda _idx: self._refresh_target_notification())
+
+        def _cursor_entry():
+            """The listing entry the cursor is on, in whichever view is showing. `None` if there is none."""
+            if self._grid_mode and self._grid is not None:
+                return self._grid.current_entry
+            idx = self._table_cursor.current
+            if 0 <= idx < len(self._row_entries):
+                return self._row_entries[idx]
+            return None
+        self._cursor_entry = _cursor_entry
+
+        def _activate_cursor_entry():
+            """Enter: go as deep as this entry allows.
+
+            One sentence covers every mode, which is why the rule reads as a rule rather than a table: `..`
+            and directories are somewhere to *go*, and a file in a picker that returns files is the bottom,
+            so accepting it is the deepest move available. A file in a folder picker is scenery — it is
+            shown so the folder can be judged by it — and Enter on scenery does nothing.
+
+            Ctrl+Enter is the counterpart that declines to descend, and it is `ok` unchanged.
+            """
+            entry = _cursor_entry()
+            if entry is None:
+                self.ok()  # nothing under the cursor: fall back to what the OK button would do
+                return
+            if entry.is_parent or entry.is_dir:
+                chdir(entry.path)
+                return
+            if not _is_choosable(entry):
+                return
+            self.selected_files.clear()
+            self.selected_files.append(entry.path)
+            self.ok()
 
         def _navigator():
             """Whichever view is on screen, as the thing that answers to `navigate_*`.
@@ -1305,8 +1350,10 @@ class FileDialog:
                 nav.navigate_first()
             elif key == dpg.mvKey_End:
                 nav.navigate_last()
+            elif key == dpg.mvKey_Return and ctrl:
+                self.ok()  # commit here, without descending
             elif key == dpg.mvKey_Return:
-                self.ok()
+                _activate_cursor_entry()
             elif key == dpg.mvKey_Escape:
                 self.cancel()
             elif key == dpg.mvKey_F5:
@@ -1527,12 +1574,15 @@ class FileDialog:
         """What OK would return right now in a directory-picking mode. `None` in a file picker, which has
         no such notion — there, OK with nothing selected is a question rather than an answer.
 
-        Three ways to name a folder, in the order a user's intent narrows:
+        Four ways to name a folder, in the order a user's intent narrows:
 
         1. One they clicked. An explicit choice outranks everything.
-        2. The only choosable thing left on screen — typing into the find field until a single folder
+        2. The one under the cursor, if it is a folder. A keyboard user arrows to a folder and expects to
+           get *that* folder; without this they would get whatever directory the listing happens to be
+           showing, which is the one thing they just navigated away from choosing.
+        3. The only choosable thing left on screen — typing into the find field until a single folder
            survives is a way of picking it, and predates this method.
-        3. The directory being shown. Descending into a folder and accepting is how you choose a folder
+        4. The directory being shown. Descending into a folder and accepting is how you choose a folder
            you wanted to look inside first, which is the whole point of `"dir-with-contents"`.
 
         Exists so that the notification line and `ok` cannot disagree: the line promises what this returns,
@@ -1543,6 +1593,9 @@ class FileDialog:
             return None
         if self.selected_files:
             return self.selected_files[0]
+        entry = self._cursor_entry()
+        if entry is not None and entry.is_dir and not entry.is_parent:
+            return entry.path
         choosable = [path for path in self.shown_items if os.path.isdir(path)]
         if len(choosable) == 1:
             return choosable[0]

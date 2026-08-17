@@ -80,7 +80,7 @@ class TableCursor:
     # Listing
     # ------------------------------------------------------------------
 
-    def set_listing(self, keys: Sequence[Any], *, listing_key: Any = None) -> None:
+    def set_listing(self, keys: Sequence[Any], *, listing_key: Any = None) -> bool:
         """Point the cursor at a freshly built set of rows, `keys` identifying them in display order.
 
         Call after the rows exist, since the cursor paints itself onto one of them.
@@ -88,6 +88,11 @@ class TableCursor:
         *listing_key*: what this is a listing *of* — for a directory browser, the directory path. A change
             means this is a different listing rather than a rebuild of the same one, and the cursor starts
             at the top rather than carrying a position across.
+
+        Returns whether this was a different listing — i.e. whether the cursor started over rather than
+        finding its way back. Handed back because the answer has just been worked out here and an owner
+        with a policy for a fresh listing (a first row worth skipping, say) would otherwise have to
+        reconstruct it from the same inputs and risk disagreeing.
         """
         with self._lock:
             same_listing = (listing_key == self._listing_key)
@@ -107,6 +112,7 @@ class TableCursor:
                 self._paint(self._current, True)
             self._notify()
             self._scroll_to_current()
+            return not same_listing
 
     def get_current(self) -> int:
         with self._lock:
