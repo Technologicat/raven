@@ -183,6 +183,63 @@ def test_the_cursor_keeps_its_place_when_its_file_is_gone(make_grid):
     assert grid.current_entry.name == "c.txt"
 
 
+def test_the_cursor_goes_home_when_its_file_comes_back(make_grid):
+    """Filter the cursor's file out, then stop filtering: the cursor returns to it.
+
+    While the file is missing the cursor holds its position, so a *different* file slides under it — but the
+    user never chose that file, the list moved under a stationary cursor. Remembering the chosen entry apart
+    from the displayed one is what lets the cursor go home. Typing a character and erasing it again is the
+    shape this takes in the file dialog, and it is a round trip a user expects to be free.
+    """
+    grid = make_grid()
+    grid.set_listing([_entry("a.txt"), _entry("b.txt"), _entry("c.txt")])
+    grid.set_current(0)  # deliberate: the user chose a.txt
+
+    grid.set_listing([_entry("b.txt"), _entry("c.txt")])  # a.txt filtered out
+    assert grid.current_entry.name == "b.txt"  # held its position; the user did not pick this
+
+    grid.set_listing([_entry("a.txt"), _entry("b.txt"), _entry("c.txt")])  # filter cleared
+    assert grid.current_entry.name == "a.txt"
+
+
+def test_moving_the_cursor_adopts_the_new_file(make_grid):
+    """The escape hatch from the rule above: any deliberate move re-anchors, so the cursor stops going home.
+
+    Without this, a user who filtered, then arrowed to what they were looking for, would be dragged back to
+    where they started the moment the filter cleared.
+    """
+    grid = make_grid()
+    grid.set_listing([_entry("a.txt"), _entry("b.txt"), _entry("c.txt")])
+    grid.set_current(0)
+    grid.set_listing([_entry("b.txt"), _entry("c.txt")])
+    grid.set_current(1)  # deliberate: the user chose c.txt
+
+    grid.set_listing([_entry("a.txt"), _entry("b.txt"), _entry("c.txt")])
+    assert grid.current_entry.name == "c.txt"
+
+
+def test_a_new_directory_starts_at_the_top(make_grid):
+    """A changed `listing_key` says "this is somewhere else", and the cursor does not carry a position over.
+
+    Carrying one across a `chdir` would drop the cursor at an index that named a file in the directory you
+    left.
+    """
+    grid = make_grid()
+    grid.set_listing([_entry("a.txt"), _entry("b.txt"), _entry("c.txt")], listing_key="/here")
+    grid.set_current(2)
+    grid.set_listing([_entry("x.txt"), _entry("y.txt"), _entry("z.txt")], listing_key="/elsewhere")
+    assert grid.current_entry.name == "x.txt"
+
+
+def test_the_same_directory_relisted_keeps_the_cursor(make_grid):
+    """The other half of the same rule: an unchanged key is a rebuild in place, however much the list moved."""
+    grid = make_grid()
+    grid.set_listing([_entry("a.txt"), _entry("b.txt"), _entry("c.txt")], listing_key="/here")
+    grid.set_current(2)
+    grid.set_listing([_entry("c.txt"), _entry("a.txt")], listing_key="/here")
+    assert grid.current_entry.name == "c.txt"
+
+
 def test_selected_entries_come_back_in_display_order(make_grid):
     grid = make_grid()
     grid.set_listing([_entry("a.txt"), _entry("b.txt"), _entry("c.txt")])

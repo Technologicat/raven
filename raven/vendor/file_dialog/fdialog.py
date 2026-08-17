@@ -735,6 +735,12 @@ class FileDialog:
             previously_selected = set(self.selected_files)
             self.selected_files.clear()
             self.shown_items.clear()
+
+            # What this is a listing *of*. A rebuild of the same directory and a move to a different one
+            # look identical from here, and the cursor wants opposite things from them — hold its place
+            # across a re-filter, start at the top of somewhere new — so the views are told which directory
+            # this is and work it out themselves.
+            listed_dir = os.path.abspath(str(default_path))
             try:
                 dpg.configure_item(f"ex_path_input_{self.instance_tag}", default_value=os.getcwd())
                 # Compiled once per rebuild rather than per entry: on a directory of thousands, the split is
@@ -762,7 +768,7 @@ class FileDialog:
                 with timer() as tim_build:
                     if self._grid_mode:
                         grid = _the_grid()
-                        grid.set_listing(entries)
+                        grid.set_listing(entries, listing_key=listed_dir)
                         # Re-made against the new order, and the grid's own callback puts the survivors
                         # back into `selected_files`.
                         grid.set_selected_paths(previously_selected)

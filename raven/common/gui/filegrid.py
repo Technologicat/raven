@@ -37,7 +37,7 @@ import pathlib
 import threading
 import time
 from collections.abc import Callable, Mapping, Sequence
-from typing import Optional, Union
+from typing import Any, Optional, Union
 
 import torch
 
@@ -141,6 +141,10 @@ class FileGrid(ThumbnailGrid):
         self._icon_name_for = icon_name_for
         self._selectable_for = selectable_for
         self._unselectable_wash = unselectable_wash
+        # The entry the *user* last put the cursor on, which is not the same as the entry the cursor is
+        # currently showing. See `set_current`.
+        self._anchor_path: Optional[str] = None
+        self._listing_key: Any = None  # what the current listing is *of*; see `set_listing`
         self._decodable: set[int] = set()
         self._on_current_entry_changed = on_current_entry_changed
         self._on_selection_changed_entries = on_selection_changed_entries
@@ -191,8 +195,19 @@ class FileGrid(ThumbnailGrid):
     # Public API
     # ------------------------------------------------------------------
 
-    def set_listing(self, entries: Sequence[FileEntry]) -> None:
+    def set_listing(self, entries: Sequence[FileEntry], *, listing_key: Any = None) -> None:
         """Show `entries`, in the order given.
+
+        *listing_key*: what this is a listing *of* — for a directory browser, the directory path. When it
+        differs from the previous call's, this is a different listing rather than a rebuild of the same one,
+        and the cursor starts at the top instead of carrying a position across; a position in one directory
+        names nothing in another.
+
+        Anything comparable will do, and it need not be a directory: a listing of search results gathered
+        from many of them is one listing, identified by its query.
+
+        Left at `None` it compares equal to itself, so a caller that never supplies one gets the
+        rebuild-in-place behaviour throughout.
 
         The cursor is re-anchored **by path**, so a listing rebuilt under a changed filter or a changed sort
         leaves it on the same file — and keeps its *position*, clamped, when that file is no longer listed.
@@ -207,8 +222,24 @@ class FileGrid(ThumbnailGrid):
         recently visited folder all free.
         """
         with self._lock:
-            previous_path = self._current_path()
-            previous_index = self._current  # `set_entries` below resets it, so it is read here
+            # A key rather than a "did the directory change" flag, because the flag asks the call site for a
+            # judgement that every future call site would then have to derive and thread down to here, where
+            # the key asks for a fact the caller already had in hand.
+            #
+            # And the threading is not always possible. A rebuild deferred to a frame callback or a
+            # background task cannot be handed an argument by whoever decided to rebuild, so a flag would
+            # have to be stashed somewhere and read later — where it can go stale, or belong to a different
+            # rebuild than the entries it is read beside. A key arrives *with* the entries and cannot
+            # disagree with them.
+            same_listing = (listing_key == self._listing_key)
+            self._listing_key = listing_key
+
+            # Read before `set_entries` below resets them. The *anchor* is what the cursor tries to find
+            # again; the *index* is only the fallback for when it is gone.
+            previous_anchor = self._anchor_path if same_listing else None
+            previous_index = self._current if same_listing else None
+            if not same_listing:
+                self._anchor_path = None
             self._entries = list(entries)
             self._pipeline.cancel()
             self._batch = []
@@ -234,10 +265,11 @@ class FileGrid(ThumbnailGrid):
             self._evict_thumbnails()
 
             target = reanchor_cursor([entry.path for entry in self._entries],
-                                     previous_key=previous_path,
+                                     previous_key=previous_anchor,
                                      previous_index=previous_index)
             if target is not None:
-                self.set_current(target)
+                # Placing, not choosing — so the anchor survives a rebuild that moved the cursor off it.
+                self.set_current(target, anchor=False)
 
     def get_entries(self) -> list[FileEntry]:
         with self._lock:
@@ -250,6 +282,28 @@ class FileGrid(ThumbnailGrid):
                 return self._entries[self._current]
             return None
     current_entry = property(fget=get_current_entry, doc="The entry the cursor is on, or `None`.")
+
+    def set_current(self, idx: int, *, anchor: bool = True) -> None:
+        """Move the cursor to entry `idx`, and record that entry as the one the user chose.
+
+        *anchor*: `False` when the cursor is being *placed* rather than *moved* — by a rebuild, not by the
+        user. The distinction is the whole point of this override, and it exists because the two are easy to
+        confuse and behave differently later.
+
+        A rebuild that drops the cursor's file leaves the cursor holding its position, so a different file
+        slides under it. The user did not choose that file — the list moved beneath a stationary cursor —
+        and the difference shows up when the filter is removed again: with only one remembered entry the
+        cursor stays on the newcomer, which is not where anybody left it. Remembering the *chosen* entry
+        separately lets the cursor go home when the file it was on comes back.
+
+        Every navigation path in the base class routes through here, so arrows, page keys, Home/End and
+        clicks all anchor without knowing they do. `set_entries` assigns the cursor directly and therefore
+        does not, which is correct: rebuilding is not choosing.
+        """
+        super().set_current(idx)
+        if anchor:
+            with self._lock:
+                self._anchor_path = self._entries[idx].path if 0 <= idx < len(self._entries) else None
 
     def set_selected_paths(self, paths) -> None:
         """Select exactly the listed entries whose path is in `paths`, ignoring any that are not listed.
