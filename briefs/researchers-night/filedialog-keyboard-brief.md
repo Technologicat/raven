@@ -26,8 +26,14 @@ navigation.
 ## The design
 
 **Focus lives in the find field**, which doubles as the filename field in save mode. Being a single-line
-entry it leaves *up and down* free for the listing; left and right stay with the text caret, so the design
-must not want horizontal navigation, and does not. Nothing Tab-cycles. Two other widgets are reachable, each
+entry it leaves *up and down* free for the listing; left and right stay with the text caret.
+
+**Which costs nothing in the table and something in the grid**, noticed 2026-08-17 on the first build:
+a table row is a whole entry, so horizontal movement means nothing there, but a grid row holds several
+tiles and stepping between them is the obvious gesture. So the keys are not unwanted, they are *occupied* —
+and only while the field has the caret. Once Tab hands focus to the listing they are free, and
+`navigate_next` / `navigate_prev` (a single entry either way) are already waiting for them. Until then,
+Left and Right doing nothing in grid view is the design working rather than a gap in it. Nothing Tab-cycles. Two other widgets are reachable, each
 by explicit key rather than by a focus order.
 
 **The governing rule for Enter: *Enter goes as deep as it can; Ctrl+Enter stops here.*** Uniform across all
