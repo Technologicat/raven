@@ -148,6 +148,13 @@ class FileDialog:
                 with dpg.theme_component(dpg.mvThemeCat_Core):
                     dpg.add_theme_style(dpg.mvStyleVar_SelectableTextAlign, x=1, y=.5)
 
+            # `..` is never something the dialog returns, so it should read like the other entries it will
+            # not return — but it is also the way out of the directory, so it cannot be a *disabled* widget
+            # the way those are. Same grey, reached for directly instead of through the widget state.
+            with dpg.theme() as cls.unreturnable_text_theme:
+                with dpg.theme_component(dpg.mvAll):
+                    dpg.add_theme_color(dpg.mvThemeCol_Text, guiutils.DISABLED_TEXT_COLOR, category=dpg.mvThemeCat_Core)
+
             # texture loading
             for img in _ICON_NAMES:
                 width, height, _, data = dpg.load_image(os.path.join(cls.fd_img_path, f"{img}.png"))
@@ -597,9 +604,14 @@ class FileDialog:
             if entry.is_parent:
                 with dpg.table_row(parent=parent):
                     with dpg.group(horizontal=True):
-                        dpg.add_image(self.img_mini_folder, tint_color=[255, 255, 255, 255], user_data=entry.kind)
-                        dpg.add_selectable(label=entry.name, callback=_go_up_one_level,
-                                           span_columns=True, height=self.selec_height)
+                        # Dimmed like everything else the dialog will not return, which is what the grid
+                        # does with it too: `..` is not a choice in any mode, so showing it at full strength
+                        # among entries that *are* choices says the opposite of what is true.
+                        dpg.add_image(self.img_mini_folder, user_data=entry.kind,
+                                      tint_color=[255, 255, 255, self.image_transparency])
+                        parent_cell = dpg.add_selectable(label=entry.name, callback=_go_up_one_level,
+                                                         span_columns=True, height=self.selec_height)
+                        dpg.bind_item_theme(parent_cell, self.unreturnable_text_theme)
                 return
 
             # Shown, but nothing can be done with it: not an answer this dialog returns, and not somewhere

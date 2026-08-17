@@ -6,6 +6,7 @@ This module is licensed under the 2-clause BSD license, to facilitate integratio
 __all__ = ["bootup", "load_extra_font",  # high-level bootup API, you usually want these two for app bootup
            "get_font_path",  # mostly internal, but available for exotic use cases
            "setup_default_font", "setup_icon_fonts", "setup_markdown", "setup_themes",  # granular low-level app bootup API
+           "DISABLED_TEXT_COLOR",
            "nonexistent_ok",
            "maybe_delete_item", "has_child_items",
            "get_widget_pos", "get_widget_size", "get_widget_relative_pos",
@@ -41,6 +42,12 @@ from . import fontsetup
 from .layout_math import (screen_to_content, content_to_screen,  # noqa: F401 -- re-export
                           zoom_keep_point, compute_zoom_to_fit,
                           compute_tooltip_position_scalar)
+
+# The grey Raven's disabled widgets render their text in. Exported because "disabled" is a *widget state*,
+# and some things that should look unavailable cannot be in it — `fdialog`'s `..` entry has to stay
+# clickable, since it is the way out of the directory, while reading like the entries the dialog will not
+# return. Those reach for the colour directly rather than each inventing a grey.
+DISABLED_TEXT_COLOR = (0.50 * 255, 0.50 * 255, 0.50 * 255, 1.00 * 255)
 
 # ---------------------------------------------------------------------------
 # Fonts & themes
@@ -305,7 +312,7 @@ def setup_themes() -> env:
     # TODO: Figure out how to get colors from a theme. Might not always be `(45, 45, 48)`.
     #   - Maybe see how DPG's built-in theme editor does it - unless it's implemented at the C++ level.
     #   - See also the theme color editor in https://github.com/hoffstadt/DearPyGui/wiki/Tools-and-Widgets
-    disabled_color = (0.50 * 255, 0.50 * 255, 0.50 * 255, 1.00 * 255)
+    disabled_color = DISABLED_TEXT_COLOR
     disabled_button_color = (45, 45, 48)
     disabled_button_hover_color = (45, 45, 48)
     disabled_button_active_color = (45, 45, 48)
