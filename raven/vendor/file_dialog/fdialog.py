@@ -935,11 +935,16 @@ class FileDialog:
             """
             with dpg.group(horizontal=True):
                 dpg.add_text("Sort by")
-                for sort_key, label in _SORT_CRITERIA:
+                for n, (sort_key, label) in enumerate(_SORT_CRITERIA, start=1):
                     with dpg.group(horizontal=True):
-                        dpg.add_button(label=label, width=70,
-                                       user_data=sort_key,
-                                       callback=lambda s, a, u: sort_by(u))
+                        button = dpg.add_button(label=label, width=70,
+                                                user_data=sort_key,
+                                                callback=lambda s, a, u: sort_by(u))
+                        # The keys are numbered by position, so the tooltip is the only place a user finds
+                        # out *which* number this button is without counting the row.
+                        with dpg.tooltip(button):
+                            dpg.add_text(f"Sort by {label.lower()} [Ctrl+Shift+{n}]\n"
+                                         "Again to reverse the order.")
                         drawlist = dpg.add_drawlist(width=14, height=self.selec_height + 10)
                         _sort_indicators[sort_key] = drawlist
                 self.spacer_view_toggle = dpg.add_spacer(width=16)
@@ -948,7 +953,7 @@ class FileDialog:
                                                             show=_grid_is_available(),
                                                             callback=_thumbnails_checkbox_callback)
                 with dpg.tooltip(self.checkbox_thumbnails):
-                    dpg.add_text("Show the listing as image thumbnails instead of a table.\n"
+                    dpg.add_text("Show the listing as image thumbnails instead of a table. [Ctrl+T]\n"
                                  "Turns itself on when the file type filter selects images;\n"
                                  "setting it by hand overrides that until you close the dialog.")
             _draw_sort_indicators()
@@ -1471,17 +1476,17 @@ class FileDialog:
                         with dpg.group(horizontal=True):
                             self.button_refresh = dpg.add_image_button(self.img_refresh, tag=f"button_refresh_{self.instance_tag}")
                             with dpg.tooltip(self.button_refresh):
-                                dpg.add_text("Refresh the current folder listing [F5]")  # TODO: move the hotkey handler for this dialog here
+                                dpg.add_text("Refresh the current folder listing [F5]")
                             self.button_back_to_default_path = dpg.add_image_button(self.img_back, tag=f"button_back_to_default_path_{self.instance_tag}")
                             with dpg.tooltip(self.button_back_to_default_path):
-                                dpg.add_text("Go back to the default path [Ctrl+Home]")  # TODO: move the hotkey handler for this dialog here
+                                dpg.add_text("Go back to the default path [Ctrl+Home]")
                             dpg.set_item_callback(self.button_refresh, self.refresh)
                             dpg.set_item_callback(self.button_back_to_default_path, self.back_to_default_path)
 
                             dpg.add_input_text(hint="Path", on_enter=True, callback=on_path_enter, default_value=os.getcwd(), width=-1, tag=f"ex_path_input_{self.instance_tag}")
 
                         with dpg.group(horizontal=True):
-                            search_hint = "Search files [Ctrl+F]" if not save_mode else "Filename to save as [Ctrl+F]"  # TODO: move the hotkey handler for this dialog here
+                            search_hint = "Search files [Ctrl+F]" if not save_mode else "Filename to save as [Ctrl+F]"
                             self.search_field = dpg.add_input_text(hint=search_hint, callback=self._update_search, tag=f"ex_search_{self.instance_tag}", width=-1)
 
                         _make_sort_row()
@@ -1571,11 +1576,25 @@ class FileDialog:
 
             with dpg.group(horizontal=True):
                 self.spacer_okcancel = dpg.add_spacer(width=int(self.width * 0.5))
-                # "Use folder" rather than "OK" where OK does not need a selection: the label is the shortest
-                # place to say that pressing it now, with nothing picked, is a complete action.
-                self.btn_ok = dpg.add_button(label="Use folder" if (self.returns_dir and not save_mode) else "OK",
+                # "Pick folder" rather than "OK" where OK does not need a selection: the label is the
+                # shortest place to say that pressing it now, with nothing selected, is a complete action.
+                # *Pick* rather than *use*, to match what these dialogs are called — a file picker.
+                self.btn_ok = dpg.add_button(label="Pick folder" if (self.returns_dir and not save_mode) else "OK",
                                              width=100, tag=self.tag + "_return", callback=self.ok)
+                # Worth a tooltip precisely *because* this one changed: bare Enter used to press this
+                # button, and now it acts on the cursor instead — descending into a folder rather than
+                # accepting one. Anybody who learned the old behaviour learned it silently, and will
+                # un-learn it the same way unless the button says so.
+                with dpg.tooltip(self.btn_ok):
+                    if self.returns_dir and not save_mode:
+                        dpg.add_text("Pick the folder named above. [Ctrl+Enter]\n"
+                                     "Enter descends into the folder under the cursor instead of picking it.")
+                    else:
+                        dpg.add_text("Accept the selection. [Ctrl+Enter]\n"
+                                     "Enter descends into the folder under the cursor, or picks a file.")
                 self.btn_cancel = dpg.add_button(label="Cancel", width=100, callback=self.cancel)
+                with dpg.tooltip(self.btn_cancel):
+                    dpg.add_text("Close without choosing anything. [Esc]")
 
             # After the widgets exist, since it may flip the view: an image-typed filter comes up as a grid
             # unless the caller said otherwise. `rebuild=False` because `chdir` below lists the directory.
