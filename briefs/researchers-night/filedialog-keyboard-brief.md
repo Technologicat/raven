@@ -478,6 +478,12 @@ that from the code.
   place is load-bearing — and **jumps to the first match once a filter is typed**, a filter being a search.
 - **Ctrl+1…9** type filter, **Ctrl+Shift+1…4** sort, **Ctrl+T** thumbnails, plus the five that already
   existed (Enter, Esc, F5, Ctrl+Home, Ctrl+F).
+- **A "Will pick:" line** names the path OK would return, live, from the same `_effective_target` that
+  `ok` uses — so what is promised and what is delivered cannot drift. It took three corrections to get
+  right, each of them a rule firing outside the conditions it was written for: it said "open" for a dialog
+  that saves, it answered from the listing in save mode where `ok` answers from the name field, and its
+  unique-match shortcut fired with nothing typed, offering a lone subfolder instead of the folder being
+  browsed.
 - **The cursor survives a rebuild** by the rules in `gridnav.reanchor_cursor`, shared with the grid: follow
   the entry you chose, else hold position, else start at the top somewhere new. The *chosen* entry is
   remembered apart from the displayed one, so a filtered-out file gets its cursor back when it returns.
