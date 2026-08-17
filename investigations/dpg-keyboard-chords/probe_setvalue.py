@@ -68,6 +68,32 @@ def key_handler(sender, app_data):
         log(f"F5 dance: before={before!r} active_per_frame={states} wrote={wrote!r} "
             f"after={dpg.get_value('probe_input')!r} "  # tag
             f"active={int(dpg.is_item_active('probe_input'))}")  # tag
+    elif app_data == dpg.mvKey_F6:
+        # `configure_item(default_value=...)` is a different spelling of the same write, and `dpg-notes`
+        # records it changing the live value where the name says it should not. That was measured on an
+        # *inactive* field, so whether it survives ImGui's edit buffer is a separate question — and the one
+        # that decides whether Tab completion is buildable at all.
+        before = dpg.get_value("probe_input")  # tag
+        dpg.configure_item("probe_input", default_value="CONFIGURED")  # tag
+        dpg.split_frame()
+        log(f"F6 configure_item: before={before!r} after={dpg.get_value('probe_input')!r} "  # tag
+            f"active={int(dpg.is_item_active('probe_input'))}")  # tag
+    elif app_data == dpg.mvKey_F7:
+        # Can a `menu_item` hold focus? The places panel is built from free-floating ones, and DPG's focus
+        # model has already produced two surprises here (a child window cannot be focused, a button can).
+        before_focus = dpg.get_focused_item()
+        dpg.focus_item("probe_menu_item")  # tag
+        dpg.split_frame()
+        # Asked separately and defensively: a `menu_item` turns out to have no `focused` state at all, so
+        # the query raises rather than answering False — and where focus actually *went* is the half that
+        # decides whether asking for it is merely useless or harmful.
+        try:
+            focused_flag = dpg.is_item_focused("probe_menu_item")  # tag
+        except Exception as exc:  # noqa: BLE001 -- the point is to report whatever it does
+            focused_flag = f"<{type(exc).__name__}: {exc}>"
+        log(f"F7 focus menu_item: before={before_focus} after={dpg.get_focused_item()} "
+            f"is_item_focused={focused_flag} "
+            f"input_active={int(dpg.is_item_active('probe_input'))}")  # tag
     elif app_data == dpg.mvKey_Return:
         log(f"RETURN value={dpg.get_value('probe_input')!r}")  # tag
 
@@ -83,6 +109,9 @@ with dpg.window(tag="win", width=860, height=240, pos=(10, 10)):  # tag
     dpg.add_text("Click the field, type, press F2, type again, press Enter.")
     dpg.add_input_text(tag="probe_input", width=600, callback=on_edit)  # tag
     dpg.add_button(tag="parking_button", label="parking spot for the unfocus dance", width=300)  # tag
+    # Free-floating, the way `fdialog`'s places panel builds them — not inside a menu bar.
+    with dpg.group(horizontal=True):
+        dpg.add_menu_item(tag="probe_menu_item", label="a menu item, as the places panel uses")  # tag
 
 dpg.show_viewport()
 

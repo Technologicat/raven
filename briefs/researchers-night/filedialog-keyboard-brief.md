@@ -169,6 +169,17 @@ lifts; the spelled-out words are correct either way, which is the reason to pref
 
 ### Tab completion, and how it coexists with the fragment search
 
+> **Not buildable as specified, measured 2026-08-17.** Completion means writing the find field while the
+> user is typing in it, and ImGui's edit buffer owns an active `InputText`: `set_value` is reverted on the
+> next frame, and `configure_item(default_value=...)` never lands at all. The unfocus/write/refocus dance
+> works but arms select-all, so the next character typed would replace the completion instead of extending
+> it — worse than not completing. There is no third spelling; this needs a different feature, not a
+> different call.
+>
+> The rule below is kept because it is still the right rule *if* the field ever becomes one we control, and
+> because the candidate-set half of it (prefix-preferred-else-all, smart-case) is reusable by whatever
+> replaces Tab. What replaces it is an open question — see "What Tab does instead" below.
+
 One rule with a fallback:
 
 > Among the shown items, take those whose name *starts with* the field content. If none do, take **all**
@@ -213,6 +224,25 @@ name follows you; type one character and the field is yours. The mechanical catc
 re-run the filter, or the listing collapses to one row and the cursor has nowhere left to move. The existing
 click path calls `_update_search()` explicitly after `set_value`, which is right for a click and wrong for
 arrows.
+
+### What Tab does instead
+
+**Open.** The measurement above closes the field-writing route without saying what Tab should do, and Tab is
+worth keeping: it is the key a keyboard user reaches for, and leaving it inert is a worse answer than
+choosing a different job for it.
+
+The proposal on the table is to make Tab a *navigation* key rather than a text key: **if exactly one item
+matches, act on it — descend into a directory, accept a file; otherwise put the cursor in the listing.** The
+argument for it is that bash completes because bash has no listing, while here the listing is already
+filtered live by what you typed, so the narrowing Tab exists to do has happened on screen already. What is
+left is to act on the result, and that needs no write.
+
+What it gives up is extending the text so you can keep typing from where completion left off — which is
+worth less here than in a shell, but is not nothing: it also means Tab can no longer help you *build* a
+name in save mode, where there is no listing entry to act on yet.
+
+Not settled. Worth building the cursor first either way, since the fallback behaviour ("put the cursor in
+the listing") needs it to exist before it can be tried.
 
 ### Cursor and selection
 
@@ -326,9 +356,17 @@ Still open:
 
 - **Whether the cursor and the selection are visually distinguishable** — see above; a looking question, not
   an arguing one, and it needs the cursor built before it can be asked.
-- **Whether `dpg.focus_item` can focus a `menu_item`**, which the places panel is built from. A child window
-  cannot be focused and a button can, so this is a third case and neither answer is safe to assume. One
-  headless probe settles it; it blocks only the places panel, so it can wait until that step.
+**A `menu_item` cannot hold focus, and asking is a no-op** — measured 2026-08-17. It is a stronger no than
+expected: `get_item_state` on one has no `"focused"` key at all, so `is_item_focused` raises rather than
+answering False. `focus_item` on one changes nothing (focus stayed on the text field, still active), which
+at least makes it the harmless case rather than the child-window one.
+
+So the places panel cannot use the focus-dispatch idiom the type filter uses, and Ctrl+B needs one of two
+shapes instead: a **drawn cursor plus a mode flag** (the listing's cursor is drawn already, so this is a
+second instance rather than a new mechanism), or a **real focusable widget parked inside the panel** to hold
+focus on its behalf — a button works, and `dpg-notes` records that a focused button ignores Space and Enter,
+so it is inert while it sits there. The mode flag is the smaller change; the parked widget keeps the
+"dispatch on `get_focused_item`" rule uniform across all three panels. Undecided.
 
 **Out of scope, worth recording**: an audio cue for the overwrite warning, and for whatever other warnings the
 dialog grows. Visual-only feedback is a gap for the same audience this brief is about.

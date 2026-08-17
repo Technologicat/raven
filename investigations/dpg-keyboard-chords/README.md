@@ -79,9 +79,25 @@ of frames is a race that passes here and fails on a loaded app; poll `is_item_ac
 The easy walk-in: `focus_item` not taking effect until the next frame is already documented, so spending
 one `split_frame` on it feels like the job is done.
 
-**But refocusing arms select-all**, and that is the part with no answer yet. After the full dance the field
+**But refocusing arms select-all**, and that is the part with no answer. After the full dance the field
 genuinely held `DANCED3`; the next typed character left it holding `Y`. For a completion this is the wrong
 behaviour outright, and DPG exposes no caret or selection API to correct it.
+
+**`configure_item(default_value=...)` is not a way around it** (F6). It fails harder than `set_value`:
+`before='abc' after='abc'` on the very next line, where `set_value` at least reported the new string before
+the revert. So there is no spelling of the write that survives an active field — a feature needing one has
+to be redesigned rather than re-spelled. This is what closed Tab completion in the FileDialog brief.
+
+## Can a `menu_item` hold focus?
+
+No, and it is the third distinct case in DPG's focus model (F7). `get_item_state` on a `menu_item` returns
+a dict with no `"focused"` key at all, so `dpg.is_item_focused` raises `KeyError: 'focused'` rather than
+answering False — which is why the first run of this probe lost the whole log line to an exception, and why
+the query is wrapped now. `focus_item` on one is a no-op: focus was on the text field before the call and
+still on it afterwards, still active.
+
+Harmless, then, unlike a child window, which takes the caret away when asked to do the impossible. But it
+means anything built from menu items cannot use the focus-dispatch idiom.
 
 ## Is the dialog resizable if you ask it to be?
 
