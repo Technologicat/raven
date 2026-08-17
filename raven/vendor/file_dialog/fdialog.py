@@ -835,13 +835,17 @@ class FileDialog:
                             _make_row(entry, open_file, selected_paths=previously_selected)
                         # After the rows exist, since the cursor paints itself onto one of them.
                         self._row_entries = list(entries)
-                        fresh = self._table_cursor.set_listing([entry.path for entry in entries],
-                                                               listing_key=listed_dir)
-                        # A new directory opens with the cursor on its first *real* entry rather than on
-                        # `..`. Starting on the way out is a poor offer, and it misreads the commonest
-                        # keyboard opening: type a few characters, press Enter — which on `..` would leave
-                        # the directory instead of opening the match. `..` is one Up away.
-                        if fresh and entries and entries[0].is_parent and len(entries) > 1:
+                        self._table_cursor.set_listing([entry.path for entry in entries],
+                                                       listing_key=listed_dir)
+                        # `..` is where the cursor rests while nothing has been typed, and that is
+                        # load-bearing rather than incidental: the cursor is what Ctrl+Enter returns, so a
+                        # cursor parked on the first subfolder would hand back a *child* of the directory
+                        # you navigated to in order to choose it.
+                        #
+                        # Typing changes the question. A filter is a search, and a search puts the cursor on
+                        # its first hit — otherwise "type a few characters, press Enter" leaves the
+                        # directory instead of opening the match, `..` being what Enter would act on.
+                        if file_name_filter and self._table_cursor.current == 0 and len(entries) > 1 and entries[0].is_parent:
                             self._table_cursor.set_current(1)
 
                 logger.debug(f"reset_dir: instance '{self.tag}' ({self.instance_tag}), {len(self.shown_items)} entries "
