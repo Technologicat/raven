@@ -136,6 +136,40 @@ def shown(dialog):
     return sorted(os.path.basename(path) for path in dialog.shown_items)
 
 
+# --------------------------------------------------------------------------------
+# What a directory picker promises to return
+
+def test_a_lone_subfolder_is_not_picked_for_you(make_dialog, tmp_path):
+    """Browsing a folder that happens to hold one subfolder must still offer *this* folder.
+
+    The unique-match shortcut is for narrowing — type until one folder survives, then accept it. Applied
+    with nothing typed it fires on any directory containing a single subdirectory, promising the child
+    while the cursor rests on `..` meaning the parent. `~/Pictures` with one album in it is enough.
+    """
+    (tmp_path / "the_only_album").mkdir()
+    d = make_dialog(pick="dir")
+    d.reset_dir(default_path=str(tmp_path))
+    assert d._effective_target() == os.getcwd()
+
+
+def test_narrowing_to_one_folder_does_pick_it(make_dialog, tmp_path):
+    """The other half: with something typed, one surviving folder is the answer the typing asked for."""
+    (tmp_path / "alpha").mkdir()
+    (tmp_path / "beta").mkdir()
+    d = make_dialog(pick="dir")
+    d.reset_dir(file_name_filter="alph", default_path=str(tmp_path))
+    assert os.path.basename(d._effective_target()) == "alpha"
+
+
+def test_a_file_picker_promises_nothing(make_dialog, tmp_path):
+    """`_effective_target` is a directory-picker notion; in a file picker OK with no selection is a
+    question rather than an answer, and the line that reports it is not shown at all."""
+    (tmp_path / "only.txt").write_text("x")
+    d = make_dialog()
+    d.reset_dir(default_path=str(tmp_path))
+    assert d._effective_target() is None
+
+
 def test_file_filter_defaults_to_the_first_offered_item(make_dialog):
     """Every call site passed the first item's own label, so the constructor may as well say it."""
     assert make_dialog(filter_list=[".xdot", ".dot", ".gv"]).file_filter == ".xdot"

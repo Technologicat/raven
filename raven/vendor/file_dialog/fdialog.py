@@ -1651,9 +1651,14 @@ class FileDialog:
         entry = self._cursor_entry()
         if entry is not None and entry.is_dir and not entry.is_parent:
             return entry.path
-        choosable = [path for path in self.shown_items if os.path.isdir(path)]
-        if len(choosable) == 1:
-            return choosable[0]
+        # Only while something is typed. The shortcut is for *narrowing* — type until one folder survives,
+        # then accept it — and without that guard it fires on any directory that merely happens to contain
+        # one subfolder, promising the child while the cursor rests on `..` meaning the parent. Browsing
+        # `~/Pictures` with a single album in it is enough to hit that.
+        if dpg.get_value(f"ex_search_{self.instance_tag}"):  # tag
+            choosable = [path for path in self.shown_items if os.path.isdir(path)]
+            if len(choosable) == 1:
+                return choosable[0]
         return os.getcwd()
 
     def _refresh_target_notification(self) -> None:
