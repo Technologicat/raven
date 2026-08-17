@@ -55,7 +55,7 @@ one sentence rather than a table of special cases.
 | Ctrl+B | focus the places panel — the folder shortcuts and drives; Up / Down / Home / End then move within it, Enter goes there — see below |
 | Ctrl+Shift+1 … Ctrl+Shift+4 | sort by the Nth criterion — Name, Date, Type, Size — see below |
 | F1 | open the dialog's help card — see below |
-| Tab | complete in the field — see below |
+| Tab | move the caret between the find field and the listing; completion is applied on the way out — see below |
 
 **Why Ctrl+Up exists alongside the standard Alt+Up.** On a Nordic layout Alt sits only to the *left* of
 space — the right-hand key is AltGr, which is a different key — so Alt+Up needs two hands. Ctrl is mirrored
@@ -169,16 +169,13 @@ lifts; the spelled-out words are correct either way, which is the reason to pref
 
 ### Tab completion, and how it coexists with the fragment search
 
-> **Not buildable as specified, measured 2026-08-17.** Completion means writing the find field while the
-> user is typing in it, and ImGui's edit buffer owns an active `InputText`: `set_value` is reverted on the
-> next frame, and `configure_item(default_value=...)` never lands at all. The unfocus/write/refocus dance
-> works but arms select-all, so the next character typed would replace the completion instead of extending
-> it — worse than not completing. There is no third spelling; this needs a different feature, not a
-> different call.
+> **Buildable, but only with the caret out of the field.** Measured 2026-08-17: ImGui's edit buffer owns an
+> *active* `InputText`, so `set_value` is reverted on the next frame and `configure_item(default_value=...)`
+> never lands at all. There is no spelling of the write that survives. On an **inactive** field both work
+> normally — which is what "Tab is the mode-switch key" below is built on: Tab moves the caret out of the
+> field first, and the completion is written into a field nobody is typing in.
 >
-> The rule below is kept because it is still the right rule *if* the field ever becomes one we control, and
-> because the candidate-set half of it (prefix-preferred-else-all, smart-case) is reusable by whatever
-> replaces Tab. What replaces it is an open question — see "What Tab does instead" below.
+> So the rule below stands as written. What changes is *when* it runs.
 
 One rule with a fallback:
 
@@ -225,24 +222,34 @@ re-run the filter, or the listing collapses to one row and the cursor has nowher
 click path calls `_update_search()` explicitly after `set_value`, which is right for a click and wrong for
 arrows.
 
-### What Tab does instead
+### Tab is the mode-switch key
 
-**Open.** The measurement above closes the field-writing route without saying what Tab should do, and Tab is
-worth keeping: it is the key a keyboard user reaches for, and leaving it inert is a worse answer than
-choosing a different job for it.
+Settled 2026-08-17 (Juha), and it is what makes completion possible at all rather than a consolation for
+losing it. **Tab moves the caret between the find field and the listing.** Everything else follows from the
+field being inactive while the listing holds focus:
 
-The proposal on the table is to make Tab a *navigation* key rather than a text key: **if exactly one item
-matches, act on it — descend into a directory, accept a file; otherwise put the cursor in the listing.** The
-argument for it is that bash completes because bash has no listing, while here the listing is already
-filtered live by what you typed, so the narrowing Tab exists to do has happened on screen already. What is
-left is to act on the result, and that needs no write.
+- **The field becomes writable.** Programmatic writes land on an inactive field, so this is where the
+  completion above is applied, and where save mode fills the field from the cursor row.
+- **The focused item is the cursor.** In table view the rows are selectables, which are ordinary focusable
+  items, so Tab focuses the cursor row's own selectable — no stand-in widget, and `get_focused_item`
+  dispatch says something true rather than approximating.
+- **Grid view needs the stand-in**, being a child window and drawlists with nothing focusable in it. Same
+  rule, two implementations; the mode-flag fallback lives there.
 
-What it gives up is extending the text so you can keep typing from where completion left off — which is
-worth less here than in a shell, but is not nothing: it also means Tab can no longer help you *build* a
-name in save mode, where there is no listing entry to act on yet.
+**The return Tab is for editing the text, not for accepting.** Enter acts directly from the listing, per the
+governing rule, so the common path is *type → Tab → arrow → Enter* and never comes back to the field. Tab
+back is what you press when you want the name in the field to work on — which in practice means save mode,
+amending an existing name into a variant.
 
-Not settled. Worth building the cursor first either way, since the fallback behaviour ("put the cursor in
-the listing") needs it to exist before it can be tried.
+**Returning arms ImGui's select-all**, and there is no API to undo it. The next character typed replaces the
+field instead of extending it. Three cases, and only one bites:
+
+- *type → Tab → arrow → Enter*: never bites; Enter is not a character.
+- *amending a name in save mode*: to append you press End first anyway, which collapses the selection. Other
+  save dialogs in the wild behave the same way, so the motion is already in the fingers.
+- *Tab back and immediately type, meaning to extend*: the completion vanishes, silently. Documented rather
+  than fixed — one line on the help card, along the lines of "Tab returns to the field with the text
+  selected; End to keep it".
 
 ### Cursor and selection
 
@@ -268,6 +275,26 @@ It takes the same shape as the type filter, so it adds an entry point rather tha
 focuses the panel; bare Up / Down / Home / End then move within it; Enter goes to the highlighted place;
 Esc returns to the find field**, per the universal rule. `B` for *bookmarks*, which is what a browser and
 GTK's own file chooser call this panel's key.
+
+**The entries move from `menu_item` to selectables, in a table like the listing's.** Decided 2026-08-17
+(Juha), after measuring that a `menu_item` cannot hold focus and cannot be asked to. The colour-a-menu-item
+route was the alternative and loses on cleanliness even where it works: it would bind and unbind per-item
+themes on every cursor move to produce a weaker affordance than the listing's, on a widget that then *still*
+needs a mode flag because it cannot be focused.
+
+The migration is close to a rename — a listing row is `[image][selectable spanning columns]` and a places
+entry is `[image][menu_item]` — and on the far side the panel stops needing anything of its own: the same
+cursor machinery as the listing, a real selection highlight so the cursor *looks* the same in both panels,
+and Ctrl+B working by the rule Ctrl+Shift+F works by. The one wrinkle is that a selectable is a toggle where
+a menu item is an action, so a click has to clear the value afterwards — which the listing already does, so
+it is an established pattern here rather than a new one.
+
+**Build it with the cursor rather than before or after it.** The cursor is what both panels need, and a
+component's second consumer is what finds the gaps the first one hid — `ThumbnailGrid` gained three missing
+pieces within an hour of being wired into a second app. **With GUI tests** (Juha, 2026-08-17): this is the
+first cursor-bearing widget in the dialog, and the behaviour worth pinning — re-anchoring by path across a
+rebuild, clamping when the path is gone, the focus hand-off — is invisible in a screenshot and easy to
+regress.
 
 Four things to settle while building it:
 
@@ -361,12 +388,9 @@ expected: `get_item_state` on one has no `"focused"` key at all, so `is_item_foc
 answering False. `focus_item` on one changes nothing (focus stayed on the text field, still active), which
 at least makes it the harmless case rather than the child-window one.
 
-So the places panel cannot use the focus-dispatch idiom the type filter uses, and Ctrl+B needs one of two
-shapes instead: a **drawn cursor plus a mode flag** (the listing's cursor is drawn already, so this is a
-second instance rather than a new mechanism), or a **real focusable widget parked inside the panel** to hold
-focus on its behalf — a button works, and `dpg-notes` records that a focused button ignores Space and Enter,
-so it is inert while it sits there. The mode flag is the smaller change; the parked widget keeps the
-"dispatch on `get_focused_item`" rule uniform across all three panels. Undecided.
+**Resolved by moving the panel off `menu_item` entirely** — see "The places panel" above. Selectables hold
+focus, so Ctrl+B needs no special case and the panel gains the listing's cursor rather than a second kind.
+The mode-flag fallback survives for grid view, which has nothing focusable in it either.
 
 **Out of scope, worth recording**: an audio cue for the overwrite warning, and for whatever other warnings the
 dialog grows. Visual-only feedback is a gap for the same audience this brief is about.
