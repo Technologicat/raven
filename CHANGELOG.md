@@ -66,7 +66,7 @@
   - `SMOOTH_SCROLLING`, `SMOOTH_SCROLLING_STEP_PARAMETER` and `SCROLL_ENDS_HERE_DURATION` in `raven/cherrypick/config.py` tune or disable both.
 
 - **"Open image folder" now shows you the pictures.** It opens in the thumbnail grid, and a folder's images are listed as you browse — so you can tell the right folder from the one next to it by looking, instead of by remembering what the name meant. Walk into a folder and press **Pick folder** to take the one you are looking at; clicking a folder and pressing the button still takes that one. The line above the buttons names whichever it would be.
-  - The images are there to be looked at, not chosen: they are dimmed and do not respond to clicks, since the answer this dialog gives is a folder.
+  - The images are there to be looked at, not picked — they are how you judge whether this is the right folder. So they are dimmed and do not respond to clicks, the answer this dialog gives being a folder.
 
 *Raven-pdf2bib*
 
