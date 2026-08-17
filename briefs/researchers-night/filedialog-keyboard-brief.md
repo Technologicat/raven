@@ -52,6 +52,8 @@ one sentence rather than a table of special cases.
 | Ctrl+1 … Ctrl+9 | select the Nth offered type filter |
 | Ctrl+T | focus the type filter combo; Up / Down / Home / End then cycle it — see below |
 | Ctrl+B | focus the places panel — the folder shortcuts and drives; Up / Down / Home / End then move within it, Enter goes there — see below |
+| Ctrl+Shift+1 … Ctrl+Shift+4 | sort by the Nth criterion — Name, Date, Type, Size — see below |
+| F1 | open the dialog's help card — see below |
 | Tab | complete in the field — see below |
 
 **Why Ctrl+Up exists alongside the standard Alt+Up.** On a Nordic layout Alt sits only to the *left* of
@@ -90,6 +92,50 @@ this brief exists to serve. The existing overwrite confirmation survives that ob
 would *descend*, and a slow second press descends again rather than accepting, losing your place in the tree.
 Deferring the descent by the confirm window would restore the benign-failure property, at the cost of lag on
 the most common keystroke. Ctrl+Enter costs neither.
+
+### Sorting
+
+Added 2026-08-17 (Juha). The sort row above the listing is mouse-only, and it is the one control the
+original design of this brief left out — an oversight rather than a decision, since sorting a directory by
+date is how you find what you just downloaded.
+
+**Ctrl+Shift+1 … Ctrl+Shift+4 pick the Nth criterion**, parallel to Ctrl+1…9 for the type filter: *Ctrl and
+a number picks the Nth filter; add Shift and it picks the Nth sort criterion.* Bare Ctrl+numbers are already
+spoken for, which is what makes the Shift necessary rather than decorative. Numbers also dodge a collision
+the letter form walks into — `T` is the type-filter combo, while *Type* is also a sort criterion, and the
+two have nothing to do with each other.
+
+Each chord does exactly what clicking that button does, by calling the same `sort_by(sort_key)`: asking for
+the criterion already in force reverses it, any other starts ascending. No separate key for direction.
+
+### Discoverability
+
+A hotkey nobody knows about has not been added. Three tiers, in descending order of how much they buy:
+
+- **Tooltips wherever a widget exists** — sort buttons, type filter, thumbnails checkbox, places entries.
+  Nearly free, and already the house pattern here (`"Refresh the current folder listing [F5]"`). Covers
+  roughly half the table.
+- **F1 opens the dialog's help card**, built on `raven.common.gui.helpcard.HelpWindow` like the six apps
+  that already have one. This is the load-bearing tier, because the listing keys — Up/Down, Enter,
+  Ctrl+Space, Tab — have no widget to hang a tooltip on, and they are what this brief is for. It is also
+  the only place the governing rule can be stated as a sentence rather than inferred from a table.
+- **Not a permanent hint bar under the listing.** Vertical space in a file dialog is what shows you files.
+
+Two mechanics to get right:
+
+- **DPG does not stack modals**, measured 2026-08-17: `show_item` on a second modal while one is up
+  succeeds, raises nothing, and never becomes visible. Since both the dialog and `HelpWindow` are modal,
+  the dialog must hide itself while its card is up and restore itself when the card closes. The card should
+  say whose keys it is listing, since it appears with the dialog gone.
+- **`FileDialog.is_visible()` must keep returning `True` across that gap.** Apps ask it to suppress their
+  own hotkeys and file drops while a picker is up; if hiding the dialog window flips it to `False`, the app
+  wakes up underneath the help card. `HelpWindow`'s `on_show`/`on_hide` are *not* the place for this — those
+  are the app's hooks for suspending its own viewport-level things (Visualizer's overlay) and should not
+  fire for a card belonging to a dialog that is itself already modal.
+
+Write the card's hotkey text as "Up / Down", never "↑↓": Raven's UI font is OpenSans, which has no arrow
+glyphs, so the arrows render as missing-glyph boxes. It is why the sort indicators are drawn as triangles
+rather than written.
 
 ### Tab completion, and how it coexists with the fragment search
 
@@ -198,17 +244,34 @@ own config setting (Librarian already has both).
 re-running the filter, which is what that rule needs, and the combo idiom can set a choice and call the
 callback itself. Two places in the tree already relied on this in comments; it is now measured.
 
+**Every chord in the table reaches a key handler while the find field holds the caret** — measured
+2026-08-17, probe write-up in `investigations/dpg-keyboard-chords/`. Ctrl+Enter, Alt+Up, Ctrl+Up,
+Ctrl+Space, Ctrl+Home, Ctrl+Shift+1 and the bare navigation keys all arrive with their modifiers intact,
+and nothing intercepts Alt+Up under Cinnamon. So Ctrl+Up stays as the one-handed alias it was proposed as,
+rather than becoming a fallback for a broken Alt+Up — though since both dev machines run Cinnamon, whether
+some other desktop claims Alt+Up is for users elsewhere to report, and the alias covers that too.
+
+**Tab arrives and ImGui does not spend it** — focus does not move, no character is inserted. Tab completion
+is therefore free to be built as designed. One wrinkle to code around: Tab pressed while the field is
+focused but *inactive* re-activates it, so the handler can see the field become active under it.
+
+**Page Up / Page Down are `517` / `518`**, confirmed against the live enum: Tab=512, Up=515, Down=516,
+**517**, **518**, Home=519, End=520 — exactly where the sequence says they belong, while `mvKey_Prior` and
+`mvKey_Next` still read 266 and 267. Compare against the literals.
+
+**Ctrl+Enter deactivates the find field**, since it commits the edit exactly as bare Enter does on a
+single-line field. Two consequences: gate the Enter and Ctrl+Enter handlers on `is_item_focused` rather
+than `is_item_active`, per the standing rule; and where the dialog *stays open* afterwards — Enter
+descending into a directory — the field has silently lost the caret, so it must be reactivated or the next
+thing typed goes nowhere.
+
 Still open:
 
-- **Page Up / Page Down arrive as `517` / `518`**, not `mvKey_Prior` / `mvKey_Next` — this dialog is exactly
-  where that trap bites. Compare against the literals.
-- **Whether Ctrl+Enter, Alt+Up and Ctrl+Up reach a DPG handler while a single-line `InputText` holds the
-  caret.** Unverified. The window manager may eat Alt; Ctrl+Up is the fallback for that too.
 - **Whether the cursor and the selection are visually distinguishable** — see above; a looking question, not
-  an arguing one.
+  an arguing one, and it needs the cursor built before it can be asked.
 - **Whether `dpg.focus_item` can focus a `menu_item`**, which the places panel is built from. A child window
   cannot be focused and a button can, so this is a third case and neither answer is safe to assume. One
-  headless probe settles it.
+  headless probe settles it; it blocks only the places panel, so it can wait until that step.
 
 **Out of scope, worth recording**: an audio cue for the overwrite warning, and for whatever other warnings the
 dialog grows. Visual-only feedback is a gap for the same audience this brief is about.

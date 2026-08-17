@@ -331,6 +331,18 @@ front but also steals keyboard focus.
 initialization (before the render loop), not lazily during hover. Windows
 created mid-render-loop may end up behind earlier windows.
 
+## A modal window does not stack over another modal window
+
+`show_item` on a second modal while one is already up does nothing visible. The call succeeds, no error
+is raised, and the window simply never appears — `is_item_visible` on it stays `False` for as long as the
+first modal is up. Measured 2026-08-17 with two `modal=True` windows, the second shown from the render
+loop several seconds after the first, and still absent eight seconds later.
+
+So a modal that wants a modal of its own — a file dialog offering its own help card, say — has to hide
+itself first and restore itself when the inner one closes. Whatever the *app* keys on to mean "a picker
+is up" must keep answering yes across that gap, or the app un-suppresses its own hotkeys and file drops
+exactly while the inner window is on screen.
+
 ## Investigation history
 
 - 2026-04-03: Discovered `min_size` default causing phantom padding in
@@ -691,8 +703,56 @@ This makes "park focus on the scroll panel so the navigation keys are live" — 
 
 **A focused button is a safe parking spot:** DPG does not enable ImGui's keyboard-nav activation, so a focused button ignores Space and Enter and cannot fire its callback. Verified, because parking focus on a *send* button is not something to assume about.
 
+## What still reaches a global handler while a single-line field holds the caret
+
+Nearly everything, which is what makes a keyboard-operable dialog possible at all with focus parked in a
+text field. Measured 2026-08-17 on `add_input_text` with the caret in it, on this desktop: Ctrl+Enter,
+Alt+Up, Ctrl+Up, Ctrl+Space, Ctrl+Home, Ctrl+Shift+1, and bare Up / Down / Home / End / Page Up / Page
+Down all arrive at a `add_key_press_handler`, each carrying its modifiers.
+
+**Tab arrives too, and ImGui does not spend it** — focus does not move and no character is inserted, so an
+app is free to give Tab its own meaning while a field is being typed into. One wrinkle: Tab pressed while
+the field is *focused but inactive* re-activates it (ImGui's tab-into-field behaviour), so a Tab handler
+sees the field become active under it.
+
+The one to plan around is **Ctrl+Enter, which deactivates a single-line field** the same way bare Enter
+does — it commits the edit. That is the commit-chord case above, so gate it on `is_item_focused`; and if
+the dialog *stays open* afterwards (Enter descending into a directory, rather than accepting), the field
+has silently lost the caret and later typing goes nowhere until something reactivates it.
+
+Alt is the modifier that varies by desktop: nothing intercepted Alt+Up under Cinnamon, but window managers
+commonly bind Alt chords, and that is a statement about the desktop rather than about DPG. Both dev
+machines here run Cinnamon, so this one cannot be settled in-house — it is for users on other desktops to
+report. Which is the argument for Ctrl+Up existing as an alias regardless of what Alt does.
+
+## `is_key_down` is sampled when the callback runs, not when the key was pressed
+
+Modifier state is read *inside* the handler, and handlers are dispatched per frame — so the answer
+describes the modifier at dispatch time rather than at press time. A chord whose modifier is released
+before the next frame arrives reporting no modifier at all.
+
+Human typing never does this; a modifier is held for far longer than a frame. **Synthetic input does.**
+`xdotool key ctrl+Up` presses and releases both keys in well under a millisecond, and the `Up` is
+dispatched a frame later with `is_key_down(LControl)` already false. Sent as `xdotool keydown ctrl` /
+`xdotool key Up` / `xdotool keyup ctrl`, the same chord reports its modifier correctly.
+
+This is a hazard for probes and driven-GUI tests, not for apps — but it fails in the direction that
+invents a finding: the chord looks like it does not carry its modifier, and that reads as a DPG
+limitation rather than as an artifact of the harness. Hold synthetic modifiers across frames.
+
+Related, and visible in any such log: **held modifier keys arrive as repeated key presses** (~50 ms
+apart, LControl / LShift / LAlt alike), alongside a companion pseudo-key — 663 for Ctrl, 664 for Shift,
+665 for Alt — that no `mvKey_*` constant names. A handler that acts on a bare modifier keycode therefore
+fires over and over while the key is down.
+
 ## Investigation history
 
+- 2026-08-17: Surveyed which chords survive a single-line `InputText` holding the caret, ahead of building
+  `FileDialog`'s keyboard operation. All of them do, Tab included. Confirmed the 517/518 codes from the
+  live enum in the same run — Tab=512, Up=515, Down=516, **517**, **518**, Home=519, End=520, so Page
+  Up/Down sit exactly where the sequence says they should while `mvKey_Prior`/`mvKey_Next` still read
+  266/267. Two harness traps found on the way: synthetic chords lose their modifier unless it is held
+  across frames, and held modifiers auto-repeat as press events.
 - 2026-06-06: Traced a raven-cherrypick mis-tag (fast `C`+`Right` tagging the next image instead of the current one) to same-frame keycode-order dispatch; confirmed empirically that every triage letter outranks every arrow, so navigation always fires first. Fixed by deferring keyboard navigation one frame (`_request_nav`). Resolved the long-standing "mysterious 517/518" in the same pass — the `mvKey_Prior`/`mvKey_Next` constants are stale DPG-1.x values; the live codes are 517/518.
 - 2026-08-03: Librarian's arrow keys were dead at app start until the chat log was clicked. Four standalone DPG probes (auto-focus baseline; `focus_item` on a child window vs. a button; a self-driving `xdotool` run that clicks, types and presses Escape; and a Space/Enter test on a focused button) produced the two sections above. The Visualizer had the same pair — an `is_item_focused("search_field")` gate on its bare-key branch, and `focus_item("item_information_panel")` on Enter and Escape, `item_information_panel` being a child window — and was fixed in the same pass: the gate now reads `is_item_active`, Enter parks on `clear_search_button`, and the Escape branch is gone, since `InputText` deactivates itself and deactivated is what the bare-key branch tests for. The input-free half of the probes is now `raven/common/gui/tests/test_focus_semantics.py`, marked `gui` and run with `pytest --run-gui`.
 
