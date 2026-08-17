@@ -254,15 +254,32 @@ field instead of extending it. Three cases, and only one bites:
 
 ### Cursor and selection
 
-**Cursor and selection are different things** once Ctrl+Space exists, so they need different looks. Selection
-keeps the selectable's `True` highlight; the proposal for the cursor is a bound theme painting
-`mvThemeCol_HeaderHovered`, on the reasoning that "hovered" is the affordance a cursor wants. **Whether the
-two are actually distinguishable at a glance has to be looked at**, not argued — they are adjacent greys in
-the default theme, and a cursor that reads as a weak selection is worse than either. Render a row in each
-state side by side and pick from that; if the hovered colour is too close, the fallback is a border or a
-distinct text colour rather than a third fill. The cursor is an index into `shown_items`,
-re-anchored **by path** after every rebuild and clamped if that path is gone; every keystroke in the find
-field rebuilds the listing, so this is the common case rather than an edge one.
+**Cursor and selection are different things** once Ctrl+Space exists, so they need different looks — and
+**different *axes*, not different shades of the same one.** That is settled rather than open, because the
+thumbnail grid solved it already and has been shipping the answer (`thumbnailgrid.py`, `_draw_tile`):
+
+| | grid | table |
+|---|---|---|
+| selection | fill — a white wash over the tile at alpha 40 | the selectable's own `True` highlight |
+| cursor | inner border — inset 3 px, 2 px thick, `(80, 160, 255)` | **distinct text colour** |
+
+The grid's two marks are different *kinds*, so they compose: a tile that is both selected and current reads
+as both at once, with neither competing for the other's channel. An earlier draft of this brief proposed
+painting the table cursor with `mvThemeCol_HeaderHovered` — a *second fill* — and that is the mistake the
+grid's design rules out. Two adjacent greys is not a problem to be solved by finding a better grey.
+
+A table row cannot take the grid's answer literally: its fill is spoken for by selection, and selectables do
+not draw borders. What is left is text colour, which was this brief's fallback and is now the choice, for
+the reason above rather than for want of anything else. Across all three panels, then: **fill means
+selection, text colour means cursor** — which also makes the places panel's lack of a selection concept
+invisible instead of a special case.
+
+Still a looking question, but a narrower one: whether the chosen cursor colour reads as a cursor against
+both a selected and an unselected row. Render the four combinations together and pick from that.
+
+The cursor is an index into `shown_items`, re-anchored **by path** after every rebuild and clamped if that
+path is gone; every keystroke in the find field rebuilds the listing, so this is the common case rather than
+an edge one.
 
 ### The places panel
 
@@ -305,10 +322,10 @@ highlight left behind afterwards would assert a state that does not exist. Concr
 two; Ctrl+B reaches the third and it hands focus straight back on use, so it is a visit rather than a place
 to be.
 
-*A looking question this raises*: if the panel draws its cursor as the selectable's own highlight — which it
-can, having no selection to confuse it with — then that highlight means "selected" in the listing and
-"cursor" here, side by side on screen. Unambiguous within each panel and possibly confusing across them.
-Settle it with the cursor-vs-selection question below, by rendering them together rather than by arguing.
+*Which leaves the panel's cursor with nothing special to do*: it is a text colour, like the listing's. The
+tempting shortcut was to use the selectable's own highlight here — the panel has no selection to confuse it
+with, so it is free — but that would make one mark mean "selected" in the listing and "cursor" in the panel,
+side by side on screen. The uniform rule costs nothing and says the same thing everywhere.
 
 **Build it with the cursor rather than before or after it.** The cursor is what both panels need, and a
 component's second consumer is what finds the gaps the first one hid — `ThumbnailGrid` gained three missing
