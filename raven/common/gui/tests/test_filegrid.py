@@ -169,12 +169,18 @@ def test_the_cursor_follows_the_file_across_a_re_sort(make_grid):
     assert grid.current_entry.name == "c.txt"
 
 
-def test_the_cursor_falls_to_the_first_entry_when_its_file_is_gone(make_grid):
+def test_the_cursor_keeps_its_place_when_its_file_is_gone(make_grid):
+    """Position is what survives when identity does not — it does not jump to the top of the listing.
+
+    The case is a keystroke in the file dialog's find field narrowing the cursor's file out of the listing.
+    Falling to the first entry would throw the user to the top of the directory on every such character,
+    and would also put this grid somewhere different from the table showing the same listing.
+    """
     grid = make_grid()
     grid.set_listing([_entry("a.txt"), _entry("b.txt")])
     grid.set_current(1)
     grid.set_listing([_entry("a.txt"), _entry("c.txt")])
-    assert grid.current_entry.name == "a.txt"
+    assert grid.current_entry.name == "c.txt"
 
 
 def test_selected_entries_come_back_in_display_order(make_grid):

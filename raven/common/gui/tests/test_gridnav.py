@@ -1,17 +1,19 @@
 """Tests for raven.common.gui.gridnav navigation arithmetic.
 
-Covers `resolve_nav_target`, the pure core of relative grid navigation. The
-focus is the filtered-view case: when the current image has been tagged out of
-the visible set, a step must land on the image that took its place — not skip
-past it.
+Covers `resolve_nav_target`, the pure core of relative navigation, and
+`reanchor_cursor`, which decides where a cursor lands when the list underneath
+it is rebuilt. The focus for the first is the filtered-view case: when the
+current image has been tagged out of the visible set, a step must land on the
+image that took its place — not skip past it. For the second it is the policy
+itself, which two views of one listing have to share.
 
-Lives in its own dearpygui-free module so this test runs under the CI's minimal
-dependency subset (the `grid` widget itself imports dearpygui).
+The arithmetic lives apart from the widgets so these can state the invariant
+directly — no context to create, no frames to render, no widget to drive.
 """
 
 import pytest
 
-from raven.common.gui.gridnav import resolve_nav_target, resolve_undo_nav_target
+from raven.common.gui.gridnav import reanchor_cursor, resolve_nav_target, resolve_undo_nav_target
 
 
 # ---------------------------------------------------------------------------
@@ -129,3 +131,40 @@ def test_undo_nav_stays_when_current_affected_and_none_visible():
 
 def test_undo_nav_empty_affected_stays():
     assert resolve_undo_nav_target([], current=3, visible={3}) is None
+
+
+# ---------------------------------------------------------------------------
+# reanchor_cursor
+# ---------------------------------------------------------------------------
+
+def test_reanchor_follows_the_entry_when_it_survives():
+    # A re-sort moves everything; the cursor rides along with the file it was on.
+    assert reanchor_cursor(["c", "b", "a"], previous_key="b", previous_index=1) == 1
+    assert reanchor_cursor(["c", "a", "b"], previous_key="b", previous_index=1) == 2
+
+
+def test_reanchor_keeps_position_when_the_entry_is_gone():
+    # Typing one more character filtered the cursor's file out. Relative position is what is left.
+    assert reanchor_cursor(["a", "c", "d"], previous_key="b", previous_index=2) == 2
+
+
+def test_reanchor_clamps_a_position_past_the_end():
+    # The list got shorter than where the cursor was.
+    assert reanchor_cursor(["a", "b"], previous_key="z", previous_index=7) == 1
+
+
+def test_reanchor_does_not_fall_to_the_first_entry():
+    """The policy this function exists to pin: a vanished entry keeps its place, it does not go to the top.
+
+    The grid used to jump to entry 0 here, which throws the user to the top of the directory on a
+    keystroke — in a dialog where every keystroke rebuilds the listing.
+    """
+    assert reanchor_cursor(["a", "b", "c", "d"], previous_key="gone", previous_index=3) == 3
+
+
+def test_reanchor_empty_list_has_nowhere_to_point():
+    assert reanchor_cursor([], previous_key="a", previous_index=0) is None
+
+
+def test_reanchor_with_no_previous_cursor_starts_at_the_top():
+    assert reanchor_cursor(["a", "b"], previous_key=None, previous_index=None) == 0

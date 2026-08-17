@@ -1,15 +1,22 @@
-"""Pure navigation arithmetic for a thumbnail grid: where does a keypress move the cursor?
+"""Pure navigation arithmetic for a cursor over a list: where does a keypress move it, and where does it
+land when the list is rebuilt underneath it?
 
-Separated from the DPG-bound grid widget so the algorithm layer is testable without the GUI stack (the test
-CI installs a minimal, dearpygui-free dependency subset). See `resolve_nav_target`.
+Separated from the DPG-bound widgets so the algorithm can be tested by stating the invariant directly — no
+context to create, no frames to render, no widget to drive. See `resolve_nav_target`.
 
-Used by `raven.common.gui.thumbnailgrid`, and through it by every grid in the constellation.
+Used by `raven.common.gui.thumbnailgrid`, and through it by every grid in the constellation; `reanchor_cursor`
+additionally serves the file dialog's table views, which show the same listing the grid does and must agree
+with it about where the cursor goes.
+
+The module name is narrower than its contents: none of this is grid-specific — `resolve_nav_target` has
+always operated on a flat list of visible indices, with two-dimensional movement expressed by the caller as
+a delta of one row's width. Worth renaming when something else here is being touched anyway.
 """
 
-__all__ = ["resolve_nav_target", "resolve_undo_nav_target"]
+__all__ = ["resolve_nav_target", "resolve_undo_nav_target", "reanchor_cursor"]
 
 import bisect
-from typing import List, Optional, Set
+from typing import Any, List, Optional, Sequence, Set
 
 
 def resolve_nav_target(visible: List[int], current: int, delta: int) -> Optional[int]:
@@ -40,6 +47,45 @@ def resolve_nav_target(visible: List[int], current: int, delta: int) -> Optional
         new_pos = (ins - 1 + delta) if delta > 0 else (ins + delta)
     new_pos = max(0, min(len(visible) - 1, new_pos))
     return visible[new_pos]
+
+
+def reanchor_cursor(keys: Sequence[Any],
+                    previous_key: Any,
+                    previous_index: Optional[int]) -> Optional[int]:
+    """Where a cursor should land after the list it points into has been rebuilt.
+
+    `keys` is the new list, in display order, of whatever identifies an entry across a rebuild — for a file
+    listing, the paths. `previous_key` and `previous_index` are where the cursor was; either may be `None`
+    if there was no cursor. Returns the new index, or `None` when there is nothing to point at.
+
+    Two rules, and the order matters:
+
+    1. **The same entry, wherever it moved to.** A re-sort or a re-filter that keeps the entry keeps the
+       cursor on it, which is the answer in the overwhelming majority of rebuilds.
+    2. **Otherwise the same position, clamped.** When the entry is gone, relative position is what the user
+       still has: they narrowed a search and the file under the cursor stopped matching, and they were
+       looking at the middle of the list. Falling to the top instead would throw them to the top of a
+       directory on a keystroke, in a dialog where every keystroke rebuilds the listing.
+
+    A re-sort never reaches rule 2, which is worth knowing before worrying about it: re-sorting keeps every
+    entry, so rule 1 catches them all. Rule 2 is reached only when an entry genuinely left — a re-filter, a
+    deletion, a refresh of a directory that changed underneath.
+
+    **For a genuinely different list — a new directory — pass `None` for both**, and the cursor starts at the
+    top. Clamping a position across a `chdir` would carry a number from one directory into another, where it
+    means nothing; this function cannot tell the two cases apart, so the caller says which it is by whether
+    it offers a previous position at all.
+    """
+    if not keys:
+        return None
+    if previous_key is not None:
+        try:
+            return list(keys).index(previous_key)
+        except ValueError:
+            pass
+    if previous_index is None:
+        return 0
+    return max(0, min(len(keys) - 1, previous_index))
 
 
 def resolve_undo_nav_target(affected: List[int], current: int,

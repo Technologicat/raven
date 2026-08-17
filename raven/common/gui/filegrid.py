@@ -48,6 +48,7 @@ from ..filelisting import FileEntry
 from ..image import lanczos
 from ..image import thumbnails
 from . import utils as guiutils
+from .gridnav import reanchor_cursor
 from .thumbnailgrid import ThumbnailGrid
 from .tileicons import TileIconCache
 
@@ -194,8 +195,10 @@ class FileGrid(ThumbnailGrid):
         """Show `entries`, in the order given.
 
         The cursor is re-anchored **by path**, so a listing rebuilt under a changed filter or a changed sort
-        leaves it on the same file. It falls to the first entry when that file is no longer listed, which is
-        the only honest answer.
+        leaves it on the same file — and keeps its *position*, clamped, when that file is no longer listed.
+        The policy lives in `gridnav.reanchor_cursor`, shared with the file dialog's table views: they show
+        the same listing this grid does, so a rebuild must not leave the two disagreeing about where the
+        cursor went.
 
         **Thumbnails already decoded are re-attached, not decoded again.** A file dialog re-lists constantly
         — every keystroke in the find field is a new listing of the same directory — and the entries a file
@@ -205,6 +208,7 @@ class FileGrid(ThumbnailGrid):
         """
         with self._lock:
             previous_path = self._current_path()
+            previous_index = self._current  # `set_entries` below resets it, so it is read here
             self._entries = list(entries)
             self._pipeline.cancel()
             self._batch = []
@@ -229,11 +233,11 @@ class FileGrid(ThumbnailGrid):
 
             self._evict_thumbnails()
 
-            if previous_path is not None:
-                for idx, entry in enumerate(self._entries):
-                    if entry.path == previous_path:
-                        self.set_current(idx)
-                        break
+            target = reanchor_cursor([entry.path for entry in self._entries],
+                                     previous_key=previous_path,
+                                     previous_index=previous_index)
+            if target is not None:
+                self.set_current(target)
 
     def get_entries(self) -> list[FileEntry]:
         with self._lock:
