@@ -244,7 +244,8 @@ amending an existing name into a variant.
 **Returning arms ImGui's select-all**, and there is no API to undo it. The next character typed replaces the
 field instead of extending it. Three cases, and only one bites:
 
-- *type → Tab → arrow → Enter*: never bites; Enter is not a character.
+- *type → Tab → arrow → Enter*: structurally exempt. Focus never returns to the field, so nothing arms the
+  selection in the first place — this is not a case that survives the hazard, it is one that never meets it.
 - *amending a name in save mode*: to append you press End first anyway, which collapses the selection. Other
   save dialogs in the wild behave the same way, so the motion is already in the fingers.
 - *Tab back and immediately type, meaning to extend*: the completion vanishes, silently. Documented rather

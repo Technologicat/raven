@@ -97,24 +97,15 @@ def _normalize_filter(entry: Union[str, tuple[str, Iterable[str]]]) -> tuple[str
 # Hotkey support
 visible_dialog_instance = None  # fdialog is modal so There Can Be Only One (TM). If needed, could use a list, and check which one has keyboard focus, but that might not always work.
 def fdialog_hotkeys_callback(sender, app_data):
+    """Route a key press to whichever dialog is on screen.
+
+    Registry-level concerns only — there is one global handler for every dialog, so its job is to decide
+    *who* is listening. What each key does belongs to the instance, where the closures a hotkey needs to
+    reach actually live.
+    """
     if visible_dialog_instance is None:
         return
-
-    key = app_data  # for documentation only
-    # shift_pressed = dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)
-    ctrl_pressed = dpg.is_key_down(dpg.mvKey_LControl) or dpg.is_key_down(dpg.mvKey_RControl)
-
-    # TODO: Add hotkeys to navigate up/down in the table, descend into folder, ...
-    if key == dpg.mvKey_Return:
-        visible_dialog_instance.ok()
-    elif key == dpg.mvKey_Escape:
-        visible_dialog_instance.cancel()
-    elif key == dpg.mvKey_F5:
-        visible_dialog_instance.refresh()
-    elif ctrl_pressed and key == dpg.mvKey_Home:
-        visible_dialog_instance.back_to_default_path()
-    elif ctrl_pressed and key == dpg.mvKey_F:
-        dpg.focus_item(visible_dialog_instance.search_field)
+    visible_dialog_instance._handle_key(app_data)
 
 
 class FileDialog:
@@ -1099,6 +1090,35 @@ class FileDialog:
                                             name=f"fdialog_grid_tick_{self.instance_tag}")
             self._ticker.start()
         self._start_grid_ticker = _start_grid_ticker  # instance-injected for the same reason as `set_type_filter` above.
+
+        # --------------------------------------------------------------------------------
+        # Hotkeys.
+
+        def _handle_key(key: int) -> None:
+            """Handle one key press for this dialog. Called by the module-level handler, which owns the
+            registry and decides *which* dialog is listening; this decides what the key does.
+
+            A closure rather than a method, for the reason `reset_dir` and `sort_by` are: the things a
+            hotkey has to reach — `chdir`, `sort_by`, `_go_up_one_level`, the listing state — live in this
+            scope and are not attributes of anything. The module-level callback can see only public
+            methods, which is why it has never been able to grow past the five keys it has.
+            """
+            ctrl = dpg.is_key_down(dpg.mvKey_LControl) or dpg.is_key_down(dpg.mvKey_RControl)
+
+            # TODO (briefs/researchers-night/filedialog-keyboard-brief.md): the rest of the keyboard —
+            # TODO: cursor movement, Tab between field and listing, the focus-parking chords, sorting.
+            # This function is where they go; making that possible is what the split above was for.
+            if key == dpg.mvKey_Return:
+                self.ok()
+            elif key == dpg.mvKey_Escape:
+                self.cancel()
+            elif key == dpg.mvKey_F5:
+                self.refresh()
+            elif ctrl and key == dpg.mvKey_Home:
+                self.back_to_default_path()
+            elif ctrl and key == dpg.mvKey_F:
+                dpg.focus_item(self.search_field)
+        self._handle_key = _handle_key  # instance-injected, as above.
 
         # main file dialog header
         with dpg.window(label=self.title, tag=self.tag, on_close=self.cancel, no_resize=self.no_resize, show=False, modal=self.modal, width=self.width, height=self.height, min_size=self.min_size, no_collapse=True, pos=(50, 50)):
