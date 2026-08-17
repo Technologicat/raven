@@ -485,10 +485,23 @@ def get_widget_pos(widget: Union[str, int]) -> Tuple[int, int]:
     return x0, y0
 
 def get_widget_size(widget: Union[str, int]) -> Tuple[int, int]:
-    """Return `widget`'s (DPG tag or ID) on-screen size `(width, height)`, in pixels.
+    """Return `widget`'s (DPG tag or ID) size `(width, height)`, in pixels where DPG knows them.
 
     This papers over the fact that most items support `dpg.get_item_rect_size`,
-    but e.g. child windows store their size in the item configuration instead.
+    but some — a `mvTable`, for one — have no `rect_size` in their item state at
+    all, and answer only from the item configuration.
+
+    **A negative component means "unknown", not a size.** The configuration holds
+    what the item was *asked* for, and `-1` there is the layout directive "fill
+    the available space" rather than a measurement; for an item with no
+    `rect_size` there is nothing to resolve it against, so it comes back as it
+    went in. Check for it before doing arithmetic — `-1` is truthy, so a bare
+    falsiness guard passes it straight through, and the result is an off-screen
+    scroll or a zero-size layout rather than an error.
+
+    Where an autosizing item must be measured, measure the container that holds
+    it: a child window does report a resolved `rect_size` even when it, too, was
+    configured `-1`.
     """
     try:
         w, h = dpg.get_item_rect_size(widget)
