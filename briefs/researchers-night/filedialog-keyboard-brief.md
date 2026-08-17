@@ -458,6 +458,41 @@ The mode-flag fallback survives for grid view, which has nothing focusable in it
 **Out of scope, worth recording**: an audio cue for the overwrite warning, and for whatever other warnings the
 dialog grows. Visual-only feedback is a gap for the same audience this brief is about.
 
+## What is built, as of 2026-08-17
+
+The table above is the design. This is the state of it, so the next session does not have to reconstruct
+that from the code.
+
+**Working, live-tested:**
+
+- **The listing has a cursor**, in both views, drawn as blue text in the table and as the grid's own inner
+  border — one `CURSOR_COLOR`, so the mark means the same thing in either. Up / Down / Page Up / Page Down /
+  Home / End move it.
+- **Enter goes as deep as it can**, acting on the cursor: `..` and directories descend, a choosable file is
+  accepted, a file in a folder picker is scenery and Enter declines it. **Ctrl+Enter** commits without
+  descending.
+- **The cursor rests on `..` while nothing is typed** — that is what Ctrl+Enter returns, so the resting
+  place is load-bearing — and **jumps to the first match once a filter is typed**, a filter being a search.
+- **Ctrl+1…9** type filter, **Ctrl+Shift+1…4** sort, **Ctrl+T** thumbnails, plus the five that already
+  existed (Enter, Esc, F5, Ctrl+Home, Ctrl+F).
+- **The cursor survives a rebuild** by the rules in `gridnav.reanchor_cursor`, shared with the grid: follow
+  the entry you chose, else hold position, else start at the top somewhere new. The *chosen* entry is
+  remembered apart from the displayed one, so a filtered-out file gets its cursor back when it returns.
+
+**Not built:** Tab, Ctrl+Space, Alt+Up, Ctrl+Up, Ctrl+L, Ctrl+Shift+F, Ctrl+B, Ctrl+H, F1, the places-panel
+migration, tooltips.
+
+**Take Tab next**, and not only because it is the largest. Three things are waiting on it and on nothing
+else: grid view is *incomplete* without it (Up/Down move a whole row of tiles, so every column but the first
+is unreachable until Left/Right are freed); the save-mode fill and Tab completion both need a moment when
+the field is inactive, which is exactly what Tab creates; and the focus-parking chords all reduce to the
+same mechanism once one panel has it. The cheap keys — Alt+Up, Ctrl+Up, Ctrl+H — are genuinely cheap and
+can go in any order.
+
+**When testing type filters, use Librarian's attach dialog rather than Cherrypick.** Cherrypick passes no
+`filter_list`, so it gets the default hundreds-of-extensions list and Ctrl+1 selects the filter already
+active — which looks like the key doing nothing.
+
 ## Where the dialog stands
 
 Four sibling items closed on 2026-08-13 and changed what this brief builds on: smart-case find, grouped
