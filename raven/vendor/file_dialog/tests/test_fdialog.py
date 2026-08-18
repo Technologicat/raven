@@ -894,6 +894,46 @@ def test_tab_completes_the_find_field_and_hands_over_the_arrow_keys(make_dialog,
     assert dialog._caret_in_listing is True
 
 
+def test_tab_back_fills_the_field_from_the_cursor(make_dialog, tmp_path):
+    """Coming back from the listing means "give me the one I navigated to".
+
+    The same in both modes, deliberately: in save mode it is how an existing name becomes the template for
+    a variant, and in open mode it collapses the listing to the entry picked. A rule that differed between
+    them would be one more thing to hold in mind for no gain.
+    """
+    for name in ("rawdata", "datasets", "tempdatasets"):
+        (tmp_path / name).touch()
+    dialog = make_dialog(pick="file", filter_list=[".*"], file_filter=".*")
+    dialog.reset_dir(file_name_filter="data")
+    dialog._handle_key(dpg.mvKey_Tab)                 # into the listing
+    dialog._handle_key(dpg.mvKey_Down)                # arrow to a different match
+    picked = os.path.basename(dialog._table_cursor.get_current_key())
+
+    dialog._handle_key(dpg.mvKey_Tab)                 # ...and back
+
+    assert dpg.get_value(dialog.search_field) == picked
+    assert dialog._caret_in_listing is False
+    assert shown(dialog) == [picked], "the listing narrows to what was picked"
+
+
+def test_tab_back_from_the_parent_entry_leaves_the_field_alone(make_dialog, tmp_path):
+    """`..` is a way out of the directory rather than a name, so there is nothing to take from it."""
+    # Two names sharing no prefix, so the *outbound* Tab completes nothing and cannot be mistaken for the
+    # inbound one. With a single entry it would fill the field with that entry's whole name on the way out.
+    (tmp_path / "album").mkdir()
+    (tmp_path / "briefs").mkdir()
+    dialog = make_dialog(pick="file", filter_list=[".*"], file_filter=".*")
+    dialog.reset_dir()
+    assert dialog._row_entries[dialog._table_cursor.current].is_parent, "precondition: cursor on `..`"
+
+    dialog._handle_key(dpg.mvKey_Tab)
+    assert dpg.get_value(dialog.search_field) == "", "precondition: nothing was completed on the way out"
+
+    dialog._handle_key(dpg.mvKey_Tab)
+
+    assert dpg.get_value(dialog.search_field) == ""
+
+
 def test_tab_leaves_the_field_alone_when_there_is_nothing_to_complete(make_dialog, tmp_path):
     for name in ("readme.txt", "headers.h"):
         (tmp_path / name).touch()

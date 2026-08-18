@@ -1762,6 +1762,9 @@ class FileDialog:
         # to reach the state where the find field is inactive.
         if key == dpg.mvKey_Tab:
             if self._caret_in_listing:
+                # Written before the caret returns, the field being writable only while it does not have
+                # it — the mirror of the outbound order below.
+                self._fill_field_from_cursor()
                 self._focus_field()
             else:
                 # Order is load-bearing: the completion is a write to the find field, and a field with the
@@ -1859,6 +1862,25 @@ class FileDialog:
         dpg.set_value(self.search_field, text)
         self._update_search()  # `set_value` fires no callback, so the filter is re-run by hand
         return True
+
+    def _fill_field_from_cursor(self) -> None:
+        """Put the cursor entry's name in the find field. Tab's inbound half.
+
+        Does nothing when the cursor is on `..`, which is a way out of the directory rather than a name.
+        """
+        # Unconditional otherwise, because the only reason to press Tab in the first place is to go and
+        # navigate: coming back means "give me the one I navigated to". A version that filled only when
+        # the cursor had been *arrowed* to would guard a path nobody walks — refining a query needs no Tab,
+        # the caret being in the field already.
+        #
+        # The query is not preserved, and that is the trade. Returning arms ImGui's select-all, so it was
+        # a keystroke from gone regardless; a name you can edit beats text you were about to overwrite. It
+        # is what makes "save a variant of this file" reachable from the keyboard — Tab onto the existing
+        # name, then amend it — and in open mode it collapses the listing to the entry you picked.
+        entry = self._cursor_entry()
+        if entry is None or entry.is_parent:
+            return
+        self._write_find_field(os.path.basename(entry.path))
 
     def _complete_find_field(self) -> None:
         """Extend the find field to what the entries on screen have in common.
