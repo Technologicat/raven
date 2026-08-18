@@ -375,6 +375,29 @@ narrowed it; `ead` gives nothing and flashes, since `headers.h` is still shown. 
 complete fully when unique, and append the separator when the unique result is a directory — which gives
 Tab-descent for free.
 
+**Completing a component re-lists, and a path that resolves to nothing says so** (Juha, 2026-08-18). Tab
+that lands on an existing directory and appends the separator should show that directory's contents, which
+is what makes Ctrl+L a way of *going* somewhere rather than a way of typing a string blind. Where the typed
+path does not exist, tint the field, following what Visualizer already does with its search: it drives the
+field's text colour from a live theme handle — white with nothing typed, `(180, 255, 180)` green when the
+search finds something, `(255, 128, 128)` red when it does not. Three states, steady rather than flashed,
+and the same three fit here exactly.
+
+*This collides with the draft rule two paragraphs up, and the collision has to be resolved rather than
+noticed halfway through.* The path field was specified as a draft — typing does nothing until Enter, which
+is what lets Esc discard it and put the current directory back. Re-listing on completion makes it partly
+live. Two ways out, and they are not equivalent:
+
+- **Completion navigates.** Tab `chdir`s to the completed component, so the listing follows for free and
+  `reset_dir` keeps reading the working directory from the process — which it does deliberately, so that
+  the dialog cannot show you A and hand back B. Esc then means *return to where I pressed Ctrl+L*, which
+  needs one remembered path and is the browser behaviour this section already cites. **Recommended**, and
+  it costs the draft semantics rather than the invariant.
+- **Completion previews.** The listing shows the completed directory without moving the process, so the
+  draft rule survives. But then the listing and `os.getcwd()` disagree by construction, which is precisely
+  what `reset_dir`'s "read from the process" comment exists to prevent. Choosing this means changing that
+  contract knowingly.
+
 **The path field completes too, by the same rule against a different candidate set.** It already exists and
 is already typable — `ex_path_input_*`, an `InputText` with `on_enter=True` whose callback `chdir`s to what
 was typed — so Ctrl+L has a real target rather than needing one built. What it lacks is completion, and
@@ -549,6 +572,26 @@ own config setting (Librarian already has both).
 **Save mode keeps its double-Enter overwrite confirmation**, unchanged.
 
 ## What still needs checking, and what no longer does
+
+**Should cancelling take two presses of Esc?** Raised 2026-08-18 (Juha), open. The dialog already has the
+pattern — save mode's overwrite confirmation, where the OK button must be pressed twice and animates to say
+so — and this brief's own argument for it transfers cleanly: a confirmation survives the timing-window
+objection *because press #1 is inert*, so missing the window merely re-arms it. That is the case here too.
+
+Three things pull the other way, which is why it is a question rather than a decision:
+
+- **Esc-to-dismiss is the most universal dialog reflex there is**, and it is one users have already built.
+  Breaking it costs everyone a little to protect against a rare accident.
+- **The accident is cheap.** A cancelled picker loses the browsing you did, not any data — reopen it and
+  the default path is where it always was. The overwrite confirmation guards a *file*, which is a different
+  order of loss, so the two are not the same bet.
+- **Save mode is where it would actually bite**, a typed filename being the one thing in this dialog worth
+  losing. But making it two presses in save mode and one elsewhere is exactly the mode dependence the Tab
+  discussion rejected for the user's mental model. Uniform, or not at all.
+
+Cheap to test both ways once the caret has more than two homes, since Esc's behaviour is being rewritten
+then anyway. Worth trying rather than arguing: the reflex either survives the second press or it does not,
+and that is not predictable from here.
 
 **`dpg.set_value` does not fire the widget's callback** — measured 2026-08-13 on a combo and on an
 `InputText`, both silent while the value did change. So the save-mode arrow-fill can write the field without
