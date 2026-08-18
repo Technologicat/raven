@@ -1,9 +1,14 @@
 # FileDialog: keyboard accessibility
 
-**Status: designed in full, unbuilt.** The design below was settled on 2026-08-13 (Juha and Claude) and is
-agreed; what remains is building it, plus three live checks listed at the end. Moved out of
-`TODO_DEFERRED.md` on 2026-08-13, where a 164-line settled specification was the largest thing in a file
-meant for items noticed and parked.
+**Status: mostly built.** The design below was settled on 2026-08-13 (Juha and Claude); the listing cursor,
+Enter's rules, Tab and its completion and fill, the sort and filter chords and the "Will pick" line are in
+and live-tested. Still to build: Ctrl+Space, Alt+Up, Ctrl+Up, Ctrl+L, Ctrl+Shift+F, Ctrl+B, Ctrl+H, F1 and
+the places-panel migration. **See "What is built" near the end for the current state** — including the
+several places where the design below was overtaken by what building it taught, each noted there rather
+than edited into the design, so the reasoning stays legible.
+
+Moved out of `TODO_DEFERRED.md` on 2026-08-13, where a 164-line settled specification was the largest thing
+in a file meant for items noticed and parked.
 
 One of the two final FileDialog pieces for Researchers' Night, with `filedialog-thumbnails-brief.md`.
 They touch the same widget and should be built with each other in view — the grid view needs the same cursor
