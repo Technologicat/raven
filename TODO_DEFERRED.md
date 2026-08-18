@@ -13,6 +13,27 @@ importer first. Recorded here rather than in that item because a trigger nobody 
 the tool for finding things in the backlog cannot be gated on someone remembering to look for it *in* the
 backlog. The recurring moment to ask is the triage step in the release procedure.
 
+## Docstrings that describe a previous version, or argue a design choice at the caller
+
+Two related lapses against the rule that a docstring describes the code as it is now and serves the
+*caller*, while a design rationale serves the maintainer and belongs in a comment at the code: docstrings
+that say what an earlier implementation did, and docstrings whose middle paragraphs argue why a shape was
+chosen over the obvious alternative. Both were found in `fdialog.py` on 2026-08-18, in text written the
+same day, which is what suggests the habit rather than the instance is the problem.
+
+A grep for history markers (`used to`, `previously`, `no longer`, `formerly`, …) in docstrings finds **121
+candidates across 64 files**. That is an upper bound and cannot be swept blindly: the rule has a real
+exception — history that is load-bearing for present behaviour, such as a file-format auto-migration that
+must know the old schema, or a workaround whose shape only makes sense once the upstream bug is named.
+Those must survive. The rationale half has no grep at all and needs reading.
+
+Worth doing as a deliberate pass rather than opportunistically, because the cost is not the edits: it is
+that a codebase carrying many instances *teaches* the pattern to whoever reads it next, agents included,
+so the examples in context pull against the rule in CLAUDE.md. That is the argument for fixing it in one
+sweep and the reason it will not fix itself.
+
+Discovered during the FileDialog keyboard work (2026-08-18).
+
 ## String quotes: sweep the tree onto double quotes
 
 *Cluster: hygiene-sweep · Cost: mechanical · Gate: none · Filed: 2026-08-17*
