@@ -536,14 +536,33 @@ that from the code.
   mode it collapses the listing to what was picked. Unconditional, because the only reason to press Tab is
   to go and navigate, so coming back means "give me the one I navigated to". The query is not preserved,
   which is the trade: returning arms ImGui's select-all, so it was a keystroke from gone regardless.
-  - **Whether that beats keeping the query in open mode is an empirical question**, and it is on trial.
-    Isolated in one commit (`40ea291`, pure additions) so `git revert` settles it without touching the
-    completion work.
+  - **Kept after live testing** (Juha, 2026-08-18). Whether it beat keeping the query in open mode was an
+    empirical question rather than an arguable one, so it went in as one commit of pure additions
+    (`40ea291`) that `git revert` could undo without touching the completion work, and was driven before
+    being believed.
+  - **Tab rewrites the query; Ctrl+F does not. That pairing is the design, not an accident of which key
+    got the feature.** Both return the caret to the field, and the dialog needs both: one for "I picked
+    this, give me its name to work on", one for "let me back to what I was typing". Since Ctrl+F already
+    means *focus the find field*, it is the natural home for the non-destructive return, which leaves Tab
+    free to be the one that carries something.
+    - The alternative — Tab as the pure focus cycle it is in most software, with a new chord for "rewrite
+      the query with this" — was considered and rejected. Tab is *already* not a pure cycle here: on the
+      way out it completes, which is bash's convention and the strongest one in play for a file dialog. A
+      Tab that completes outbound and does nothing inbound is the asymmetric option, not the tidy one.
+    - What this costs is discoverability, since neither key announces which it is. That is the help card's
+      job, and the pair should be described there together rather than as two unrelated entries.
 
 - **The cursor's placements are told from its choices.** A search shows its first hit — always, including
   after arrowing somewhere, typing being a fresh intent. Erasing the query returns the cursor to `..` if
   nobody moved it, and to the entry that *was* arrowed to if somebody did. `is_anchored` on `TableCursor`
   and `FileGrid` is the one question that decides it, spelled the same on both.
+
+- **`..` answers a search like any other name**, so typing `..` puts the cursor on it and Enter goes up.
+  Navigate-by-search covers leaving a directory as well as entering one, rather than requiring a separate
+  key for the one direction. Being *searchable* and being *filterable* are kept apart deliberately: the
+  listing always shows `..` whatever is typed, because it has to remain the way out when a query matches
+  nothing — and that case now lands the cursor on it too, it being the one row left to act on. So the
+  first-hit rule is "the first entry that matches" rather than "the row after the parent".
 
 - **Navigating clears the find field**, in `chdir`, which is the one place this dialog navigates. The mouse
   path had always cleared it and the keyboard path had not. Arriving also returns the caret to the field —
