@@ -398,6 +398,28 @@ live. Two ways out, and they are not equivalent:
   what `reset_dir`'s "read from the process" comment exists to prevent. Choosing this means changing that
   contract knowingly.
 
+**Either way, an ambiguous completion has nowhere to show its candidates** (Juha, 2026-08-18) — Tab extends
+to the common prefix and the user is left guessing what else matched. Navigating narrows the problem rather
+than solving it: after a successful completion the listing *is* the candidate list for the next component,
+since the process is now in that directory, so what remains uncovered is the first ambiguous component of a
+path typed somewhere far from the current directory. Under the draft branch nothing is covered at all,
+which is a third cost to weigh against keeping the draft.
+
+So it wants a candidate list of its own — a programmatic popup under the field, tooltip-like but not
+hover-driven. Prototype before committing to a shape, and read `investigations/dpg-overlays/` first, which
+already measured two traps this walks straight into:
+
+- **A floating overlay is opaque to the mouse across its whole rect**, `no_background=True` included. A
+  candidate list hanging over the listing is a dead zone over whatever it covers — wheel and clicks both
+  swallowed — which is why `ScrollEndFlasher` is two windows rather than one.
+- **An autosize window is silently ~100 px tall unless `min_size` says otherwise**, and the clamp applies
+  to an explicit size too. A three-item list comes out with phantom blank space under it.
+
+What that bundle does *not* answer is the one thing this needs: whether a **non-modal** window renders above
+a **modal** one. The measured result is that a second *modal* never becomes visible, which is a different
+question, and it is the question the help card had to work around by hiding the dialog — an answer unusable
+here, since the whole point is to see the field while the list is up. One probe, before any of it is built.
+
 **The path field completes too, by the same rule against a different candidate set.** It already exists and
 is already typable — `ex_path_input_*`, an `InputText` with `on_enter=True` whose callback `chdir`s to what
 was typed — so Ctrl+L has a real target rather than needing one built. What it lacks is completion, and
@@ -589,9 +611,26 @@ Three things pull the other way, which is why it is a question rather than a dec
   losing. But making it two presses in save mode and one elsewhere is exactly the mode dependence the Tab
   discussion rejected for the user's mental model. Uniform, or not at all.
 
+**What to measure is which annoyance is larger**, and stating it that way is what makes it measurable at
+all. The case for two presses is not safety in the abstract: it is that Esc would then *never* close the
+dialog by accident, and an accidentally dismissed picker is a genuinely irritating thing to happen. The
+case against is that every deliberate dismissal costs a second press, forever. Both are annoyances, one
+rare and sharp and the other constant and small, so the question is their product rather than either alone
+— which nobody can compute from here.
+
+**If it goes in, the Cancel button flashes and says so** (Juha, 2026-08-18), exactly as the overwrite
+confirmation does — an inert first press that gives no sign is not a confirmation, it is a key that stopped
+working. Same call, `gui_animation.WidgetFlash` with `target=self.btn_cancel` and the message routed to
+`target_text=self.text_notification`, which is where "Press again to overwrite file" already appears.
+
+**Green, and that falls out of the defaults**: `WidgetFlash` flashes `(96, 128, 96)` with `(180, 255, 180)`
+text unless told otherwise, and the overwrite is the one that overrides — to `(255, 32, 32)` — because it
+is confirming something destructive. Cancelling destroys nothing, so it takes the ordinary colour, and the
+difference between the two reads at a glance rather than needing to be learned. Those greens are also the
+ones Visualizer's search field uses for a match, so the constellation already means one thing by them.
+
 Cheap to test both ways once the caret has more than two homes, since Esc's behaviour is being rewritten
-then anyway. Worth trying rather than arguing: the reflex either survives the second press or it does not,
-and that is not predictable from here.
+then anyway. Worth trying rather than arguing: the reflex either survives the second press or it does not.
 
 **`dpg.set_value` does not fire the widget's callback** — measured 2026-08-13 on a combo and on an
 `InputText`, both silent while the value did change. So the save-mode arrow-fill can write the field without
