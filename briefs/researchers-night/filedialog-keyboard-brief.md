@@ -211,6 +211,34 @@ catches `PermissionError` and `NotADirectoryError` — not `FileNotFoundError`, 
 directory raises, and which only `on_path_enter` guards against at its own call site. Back into a deleted
 directory would therefore raise out of a key handler.
 
+**Back skips over what is gone** (Juha, 2026-08-18) rather than stopping there or reporting it. A history
+step is a request to be somewhere you have been, and a directory that no longer exists cannot satisfy it;
+stopping at a dead entry would make Back appear to do nothing, which is worse than going one step further.
+Validity is re-tested on each traversal rather than pruned, so a path that comes back — a remount, a
+recreated directory — is reachable again.
+
+**And that is the interesting thing to have found**, because it lands on the shared-stack question above.
+A state can go invalid between being pushed and being popped, and the mechanism cannot know: validity is
+domain knowledge, the same way equality is. So it takes the same treatment — **a predicate the caller
+supplies, which the traversal walks until it finds a state the caller accepts, or runs out**. That keeps
+the stack opaque, so this is not evidence against a generic shape.
+
+What it *is* evidence about is how much such a shape would be carrying. Visualizer needs the equality
+predicate (its no-op-commit test is a set comparison) and has no use for validity — `reset_undo_history`
+fires on dataset load, so its stack never outlives what its states index. The dialog needs both. So the
+shared thing is a list, a cursor, and two injected policies, and the honest test tomorrow is whether
+`selection.py` comes out *simpler* for using it. If it comes out merely different, the answer is no.
+
+Two mechanics that fall out of skipping, both of which have to be right or Back lies about where you are:
+
+- **The cursor moves only if the navigation did.** A skipped entry is one the predicate rejected, but a
+  *permission* failure is not visible to `os.path.isdir` and surfaces inside `chdir`, which handles it with
+  a message box and stays put. If the history had already moved its cursor, it would then disagree with the
+  working directory. `chdir` returns nothing today and swallows its errors into message boxes, so it needs
+  to report success for this to be checkable at all.
+- **Skipping has to be symmetric.** Forward must skip the same dead entries Back did, or the pair stops
+  being inverse and a user cannot get back to where they pressed Back from.
+
 **Whether the stack itself is shared with Visualizer is the open design question.** Visualizer's selection
 undo (`raven/visualizer/selection.py`) is the reference and is the only undo stack in the tree: a module-
 level `_undo_stack` list plus an `_undo_pos` cursor, where committing truncates everything after the cursor
