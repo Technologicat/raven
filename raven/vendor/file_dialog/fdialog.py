@@ -35,6 +35,18 @@ _KEY_PAGE_UP = 517
 _KEY_PAGE_DOWN = 518
 
 
+# The shortcuts the places panel offers, in the order they are shown: the label, the XDG directory to ask
+# the platform for, and the icon. The label is not always the XDG name — "Images" is `Pictures` — so both
+# are spelled out rather than derived from each other.
+_PLACES = [("Home", "Home", "img_home"),
+           ("Desktop", "Desktop", "img_desktop"),
+           ("Downloads", "Downloads", "img_downloads"),
+           ("Images", "Pictures", "img_picture_folder"),
+           ("Documents", "Documents", "img_document_folder"),
+           ("Music", "Music", "img_music_folder"),
+           ("Videos", "Videos", "img_videos")]
+
+
 # The sort criteria a dialog offers, in the order its buttons appear — which is also the order Ctrl+Shift+N
 # indexes, so the two rows read off one list and cannot drift apart.
 _SORT_CRITERIA = [(filelisting.SortKey.NAME, "Name"),
@@ -1426,40 +1438,22 @@ class FileDialog:
         with dpg.window(label=self.title, tag=self.tag, on_close=self.cancel, no_resize=self.no_resize, show=False, modal=self.modal, width=self.width, height=self.height, min_size=self.min_size, no_collapse=True, pos=(50, 50)):
             info_px = 90
 
+            # The places, resolved once. Held as data rather than as seven locals per branch: the two
+            # `user_style` layouts were each spelling out the same seven lookups and then seven near-identical
+            # rows, and a keyboard cursor over this panel needs the list to be something it can index anyway.
+            self._places = {label: get_directory_path(xdg_name) for label, xdg_name, _icon in _PLACES}
+
             # horizontal group (shot_menu + dir_list)
             with dpg.group(horizontal=True):
                 # shortcut menu
                 if (self.user_style == 0):
                     with dpg.child_window(tag=f"shortcut_menu_{self.instance_tag}", width=200, resizable_x=True, show=self.show_shortcuts_menu, height=-info_px):
-                        home = get_directory_path("Home")
-                        desktop = get_directory_path("Desktop")
-                        downloads = get_directory_path("Downloads")
-                        images = get_directory_path("Pictures")
-                        documents = get_directory_path("Documents")
-                        musics = get_directory_path("Music")
-                        videos = get_directory_path("Videos")
-
-                        with dpg.group(horizontal=True):
-                            dpg.add_image(self.img_home)
-                            dpg.add_menu_item(label="Home", callback=lambda: chdir(home))
-                        with dpg.group(horizontal=True):
-                            dpg.add_image(self.img_desktop)
-                            dpg.add_menu_item(label="Desktop", callback=lambda: chdir(desktop))
-                        with dpg.group(horizontal=True):
-                            dpg.add_image(self.img_downloads)
-                            dpg.add_menu_item(label="Downloads", callback=lambda: chdir(downloads))
-                        with dpg.group(horizontal=True):
-                            dpg.add_image(self.img_picture_folder)
-                            dpg.add_menu_item(label="Images", callback=lambda: chdir(images))
-                        with dpg.group(horizontal=True):
-                            dpg.add_image(self.img_document_folder)
-                            dpg.add_menu_item(label="Documents", callback=lambda: chdir(documents))
-                        with dpg.group(horizontal=True):
-                            dpg.add_image(self.img_music_folder)
-                            dpg.add_menu_item(label="Music", callback=lambda: chdir(musics))
-                        with dpg.group(horizontal=True):
-                            dpg.add_image(self.img_videos)
-                            dpg.add_menu_item(label="Videos", callback=lambda: chdir(videos))
+                        for label, _xdg_name, icon in _PLACES:
+                            with dpg.group(horizontal=True):
+                                dpg.add_image(getattr(self, icon))
+                                # `label=label` binds this row's label at definition time; a bare closure over
+                                # the loop variable would leave every entry pointing at Videos.
+                                dpg.add_menu_item(label=label, callback=lambda label=label: chdir(self._places[label]))
 
                         dpg.add_separator()
 
@@ -1473,21 +1467,8 @@ class FileDialog:
 
                 elif (self.user_style == 1):
                     with dpg.child_window(tag=f"shortcut_menu_{self.instance_tag}", width=40, show=self.show_shortcuts_menu, height=-info_px):
-                        home = get_directory_path("Home")
-                        desktop = get_directory_path("Desktop")
-                        downloads = get_directory_path("Downloads")
-                        images = get_directory_path("Pictures")
-                        documents = get_directory_path("Documents")
-                        musics = get_directory_path("Music")
-                        videos = get_directory_path("Videos")
-
-                        dpg.add_image_button(self.img_home, callback=lambda: chdir(home))
-                        dpg.add_image_button(self.img_desktop, callback=lambda: chdir(desktop))
-                        dpg.add_image_button(self.img_downloads, callback=lambda: chdir(downloads))
-                        dpg.add_image_button(self.img_picture_folder, callback=lambda: chdir(images))
-                        dpg.add_image_button(self.img_document_folder, callback=lambda: chdir(documents))
-                        dpg.add_image_button(self.img_music_folder, callback=lambda: chdir(musics))
-                        dpg.add_image_button(self.img_videos, callback=lambda: chdir(videos))
+                        for label, _xdg_name, icon in _PLACES:
+                            dpg.add_image_button(getattr(self, icon), callback=lambda label=label: chdir(self._places[label]))
 
                         dpg.add_separator()
 
