@@ -464,12 +464,6 @@ class FileDialog:
         self._initialize_class()
 
         # File type filter.
-        def _set_type_filter(label: str) -> None:
-            self.file_filter = label
-            if label in self._filter_extensions:
-                self._active_extensions = self._filter_extensions[label]
-            else:  # not one of the offered items; read it as a literal extension, as the single-extension form did
-                self._active_extensions = None if label == ".*" else (label.lower(),)
 
         # Whether the caller named a save extension. If not, it is derived from the filter, and so has to be
         # re-derived whenever the offered filters change.
@@ -487,7 +481,7 @@ class FileDialog:
                                                  for _label, extensions in self._filters if extensions is not None
                                                  for ext in extensions}))
             # `None` means "the first item", which is what a caller listing the types it wants almost always means.
-            _set_type_filter(self._filter_labels[0] if file_filter is None else file_filter)
+            self._set_type_filter(self._filter_labels[0] if file_filter is None else file_filter)
 
             # A save dialog's default extension is nearly always the one extension its filter names, so derive
             # it rather than making the caller write it a third time. Only for a filter naming exactly one:
@@ -500,18 +494,7 @@ class FileDialog:
                     self.default_file_extension = None
         _install_filters(self.filter_list, self.file_filter)
 
-        def _matches_type_filter(file_name: str) -> bool:
-            if self._active_extensions is None:  # ".*"
-                return True
-            file_name = file_name.lower()
-            return any(file_name.endswith(ext) for ext in self._active_extensions)
 
-        def _describe_type_filter(label: str) -> str:
-            extensions = self._filter_extensions.get(label)
-            if extensions is None:
-                return "Every file, whatever its extension."
-            return textwrap.fill(" ".join(extensions), width=72,
-                                 initial_indent="Matches: ", subsequent_indent="         ")
 
         # low-level functions
 
@@ -520,28 +503,8 @@ class FileDialog:
             try:
                 chdir(dpg.get_value(f"ex_path_input_{self.instance_tag}"))
             except FileNotFoundError:
-                message_box("Invalid path", "No such file or directory")
+                self.message_box("Invalid path", "No such file or directory")
 
-        def message_box(title, message):
-            if not self.modal:
-                with dpg.mutex():
-                    viewport_width = dpg.get_viewport_client_width()
-                    viewport_height = dpg.get_viewport_client_height()
-                    with dpg.window(label=title, no_close=True, modal=True) as modal_id:
-                        dpg.add_text(message)
-                        with dpg.group(horizontal=True):
-                            dpg.add_button(label="Ok", width=-1, user_data=(modal_id, True), callback=lambda: dpg.delete_item(modal_id))
-
-                # Waited for so the box can be centered on geometry that exists. Not required: an
-                # off-center message box beats a hang with no traceback, which is what a bare
-                # `dpg.split_frame` gives when there is no render loop to wait for.
-                guiutils.split_frame(operation="file dialog: centering a message box", required=False)
-                width = dpg.get_item_width(modal_id)
-                height = dpg.get_item_height(modal_id)
-                dpg.set_item_pos(modal_id, [viewport_width // 2 - width // 2, viewport_height // 2 - height // 2])
-            else:
-                # TODO: We really need a message box that works while the file dialog is modal.
-                logger.warning(f"message_box: Cannot display message box while file_dialog is in modal. Message follows:\n{title}:\t{message}\n")
 
         def open_drive(sender, app_data, user_data):
             chdir(user_data)
@@ -600,23 +563,6 @@ class FileDialog:
                         self.selected_files.append(user_data[1])
                         self._refresh_target_notification()
 
-        def get_directory_path(directory_name):
-            """Where the shortcut named `directory_name` should go, or `None` if this user has no such place.
-
-            `None` rather than a fallback path, because a shortcut that silently goes somewhere else is
-            worse than one that is not offered: the panel omits the row instead.
-            """
-            # `common_utils.user_directory` is what knows that these directories are renamed on disk on
-            # Linux — `~/Pictures` is `~/Kuvat` on a Finnish desktop — and reads the XDG definitions.
-            # Joining `~` with an English name, which is what this did, finds nothing there.
-            directory_path = common_utils.user_directory(directory_name)
-            try:
-                os.listdir(directory_path)  # test access, not just existence
-            except OSError:
-                logger.debug(f"get_directory_path: instance '{self.tag}' ({self.instance_tag}): "
-                             f"no usable '{directory_name}' at '{directory_path}', omitting the shortcut")
-                return None
-            return str(directory_path)
 
         def _icon_for(entry) -> Union[str, int]:
             """The small icon shown at the left of `entry`'s row."""
@@ -677,7 +623,7 @@ class FileDialog:
             # let you walk into it — so the rule is choosability plus navigability, not choosability alone.
             # Files in a directory picker are the case this exists for; a broken link falls out of it too,
             # having been inert in practice all along without looking it.
-            inert = not _is_choosable(entry) and not entry.is_dir
+            inert = not self._is_choosable(entry) and not entry.is_dir
 
             # `user_data` shape is `open_file`'s contract: [name, full path, mtime, size].
             kwargs_cell = {'callback': callback, 'span_columns': True, 'height': self.selec_height,
@@ -704,7 +650,7 @@ class FileDialog:
 
                 # Restore the selection: only the name cell is set, since every cell spans the columns and
                 # setting all four would stack the tint on itself.
-                if entry.path in selected_paths and _is_choosable(entry):
+                if entry.path in selected_paths and self._is_choosable(entry):
                     dpg.set_value(cell_name, True)
                     self.selected_files.append(entry.path)
 
@@ -751,9 +697,9 @@ class FileDialog:
             `label` is one of the labels derived from `filter_list` — a bare extension for a string entry,
             or the given label for a `(label, extensions)` pair.
             """
-            _set_type_filter(label)
+            self._set_type_filter(label)
             dpg.set_value(self.combo_file_filter, self.file_filter)  # keep the GUI in sync when called programmatically
-            dpg.set_value(self.text_file_filter_extensions, _describe_type_filter(self.file_filter))
+            dpg.set_value(self.text_file_filter_extensions, self._describe_type_filter(self.file_filter))
             _apply_automatic_grid_mode(rebuild=False)  # the listing is about to be rebuilt anyway
             reset_dir()
         self.set_type_filter = set_type_filter  # needs to be accessible from the outside; uses closure data from this scope, so shouldn't be injected as an instance method (on the class); inject as a regular function *on the instance*.
@@ -775,7 +721,7 @@ class FileDialog:
             _install_filters(filter_list, file_filter)
             dpg.configure_item(self.combo_file_filter, items=self._filter_labels)
             dpg.set_value(self.combo_file_filter, self.file_filter)
-            dpg.set_value(self.text_file_filter_extensions, _describe_type_filter(self.file_filter))
+            dpg.set_value(self.text_file_filter_extensions, self._describe_type_filter(self.file_filter))
             _apply_automatic_grid_mode(rebuild=False)
             # The *configured* show flag, not `is_visible`: the latter answers "did the user see it in the last
             # rendered frame", which is False for a window shown microseconds ago and False always with no
@@ -792,9 +738,9 @@ class FileDialog:
                 os.chdir(path)
                 reset_dir()
             except PermissionError as e:
-                message_box("File dialog - PerimssionError", f"Cannot open the folder because is a system folder or the access is denied\n\nMore info:\n{e}")
+                self.message_box("File dialog - PerimssionError", f"Cannot open the folder because is a system folder or the access is denied\n\nMore info:\n{e}")
             except NotADirectoryError as e:
-                message_box("File dialog - not a directory", f"The selected item is not a directory, but a file.\n\nMore info:\n{e}")
+                self.message_box("File dialog - not a directory", f"The selected item is not a directory, but a file.\n\nMore info:\n{e}")
         self.chdir = chdir  # needs to be accessible from the outside; uses closure data from this scope, so shouldn't be injected as an instance method (on the class); inject as a regular function *on the instance*.
 
         def reset_dir(file_name_filter=None):
@@ -838,7 +784,7 @@ class FileDialog:
                                                          show_hidden=self.show_hidden_files,
                                                          dirs_only=not self.lists_files,
                                                          name_filter=matches_name_filter,
-                                                         type_filter=_matches_type_filter,
+                                                         type_filter=self._matches_type_filter,
                                                          sort_key=self._sort_key,
                                                          descending=self._sort_descending)
                 # `..` stays out: it is the way out of the directory rather than a candidate for the
@@ -889,7 +835,7 @@ class FileDialog:
                 # locate it. Cost a CI round on a Windows-only failure that said "negative dimensions are
                 # not allowed" and nothing about where.
                 logger.exception(f"reset_dir: instance '{self.tag}' ({self.instance_tag}), failed to list '{str(default_path)}'")
-                message_box("File dialog - Error", f"An unknown error has occured when listing the items, More info:\n{exc}")
+                self.message_box("File dialog - Error", f"An unknown error has occured when listing the items, More info:\n{exc}")
 
             # Every path into here changes something the promised target depends on — which directory is
             # shown, and what survives the find field — so this is the one place that has to refresh it.
@@ -913,23 +859,6 @@ class FileDialog:
         #
         # The header itself stays, because `resizable` is a header-drag gesture and filename lengths vary
         # enormously between users and directories — which is exactly when a fixed Name column hurts.
-        def _draw_sort_indicators():
-            """Redraw the triangle marking which criterion is active, and which way it points.
-
-            Drawn rather than written: Raven's UI font is OpenSans, which has no triangle or arrow glyphs
-            at all, so a text label would render a missing-glyph box. Ten lines of drawlist is cheaper than
-            binding the icon font to a button, which would apply to its whole label.
-            """
-            for sort_key, drawlist in self._sort_indicators.items():
-                dpg.delete_item(drawlist, children_only=True)
-                if sort_key is not self._sort_key:
-                    continue
-                color = (210, 210, 210, 255)
-                if self._sort_descending:
-                    points = [(2, 10), (12, 10), (7, 18)]
-                else:
-                    points = [(2, 18), (12, 18), (7, 10)]
-                dpg.draw_triangle(*points, color=color, fill=color, parent=drawlist)
 
         def sort_by(sort_key, descending=None):
             """Order the listing by `sort_key`, and rebuild it.
@@ -942,7 +871,7 @@ class FileDialog:
                 descending = (not self._sort_descending) if sort_key is self._sort_key else False
             self._sort_key = sort_key
             self._sort_descending = descending
-            _draw_sort_indicators()
+            self._draw_sort_indicators()
             self._update_search()  # re-lists the current directory under the current find query
         self.sort_by = sort_by  # instance-injected for the same reason as `set_type_filter` above.
 
@@ -971,38 +900,18 @@ class FileDialog:
                 self.spacer_view_toggle = dpg.add_spacer(width=16)
                 self.checkbox_thumbnails = dpg.add_checkbox(label="Thumbnails",
                                                             default_value=self._grid_mode,
-                                                            show=_grid_is_available(),
+                                                            show=self._grid_is_available(),
                                                             callback=_thumbnails_checkbox_callback)
                 with dpg.tooltip(self.checkbox_thumbnails):
                     dpg.add_text("Show the listing as image thumbnails instead of a table. [Ctrl+T]\n"
                                  "Turns itself on when the file type filter selects images;\n"
                                  "setting it by hand overrides that until you close the dialog.")
-            _draw_sort_indicators()
+            self._draw_sort_indicators()
 
         # --------------------------------------------------------------------------------
         # Grid view.
 
-        def _grid_is_available() -> bool:
-            """Whether this dialog offers the grid view at all.
 
-            The question is whether there are files to show, not whether files can be *chosen*. A `"dir"`
-            picker lists none, so every tile would be the same folder icon and the grid would cost space
-            and legibility to show nothing the table does not. `"dir-with-contents"` lists them precisely
-            so they can be looked at, which is the whole reason that mode exists — so it gets the grid even
-            though what it returns is a directory.
-            """
-            return self.lists_files
-
-        def _filter_is_image_typed(label) -> bool:
-            """Whether the named file type filter selects images and nothing else.
-
-            The catch-all does not count: ".*" selects images *among* everything, and a directory of source
-            code shown as thumbnails would be a wall of identical icons.
-            """
-            extensions = self._filter_extensions.get(label)
-            if not extensions:
-                return False
-            return all(ext in _DECODABLE_IMAGE_EXTENSIONS for ext in extensions)
 
         def _the_grid():
             """The grid view, built on first use.
@@ -1021,7 +930,7 @@ class FileDialog:
                                                width=self._grid_size[0], height=self._grid_size[1],
                                                icon_assets=icon_assets,
                                                icon_name_for=_tile_icon_for,
-                                               selectable_for=_is_choosable,
+                                               selectable_for=self._is_choosable,
                                                tile_size=self.thumbnail_size,
                                                thumbnail_device=self.thumbnail_device,
                                                allow_multi_select=self.multi_selection,
@@ -1030,19 +939,6 @@ class FileDialog:
                                                on_activate=_grid_activate)
             return self._grid
 
-        def _is_choosable(entry) -> bool:
-            """Whether `entry` is a thing this dialog can return.
-
-            One kind is returnable and the other is scenery, and which is which is `pick`'s whole job: a
-            file picker navigates into directories rather than choosing them, and a directory picker shows
-            files (in `"dir-with-contents"`) so the folder can be judged by them, without either becoming
-            an answer. `..` is never a choice, and a broken link leads nowhere.
-            """
-            if entry is None or entry.is_parent:
-                return False
-            if entry.kind == filelisting.KIND_BROKEN_LINK:
-                return False
-            return self.returns_dir if entry.is_dir else not self.returns_dir
 
         def _grid_selection_changed(entries):
             """The grid's selection is the dialog's, filtered to what can actually be returned.
@@ -1053,7 +949,7 @@ class FileDialog:
             when the dialog was not opened for multi-selection.
             """
             self.selected_files.clear()
-            self.selected_files.extend(entry.path for entry in entries if _is_choosable(entry))
+            self.selected_files.extend(entry.path for entry in entries if self._is_choosable(entry))
             self._refresh_target_notification()
 
         def _grid_current_changed(entry):
@@ -1065,7 +961,7 @@ class FileDialog:
             # Before the choosability test: the promised target follows the cursor wherever it lands, and
             # a cursor sitting on something unreturnable is exactly when the line has to say so.
             self._refresh_target_notification()
-            if not _is_choosable(entry):
+            if not self._is_choosable(entry):
                 return
             if self.save_mode:
                 basename, _ext = os.path.splitext(entry.name)
@@ -1078,7 +974,7 @@ class FileDialog:
                 dpg.set_value(f"ex_search_{self.instance_tag}", "")
                 chdir(entry.path)
                 return
-            if not _is_choosable(entry):
+            if not self._is_choosable(entry):
                 return  # a broken link leads nowhere, and `..` was handled above
             self.selected_files.clear()
             self.selected_files.append(entry.path)
@@ -1095,7 +991,7 @@ class FileDialog:
             **Switching views changes nothing else**: the sort order is app state that a view switch does
             not touch, and the cursor is re-anchored by path on every rebuild, a view switch included.
             """
-            enabled = bool(enabled) and _grid_is_available()
+            enabled = bool(enabled) and self._grid_is_available()
             if remember:
                 self._grid_mode_chosen_by_user = True
             if enabled == self._grid_mode:
@@ -1106,7 +1002,7 @@ class FileDialog:
             dpg.configure_item(f"grid_host_{self.instance_tag}", show=enabled)  # tag
             dpg.configure_item(f"explorer_{self.instance_tag}", show=not enabled)  # tag
             if enabled:
-                _resize_grid()
+                self._resize_grid()
                 if self.is_visible():
                     _start_grid_ticker()
             if rebuild:
@@ -1120,7 +1016,7 @@ class FileDialog:
             """Turn the grid on for an image-typed filter, unless the user has said otherwise."""
             if self._grid_mode_chosen_by_user:
                 return
-            set_grid_mode(_filter_is_image_typed(self.file_filter), remember=False, rebuild=rebuild)
+            set_grid_mode(self._filter_is_image_typed(self.file_filter), remember=False, rebuild=rebuild)
 
         def _reset_grid_mode_for_opening():
             """Forget a hand-set view, so the automatic rule gets to decide again. Called on each opening.
@@ -1143,19 +1039,6 @@ class FileDialog:
                 _apply_automatic_grid_mode(rebuild=False)
         self._reset_grid_mode_for_opening = _reset_grid_mode_for_opening  # instance-injected, as `set_type_filter` above.
 
-        def _resize_grid():
-            """Match the grid to the area the table would have filled.
-
-            Measured rather than computed: the shortcuts panel is resizable, so the listing's width is not
-            known at construction and changes while the dialog is open.
-            """
-            if self._grid is None:
-                return
-            width, height = guiutils.get_widget_size(f"listing_area_{self.instance_tag}")  # tag
-            size = (max(64, int(width) - 4), max(64, int(height) - 4))
-            if size != self._grid_size:
-                self._grid_size = size
-                self._grid.set_size(*size)
 
         def _start_grid_ticker():
             """Run the grid's per-frame work on a thread of the dialog's own, for as long as it is on screen.
@@ -1187,7 +1070,7 @@ class FileDialog:
                             return
                         if self._grid is None or not self._grid_mode or not self.is_visible():
                             continue
-                        _resize_grid()
+                        self._resize_grid()
                         self._grid.tick()
                     except Exception as exc:
                         logger.error(f"tick_loop: instance '{self.tag}' ({self.instance_tag}): {type(exc)}: {exc}")
@@ -1276,7 +1159,7 @@ class FileDialog:
             if entry.is_parent or entry.is_dir:
                 chdir(entry.path)
                 return
-            if not _is_choosable(entry):
+            if not self._is_choosable(entry):
                 return
             self.selected_files.clear()
             self.selected_files.append(entry.path)
@@ -1363,7 +1246,7 @@ class FileDialog:
                 # mnemonic that fits it. Silently ignored where the grid is not on offer — a directory
                 # picker listing no files has nothing to make tiles of — since the checkbox is hidden there
                 # too and a key that acts where its control is invisible is worse than one that does not.
-                if _grid_is_available():
+                if self._grid_is_available():
                     set_grid_mode(not self._grid_mode)
         self._handle_key = _handle_key  # instance-injected, as above.
 
@@ -1375,7 +1258,7 @@ class FileDialog:
             # `user_style` layouts were each spelling out the same seven lookups and then seven near-identical
             # rows, and a keyboard cursor over this panel needs the list to be something it can index anyway.
             self._places = {label: path for label, _icon in _PLACES
-                            if (path := get_directory_path(label)) is not None}
+                            if (path := self.get_directory_path(label)) is not None}
 
             # horizontal group (shot_menu + dir_list)
             with dpg.group(horizontal=True):
@@ -1513,7 +1396,7 @@ class FileDialog:
                 self.combo_file_filter = dpg.add_combo(items=self._filter_labels,
                                                        callback=filter_combo_selector, default_value=self.file_filter, width=-1)
                 with dpg.tooltip(self.combo_file_filter):
-                    self.text_file_filter_extensions = dpg.add_text(_describe_type_filter(self.file_filter))
+                    self.text_file_filter_extensions = dpg.add_text(self._describe_type_filter(self.file_filter))
 
             with dpg.group(horizontal=True):
                 self.spacer_notification = dpg.add_spacer(width=int(self.width * 0.5))
@@ -1706,6 +1589,124 @@ class FileDialog:
     def delete_table(self):
         for child in dpg.get_item_children(f"explorer_{self.instance_tag}", 1):
             dpg.delete_item(child)
+
+    def _describe_type_filter(self, label: str) -> str:
+        extensions = self._filter_extensions.get(label)
+        if extensions is None:
+            return "Every file, whatever its extension."
+        return textwrap.fill(" ".join(extensions), width=72,
+                             initial_indent="Matches: ", subsequent_indent="         ")
+    def _draw_sort_indicators(self):
+        """Redraw the triangle marking which criterion is active, and which way it points.
+
+        Drawn rather than written: Raven's UI font is OpenSans, which has no triangle or arrow glyphs
+        at all, so a text label would render a missing-glyph box. Ten lines of drawlist is cheaper than
+        binding the icon font to a button, which would apply to its whole label.
+        """
+        for sort_key, drawlist in self._sort_indicators.items():
+            dpg.delete_item(drawlist, children_only=True)
+            if sort_key is not self._sort_key:
+                continue
+            color = (210, 210, 210, 255)
+            if self._sort_descending:
+                points = [(2, 10), (12, 10), (7, 18)]
+            else:
+                points = [(2, 18), (12, 18), (7, 10)]
+            dpg.draw_triangle(*points, color=color, fill=color, parent=drawlist)
+    def _filter_is_image_typed(self, label) -> bool:
+        """Whether the named file type filter selects images and nothing else.
+
+        The catch-all does not count: ".*" selects images *among* everything, and a directory of source
+        code shown as thumbnails would be a wall of identical icons.
+        """
+        extensions = self._filter_extensions.get(label)
+        if not extensions:
+            return False
+        return all(ext in _DECODABLE_IMAGE_EXTENSIONS for ext in extensions)
+    def _grid_is_available(self) -> bool:
+        """Whether this dialog offers the grid view at all.
+
+        The question is whether there are files to show, not whether files can be *chosen*. A `"dir"`
+        picker lists none, so every tile would be the same folder icon and the grid would cost space
+        and legibility to show nothing the table does not. `"dir-with-contents"` lists them precisely
+        so they can be looked at, which is the whole reason that mode exists — so it gets the grid even
+        though what it returns is a directory.
+        """
+        return self.lists_files
+    def _is_choosable(self, entry) -> bool:
+        """Whether `entry` is a thing this dialog can return.
+
+        One kind is returnable and the other is scenery, and which is which is `pick`'s whole job: a
+        file picker navigates into directories rather than choosing them, and a directory picker shows
+        files (in `"dir-with-contents"`) so the folder can be judged by them, without either becoming
+        an answer. `..` is never a choice, and a broken link leads nowhere.
+        """
+        if entry is None or entry.is_parent:
+            return False
+        if entry.kind == filelisting.KIND_BROKEN_LINK:
+            return False
+        return self.returns_dir if entry.is_dir else not self.returns_dir
+    def _matches_type_filter(self, file_name: str) -> bool:
+        if self._active_extensions is None:  # ".*"
+            return True
+        file_name = file_name.lower()
+        return any(file_name.endswith(ext) for ext in self._active_extensions)
+    def _resize_grid(self):
+        """Match the grid to the area the table would have filled.
+
+        Measured rather than computed: the shortcuts panel is resizable, so the listing's width is not
+        known at construction and changes while the dialog is open.
+        """
+        if self._grid is None:
+            return
+        width, height = guiutils.get_widget_size(f"listing_area_{self.instance_tag}")  # tag
+        size = (max(64, int(width) - 4), max(64, int(height) - 4))
+        if size != self._grid_size:
+            self._grid_size = size
+            self._grid.set_size(*size)
+    def _set_type_filter(self, label: str) -> None:
+        self.file_filter = label
+        if label in self._filter_extensions:
+            self._active_extensions = self._filter_extensions[label]
+        else:  # not one of the offered items; read it as a literal extension, as the single-extension form did
+            self._active_extensions = None if label == ".*" else (label.lower(),)
+    def get_directory_path(self, directory_name):
+        """Where the shortcut named `directory_name` should go, or `None` if this user has no such place.
+
+        `None` rather than a fallback path, because a shortcut that silently goes somewhere else is
+        worse than one that is not offered: the panel omits the row instead.
+        """
+        # `common_utils.user_directory` is what knows that these directories are renamed on disk on
+        # Linux — `~/Pictures` is `~/Kuvat` on a Finnish desktop — and reads the XDG definitions.
+        # Joining `~` with an English name, which is what this did, finds nothing there.
+        directory_path = common_utils.user_directory(directory_name)
+        try:
+            os.listdir(directory_path)  # test access, not just existence
+        except OSError:
+            logger.debug(f"get_directory_path: instance '{self.tag}' ({self.instance_tag}): "
+                         f"no usable '{directory_name}' at '{directory_path}', omitting the shortcut")
+            return None
+        return str(directory_path)
+    def message_box(self, title, message):
+        if not self.modal:
+            with dpg.mutex():
+                viewport_width = dpg.get_viewport_client_width()
+                viewport_height = dpg.get_viewport_client_height()
+                with dpg.window(label=title, no_close=True, modal=True) as modal_id:
+                    dpg.add_text(message)
+                    with dpg.group(horizontal=True):
+                        dpg.add_button(label="Ok", width=-1, user_data=(modal_id, True), callback=lambda: dpg.delete_item(modal_id))
+
+            # Waited for so the box can be centered on geometry that exists. Not required: an
+            # off-center message box beats a hang with no traceback, which is what a bare
+            # `dpg.split_frame` gives when there is no render loop to wait for.
+            guiutils.split_frame(operation="file dialog: centering a message box", required=False)
+            width = dpg.get_item_width(modal_id)
+            height = dpg.get_item_height(modal_id)
+            dpg.set_item_pos(modal_id, [viewport_width // 2 - width // 2, viewport_height // 2 - height // 2])
+        else:
+            # TODO: We really need a message box that works while the file dialog is modal.
+            logger.warning(f"message_box: Cannot display message box while file_dialog is in modal. Message follows:\n{title}:\t{message}\n")
 
     def _navigator(self):
         """Whichever view is on screen, as the thing that answers to `navigate_*`.
