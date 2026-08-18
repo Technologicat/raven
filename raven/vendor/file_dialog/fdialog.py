@@ -1628,16 +1628,23 @@ class FileDialog:
                     self._row_entries = list(entries)
                     self._table_cursor.set_listing([entry.path for entry in entries],
                                                    listing_key=listed_dir)
-                    # `..` is where the cursor rests while nothing has been typed, and that is
-                    # load-bearing rather than incidental: the cursor is what Ctrl+Enter returns, so a
-                    # cursor parked on the first subfolder would hand back a *child* of the directory
-                    # you navigated to in order to choose it.
-                    #
-                    # Typing changes the question. A filter is a search, and a search puts the cursor on
-                    # its first hit — otherwise "type a few characters, press Enter" leaves the
-                    # directory instead of opening the match, `..` being what Enter would act on.
-                    if file_name_filter and self._table_cursor.current == 0 and len(entries) > 1 and entries[0].is_parent:
-                        self._table_cursor.set_current(1)
+
+                # `..` is where the cursor rests while nothing has been typed, and that is load-bearing
+                # rather than incidental: the cursor is what Ctrl+Enter returns, so a cursor parked on the
+                # first subfolder would hand back a *child* of the directory you navigated to in order to
+                # choose it.
+                #
+                # Typing changes the question. A filter is a search, and a search puts the cursor on its
+                # first hit — otherwise "type a few characters, press Enter" leaves the directory instead
+                # of opening the match, `..` being what Enter would act on.
+                #
+                # `anchor=False` because the user chose a *query*, not an entry. The anchor is where the
+                # cursor tries to return when the listing changes again, so anchoring a landing nobody
+                # picked means erasing the query returns the cursor to whatever happened to match first
+                # rather than to `..`.
+                navigator = self._navigator()
+                if file_name_filter and len(entries) > 1 and entries[0].is_parent and navigator.current == 0:
+                    navigator.set_current(1, anchor=False)
 
             logger.debug(f"reset_dir: instance '{self.tag}' ({self.instance_tag}), {len(self.shown_items)} entries "
                          f"as {'tiles' if self._grid_mode else 'rows'}: "

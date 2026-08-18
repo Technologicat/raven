@@ -922,3 +922,41 @@ def test_the_mouse_and_the_keyboard_agree_about_this(make_dialog, tmp_path):
     dialog.chdir(str(tmp_path / "album"))  # what a double-click ends up calling
 
     assert dpg.get_value(dialog.search_field) == ""
+
+
+# --------------------------------------------------------------------------------
+# Where a search leaves the cursor
+
+def test_a_search_puts_the_cursor_on_its_first_hit(dialog):
+    """Otherwise "type a few characters, press Enter" leaves the directory instead of opening the match.
+
+    The cursor rests on `..` while nothing is typed, and `..` is what Enter acts on — so a filter that
+    narrows to exactly what you were after, with the cursor still parked above it, sends you up a level.
+    """
+    dialog.reset_dir(file_name_filter="photo")
+    assert dialog._row_entries[0].is_parent, "precondition: `..` is row 0"
+    assert dialog._table_cursor.current == 1
+
+
+def test_the_grid_moves_its_cursor_onto_the_first_hit_too(dialog):
+    """Both views, or the rule is a property of the table rather than of the dialog."""
+    dialog.set_grid_mode(True)
+    dialog.reset_dir(file_name_filter="photo")
+    assert dialog._grid.current == 1
+
+
+def test_landing_on_a_match_is_not_a_choice_the_user_made(dialog):
+    """The user picked a *query*, not an entry, so the landing must not become the cursor's anchor.
+
+    The anchor is where the cursor tries to return when the listing changes again. Anchoring an entry
+    nobody chose means erasing the query returns the cursor to whatever happened to match first, rather
+    than to the resting place it started from.
+    """
+    dialog.reset_dir(file_name_filter="photo")
+    assert dialog._table_cursor.current == 1
+    landed_on = dialog._row_entries[1].path
+
+    dialog.reset_dir()  # query erased; same directory, so the cursor re-anchors rather than starting over
+
+    assert dialog._table_cursor.get_current_key() != landed_on, \
+        "the cursor followed an entry the user never chose"
