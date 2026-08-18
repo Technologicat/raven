@@ -109,6 +109,37 @@ _EXTENSION_ICONS = {
     (".svg",): "vector",
 }
 
+
+def _icon_name_for_extension(file_name: str) -> Optional[str]:
+    """Which icon `file_name`'s extension asks for, or `None` for a type with no icon of its own.
+
+    Matched case-insensitively, so `PHOTO.JPG` gets the picture icon that `photo.jpg` does. The answer is
+    an icon *name*, not a texture: the table draws it small and the grid draws it at tile size, so the two
+    views share this table and pick their own assets from it.
+    """
+    file_name = file_name.lower()
+    for extensions, icon_name in _EXTENSION_ICONS.items():
+        if file_name.endswith(extensions):  # `str.endswith` takes a tuple
+            return icon_name
+    return None
+
+
+def _get_all_drives():
+    """Mount points to offer in the shortcuts panel, one menu item each.
+
+    Mount points, specifically: every entry has to be somewhere `chdir` can go, because that is the only
+    thing clicking one does.
+
+    A POSIX-only branch here used to also scan /dev for names starting with "sd" or "nvme" and append
+    the raw device paths. It was skipped on Windows (`os.name == 'posix'`), which is why the panel
+    looked right there and only there. On this machine it added four entries — the two partitions
+    already listed by their mount points, plus the whole disk and the controller — and a block device
+    is not a directory, so each could only raise `NotADirectoryError` into the message box. Its
+    dedup test could never fire either: it compared /dev paths against a list of mount points.
+    """
+    return [drive.mountpoint for drive in psutil.disk_partitions() if drive.mountpoint]
+
+
 # How often the grid's own tick runs while it is on screen. `FileDialog` is a widget inside apps that own
 # their render loops, so requiring every host app to call something would be a landmine — the app that
 # forgets is the one whose thumbnails never appear.
@@ -483,20 +514,6 @@ class FileDialog:
                                  initial_indent="Matches: ", subsequent_indent="         ")
 
         # low-level functions
-        def _get_all_drives():
-            """Mount points to offer in the shortcuts panel, one menu item each.
-
-            Mount points, specifically: every entry has to be somewhere `chdir` can go, because that is the
-            only thing clicking one does.
-
-            A POSIX-only branch here used to also scan /dev for names starting with "sd" or "nvme" and append
-            the raw device paths. It was skipped on Windows (`os.name == 'posix'`), which is why the panel
-            looked right there and only there. On this machine it added four entries — the two partitions
-            already listed by their mount points, plus the whole disk and the controller — and a block device
-            is not a directory, so each could only raise `NotADirectoryError` into the message box. Its
-            dedup test could never fire either: it compared /dev paths against a list of mount points.
-            """
-            return [drive.mountpoint for drive in psutil.disk_partitions() if drive.mountpoint]
 
         def delete_table():
             for child in dpg.get_item_children(f"explorer_{self.instance_tag}", 1):
@@ -603,19 +620,6 @@ class FileDialog:
                              f"no usable '{directory_name}' at '{directory_path}', omitting the shortcut")
                 return None
             return str(directory_path)
-
-        def _icon_name_for_extension(file_name: str) -> Optional[str]:
-            """Which icon `file_name`'s extension asks for, or `None` for a type with no icon of its own.
-
-            Matched case-insensitively, so `PHOTO.JPG` gets the picture icon that `photo.jpg` does. The
-            answer is an icon *name*, not a texture: the table draws it small and the grid draws it at tile
-            size, so the two views share this table and pick their own assets from it.
-            """
-            file_name = file_name.lower()
-            for extensions, icon_name in _EXTENSION_ICONS.items():
-                if file_name.endswith(extensions):  # `str.endswith` takes a tuple
-                    return icon_name
-            return None
 
         def _icon_for(entry) -> Union[str, int]:
             """The small icon shown at the left of `entry`'s row."""
