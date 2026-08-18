@@ -14,6 +14,7 @@ that the dialog routes the Find field through it.
 import os
 import pathlib
 import threading
+from unittest import mock
 
 import pytest
 
@@ -607,3 +608,78 @@ def test_closing_from_the_tick_thread_does_not_try_to_join_it(dialog):
     dialog.ok()  # must not raise
     assert dialog.selected_files == []
     assert dialog.shown_items == []
+
+
+# --------------------------------------------------------------------------------
+# Tab, and the keys it frees
+
+def test_the_caret_starts_in_the_find_field(dialog):
+    """Whatever the previous dialog was doing, a fresh one is ready to be typed into."""
+    dialog.show_file_dialog()
+    assert dialog._caret_in_listing is False
+
+
+def test_tab_moves_the_caret_to_the_listing_and_back(dialog):
+    dialog.reset_dir(default_path=os.getcwd())
+
+    dialog._handle_key(dpg.mvKey_Tab)
+    assert dialog._caret_in_listing is True
+
+    dialog._handle_key(dpg.mvKey_Tab)
+    assert dialog._caret_in_listing is False
+
+
+def test_left_and_right_belong_to_the_text_caret_until_tab(dialog):
+    """The find field is a single-line entry, so it spends Left and Right on the text.
+
+    They are not unwanted in the listing, they are occupied — which is the whole reason Tab exists, and
+    why the grid could not be fully navigated before it.
+    """
+    dialog.reset_dir(default_path=os.getcwd())
+    dialog._table_cursor.set_current(2)
+
+    dialog._handle_key(dpg.mvKey_Right)
+    dialog._handle_key(dpg.mvKey_Left)
+
+    assert dialog._table_cursor.get_current() == 2
+
+
+def test_tab_frees_left_and_right_for_the_listing(dialog):
+    dialog.reset_dir(default_path=os.getcwd())
+    dialog._table_cursor.set_current(2)
+    dialog._handle_key(dpg.mvKey_Tab)
+
+    dialog._handle_key(dpg.mvKey_Right)
+    assert dialog._table_cursor.get_current() == 3
+
+    dialog._handle_key(dpg.mvKey_Left)
+    assert dialog._table_cursor.get_current() == 2
+
+
+def test_up_and_down_work_from_either_home(dialog):
+    """Only the horizontal pair is contested — a single-line field leaves Up and Down alone throughout."""
+    dialog.reset_dir(default_path=os.getcwd())
+
+    dialog._table_cursor.set_current(2)
+    dialog._handle_key(dpg.mvKey_Down)
+    assert dialog._table_cursor.get_current() == 3
+
+    dialog._handle_key(dpg.mvKey_Tab)
+    dialog._handle_key(dpg.mvKey_Down)
+    assert dialog._table_cursor.get_current() == 4
+
+
+def test_focusing_the_find_field_brings_the_caret_with_it(dialog):
+    """Ctrl+F is a way back to the field, so it has to agree with Tab about where the caret now is.
+
+    The flag and the DPG focus are two records of one fact; a key that moved focus without updating the
+    flag would leave the arrow keys bound to the listing while the user typed into the field.
+    """
+    dialog.reset_dir(default_path=os.getcwd())
+    dialog._handle_key(dpg.mvKey_Tab)
+    assert dialog._caret_in_listing is True
+
+    with mock.patch.object(dpg, "is_key_down", lambda key: key in (dpg.mvKey_LControl,)):
+        dialog._handle_key(dpg.mvKey_F)
+
+    assert dialog._caret_in_listing is False

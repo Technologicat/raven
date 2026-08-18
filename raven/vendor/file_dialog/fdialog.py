@@ -388,6 +388,11 @@ class FileDialog:
         # rebuild: both are constants of the table's styling rather than of its contents, and the rows that
         # could re-measure them are exactly the ones a clipping table may not have drawn.
         self._row_metrics_cache = None
+        # Which of the dialog's two keyboard modes is up: the caret in the find field, or in the listing.
+        # Tab swaps them. Held as a flag rather than derived from `is_item_active` on the field, because
+        # the two are not the same question — the field is inactive whenever anything else has been
+        # clicked, and that must not silently rebind the arrow keys.
+        self._caret_in_listing = False
         self.selec_height = 16
         # The listing's order, held as data rather than as the table's row order. A rebuild reproduces it,
         # which is what lets the listing be re-rendered — re-filtered, or shown a different way — without
@@ -1345,8 +1350,18 @@ class FileDialog:
             ctrl = dpg.is_key_down(dpg.mvKey_LControl) or dpg.is_key_down(dpg.mvKey_RControl)
 
             # TODO (briefs/researchers-night/filedialog-keyboard-brief.md): the rest of the keyboard —
-            # TODO: Tab between field and listing, the focus-parking chords, hidden files.
+            # TODO: the focus-parking chords, hidden files.
             shift = dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)
+
+            # Tab swaps the caret's two homes. ImGui does not spend Tab on an `InputText` — it neither
+            # moves focus nor inserts anything — so the key is ours to define, and this is the only way
+            # to reach the state where the find field is inactive.
+            if key == dpg.mvKey_Tab:
+                if self._caret_in_listing:
+                    self._focus_field()
+                else:
+                    self._focus_listing()
+                return
 
             # Ctrl and a number picks the Nth type filter; add Shift and it picks the Nth sort criterion.
             # One indexed rule for two labelled rows, which is what makes them worth remembering — and what
@@ -1370,6 +1385,14 @@ class FileDialog:
                 nav.navigate_page_up()
             elif key == _KEY_PAGE_DOWN:
                 nav.navigate_page_down()
+            elif key == dpg.mvKey_Left and self._caret_in_listing:
+                # Left and Right are not unwanted while the caret is in the find field, they are
+                # *occupied* — a single-line entry spends them on the text caret. Tab is what frees them,
+                # which is why the grid is only now completely reachable: its rows hold several tiles, so
+                # without a horizontal step every column but the first was unvisitable from the keyboard.
+                nav.navigate_prev()
+            elif key == dpg.mvKey_Right and self._caret_in_listing:
+                nav.navigate_next()
             elif key == dpg.mvKey_Home and not ctrl:
                 nav.navigate_first()
             elif key == dpg.mvKey_End:
@@ -1385,7 +1408,7 @@ class FileDialog:
             elif ctrl and key == dpg.mvKey_Home:
                 self.back_to_default_path()
             elif ctrl and key == dpg.mvKey_F:
-                dpg.focus_item(self.search_field)
+                self._focus_field()
             elif ctrl and key == dpg.mvKey_T:
                 # `T` for Thumbnails, and free to mean it: the type filter gave the letter up when its label
                 # became `Show`, which left the dialog's one unlabelled-by-key control holding the one
@@ -1700,6 +1723,30 @@ class FileDialog:
         dpg.set_item_width(f"target_area_{self.instance_tag}", max(0, width - self._TYPE_FILTER_ROW_TAIL))  # tag
 
     # high-level functions
+    def _focus_field(self) -> None:
+        """Put the caret back in the find field, where typing filters the listing."""
+        self._caret_in_listing = False
+        dpg.focus_item(self.search_field)
+
+    def _focus_listing(self) -> None:
+        """Take the caret out of the find field and give the listing the arrow keys.
+
+        Focus is parked on the OK button rather than on the cursor row, and the two views share that one
+        target. A table row is a selectable and could hold focus itself, but then focus would have to
+        chase the cursor on every move, and in grid view there is nothing to chase — a drawlist has no
+        focusable items, so that view needs a stand-in regardless. One target for both keeps the two
+        views answering to the same code, which is the property that made `TableCursor` worth writing.
+
+        A button is the safe place to park: DPG leaves ImGui's keyboard-nav activation off, so a focused
+        button ignores Space and Enter instead of pressing itself.
+        """
+        # What the move is *for* is deactivating the find field. An active `InputText` owns ImGui's edit
+        # buffer — it reverts programmatic writes on the next frame — and it spends Left and Right on the
+        # text caret. Both stop being true once the field is inactive, which is what makes completion and
+        # the grid's horizontal navigation possible at all.
+        self._caret_in_listing = True
+        dpg.focus_item(self.tag + "_return")  # tag
+
     def show_file_dialog(self):
         # Timed alongside `reset_dir`'s own phases, because "the dialog takes a moment to appear" can mean
         # the listing, or the frame this waits for, and the two have nothing to do with each other. The
@@ -1727,7 +1774,8 @@ class FileDialog:
         if self._grid_mode:
             self._start_grid_ticker()
 
-        dpg.focus_item(self.search_field)
+        # A dialog always opens ready to be typed into, whichever mode the previous one closed in.
+        self._focus_field()
 
     def _stop_grid_ticker(self):
         """Stop the grid's tick thread and wait for it to notice.

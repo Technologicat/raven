@@ -75,6 +75,10 @@
 
 *Constellation-wide*
 
+- **the file dialog can be driven from the keyboard.** Every app that opens a file browser gets this. Arrow keys, Page Up / Page Down and Home / End move a cursor through the listing; **Enter** goes as deep as it can — descending into the directory under the cursor, accepting a file where there is nothing deeper — and **Ctrl+Enter** commits where you are, as the OK button does. A line above the buttons names the path OK would return, and updates as you move.
+  - **Tab moves the caret between the find field and the listing**, which is what frees Left and Right. They are spent on the text caret while you are typing, so until Tab existed the thumbnail view could not be crossed: its rows hold several tiles each, and without a horizontal step every column but the first was unreachable.
+  - **Ctrl+1 … Ctrl+9** pick the Nth offered file type, **Ctrl+Shift+1 … Ctrl+Shift+4** sort by Name, Date, Type or Size — pressing the same one again reverses it — and **Ctrl+T** toggles the thumbnail view. The controls they stand for say so in their tooltips.
+
 - **the file dialog is resizable, and opens larger.** Drag its border when a directory warrants more rows than the default shows; every app that opens a file browser gets this. The new default is chosen so that reaching for the border should be the exception rather than the routine.
   - It will not shrink past the point where its own controls stop fitting — the sort buttons are fixed-width and cannot reflow, so below that size the Thumbnails checkbox would be clipped off the edge.
   - In the thumbnail view, the tiles reflow to fill the new width as you drag.
