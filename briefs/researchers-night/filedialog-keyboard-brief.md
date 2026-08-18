@@ -61,6 +61,7 @@ one sentence rather than a table of special cases.
 | Alt+Up | up one level |
 | Ctrl+Up | up one level, one-handed alias — see below |
 | Alt+Left / Alt+Right | back / forward through where this dialog has been — see below |
+| Ctrl+Left / Ctrl+Right | the same, but only while the caret is in the listing — see below |
 | mouse back / forward | the same, for the mice that have the buttons — see below |
 | Ctrl+Home | back to the default directory (exists) |
 | F5 | refresh (exists) |
@@ -174,13 +175,16 @@ answerable today.
 **Alt+Left and Alt+Right**, which is what a browser and every file manager bind. They pair with Alt+Up
 already being the up key, so one modifier covers the whole navigation cluster.
 
-**Ctrl+Left / Ctrl+Right are not aliases for them, unlike Ctrl+Up.** In a text field those chords mean
-*move the caret by one word*, and the find field is where the caret sits by default — so the alias trick
-that worked for Alt+Up cannot simply be repeated. What is worth considering is binding them **only while
-the caret is in the listing**, where no text field owns them: the dialog already knows which of its two
-homes the caret is in, and Tab already makes Left and Right mean something different on each side of it,
-so this would be the same rule applied to one more pair rather than a new kind of exception. Decide when
-building; the pair is genuinely optional, where Alt+Left / Alt+Right is not.
+**Ctrl+Left / Ctrl+Right join them, but only while the caret is in the listing.** Settled 2026-08-18
+(Juha). They cannot be unconditional aliases the way Ctrl+Up is: in a text field those chords mean *move
+the caret by one word*, and the find field is where the caret sits by default. But the boundary that would
+gate them is not a new one — Tab already makes bare Left and Right mean the text caret on one side and the
+listing cursor on the other, so a pair that also depends on which side the caret is on is the established
+rule reaching one step further, not an exception carved for it.
+
+The implementation consequence is the same one Ctrl+Up had: the listing's bare Left / Right branch does not
+currently test for Ctrl, so it would swallow the chord. The modified form has to be checked first, exactly
+as `Alt+Up` / `Ctrl+Up` is checked ahead of bare Up.
 
 **The mouse's back and forward buttons, if they arrive.** DPG exposes them — `mvMouseButton_X1` (3) and
 `mvMouseButton_X2` (4), alongside Left/Right/Middle, with `add_mouse_click_handler` taking a button — so
