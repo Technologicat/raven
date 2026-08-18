@@ -754,7 +754,7 @@ class FileDialog:
             dpg.set_value(self.combo_file_filter, self.file_filter)  # keep the GUI in sync when called programmatically
             dpg.set_value(self.text_file_filter_extensions, _describe_type_filter(self.file_filter))
             _apply_automatic_grid_mode(rebuild=False)  # the listing is about to be rebuilt anyway
-            reset_dir(default_path=os.getcwd())
+            reset_dir()
         self.set_type_filter = set_type_filter  # needs to be accessible from the outside; uses closure data from this scope, so shouldn't be injected as an instance method (on the class); inject as a regular function *on the instance*.
 
         def set_filter_list(filter_list, file_filter=None):
@@ -780,7 +780,7 @@ class FileDialog:
             # rendered frame", which is False for a window shown microseconds ago and False always with no
             # render loop. The question here is whether a listing exists to be brought up to date.
             if dpg.get_item_configuration(self.tag)["show"]:  # tag
-                reset_dir(default_path=os.getcwd())
+                reset_dir()
         self.set_filter_list = set_filter_list  # instance-injected for the same reason as `set_type_filter` above.
 
         def filter_combo_selector(sender, app_data):
@@ -789,23 +789,24 @@ class FileDialog:
         def chdir(path):
             try:
                 os.chdir(path)
-                cwd = os.getcwd()
-                reset_dir(default_path=cwd)
+                reset_dir()
             except PermissionError as e:
                 message_box("File dialog - PerimssionError", f"Cannot open the folder because is a system folder or the access is denied\n\nMore info:\n{e}")
             except NotADirectoryError as e:
                 message_box("File dialog - not a directory", f"The selected item is not a directory, but a file.\n\nMore info:\n{e}")
         self.chdir = chdir  # needs to be accessible from the outside; uses closure data from this scope, so shouldn't be injected as an instance method (on the class); inject as a regular function *on the instance*.
 
-        def reset_dir(file_name_filter=None, default_path=self.default_path):
-            """Rebuild the listing from `default_path`, optionally narrowed to `file_name_filter`.
+        def reset_dir(file_name_filter=None):
+            """Rebuild the listing of the working directory, optionally narrowed to `file_name_filter`.
 
             This *lists*; it does not navigate. Going somewhere is `chdir`, which moves the process and
-            then calls this. So `default_path` should be the current working directory in all but the
-            initial build — `ok` and the target notification answer from `os.getcwd()`, and a listing of
-            one directory beside a working directory of another is a dialog that shows you A and hands
-            back B.
+            then calls this — so there is no directory to pass, and deliberately no way to pass one.
+            `ok` and the target notification both answer from `os.getcwd()`, so a listing of one directory
+            beside a working directory of another would be a dialog that shows you A and hands back B.
+            Every caller already passed the working directory; the parameter's only remaining power was to
+            make that mismatch expressible.
             """
+            default_path = os.getcwd()
             logger.debug(f"reset_dir: instance '{self.tag}' ({self.instance_tag}), called with file_name_filter = {file_name_filter}, default_path = '{str(default_path)}'")
             # Phase timings, so a slow open says *which* phase is slow rather than only that it was. Reading
             # the directory, deleting the old rows and creating the new ones have entirely different fixes,
@@ -1832,7 +1833,7 @@ class FileDialog:
     def refresh(self):
         cwd = os.getcwd()
         logger.debug(f"refresh: instance '{self.tag}' ({self.instance_tag}), refreshing at cwd = '{cwd}'")
-        self.reset_dir(default_path=cwd)
+        self.reset_dir()
         # Raven: Acknowledge the action in the GUI.
         gui_animation.animator.add(gui_animation.WidgetFlash(message="",
                                                              target=self.button_refresh,
@@ -1852,7 +1853,7 @@ class FileDialog:
 
     def _update_search(self):
         res = dpg.get_value(f"ex_search_{self.instance_tag}")
-        self.reset_dir(default_path=os.getcwd(), file_name_filter=res)
+        self.reset_dir(file_name_filter=res)
 
     def ok(self):
         """Close dialog and accept currently selected files.

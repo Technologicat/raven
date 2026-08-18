@@ -149,7 +149,7 @@ def test_a_lone_subfolder_is_not_picked_for_you(make_dialog, tmp_path):
     """
     (tmp_path / "the_only_album").mkdir()
     d = make_dialog(pick="dir")
-    d.reset_dir(default_path=str(tmp_path))
+    d.reset_dir()
     assert d._effective_target() == os.getcwd()
 
 
@@ -158,7 +158,7 @@ def test_narrowing_to_one_folder_does_pick_it(make_dialog, tmp_path):
     (tmp_path / "alpha").mkdir()
     (tmp_path / "beta").mkdir()
     d = make_dialog(pick="dir")
-    d.reset_dir(file_name_filter="alph", default_path=str(tmp_path))
+    d.reset_dir(file_name_filter="alph")
     assert os.path.basename(d._effective_target()) == "alpha"
 
 
@@ -167,7 +167,7 @@ def test_a_file_picker_promises_nothing(make_dialog, tmp_path):
     question rather than an answer, and the line that reports it is not shown at all."""
     (tmp_path / "only.txt").write_text("x")
     d = make_dialog()
-    d.reset_dir(default_path=str(tmp_path))
+    d.reset_dir()
     assert d._effective_target() is None
 
 
@@ -234,23 +234,23 @@ def test_a_filter_may_name_a_multi_part_suffix(dialog):
 def test_an_extension_absent_from_the_directory_shows_nothing(dialog):
     """Guards against a filter that silently degrades to the catch-all when nothing matches."""
     dialog.set_type_filter("Images")
-    dialog.reset_dir(file_name_filter="notes", default_path=os.getcwd())
+    dialog.reset_dir(file_name_filter="notes")
     assert shown(dialog) == []
 
 
 def test_find_field_is_case_insensitive_for_a_lowercase_query(dialog):
-    dialog.reset_dir(file_name_filter="jpg", default_path=os.getcwd())
+    dialog.reset_dir(file_name_filter="jpg")
     assert shown(dialog) == ["scan.JPG"]
 
 
 def test_find_field_is_case_sensitive_for_a_query_with_uppercase(dialog):
-    dialog.reset_dir(file_name_filter="PHOTO", default_path=os.getcwd())
+    dialog.reset_dir(file_name_filter="PHOTO")
     assert shown(dialog) == []
 
 
 def test_find_field_ands_fragments_in_any_order(dialog):
     """The Find field is wired to the shared incremental fragment search, not a plain substring test."""
-    dialog.reset_dir(file_name_filter="pdf pa", default_path=os.getcwd())
+    dialog.reset_dir(file_name_filter="pdf pa")
     assert shown(dialog) == ["paper.pdf"]
 
 
@@ -309,7 +309,7 @@ def test_replacing_the_filter_list_leaves_an_explicit_save_extension_alone(make_
 def test_find_field_and_type_filter_compose(dialog):
     """Two independent concerns; a row has to survive both."""
     dialog.set_type_filter("Images")
-    dialog.reset_dir(file_name_filter="o", default_path=os.getcwd())
+    dialog.reset_dir(file_name_filter="o")
     assert shown(dialog) == ["photo.png"]  # "notes.md" also contains "o", but is not an image
 
 
@@ -345,7 +345,7 @@ def test_cancelling_does_not_rebuild_the_listing(dialog, monkeypatch):
 def test_accepting_does_not_rebuild_the_listing(dialog, monkeypatch):
     """The `ok` path used to rebuild twice, so it cost twice what cancelling did."""
     dpg.show_item(dialog.tag)
-    dialog.reset_dir(file_name_filter="photo", default_path=os.getcwd())  # narrow to one, which `ok` accepts
+    dialog.reset_dir(file_name_filter="photo")  # narrow to one, which `ok` accepts
     calls = count_rebuilds(dialog, monkeypatch)
     dialog.ok()
     assert calls == []
@@ -354,7 +354,7 @@ def test_accepting_does_not_rebuild_the_listing(dialog, monkeypatch):
 def test_closing_forgets_the_selection(dialog):
     """Whatever the close skips, it may not leave stale state for the next `ok` to act on."""
     dpg.show_item(dialog.tag)
-    dialog.reset_dir(file_name_filter="photo", default_path=os.getcwd())
+    dialog.reset_dir(file_name_filter="photo")
     dialog.ok()
     assert dialog.selected_files == []
     assert dialog.shown_items == []
@@ -564,11 +564,11 @@ def test_the_selection_survives_a_view_switch(dialog):
 def test_the_selection_survives_a_find_field_keystroke(dialog):
     """A rebuild per keystroke must not quietly unselect what the user picked a moment ago."""
     dialog.set_type_filter(".*")
-    dialog.reset_dir(default_path=os.getcwd())
+    dialog.reset_dir()
     chosen = os.path.join(os.getcwd(), "photo.png")
     dialog.selected_files.append(chosen)
 
-    dialog.reset_dir(file_name_filter="photo", default_path=os.getcwd())  # still matches
+    dialog.reset_dir(file_name_filter="photo")  # still matches
 
     assert dialog.selected_files == [chosen]
 
@@ -580,10 +580,10 @@ def test_a_selection_filtered_out_of_the_listing_is_dropped(dialog):
     no longer see and may have forgotten choosing.
     """
     dialog.set_type_filter(".*")
-    dialog.reset_dir(default_path=os.getcwd())
+    dialog.reset_dir()
     dialog.selected_files.append(os.path.join(os.getcwd(), "photo.png"))
 
-    dialog.reset_dir(file_name_filter="notes", default_path=os.getcwd())  # no longer matches
+    dialog.reset_dir(file_name_filter="notes")  # no longer matches
 
     assert dialog.selected_files == []
 
@@ -604,7 +604,7 @@ def test_closing_from_the_tick_thread_does_not_try_to_join_it(dialog):
     """
     dpg.show_item(dialog.tag)
     dialog._ticker = threading.current_thread()  # stand in for being called from the ticker
-    dialog.reset_dir(file_name_filter="photo", default_path=os.getcwd())
+    dialog.reset_dir(file_name_filter="photo")
     dialog.ok()  # must not raise
     assert dialog.selected_files == []
     assert dialog.shown_items == []
@@ -620,7 +620,7 @@ def test_the_caret_starts_in_the_find_field(dialog):
 
 
 def test_tab_moves_the_caret_to_the_listing_and_back(dialog):
-    dialog.reset_dir(default_path=os.getcwd())
+    dialog.reset_dir()
 
     dialog._handle_key(dpg.mvKey_Tab)
     assert dialog._caret_in_listing is True
@@ -635,7 +635,7 @@ def test_left_and_right_belong_to_the_text_caret_until_tab(dialog):
     They are not unwanted in the listing, they are occupied — which is the whole reason Tab exists, and
     why the grid could not be fully navigated before it.
     """
-    dialog.reset_dir(default_path=os.getcwd())
+    dialog.reset_dir()
     dialog._table_cursor.set_current(2)
 
     dialog._handle_key(dpg.mvKey_Right)
@@ -645,7 +645,7 @@ def test_left_and_right_belong_to_the_text_caret_until_tab(dialog):
 
 
 def test_tab_frees_left_and_right_for_the_listing(dialog):
-    dialog.reset_dir(default_path=os.getcwd())
+    dialog.reset_dir()
     dialog._table_cursor.set_current(2)
     dialog._handle_key(dpg.mvKey_Tab)
 
@@ -658,7 +658,7 @@ def test_tab_frees_left_and_right_for_the_listing(dialog):
 
 def test_up_and_down_work_from_either_home(dialog):
     """Only the horizontal pair is contested — a single-line field leaves Up and Down alone throughout."""
-    dialog.reset_dir(default_path=os.getcwd())
+    dialog.reset_dir()
 
     dialog._table_cursor.set_current(2)
     dialog._handle_key(dpg.mvKey_Down)
@@ -675,7 +675,7 @@ def test_focusing_the_find_field_brings_the_caret_with_it(dialog):
     The flag and the DPG focus are two records of one fact; a key that moved focus without updating the
     flag would leave the arrow keys bound to the listing while the user typed into the field.
     """
-    dialog.reset_dir(default_path=os.getcwd())
+    dialog.reset_dir()
     dialog._handle_key(dpg.mvKey_Tab)
     assert dialog._caret_in_listing is True
 
@@ -748,7 +748,7 @@ def test_enter_on_a_choosable_file_accepts_it(dialog):
     """A file in a file picker is the bottom, so accepting it *is* the deepest available move."""
     chosen = []
     dialog.change_callback(lambda paths: chosen.append(paths))
-    dialog.reset_dir(default_path=os.getcwd())
+    dialog.reset_dir()
 
     cursor_onto(dialog, "photo.png")
     dialog._handle_key(dpg.mvKey_Return)
@@ -765,7 +765,7 @@ def test_enter_on_scenery_declines(make_dialog, tmp_path):
     (tmp_path / "photo.png").touch()
     chosen = []
     dialog = make_dialog(pick="dir-with-contents", callback=lambda paths: chosen.append(paths))
-    dialog.reset_dir(default_path=str(tmp_path))
+    dialog.reset_dir()
 
     cursor_onto(dialog, "photo.png")
     dialog._handle_key(dpg.mvKey_Return)
@@ -779,7 +779,7 @@ def test_ctrl_enter_declines_to_descend(make_dialog, tmp_path):
     (tmp_path / "album").mkdir()
     chosen = []
     dialog = make_dialog(pick="dir", callback=lambda paths: chosen.append(paths))
-    dialog.reset_dir(default_path=str(tmp_path))
+    dialog.reset_dir()
 
     cursor_onto(dialog, "album")
     with mock.patch.object(dpg, "is_key_down", lambda key: key in (dpg.mvKey_LControl,)):
@@ -800,7 +800,7 @@ def test_enter_with_no_cursor_falls_back_to_the_ok_button(make_dialog, tmp_path)
     """
     chosen = []
     dialog = make_dialog(pick="dir", callback=lambda paths: chosen.append(paths))
-    dialog.reset_dir(default_path=str(tmp_path))
+    dialog.reset_dir()
     dialog._row_entries.clear()
 
     dialog._handle_key(dpg.mvKey_Return)
