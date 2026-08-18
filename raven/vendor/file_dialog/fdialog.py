@@ -892,43 +892,15 @@ class FileDialog:
             self.selected_files.append(entry.path)
             self.ok()
 
-        def set_grid_mode(enabled, remember=True, rebuild=True):
-            """Switch between the table and the thumbnail grid.
-
-            `remember`: whether this counts as the user's own choice, which then overrides the automatic
-            switching until they choose again. The automatic path passes `False`.
-            `rebuild`: whether to re-list into the new view. `False` where the caller is about to re-list
-            anyway, so a filter change does not build the listing twice.
-
-            **Switching views changes nothing else**: the sort order is app state that a view switch does
-            not touch, and the cursor is re-anchored by path on every rebuild, a view switch included.
-            """
-            enabled = bool(enabled) and self._grid_is_available()
-            if remember:
-                self._grid_mode_chosen_by_user = True
-            if enabled == self._grid_mode:
-                dpg.set_value(self.checkbox_thumbnails, enabled)  # in case a refused request left it on
-                return
-            self._grid_mode = enabled
-            dpg.set_value(self.checkbox_thumbnails, enabled)
-            dpg.configure_item(f"grid_host_{self.instance_tag}", show=enabled)  # tag
-            dpg.configure_item(f"explorer_{self.instance_tag}", show=not enabled)  # tag
-            if enabled:
-                self._resize_grid()
-                if self.is_visible():
-                    self._start_grid_ticker()
-            if rebuild:
-                self._update_search()  # rebuild into the view that is now on screen
-        self.set_grid_mode = set_grid_mode  # instance-injected for the same reason as `set_type_filter` above.
 
         def _thumbnails_checkbox_callback(sender, app_data):
-            set_grid_mode(app_data)
+            self.set_grid_mode(app_data)
 
         def _apply_automatic_grid_mode(rebuild=True):
             """Turn the grid on for an image-typed filter, unless the user has said otherwise."""
             if self._grid_mode_chosen_by_user:
                 return
-            set_grid_mode(self._filter_is_image_typed(self.file_filter), remember=False, rebuild=rebuild)
+            self.set_grid_mode(self._filter_is_image_typed(self.file_filter), remember=False, rebuild=rebuild)
 
         def _reset_grid_mode_for_opening():
             """Forget a hand-set view, so the automatic rule gets to decide again. Called on each opening.
@@ -946,7 +918,7 @@ class FileDialog:
             """
             self._grid_mode_chosen_by_user = (self._show_thumbnails_default is not None)
             if self._show_thumbnails_default is not None:
-                set_grid_mode(self._show_thumbnails_default, remember=True, rebuild=False)
+                self.set_grid_mode(self._show_thumbnails_default, remember=True, rebuild=False)
             else:
                 _apply_automatic_grid_mode(rebuild=False)
         self._reset_grid_mode_for_opening = _reset_grid_mode_for_opening  # instance-injected, as `set_type_filter` above.
@@ -961,39 +933,10 @@ class FileDialog:
 
 
 
-        def _scroll_row_into_view(idx):
-            """Move the least that puts row `idx` on screen, and nothing at all when it already is.
-
-            Scrolling only when the row is outside the visible band is what keeps arrow navigation from
-            yanking the listing on every keypress.
-            """
-            extent = self._row_extent(idx)
-            height = self._view_height()
-            table = f"explorer_{self.instance_tag}"  # tag
-            if extent is None or not height:
-                logger.debug(f"_scroll_row_into_view: instance '{self.tag}' ({self.instance_tag}), "
-                             f"row {idx}: no geometry (extent={extent}, view height={height})")
-                return
-            row_top, row_height = extent
-            with guiutils.nonexistent_ok():
-                view_top = dpg.get_y_scroll(table)
-                if row_top < view_top:
-                    new_top = row_top
-                elif row_top + row_height > view_top + height:
-                    new_top = row_top + row_height - height
-                else:
-                    logger.debug(f"_scroll_row_into_view: instance '{self.tag}' ({self.instance_tag}), "
-                                 f"row {idx} at {row_top}+{row_height} already inside "
-                                 f"{view_top}..{view_top + height}, not scrolling")
-                    return
-                logger.debug(f"_scroll_row_into_view: instance '{self.tag}' ({self.instance_tag}), "
-                             f"row {idx} at {row_top}+{row_height}, view {view_top}..{view_top + height}, "
-                             f"scrolling to {max(0.0, float(new_top))}")
-                dpg.set_y_scroll(table, max(0.0, float(new_top)))
 
 
         self._table_cursor = TableCursor(on_paint=self._paint_row,
-                                         on_scroll_into_view=_scroll_row_into_view,
+                                         on_scroll_into_view=self._scroll_row_into_view,
                                          page_size=self._rows_per_page,
                                          # The promised target follows the cursor now, so it has to be
                                          # rewritten whenever the cursor moves — including by a rebuild.
@@ -1105,7 +1048,7 @@ class FileDialog:
                 # picker listing no files has nothing to make tiles of — since the checkbox is hidden there
                 # too and a key that acts where its control is invisible is worse than one that does not.
                 if self._grid_is_available():
-                    set_grid_mode(not self._grid_mode)
+                    self.set_grid_mode(not self._grid_mode)
         self._handle_key = _handle_key  # instance-injected, as above.
 
         # main file dialog header
@@ -1706,6 +1649,63 @@ class FileDialog:
         self._sort_descending = descending
         self._draw_sort_indicators()
         self._update_search()  # re-lists the current directory under the current find query
+
+    def _scroll_row_into_view(self, idx):
+        """Move the least that puts row `idx` on screen, and nothing at all when it already is.
+
+        Scrolling only when the row is outside the visible band is what keeps arrow navigation from
+        yanking the listing on every keypress.
+        """
+        extent = self._row_extent(idx)
+        height = self._view_height()
+        table = f"explorer_{self.instance_tag}"  # tag
+        if extent is None or not height:
+            logger.debug(f"_scroll_row_into_view: instance '{self.tag}' ({self.instance_tag}), "
+                         f"row {idx}: no geometry (extent={extent}, view height={height})")
+            return
+        row_top, row_height = extent
+        with guiutils.nonexistent_ok():
+            view_top = dpg.get_y_scroll(table)
+            if row_top < view_top:
+                new_top = row_top
+            elif row_top + row_height > view_top + height:
+                new_top = row_top + row_height - height
+            else:
+                logger.debug(f"_scroll_row_into_view: instance '{self.tag}' ({self.instance_tag}), "
+                             f"row {idx} at {row_top}+{row_height} already inside "
+                             f"{view_top}..{view_top + height}, not scrolling")
+                return
+            logger.debug(f"_scroll_row_into_view: instance '{self.tag}' ({self.instance_tag}), "
+                         f"row {idx} at {row_top}+{row_height}, view {view_top}..{view_top + height}, "
+                         f"scrolling to {max(0.0, float(new_top))}")
+            dpg.set_y_scroll(table, max(0.0, float(new_top)))
+    def set_grid_mode(self, enabled, remember=True, rebuild=True):
+        """Switch between the table and the thumbnail grid.
+
+        `remember`: whether this counts as the user's own choice, which then overrides the automatic
+        switching until they choose again. The automatic path passes `False`.
+        `rebuild`: whether to re-list into the new view. `False` where the caller is about to re-list
+        anyway, so a filter change does not build the listing twice.
+
+        **Switching views changes nothing else**: the sort order is app state that a view switch does
+        not touch, and the cursor is re-anchored by path on every rebuild, a view switch included.
+        """
+        enabled = bool(enabled) and self._grid_is_available()
+        if remember:
+            self._grid_mode_chosen_by_user = True
+        if enabled == self._grid_mode:
+            dpg.set_value(self.checkbox_thumbnails, enabled)  # in case a refused request left it on
+            return
+        self._grid_mode = enabled
+        dpg.set_value(self.checkbox_thumbnails, enabled)
+        dpg.configure_item(f"grid_host_{self.instance_tag}", show=enabled)  # tag
+        dpg.configure_item(f"explorer_{self.instance_tag}", show=not enabled)  # tag
+        if enabled:
+            self._resize_grid()
+            if self.is_visible():
+                self._start_grid_ticker()
+        if rebuild:
+            self._update_search()  # rebuild into the view that is now on screen
 
     def _navigator(self):
         """Whichever view is on screen, as the thing that answers to `navigate_*`.
