@@ -21,14 +21,18 @@ the signal to go simplify the handlers rather than a defect to work around.
 These tests map a real window, because focus is only meaningful once frames are rendering, and
 `dpg.render_dearpygui_frame()` aborts the process when there is nothing to render into. Mapping a window
 takes keyboard focus from whatever the developer is typing into, so they are marked `gui` and skipped unless
-`--run-gui` is passed. Nothing here synthesizes input; the window is on screen for well under a second.
+`--run-gui` is passed. The window is on screen for well under a second.
 
-One test here does synthesize input, and says so in its name. That a focused button ignores Space and Enter
-— DPG leaves ImGui's keyboard-nav activation off — is what makes a button a safe place to park focus, and
-`FileDialog` now parks there whenever Tab hands the arrow keys to its listing. An assumption load-bearing
-enough to be worth the intrusion: it is an upstream default nothing in DPG's API exposes for inspection, so
-behaviour is the only place it can be read. Should it ever flip, the failure would be a file dialog that
-saves a file when the user meant to step sideways.
+Most of these only read focus state back. Two synthesize key presses, and say so in their names: that a
+focused button ignores Space and Enter — DPG leaves ImGui's keyboard-nav activation off — is what makes a
+button a safe place to park focus, and `FileDialog` now parks there whenever Tab hands the arrow keys to
+its listing. An assumption load-bearing enough to be worth the intrusion: it is an upstream default nothing
+in DPG's API exposes for inspection, so behaviour is the only place it can be read.
+
+Should it ever flip, the key that breaks is **Enter**, not the arrows the parking was done for. Enter means
+*descend into the folder under the cursor* there, and a focused OK button would answer it too — so the
+dialog would commit and close instead of stepping into the directory, which in save mode means writing a
+file. The arrow keys would be unaffected; a button has nothing to do with them either way.
 """
 
 import shutil
