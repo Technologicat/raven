@@ -40,12 +40,15 @@ _KEY_PAGE_DOWN = 518
 # on every platform, so a label that differs from the folder names a directory the panel will not open.
 # `Pictures` was labelled "Images" and pointed at `~/Pictures`, which is what Linux, macOS and Windows all
 # call it.
+# Home leads, being where the others live; the rest are alphabetical, case-insensitively. Upstream's order
+# was neither, and a list a reader cannot predict is one they have to scan every time. `test_the_places_are_
+# ordered_predictably` holds this, so an addition cannot quietly land in the wrong row.
 _PLACES = [("Home", "img_home"),
            ("Desktop", "img_desktop"),
-           ("Downloads", "img_downloads"),
-           ("Pictures", "img_picture_folder"),
            ("Documents", "img_document_folder"),
+           ("Downloads", "img_downloads"),
            ("Music", "img_music_folder"),
+           ("Pictures", "img_picture_folder"),
            ("Videos", "img_videos")]
 
 
@@ -795,6 +798,14 @@ class FileDialog:
         self.chdir = chdir  # needs to be accessible from the outside; uses closure data from this scope, so shouldn't be injected as an instance method (on the class); inject as a regular function *on the instance*.
 
         def reset_dir(file_name_filter=None, default_path=self.default_path):
+            """Rebuild the listing from `default_path`, optionally narrowed to `file_name_filter`.
+
+            This *lists*; it does not navigate. Going somewhere is `chdir`, which moves the process and
+            then calls this. So `default_path` should be the current working directory in all but the
+            initial build — `ok` and the target notification answer from `os.getcwd()`, and a listing of
+            one directory beside a working directory of another is a dialog that shows you A and hands
+            back B.
+            """
             logger.debug(f"reset_dir: instance '{self.tag}' ({self.instance_tag}), called with file_name_filter = {file_name_filter}, default_path = '{str(default_path)}'")
             # Phase timings, so a slow open says *which* phase is slow rather than only that it was. Reading
             # the directory, deleting the old rows and creating the new ones have entirely different fixes,
@@ -1942,7 +1953,10 @@ class FileDialog:
         global visible_dialog_instance
         visible_dialog_instance = None
         if self.callback is not None:
-            self.callback(self.selected_files)
+            # A copy, because `_forget_listing` below clears `selected_files` — so a callback that *stored*
+            # what it was handed, rather than reading it immediately, found the list empty by the time it
+            # looked. The receiver owns what it is given.
+            self.callback(list(self.selected_files))
         dpg.set_value(f"ex_search_{self.instance_tag}", "")  # clear the search when exiting
         self.last_path = os.getcwd()  # update remembered path when the dialog is closed with OK
         self._forget_listing()  # after the callback, which was handed `selected_files`

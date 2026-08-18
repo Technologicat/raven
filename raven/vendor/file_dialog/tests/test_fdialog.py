@@ -21,7 +21,7 @@ import pytest
 dpg = pytest.importorskip("dearpygui.dearpygui", reason="dearpygui not installed")
 
 from raven.common import filelisting  # noqa: E402 -- after importorskip by design
-from raven.vendor.file_dialog.fdialog import FileDialog, _normalize_filter  # noqa: E402 -- after importorskip by design
+from raven.vendor.file_dialog.fdialog import FileDialog, _PLACES, _normalize_filter  # noqa: E402 -- after importorskip by design
 
 
 def test_normalize_bare_string_is_its_own_label():
@@ -683,3 +683,126 @@ def test_focusing_the_find_field_brings_the_caret_with_it(dialog):
         dialog._handle_key(dpg.mvKey_F)
 
     assert dialog._caret_in_listing is False
+
+
+# --------------------------------------------------------------------------------
+# The places panel
+
+def test_the_places_are_ordered_predictably():
+    """Home first, then the rest alphabetically, case-insensitively.
+
+    Upstream's order was neither, and nothing enforced one — so this exists to catch an addition landing
+    wherever it was typed rather than where a reader will look for it.
+    """
+    labels = [label for label, _icon in _PLACES]
+    assert labels[0] == "Home"
+    assert labels[1:] == sorted(labels[1:], key=str.casefold)
+
+
+def test_every_place_names_an_icon_the_dialog_has(dialog):
+    """The icon is reached by `getattr`, so a typo would be an `AttributeError` while building the panel."""
+    for label, icon in _PLACES:
+        assert hasattr(dialog, icon), f"place '{label}' names a missing icon attribute '{icon}'"
+
+
+# --------------------------------------------------------------------------------
+# Enter: "go as deep as this entry allows"
+#
+# The governing rule of the whole keyboard design, and until now checked only by hand. Each test names the
+# case of the rule it covers, so a failure says which half of the sentence broke.
+
+def cursor_onto(dialog, basename):
+    """Put the keyboard cursor on the row for `basename`, and return its index."""
+    for idx, entry in enumerate(dialog._row_entries):
+        if os.path.basename(entry.path) == basename or entry.name == basename:
+            dialog._table_cursor.set_current(idx)
+            return idx
+    raise AssertionError(f"no row named '{basename}' in {[e.name for e in dialog._row_entries]}")
+
+
+def test_enter_on_a_directory_descends_into_it(make_dialog, tmp_path):
+    # Navigation is `chdir`; the constructor has already put us in `tmp_path`. Calling `reset_dir` with a
+    # different directory would list that one without moving there, which is not a state the app reaches.
+    (tmp_path / "album").mkdir()
+    dialog = make_dialog(pick="file")
+
+    cursor_onto(dialog, "album")
+    dialog._handle_key(dpg.mvKey_Return)
+
+    assert os.path.realpath(os.getcwd()) == os.path.realpath(tmp_path / "album")
+
+
+def test_enter_on_the_parent_entry_goes_up(make_dialog, tmp_path):
+    (tmp_path / "album").mkdir()
+    dialog = make_dialog(pick="file")
+    dialog.chdir(str(tmp_path / "album"))
+    assert os.path.realpath(os.getcwd()) == os.path.realpath(tmp_path / "album"), "precondition: we are inside"
+
+    cursor_onto(dialog, "..")
+    dialog._handle_key(dpg.mvKey_Return)
+
+    assert os.path.realpath(os.getcwd()) == os.path.realpath(tmp_path)
+
+
+def test_enter_on_a_choosable_file_accepts_it(dialog):
+    """A file in a file picker is the bottom, so accepting it *is* the deepest available move."""
+    chosen = []
+    dialog.change_callback(lambda paths: chosen.append(paths))
+    dialog.reset_dir(default_path=os.getcwd())
+
+    cursor_onto(dialog, "photo.png")
+    dialog._handle_key(dpg.mvKey_Return)
+
+    assert chosen and [os.path.basename(p) for p in chosen[0]] == ["photo.png"]
+
+
+def test_enter_on_scenery_declines(make_dialog, tmp_path):
+    """A file in a folder picker is shown so the folder can be judged by it, and Enter does nothing to it.
+
+    The dialog must stay open and return nothing — the failure this guards against is a folder picker that
+    hands back a file because the cursor happened to rest on one.
+    """
+    (tmp_path / "photo.png").touch()
+    chosen = []
+    dialog = make_dialog(pick="dir-with-contents", callback=lambda paths: chosen.append(paths))
+    dialog.reset_dir(default_path=str(tmp_path))
+
+    cursor_onto(dialog, "photo.png")
+    dialog._handle_key(dpg.mvKey_Return)
+
+    assert chosen == []
+    assert dialog.selected_files == []
+
+
+def test_ctrl_enter_declines_to_descend(make_dialog, tmp_path):
+    """The counterpart rule: Ctrl+Enter commits here, even with a directory under the cursor."""
+    (tmp_path / "album").mkdir()
+    chosen = []
+    dialog = make_dialog(pick="dir", callback=lambda paths: chosen.append(paths))
+    dialog.reset_dir(default_path=str(tmp_path))
+
+    cursor_onto(dialog, "album")
+    with mock.patch.object(dpg, "is_key_down", lambda key: key in (dpg.mvKey_LControl,)):
+        dialog._handle_key(dpg.mvKey_Return)
+
+    assert os.path.realpath(os.getcwd()) == os.path.realpath(tmp_path), "Ctrl+Enter must not descend"
+    assert chosen and os.path.realpath(chosen[0][0]) == os.path.realpath(tmp_path / "album")
+
+
+def test_enter_with_no_cursor_falls_back_to_the_ok_button(make_dialog, tmp_path):
+    """With nothing under the cursor, Enter means whatever OK would have meant.
+
+    A defensive branch rather than a routine one: every real listing contains `..`, and `set_current`
+    refuses an out-of-range index, so the cursor cannot be moved off the rows once they exist. The state
+    is therefore staged here by emptying the rows — which is what a dialog looks like before its first
+    listing is built. The branch is worth keeping and worth pinning; a bare `ok()` is the right answer to
+    "act on the cursor" when there is no cursor, and the alternative is an `IndexError` on a rare path.
+    """
+    chosen = []
+    dialog = make_dialog(pick="dir", callback=lambda paths: chosen.append(paths))
+    dialog.reset_dir(default_path=str(tmp_path))
+    dialog._row_entries.clear()
+
+    dialog._handle_key(dpg.mvKey_Return)
+
+    assert chosen and os.path.realpath(chosen[0][0]) == os.path.realpath(tmp_path)

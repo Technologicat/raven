@@ -54,7 +54,6 @@ logger.info("Loading libraries...")
 from unpythonic import timer
 with timer() as tim:
     import concurrent.futures
-    from copy import deepcopy
     import math
     import os
     import pathlib
@@ -370,7 +369,7 @@ def _open_import_callback(selected_files):
     app_state.exit_modal_mode()
     if selected_files:
         logger.debug(f"_open_import_callback: User selected the file(s) {selected_files}.")
-        importer_input_files_box << deepcopy(selected_files)  # Make a copy of the filename list, so that the GUI dialog can clear its own list without affecting ours.
+        importer_input_files_box << selected_files  # the dialog hands over a list of its own, so this one is ours to keep
         update_open_import_gui_table()
     else:  # empty selection -> cancelled
         logger.debug("_open_import_callback: Cancelled.")
