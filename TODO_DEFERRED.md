@@ -13,7 +13,23 @@ importer first. Recorded here rather than in that item because a trigger nobody 
 the tool for finding things in the backlog cannot be gated on someone remembering to look for it *in* the
 backlog. The recurring moment to ask is the triage step in the release procedure.
 
+## Anonymous lambdas where a named callable exists
+
+`operator.attrgetter` / `itemgetter` for `key=` and similar, `unpythonic.namelambda` where a lambda is
+genuinely the right shape but wants a name in a traceback. Found one in `librarian/cleanup.py` while
+renaming a getter — `key=lambda entry: entry.sort_key` where `attrgetter("sort_key")` says it exactly —
+and there are likely more of the same shape across the tree.
+
+Worth a grep for `lambda` in `key=`, `sort`, `sorted`, `min`, `max` and callback arguments, then judging
+each: an anonymous lambda is not wrong, it is just usually not the clearest thing available.
+
+*Cluster: hygiene-sweep · Cost: S · Gate: none · Filed: 2026-08-18*
+
+Discovered during the getter/property sweep (2026-08-18).
+
 ## FileDialog: the path field flashes blue on every Tab
+
+*Cluster: filedialog · Cost: ? · Gate: none; cosmetic, nothing acts on it · Filed: 2026-08-18 · See also: `investigations/dpg-focus/`*
 
 Pressing Tab makes the path field go *active* for 25–100 ms before focus settles on its intended target.
 Active means the caret, which fires DPG's focus-selects-all, which paints the text blue — a flash in a
@@ -36,6 +52,8 @@ on the ruled-out premise, so it is not the quick win it looked like.
 Discovered during the FileDialog keyboard work (2026-08-18).
 
 ## Docstrings that describe a previous version, or argue a design choice at the caller
+
+*Cluster: hygiene-sweep · Cost: L · Gate: none; wants the `agent.py` triage first · Filed: 2026-08-18*
 
 Two related lapses against the rule that a docstring describes the code as it is now and serves the
 *caller*, while a design rationale serves the maintainer and belongs in a comment at the code: docstrings
