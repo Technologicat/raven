@@ -292,7 +292,7 @@ class FileDialog:
         tag="file_dialog",
         width=1400,
         height=820,
-        min_size=(900, 400),
+        min_size=(960, 400),
         pick="file",
         save_mode=False,
         default_file_extension=None,
@@ -322,10 +322,11 @@ class FileDialog:
                                     viewport in the constellation.
             height:                 int, File dialog window height (pixels).
             min_size:               (int, int), File dialog minimum size. The floor exists because the sort
-                                    row is fixed-width buttons that cannot reflow: below roughly 800 px the
-                                    Thumbnails checkbox is clipped off the right edge. Measured at
+                                    row is fixed-width buttons that cannot reflow: below 945 px of window
+                                    width the rightmost checkbox is clipped off the edge. Measured at
                                     `font_size=20`, which every app in the constellation uses; raise it if
-                                    yours does not.
+                                    yours does not, and `test_the_sort_row_fits_the_minimum_width` re-measures
+                                    it whenever the row grows another control.
             pick:                   What this dialog returns, and what it lists on the way there. Two axes
                                     that used to be one flag, because a folder picker that lets you *look*
                                     at a folder before choosing it needs them apart.
@@ -397,7 +398,9 @@ class FileDialog:
                                     is what stops the layout being shrunk past the point where its controls
                                     fit.
             modal:                  If True, use DPG modal mode; a sort of popup effect. Can cause problems if the file dialog is opened by a modal window.
-            show_hidden_files:      If True, the dialog shows also hidden files and folders.
+            show_hidden_files:      If True, the dialog shows also hidden files and folders. This is what
+                                    it opens with; the user can toggle it from the Hidden checkbox or
+                                    with Ctrl+H, and their choice holds for the rest of the session.
             show_thumbnails:        Whether to open in the thumbnail grid view instead of the table.
 
                                     `None` (the default) decides per file type filter: the grid comes up
@@ -1278,13 +1281,30 @@ class FileDialog:
     def _thumbnails_checkbox_callback(self, sender, app_data):
         self.set_grid_mode(app_data)
 
-    def _make_sort_row(self):
-        """The sort buttons, plus the view toggle, on one row above the listing.
+    def set_show_hidden_files(self, enabled):
+        """Show or hide dotfiles and their platform equivalents, and re-list under the current query.
 
-        The toggle sits next to them rather than off at the right edge, because the case it exists for
-        is a filter that selects images *and* something else — Librarian's "Documents and images", say —
-        where the automatic rule deliberately does not fire and the user has to find this. Next to the
-        controls they are already using is where they will.
+        The listing goes through the same rebuild a sort or a filter change does, so the cursor is
+        re-anchored by path and clamped like any other — if it was sitting on a hidden entry when this
+        turns them off, the clamp catches it.
+        """
+        enabled = bool(enabled)
+        dpg.set_value(self.checkbox_hidden_files, enabled)  # which a keyboard route has not already done
+        if enabled == self.show_hidden_files:
+            return
+        self.show_hidden_files = enabled
+        self._update_search()  # re-lists the current directory under the current find query
+
+    def _hidden_files_checkbox_callback(self, sender, app_data):
+        self.set_show_hidden_files(app_data)
+
+    def _make_sort_row(self):
+        """The sort buttons, plus the two view toggles, on one row above the listing.
+
+        The toggles sit next to them rather than off at the right edge, because the case the thumbnail
+        one exists for is a filter that selects images *and* something else — Librarian's "Documents and
+        images", say — where the automatic rule deliberately does not fire and the user has to find this.
+        Next to the controls they are already using is where they will.
         """
         with dpg.group(horizontal=True):
             dpg.add_text("Sort by")
@@ -1309,6 +1329,16 @@ class FileDialog:
                 dpg.add_text("Show the listing as image thumbnails instead of a table. [Ctrl+T]\n"
                              "Turns itself on when the file type filter selects images;\n"
                              "setting it by hand overrides that until you close the dialog.")
+            dpg.add_spacer(width=8)
+            # Always offered, unlike the Thumbnails box: a directory picker lists no files to make tiles
+            # of, but it lists hidden *folders* — which is the case where a config directory is what you
+            # came for and nothing else reaches it.
+            self.checkbox_hidden_files = dpg.add_checkbox(label="Hidden",
+                                                          default_value=self.show_hidden_files,
+                                                          callback=self._hidden_files_checkbox_callback)
+            with dpg.tooltip(self.checkbox_hidden_files):
+                dpg.add_text("Show hidden files and folders — names beginning with a dot,\n"
+                             "and on Windows the ones the filesystem marks hidden. [Ctrl+H]")
         self._draw_sort_indicators()
 
     def _reset_grid_mode_for_opening(self):
@@ -1838,6 +1868,9 @@ class FileDialog:
             self.back_to_default_path()
         elif ctrl and key == dpg.mvKey_F:
             self._focus_field()
+        elif ctrl and key == dpg.mvKey_H:
+            # What every GTK and GNOME file chooser binds this to, which is the whole argument for it.
+            self.set_show_hidden_files(not self.show_hidden_files)
         elif ctrl and key == dpg.mvKey_T:
             # `T` for Thumbnails, and free to mean it: the type filter gave the letter up when its label
             # became `Show`, which left the dialog's one unlabelled-by-key control holding the one

@@ -4,7 +4,9 @@ Two layers. `_normalize_filter` is a module-level pure function needing no DPG c
 was hoisted out of the constructor's closure. The rest drives a real dialog against a real directory,
 because what the filter *means* only shows up in which rows survive into `shown_items`.
 
-No window is ever mapped, so nothing here takes keyboard focus and none of it carries the `gui` marker.
+One test maps a window and so carries the `gui` marker — the one that measures the sort row, widths being
+a thing DPG has no answer for until it has rendered. Everything else runs against an unmapped viewport and
+takes no keyboard focus.
 
 The Find field's matching rule is not re-tested here: it is `raven.common.utils.make_search_matcher`,
 shared with Visualizer's search and the xdot widget's, and tested with those. What *is* tested here is
@@ -21,6 +23,7 @@ import pytest
 dpg = pytest.importorskip("dearpygui.dearpygui", reason="dearpygui not installed")
 
 from raven.common import filelisting  # noqa: E402 -- after importorskip by design
+from raven.common.gui import utils as guiutils  # noqa: E402 -- after importorskip by design
 from raven.vendor.file_dialog.fdialog import FileDialog, _PLACES, _complete_from, _normalize_filter  # noqa: E402 -- after importorskip by design
 
 
@@ -1163,3 +1166,109 @@ def test_an_unmodified_up_still_moves_the_cursor(make_dialog, tmp_path):
         dialog._handle_key(dpg.mvKey_Up)
 
     assert os.path.realpath(os.getcwd()) == os.path.realpath(tmp_path / "album")
+
+
+# --------------------------------------------------------------------------------
+# Hidden files
+
+def test_hidden_entries_are_out_of_the_listing_until_asked_for(make_dialog, tmp_path):
+    """Both directions, since the toggle is the only way back once it has been used."""
+    (tmp_path / ".config").mkdir()
+    (tmp_path / "notes.txt").touch()
+    (tmp_path / ".secret.txt").touch()
+    dialog = make_dialog(pick="file")
+
+    assert shown(dialog) == ["notes.txt"]
+
+    dialog.set_show_hidden_files(True)
+    assert shown(dialog) == [".config", ".secret.txt", "notes.txt"]
+
+    dialog.set_show_hidden_files(False)
+    assert shown(dialog) == ["notes.txt"]
+
+
+def test_ctrl_h_toggles_them(make_dialog, tmp_path):
+    (tmp_path / ".secret.txt").touch()
+    dialog = make_dialog(pick="file")
+
+    with held(dpg.mvKey_LControl):
+        dialog._handle_key(dpg.mvKey_H)
+    assert shown(dialog) == [".secret.txt"]
+
+    with held(dpg.mvKey_LControl):
+        dialog._handle_key(dpg.mvKey_H)
+    assert shown(dialog) == []
+
+
+def test_the_checkbox_and_the_hotkey_are_one_control(make_dialog, tmp_path):
+    """Whichever route is taken, the other one's widget has to agree — a checkbox left unticked after
+    Ctrl+H would offer to "show" what is already shown."""
+    dialog = make_dialog(pick="file")
+
+    with held(dpg.mvKey_LControl):
+        dialog._handle_key(dpg.mvKey_H)
+
+    assert dpg.get_value(dialog.checkbox_hidden_files) is True
+
+
+def test_a_hidden_directory_is_reachable_in_a_folder_picker(make_dialog, tmp_path):
+    """The case the toggle is offered unconditionally for: a folder picker lists no files to make
+    thumbnails of, so its Thumbnails box is hidden — but hidden *folders* are exactly what a user
+    reaching for a config directory came here to find."""
+    (tmp_path / ".config").mkdir()
+    dialog = make_dialog(pick="dir")
+
+    with held(dpg.mvKey_LControl):
+        dialog._handle_key(dpg.mvKey_H)
+
+    assert shown(dialog) == [".config"]
+
+
+def test_the_query_survives_the_toggle(make_dialog, tmp_path):
+    """Showing hidden files re-lists rather than navigates, so the find field is left alone — unlike
+    `chdir`, which clears it."""
+    (tmp_path / ".notes.txt").touch()
+    (tmp_path / "notes.md").touch()
+    (tmp_path / "photo.png").touch()
+    dialog = make_dialog(pick="file")
+    dpg.set_value(dialog.search_field, "notes")
+    dialog._update_search()
+
+    with held(dpg.mvKey_LControl):
+        dialog._handle_key(dpg.mvKey_H)
+
+    assert dpg.get_value(dialog.search_field) == "notes"
+    assert shown(dialog) == [".notes.txt", "notes.md"]
+
+
+@pytest.mark.gui
+def test_the_sort_row_fits_the_minimum_width(make_dialog):
+    """The floor in `min_size` is a measurement, and this is what re-takes it when the row grows.
+
+    The sort buttons are fixed-width and the row does not reflow, so a control added to its right end
+    pushes the rightmost one off the edge at widths that used to be fine — silently, since a clipped
+    checkbox looks like a checkbox that was never there. `width=-1` on the find field makes it exactly
+    as wide as the content area, which is the space the row is competing for.
+
+    Carries the `gui` marker: a widget has no size until frames are rendered, and DPG aborts the process
+    if asked to render without a mapped viewport. Measured at `font_size=20`, which every app in the
+    constellation uses — the labels are what the row's width is made of, so at DPG's own default font it
+    comes out 33 px narrower and the floor this justifies would be 33 px too low.
+    """
+    guiutils.setup_default_font(20)
+    dialog = make_dialog()
+    dpg.show_viewport()
+    try:
+        dialog.show_file_dialog()
+        dpg.set_item_width(dialog.tag, dialog.min_size[0])  # tag
+        for _ in range(6):
+            dpg.render_dearpygui_frame()
+
+        rightmost = dialog.checkbox_hidden_files
+        needed = dpg.get_item_pos(rightmost)[0] + dpg.get_item_rect_size(rightmost)[0]
+        available = dpg.get_item_rect_size(dialog.search_field)[0]
+        assert available >= needed, (f"the sort row needs {needed} px but min_size leaves {available}; "
+                                     f"raise min_size to about {dialog.min_size[0] + needed - available}")
+    finally:
+        dpg.hide_item(dialog.tag)  # tag
+        dpg.bind_font(0)  # the module's other tests are not measuring, but leave them as they were found

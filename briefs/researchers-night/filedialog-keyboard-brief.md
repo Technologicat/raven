@@ -2,8 +2,8 @@
 
 **Status: mostly built.** The design below was settled on 2026-08-13 (Juha and Claude); the listing cursor,
 Enter's rules, Tab and its completion and fill, the sort and filter chords, Alt+Up / Ctrl+Up and the
-"Will pick" line are in and live-tested. Still to build: Ctrl+Space, Ctrl+L, Ctrl+Shift+F, Ctrl+B, Ctrl+H,
-F1 and the places-panel migration. **See "What is built" near the end for the current state** — including the
+"Will pick" line are in and live-tested. Still to build: Ctrl+Space, Ctrl+L, Ctrl+Shift+F, Ctrl+B, F1 and
+the places-panel migration. **See "What is built" near the end for the current state** — including the
 several places where the design below was overtaken by what building it taught, each noted there rather
 than edited into the design, so the reasoning stays legible.
 
@@ -572,7 +572,17 @@ that from the code.
   moves the cursor one row. The alias is not redundancy: it is what makes the chord one-handed on a layout
   where Alt has no right-hand twin.
 
-**Not built:** Ctrl+Space, Ctrl+L, Ctrl+Shift+F, Ctrl+B, Ctrl+H, F1, and the places-panel migration.
+- **Hidden files toggle from Ctrl+H and from a Hidden checkbox**, as specified — and the checkbox is offered
+  in every mode, including the directory picker whose Thumbnails box is hidden. A folder picker lists no
+  files to make tiles of, but hidden *folders* are the case the toggle exists for.
+  - **The row it joined has a measured floor, and this moved it**: `min_size` was 900 px because below
+    roughly that the rightmost checkbox is clipped off the edge, the sort buttons being fixed-width and
+    unable to reflow. Re-measured at `font_size=20`: the row now needs 945 px of window width, so the floor
+    is 960. `test_the_sort_row_fits_the_minimum_width` re-takes that measurement whenever the row grows
+    another control — which is what the next one added here would otherwise break silently, a clipped
+    checkbox looking exactly like one that was never there.
+
+**Not built:** Ctrl+Space, Ctrl+L, Ctrl+Shift+F, Ctrl+B, F1, and the places-panel migration.
 
 **The save-mode arrow-fill is superseded rather than pending.** This brief specified that arrowing fills
 the field in save mode, gated on a flag tracking whether the user had typed since the last programmatic
