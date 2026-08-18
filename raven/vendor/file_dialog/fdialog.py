@@ -2147,7 +2147,7 @@ class FileDialog:
                                                                          target=self.btn_ok,
                                                                          target_tooltip=None,
                                                                          target_text=self.text_notification,
-                                                                         flash_color=(255, 32, 32),  # orange for warning
+                                                                         flash_color=(255, 32, 32),  # red for warning, against the green this flashes by default
                                                                          text_color=(255, 255, 255),
                                                                          duration=1.0))
                     return
@@ -2175,7 +2175,7 @@ class FileDialog:
                                                                              target=self.btn_ok,
                                                                              target_tooltip=None,
                                                                              target_text=self.text_notification,
-                                                                             flash_color=(255, 32, 32),  # orange for warning
+                                                                             flash_color=(255, 32, 32),  # red for warning, against the green this flashes by default
                                                                              text_color=(255, 255, 255),
                                                                              duration=1.0))
                         return
@@ -2189,7 +2189,7 @@ class FileDialog:
                                                                          target=self.btn_ok,
                                                                          target_tooltip=None,
                                                                          target_text=self.text_notification,
-                                                                         flash_color=(255, 32, 32),  # orange for warning
+                                                                         flash_color=(255, 32, 32),  # red for warning, against the green this flashes by default
                                                                          text_color=(255, 255, 255),
                                                                          duration=1.0))
                     return
@@ -2219,7 +2219,7 @@ class FileDialog:
                                                                  target=self.btn_ok,
                                                                  target_tooltip=None,
                                                                  target_text=self.text_notification,
-                                                                 flash_color=(255, 32, 32),  # orange for warning
+                                                                 flash_color=(255, 32, 32),  # red for warning, against the green this flashes by default
                                                                  text_color=(255, 255, 255),
                                                                  duration=confirm_duration))
             return
