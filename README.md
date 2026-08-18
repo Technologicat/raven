@@ -264,10 +264,10 @@ Beside the desktop apps, Raven installs a set of headless tools. They exist so t
 
 **Building a bibliography**
 
-- **`raven-arxiv-search`** runs a boolean search against arXiv and prints the matching identifiers.
+- **`raven-arxiv-search`** runs a boolean search against arXiv and writes the matching papers to a BibTeX file (`-o/--output`, defaulting to `<query_file>.bib`, or `results.bib` when the query is given with `-q`). Its output is already a bibliography, so it feeds `raven-arxiv-download --from-bib` directly — query to fulltext in two commands, with no identifiers to shuffle in between.
 - **`raven-arxiv2id`** scans a directory for arXiv identifiers in PDF filenames, keeping the newest version of each paper. `--strip-versions` drops the version suffix, which is how a collection gets refreshed to the current revisions.
 - **`raven-arxiv2bib`** turns identifiers into BibTeX, recording the version arXiv actually answered with.
-- **`raven-arxiv-download`** fetches the fulltext PDFs. `--save-bib` writes the BibTeX from metadata it already had to fetch anyway, so you pay arXiv's politeness delays once instead of twice.
+- **`raven-arxiv-download`** fetches the fulltext PDFs, for identifiers given on the command line or read out of a `.bib` with `--from-bib`. `--save-bib` writes the BibTeX from metadata it already had to fetch anyway, so you pay arXiv's politeness delays once instead of twice — which is what you want coming from bare identifiers, rather than from a search that handed you the bibliography already.
 - **`raven-burstbib`** splits a multi-entry `.bib` into one file per entry — which is what makes a bibliography usable as a document database, since otherwise the whole thing indexes as a single document.
 - **`raven-wos2bib`**, **`raven-csv2bib`**, **`raven-pdf2bib`** convert Web of Science exports, CSV, and PDF metadata into BibTeX.
 
