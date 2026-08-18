@@ -1241,6 +1241,92 @@ def test_the_query_survives_the_toggle(make_dialog, tmp_path):
     assert shown(dialog) == [".notes.txt", "notes.md"]
 
 
+# --------------------------------------------------------------------------------
+# Ctrl+Space: what Ctrl+click does, without the mouse
+
+def test_ctrl_space_marks_and_unmarks_the_cursor_entry(make_dialog, tmp_path):
+    (tmp_path / "one.txt").touch()
+    (tmp_path / "two.txt").touch()
+    dialog = make_dialog(pick="file", multi_selection=True)
+
+    cursor_onto(dialog, "one.txt")
+    with held(dpg.mvKey_LControl):
+        dialog._handle_key(dpg.mvKey_Spacebar)
+    assert [os.path.basename(p) for p in dialog.selected_files] == ["one.txt"]
+
+    cursor_onto(dialog, "two.txt")
+    with held(dpg.mvKey_LControl):
+        dialog._handle_key(dpg.mvKey_Spacebar)
+    assert sorted(os.path.basename(p) for p in dialog.selected_files) == ["one.txt", "two.txt"]
+
+    cursor_onto(dialog, "one.txt")
+    with held(dpg.mvKey_LControl):
+        dialog._handle_key(dpg.mvKey_Spacebar)
+    assert [os.path.basename(p) for p in dialog.selected_files] == ["two.txt"]
+
+
+def test_ctrl_space_does_nothing_in_a_single_selection_dialog(make_dialog, tmp_path):
+    """There is no Ctrl+click to mirror there, and a key that half-works is worse than one that does not:
+    marking two files in a dialog that returns one would be a promise it cannot keep."""
+    (tmp_path / "one.txt").touch()
+    dialog = make_dialog(pick="file")  # `multi_selection` defaults off
+
+    cursor_onto(dialog, "one.txt")
+    with held(dpg.mvKey_LControl):
+        dialog._handle_key(dpg.mvKey_Spacebar)
+
+    assert dialog.selected_files == []
+
+
+def test_ctrl_space_declines_on_what_the_dialog_cannot_return(make_dialog, tmp_path):
+    """`..` and scenery are shown but are not answers, and the cursor rests on `..` by default."""
+    (tmp_path / "album").mkdir()
+    (tmp_path / "readme.txt").touch()
+    dialog = make_dialog(pick="dir-with-contents", multi_selection=True)
+
+    for name in ("..", "readme.txt"):  # the way out, and a file in a folder picker
+        cursor_onto(dialog, name)
+        with held(dpg.mvKey_LControl):
+            dialog._handle_key(dpg.mvKey_Spacebar)
+        assert dialog.selected_files == [], f"'{name}' is not something this dialog returns"
+
+
+def test_a_marked_row_shows_as_marked(make_dialog, tmp_path):
+    """The bookkeeping and the widget are two records of one fact, and the widget is the one the user
+    reads — a selection the listing does not show is a selection nobody knows they made."""
+    (tmp_path / "one.txt").touch()
+    dialog = make_dialog(pick="file", multi_selection=True)
+
+    idx = cursor_onto(dialog, "one.txt")
+    with held(dpg.mvKey_LControl):
+        dialog._handle_key(dpg.mvKey_Spacebar)
+
+    name_cell = dialog._row_themes[idx][0][0]
+    assert dpg.get_value(name_cell) is True
+
+
+def test_unmarking_a_folder_updates_what_ok_promises(make_dialog, tmp_path):
+    """An explicit selection outranks the cursor in a directory picker, so the promised-target line has
+    to follow one. It did not follow a Ctrl+click either, which is why both routes now share the update.
+
+    *Un*marking is what can tell the two apart. Marking the folder under the cursor promises the folder
+    the cursor was already promising, so a line that never refreshed would look right the whole way
+    through — the first version of this test asserted exactly that and passed without the refresh.
+    Here the first-marked folder outranks the cursor, and dropping it hands the promise to the second.
+    """
+    (tmp_path / "a_album").mkdir()
+    (tmp_path / "b_album").mkdir()
+    dialog = make_dialog(pick="dir", multi_selection=True)
+
+    for name in ("a_album", "b_album", "a_album"):  # mark, mark, unmark
+        cursor_onto(dialog, name)
+        with held(dpg.mvKey_LControl):
+            dialog._handle_key(dpg.mvKey_Spacebar)
+
+    assert [os.path.basename(p) for p in dialog.selected_files] == ["b_album"]
+    assert dpg.get_value(dialog.text_target) == f"Will pick: {tmp_path / 'b_album'}"
+
+
 @pytest.mark.gui
 def test_the_sort_row_fits_the_minimum_width(make_dialog):
     """The floor in `min_size` is a measurement, and this is what re-takes it when the row grows.

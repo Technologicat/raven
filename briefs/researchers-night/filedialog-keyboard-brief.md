@@ -2,8 +2,8 @@
 
 **Status: mostly built.** The design below was settled on 2026-08-13 (Juha and Claude); the listing cursor,
 Enter's rules, Tab and its completion and fill, the sort and filter chords, Alt+Up / Ctrl+Up and the
-"Will pick" line are in and live-tested. Still to build: Ctrl+Space, Ctrl+L, Ctrl+Shift+F, Ctrl+B, F1 and
-the places-panel migration. **See "What is built" near the end for the current state** — including the
+"Will pick" line are in and live-tested. Still to build: Ctrl+L, Ctrl+Shift+F, Ctrl+B, F1 and the
+places-panel migration. **See "What is built" near the end for the current state** — including the
 several places where the design below was overtaken by what building it taught, each noted there rather
 than edited into the design, so the reasoning stays legible.
 
@@ -582,7 +582,13 @@ that from the code.
     another control — which is what the next one added here would otherwise break silently, a clipped
     checkbox looking exactly like one that was never there.
 
-**Not built:** Ctrl+Space, Ctrl+L, Ctrl+Shift+F, Ctrl+B, F1, and the places-panel migration.
+- **Ctrl+Space marks the cursor entry**, in either view, and declines on anything the dialog would not
+  return — `..`, and files in a folder picker. The bookkeeping half is shared with Ctrl+click rather than
+  written twice, which closed a gap in the mouse path on the way: a Ctrl+click on a folder had never
+  refreshed the promised-target line, so in a directory picker the line could name the folder the user
+  had just stopped choosing.
+
+**Not built:** Ctrl+L, Ctrl+Shift+F, Ctrl+B, F1, and the places-panel migration.
 
 **The save-mode arrow-fill is superseded rather than pending.** This brief specified that arrowing fills
 the field in save mode, gated on a flag tracking whether the user had typed since the last programmatic

@@ -1388,12 +1388,10 @@ class FileDialog:
 
         logger.debug(f"open_file: instance '{self.tag}' ({self.instance_tag}), sender is {sender} (tag '{dpg.get_item_alias(sender)}', type {dpg.get_item_type(sender)}, value = {dpg.get_value(sender)}), app_data = {app_data}, user_data = {user_data}, ctrl = {ctrl_pressed}, doubleclick = {double_clicked}")
 
-        # Multi selection
+        # Multi selection. DPG has already flipped the selectable by the time this runs, so the widget is
+        # the record of what the user just asked for and the bookkeeping follows it.
         if self.multi_selection and ctrl_pressed:
-            if dpg.get_value(sender) is True:
-                self.selected_files.append(user_data[1])
-            elif user_data[1] in self.selected_files:
-                self.selected_files.remove(user_data[1])
+            self._mark_selected(user_data[1], dpg.get_value(sender) is True)
         # Single selection
         else:
             dpg.set_value(sender, False)  # unselect this item  (TODO: why? double-click handling?)
@@ -1423,6 +1421,45 @@ class FileDialog:
                     self.selected_files.clear()
                     self.selected_files.append(user_data[1])
                     self._refresh_target_notification()
+
+    def _mark_selected(self, path, selected) -> None:
+        """Record `path` as selected or not, leaving the widget that shows it alone.
+
+        The bookkeeping half of a multi-selection change, shared by Ctrl+click and Ctrl+Space so that the
+        two cannot drift — and so that the promised-target line is refreshed by both. In a directory
+        picker an explicit selection outranks the cursor, so a click that did not refresh the line left
+        it naming the folder the user had just stopped choosing.
+        """
+        if selected:
+            if path not in self.selected_files:
+                self.selected_files.append(path)
+        elif path in self.selected_files:
+            self.selected_files.remove(path)
+        self._refresh_target_notification()
+
+    def _toggle_cursor_selection(self) -> None:
+        """Ctrl+Space: mark or unmark the cursor's entry — what Ctrl+click does, without the mouse.
+
+        Silently nothing outside multi-selection mode, where there is no such gesture to mirror, and on
+        an entry the dialog would not return anyway.
+        """
+        if not self.multi_selection:
+            return
+        entry = self._cursor_entry()
+        if entry is None or not self._is_choosable(entry):
+            return
+        if self._grid_mode:
+            # The grid owns its selection and tells the dialog about it through `_grid_selection_changed`,
+            # so asking the grid is the whole of it here.
+            grid = self._the_grid()
+            grid.toggle_select(grid.current)
+            return
+        # The name cell is the one the row's selection is kept on: every cell spans the columns, so
+        # setting all four would stack the tint on itself.
+        cell = self._row_themes[self._table_cursor.current][0][0]
+        now_selected = not dpg.get_value(cell)
+        dpg.set_value(cell, now_selected)
+        self._mark_selected(entry.path, now_selected)
 
     def _make_row(self, entry, callback, parent=None, selected_paths=()):
         """Build one table row from a `filelisting.FileEntry`.
@@ -1868,6 +1905,8 @@ class FileDialog:
             self.back_to_default_path()
         elif ctrl and key == dpg.mvKey_F:
             self._focus_field()
+        elif ctrl and key == dpg.mvKey_Spacebar:
+            self._toggle_cursor_selection()
         elif ctrl and key == dpg.mvKey_H:
             # What every GTK and GNOME file chooser binds this to, which is the whole argument for it.
             self.set_show_hidden_files(not self.show_hidden_files)
