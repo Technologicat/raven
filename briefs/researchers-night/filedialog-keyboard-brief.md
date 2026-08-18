@@ -285,12 +285,16 @@ arrow with a confusing house — but the collision is the smaller half of it. Th
 the current working directory five, an app-supplied path four, and `~` exactly **once**. A house would be
 wrong about the destination in fourteen cases out of fifteen, which is worse than ambiguous.
 
-What the button means is *"back to where this dialog started"*, so the glyph wants to say a marked starting
-place rather than a home: `ICON_FLAG` (a flag planted where you began) or `ICON_LOCATION_DOT`, with
-`ICON_ANCHOR` and `ICON_BULLSEYE` also available. `ICON_FLAG` is the recommendation — it carries "the spot
-I came from" without claiming to be a location on disk, which a pin arguably does. Settle it by looking at
-the row rendered, not from the list: four glyphs side by side is a thing to judge by eye, and rendering the
-candidates together is a two-minute probe.
+What the button means is **"the default directory, as the app asked for it"** — the caller's designation
+for this dialog's task, not a mark the user left and not where this particular opening happened to begin.
+`self.default_path` is assigned once in `__init__` and never reassigned, so it is constructor state: the
+same destination every time, for the life of the instance.
+
+That narrows the glyph. Anything implying the *user* put it there — a dropped pin, a planted flag — is
+telling the wrong story about who chose it, so `ICON_BULLSEYE` (the designated target) fits the meaning
+better than `ICON_FLAG` does, with `ICON_LOCATION_DOT` and `ICON_ANCHOR` as the remaining candidates.
+Settle it by looking at the row rendered rather than from this list: four glyphs side by side is a thing to
+judge by eye, and rendering the candidates together is a two-minute probe.
 
 The one piece of wiring to expect: the house pattern is `add_button(label=fa.ICON_X)` followed by
 `bind_item_font(tag, themes_and_fonts.icon_font_solid)`, and `fdialog.py` currently touches neither the
