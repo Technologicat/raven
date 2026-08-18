@@ -239,6 +239,27 @@ Two mechanics that fall out of skipping, both of which have to be right or Back 
 - **Skipping has to be symmetric.** Forward must skip the same dead entries Back did, or the pair stops
   being inverse and a user cannot get back to where they pressed Back from.
 
+**Which changes what "no more history" means for the buttons.** Raven's convention, set by Visualizer long
+ago and worth keeping: *the button is disabled exactly when there is nothing left in that direction*. With
+skipping, that is no longer "the cursor is at the end" — it is **"there is a valid entry in that
+direction"**, so the enabled state is computed by running the same validity predicate over the remaining
+entries. No third policy is needed; the enabling falls out of the predicate that was already required.
+
+Two consequences of computing it that way:
+
+- **The answer goes stale on its own.** A directory deleted from another window changes whether Back has
+  anywhere to go, with nothing in the history having moved. Re-evaluate at the moments the dialog re-reads
+  the filesystem *deliberately* — on opening, on F5, and after each history step — and not on every listing
+  rebuild, which happens per keystroke in the find field and concerns only the current directory. A stat
+  per entry is nothing on a history this size; doing it per keystroke would be.
+- **A press that finds nothing disables the button**, which makes the staleness self-healing rather than
+  something to chase: the worst case is one press that goes nowhere and leaves the button correct.
+
+**The icon needs care, because the dialog already has a back arrow that does not mean back.** The toolbar's
+`img_back` button is *"Go back to the default path [Ctrl+Home]"* — a left arrow, sitting exactly where a
+user would look for history-back. Putting a real Back beside it without distinguishing the two would make
+both misleading.
+
 **Whether the stack itself is shared with Visualizer is the open design question.** Visualizer's selection
 undo (`raven/visualizer/selection.py`) is the reference and is the only undo stack in the tree: a module-
 level `_undo_stack` list plus an `_undo_pos` cursor, where committing truncates everything after the cursor
