@@ -155,28 +155,34 @@ _GRID_TICK_INTERVAL = 1.0 / 60
 def _complete_from(text: str, candidates: Iterable[str]) -> Optional[str]:
     """What `text` becomes when Tab completes it against `candidates`. `None` when there is nothing to add.
 
-    Among the candidates, those that *start with* `text` are preferred; if none do, all of them are used.
-    The answer is that group's longest common prefix.
+    The answer is the candidates' longest common prefix — Tab asks *"what do the things I am looking at
+    have in common?"*, and `candidates` is what the listing is showing.
 
-    The fallback is what makes this agree with a fragment search rather than fighting it. `readme.txt` and
-    `readme.md` both contain `eadm` and neither starts with it, so a prefix-only rule would refuse; taking
-    all of them instead answers `readme.`, which is what the two entries on screen have in common.
+    Which is the whole of the rule, because the listing has already been narrowed by the fragment search.
+    Typing `re` leaves only the entries containing `re` on screen, so their common prefix is a real answer
+    about them; there is no need to prefer the ones that happen to *start* with what was typed, and
+    preferring them is actively wrong. Type `data` against `rawdata`, `datasets` and `tempdatasets` — all
+    three shown, all three legitimate — and a prefix preference answers `datasets`, which then filters
+    `rawdata` off the screen. Better to complete nothing than to discard a match the user can see.
 
-    Matching is smart-case, as everywhere else in this dialog: `text` in all lowercase matches
-    case-insensitively, and one carrying an uppercase letter matches exactly. The returned string carries a
-    candidate's own casing, so completing `read` against `README` yields `README`.
+    Matching is smart-case, as everywhere else in this dialog: `text` in all lowercase compares
+    case-insensitively, and one carrying an uppercase letter compares exactly.
+
+    Which decides the casing of the answer, and it is the same principle again. In case-sensitive mode all
+    the candidates agree on the shared prefix letter for letter, so it can be returned as it stands. In
+    case-insensitive mode they need not — `README` and `readme.txt` share `readme` only when folded — and
+    returning either spelling would make the field case-*sensitive*, dropping the other from the listing.
+    So the folded form is returned there: it still matches everything that matched before.
     """
     candidates = list(candidates)
     if not candidates:
         return None
-    fold = str.lower if text.islower() or not any(c.isalpha() for c in text) else (lambda s: s)
-    folded_text = fold(text)
-    starting = [c for c in candidates if fold(c).startswith(folded_text)]
-    group = starting or candidates
-    common = os.path.commonprefix([fold(c) for c in group])
+    case_insensitive = text.islower() or not any(c.isalpha() for c in text)
+    fold = str.lower if case_insensitive else (lambda s: s)
+    common = os.path.commonprefix([fold(c) for c in candidates])
     if len(common) <= len(text):
         return None
-    return group[0][:len(common)]
+    return common if case_insensitive else candidates[0][:len(common)]
 
 
 def _normalize_filter(entry: Union[str, tuple[str, Iterable[str]]]) -> tuple[str, Optional[tuple[str, ...]]]:

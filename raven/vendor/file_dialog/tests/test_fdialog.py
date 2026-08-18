@@ -811,25 +811,35 @@ def test_enter_with_no_cursor_falls_back_to_the_ok_button(make_dialog, tmp_path)
 # --------------------------------------------------------------------------------
 # Tab completion
 #
-# The rule: among the shown entries prefer those starting with what is typed, fall back to all of them,
-# and extend the field to that group's longest common prefix.
+# The rule: extend the field to the longest common prefix of the entries on screen.
+#
+# `candidates` is always what the *listing* is showing, so every set below is one the fragment search can
+# actually produce for the query beside it. Feeding a set it could not — say `headers.h` against `re`,
+# which does not contain `re` — tests a situation the dialog never reaches, and hides real behaviour.
 
 def test_completion_extends_to_the_common_prefix():
-    assert _complete_from("re", ["readme.txt", "readme.md", "headers.h"]) == "readme."
+    """Typing `re` leaves only the readmes on screen; what they share is `readme.`."""
+    assert _complete_from("re", ["readme.txt", "readme.md"]) == "readme."
 
 
-def test_completion_falls_back_to_everything_shown_when_nothing_starts_with_the_query():
-    """What makes this agree with the fragment search instead of fighting it.
-
-    `eadm` prefixes neither name, but the search has already narrowed the listing to the two that contain
-    it — and what those two have in common is the answer the user is after.
-    """
+def test_completion_works_from_a_fragment_that_prefixes_nothing():
+    """`eadm` starts neither name, and it does not need to: the listing already holds only the matches."""
     assert _complete_from("eadm", ["readme.txt", "readme.md"]) == "readme."
 
 
 def test_completion_declines_when_the_shown_entries_share_nothing():
     """`ead` matches `headers.h` too, and `readme`/`headers` have no common prefix. Better to do nothing."""
     assert _complete_from("ead", ["readme.txt", "readme.md", "headers.h"]) is None
+
+
+def test_completion_never_discards_an_entry_the_user_can_see():
+    """All three contain `data`, so all three are legitimate and none may be filtered away by completing.
+
+    Preferring the candidates that *start with* the query would answer `datasets` here — the only one that
+    does — and applying that to the field would drop `rawdata` off the screen. There is nothing the three
+    share, so the honest answer is to complete nothing.
+    """
+    assert _complete_from("data", ["rawdata", "datasets", "tempdatasets"]) is None
 
 
 def test_completion_completes_a_unique_match_fully():
@@ -840,13 +850,23 @@ def test_completion_declines_when_there_is_nothing_left_to_add(dialog):
     assert _complete_from("readme.", ["readme.txt", "readme.md"]) is None
 
 
-def test_completion_is_smart_case_and_keeps_the_entry_casing():
-    """A lowercase query matches case-insensitively, and the *entry's* spelling is what lands in the field."""
-    assert _complete_from("read", ["README"]) == "README"
+def test_completion_stays_case_insensitive_when_the_query_was():
+    """The casing follows the same rule as everything else here: never narrow what is on screen.
+
+    A lowercase query compares case-insensitively, so writing an entry's own spelling back into the field
+    would make it case-*sensitive* and drop whatever differs in case. The folded form matches everything
+    that matched before, which is why `read` against these two answers `readme` and not `README`.
+    """
+    assert _complete_from("read", ["README", "readme.txt"]) == "readme"
+    # With one candidate there is nothing to drop, and the same folded answer still matches it.
+    assert _complete_from("read", ["README"]) == "readme"
 
 
 def test_an_uppercase_query_matches_exactly():
-    assert _complete_from("READ", ["README", "readme.txt"]) == "README"
+    # An uppercase query is case-sensitive, so `readme.txt` is not on screen to be completed against.
+    assert _complete_from("READ", ["README"]) == "README"
+    # ...whereas a lowercase one shows both, and what they share stops at the case difference.
+    assert _complete_from("read", ["README", "readme.txt"]) == "readme"  # folded, so both stay shown
 
 
 def test_completion_of_an_empty_query_is_what_the_whole_listing_shares(dialog):
