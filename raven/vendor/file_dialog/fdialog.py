@@ -35,6 +35,14 @@ _KEY_PAGE_UP = 517
 _KEY_PAGE_DOWN = 518
 
 
+# The sort criteria a dialog offers, in the order its buttons appear — which is also the order Ctrl+Shift+N
+# indexes, so the two rows read off one list and cannot drift apart.
+_SORT_CRITERIA = [(filelisting.SortKey.NAME, "Name"),
+                  (filelisting.SortKey.DATE, "Date"),
+                  (filelisting.SortKey.KIND, "Type"),
+                  (filelisting.SortKey.SIZE, "Size")]
+
+
 # The icon assets, by name. `ico_<name>` holds the loaded pixels and `img_<name>` the texture, both set on
 # the class; the grid view resamples the former to tile size and the table draws the latter.
 _ICON_NAMES = [
@@ -388,6 +396,7 @@ class FileDialog:
         # rebuild: both are constants of the table's styling rather than of its contents, and the rows that
         # could re-measure them are exactly the ones a clipping table may not have drawn.
         self._row_metrics_cache = None
+        self._sort_indicators = {}  # SortKey -> drawlist tag, one per sort button
         # Which of the dialog's two keyboard modes is up: the caret in the find field, or in the listing.
         # Tab swaps them. Held as a flag rather than derived from `is_item_active` on the field, because
         # the two are not the same question — the field is inactive whenever anything else has been
@@ -891,12 +900,6 @@ class FileDialog:
         #
         # The header itself stays, because `resizable` is a header-drag gesture and filename lengths vary
         # enormously between users and directories — which is exactly when a fixed Name column hurts.
-        _SORT_CRITERIA = [(filelisting.SortKey.NAME, "Name"),
-                          (filelisting.SortKey.DATE, "Date"),
-                          (filelisting.SortKey.KIND, "Type"),
-                          (filelisting.SortKey.SIZE, "Size")]
-        _sort_indicators = {}  # SortKey -> drawlist tag
-
         def _draw_sort_indicators():
             """Redraw the triangle marking which criterion is active, and which way it points.
 
@@ -904,7 +907,7 @@ class FileDialog:
             at all, so a text label would render a missing-glyph box. Ten lines of drawlist is cheaper than
             binding the icon font to a button, which would apply to its whole label.
             """
-            for sort_key, drawlist in _sort_indicators.items():
+            for sort_key, drawlist in self._sort_indicators.items():
                 dpg.delete_item(drawlist, children_only=True)
                 if sort_key is not self._sort_key:
                     continue
@@ -951,7 +954,7 @@ class FileDialog:
                             dpg.add_text(f"Sort by {label.lower()} [Ctrl+Shift+{n}]\n"
                                          "Again to reverse the order.")
                         drawlist = dpg.add_drawlist(width=14, height=self.selec_height + 10)
-                        _sort_indicators[sort_key] = drawlist
+                        self._sort_indicators[sort_key] = drawlist
                 self.spacer_view_toggle = dpg.add_spacer(width=16)
                 self.checkbox_thumbnails = dpg.add_checkbox(label="Thumbnails",
                                                             default_value=self._grid_mode,
