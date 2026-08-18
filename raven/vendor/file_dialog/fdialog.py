@@ -813,38 +813,6 @@ class FileDialog:
         # enormously between users and directories — which is exactly when a fixed Name column hurts.
 
 
-        def _make_sort_row():
-            """The sort buttons, plus the view toggle, on one row above the listing.
-
-            The toggle sits next to them rather than off at the right edge, because the case it exists for
-            is a filter that selects images *and* something else — Librarian's "Documents and images", say —
-            where the automatic rule deliberately does not fire and the user has to find this. Next to the
-            controls they are already using is where they will.
-            """
-            with dpg.group(horizontal=True):
-                dpg.add_text("Sort by")
-                for n, (sort_key, label) in enumerate(_SORT_CRITERIA, start=1):
-                    with dpg.group(horizontal=True):
-                        button = dpg.add_button(label=label, width=70,
-                                                user_data=sort_key,
-                                                callback=lambda s, a, u: self.sort_by(u))
-                        # The keys are numbered by position, so the tooltip is the only place a user finds
-                        # out *which* number this button is without counting the row.
-                        with dpg.tooltip(button):
-                            dpg.add_text(f"Sort by {label.lower()} [Ctrl+Shift+{n}]\n"
-                                         "Again to reverse the order.")
-                        drawlist = dpg.add_drawlist(width=14, height=self.selec_height + 10)
-                        self._sort_indicators[sort_key] = drawlist
-                self.spacer_view_toggle = dpg.add_spacer(width=16)
-                self.checkbox_thumbnails = dpg.add_checkbox(label="Thumbnails",
-                                                            default_value=self._grid_mode,
-                                                            show=self._grid_is_available(),
-                                                            callback=self._thumbnails_checkbox_callback)
-                with dpg.tooltip(self.checkbox_thumbnails):
-                    dpg.add_text("Show the listing as image thumbnails instead of a table. [Ctrl+T]\n"
-                                 "Turns itself on when the file type filter selects images;\n"
-                                 "setting it by hand overrides that until you close the dialog.")
-            self._draw_sort_indicators()
 
         # --------------------------------------------------------------------------------
         # Grid view.
@@ -895,26 +863,6 @@ class FileDialog:
 
 
 
-        def _reset_grid_mode_for_opening():
-            """Forget a hand-set view, so the automatic rule gets to decide again. Called on each opening.
-
-            **The checkbox is per-opening**, and it has to be: a `FileDialog` is built once and lives as long
-            as the app, so an override that outlived one opening would outlive the whole session — tick the
-            box once and the automatic switching is gone until the app restarts. That is not an override,
-            it is a one-way door.
-
-            Within an opening the choice does hold, filter changes included: having said "not this time",
-            the user should not have to say it again for every filter they try.
-
-            What it resets *to* is the caller's `show_thumbnails`, not "no preference": an app that asked
-            for a particular view asked for it every time, not only the first.
-            """
-            self._grid_mode_chosen_by_user = (self._show_thumbnails_default is not None)
-            if self._show_thumbnails_default is not None:
-                self.set_grid_mode(self._show_thumbnails_default, remember=True, rebuild=False)
-            else:
-                self._apply_automatic_grid_mode(rebuild=False)
-        self._reset_grid_mode_for_opening = _reset_grid_mode_for_opening  # instance-injected, as `set_type_filter` above.
 
 
 
@@ -1111,7 +1059,7 @@ class FileDialog:
                             search_hint = "Search files [Ctrl+F]" if not save_mode else "Filename to save as [Ctrl+F]"
                             self.search_field = dpg.add_input_text(hint=search_hint, callback=self._update_search, tag=f"ex_search_{self.instance_tag}", width=-1)
 
-                        _make_sort_row()
+                        self._make_sort_row()
 
                         # Both views live here, one shown at a time. A container of their own, so the grid
                         # can be sized to the area the table would have filled — which is not known at
@@ -1707,6 +1655,58 @@ class FileDialog:
         self.set_grid_mode(self._filter_is_image_typed(self.file_filter), remember=False, rebuild=rebuild)
     def _thumbnails_checkbox_callback(self, sender, app_data):
         self.set_grid_mode(app_data)
+
+    def _make_sort_row(self):
+        """The sort buttons, plus the view toggle, on one row above the listing.
+
+        The toggle sits next to them rather than off at the right edge, because the case it exists for
+        is a filter that selects images *and* something else — Librarian's "Documents and images", say —
+        where the automatic rule deliberately does not fire and the user has to find this. Next to the
+        controls they are already using is where they will.
+        """
+        with dpg.group(horizontal=True):
+            dpg.add_text("Sort by")
+            for n, (sort_key, label) in enumerate(_SORT_CRITERIA, start=1):
+                with dpg.group(horizontal=True):
+                    button = dpg.add_button(label=label, width=70,
+                                            user_data=sort_key,
+                                            callback=lambda s, a, u: self.sort_by(u))
+                    # The keys are numbered by position, so the tooltip is the only place a user finds
+                    # out *which* number this button is without counting the row.
+                    with dpg.tooltip(button):
+                        dpg.add_text(f"Sort by {label.lower()} [Ctrl+Shift+{n}]\n"
+                                     "Again to reverse the order.")
+                    drawlist = dpg.add_drawlist(width=14, height=self.selec_height + 10)
+                    self._sort_indicators[sort_key] = drawlist
+            self.spacer_view_toggle = dpg.add_spacer(width=16)
+            self.checkbox_thumbnails = dpg.add_checkbox(label="Thumbnails",
+                                                        default_value=self._grid_mode,
+                                                        show=self._grid_is_available(),
+                                                        callback=self._thumbnails_checkbox_callback)
+            with dpg.tooltip(self.checkbox_thumbnails):
+                dpg.add_text("Show the listing as image thumbnails instead of a table. [Ctrl+T]\n"
+                             "Turns itself on when the file type filter selects images;\n"
+                             "setting it by hand overrides that until you close the dialog.")
+        self._draw_sort_indicators()
+    def _reset_grid_mode_for_opening(self):
+        """Forget a hand-set view, so the automatic rule gets to decide again. Called on each opening.
+
+        **The checkbox is per-opening**, and it has to be: a `FileDialog` is built once and lives as long
+        as the app, so an override that outlived one opening would outlive the whole session — tick the
+        box once and the automatic switching is gone until the app restarts. That is not an override,
+        it is a one-way door.
+
+        Within an opening the choice does hold, filter changes included: having said "not this time",
+        the user should not have to say it again for every filter they try.
+
+        What it resets *to* is the caller's `show_thumbnails`, not "no preference": an app that asked
+        for a particular view asked for it every time, not only the first.
+        """
+        self._grid_mode_chosen_by_user = (self._show_thumbnails_default is not None)
+        if self._show_thumbnails_default is not None:
+            self.set_grid_mode(self._show_thumbnails_default, remember=True, rebuild=False)
+        else:
+            self._apply_automatic_grid_mode(rebuild=False)
 
     def _navigator(self):
         """Whichever view is on screen, as the thing that answers to `navigate_*`.
