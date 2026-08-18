@@ -260,6 +260,29 @@ Two consequences of computing it that way:
 user would look for history-back. Putting a real Back beside it without distinguishing the two would make
 both misleading.
 
+This is not a new problem and should not be solved twice: `TODO.md`'s fdialog list already carries *"change
+the 'go to default directory' icon to something less confusing"* and *"add a 'go up to parent directory'
+button"* — which is the third arrow in this cluster, and now has keys (Alt+Up / Ctrl+Up) but still no
+widget. Up, back and default-path as three arrow buttons is precisely the confusion that item was filed
+about, so all of it wants deciding at once rather than a button at a time.
+
+**Use FontAwesome glyphs for them, not drawn assets** (Juha, 2026-08-18), which takes these buttons out of
+the icon-set problem entirely. Two separate things wear icons here, and only one of them is in trouble: the
+**file-type** icons are icons8 "3D Fluency" third-party assets, which `TODO_DEFERRED.md`'s "A file-type icon
+set of our own" replaces; the **toolbar** is UI chrome, and chrome everywhere else in Raven is an icon-font
+glyph on a plain button. Doing the same here matches the look and needs nothing drawn.
+
+Licensing comes out clean rather than merely deferred: Font Awesome's split terms were settled on
+2026-08-03 (`TODO_DEFERRED.md`) — icons CC-BY-4.0, fonts OFL-1.1 — and the webfonts already ship. Every
+glyph this needs exists: `ICON_ARROW_LEFT`, `ICON_ARROW_RIGHT`, `ICON_ARROW_UP`, `ICON_HOUSE` for
+default-path, and `ICON_ARROW_ROTATE_RIGHT` / `ICON_ARROWS_ROTATE` for refresh. Converting the two existing
+image buttons at the same time is what makes the row one set instead of a mixture.
+
+The one piece of wiring to expect: the house pattern is `add_button(label=fa.ICON_X)` followed by
+`bind_item_font(tag, themes_and_fonts.icon_font_solid)`, and `fdialog.py` currently touches neither the
+icon font nor `themes_and_fonts` — it has no reference to reach. So the font handle has to get into the
+dialog somehow, and *how* is the only real design question in this part.
+
 **Whether the stack itself is shared with Visualizer is the open design question.** Visualizer's selection
 undo (`raven/visualizer/selection.py`) is the reference and is the only undo stack in the tree: a module-
 level `_undo_stack` list plus an `_undo_pos` cursor, where committing truncates everything after the cursor
