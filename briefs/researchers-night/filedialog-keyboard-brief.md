@@ -2,8 +2,8 @@
 
 **Status: mostly built.** The design below was settled on 2026-08-13 (Juha and Claude); the listing cursor,
 Enter's rules, Tab and its completion and fill, the sort and filter chords, Alt+Up / Ctrl+Up and the
-"Will pick" line are in and live-tested. Still to build: Ctrl+L, Ctrl+Shift+F, Ctrl+B, F1 and the
-places-panel migration. **See "What is built" near the end for the current state** — including the
+"Will pick" line are in and live-tested. Still to build: Ctrl+L, Ctrl+Shift+F, Ctrl+B, F1, the
+places-panel migration, and the navigation history added on 2026-08-18. **See "What is built" near the end for the current state** — including the
 several places where the design below was overtaken by what building it taught, each noted there rather
 than edited into the design, so the reasoning stays legible.
 
@@ -60,6 +60,8 @@ one sentence rather than a table of special cases.
 | Ctrl+Space | toggle the cursor row's selection (multi-selection mode only) |
 | Alt+Up | up one level |
 | Ctrl+Up | up one level, one-handed alias — see below |
+| Alt+Left / Alt+Right | back / forward through where this dialog has been — see below |
+| mouse back / forward | the same, for the mice that have the buttons — see below |
 | Ctrl+Home | back to the default directory (exists) |
 | F5 | refresh (exists) |
 | Ctrl+F | focus the find field (exists) |
@@ -161,6 +163,49 @@ makes it discoverable, and the two share one callback exactly as the thumbnails 
 The toggle re-lists the current directory, so it goes through the same rebuild path as a sort or a filter
 change — meaning the cursor is re-anchored by path and clamped like any other rebuild, with no special
 case. If the cursor was sitting on a hidden entry when it is switched off, the clamp handles it.
+
+### Navigation history
+
+Added 2026-08-18 (Juha), for building the next day. The dialog can go *up*, and that is all: there is no
+back, so a wrong turn costs you the way you came rather than one keystroke. Up and back are different
+questions — up is a fact about the filesystem, back is a fact about this session — and only one of them is
+answerable today.
+
+**Alt+Left and Alt+Right**, which is what a browser and every file manager bind. They pair with Alt+Up
+already being the up key, so one modifier covers the whole navigation cluster.
+
+**Ctrl+Left / Ctrl+Right are not aliases for them, unlike Ctrl+Up.** In a text field those chords mean
+*move the caret by one word*, and the find field is where the caret sits by default — so the alias trick
+that worked for Alt+Up cannot simply be repeated. What is worth considering is binding them **only while
+the caret is in the listing**, where no text field owns them: the dialog already knows which of its two
+homes the caret is in, and Tab already makes Left and Right mean something different on each side of it,
+so this would be the same rule applied to one more pair rather than a new kind of exception. Decide when
+building; the pair is genuinely optional, where Alt+Left / Alt+Right is not.
+
+**The mouse's back and forward buttons, if they arrive.** DPG exposes them — `mvMouseButton_X1` (3) and
+`mvMouseButton_X2` (4), alongside Left/Right/Middle, with `add_mouse_click_handler` taking a button — so
+the API surface is there. Whether the events actually reach a DPG app from a thumb-button mouse on this
+desktop is **unmeasured**; a click handler that logs the button answers it in a minute, and that probe is
+the first step of building this. If they do not arrive, the keys stand alone and nothing else changes.
+
+**The history is per opening.** A `FileDialog` is built once and lives as long as the app, so a history
+that was not cleared would let a user press Back into a directory they visited in a different dialog
+session, for a different purpose — which is the same one-way-door reasoning that makes the thumbnail
+override per-opening. `_reset_grid_mode_for_opening` is where the sibling reset already happens.
+
+**Whether the stack itself is shared with Visualizer is the open design question.** Visualizer's selection
+undo (`raven/visualizer/selection.py`) is the reference and is the only undo stack in the tree: a module-
+level `_undo_stack` list plus an `_undo_pos` cursor, where committing truncates everything after the cursor
+and a commit equal to the current state is skipped. That core — a stack of opaque states, a cursor, commit
+/ undo / redo, and `can_undo` / `can_redo` for enabling buttons — is what both users want, and neither
+half of it knows anything about what the states *are*.
+
+What is entangled in the Visualizer copy, and would have to stay behind: DPG button enabling by tag, numpy
+set-comparison as the equality test, and the `app_state` side effects each step fires. So the extraction is
+the stack and the cursor, with equality passed in as a predicate and the side effects left to the caller.
+Worth doing if it comes out that clean, and worth abandoning if it does not — one of the two consumers is
+being written from scratch, so this is the cheapest moment to find out, and also the moment where forcing
+a shared shape would cost the most.
 
 ### Discoverability
 
@@ -588,7 +633,9 @@ that from the code.
   refreshed the promised-target line, so in a directory picker the line could name the folder the user
   had just stopped choosing.
 
-**Not built:** Ctrl+L, Ctrl+Shift+F, Ctrl+B, F1, and the places-panel migration.
+**Not built:** Ctrl+L, Ctrl+Shift+F, Ctrl+B, F1, the places-panel migration, and the navigation history —
+Alt+Left / Alt+Right and the mouse's back and forward buttons, which is the one item here that arrived
+after the dialog started being built rather than with the original design.
 
 **The save-mode arrow-fill is superseded rather than pending.** This brief specified that arrowing fills
 the field in save mode, gated on a flag tracking whether the user had typed since the last programmatic
