@@ -32,6 +32,12 @@ from ...common.gui.tablecursor import TableCursor
 _KEY_PAGE_UP = 517
 _KEY_PAGE_DOWN = 518
 
+# How many rendered frames to wait for the find field to release the caret before giving up on writing to
+# it. A queued focus change lands within a frame or two on an idle app, but that is one sample and not a
+# number to build on — what it actually costs depends on what else is in flight. Generous, therefore, and
+# a bound rather than an estimate: the point is to fail with a log line instead of looping forever.
+_FIELD_DEACTIVATION_FRAMES = 30
+
 
 # The shortcuts the places panel offers, in the order they are shown: the label, which is also the folder
 # name looked for under the home directory, and the icon.
@@ -144,6 +150,33 @@ def _get_all_drives():
 # their render loops, so requiring every host app to call something would be a landmine — the app that
 # forgets is the one whose thumbnails never appear.
 _GRID_TICK_INTERVAL = 1.0 / 60
+
+
+def _complete_from(text: str, candidates: Iterable[str]) -> Optional[str]:
+    """What `text` becomes when Tab completes it against `candidates`. `None` when there is nothing to add.
+
+    Among the candidates, those that *start with* `text` are preferred; if none do, all of them are used.
+    The answer is that group's longest common prefix.
+
+    The fallback is what makes this agree with a fragment search rather than fighting it. `readme.txt` and
+    `readme.md` both contain `eadm` and neither starts with it, so a prefix-only rule would refuse; taking
+    all of them instead answers `readme.`, which is what the two entries on screen have in common.
+
+    Matching is smart-case, as everywhere else in this dialog: `text` in all lowercase matches
+    case-insensitively, and one carrying an uppercase letter matches exactly. The returned string carries a
+    candidate's own casing, so completing `read` against `README` yields `README`.
+    """
+    candidates = list(candidates)
+    if not candidates:
+        return None
+    fold = str.lower if text.islower() or not any(c.isalpha() for c in text) else (lambda s: s)
+    folded_text = fold(text)
+    starting = [c for c in candidates if fold(c).startswith(folded_text)]
+    group = starting or candidates
+    common = os.path.commonprefix([fold(c) for c in group])
+    if len(common) <= len(text):
+        return None
+    return group[0][:len(common)]
 
 
 def _normalize_filter(entry: Union[str, tuple[str, Iterable[str]]]) -> tuple[str, Optional[tuple[str, ...]]]:
@@ -1693,7 +1726,11 @@ class FileDialog:
             if self._caret_in_listing:
                 self._focus_field()
             else:
+                # Order is load-bearing: the completion is a write to the find field, and a field with the
+                # caret in it reverts one. Leaving is what makes the write possible, so the caret goes
+                # first and the completion follows it out.
                 self._focus_listing()
+                self._complete_find_field()
             return
 
         # Ctrl and a number picks the Nth type filter; add Shift and it picks the Nth sort criterion.
@@ -1760,6 +1797,43 @@ class FileDialog:
         """
         return self._grid if (self._grid_mode and self._grid is not None) else self._table_cursor
 
+    def _write_find_field(self, text: str) -> bool:
+        """Put `text` in the find field and re-filter the listing. Returns whether the write landed.
+
+        Only safe once the caret has left the field, which is the caller's job to have arranged.
+        """
+        # ImGui's edit buffer owns an *active* `InputText`: `set_value` appears to work — `get_value`
+        # immediately after reports the new string — and the next frame writes the old buffer back, firing
+        # the edit callback as it goes. So the write has to wait for the field to go inactive, which a
+        # queued focus change does not achieve on the calling frame. How many frames it takes depends on
+        # what else is in flight, so this polls rather than counting frames.
+        for _ in range(_FIELD_DEACTIVATION_FRAMES):
+            if not dpg.is_item_active(self.search_field):
+                break
+            if not guiutils.split_frame(operation="file dialog: waiting for the find field to go inactive",
+                                        required=False):
+                return False  # no render loop to wait for; nothing would land anyway
+        else:
+            logger.warning(f"_write_find_field: instance '{self.tag}' ({self.instance_tag}): the find field "
+                           f"is still active after {_FIELD_DEACTIVATION_FRAMES} frames; not writing '{text}'")
+            return False
+
+        dpg.set_value(self.search_field, text)
+        self._update_search()  # `set_value` fires no callback, so the filter is re-run by hand
+        return True
+
+    def _complete_find_field(self) -> None:
+        """Extend the find field to what the entries on screen have in common.
+
+        The other half of Tab, applied on the way out of the field. Does nothing when there is nothing to
+        add, which includes the case where what is shown has no common prefix at all.
+        """
+        text = dpg.get_value(self.search_field)
+        completed = _complete_from(text, [os.path.basename(path) for path in self.shown_items])
+        if completed is None:
+            return
+        self._write_find_field(completed)
+
     def _focus_field(self) -> None:
         """Put the caret back in the find field, where typing filters the listing."""
         self._caret_in_listing = False
@@ -1771,16 +1845,22 @@ class FileDialog:
         Leaves the find field inactive, which is what lets it be written programmatically: an active
         `InputText` owns ImGui's edit buffer and reverts writes on the next frame.
         """
-        # Focus parks on the OK button, and both views share that one target. A table row is a selectable
-        # and could hold focus itself, but then focus would have to chase the cursor on every move, and
-        # grid view has nothing to chase — a drawlist has no focusable items, so that view needs a
-        # stand-in regardless. One target for both keeps the two views answering to the same code.
+        # Both views park on the same target, which keeps them answering to the same code. A table row is
+        # a selectable and could hold focus itself, but then focus would have to chase the cursor on every
+        # move, and grid view has nothing to chase — a drawlist has no focusable items.
         #
-        # A button is safe to park on: DPG leaves ImGui's keyboard-nav activation off, so a focused button
-        # ignores Space and Enter instead of pressing itself. Pinned by
+        # *Which* target is not free to choose, and not for a visual reason. `focus_item` cannot move
+        # focus from outside a child window to inside one; measured across every source/target pair, that
+        # is the only refused direction. The find field lives in the listing's child window, so parking
+        # below it — on the OK button, say — makes every later Ctrl+F and Tab-back an outside-to-inside
+        # request, which is ignored in silence: the caret never returns and typing goes nowhere. The
+        # refresh button shares the child window with the field, so the return trip stays inside it.
+        #
+        # A button is also safe to park on: DPG leaves ImGui's keyboard-nav activation off, so a focused
+        # button ignores Space and Enter instead of pressing itself. Pinned by
         # `test_a_focused_button_ignores_the_keys_that_would_press_it`, since nothing in the API reports it.
         self._caret_in_listing = True
-        dpg.focus_item(self.tag + "_return")  # tag
+        dpg.focus_item(self.button_refresh)
 
     def show_file_dialog(self):
         # Timed alongside `reset_dir`'s own phases, because "the dialog takes a moment to appear" can mean

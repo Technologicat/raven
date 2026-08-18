@@ -21,7 +21,7 @@ import pytest
 dpg = pytest.importorskip("dearpygui.dearpygui", reason="dearpygui not installed")
 
 from raven.common import filelisting  # noqa: E402 -- after importorskip by design
-from raven.vendor.file_dialog.fdialog import FileDialog, _PLACES, _normalize_filter  # noqa: E402 -- after importorskip by design
+from raven.vendor.file_dialog.fdialog import FileDialog, _PLACES, _complete_from, _normalize_filter  # noqa: E402 -- after importorskip by design
 
 
 def test_normalize_bare_string_is_its_own_label():
@@ -806,3 +806,81 @@ def test_enter_with_no_cursor_falls_back_to_the_ok_button(make_dialog, tmp_path)
     dialog._handle_key(dpg.mvKey_Return)
 
     assert chosen and os.path.realpath(chosen[0][0]) == os.path.realpath(tmp_path)
+
+
+# --------------------------------------------------------------------------------
+# Tab completion
+#
+# The rule: among the shown entries prefer those starting with what is typed, fall back to all of them,
+# and extend the field to that group's longest common prefix.
+
+def test_completion_extends_to_the_common_prefix():
+    assert _complete_from("re", ["readme.txt", "readme.md", "headers.h"]) == "readme."
+
+
+def test_completion_falls_back_to_everything_shown_when_nothing_starts_with_the_query():
+    """What makes this agree with the fragment search instead of fighting it.
+
+    `eadm` prefixes neither name, but the search has already narrowed the listing to the two that contain
+    it — and what those two have in common is the answer the user is after.
+    """
+    assert _complete_from("eadm", ["readme.txt", "readme.md"]) == "readme."
+
+
+def test_completion_declines_when_the_shown_entries_share_nothing():
+    """`ead` matches `headers.h` too, and `readme`/`headers` have no common prefix. Better to do nothing."""
+    assert _complete_from("ead", ["readme.txt", "readme.md", "headers.h"]) is None
+
+
+def test_completion_completes_a_unique_match_fully():
+    assert _complete_from("re", ["readme.txt"]) == "readme.txt"
+
+
+def test_completion_declines_when_there_is_nothing_left_to_add(dialog):
+    assert _complete_from("readme.", ["readme.txt", "readme.md"]) is None
+
+
+def test_completion_is_smart_case_and_keeps_the_entry_casing():
+    """A lowercase query matches case-insensitively, and the *entry's* spelling is what lands in the field."""
+    assert _complete_from("read", ["README"]) == "README"
+
+
+def test_an_uppercase_query_matches_exactly():
+    assert _complete_from("READ", ["README", "readme.txt"]) == "README"
+
+
+def test_completion_of_an_empty_query_is_what_the_whole_listing_shares(dialog):
+    assert _complete_from("", ["alpha", "album"]) == "al"
+
+
+def test_completion_declines_on_an_empty_listing():
+    assert _complete_from("x", []) is None
+
+
+def test_tab_completes_the_find_field_and_hands_over_the_arrow_keys(make_dialog, tmp_path):
+    """The two halves of Tab, in the order that makes the write possible.
+
+    Leaving the field is what lets it be written at all, so the completion is applied on the way out —
+    and the caret ends up in the listing either way.
+    """
+    for name in ("readme.txt", "readme.md", "headers.h"):
+        (tmp_path / name).touch()
+    dialog = make_dialog(pick="file", filter_list=[".*"], file_filter=".*")
+    dialog.reset_dir(file_name_filter="re")
+
+    dialog._handle_key(dpg.mvKey_Tab)
+
+    assert dpg.get_value(dialog.search_field) == "readme."
+    assert dialog._caret_in_listing is True
+
+
+def test_tab_leaves_the_field_alone_when_there_is_nothing_to_complete(make_dialog, tmp_path):
+    for name in ("readme.txt", "headers.h"):
+        (tmp_path / name).touch()
+    dialog = make_dialog(pick="file", filter_list=[".*"], file_filter=".*")
+    dialog.reset_dir(file_name_filter="ead")
+
+    dialog._handle_key(dpg.mvKey_Tab)
+
+    assert dpg.get_value(dialog.search_field) == ""  # the filter came from `reset_dir`, not from typing
+    assert dialog._caret_in_listing is True, "the caret still moves; only the completion declined"

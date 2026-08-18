@@ -96,9 +96,20 @@ because both land in `raven/common/gui/animation.py` and are better done togethe
   than the thumb, so ImGui answers with auto-repeat paging instead of a drag, and the creep is better
   established from the session log above than from any synthetic drag.
 
-All four are self-driving: run them and read the table. Re-run after a DPG upgrade that might have touched focus
+- `focus_across_child_window_probe.py` — when `focus_item` refuses to move focus at all. Enumerates every
+  source/target position across two sibling child windows and the enclosing window. The answer is that
+  **only window-level to child is refused**; child to child, including between siblings, works. Added
+  2026-08-18, when `FileDialog`'s Ctrl+F stopped returning the caret. Under a second.
+  - **Measured on DearPyGui 2.3.1**, the version pinned at the time (`dearpygui>=2.3`). Recorded because
+    this one is a bug rather than a design choice as far as anyone can tell, so it is the finding here
+    most likely to change under upgrade — and a result with no version against it cannot be compared to a
+    later run.
+
+All five are self-driving: run them and read the table. Re-run after a DPG upgrade that might have touched focus
 handling — the send path in `raven/librarian/app.py` and the search-accept path in `raven/visualizer/app.py`
-both rest on the button result.
+both rest on the button result, and `FileDialog`'s choice of parking spot rests on the position result. If a
+later DPG lifts the window-to-child restriction, that probe is where it will show, and the parking spot can go
+back to being chosen for readability rather than for reachability.
 
 ## Where this ended up
 
