@@ -36,6 +36,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 import dataclasses
+import operator
 import pathlib
 from typing import Any, Optional, Union
 
@@ -204,8 +205,8 @@ def preview_cleanup(datastore: chattree.PersistentForest, *roots: str) -> Cleanu
     subsumed = {companion for entry in entries.values() for companion in entry.companion_filenames}
     listed = [entry for filename, entry in entries.items() if filename not in subsumed]
 
-    images = sorted((entry for entry in listed if entry.is_image), key=lambda entry: entry.sort_key)
-    documents = sorted((entry for entry in listed if not entry.is_image), key=lambda entry: entry.sort_key)
+    images = sorted((entry for entry in listed if entry.is_image), key=operator.attrgetter("sort_key"))
+    documents = sorted((entry for entry in listed if not entry.is_image), key=operator.attrgetter("sort_key"))
     return CleanupPreview(node_ids=node_ids, images=images, documents=documents)
 
 

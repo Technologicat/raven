@@ -13,6 +13,28 @@ importer first. Recorded here rather than in that item because a trigger nobody 
 the tool for finding things in the backlog cannot be gated on someone remembering to look for it *in* the
 backlog. The recurring moment to ask is the triage step in the release procedure.
 
+## FileDialog: the path field flashes blue on every Tab
+
+Pressing Tab makes the path field go *active* for 25–100 ms before focus settles on its intended target.
+Active means the caret, which fires DPG's focus-selects-all, which paints the text blue — a flash in a
+field nobody touched. Cosmetic only; nothing acts on it.
+
+**Measured, so a later attempt need not re-derive it:** 18 frames of 360 carry it, found by recording the
+window with `investigations/dpg-focus/catch_visual_flash.sh` and by logging `is_item_focused` /
+`is_item_active` per frame from the grid's tick thread. Screenshots cannot catch it — `import` samples
+about one frame in five.
+
+**What it is not.** Three explanations were falsified: that image buttons are skipped in nav order leaving
+a text field first (they are not — `auto_focus_target_probe.py`); that startup auto-focus explains it (it
+focuses without *activating*, and the flash is active); and that the listing rebuild causes it (headless
+reproductions with and without the rebuild never showed it). A fourth guess written down as fact would be
+worth less than nothing.
+
+Left for whoever has a mechanism. The obvious fix — give the transient somewhere harmless to land — rests
+on the ruled-out premise, so it is not the quick win it looked like.
+
+Discovered during the FileDialog keyboard work (2026-08-18).
+
 ## Docstrings that describe a previous version, or argue a design choice at the caller
 
 Two related lapses against the rule that a docstring describes the code as it is now and serves the
