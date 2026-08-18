@@ -476,323 +476,20 @@ class FileDialog:
         # low-level functions
 
 
-        def on_path_enter():
-            try:
-                chdir(dpg.get_value(f"ex_path_input_{self.instance_tag}"))
-            except FileNotFoundError:
-                self.message_box("Invalid path", "No such file or directory")
-
-
-        def open_drive(sender, app_data, user_data):
-            chdir(user_data)
-
-        def _deselect_recursive(root):
-            """Deselect all selectables inside DPG widget `root`, including `root` itself."""
-            if dpg.get_item_type(root) == "mvAppItemType::mvSelectable":
-                dpg.set_value(root, False)
-            for item in dpg.get_item_children(root, slot=1):
-                _deselect_recursive(item)
-
-        def open_file(sender, app_data, user_data):  # `user_data`: [name, fullpath, timestamp, size]
-            ctrl_pressed = dpg.is_key_down(dpg.mvKey_LControl) or dpg.is_key_down(dpg.mvKey_RControl)
-
-            # Detect double-click.
-            # double_clicked = dpg.is_mouse_button_double_clicked(dpg.mvMouseButton_Left)  # TODO: doesn't work, why?
-            current_time = time.time()
-            double_clicked = (current_time - self.last_click_time < self.double_click_threshold)
-            self.last_click_time = current_time
-
-            logger.debug(f"open_file: instance '{self.tag}' ({self.instance_tag}), sender is {sender} (tag '{dpg.get_item_alias(sender)}', type {dpg.get_item_type(sender)}, value = {dpg.get_value(sender)}), app_data = {app_data}, user_data = {user_data}, ctrl = {ctrl_pressed}, doubleclick = {double_clicked}")
-
-            # Multi selection
-            if self.multi_selection and ctrl_pressed:
-                if dpg.get_value(sender) is True:
-                    self.selected_files.append(user_data[1])
-                elif user_data[1] in self.selected_files:
-                    self.selected_files.remove(user_data[1])
-            # Single selection
-            else:
-                dpg.set_value(sender, False)  # unselect this item  (TODO: why? double-click handling?)
-
-                if double_clicked:
-                    if user_data is not None and user_data[1] is not None:
-                        if os.path.isdir(user_data[1]):
-                            logger.debug(f"open_file: instance '{self.tag}' ({self.instance_tag}), Content: {dpg.get_item_label(sender)}, files: {user_data}")
-                            chdir(user_data[1])
-                            dpg.set_value(f"ex_search_{self.instance_tag}", "")
-                        elif os.path.isfile(user_data[1]):
-                            if len(self.selected_files) < 1:
-                                self.selected_files.append(user_data[1])
-                            self.ok()
-                            return user_data[1]
-                else:
-                    # Only what this dialog can return responds to a click. In "dir-with-contents" the file
-                    # rows are built disabled, so this is a second line of defence rather than the only one.
-                    if os.path.isdir(user_data[1]) if self.returns_dir else os.path.isfile(user_data[1]):
-                        _deselect_recursive(f"explorer_{self.instance_tag}")  # unselect others
-                        dpg.set_value(sender, True)  # and select this item
-                        # Save mode: populate file name field from clicked file, without file extension
-                        if self.save_mode:
-                            basename, ext = os.path.splitext(user_data[0])
-                            dpg.set_value(f"ex_search_{self.instance_tag}", basename)
-                            self._update_search()
-                        self.selected_files.clear()
-                        self.selected_files.append(user_data[1])
-                        self._refresh_target_notification()
 
 
 
 
-        def _make_row(entry, callback, parent=f"explorer_{self.instance_tag}", selected_paths=()):
-            """Build one table row from a `filelisting.FileEntry`.
 
-            The entry carries everything the row needs, so nothing here consults the filesystem and nothing
-            has to be read back off the widgets later.
 
-            `selected_paths`: which paths were selected before this rebuild. A row for one of them comes up
-            already selected, so a selection survives a re-listing instead of quietly evaporating.
-            """
-            # `..` is the way out of the directory rather than something in it: one spanning cell, and no
-            # date/type/size.
-            if entry.is_parent:
-                with dpg.table_row(parent=parent):
-                    with dpg.group(horizontal=True):
-                        # Dimmed like everything else the dialog will not return, which is what the grid
-                        # does with it too: `..` is not a choice in any mode, so showing it at full strength
-                        # among entries that *are* choices says the opposite of what is true.
-                        dpg.add_image(self.img_mini_folder, user_data=entry.kind,
-                                      tint_color=[255, 255, 255, self.image_transparency])
-                        parent_cell = dpg.add_selectable(label=entry.name, callback=_go_up_one_level,
-                                                         span_columns=True, height=self.selec_height)
-                        dpg.bind_item_theme(parent_cell, self.unreturnable_text_theme)
-                        self._row_themes.append([(parent_cell,
-                                                  self.unreturnable_text_theme,
-                                                  self.unreturnable_text_theme_cursor)])
-                return
 
-            # Shown, but nothing can be done with it: not an answer this dialog returns, and not somewhere
-            # to go either. Directories stay live in every mode — a file picker cannot *choose* one but must
-            # let you walk into it — so the rule is choosability plus navigability, not choosability alone.
-            # Files in a directory picker are the case this exists for; a broken link falls out of it too,
-            # having been inert in practice all along without looking it.
-            inert = not self._is_choosable(entry) and not entry.is_dir
 
-            # `user_data` shape is `open_file`'s contract: [name, full path, mtime, size].
-            kwargs_cell = {'callback': callback, 'span_columns': True, 'height': self.selec_height,
-                           'enabled': not inert,
-                           'user_data': [entry.name, entry.path, entry.mtime, entry.size or 0]}
-            # Two independent reasons to recede, so they compound rather than saturate: a hidden file you
-            # also cannot choose is less relevant than either alone, and one fixed alpha for "some reason
-            # applies" would flatten that back out.
-            dimming = 1.0
-            if entry.is_hidden:
-                dimming *= self.image_transparency / 255
-            if inert:
-                dimming *= self.image_transparency / 255
-            alpha = round(255 * dimming)
-            kwargs_image = {'tint_color': [255, 255, 255, alpha], 'user_data': entry.kind}
 
-            with dpg.table_row(parent=parent):
-                with dpg.group(horizontal=True):
-                    dpg.add_image(self._icon_for(entry), **kwargs_image)
-                    cell_name = dpg.add_selectable(label=entry.name, **kwargs_cell)
-                cell_time = dpg.add_selectable(label=filelisting.format_mtime(entry.mtime), **kwargs_cell)
-                cell_type = dpg.add_selectable(label=filelisting.format_kind(entry), **kwargs_cell)
-                cell_size = dpg.add_selectable(label=filelisting.format_size(entry.size), **kwargs_cell)
 
-                # Restore the selection: only the name cell is set, since every cell spans the columns and
-                # setting all four would stack the tint on itself.
-                if entry.path in selected_paths and self._is_choosable(entry):
-                    dpg.set_value(cell_name, True)
-                    self.selected_files.append(entry.path)
 
-                if self.allow_drag:
-                    drag_payload = dpg.add_drag_payload(parent=cell_name, payload_type=self.PAYLOAD_TYPE)
-                dpg.bind_item_theme(cell_name, self.selec_alignt)
-                dpg.bind_item_theme(cell_time, self.selec_alignt)
-                dpg.bind_item_theme(cell_type, self.selec_alignt)
-                dpg.bind_item_theme(cell_size, self.size_alignt)
 
-                # Each cell with the theme it wears normally and the one it wears as the cursor, so moving
-                # the cursor is a rebind of four cells rather than a rebuild of the listing. Kept in row
-                # order, matching `shown_items`, which is what the cursor indexes.
-                self._row_themes.append([(cell_name, self.selec_alignt, self.selec_alignt_cursor),
-                                         (cell_time, self.selec_alignt, self.selec_alignt_cursor),
-                                         (cell_type, self.selec_alignt, self.selec_alignt_cursor),
-                                         (cell_size, self.size_alignt, self.size_alignt_cursor)])
-                if self.allow_drag:
-                    if entry.name.lower().endswith((".png", ".jpg")):
-                        dpg.add_image(self.img_big_picture, parent=drag_payload)
-                    elif entry.is_dir:
-                        dpg.add_image(self.img_folder, parent=drag_payload)
-                    else:
-                        dpg.add_image(self.img_document, parent=drag_payload)
 
-        def _go_up_one_level(sender, app_data, user_data):
-            """GUI callback: if this item double-clicked, go up one level."""
-            ctrl_pressed = dpg.is_key_down(dpg.mvKey_LControl) or dpg.is_key_down(dpg.mvKey_RControl)
-            current_time = time.time()
-            double_clicked = (current_time - self.last_click_time < self.double_click_threshold)
-            self.last_click_time = current_time
 
-            dpg.set_value(sender, False)  # unselect the ".." entry
-
-            if ctrl_pressed:
-                return
-            if double_clicked:
-                dpg.set_value(f"ex_search_{self.instance_tag}", "")
-                chdir("..")
-
-        def set_type_filter(label):
-            """Select the file type filter by its label, exactly as picking it from the combo would.
-
-            `label` is one of the labels derived from `filter_list` — a bare extension for a string entry,
-            or the given label for a `(label, extensions)` pair.
-            """
-            self._set_type_filter(label)
-            dpg.set_value(self.combo_file_filter, self.file_filter)  # keep the GUI in sync when called programmatically
-            dpg.set_value(self.text_file_filter_extensions, self._describe_type_filter(self.file_filter))
-            self._apply_automatic_grid_mode(rebuild=False)  # the listing is about to be rebuilt anyway
-            reset_dir()
-        self.set_type_filter = set_type_filter  # needs to be accessible from the outside; uses closure data from this scope, so shouldn't be injected as an instance method (on the class); inject as a regular function *on the instance*.
-
-        def set_filter_list(filter_list, file_filter=None):
-            """Replace the offered file type filters, as `filter_list` in the constructor.
-
-            For an app whose acceptable types depend on state that can change while it runs — a Librarian
-            that offers image formats only while a vision model is loaded. Call it before
-            `show_file_dialog`, so what is offered reflects the answer at the moment of opening rather than
-            at construction.
-
-            `file_filter` selects one of the new labels; `None` takes the first, as in the constructor.
-
-            The listing is rebuilt only if the dialog is already open. Called just before `show_file_dialog`,
-            which is the intended use, rebuilding here would be work thrown away: that call rebuilds anyway,
-            and on a directory of thousands each rebuild is the couple of seconds the dialog is already slow by.
-            """
-            self._install_filters(filter_list, file_filter)
-            dpg.configure_item(self.combo_file_filter, items=self._filter_labels)
-            dpg.set_value(self.combo_file_filter, self.file_filter)
-            dpg.set_value(self.text_file_filter_extensions, self._describe_type_filter(self.file_filter))
-            self._apply_automatic_grid_mode(rebuild=False)
-            # The *configured* show flag, not `is_visible`: the latter answers "did the user see it in the last
-            # rendered frame", which is False for a window shown microseconds ago and False always with no
-            # render loop. The question here is whether a listing exists to be brought up to date.
-            if dpg.get_item_configuration(self.tag)["show"]:  # tag
-                reset_dir()
-        self.set_filter_list = set_filter_list  # instance-injected for the same reason as `set_type_filter` above.
-
-        def filter_combo_selector(sender, app_data):
-            set_type_filter(dpg.get_value(sender))
-
-        def chdir(path):
-            try:
-                os.chdir(path)
-                reset_dir()
-            except PermissionError as e:
-                self.message_box("File dialog - PerimssionError", f"Cannot open the folder because is a system folder or the access is denied\n\nMore info:\n{e}")
-            except NotADirectoryError as e:
-                self.message_box("File dialog - not a directory", f"The selected item is not a directory, but a file.\n\nMore info:\n{e}")
-        self.chdir = chdir  # needs to be accessible from the outside; uses closure data from this scope, so shouldn't be injected as an instance method (on the class); inject as a regular function *on the instance*.
-
-        def reset_dir(file_name_filter=None):
-            """Rebuild the listing of the working directory, optionally narrowed to `file_name_filter`.
-
-            This *lists*; it does not navigate. Going somewhere is `chdir`, which moves the process and
-            then calls this.
-            """
-            # Read from the process rather than accepted as an argument, so the two cannot disagree: `ok`
-            # and the target notification both answer from `os.getcwd()`, and a listing built from
-            # anywhere else would be a dialog that shows you A and hands back B.
-            default_path = os.getcwd()
-            logger.debug(f"reset_dir: instance '{self.tag}' ({self.instance_tag}), called with file_name_filter = {file_name_filter}, default_path = '{str(default_path)}'")
-            # Phase timings, so a slow open says *which* phase is slow rather than only that it was. Reading
-            # the directory, deleting the old rows and creating the new ones have entirely different fixes,
-            # and a report of "a couple of seconds" does not distinguish them.
-            # What was selected, so it can be restored against the new listing. A rebuild happens on every
-            # keystroke in the find field and on every view switch, and until 2026-08-14 each of those
-            # silently dropped the selection: the *cursor* was re-anchored by path and the selection was
-            # not, so switching to the grid and back left the file chosen but no longer shown as chosen.
-            previously_selected = set(self.selected_files)
-            self.selected_files.clear()
-            self.shown_items.clear()
-            self._row_entries = []
-            self._row_themes = []
-
-            # What this is a listing *of*. A rebuild of the same directory and a move to a different one
-            # look identical from here, and the cursor wants opposite things from them — hold its place
-            # across a re-filter, start at the top of somewhere new — so the views are told which directory
-            # this is and work it out themselves.
-            listed_dir = os.path.abspath(str(default_path))
-            try:
-                dpg.configure_item(f"ex_path_input_{self.instance_tag}", default_value=os.getcwd())
-                # Compiled once per rebuild rather than per entry: on a directory of thousands, the split is
-                # the part worth hoisting out of the loop.
-                matches_name_filter = common_utils.make_search_matcher(file_name_filter or "")
-
-                # Enumerating, filtering and sorting all happen here, on data, before a widget is touched.
-                with timer() as tim_list:
-                    entries = filelisting.list_directory(default_path,
-                                                         show_hidden=self.show_hidden_files,
-                                                         dirs_only=not self.lists_files,
-                                                         name_filter=matches_name_filter,
-                                                         type_filter=self._matches_type_filter,
-                                                         sort_key=self._sort_key,
-                                                         descending=self._sort_descending)
-                # `..` stays out: it is the way out of the directory rather than a candidate for the
-                # unique-match shortcut in `ok`.
-                self.shown_items.extend(entry.path for entry in entries if not entry.is_parent)
-
-                # Only the view on screen is built. The other one is emptied rather than left holding a
-                # stale listing, which would be both the memory and, on a switch back, the wrong answer.
-                with timer() as tim_delete:
-                    self.delete_table()
-
-                with timer() as tim_build:
-                    if self._grid_mode:
-                        grid = _the_grid()
-                        grid.set_listing(entries, listing_key=listed_dir)
-                        # Re-made against the new order, and the grid's own callback puts the survivors
-                        # back into `selected_files`.
-                        grid.set_selected_paths(previously_selected)
-                    else:
-                        for entry in entries:
-                            _make_row(entry, open_file, selected_paths=previously_selected)
-                        # After the rows exist, since the cursor paints itself onto one of them.
-                        self._row_entries = list(entries)
-                        self._table_cursor.set_listing([entry.path for entry in entries],
-                                                       listing_key=listed_dir)
-                        # `..` is where the cursor rests while nothing has been typed, and that is
-                        # load-bearing rather than incidental: the cursor is what Ctrl+Enter returns, so a
-                        # cursor parked on the first subfolder would hand back a *child* of the directory
-                        # you navigated to in order to choose it.
-                        #
-                        # Typing changes the question. A filter is a search, and a search puts the cursor on
-                        # its first hit — otherwise "type a few characters, press Enter" leaves the
-                        # directory instead of opening the match, `..` being what Enter would act on.
-                        if file_name_filter and self._table_cursor.current == 0 and len(entries) > 1 and entries[0].is_parent:
-                            self._table_cursor.set_current(1)
-
-                logger.debug(f"reset_dir: instance '{self.tag}' ({self.instance_tag}), {len(self.shown_items)} entries "
-                             f"as {'tiles' if self._grid_mode else 'rows'}: "
-                             f"list {tim_list.dt:.3f}s, delete {tim_delete.dt:.3f}s, build {tim_build.dt:.3f}s")
-
-            # exceptions
-            except FileNotFoundError:
-                logger.error(f"reset_dir: instance '{self.tag}' ({self.instance_tag}), invalid path: '{str(default_path)}'")
-            except Exception as exc:
-                # Logged with its traceback *before* the message box, which shows only `str(exc)`. A listing
-                # error is otherwise reduced to one line with no stack — and where the dialog is modal the
-                # box cannot even be shown, so the line goes to the log stripped of everything that would
-                # locate it. Cost a CI round on a Windows-only failure that said "negative dimensions are
-                # not allowed" and nothing about where.
-                logger.exception(f"reset_dir: instance '{self.tag}' ({self.instance_tag}), failed to list '{str(default_path)}'")
-                self.message_box("File dialog - Error", f"An unknown error has occured when listing the items, More info:\n{exc}")
-
-            # Every path into here changes something the promised target depends on — which directory is
-            # shown, and what survives the find field — so this is the one place that has to refresh it.
-            self._refresh_target_notification()
-        self.reset_dir = reset_dir  # needs to be accessible from the outside; uses closure data from this scope, so shouldn't be injected as an instance method (on the class); inject as a regular function *on the instance*.
 
         # --------------------------------------------------------------------------------
         # Sorting.
@@ -819,46 +516,10 @@ class FileDialog:
 
 
 
-        def _the_grid():
-            """The grid view, built on first use.
-
-            Deferred because building it costs the thumbnail decoder and its device — several seconds of
-            torch import for an app that may never switch views. A dialog used only as a list pays none of
-            it.
-            """
-            if self._grid is None:
-                # Imported here for the same reason: `raven.common.gui.filegrid` reaches torch, and every
-                # app with a file dialog would otherwise pay that at startup.
-                from ...common.gui import filegrid
-
-                icon_assets = {name: tuple(getattr(self, f"ico_{name}")) for name in _ICON_NAMES}
-                self._grid = filegrid.FileGrid(parent=f"grid_host_{self.instance_tag}",  # tag
-                                               width=self._grid_size[0], height=self._grid_size[1],
-                                               icon_assets=icon_assets,
-                                               icon_name_for=self._tile_icon_for,
-                                               selectable_for=self._is_choosable,
-                                               tile_size=self.thumbnail_size,
-                                               thumbnail_device=self.thumbnail_device,
-                                               allow_multi_select=self.multi_selection,
-                                               on_current_entry_changed=self._grid_current_changed,
-                                               on_selection_changed_entries=self._grid_selection_changed,
-                                               on_activate=_grid_activate)
-            return self._grid
 
 
 
 
-        def _grid_activate(entry):
-            """Double click in the grid: descend into the directory, or accept the file."""
-            if entry.is_dir:
-                dpg.set_value(f"ex_search_{self.instance_tag}", "")
-                chdir(entry.path)
-                return
-            if not self._is_choosable(entry):
-                return  # a broken link leads nowhere, and `..` was handled above
-            self.selected_files.clear()
-            self.selected_files.append(entry.path)
-            self.ok()
 
 
 
@@ -884,113 +545,11 @@ class FileDialog:
                                          on_current_changed=lambda _idx: self._refresh_target_notification())
 
 
-        def _activate_cursor_entry():
-            """Enter: go as deep as this entry allows.
-
-            One sentence covers every mode, which is why the rule reads as a rule rather than a table: `..`
-            and directories are somewhere to *go*, and a file in a picker that returns files is the bottom,
-            so accepting it is the deepest move available. A file in a folder picker is scenery — it is
-            shown so the folder can be judged by it — and Enter on scenery does nothing.
-
-            Ctrl+Enter is the counterpart that declines to descend, and it is `ok` unchanged.
-            """
-            entry = self._cursor_entry()
-            if entry is None:
-                self.ok()  # nothing under the cursor: fall back to what the OK button would do
-                return
-            if entry.is_parent or entry.is_dir:
-                chdir(entry.path)
-                return
-            if not self._is_choosable(entry):
-                return
-            self.selected_files.clear()
-            self.selected_files.append(entry.path)
-            self.ok()
 
 
         # --------------------------------------------------------------------------------
         # Hotkeys.
 
-        def _handle_key(key: int) -> None:
-            """Handle one key press for this dialog. Called by the module-level handler, which owns the
-            registry and decides *which* dialog is listening; this decides what the key does.
-
-            A closure rather than a method, for the reason `reset_dir` and `sort_by` are: the things a
-            hotkey has to reach — `chdir`, `sort_by`, `_go_up_one_level`, the listing state — live in this
-            scope and are not attributes of anything. The module-level callback can see only public
-            methods, which is why it has never been able to grow past the five keys it has.
-            """
-            ctrl = dpg.is_key_down(dpg.mvKey_LControl) or dpg.is_key_down(dpg.mvKey_RControl)
-
-            # TODO (briefs/researchers-night/filedialog-keyboard-brief.md): the rest of the keyboard —
-            # TODO: the focus-parking chords, hidden files.
-            shift = dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)
-
-            # Tab swaps the caret's two homes. ImGui does not spend Tab on an `InputText` — it neither
-            # moves focus nor inserts anything — so the key is ours to define, and this is the only way
-            # to reach the state where the find field is inactive.
-            if key == dpg.mvKey_Tab:
-                if self._caret_in_listing:
-                    self._focus_field()
-                else:
-                    self._focus_listing()
-                return
-
-            # Ctrl and a number picks the Nth type filter; add Shift and it picks the Nth sort criterion.
-            # One indexed rule for two labelled rows, which is what makes them worth remembering — and what
-            # keeps the criteria off letters they cannot have, `Ctrl+Shift+S` reading as a Save variant in a
-            # dialog that saves and `Ctrl+Shift+N` being *new folder* in every file manager.
-            if ctrl and dpg.mvKey_1 <= key <= dpg.mvKey_9:
-                n = key - dpg.mvKey_1
-                if shift:
-                    if n < len(_SORT_CRITERIA):
-                        self.sort_by(_SORT_CRITERIA[n][0])
-                elif n < len(self._filter_labels):
-                    set_type_filter(self._filter_labels[n])
-                return
-
-            nav = self._navigator()
-            if key == dpg.mvKey_Up:
-                nav.navigate_row_up()
-            elif key == dpg.mvKey_Down:
-                nav.navigate_row_down()
-            elif key == _KEY_PAGE_UP:
-                nav.navigate_page_up()
-            elif key == _KEY_PAGE_DOWN:
-                nav.navigate_page_down()
-            elif key == dpg.mvKey_Left and self._caret_in_listing:
-                # Left and Right are not unwanted while the caret is in the find field, they are
-                # *occupied* — a single-line entry spends them on the text caret. Tab is what frees them,
-                # which is why the grid is only now completely reachable: its rows hold several tiles, so
-                # without a horizontal step every column but the first was unvisitable from the keyboard.
-                nav.navigate_prev()
-            elif key == dpg.mvKey_Right and self._caret_in_listing:
-                nav.navigate_next()
-            elif key == dpg.mvKey_Home and not ctrl:
-                nav.navigate_first()
-            elif key == dpg.mvKey_End:
-                nav.navigate_last()
-            elif key == dpg.mvKey_Return and ctrl:
-                self.ok()  # commit here, without descending
-            elif key == dpg.mvKey_Return:
-                _activate_cursor_entry()
-            elif key == dpg.mvKey_Escape:
-                self.cancel()
-            elif key == dpg.mvKey_F5:
-                self.refresh()
-            elif ctrl and key == dpg.mvKey_Home:
-                self.back_to_default_path()
-            elif ctrl and key == dpg.mvKey_F:
-                self._focus_field()
-            elif ctrl and key == dpg.mvKey_T:
-                # `T` for Thumbnails, and free to mean it: the type filter gave the letter up when its label
-                # became `Show`, which left the dialog's one unlabelled-by-key control holding the one
-                # mnemonic that fits it. Silently ignored where the grid is not on offer — a directory
-                # picker listing no files has nothing to make tiles of — since the checkbox is hidden there
-                # too and a key that acts where its control is invisible is worse than one that does not.
-                if self._grid_is_available():
-                    self.set_grid_mode(not self._grid_mode)
-        self._handle_key = _handle_key  # instance-injected, as above.
 
         # main file dialog header
         with dpg.window(label=self.title, tag=self.tag, on_close=self.cancel, no_resize=self.no_resize, show=False, modal=self.modal, width=self.width, height=self.height, min_size=self.min_size, no_collapse=True, pos=(50, 50)):
@@ -1014,7 +573,7 @@ class FileDialog:
                                 dpg.add_image(getattr(self, icon))
                                 # `label=label` binds this row's label at definition time; a bare closure over
                                 # the loop variable would leave every entry pointing at Videos.
-                                dpg.add_menu_item(label=label, callback=lambda label=label: chdir(self._places[label]))
+                                dpg.add_menu_item(label=label, callback=lambda label=label: self.chdir(self._places[label]))
 
                         dpg.add_separator()
 
@@ -1024,21 +583,21 @@ class FileDialog:
                             for drive in drives:
                                 with dpg.group(horizontal=True):
                                     dpg.add_image(self.img_hard_disk)
-                                    dpg.add_menu_item(label=drive, user_data=drive, callback=open_drive)
+                                    dpg.add_menu_item(label=drive, user_data=drive, callback=self.open_drive)
 
                 elif (self.user_style == 1):
                     with dpg.child_window(tag=f"shortcut_menu_{self.instance_tag}", width=40, show=self.show_shortcuts_menu, height=-info_px):
                         for label, icon in _PLACES:
                             if label not in self._places:  # this user has no such directory
                                 continue
-                            dpg.add_image_button(getattr(self, icon), callback=lambda label=label: chdir(self._places[label]))
+                            dpg.add_image_button(getattr(self, icon), callback=lambda label=label: self.chdir(self._places[label]))
 
                         dpg.add_separator()
 
                         with dpg.group():
                             drives = _get_all_drives()
                             for drive in drives:
-                                dpg.add_image_button(texture_tag=self.img_hard_disk, label=drive, user_data=drive, callback=open_drive)
+                                dpg.add_image_button(texture_tag=self.img_hard_disk, label=drive, user_data=drive, callback=self.open_drive)
 
                 with dpg.child_window(height=-info_px):
                     # main explorer header
@@ -1053,7 +612,7 @@ class FileDialog:
                             dpg.set_item_callback(self.button_refresh, self.refresh)
                             dpg.set_item_callback(self.button_back_to_default_path, self.back_to_default_path)
 
-                            dpg.add_input_text(hint="Path", on_enter=True, callback=on_path_enter, default_value=os.getcwd(), width=-1, tag=f"ex_path_input_{self.instance_tag}")
+                            dpg.add_input_text(hint="Path", on_enter=True, callback=self.on_path_enter, default_value=os.getcwd(), width=-1, tag=f"ex_path_input_{self.instance_tag}")
 
                         with dpg.group(horizontal=True):
                             search_hint = "Search files [Ctrl+F]" if not save_mode else "Filename to save as [Ctrl+F]"
@@ -1136,7 +695,7 @@ class FileDialog:
                     self.text_target = dpg.add_text("", show=self.returns_dir)
                 dpg.add_text('Show')
                 self.combo_file_filter = dpg.add_combo(items=self._filter_labels,
-                                                       callback=filter_combo_selector, default_value=self.file_filter, width=-1)
+                                                       callback=self.filter_combo_selector, default_value=self.file_filter, width=-1)
                 with dpg.tooltip(self.combo_file_filter):
                     self.text_file_filter_extensions = dpg.add_text(self._describe_type_filter(self.file_filter))
 
@@ -1172,7 +731,7 @@ class FileDialog:
             # After the widgets exist, since it may flip the view: an image-typed filter comes up as a grid
             # unless the caller said otherwise. `rebuild=False` because `chdir` below lists the directory.
             self._apply_automatic_grid_mode(rebuild=False)
-            chdir(self.default_path)
+            self.chdir(self.default_path)
 
         # Outside the window's `with`, so the registry is not parented into it. Held by ID rather than by
         # tag: nothing looks it up, and it lives as long as the window it is bound to.
@@ -1707,6 +1266,451 @@ class FileDialog:
             self.set_grid_mode(self._show_thumbnails_default, remember=True, rebuild=False)
         else:
             self._apply_automatic_grid_mode(rebuild=False)
+
+    def on_path_enter(self):
+        try:
+            self.chdir(dpg.get_value(f"ex_path_input_{self.instance_tag}"))
+        except FileNotFoundError:
+            self.message_box("Invalid path", "No such file or directory")
+    def open_drive(self, sender, app_data, user_data):
+        self.chdir(user_data)
+    def _deselect_recursive(self, root):
+        """Deselect all selectables inside DPG widget `root`, including `root` itself."""
+        if dpg.get_item_type(root) == "mvAppItemType::mvSelectable":
+            dpg.set_value(root, False)
+        for item in dpg.get_item_children(root, slot=1):
+            self._deselect_recursive(item)
+    def open_file(self, sender, app_data, user_data):  # `user_data`: [name, fullpath, timestamp, size]
+        ctrl_pressed = dpg.is_key_down(dpg.mvKey_LControl) or dpg.is_key_down(dpg.mvKey_RControl)
+
+        # Detect double-click.
+        # double_clicked = dpg.is_mouse_button_double_clicked(dpg.mvMouseButton_Left)  # TODO: doesn't work, why?
+        current_time = time.time()
+        double_clicked = (current_time - self.last_click_time < self.double_click_threshold)
+        self.last_click_time = current_time
+
+        logger.debug(f"open_file: instance '{self.tag}' ({self.instance_tag}), sender is {sender} (tag '{dpg.get_item_alias(sender)}', type {dpg.get_item_type(sender)}, value = {dpg.get_value(sender)}), app_data = {app_data}, user_data = {user_data}, ctrl = {ctrl_pressed}, doubleclick = {double_clicked}")
+
+        # Multi selection
+        if self.multi_selection and ctrl_pressed:
+            if dpg.get_value(sender) is True:
+                self.selected_files.append(user_data[1])
+            elif user_data[1] in self.selected_files:
+                self.selected_files.remove(user_data[1])
+        # Single selection
+        else:
+            dpg.set_value(sender, False)  # unselect this item  (TODO: why? double-click handling?)
+
+            if double_clicked:
+                if user_data is not None and user_data[1] is not None:
+                    if os.path.isdir(user_data[1]):
+                        logger.debug(f"open_file: instance '{self.tag}' ({self.instance_tag}), Content: {dpg.get_item_label(sender)}, files: {user_data}")
+                        self.chdir(user_data[1])
+                        dpg.set_value(f"ex_search_{self.instance_tag}", "")
+                    elif os.path.isfile(user_data[1]):
+                        if len(self.selected_files) < 1:
+                            self.selected_files.append(user_data[1])
+                        self.ok()
+                        return user_data[1]
+            else:
+                # Only what this dialog can return responds to a click. In "dir-with-contents" the file
+                # rows are built disabled, so this is a second line of defence rather than the only one.
+                if os.path.isdir(user_data[1]) if self.returns_dir else os.path.isfile(user_data[1]):
+                    self._deselect_recursive(f"explorer_{self.instance_tag}")  # unselect others
+                    dpg.set_value(sender, True)  # and select this item
+                    # Save mode: populate file name field from clicked file, without file extension
+                    if self.save_mode:
+                        basename, ext = os.path.splitext(user_data[0])
+                        dpg.set_value(f"ex_search_{self.instance_tag}", basename)
+                        self._update_search()
+                    self.selected_files.clear()
+                    self.selected_files.append(user_data[1])
+                    self._refresh_target_notification()
+    def _make_row(self, entry, callback, parent=None, selected_paths=()):
+        """Build one table row from a `filelisting.FileEntry`.
+
+        The entry carries everything the row needs, so nothing here consults the filesystem and nothing
+        has to be read back off the widgets later.
+
+        `selected_paths`: which paths were selected before this rebuild. A row for one of them comes up
+        already selected, so a selection survives a re-listing instead of quietly evaporating.
+
+        `parent`: the table to build into. Defaults to this dialog's own listing table.
+        """
+        # Resolved here rather than in the signature: a default argument is evaluated once, when the
+        # `def` runs, and for a method that is at class-definition time — where there is no instance to
+        # ask. The value is the same for the life of a dialog either way, `instance_tag` being fixed.
+        if parent is None:
+            parent = f"explorer_{self.instance_tag}"  # tag
+
+        # `..` is the way out of the directory rather than something in it: one spanning cell, and no
+        # date/type/size.
+        if entry.is_parent:
+            with dpg.table_row(parent=parent):
+                with dpg.group(horizontal=True):
+                    # Dimmed like everything else the dialog will not return, which is what the grid
+                    # does with it too: `..` is not a choice in any mode, so showing it at full strength
+                    # among entries that *are* choices says the opposite of what is true.
+                    dpg.add_image(self.img_mini_folder, user_data=entry.kind,
+                                  tint_color=[255, 255, 255, self.image_transparency])
+                    parent_cell = dpg.add_selectable(label=entry.name, callback=self._go_up_one_level,
+                                                     span_columns=True, height=self.selec_height)
+                    dpg.bind_item_theme(parent_cell, self.unreturnable_text_theme)
+                    self._row_themes.append([(parent_cell,
+                                              self.unreturnable_text_theme,
+                                              self.unreturnable_text_theme_cursor)])
+            return
+
+        # Shown, but nothing can be done with it: not an answer this dialog returns, and not somewhere
+        # to go either. Directories stay live in every mode — a file picker cannot *choose* one but must
+        # let you walk into it — so the rule is choosability plus navigability, not choosability alone.
+        # Files in a directory picker are the case this exists for; a broken link falls out of it too,
+        # having been inert in practice all along without looking it.
+        inert = not self._is_choosable(entry) and not entry.is_dir
+
+        # `user_data` shape is `open_file`'s contract: [name, full path, mtime, size].
+        kwargs_cell = {'callback': callback, 'span_columns': True, 'height': self.selec_height,
+                       'enabled': not inert,
+                       'user_data': [entry.name, entry.path, entry.mtime, entry.size or 0]}
+        # Two independent reasons to recede, so they compound rather than saturate: a hidden file you
+        # also cannot choose is less relevant than either alone, and one fixed alpha for "some reason
+        # applies" would flatten that back out.
+        dimming = 1.0
+        if entry.is_hidden:
+            dimming *= self.image_transparency / 255
+        if inert:
+            dimming *= self.image_transparency / 255
+        alpha = round(255 * dimming)
+        kwargs_image = {'tint_color': [255, 255, 255, alpha], 'user_data': entry.kind}
+
+        with dpg.table_row(parent=parent):
+            with dpg.group(horizontal=True):
+                dpg.add_image(self._icon_for(entry), **kwargs_image)
+                cell_name = dpg.add_selectable(label=entry.name, **kwargs_cell)
+            cell_time = dpg.add_selectable(label=filelisting.format_mtime(entry.mtime), **kwargs_cell)
+            cell_type = dpg.add_selectable(label=filelisting.format_kind(entry), **kwargs_cell)
+            cell_size = dpg.add_selectable(label=filelisting.format_size(entry.size), **kwargs_cell)
+
+            # Restore the selection: only the name cell is set, since every cell spans the columns and
+            # setting all four would stack the tint on itself.
+            if entry.path in selected_paths and self._is_choosable(entry):
+                dpg.set_value(cell_name, True)
+                self.selected_files.append(entry.path)
+
+            if self.allow_drag:
+                drag_payload = dpg.add_drag_payload(parent=cell_name, payload_type=self.PAYLOAD_TYPE)
+            dpg.bind_item_theme(cell_name, self.selec_alignt)
+            dpg.bind_item_theme(cell_time, self.selec_alignt)
+            dpg.bind_item_theme(cell_type, self.selec_alignt)
+            dpg.bind_item_theme(cell_size, self.size_alignt)
+
+            # Each cell with the theme it wears normally and the one it wears as the cursor, so moving
+            # the cursor is a rebind of four cells rather than a rebuild of the listing. Kept in row
+            # order, matching `shown_items`, which is what the cursor indexes.
+            self._row_themes.append([(cell_name, self.selec_alignt, self.selec_alignt_cursor),
+                                     (cell_time, self.selec_alignt, self.selec_alignt_cursor),
+                                     (cell_type, self.selec_alignt, self.selec_alignt_cursor),
+                                     (cell_size, self.size_alignt, self.size_alignt_cursor)])
+            if self.allow_drag:
+                if entry.name.lower().endswith((".png", ".jpg")):
+                    dpg.add_image(self.img_big_picture, parent=drag_payload)
+                elif entry.is_dir:
+                    dpg.add_image(self.img_folder, parent=drag_payload)
+                else:
+                    dpg.add_image(self.img_document, parent=drag_payload)
+    def _go_up_one_level(self, sender, app_data, user_data):
+        """GUI callback: if this item double-clicked, go up one level."""
+        ctrl_pressed = dpg.is_key_down(dpg.mvKey_LControl) or dpg.is_key_down(dpg.mvKey_RControl)
+        current_time = time.time()
+        double_clicked = (current_time - self.last_click_time < self.double_click_threshold)
+        self.last_click_time = current_time
+
+        dpg.set_value(sender, False)  # unselect the ".." entry
+
+        if ctrl_pressed:
+            return
+        if double_clicked:
+            dpg.set_value(f"ex_search_{self.instance_tag}", "")
+            self.chdir("..")
+    def set_type_filter(self, label):
+        """Select the file type filter by its label, exactly as picking it from the combo would.
+
+        `label` is one of the labels derived from `filter_list` — a bare extension for a string entry,
+        or the given label for a `(label, extensions)` pair.
+        """
+        self._set_type_filter(label)
+        dpg.set_value(self.combo_file_filter, self.file_filter)  # keep the GUI in sync when called programmatically
+        dpg.set_value(self.text_file_filter_extensions, self._describe_type_filter(self.file_filter))
+        self._apply_automatic_grid_mode(rebuild=False)  # the listing is about to be rebuilt anyway
+        self.reset_dir()
+    def set_filter_list(self, filter_list, file_filter=None):
+        """Replace the offered file type filters, as `filter_list` in the constructor.
+
+        For an app whose acceptable types depend on state that can change while it runs — a Librarian
+        that offers image formats only while a vision model is loaded. Call it before
+        `show_file_dialog`, so what is offered reflects the answer at the moment of opening rather than
+        at construction.
+
+        `file_filter` selects one of the new labels; `None` takes the first, as in the constructor.
+
+        The listing is rebuilt only if the dialog is already open. Called just before `show_file_dialog`,
+        which is the intended use, rebuilding here would be work thrown away: that call rebuilds anyway,
+        and on a directory of thousands each rebuild is the couple of seconds the dialog is already slow by.
+        """
+        self._install_filters(filter_list, file_filter)
+        dpg.configure_item(self.combo_file_filter, items=self._filter_labels)
+        dpg.set_value(self.combo_file_filter, self.file_filter)
+        dpg.set_value(self.text_file_filter_extensions, self._describe_type_filter(self.file_filter))
+        self._apply_automatic_grid_mode(rebuild=False)
+        # The *configured* show flag, not `is_visible`: the latter answers "did the user see it in the last
+        # rendered frame", which is False for a window shown microseconds ago and False always with no
+        # render loop. The question here is whether a listing exists to be brought up to date.
+        if dpg.get_item_configuration(self.tag)["show"]:  # tag
+            self.reset_dir()
+    def filter_combo_selector(self, sender, app_data):
+        self.set_type_filter(dpg.get_value(sender))
+    def chdir(self, path):
+        try:
+            os.chdir(path)
+            self.reset_dir()
+        except PermissionError as e:
+            self.message_box("File dialog - PerimssionError", f"Cannot open the folder because is a system folder or the access is denied\n\nMore info:\n{e}")
+        except NotADirectoryError as e:
+            self.message_box("File dialog - not a directory", f"The selected item is not a directory, but a file.\n\nMore info:\n{e}")
+    def reset_dir(self, file_name_filter=None):
+        """Rebuild the listing of the working directory, optionally narrowed to `file_name_filter`.
+
+        This *lists*; it does not navigate. Going somewhere is `chdir`, which moves the process and
+        then calls this.
+        """
+        # Read from the process rather than accepted as an argument, so the two cannot disagree: `ok`
+        # and the target notification both answer from `os.getcwd()`, and a listing built from
+        # anywhere else would be a dialog that shows you A and hands back B.
+        default_path = os.getcwd()
+        logger.debug(f"reset_dir: instance '{self.tag}' ({self.instance_tag}), called with file_name_filter = {file_name_filter}, default_path = '{str(default_path)}'")
+        # Phase timings, so a slow open says *which* phase is slow rather than only that it was. Reading
+        # the directory, deleting the old rows and creating the new ones have entirely different fixes,
+        # and a report of "a couple of seconds" does not distinguish them.
+        # What was selected, so it can be restored against the new listing. A rebuild happens on every
+        # keystroke in the find field and on every view switch, and until 2026-08-14 each of those
+        # silently dropped the selection: the *cursor* was re-anchored by path and the selection was
+        # not, so switching to the grid and back left the file chosen but no longer shown as chosen.
+        previously_selected = set(self.selected_files)
+        self.selected_files.clear()
+        self.shown_items.clear()
+        self._row_entries = []
+        self._row_themes = []
+
+        # What this is a listing *of*. A rebuild of the same directory and a move to a different one
+        # look identical from here, and the cursor wants opposite things from them — hold its place
+        # across a re-filter, start at the top of somewhere new — so the views are told which directory
+        # this is and work it out themselves.
+        listed_dir = os.path.abspath(str(default_path))
+        try:
+            dpg.configure_item(f"ex_path_input_{self.instance_tag}", default_value=os.getcwd())
+            # Compiled once per rebuild rather than per entry: on a directory of thousands, the split is
+            # the part worth hoisting out of the loop.
+            matches_name_filter = common_utils.make_search_matcher(file_name_filter or "")
+
+            # Enumerating, filtering and sorting all happen here, on data, before a widget is touched.
+            with timer() as tim_list:
+                entries = filelisting.list_directory(default_path,
+                                                     show_hidden=self.show_hidden_files,
+                                                     dirs_only=not self.lists_files,
+                                                     name_filter=matches_name_filter,
+                                                     type_filter=self._matches_type_filter,
+                                                     sort_key=self._sort_key,
+                                                     descending=self._sort_descending)
+            # `..` stays out: it is the way out of the directory rather than a candidate for the
+            # unique-match shortcut in `ok`.
+            self.shown_items.extend(entry.path for entry in entries if not entry.is_parent)
+
+            # Only the view on screen is built. The other one is emptied rather than left holding a
+            # stale listing, which would be both the memory and, on a switch back, the wrong answer.
+            with timer() as tim_delete:
+                self.delete_table()
+
+            with timer() as tim_build:
+                if self._grid_mode:
+                    grid = self._the_grid()
+                    grid.set_listing(entries, listing_key=listed_dir)
+                    # Re-made against the new order, and the grid's own callback puts the survivors
+                    # back into `selected_files`.
+                    grid.set_selected_paths(previously_selected)
+                else:
+                    for entry in entries:
+                        self._make_row(entry, self.open_file, selected_paths=previously_selected)
+                    # After the rows exist, since the cursor paints itself onto one of them.
+                    self._row_entries = list(entries)
+                    self._table_cursor.set_listing([entry.path for entry in entries],
+                                                   listing_key=listed_dir)
+                    # `..` is where the cursor rests while nothing has been typed, and that is
+                    # load-bearing rather than incidental: the cursor is what Ctrl+Enter returns, so a
+                    # cursor parked on the first subfolder would hand back a *child* of the directory
+                    # you navigated to in order to choose it.
+                    #
+                    # Typing changes the question. A filter is a search, and a search puts the cursor on
+                    # its first hit — otherwise "type a few characters, press Enter" leaves the
+                    # directory instead of opening the match, `..` being what Enter would act on.
+                    if file_name_filter and self._table_cursor.current == 0 and len(entries) > 1 and entries[0].is_parent:
+                        self._table_cursor.set_current(1)
+
+            logger.debug(f"reset_dir: instance '{self.tag}' ({self.instance_tag}), {len(self.shown_items)} entries "
+                         f"as {'tiles' if self._grid_mode else 'rows'}: "
+                         f"list {tim_list.dt:.3f}s, delete {tim_delete.dt:.3f}s, build {tim_build.dt:.3f}s")
+
+        # exceptions
+        except FileNotFoundError:
+            logger.error(f"reset_dir: instance '{self.tag}' ({self.instance_tag}), invalid path: '{str(default_path)}'")
+        except Exception as exc:
+            # Logged with its traceback *before* the message box, which shows only `str(exc)`. A listing
+            # error is otherwise reduced to one line with no stack — and where the dialog is modal the
+            # box cannot even be shown, so the line goes to the log stripped of everything that would
+            # locate it. Cost a CI round on a Windows-only failure that said "negative dimensions are
+            # not allowed" and nothing about where.
+            logger.exception(f"reset_dir: instance '{self.tag}' ({self.instance_tag}), failed to list '{str(default_path)}'")
+            self.message_box("File dialog - Error", f"An unknown error has occured when listing the items, More info:\n{exc}")
+
+        # Every path into here changes something the promised target depends on — which directory is
+        # shown, and what survives the find field — so this is the one place that has to refresh it.
+        self._refresh_target_notification()
+    def _the_grid(self):
+        """The grid view, built on first use.
+
+        Deferred because building it costs the thumbnail decoder and its device — several seconds of
+        torch import for an app that may never switch views. A dialog used only as a list pays none of
+        it.
+        """
+        if self._grid is None:
+            # Imported here for the same reason: `raven.common.gui.filegrid` reaches torch, and every
+            # app with a file dialog would otherwise pay that at startup.
+            from ...common.gui import filegrid
+
+            icon_assets = {name: tuple(getattr(self, f"ico_{name}")) for name in _ICON_NAMES}
+            self._grid = filegrid.FileGrid(parent=f"grid_host_{self.instance_tag}",  # tag
+                                           width=self._grid_size[0], height=self._grid_size[1],
+                                           icon_assets=icon_assets,
+                                           icon_name_for=self._tile_icon_for,
+                                           selectable_for=self._is_choosable,
+                                           tile_size=self.thumbnail_size,
+                                           thumbnail_device=self.thumbnail_device,
+                                           allow_multi_select=self.multi_selection,
+                                           on_current_entry_changed=self._grid_current_changed,
+                                           on_selection_changed_entries=self._grid_selection_changed,
+                                           on_activate=self._grid_activate)
+        return self._grid
+    def _grid_activate(self, entry):
+        """Double click in the grid: descend into the directory, or accept the file."""
+        if entry.is_dir:
+            dpg.set_value(f"ex_search_{self.instance_tag}", "")
+            self.chdir(entry.path)
+            return
+        if not self._is_choosable(entry):
+            return  # a broken link leads nowhere, and `..` was handled above
+        self.selected_files.clear()
+        self.selected_files.append(entry.path)
+        self.ok()
+    def _activate_cursor_entry(self):
+        """Enter: go as deep as this entry allows.
+
+        One sentence covers every mode, which is why the rule reads as a rule rather than a table: `..`
+        and directories are somewhere to *go*, and a file in a picker that returns files is the bottom,
+        so accepting it is the deepest move available. A file in a folder picker is scenery — it is
+        shown so the folder can be judged by it — and Enter on scenery does nothing.
+
+        Ctrl+Enter is the counterpart that declines to descend, and it is `ok` unchanged.
+        """
+        entry = self._cursor_entry()
+        if entry is None:
+            self.ok()  # nothing under the cursor: fall back to what the OK button would do
+            return
+        if entry.is_parent or entry.is_dir:
+            self.chdir(entry.path)
+            return
+        if not self._is_choosable(entry):
+            return
+        self.selected_files.clear()
+        self.selected_files.append(entry.path)
+        self.ok()
+    def _handle_key(self, key: int) -> None:
+        """Handle one key press for this dialog. Called by the module-level handler, which owns the
+        registry and decides *which* dialog is listening; this decides what the key does.
+
+        A closure rather than a method, for the reason `reset_dir` and `sort_by` are: the things a
+        hotkey has to reach — `chdir`, `sort_by`, `_go_up_one_level`, the listing state — live in this
+        scope and are not attributes of anything. The module-level callback can see only public
+        methods, which is why it has never been able to grow past the five keys it has.
+        """
+        ctrl = dpg.is_key_down(dpg.mvKey_LControl) or dpg.is_key_down(dpg.mvKey_RControl)
+
+        # TODO (briefs/researchers-night/filedialog-keyboard-brief.md): the rest of the keyboard —
+        # TODO: the focus-parking chords, hidden files.
+        shift = dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)
+
+        # Tab swaps the caret's two homes. ImGui does not spend Tab on an `InputText` — it neither
+        # moves focus nor inserts anything — so the key is ours to define, and this is the only way
+        # to reach the state where the find field is inactive.
+        if key == dpg.mvKey_Tab:
+            if self._caret_in_listing:
+                self._focus_field()
+            else:
+                self._focus_listing()
+            return
+
+        # Ctrl and a number picks the Nth type filter; add Shift and it picks the Nth sort criterion.
+        # One indexed rule for two labelled rows, which is what makes them worth remembering — and what
+        # keeps the criteria off letters they cannot have, `Ctrl+Shift+S` reading as a Save variant in a
+        # dialog that saves and `Ctrl+Shift+N` being *new folder* in every file manager.
+        if ctrl and dpg.mvKey_1 <= key <= dpg.mvKey_9:
+            n = key - dpg.mvKey_1
+            if shift:
+                if n < len(_SORT_CRITERIA):
+                    self.sort_by(_SORT_CRITERIA[n][0])
+            elif n < len(self._filter_labels):
+                self.set_type_filter(self._filter_labels[n])
+            return
+
+        nav = self._navigator()
+        if key == dpg.mvKey_Up:
+            nav.navigate_row_up()
+        elif key == dpg.mvKey_Down:
+            nav.navigate_row_down()
+        elif key == _KEY_PAGE_UP:
+            nav.navigate_page_up()
+        elif key == _KEY_PAGE_DOWN:
+            nav.navigate_page_down()
+        elif key == dpg.mvKey_Left and self._caret_in_listing:
+            # Left and Right are not unwanted while the caret is in the find field, they are
+            # *occupied* — a single-line entry spends them on the text caret. Tab is what frees them,
+            # which is why the grid is only now completely reachable: its rows hold several tiles, so
+            # without a horizontal step every column but the first was unvisitable from the keyboard.
+            nav.navigate_prev()
+        elif key == dpg.mvKey_Right and self._caret_in_listing:
+            nav.navigate_next()
+        elif key == dpg.mvKey_Home and not ctrl:
+            nav.navigate_first()
+        elif key == dpg.mvKey_End:
+            nav.navigate_last()
+        elif key == dpg.mvKey_Return and ctrl:
+            self.ok()  # commit here, without descending
+        elif key == dpg.mvKey_Return:
+            self._activate_cursor_entry()
+        elif key == dpg.mvKey_Escape:
+            self.cancel()
+        elif key == dpg.mvKey_F5:
+            self.refresh()
+        elif ctrl and key == dpg.mvKey_Home:
+            self.back_to_default_path()
+        elif ctrl and key == dpg.mvKey_F:
+            self._focus_field()
+        elif ctrl and key == dpg.mvKey_T:
+            # `T` for Thumbnails, and free to mean it: the type filter gave the letter up when its label
+            # became `Show`, which left the dialog's one unlabelled-by-key control holding the one
+            # mnemonic that fits it. Silently ignored where the grid is not on offer — a directory
+            # picker listing no files has nothing to make tiles of — since the checkbox is hidden there
+            # too and a key that acts where its control is invisible is worse than one that does not.
+            if self._grid_is_available():
+                self.set_grid_mode(not self._grid_mode)
 
     def _navigator(self):
         """Whichever view is on screen, as the thing that answers to `navigate_*`.
