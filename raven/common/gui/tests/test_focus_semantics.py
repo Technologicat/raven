@@ -23,10 +23,17 @@ These tests map a real window, because focus is only meaningful once frames are 
 takes keyboard focus from whatever the developer is typing into, so they are marked `gui` and skipped unless
 `--run-gui` is passed. Nothing here synthesizes input; the window is on screen for well under a second.
 
-Not covered here, for want of a way to do it without driving the keyboard: that a focused button ignores
-Space and Enter (DPG leaves ImGui's keyboard-nav activation off), which is what makes a button a safe place
-to park focus. Verified by hand; recorded in `dpg-notes.md`.
+One test here does synthesize input, and says so in its name. That a focused button ignores Space and Enter
+— DPG leaves ImGui's keyboard-nav activation off — is what makes a button a safe place to park focus, and
+`FileDialog` now parks there whenever Tab hands the arrow keys to its listing. An assumption load-bearing
+enough to be worth the intrusion: it is an upstream default nothing in DPG's API exposes for inspection, so
+behaviour is the only place it can be read. Should it ever flip, the failure would be a file dialog that
+saves a file when the user meant to step sideways.
 """
+
+import shutil
+import subprocess
+import time
 
 import pytest
 
@@ -123,3 +130,70 @@ def test_focus_item_on_a_child_window_activates_a_text_field_instead(mapped_view
     render()
     assert dpg.is_item_focused("field") is True  # tag
     assert dpg.is_item_active("field") is True  # tag
+
+
+def _press(keysym: str, window_title: str) -> bool:
+    """Send one key press to the window named `window_title`. False if the desktop tools are missing.
+
+    The window is really activated first, rather than addressed with `xdotool key --window`: GLFW reads
+    input from the X server directly and ignores the `XSendEvent` that the windowed form produces, so a
+    targeted press is silently discarded. Which means this genuinely takes the keyboard for a moment.
+    """
+    if not all(shutil.which(tool) for tool in ("xdotool", "wmctrl")):
+        return False
+    found = subprocess.run(["xdotool", "search", "--name", window_title],
+                           capture_output=True, text=True)
+    window_ids = found.stdout.split()
+    if not window_ids:
+        return False
+    subprocess.run(["xdotool", "windowactivate", "--sync", window_ids[-1]], check=False)
+    time.sleep(0.2)
+    subprocess.run(["xdotool", "key", keysym], check=False)
+    time.sleep(0.2)
+    return True
+
+
+def test_synthesized_keys_reach_the_app_at_all(mapped_viewport):
+    """The control for the test below, and the reason its silence can be read as an answer.
+
+    A test asserting that a key did *nothing* passes just as well when the key never arrived — so one
+    keystroke has to be shown landing somewhere before the absence of another means anything. A text field
+    holding the caret is the cheapest witness: type into it and its value changes.
+    """
+    dpg.set_value("field", "")  # tag
+    render()
+    dpg.focus_item("field")  # tag
+    render()
+
+    if not _press("x", "raven focus semantics test"):
+        pytest.skip("xdotool/wmctrl not available, cannot synthesize a key press")
+    render()
+
+    assert dpg.get_value("field") == "x", "synthesized keys are not reaching the app"  # tag
+
+
+@pytest.mark.parametrize("keysym", ["Return", "space"])
+def test_a_focused_button_ignores_the_keys_that_would_press_it(mapped_viewport, keysym):
+    """The property that makes a button a safe place to park focus.
+
+    Parking focus somewhere is how a panel says "the keyboard is mine now" — `FileDialog` does it on every
+    Tab — and the target has to be an item that will not act on the keys the panel then wants to use.
+    A button is that, because DPG does not enable ImGui's keyboard navigation, so the focus a button holds
+    is inert. Nothing in the API reports this, hence a behavioural test.
+
+    Synthesizes real key presses, and therefore really takes the keyboard for about half a second. Skipped
+    where `xdotool` is absent, which is every CI runner.
+    """
+    pressed = []
+    dpg.configure_item("button", callback=lambda: pressed.append(keysym))  # tag
+    render()
+    dpg.focus_item("button")  # tag
+    render()
+    assert dpg.is_item_focused("button") is True, "precondition: the button holds focus"  # tag
+
+    if not _press(keysym, "raven focus semantics test"):
+        pytest.skip("xdotool/wmctrl not available, cannot synthesize a key press")
+    render()
+
+    assert pressed == [], (f"a focused button acted on {keysym}: ImGui keyboard navigation appears to be "
+                          f"enabled, and parking focus on a button is no longer safe")

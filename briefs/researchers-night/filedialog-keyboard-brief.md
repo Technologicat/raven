@@ -417,7 +417,9 @@ specified. What is known so far:
   caret or selection API to undo it.
 
 So the open question is not "how do we write the field" but "how do we hand it back with the caret at the
-end". Until that is answered, Tab completion is designed but not buildable, and the save-mode arrow-fill
+end". Tab answered it, by making a moment where the field is inactive and there is no caret to hand back
+— see the build-state section at the end. What follows was written before that landed: Tab completion was
+designed but not buildable, and the save-mode arrow-fill
 needs the same answer — with the mitigating detail that arrow navigation happens when the user is browsing
 rather than mid-word, so a select-all there is less destructive.
 
@@ -494,15 +496,27 @@ that from the code.
   - The tier is therefore *complete rather than finished*: every remaining tooltip belongs to a key that
     does not exist yet, so each lands with its key rather than as a separate pass. Nothing to come back for.
 
-**Not built:** Tab, Ctrl+Space, Alt+Up, Ctrl+Up, Ctrl+L, Ctrl+Shift+F, Ctrl+B, Ctrl+H, F1, the places-panel
-migration.
+- **Tab moves the caret between the find field and the listing**, and Left / Right come free with it —
+  `navigate_prev` / `navigate_next`, which both views had implemented and neither could be given a key.
+  **Grid view is therefore crossable at last**: its rows hold eight tiles, and until Left and Right were
+  freed every column but the first was unreachable. Live-tested 2026-08-18 in Cherrypick's thumbnail view.
+  - **Focus parks on the OK button, not on the cursor row**, which is a departure from what this brief
+    proposed. A table row is a selectable and could hold focus, but then focus would have to chase the
+    cursor on every move, and grid view has nothing to chase — a drawlist has no focusable items, so that
+    view needed a stand-in whatever the table did. One target for both is what keeps the two views
+    answering to the same code. A button is safe to park on: DPG leaves ImGui's keyboard-nav activation
+    off, so it ignores Space and Enter rather than pressing itself.
+  - **The caret's home is a flag, not a reading of `is_item_active`.** The field is inactive whenever
+    anything at all has been clicked, and that must not silently rebind the arrow keys.
 
-**Take Tab next**, and not only because it is the largest. Three things are waiting on it and on nothing
-else: grid view is *incomplete* without it (Up/Down move a whole row of tiles, so every column but the first
-is unreachable until Left/Right are freed); the save-mode fill and Tab completion both need a moment when
-the field is inactive, which is exactly what Tab creates; and the focus-parking chords all reduce to the
-same mechanism once one panel has it. The cheap keys — Alt+Up, Ctrl+Up, Ctrl+H — are genuinely cheap and
-can go in any order.
+**Not built:** Ctrl+Space, Alt+Up, Ctrl+Up, Ctrl+L, Ctrl+Shift+F, Ctrl+B, Ctrl+H, F1, the places-panel
+migration, and Tab *completion* — the key is built, what it does to the typed text is not.
+
+**Tab has unblocked the two features that were waiting on an inactive field.** Completion and the save-mode
+fill both write the find field, which an active `InputText` reverts on the next frame; Tab is the moment
+when it is not active. Neither is built, but neither is blocked any more — see the `set_value` section
+above, whose "designed but not buildable" verdict Tab is the answer to. The cheap keys — Alt+Up, Ctrl+Up,
+Ctrl+H — are genuinely cheap and can go in any order.
 
 **When testing type filters, use Librarian's attach dialog rather than Cherrypick.** Cherrypick passes no
 `filter_list`, so it gets the default hundreds-of-extensions list and Ctrl+1 selects the filter already
