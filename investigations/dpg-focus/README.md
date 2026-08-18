@@ -105,7 +105,21 @@ because both land in `raven/common/gui/animation.py` and are better done togethe
     most likely to change under upgrade — and a result with no version against it cannot be compared to a
     later run.
 
-All five are self-driving: run them and read the table. Re-run after a DPG upgrade that might have touched focus
+- `auto_focus_target_probe.py` — which item DPG auto-focuses in a child window, and whether it *activates*
+  it. Kept for what it rules out rather than what it establishes: image buttons are **not** skipped in that
+  order, and auto-focus focuses without activating. Both were the obvious explanation for the flash below,
+  and both are wrong. Added 2026-08-18, DPG 2.3.1. Under a second.
+
+- `catch_visual_flash.sh` — not a probe but the instrument that worked when three probes did not. Records a
+  running app's window with `ffmpeg -f x11grab` at 60 fps and ranks the frames by how much the region of
+  interest stands out, so a 25–100 ms artifact can be found and looked at. Screenshots cannot: `import`
+  costs 50–200 ms a frame and samples roughly one in five.
+  - **The open question it was built for is still open.** `FileDialog`'s path field goes *active* for a few
+    frames on every Tab — active meaning the caret, hence select-all, hence a blue flash in a field nobody
+    touched. That much is measured, by this script and by logging focus state per frame from the grid's
+    tick thread. What puts it there is not known, and three plausible mechanisms have been falsified.
+
+All five python probes are self-driving: run them and read the table. Re-run after a DPG upgrade that might have touched focus
 handling — the send path in `raven/librarian/app.py` and the search-accept path in `raven/visualizer/app.py`
 both rest on the button result, and `FileDialog`'s choice of parking spot rests on the position result. If a
 later DPG lifts the window-to-child restriction, that probe is where it will show, and the parking spot can go
