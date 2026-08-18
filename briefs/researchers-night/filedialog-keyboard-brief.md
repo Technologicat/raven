@@ -274,9 +274,23 @@ glyph on a plain button. Doing the same here matches the look and needs nothing 
 
 Licensing comes out clean rather than merely deferred: Font Awesome's split terms were settled on
 2026-08-03 (`TODO_DEFERRED.md`) — icons CC-BY-4.0, fonts OFL-1.1 — and the webfonts already ship. Every
-glyph this needs exists: `ICON_ARROW_LEFT`, `ICON_ARROW_RIGHT`, `ICON_ARROW_UP`, `ICON_HOUSE` for
-default-path, and `ICON_ARROW_ROTATE_RIGHT` / `ICON_ARROWS_ROTATE` for refresh. Converting the two existing
-image buttons at the same time is what makes the row one set instead of a mixture.
+glyph this needs exists: `ICON_ARROW_LEFT`, `ICON_ARROW_RIGHT`, `ICON_ARROW_UP`, and
+`ICON_ARROW_ROTATE_RIGHT` / `ICON_ARROWS_ROTATE` for refresh. Converting the two existing image buttons at
+the same time is what makes the row one set instead of a mixture.
+
+**Default-path is the one that must not be a house** (Juha, 2026-08-18, who spotted it colliding with the
+places panel's Home). A second house on screen meaning a different destination would replace one confusing
+arrow with a confusing house — but the collision is the smaller half of it. The larger half is that
+`default_path` is *not* the user's home: of the 15 call sites it is an avatar assets directory six times,
+the current working directory five, an app-supplied path four, and `~` exactly **once**. A house would be
+wrong about the destination in fourteen cases out of fifteen, which is worse than ambiguous.
+
+What the button means is *"back to where this dialog started"*, so the glyph wants to say a marked starting
+place rather than a home: `ICON_FLAG` (a flag planted where you began) or `ICON_LOCATION_DOT`, with
+`ICON_ANCHOR` and `ICON_BULLSEYE` also available. `ICON_FLAG` is the recommendation — it carries "the spot
+I came from" without claiming to be a location on disk, which a pin arguably does. Settle it by looking at
+the row rendered, not from the list: four glyphs side by side is a thing to judge by eye, and rendering the
+candidates together is a two-minute probe.
 
 The one piece of wiring to expect: the house pattern is `add_button(label=fa.ICON_X)` followed by
 `bind_item_font(tag, themes_and_fonts.icon_font_solid)`, and `fdialog.py` currently touches neither the
