@@ -429,9 +429,9 @@ class ImageView:
         self._set_mip_loading(False)
         self._needs_render = True
 
-    def get_image_key(self) -> Any:
+    def _get_image_key(self) -> Any:
         return self._image_key
-    image_key = property(fget=get_image_key,
+    image_key = property(fget=_get_image_key,
                          doc="""Caller's identity for the image currently held, or `None`.
 
                          Set by whichever of `set_image`, `load_from_file` or `set_preloaded_arrays` last

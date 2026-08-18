@@ -103,25 +103,25 @@ class DPGVUMeter:
         self._peak = min_value
         self.render()
 
-    def get_width(self) -> int:
+    def _get_width(self) -> int:
         return self._width
-    def set_width(self, width: int) -> None:
+    def _set_width(self, width: int) -> None:
         if width != self.width:
             with self._render_lock:
                 self._width = width
                 self._update_geometry()
                 self.render()
-    width = property(fget=get_width, fset=set_width, doc="The width of the VU meter, in pixels. Read/write.")
+    width = property(fget=_get_width, fset=_set_width, doc="The width of the VU meter, in pixels. Read/write.")
 
-    def get_height(self) -> int:
+    def _get_height(self) -> int:
         return self._height
-    def set_height(self, height: int) -> None:
+    def _set_height(self, height: int) -> None:
         if height != self.height:
             with self._render_lock:
                 self._height = height
                 self._update_geometry()
                 self.render()
-    height = property(fget=get_height, fset=set_height, doc="The height of the VU meter, in pixels. Read/write.")
+    height = property(fget=_get_height, fset=_set_height, doc="The height of the VU meter, in pixels. Read/write.")
 
     def _value_to_pixels(self, value: float) -> int:
         """Data value -> pixels, measured from bottom of widget, accounting for border."""

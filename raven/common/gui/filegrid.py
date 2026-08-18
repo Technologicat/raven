@@ -271,19 +271,19 @@ class FileGrid(ThumbnailGrid):
                 # Placing, not choosing — so the anchor survives a rebuild that moved the cursor off it.
                 self.set_current(target, anchor=False)
 
-    def get_entries(self) -> list[FileEntry]:
+    def _get_entries(self) -> list[FileEntry]:
         with self._lock:
             return list(self._entries)
-    entries = property(fget=get_entries, doc="The listing being shown, in display order.")
+    entries = property(fget=_get_entries, doc="The listing being shown, in display order.")
 
-    def get_current_entry(self) -> Optional[FileEntry]:
+    def _get_current_entry(self) -> Optional[FileEntry]:
         with self._lock:
             if 0 <= self._current < len(self._entries):
                 return self._entries[self._current]
             return None
-    current_entry = property(fget=get_current_entry, doc="The entry the cursor is on, or `None`.")
+    current_entry = property(fget=_get_current_entry, doc="The entry the cursor is on, or `None`.")
 
-    def get_is_anchored(self) -> bool:
+    def _get_is_anchored(self) -> bool:
         """Whether the cursor is where it is because someone put it there.
 
         True once the cursor has been *moved* — by an arrow key, or by a caller passing `anchor=True` —
@@ -292,7 +292,7 @@ class FileGrid(ThumbnailGrid):
         """
         with self._lock:
             return self._anchor_path is not None
-    is_anchored = property(fget=get_is_anchored,
+    is_anchored = property(fget=_get_is_anchored,
                            doc="Whether the cursor's position was chosen rather than placed.")
 
     def set_current(self, idx: int, *, anchor: bool = True) -> None:
@@ -329,10 +329,10 @@ class FileGrid(ThumbnailGrid):
             self._apply_selection({idx for idx, entry in enumerate(self._entries)
                                    if entry.path in wanted and self.is_selectable(idx)})
 
-    def get_selected_entries(self) -> list[FileEntry]:
+    def _get_selected_entries(self) -> list[FileEntry]:
         with self._lock:
             return [self._entries[idx] for idx in sorted(self._selected) if idx < len(self._entries)]
-    selected_entries = property(fget=get_selected_entries,
+    selected_entries = property(fget=_get_selected_entries,
                                 doc="The multi-selected entries, in display order.")
 
     def tick(self) -> None:

@@ -114,19 +114,19 @@ class TableCursor:
             self._scroll_to_current()
             return not same_listing
 
-    def get_current(self) -> int:
+    def _get_current(self) -> int:
         with self._lock:
             return self._current
-    current = property(fget=get_current, doc="Index of the row the cursor is on, or -1 when there is none.")
+    current = property(fget=_get_current, doc="Index of the row the cursor is on, or -1 when there is none.")
 
-    def get_current_key(self) -> Any:
+    def _get_current_key(self) -> Any:
         with self._lock:
             if 0 <= self._current < len(self._keys):
                 return self._keys[self._current]
             return None
-    current_key = property(fget=get_current_key, doc="The key the cursor is on, or `None`.")
+    current_key = property(fget=_get_current_key, doc="The key the cursor is on, or `None`.")
 
-    def get_is_anchored(self) -> bool:
+    def _get_is_anchored(self) -> bool:
         """Whether the cursor is where it is because someone put it there.
 
         True once the cursor has been *moved* — by an arrow key, or by a caller passing `anchor=True` —
@@ -136,7 +136,7 @@ class TableCursor:
         """
         with self._lock:
             return self._anchor_key is not None
-    is_anchored = property(fget=get_is_anchored,
+    is_anchored = property(fget=_get_is_anchored,
                            doc="Whether the cursor's position was chosen rather than placed.")
 
     def set_current(self, idx: int, *, anchor: bool = True) -> None:

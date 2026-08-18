@@ -78,7 +78,7 @@ class SidecarEntry:
     companion_filenames: list[str] = dataclasses.field(default_factory=list)
     companion_bytes: int = 0
 
-    def get_archival_filename(self) -> str:
+    def _get_archival_filename(self) -> str:
         """The best stored copy of this attachment — the preserved original if there is one, else the file itself.
 
         The same resolution the chat log's "show full-size image" action makes, and for the same reason: what
@@ -87,17 +87,17 @@ class SidecarEntry:
         """
         return self.metadata.get("original_sidecar") or self.filename
 
-    archival_filename = property(fget=get_archival_filename,
-                                 doc="The best stored copy: preserved original if any, else the file itself. See `get_archival_filename`.")
+    archival_filename = property(fget=_get_archival_filename,
+                                 doc="The best stored copy: preserved original if any, else the file itself.")
 
-    def get_total_bytes(self) -> int:
+    def _get_total_bytes(self) -> int:
         """Disk this attachment occupies in total — itself plus any companion files deleted alongside it."""
         return self.size_bytes + self.companion_bytes
 
-    total_bytes = property(fget=get_total_bytes,
-                           doc="Disk this attachment occupies in total, companions included. See `get_total_bytes`.")
+    total_bytes = property(fget=_get_total_bytes,
+                           doc="Disk this attachment occupies in total, companions included.")
 
-    def get_sort_key(self) -> tuple[str, str]:
+    def _get_sort_key(self) -> tuple[str, str]:
         """Case-insensitive by display name, with the filename breaking ties (two attachments can share a name).
 
         Alphabetical is a weak ordering for a set of forgotten files, but it is the only one available while
@@ -106,8 +106,8 @@ class SidecarEntry:
         """
         return (self.display_name.casefold(), self.filename)
 
-    sort_key = property(fget=get_sort_key,
-                        doc="Case-insensitive display name, then filename. See `get_sort_key`.")
+    sort_key = property(fget=_get_sort_key,
+                        doc="Case-insensitive display name, then filename.")
 
 
 @dataclasses.dataclass
@@ -124,26 +124,26 @@ class CleanupPreview:
     images: list[SidecarEntry]
     documents: list[SidecarEntry]
 
-    def get_sidecars(self) -> list[SidecarEntry]:
+    def _get_sidecars(self) -> list[SidecarEntry]:
         """All unreferenced attachments, both kinds, images first."""
         return self.images + self.documents
 
-    sidecars = property(fget=get_sidecars,
-                        doc="All unreferenced attachments, both kinds, images first. See `get_sidecars`.")
+    sidecars = property(fget=_get_sidecars,
+                        doc="All unreferenced attachments, both kinds, images first.")
 
-    def get_total_bytes(self) -> int:
+    def _get_total_bytes(self) -> int:
         """Disk space the sidecar sweep would reclaim, over both kinds, companion files included."""
-        return sum(entry.total_bytes for entry in self.get_sidecars())
+        return sum(entry.total_bytes for entry in self.sidecars)
 
-    total_bytes = property(fget=get_total_bytes,
-                           doc="Disk space the sidecar sweep would reclaim. See `get_total_bytes`.")
+    total_bytes = property(fget=_get_total_bytes,
+                           doc="Disk space the sidecar sweep would reclaim.")
 
-    def get_is_empty(self) -> bool:
+    def _get_is_empty(self) -> bool:
         """Whether there is nothing to do — no unreachable nodes and no unreferenced attachments."""
         return not self.node_ids and not self.images and not self.documents
 
-    is_empty = property(fget=get_is_empty,
-                        doc="Whether a cleanup would do nothing at all. See `get_is_empty`.")
+    is_empty = property(fget=_get_is_empty,
+                        doc="Whether a cleanup would do nothing at all.")
 
 
 def describe_sidecar(datastore: chattree.PersistentForest, filename: str) -> SidecarEntry:
@@ -204,8 +204,8 @@ def preview_cleanup(datastore: chattree.PersistentForest, *roots: str) -> Cleanu
     subsumed = {companion for entry in entries.values() for companion in entry.companion_filenames}
     listed = [entry for filename, entry in entries.items() if filename not in subsumed]
 
-    images = sorted((entry for entry in listed if entry.is_image), key=SidecarEntry.get_sort_key)
-    documents = sorted((entry for entry in listed if not entry.is_image), key=SidecarEntry.get_sort_key)
+    images = sorted((entry for entry in listed if entry.is_image), key=lambda entry: entry.sort_key)
+    documents = sorted((entry for entry in listed if not entry.is_image), key=lambda entry: entry.sort_key)
     return CleanupPreview(node_ids=node_ids, images=images, documents=documents)
 
 

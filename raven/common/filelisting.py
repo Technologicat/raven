@@ -79,9 +79,9 @@ class FileEntry:
     # navigate by. `format_kind` composes the two for display.
     is_link: bool = False
 
-    def get_is_dir(self) -> bool:
+    def _get_is_dir(self) -> bool:
         return self.kind == KIND_DIR
-    is_dir = property(fget=get_is_dir, doc="Whether this entry is a directory. `..` counts as one.")
+    is_dir = property(fget=_get_is_dir, doc="Whether this entry is a directory. `..` counts as one.")
 
 
 def _has_hidden_attribute(path: str) -> bool:

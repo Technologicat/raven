@@ -641,7 +641,7 @@ def test_left_and_right_belong_to_the_text_caret_until_tab(dialog):
     dialog._handle_key(dpg.mvKey_Right)
     dialog._handle_key(dpg.mvKey_Left)
 
-    assert dialog._table_cursor.get_current() == 2
+    assert dialog._table_cursor.current == 2
 
 
 def test_tab_frees_left_and_right_for_the_listing(dialog):
@@ -650,10 +650,10 @@ def test_tab_frees_left_and_right_for_the_listing(dialog):
     dialog._handle_key(dpg.mvKey_Tab)
 
     dialog._handle_key(dpg.mvKey_Right)
-    assert dialog._table_cursor.get_current() == 3
+    assert dialog._table_cursor.current == 3
 
     dialog._handle_key(dpg.mvKey_Left)
-    assert dialog._table_cursor.get_current() == 2
+    assert dialog._table_cursor.current == 2
 
 
 def test_up_and_down_work_from_either_home(dialog):
@@ -662,11 +662,11 @@ def test_up_and_down_work_from_either_home(dialog):
 
     dialog._table_cursor.set_current(2)
     dialog._handle_key(dpg.mvKey_Down)
-    assert dialog._table_cursor.get_current() == 3
+    assert dialog._table_cursor.current == 3
 
     dialog._handle_key(dpg.mvKey_Tab)
     dialog._handle_key(dpg.mvKey_Down)
-    assert dialog._table_cursor.get_current() == 4
+    assert dialog._table_cursor.current == 4
 
 
 def test_focusing_the_find_field_brings_the_caret_with_it(dialog):
@@ -907,7 +907,7 @@ def test_tab_back_fills_the_field_from_the_cursor(make_dialog, tmp_path):
     dialog.reset_dir(file_name_filter="data")
     dialog._handle_key(dpg.mvKey_Tab)                 # into the listing
     dialog._handle_key(dpg.mvKey_Down)                # arrow to a different match
-    picked = os.path.basename(dialog._table_cursor.get_current_key())
+    picked = os.path.basename(dialog._table_cursor.current_key)
 
     dialog._handle_key(dpg.mvKey_Tab)                 # ...and back
 
@@ -1049,7 +1049,7 @@ def test_landing_on_a_match_is_not_a_choice_the_user_made(dialog):
 
     dialog.reset_dir()  # query erased; same directory, so the cursor re-anchors rather than starting over
 
-    assert dialog._table_cursor.get_current_key() != landed_on, \
+    assert dialog._table_cursor.current_key != landed_on, \
         "the cursor followed an entry the user never chose"
 
 
@@ -1084,12 +1084,12 @@ def test_a_search_shows_its_first_hit_even_after_arrowing_somewhere(make_dialog,
     dialog = make_dialog(pick="file", filter_list=[".*"], file_filter=".*")
     dialog.reset_dir()
     dialog._table_cursor.set_current(3)  # `aac.txt`, as an arrow key would — which anchors
-    assert os.path.basename(dialog._table_cursor.get_current_key()) == "aac.txt"
+    assert os.path.basename(dialog._table_cursor.current_key) == "aac.txt"
 
     dialog.reset_dir(file_name_filter="aa")  # matches all three, the arrowed one included
 
     assert dialog._table_cursor.current == 1
-    assert os.path.basename(dialog._table_cursor.get_current_key()) == "aaa.txt"
+    assert os.path.basename(dialog._table_cursor.current_key) == "aaa.txt"
 
 
 def test_the_arrowed_entry_is_still_where_erasing_the_query_returns_you(make_dialog, tmp_path):
@@ -1099,12 +1099,12 @@ def test_the_arrowed_entry_is_still_where_erasing_the_query_returns_you(make_dia
     dialog = make_dialog(pick="file", filter_list=[".*"], file_filter=".*")
     dialog.reset_dir()
     dialog._table_cursor.set_current(3)
-    chosen = dialog._table_cursor.get_current_key()
+    chosen = dialog._table_cursor.current_key
 
     dialog.reset_dir(file_name_filter="aa")  # cursor jumps to the first hit
     dialog.reset_dir()                       # query erased
 
-    assert dialog._table_cursor.get_current_key() == chosen
+    assert dialog._table_cursor.current_key == chosen
 
 
 def test_a_cursor_the_user_moved_is_left_where_it_belongs(dialog):
@@ -1115,8 +1115,8 @@ def test_a_cursor_the_user_moved_is_left_where_it_belongs(dialog):
     """
     dialog.reset_dir()
     dialog._table_cursor.set_current(3)  # as an arrow key would
-    chosen = dialog._table_cursor.get_current_key()
+    chosen = dialog._table_cursor.current_key
 
     dialog.reset_dir(file_name_filter="")  # a rebuild of the same directory
 
-    assert dialog._table_cursor.get_current_key() == chosen
+    assert dialog._table_cursor.current_key == chosen

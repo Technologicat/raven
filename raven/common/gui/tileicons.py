@@ -128,10 +128,10 @@ class TileIconCache:
             self._tile_size = tile_size
             self._drop_all_textures()
 
-    def get_tile_size(self) -> int:
+    def _get_tile_size(self) -> int:
         with self._lock:
             return self._tile_size
-    tile_size = property(fget=get_tile_size, doc="Edge of the square tile these icons are built for, in pixels.")
+    tile_size = property(fget=_get_tile_size, doc="Edge of the square tile these icons are built for, in pixels.")
 
     def destroy(self) -> None:
         """Delete every texture. The registered sources are kept, so the cache can be used again."""
