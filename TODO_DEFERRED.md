@@ -32,6 +32,22 @@ that a codebase carrying many instances *teaches* the pattern to whoever reads i
 so the examples in context pull against the rule in CLAUDE.md. That is the argument for fixing it in one
 sweep and the reason it will not fix itself.
 
+**A second legitimate exception, for later rather than for this pass: the versioned-note convention.**
+`unpythonic` marks a changed contract with *"Changed in vX.Y.Z: …"* and a new one with *"Added in vX.Y.Z."*,
+which is history in a docstring that earns its place — a caller may be running a different version than the
+docstring describes, so the note tells them which behaviour they have.
+
+That condition does not hold for an app. Raven's users run one version, the one in front of them, and the
+CHANGELOG is what serves them; version notes there would be maintenance for a reader who cannot exist. It
+*does* hold for the parts of Raven that are library surface — `raven.librarian.agent` (built as a scripting
+surface for outside callers), `raven.client.api`, and `raven.common` once it is extracted.
+
+So the decision has a natural trigger and should be taken at it, not now: adopt the convention for the
+extracted library when *Extract `raven.common` into an upstream library ("corvid")* happens, and consider it
+for `agent` and `client.api` at the same time. Adopting earlier means maintaining notes for callers who do
+not yet exist; adopting never means the extracted library ships without the one form of docstring history
+its audience actually needs.
+
 Discovered during the FileDialog keyboard work (2026-08-18).
 
 ## String quotes: sweep the tree onto double quotes
@@ -2371,6 +2387,11 @@ Short-term: vendor the xdot widget into pyan for pyan-gui. Long-term: extract pr
 
 **Name settled 2026-08-12: the distribution is `corvid-lab`, matching `raven-lab`.** `corvid` is taken on
 PyPI, and the qualified form keeps the family together rather than reaching for an unrelated word.
+
+**Decide the versioned-docstring convention as part of this.** Extraction is the moment the audience changes
+from "us, running one version" to "callers pinning a release", which is exactly when `unpythonic`'s *"Changed
+in vX.Y.Z: …"* notes start earning their keep. Argued under *Docstrings that describe a previous version, or
+argue a design choice at the caller*.
 
 Discovered during tooltip feature session (2026-04-03).
 
