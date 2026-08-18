@@ -691,6 +691,12 @@ Corollary: `dpg.get_focused_item()` is not a cross-check — it kept naming the 
 | multiline `add_input_text` | True | **True** |
 | multiline `add_input_text`, **Ctrl+Enter** | True | **False** |
 
+**Single-line is the default** (`add_input_text(multiline=False)`), so the Enter-deactivates behaviour is what an unmarked field does, and the multiline case is the one that needs remembering.
+
+**Enter de-activates without de-focusing**, which is worth separating because the two are easy to run together. Re-measured 2026-08-18 on DPG 2.3.1: after Enter a single-line field reports `focused=True, active=False`, and the text it held survives. Focus does not move; only the edit ends.
+
+That has a use beyond gating. Since a write lands on an *inactive* field and is reverted on an active one, **Enter is itself a licence to write the field** — no focus dance required, because the commit already released it. `FileDialog.chdir` relies on exactly this: Enter on a directory clears the find field on the way in, and the `set_value` sticks precisely because Enter had deactivated the field a moment earlier. On a multiline field it would not: Enter inserts a newline there and leaves it active, so the same write would be reverted on the next frame.
+
 So an app whose text field is single-line must gate its Enter handler on `is_item_focused` while still gating its *bare-key* branch on `is_item_active` — two different questions about the same widget, each chosen for the state the key actually arrives in. Both Raven GUI apps do this, and they differ from each other because their fields differ in kind: `raven-visualizer`'s search field is single-line, `raven-librarian`'s composer is multiline. Learned by regression — switching the Visualizer's Enter gate to `is_item_active` silently killed its search.
 
 **The rule is really about the chord that *commits*, not about the kind of field** — the third row is what makes that visible. Ctrl+Enter commits and deactivates a **multiline** field too, so a send handler gated on `is_item_active` can never fire on it either, exactly as for single-line bare Enter. Found 2026-08-04 when `raven-librarian` made Ctrl+Enter its default send chord: the chord unfocused the composer and sent nothing, silently, because the branch guarding it tested a state the commit had already cleared.
