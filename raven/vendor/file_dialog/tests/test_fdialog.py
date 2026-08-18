@@ -978,6 +978,44 @@ def test_erasing_the_query_returns_the_cursor_to_its_resting_place(dialog):
     assert dialog._row_entries[0].is_parent, "which is `..`"
 
 
+def test_a_search_shows_its_first_hit_even_after_arrowing_somewhere(make_dialog, tmp_path):
+    """Typing a query is a fresh intent, so it overrides wherever the cursor had got to.
+
+    Without this, arrowing anywhere switched the search off: the cursor stayed with the entry it had been
+    moved to, and a query typed afterwards narrowed the listing while leaving the cursor behind.
+
+    The three names matter. All match the query, so the entry arrowed to survives the filter — which is
+    the case that tells the two rules apart. Where the arrowed entry is filtered *out*, the fallback
+    happens to clamp onto the first hit anyway, and a test built on that passes either way.
+    """
+    for name in ("aaa.txt", "aab.txt", "aac.txt"):
+        (tmp_path / name).touch()
+    dialog = make_dialog(pick="file", filter_list=[".*"], file_filter=".*")
+    dialog.reset_dir()
+    dialog._table_cursor.set_current(3)  # `aac.txt`, as an arrow key would — which anchors
+    assert os.path.basename(dialog._table_cursor.get_current_key()) == "aac.txt"
+
+    dialog.reset_dir(file_name_filter="aa")  # matches all three, the arrowed one included
+
+    assert dialog._table_cursor.current == 1
+    assert os.path.basename(dialog._table_cursor.get_current_key()) == "aaa.txt"
+
+
+def test_the_arrowed_entry_is_still_where_erasing_the_query_returns_you(make_dialog, tmp_path):
+    """The other half: the search moved the cursor, but it did not take the choice away."""
+    for name in ("aaa.txt", "aab.txt", "aac.txt"):
+        (tmp_path / name).touch()
+    dialog = make_dialog(pick="file", filter_list=[".*"], file_filter=".*")
+    dialog.reset_dir()
+    dialog._table_cursor.set_current(3)
+    chosen = dialog._table_cursor.get_current_key()
+
+    dialog.reset_dir(file_name_filter="aa")  # cursor jumps to the first hit
+    dialog.reset_dir()                       # query erased
+
+    assert dialog._table_cursor.get_current_key() == chosen
+
+
 def test_a_cursor_the_user_moved_is_left_where_it_belongs(dialog):
     """The other half, and why this is one rule rather than a special case for the empty query.
 
