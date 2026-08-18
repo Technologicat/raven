@@ -652,7 +652,7 @@ class FileDialog:
             self._set_type_filter(label)
             dpg.set_value(self.combo_file_filter, self.file_filter)  # keep the GUI in sync when called programmatically
             dpg.set_value(self.text_file_filter_extensions, self._describe_type_filter(self.file_filter))
-            _apply_automatic_grid_mode(rebuild=False)  # the listing is about to be rebuilt anyway
+            self._apply_automatic_grid_mode(rebuild=False)  # the listing is about to be rebuilt anyway
             reset_dir()
         self.set_type_filter = set_type_filter  # needs to be accessible from the outside; uses closure data from this scope, so shouldn't be injected as an instance method (on the class); inject as a regular function *on the instance*.
 
@@ -674,7 +674,7 @@ class FileDialog:
             dpg.configure_item(self.combo_file_filter, items=self._filter_labels)
             dpg.set_value(self.combo_file_filter, self.file_filter)
             dpg.set_value(self.text_file_filter_extensions, self._describe_type_filter(self.file_filter))
-            _apply_automatic_grid_mode(rebuild=False)
+            self._apply_automatic_grid_mode(rebuild=False)
             # The *configured* show flag, not `is_visible`: the latter answers "did the user see it in the last
             # rendered frame", which is False for a window shown microseconds ago and False always with no
             # render loop. The question here is whether a listing exists to be brought up to date.
@@ -839,7 +839,7 @@ class FileDialog:
                 self.checkbox_thumbnails = dpg.add_checkbox(label="Thumbnails",
                                                             default_value=self._grid_mode,
                                                             show=self._grid_is_available(),
-                                                            callback=_thumbnails_checkbox_callback)
+                                                            callback=self._thumbnails_checkbox_callback)
                 with dpg.tooltip(self.checkbox_thumbnails):
                     dpg.add_text("Show the listing as image thumbnails instead of a table. [Ctrl+T]\n"
                                  "Turns itself on when the file type filter selects images;\n"
@@ -893,14 +893,7 @@ class FileDialog:
             self.ok()
 
 
-        def _thumbnails_checkbox_callback(sender, app_data):
-            self.set_grid_mode(app_data)
 
-        def _apply_automatic_grid_mode(rebuild=True):
-            """Turn the grid on for an image-typed filter, unless the user has said otherwise."""
-            if self._grid_mode_chosen_by_user:
-                return
-            self.set_grid_mode(self._filter_is_image_typed(self.file_filter), remember=False, rebuild=rebuild)
 
         def _reset_grid_mode_for_opening():
             """Forget a hand-set view, so the automatic rule gets to decide again. Called on each opening.
@@ -920,7 +913,7 @@ class FileDialog:
             if self._show_thumbnails_default is not None:
                 self.set_grid_mode(self._show_thumbnails_default, remember=True, rebuild=False)
             else:
-                _apply_automatic_grid_mode(rebuild=False)
+                self._apply_automatic_grid_mode(rebuild=False)
         self._reset_grid_mode_for_opening = _reset_grid_mode_for_opening  # instance-injected, as `set_type_filter` above.
 
 
@@ -1230,7 +1223,7 @@ class FileDialog:
 
             # After the widgets exist, since it may flip the view: an image-typed filter comes up as a grid
             # unless the caller said otherwise. `rebuild=False` because `chdir` below lists the directory.
-            _apply_automatic_grid_mode(rebuild=False)
+            self._apply_automatic_grid_mode(rebuild=False)
             chdir(self.default_path)
 
         # Outside the window's `with`, so the registry is not parented into it. Held by ID rather than by
@@ -1706,6 +1699,14 @@ class FileDialog:
                 self._start_grid_ticker()
         if rebuild:
             self._update_search()  # rebuild into the view that is now on screen
+
+    def _apply_automatic_grid_mode(self, rebuild=True):
+        """Turn the grid on for an image-typed filter, unless the user has said otherwise."""
+        if self._grid_mode_chosen_by_user:
+            return
+        self.set_grid_mode(self._filter_is_image_typed(self.file_filter), remember=False, rebuild=rebuild)
+    def _thumbnails_checkbox_callback(self, sender, app_data):
+        self.set_grid_mode(app_data)
 
     def _navigator(self):
         """Whichever view is on screen, as the thing that answers to `navigate_*`.
