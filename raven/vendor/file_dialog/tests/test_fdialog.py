@@ -1120,3 +1120,46 @@ def test_a_cursor_the_user_moved_is_left_where_it_belongs(dialog):
     dialog.reset_dir(file_name_filter="")  # a rebuild of the same directory
 
     assert dialog._table_cursor.current_key == chosen
+
+
+# --------------------------------------------------------------------------------
+# Up one level
+
+def held(*keys):
+    """Pretend the given modifier keys are held down for the duration of the block."""
+    return mock.patch.object(dpg, "is_key_down", lambda key: key in keys)
+
+
+@pytest.mark.parametrize("modifier", [dpg.mvKey_LAlt, dpg.mvKey_RAlt,
+                                      dpg.mvKey_LControl, dpg.mvKey_RControl])
+def test_a_modified_up_leaves_the_directory(make_dialog, tmp_path, modifier):
+    """Alt+Up is the standard chord; Ctrl+Up is the one-handed alias, and the two are interchangeable.
+
+    Both sides of each modifier, because the alias exists precisely *because* the two sides of Alt are
+    not the same key on a Nordic layout — so which side a chord answers to is the point of it.
+    """
+    (tmp_path / "album").mkdir()
+    dialog = make_dialog(pick="file")
+    dialog.chdir(str(tmp_path / "album"))
+
+    with held(modifier):
+        dialog._handle_key(dpg.mvKey_Up)
+
+    assert os.path.realpath(os.getcwd()) == os.path.realpath(tmp_path)
+
+
+def test_an_unmodified_up_still_moves_the_cursor(make_dialog, tmp_path):
+    """The half that would break silently: a chord claiming a bare key it was meant to share.
+
+    Going up would leave the cursor at `..` in the parent, which reads exactly like a cursor that moved
+    one row — so the directory is what this asserts, not the cursor.
+    """
+    (tmp_path / "album").mkdir()
+    dialog = make_dialog(pick="file")
+    dialog.chdir(str(tmp_path / "album"))
+    dialog._table_cursor.set_current(0)
+
+    with held():  # nothing held
+        dialog._handle_key(dpg.mvKey_Up)
+
+    assert os.path.realpath(os.getcwd()) == os.path.realpath(tmp_path / "album")

@@ -1757,17 +1757,13 @@ class FileDialog:
     def _handle_key(self, key: int) -> None:
         """Handle one key press for this dialog. Called by the module-level handler, which owns the
         registry and decides *which* dialog is listening; this decides what the key does.
-
-        A closure rather than a method, for the reason `reset_dir` and `sort_by` are: the things a
-        hotkey has to reach — `chdir`, `sort_by`, `_go_up_one_level`, the listing state — live in this
-        scope and are not attributes of anything. The module-level callback can see only public
-        methods, which is why it has never been able to grow past the five keys it has.
         """
         ctrl = dpg.is_key_down(dpg.mvKey_LControl) or dpg.is_key_down(dpg.mvKey_RControl)
 
         # TODO (briefs/researchers-night/filedialog-keyboard-brief.md): the rest of the keyboard —
-        # TODO: the focus-parking chords, hidden files.
+        # TODO: the focus-parking chords.
         shift = dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)
+        alt = dpg.is_key_down(dpg.mvKey_LAlt) or dpg.is_key_down(dpg.mvKey_RAlt)
 
         # Tab swaps the caret's two homes. ImGui does not spend Tab on an `InputText` — it neither
         # moves focus nor inserts anything — so the key is ours to define, and this is the only way
@@ -1797,6 +1793,16 @@ class FileDialog:
                     self.sort_by(_SORT_CRITERIA[n][0])
             elif n < len(self._filter_labels):
                 self.set_type_filter(self._filter_labels[n])
+            return
+
+        # Up one level, by either of two chords, before the bare key gets to mean "one row up".
+        #
+        # Alt+Up is what a file manager binds, and Ctrl+Up is a one-handed alias for it: on a Nordic
+        # layout Alt sits only to the left of space — the right-hand key is AltGr, a different key —
+        # so Alt+Up needs two hands, while Ctrl is mirrored and right Ctrl and the arrow cluster are
+        # both under the right hand. It was the one two-handed chord in the set.
+        if key == dpg.mvKey_Up and (alt or ctrl):
+            self.chdir("..")
             return
 
         nav = self._navigator()

@@ -1,9 +1,9 @@
 # FileDialog: keyboard accessibility
 
 **Status: mostly built.** The design below was settled on 2026-08-13 (Juha and Claude); the listing cursor,
-Enter's rules, Tab and its completion and fill, the sort and filter chords and the "Will pick" line are in
-and live-tested. Still to build: Ctrl+Space, Alt+Up, Ctrl+Up, Ctrl+L, Ctrl+Shift+F, Ctrl+B, Ctrl+H, F1 and
-the places-panel migration. **See "What is built" near the end for the current state** — including the
+Enter's rules, Tab and its completion and fill, the sort and filter chords, Alt+Up / Ctrl+Up and the
+"Will pick" line are in and live-tested. Still to build: Ctrl+Space, Ctrl+L, Ctrl+Shift+F, Ctrl+B, Ctrl+H,
+F1 and the places-panel migration. **See "What is built" near the end for the current state** — including the
 several places where the design below was overtaken by what building it taught, each noted there rather
 than edited into the design, so the reasoning stays legible.
 
@@ -568,8 +568,11 @@ that from the code.
   path had always cleared it and the keyboard path had not. Arriving also returns the caret to the field —
   unless the listing had it, arriving being no reason to change modes.
 
-**Not built:** Ctrl+Space, Alt+Up, Ctrl+Up, Ctrl+L, Ctrl+Shift+F, Ctrl+B, Ctrl+H, F1, and the places-panel
-migration.
+- **Up one level answers to Alt+Up and to Ctrl+Up**, both sides of each modifier, and the bare key still
+  moves the cursor one row. The alias is not redundancy: it is what makes the chord one-handed on a layout
+  where Alt has no right-hand twin.
+
+**Not built:** Ctrl+Space, Ctrl+L, Ctrl+Shift+F, Ctrl+B, Ctrl+H, F1, and the places-panel migration.
 
 **The save-mode arrow-fill is superseded rather than pending.** This brief specified that arrowing fills
 the field in save mode, gated on a flag tracking whether the user had typed since the last programmatic
