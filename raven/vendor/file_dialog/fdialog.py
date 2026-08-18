@@ -40,9 +40,9 @@ _KEY_PAGE_DOWN = 518
 # on every platform, so a label that differs from the folder names a directory the panel will not open.
 # `Pictures` was labelled "Images" and pointed at `~/Pictures`, which is what Linux, macOS and Windows all
 # call it.
-# Home leads, being where the others live; the rest are alphabetical, case-insensitively. Upstream's order
-# was neither, and a list a reader cannot predict is one they have to scan every time. `test_the_places_are_
-# ordered_predictably` holds this, so an addition cannot quietly land in the wrong row.
+# Home leads, being where the others live; the rest are alphabetical, case-insensitively. A list a reader
+# cannot predict is one they have to scan every time. `test_the_places_are_ordered_predictably` holds this,
+# so an addition cannot quietly land in the wrong row.
 _PLACES = [("Home", "img_home"),
            ("Desktop", "img_desktop"),
            ("Documents", "img_document_folder"),
@@ -800,12 +800,11 @@ class FileDialog:
             """Rebuild the listing of the working directory, optionally narrowed to `file_name_filter`.
 
             This *lists*; it does not navigate. Going somewhere is `chdir`, which moves the process and
-            then calls this — so there is no directory to pass, and deliberately no way to pass one.
-            `ok` and the target notification both answer from `os.getcwd()`, so a listing of one directory
-            beside a working directory of another would be a dialog that shows you A and hands back B.
-            Every caller already passed the working directory; the parameter's only remaining power was to
-            make that mismatch expressible.
+            then calls this.
             """
+            # Read from the process rather than accepted as an argument, so the two cannot disagree: `ok`
+            # and the target notification both answer from `os.getcwd()`, and a listing built from
+            # anywhere else would be a dialog that shows you A and hands back B.
             default_path = os.getcwd()
             logger.debug(f"reset_dir: instance '{self.tag}' ({self.instance_tag}), called with file_name_filter = {file_name_filter}, default_path = '{str(default_path)}'")
             # Phase timings, so a slow open says *which* phase is slow rather than only that it was. Reading
@@ -1721,19 +1720,17 @@ class FileDialog:
     def _focus_listing(self) -> None:
         """Take the caret out of the find field and give the listing the arrow keys.
 
-        Focus is parked on the OK button rather than on the cursor row, and the two views share that one
-        target. A table row is a selectable and could hold focus itself, but then focus would have to
-        chase the cursor on every move, and in grid view there is nothing to chase — a drawlist has no
-        focusable items, so that view needs a stand-in regardless. One target for both keeps the two
-        views answering to the same code, which is the property that made `TableCursor` worth writing.
-
-        A button is the safe place to park: DPG leaves ImGui's keyboard-nav activation off, so a focused
-        button ignores Space and Enter instead of pressing itself.
+        Leaves the find field inactive, which is what lets it be written programmatically: an active
+        `InputText` owns ImGui's edit buffer and reverts writes on the next frame.
         """
-        # What the move is *for* is deactivating the find field. An active `InputText` owns ImGui's edit
-        # buffer — it reverts programmatic writes on the next frame — and it spends Left and Right on the
-        # text caret. Both stop being true once the field is inactive, which is what makes completion and
-        # the grid's horizontal navigation possible at all.
+        # Focus parks on the OK button, and both views share that one target. A table row is a selectable
+        # and could hold focus itself, but then focus would have to chase the cursor on every move, and
+        # grid view has nothing to chase — a drawlist has no focusable items, so that view needs a
+        # stand-in regardless. One target for both keeps the two views answering to the same code.
+        #
+        # A button is safe to park on: DPG leaves ImGui's keyboard-nav activation off, so a focused button
+        # ignores Space and Enter instead of pressing itself. Pinned by
+        # `test_a_focused_button_ignores_the_keys_that_would_press_it`, since nothing in the API reports it.
         self._caret_in_listing = True
         dpg.focus_item(self.tag + "_return")  # tag
 
@@ -1954,9 +1951,9 @@ class FileDialog:
         global visible_dialog_instance
         visible_dialog_instance = None
         if self.callback is not None:
-            # A copy, because `_forget_listing` below clears `selected_files` — so a callback that *stored*
-            # what it was handed, rather than reading it immediately, found the list empty by the time it
-            # looked. The receiver owns what it is given.
+            # A copy, because `_forget_listing` below clears `selected_files`: a callback that stores what
+            # it is handed, rather than reading it immediately, would otherwise find the list empty by the
+            # time it looks. The receiver owns what it is given.
             self.callback(list(self.selected_files))
         dpg.set_value(f"ex_search_{self.instance_tag}", "")  # clear the search when exiting
         self.last_path = os.getcwd()  # update remembered path when the dialog is closed with OK
