@@ -515,9 +515,6 @@ class FileDialog:
 
         # low-level functions
 
-        def delete_table():
-            for child in dpg.get_item_children(f"explorer_{self.instance_tag}", 1):
-                dpg.delete_item(child)
 
         def on_path_enter():
             try:
@@ -851,7 +848,7 @@ class FileDialog:
                 # Only the view on screen is built. The other one is emptied rather than left holding a
                 # stale listing, which would be both the memory and, on a switch back, the wrong answer.
                 with timer() as tim_delete:
-                    delete_table()
+                    self.delete_table()
 
                 with timer() as tim_build:
                     if self._grid_mode:
@@ -1205,66 +1202,16 @@ class FileDialog:
         # The table's keyboard cursor. The grid brings its own; this gives the other view one under the
         # same method names, so `_handle_key` picks a navigator and stops caring which view is up.
 
-        def _paint_row(idx, is_cursor):
-            """Draw row `idx` as the cursor row, or as an ordinary one.
 
-            Rebinding themes rather than rebuilding the row: a listing can be thousands of rows deep and a
-            cursor move touches two of them.
-            """
-            if not (0 <= idx < len(self._row_themes)):
-                return
-            with guiutils.nonexistent_ok():
-                for cell, base_theme, cursor_theme in self._row_themes[idx]:
-                    dpg.bind_item_theme(cell, cursor_theme if is_cursor else base_theme)
-
-        def _row_metrics():
-            """`(origin, pitch)` for the listing's rows — where row 0 starts, and how far apart rows sit.
-
-            Measured, because neither number is the one that was asked for: cells created at
-            `selec_height` = 16 come out 18 px tall at a 22 px pitch, below a header contributing an origin
-            of its own.
-
-            Measured *once*, because the row being scrolled *to* can never be measured. The table clips —
-            `clipper=True`, which is what keeps a thousand-row listing cheap — so ImGui never submits a row
-            outside the visible range, and its position reads back as 0. That is exactly the row a scroll
-            is aimed at, so asking it where it is returns zero and the view never moves. Both numbers are
-            constants for the dialog's life (uniform row height is the clipper's own requirement), so two
-            adjacent rows measured while they happen to be on screen answer for every row afterwards.
-            """
-            if self._row_metrics_cache is not None:
-                return self._row_metrics_cache
-            if len(self._row_themes) < 2:
-                return None
-            with guiutils.nonexistent_ok():
-                _, first = dpg.get_item_pos(self._row_themes[0][0][0])
-                _, second = dpg.get_item_pos(self._row_themes[1][0][0])
-                pitch = second - first
-                if pitch > 0:  # both were laid out; zeros mean "not rendered yet" or "clipped away"
-                    self._row_metrics_cache = (first, pitch)
-                    logger.debug(f"_row_metrics: instance '{self.tag}' ({self.instance_tag}), "
-                                 f"origin={first}, pitch={pitch}")
-                    return self._row_metrics_cache
-            return None
 
         def _row_extent(idx):
             """Where row `idx` sits inside the table's scrollable content, as `(top, height)`."""
-            metrics = _row_metrics()
+            metrics = self._row_metrics()
             if metrics is None or not (0 <= idx < len(self._row_themes)):
                 return None
             origin, pitch = metrics
             return origin + idx * pitch, pitch
 
-        def _view_height():
-            """The visible height of the listing, measured on the container that reports one.
-
-            Not the table: a DPG table has no `rect_size` in its state at all, so `get_widget_size` falls
-            through to its *configuration* and answers with the `-1` it was created with. The enclosing
-            child window reports the real number, and the table is what scrolls inside it.
-            """
-            with guiutils.nonexistent_ok():
-                _, height = guiutils.get_widget_size(f"listing_area_{self.instance_tag}")  # tag
-                return height if height > 0 else 0
-            return 0
 
         def _scroll_row_into_view(idx):
             """Move the least that puts row `idx` on screen, and nothing at all when it already is.
@@ -1273,7 +1220,7 @@ class FileDialog:
             yanking the listing on every keypress.
             """
             extent = _row_extent(idx)
-            height = _view_height()
+            height = self._view_height()
             table = f"explorer_{self.instance_tag}"  # tag
             if extent is None or not height:
                 logger.debug(f"_scroll_row_into_view: instance '{self.tag}' ({self.instance_tag}), "
@@ -1298,28 +1245,19 @@ class FileDialog:
 
         def _rows_per_page():
             """Most of a screenful, keeping one row of context to read the new position against."""
-            height = _view_height()
-            metrics = _row_metrics()
+            height = self._view_height()
+            metrics = self._row_metrics()
             if not height or metrics is None:
                 return 1
             return max(1, int(height / metrics[1]) - 1)
 
-        self._table_cursor = TableCursor(on_paint=_paint_row,
+        self._table_cursor = TableCursor(on_paint=self._paint_row,
                                          on_scroll_into_view=_scroll_row_into_view,
                                          page_size=_rows_per_page,
                                          # The promised target follows the cursor now, so it has to be
                                          # rewritten whenever the cursor moves — including by a rebuild.
                                          on_current_changed=lambda _idx: self._refresh_target_notification())
 
-        def _cursor_entry():
-            """The listing entry the cursor is on, in whichever view is showing. `None` if there is none."""
-            if self._grid_mode and self._grid is not None:
-                return self._grid.current_entry
-            idx = self._table_cursor.current
-            if 0 <= idx < len(self._row_entries):
-                return self._row_entries[idx]
-            return None
-        self._cursor_entry = _cursor_entry
 
         def _activate_cursor_entry():
             """Enter: go as deep as this entry allows.
@@ -1331,7 +1269,7 @@ class FileDialog:
 
             Ctrl+Enter is the counterpart that declines to descend, and it is `ok` unchanged.
             """
-            entry = _cursor_entry()
+            entry = self._cursor_entry()
             if entry is None:
                 self.ok()  # nothing under the cursor: fall back to what the OK button would do
                 return
@@ -1344,15 +1282,6 @@ class FileDialog:
             self.selected_files.append(entry.path)
             self.ok()
 
-        def _navigator():
-            """Whichever view is on screen, as the thing that answers to `navigate_*`.
-
-            The two are interchangeable by construction rather than by adaptor — `TableCursor` was written
-            to the interface `ThumbnailGrid` already had — so a key handler names a movement once and both
-            views do the right thing with it.
-            """
-            return self._grid if (self._grid_mode and self._grid is not None) else self._table_cursor
-        self._navigator = _navigator
 
         # --------------------------------------------------------------------------------
         # Hotkeys.
@@ -1716,6 +1645,77 @@ class FileDialog:
         dpg.set_item_width(f"target_area_{self.instance_tag}", max(0, width - self._TYPE_FILTER_ROW_TAIL))  # tag
 
     # high-level functions
+    def _cursor_entry(self):
+        """The listing entry the cursor is on, in whichever view is showing. `None` if there is none."""
+        if self._grid_mode and self._grid is not None:
+            return self._grid.current_entry
+        idx = self._table_cursor.current
+        if 0 <= idx < len(self._row_entries):
+            return self._row_entries[idx]
+        return None
+    def _paint_row(self, idx, is_cursor):
+        """Draw row `idx` as the cursor row, or as an ordinary one.
+
+        Rebinding themes rather than rebuilding the row: a listing can be thousands of rows deep and a
+        cursor move touches two of them.
+        """
+        if not (0 <= idx < len(self._row_themes)):
+            return
+        with guiutils.nonexistent_ok():
+            for cell, base_theme, cursor_theme in self._row_themes[idx]:
+                dpg.bind_item_theme(cell, cursor_theme if is_cursor else base_theme)
+    def _row_metrics(self):
+        """`(origin, pitch)` for the listing's rows — where row 0 starts, and how far apart rows sit.
+
+        Measured, because neither number is the one that was asked for: cells created at
+        `selec_height` = 16 come out 18 px tall at a 22 px pitch, below a header contributing an origin
+        of its own.
+
+        Measured *once*, because the row being scrolled *to* can never be measured. The table clips —
+        `clipper=True`, which is what keeps a thousand-row listing cheap — so ImGui never submits a row
+        outside the visible range, and its position reads back as 0. That is exactly the row a scroll
+        is aimed at, so asking it where it is returns zero and the view never moves. Both numbers are
+        constants for the dialog's life (uniform row height is the clipper's own requirement), so two
+        adjacent rows measured while they happen to be on screen answer for every row afterwards.
+        """
+        if self._row_metrics_cache is not None:
+            return self._row_metrics_cache
+        if len(self._row_themes) < 2:
+            return None
+        with guiutils.nonexistent_ok():
+            _, first = dpg.get_item_pos(self._row_themes[0][0][0])
+            _, second = dpg.get_item_pos(self._row_themes[1][0][0])
+            pitch = second - first
+            if pitch > 0:  # both were laid out; zeros mean "not rendered yet" or "clipped away"
+                self._row_metrics_cache = (first, pitch)
+                logger.debug(f"_row_metrics: instance '{self.tag}' ({self.instance_tag}), "
+                             f"origin={first}, pitch={pitch}")
+                return self._row_metrics_cache
+        return None
+    def _view_height(self):
+        """The visible height of the listing, measured on the container that reports one.
+
+        Not the table: a DPG table has no `rect_size` in its state at all, so `get_widget_size` falls
+        through to its *configuration* and answers with the `-1` it was created with. The enclosing
+        child window reports the real number, and the table is what scrolls inside it.
+        """
+        with guiutils.nonexistent_ok():
+            _, height = guiutils.get_widget_size(f"listing_area_{self.instance_tag}")  # tag
+            return height if height > 0 else 0
+        return 0
+    def delete_table(self):
+        for child in dpg.get_item_children(f"explorer_{self.instance_tag}", 1):
+            dpg.delete_item(child)
+
+    def _navigator(self):
+        """Whichever view is on screen, as the thing that answers to `navigate_*`.
+
+        The two are interchangeable by construction rather than by adaptor — `TableCursor` was written to
+        the interface `ThumbnailGrid` already had — so a key handler names a movement once and both views
+        do the right thing with it.
+        """
+        return self._grid if (self._grid_mode and self._grid is not None) else self._table_cursor
+
     def _focus_field(self) -> None:
         """Put the caret back in the find field, where typing filters the listing."""
         self._caret_in_listing = False
