@@ -693,6 +693,8 @@ Corollary: `dpg.get_focused_item()` is not a cross-check — it kept naming the 
 
 **Single-line is the default** (`add_input_text(multiline=False)`), so the Enter-deactivates behaviour is what an unmarked field does, and the multiline case is the one that needs remembering.
 
+**Which key commits a multiline field is a flag, and the default is the one Raven wants.** `add_input_text(ctrl_enter_for_new_line=...)` selects it; DPG's own docstring is unusually clear here — *"In multi-line mode, unfocus with Enter, add new line with Ctrl+Enter (default is opposite: unfocus with Ctrl+Enter, add line with Enter)"*. It defaults to `False`, so Enter inserts a newline and **Ctrl+Enter commits**, which is what the table below measured and what Librarian's composer relies on. Worth knowing it is switchable rather than inherent: an app wanting Enter-to-send in a multiline box sets the flag instead of intercepting the key.
+
 **Enter de-activates without de-focusing**, which is worth separating because the two are easy to run together. Re-measured 2026-08-18 on DPG 2.3.1: after Enter a single-line field reports `focused=True, active=False`, and the text it held survives. Focus does not move; only the edit ends.
 
 That has a use beyond gating. Since a write lands on an *inactive* field and is reverted on an active one, **Enter is itself a licence to write the field** — no focus dance required, because the commit already released it. `FileDialog.chdir` relies on exactly this: Enter on a directory clears the find field on the way in, and the `set_value` sticks precisely because Enter had deactivated the field a moment earlier. On a multiline field it would not: Enter inserts a newline there and leaves it active, so the same write would be reverted on the next frame.
