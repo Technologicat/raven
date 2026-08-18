@@ -829,6 +829,7 @@ class FileDialog:
         dpg.set_item_width(f"target_area_{self.instance_tag}", max(0, width - self._TYPE_FILTER_ROW_TAIL))  # tag
 
     # high-level functions
+
     def _cursor_entry(self):
         """The listing entry the cursor is on, in whichever view is showing. `None` if there is none."""
         if self._grid_mode and self._grid is not None:
@@ -837,6 +838,7 @@ class FileDialog:
         if 0 <= idx < len(self._row_entries):
             return self._row_entries[idx]
         return None
+
     def _paint_row(self, idx, is_cursor):
         """Draw row `idx` as the cursor row, or as an ordinary one.
 
@@ -848,6 +850,7 @@ class FileDialog:
         with guiutils.nonexistent_ok():
             for cell, base_theme, cursor_theme in self._row_themes[idx]:
                 dpg.bind_item_theme(cell, cursor_theme if is_cursor else base_theme)
+
     def _row_metrics(self):
         """`(origin, pitch)` for the listing's rows — where row 0 starts, and how far apart rows sit.
 
@@ -876,6 +879,7 @@ class FileDialog:
                              f"origin={first}, pitch={pitch}")
                 return self._row_metrics_cache
         return None
+
     def _view_height(self):
         """The visible height of the listing, measured on the container that reports one.
 
@@ -887,6 +891,7 @@ class FileDialog:
             _, height = guiutils.get_widget_size(f"listing_area_{self.instance_tag}")  # tag
             return height if height > 0 else 0
         return 0
+
     def delete_table(self):
         for child in dpg.get_item_children(f"explorer_{self.instance_tag}", 1):
             dpg.delete_item(child)
@@ -897,6 +902,7 @@ class FileDialog:
             return "Every file, whatever its extension."
         return textwrap.fill(" ".join(extensions), width=72,
                              initial_indent="Matches: ", subsequent_indent="         ")
+
     def _draw_sort_indicators(self):
         """Redraw the triangle marking which criterion is active, and which way it points.
 
@@ -914,6 +920,7 @@ class FileDialog:
             else:
                 points = [(2, 18), (12, 18), (7, 10)]
             dpg.draw_triangle(*points, color=color, fill=color, parent=drawlist)
+
     def _filter_is_image_typed(self, label) -> bool:
         """Whether the named file type filter selects images and nothing else.
 
@@ -924,6 +931,7 @@ class FileDialog:
         if not extensions:
             return False
         return all(ext in _DECODABLE_IMAGE_EXTENSIONS for ext in extensions)
+
     def _grid_is_available(self) -> bool:
         """Whether this dialog offers the grid view at all.
 
@@ -934,6 +942,7 @@ class FileDialog:
         though what it returns is a directory.
         """
         return self.lists_files
+
     def _is_choosable(self, entry) -> bool:
         """Whether `entry` is a thing this dialog can return.
 
@@ -947,11 +956,13 @@ class FileDialog:
         if entry.kind == filelisting.KIND_BROKEN_LINK:
             return False
         return self.returns_dir if entry.is_dir else not self.returns_dir
+
     def _matches_type_filter(self, file_name: str) -> bool:
         if self._active_extensions is None:  # ".*"
             return True
         file_name = file_name.lower()
         return any(file_name.endswith(ext) for ext in self._active_extensions)
+
     def _resize_grid(self):
         """Match the grid to the area the table would have filled.
 
@@ -965,12 +976,14 @@ class FileDialog:
         if size != self._grid_size:
             self._grid_size = size
             self._grid.set_size(*size)
+
     def _set_type_filter(self, label: str) -> None:
         self.file_filter = label
         if label in self._filter_extensions:
             self._active_extensions = self._filter_extensions[label]
         else:  # not one of the offered items; read it as a literal extension, as the single-extension form did
             self._active_extensions = None if label == ".*" else (label.lower(),)
+
     def get_directory_path(self, directory_name):
         """Where the shortcut named `directory_name` should go, or `None` if this user has no such place.
 
@@ -988,6 +1001,7 @@ class FileDialog:
                          f"no usable '{directory_name}' at '{directory_path}', omitting the shortcut")
             return None
         return str(directory_path)
+
     def message_box(self, title, message):
         if not self.modal:
             with dpg.mutex():
@@ -1024,6 +1038,7 @@ class FileDialog:
             basename, _ext = os.path.splitext(entry.name)
             dpg.set_value(f"ex_search_{self.instance_tag}", basename)
             self._update_search()
+
     def _grid_selection_changed(self, entries):
         """The grid's selection is the dialog's, filtered to what can actually be returned.
 
@@ -1035,6 +1050,7 @@ class FileDialog:
         self.selected_files.clear()
         self.selected_files.extend(entry.path for entry in entries if self._is_choosable(entry))
         self._refresh_target_notification()
+
     def _icon_for(self, entry) -> Union[str, int]:
         """The small icon shown at the left of `entry`'s row."""
         if entry.is_dir:
@@ -1045,6 +1061,7 @@ class FileDialog:
         if icon_name is None:
             return self.img_mini_document
         return getattr(self, f"img_{icon_name}")
+
     def _install_filters(self, filter_list, file_filter=None) -> None:
         """Recompute the offered file type filters. Touches no widgets; callers refresh the GUI."""
         self.filter_list = list(filter_list)
@@ -1068,6 +1085,7 @@ class FileDialog:
                 self.default_file_extension = self._active_extensions[0]
             else:
                 self.default_file_extension = None
+
     def _row_extent(self, idx):
         """Where row `idx` sits inside the table's scrollable content, as `(top, height)`."""
         metrics = self._row_metrics()
@@ -1075,6 +1093,7 @@ class FileDialog:
             return None
         origin, pitch = metrics
         return origin + idx * pitch, pitch
+
     def _rows_per_page(self):
         """Most of a screenful, keeping one row of context to read the new position against."""
         height = self._view_height()
@@ -1082,6 +1101,7 @@ class FileDialog:
         if not height or metrics is None:
             return 1
         return max(1, int(height / metrics[1]) - 1)
+
     def _start_grid_ticker(self):
         """Run the grid's per-frame work on a thread of the dialog's own, for as long as it is on screen.
 
@@ -1121,6 +1141,7 @@ class FileDialog:
         self._ticker = threading.Thread(target=tick_loop, daemon=True,
                                         name=f"fdialog_grid_tick_{self.instance_tag}")
         self._ticker.start()
+
     def _tile_icon_for(self, entry) -> Optional[str]:
         """Which icon `entry`'s *tile* gets in grid view, or `None` to decode the image itself.
 
@@ -1136,6 +1157,7 @@ class FileDialog:
         if entry.name.lower().endswith(_DECODABLE_IMAGE_EXTENSIONS):
             return None
         return _icon_name_for_extension(entry.name) or "document"
+
     def sort_by(self, sort_key, descending=None):
         """Order the listing by `sort_key`, and rebuild it.
 
@@ -1179,6 +1201,7 @@ class FileDialog:
                          f"row {idx} at {row_top}+{row_height}, view {view_top}..{view_top + height}, "
                          f"scrolling to {max(0.0, float(new_top))}")
             dpg.set_y_scroll(table, max(0.0, float(new_top)))
+
     def set_grid_mode(self, enabled, remember=True, rebuild=True):
         """Switch between the table and the thumbnail grid.
 
@@ -1212,6 +1235,7 @@ class FileDialog:
         if self._grid_mode_chosen_by_user:
             return
         self.set_grid_mode(self._filter_is_image_typed(self.file_filter), remember=False, rebuild=rebuild)
+
     def _thumbnails_checkbox_callback(self, sender, app_data):
         self.set_grid_mode(app_data)
 
@@ -1247,6 +1271,7 @@ class FileDialog:
                              "Turns itself on when the file type filter selects images;\n"
                              "setting it by hand overrides that until you close the dialog.")
         self._draw_sort_indicators()
+
     def _reset_grid_mode_for_opening(self):
         """Forget a hand-set view, so the automatic rule gets to decide again. Called on each opening.
 
@@ -1272,14 +1297,17 @@ class FileDialog:
             self.chdir(dpg.get_value(f"ex_path_input_{self.instance_tag}"))
         except FileNotFoundError:
             self.message_box("Invalid path", "No such file or directory")
+
     def open_drive(self, sender, app_data, user_data):
         self.chdir(user_data)
+
     def _deselect_recursive(self, root):
         """Deselect all selectables inside DPG widget `root`, including `root` itself."""
         if dpg.get_item_type(root) == "mvAppItemType::mvSelectable":
             dpg.set_value(root, False)
         for item in dpg.get_item_children(root, slot=1):
             self._deselect_recursive(item)
+
     def open_file(self, sender, app_data, user_data):  # `user_data`: [name, fullpath, timestamp, size]
         ctrl_pressed = dpg.is_key_down(dpg.mvKey_LControl) or dpg.is_key_down(dpg.mvKey_RControl)
 
@@ -1326,6 +1354,7 @@ class FileDialog:
                     self.selected_files.clear()
                     self.selected_files.append(user_data[1])
                     self._refresh_target_notification()
+
     def _make_row(self, entry, callback, parent=None, selected_paths=()):
         """Build one table row from a `filelisting.FileEntry`.
 
@@ -1418,6 +1447,7 @@ class FileDialog:
                     dpg.add_image(self.img_folder, parent=drag_payload)
                 else:
                     dpg.add_image(self.img_document, parent=drag_payload)
+
     def _go_up_one_level(self, sender, app_data, user_data):
         """GUI callback: if this item double-clicked, go up one level."""
         ctrl_pressed = dpg.is_key_down(dpg.mvKey_LControl) or dpg.is_key_down(dpg.mvKey_RControl)
@@ -1432,6 +1462,7 @@ class FileDialog:
         if double_clicked:
             dpg.set_value(f"ex_search_{self.instance_tag}", "")
             self.chdir("..")
+
     def set_type_filter(self, label):
         """Select the file type filter by its label, exactly as picking it from the combo would.
 
@@ -1443,6 +1474,7 @@ class FileDialog:
         dpg.set_value(self.text_file_filter_extensions, self._describe_type_filter(self.file_filter))
         self._apply_automatic_grid_mode(rebuild=False)  # the listing is about to be rebuilt anyway
         self.reset_dir()
+
     def set_filter_list(self, filter_list, file_filter=None):
         """Replace the offered file type filters, as `filter_list` in the constructor.
 
@@ -1467,8 +1499,10 @@ class FileDialog:
         # render loop. The question here is whether a listing exists to be brought up to date.
         if dpg.get_item_configuration(self.tag)["show"]:  # tag
             self.reset_dir()
+
     def filter_combo_selector(self, sender, app_data):
         self.set_type_filter(dpg.get_value(sender))
+
     def chdir(self, path):
         try:
             os.chdir(path)
@@ -1477,6 +1511,7 @@ class FileDialog:
             self.message_box("File dialog - PerimssionError", f"Cannot open the folder because is a system folder or the access is denied\n\nMore info:\n{e}")
         except NotADirectoryError as e:
             self.message_box("File dialog - not a directory", f"The selected item is not a directory, but a file.\n\nMore info:\n{e}")
+
     def reset_dir(self, file_name_filter=None):
         """Rebuild the listing of the working directory, optionally narrowed to `file_name_filter`.
 
@@ -1574,6 +1609,7 @@ class FileDialog:
         # Every path into here changes something the promised target depends on — which directory is
         # shown, and what survives the find field — so this is the one place that has to refresh it.
         self._refresh_target_notification()
+
     def _the_grid(self):
         """The grid view, built on first use.
 
@@ -1599,6 +1635,7 @@ class FileDialog:
                                            on_selection_changed_entries=self._grid_selection_changed,
                                            on_activate=self._grid_activate)
         return self._grid
+
     def _grid_activate(self, entry):
         """Double click in the grid: descend into the directory, or accept the file."""
         if entry.is_dir:
@@ -1610,6 +1647,7 @@ class FileDialog:
         self.selected_files.clear()
         self.selected_files.append(entry.path)
         self.ok()
+
     def _activate_cursor_entry(self):
         """Enter: go as deep as this entry allows.
 
@@ -1632,6 +1670,7 @@ class FileDialog:
         self.selected_files.clear()
         self.selected_files.append(entry.path)
         self.ok()
+
     def _handle_key(self, key: int) -> None:
         """Handle one key press for this dialog. Called by the module-level handler, which owns the
         registry and decides *which* dialog is listening; this decides what the key does.
