@@ -45,10 +45,13 @@ render()
 
 def scenario(label, steps):
     dpg.set_value("field", "")
-    dpg.focus_item("park"); render()
-    dpg.set_value("field", "SEED"); render()
+    dpg.focus_item("park")
+    render()
+    dpg.set_value("field", "SEED")  # lands because the field is not the one holding the caret
+    render()
     for step in steps:
-        step(); render()
+        step()
+        render()
     type_text("x")
     render()
     value = dpg.get_value("field")
