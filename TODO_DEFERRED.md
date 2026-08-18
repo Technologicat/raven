@@ -22,10 +22,21 @@ chosen over the obvious alternative. Both were found in `fdialog.py` on 2026-08-
 same day, which is what suggests the habit rather than the instance is the problem.
 
 A grep for history markers (`used to`, `previously`, `no longer`, `formerly`, …) in docstrings finds **121
-candidates across 64 files**. That is an upper bound and cannot be swept blindly: the rule has a real
-exception — history that is load-bearing for present behaviour, such as a file-format auto-migration that
-must know the old schema, or a workaround whose shape only makes sense once the upstream bug is named.
-Those must survive. The rationale half has no grep at all and needs reading.
+across 64 files**, and that is a **lower** bound: it only catches the phrasings that name themselves, while
+"this was extracted from", "a previous attempt", and plain past-tense narration all pass it. The rationale
+half — a design argument sitting in the caller's way — has no grep at all.
+
+Nor can the hits be swept blindly, because the rule has a real exception: history that is load-bearing for
+present behaviour, such as a file-format auto-migration that must know the old schema, or a workaround whose
+shape only makes sense once the upstream bug is named. Those must survive.
+
+**So the triage wants a reader, and we have one.** `raven.librarian.agent` is a scripting surface over the
+agent loop — `turn()` in, a `TurnRecord` out — so a script can walk every docstring in the tree past a local
+model and ask the two questions this item is about: does this describe a version that no longer exists, and
+is any of it an argument aimed at a maintainer rather than a caller? The output is a work list for a human,
+not an edit: the exception above is a judgement call, and so is whether a rationale is worth keeping in a
+comment. That turns "read 64 files" into "review a ranked list", which is the difference between an item
+that gets done and one that does not.
 
 Worth doing as a deliberate pass rather than opportunistically, because the cost is not the edits: it is
 that a codebase carrying many instances *teaches* the pattern to whoever reads it next, agents included,
