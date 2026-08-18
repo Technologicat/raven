@@ -192,10 +192,24 @@ the API surface is there. Whether the events actually reach a DPG app from a thu
 desktop is **unmeasured**; a click handler that logs the button answers it in a minute, and that probe is
 the first step of building this. If they do not arrive, the keys stand alone and nothing else changes.
 
-**The history is per opening.** A `FileDialog` is built once and lives as long as the app, so a history
-that was not cleared would let a user press Back into a directory they visited in a different dialog
-session, for a different purpose — which is the same one-way-door reasoning that makes the thumbnail
-override per-opening. `_reset_grid_mode_for_opening` is where the sibling reset already happens.
+**The history persists across openings, because an instance is a task.** Raven apps build one `FileDialog`
+per job rather than one per app — 15 construction sites across the constellation, each with its own title,
+filter list and default path, so "open character image" and "open backdrop image" are separate objects in
+the same editor. An instance therefore reopens onto the *same kind of task*, and a history carried between
+its openings is a history of that task: reopening the character-image picker where you were last time is
+what a user would want, not a surprise. A constructor option can turn it off for a caller who disagrees.
+
+*The first version of this section said the opposite*, reasoning from the thumbnail override being
+per-opening — and that reset exists for a reason which does not transfer. The grid override competes with
+an **automatic** rule, so an override that outlived one opening would disable the automation for the
+session: a one-way door. Nothing automatic is competing for the navigation history, so there is no door to
+leave open. Worth stating because the two look like the same shape of state, and only one of them is.
+
+**What persistence costs is staleness**, and it is worth handling rather than discovering: the longer a
+history lives, the likelier it holds a directory that has since been deleted or unmounted. `chdir` today
+catches `PermissionError` and `NotADirectoryError` — not `FileNotFoundError`, which is what a vanished
+directory raises, and which only `on_path_enter` guards against at its own call site. Back into a deleted
+directory would therefore raise out of a key handler.
 
 **Whether the stack itself is shared with Visualizer is the open design question.** Visualizer's selection
 undo (`raven/visualizer/selection.py`) is the reference and is the only undo stack in the tree: a module-
