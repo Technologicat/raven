@@ -463,7 +463,7 @@ The mode-flag fallback survives for grid view, which has nothing focusable in it
 **Out of scope, worth recording**: an audio cue for the overwrite warning, and for whatever other warnings the
 dialog grows. Visual-only feedback is a gap for the same audience this brief is about.
 
-## What is built, as of 2026-08-17
+## What is built, as of 2026-08-18
 
 The table above is the design. This is the state of it, so the next session does not have to reconstruct
 that from the code.
@@ -500,23 +500,68 @@ that from the code.
   `navigate_prev` / `navigate_next`, which both views had implemented and neither could be given a key.
   **Grid view is therefore crossable at last**: its rows hold eight tiles, and until Left and Right were
   freed every column but the first was unreachable. Live-tested 2026-08-18 in Cherrypick's thumbnail view.
-  - **Focus parks on the OK button, not on the cursor row**, which is a departure from what this brief
+  - **Focus parks on the refresh button, not on the cursor row**, which is a departure from what this brief
     proposed. A table row is a selectable and could hold focus, but then focus would have to chase the
     cursor on every move, and grid view has nothing to chase — a drawlist has no focusable items, so that
     view needed a stand-in whatever the table did. One target for both is what keeps the two views
     answering to the same code. A button is safe to park on: DPG leaves ImGui's keyboard-nav activation
     off, so it ignores Space and Enter rather than pressing itself.
+  - **Which button is a correctness constraint, not a preference**, and it cost most of an afternoon to
+    find out. `focus_item` is refused when focus sits on an item at *window level* and the target is inside
+    a child window — the only refused direction, measured across every source/target position on DPG 2.3.1.
+    The find field lives in the listing's child window and the OK button does not, so parking there made
+    every later Ctrl+F and Tab-back a window-to-child request, ignored in silence: the caret never came
+    back and typing went nowhere. Refresh shares the child window with the field. Recorded in `dpg-notes.md`,
+    with the probe in `investigations/dpg-focus/`.
   - **The caret's home is a flag, not a reading of `is_item_active`.** The field is inactive whenever
     anything at all has been clicked, and that must not silently rebind the arrow keys.
 
-**Not built:** Ctrl+Space, Alt+Up, Ctrl+Up, Ctrl+L, Ctrl+Shift+F, Ctrl+B, Ctrl+H, F1, the places-panel
-migration, and Tab *completion* — the key is built, what it does to the typed text is not.
+- **Tab completes the find field on the way out**, to the longest common prefix of the entries on screen.
+  The prefix-preference this brief specified is gone: `candidates` is what the listing shows, and the
+  fragment search has already narrowed that, so preferring the entries that *start with* the query applies
+  a second rule to a set the first one chose. It answered `datasets` for `data` against `rawdata`,
+  `datasets`, `tempdatasets` — which then filtered `rawdata` off the screen. Same fault in the casing:
+  returning an entry's own spelling made a lowercase query case-sensitive and dropped what differed.
+  - **The invariant that replaced both: a completion may narrow the listing to fewer things, never to
+    different ones.** Every example this brief works through gives the same answer under the simpler rule,
+    checked against `make_search_matcher` rather than assumed.
 
-**Tab has unblocked the two features that were waiting on an inactive field.** Completion and the save-mode
-fill both write the find field, which an active `InputText` reverts on the next frame; Tab is the moment
-when it is not active. Neither is built, but neither is blocked any more — see the `set_value` section
-above, whose "designed but not buildable" verdict Tab is the answer to. The cheap keys — Alt+Up, Ctrl+Up,
-Ctrl+H — are genuinely cheap and can go in any order.
+- **Tab back fills the field from the cursor entry**, the same in both modes. In save mode that is how an
+  existing name becomes the template for a variant — the keyboard route this dialog did not have; in open
+  mode it collapses the listing to what was picked. Unconditional, because the only reason to press Tab is
+  to go and navigate, so coming back means "give me the one I navigated to". The query is not preserved,
+  which is the trade: returning arms ImGui's select-all, so it was a keystroke from gone regardless.
+  - **Whether that beats keeping the query in open mode is an empirical question**, and it is on trial.
+    Isolated in one commit (`40ea291`, pure additions) so `git revert` settles it without touching the
+    completion work.
+
+- **The cursor's placements are told from its choices.** A search shows its first hit — always, including
+  after arrowing somewhere, typing being a fresh intent. Erasing the query returns the cursor to `..` if
+  nobody moved it, and to the entry that *was* arrowed to if somebody did. `is_anchored` on `TableCursor`
+  and `FileGrid` is the one question that decides it, spelled the same on both.
+
+- **Navigating clears the find field**, in `chdir`, which is the one place this dialog navigates. The mouse
+  path had always cleared it and the keyboard path had not. Arriving also returns the caret to the field —
+  unless the listing had it, arriving being no reason to change modes.
+
+**Not built:** Ctrl+Space, Alt+Up, Ctrl+Up, Ctrl+L, Ctrl+Shift+F, Ctrl+B, Ctrl+H, F1, and the places-panel
+migration.
+
+**The save-mode arrow-fill is superseded rather than pending.** This brief specified that arrowing fills
+the field in save mode, gated on a flag tracking whether the user had typed since the last programmatic
+write. Tab-back fills it instead: explicit, so there is no flag to keep truthful, and the same in both
+modes rather than one more mode-dependent rule. The flag is exactly the kind of stashed state that goes
+stale, which is the argument that settled it.
+
+**Writing the find field is a solved problem now**, and the recipe is worth stating once. A write lands on
+an *inactive* field and is reverted on an active one, so either take the caret away first — `_focus_listing`
+then `_write_find_field`, which polls `is_item_active` rather than counting frames — or write at a moment
+when the caret is already gone. Enter provides one of those for free: committing a single-line `InputText`
+deactivates it, which is why `chdir` can clear the field with a plain `set_value`.
+
+The cheap keys — Alt+Up, Ctrl+Up, Ctrl+H — remain genuinely cheap and can go in any order. **Ctrl+B and the
+places-panel migration are the big one left**, and `self._places` is its groundwork: the panel is menu items
+today, which have no focus state at all, so a keyboard cursor over it needs the places as data first.
 
 **When testing type filters, use Librarian's attach dialog rather than Cherrypick.** Cherrypick passes no
 `filter_list`, so it gets the default hundreds-of-extensions list and Ctrl+1 selects the filter already
