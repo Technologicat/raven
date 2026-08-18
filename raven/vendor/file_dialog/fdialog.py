@@ -1546,6 +1546,16 @@ class FileDialog:
             # the path field) and only this one is common to all.
             dpg.set_value(self.search_field, "")
             self.reset_dir()
+
+            # Arriving somewhere new, the next thing a user does is usually look for something in it, so
+            # the caret goes back to the find field ready to be typed into. Enter takes it away on the way
+            # in — committing a single-line `InputText` deactivates it — so without this the first
+            # keystroke after descending would land nowhere.
+            #
+            # Unless the listing had the caret, in which case it keeps it: arriving is not a reason to
+            # change modes, and in grid view it would cost the arrow keys that Tab was needed to free.
+            if not self._caret_in_listing:
+                self._focus_field()
         except PermissionError as e:
             self.message_box("File dialog - PerimssionError", f"Cannot open the folder because is a system folder or the access is denied\n\nMore info:\n{e}")
         except NotADirectoryError as e:
