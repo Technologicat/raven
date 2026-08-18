@@ -884,3 +884,41 @@ def test_tab_leaves_the_field_alone_when_there_is_nothing_to_complete(make_dialo
 
     assert dpg.get_value(dialog.search_field) == ""  # the filter came from `reset_dir`, not from typing
     assert dialog._caret_in_listing is True, "the caret still moves; only the completion declined"
+
+
+# --------------------------------------------------------------------------------
+# A search belongs to the directory it was typed in
+
+def test_navigating_away_clears_the_search(make_dialog, tmp_path):
+    """Going somewhere else must not leave a stale query in the field.
+
+    The listing is rebuilt unfiltered on arrival, so a query left behind describes nothing that is on
+    screen: the field claims to be narrowing and the listing shows everything. Worse where the query
+    matched nothing, since then the only row to act on is `..` — so the very act of escaping a failed
+    search was what left the field lying.
+    """
+    (tmp_path / "album").mkdir()
+    dialog = make_dialog(pick="file")
+    dialog.chdir(str(tmp_path / "album"))
+
+    dpg.set_value(dialog.search_field, "zzz")  # matches nothing here
+    dialog._update_search()
+    assert shown(dialog) == [], "precondition: the search matches nothing"
+
+    cursor_onto(dialog, "..")
+    dialog._handle_key(dpg.mvKey_Return)
+
+    assert dpg.get_value(dialog.search_field) == ""
+    assert "album" in shown(dialog), "the new directory is listed in full"
+
+
+def test_the_mouse_and_the_keyboard_agree_about_this(make_dialog, tmp_path):
+    """`chdir` is the one place that navigates, so every route through it clears the field alike."""
+    (tmp_path / "album").mkdir()
+    dialog = make_dialog(pick="file")
+    dpg.set_value(dialog.search_field, "alb")
+    dialog._update_search()
+
+    dialog.chdir(str(tmp_path / "album"))  # what a double-click ends up calling
+
+    assert dpg.get_value(dialog.search_field) == ""

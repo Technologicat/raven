@@ -1493,8 +1493,7 @@ class FileDialog:
         if ctrl_pressed:
             return
         if double_clicked:
-            dpg.set_value(f"ex_search_{self.instance_tag}", "")
-            self.chdir("..")
+            self.chdir("..")  # which clears the find field, as every route into it does
 
     def set_type_filter(self, label):
         """Select the file type filter by its label, exactly as picking it from the combo would.
@@ -1537,8 +1536,15 @@ class FileDialog:
         self.set_type_filter(dpg.get_value(sender))
 
     def chdir(self, path):
+        """Go to `path` and list it. The one place this dialog navigates; every route ends up here."""
         try:
             os.chdir(path)
+            # A query belongs to the directory it was typed in. `reset_dir` lists the new one unfiltered,
+            # so a query left in the field would describe nothing on screen — the field claiming to narrow
+            # while the listing shows everything. Cleared here rather than at the call sites because there
+            # are several of them (a row's double-click, Enter on the cursor, the places panel, a drive,
+            # the path field) and only this one is common to all.
+            dpg.set_value(self.search_field, "")
             self.reset_dir()
         except PermissionError as e:
             self.message_box("File dialog - PerimssionError", f"Cannot open the folder because is a system folder or the access is denied\n\nMore info:\n{e}")
