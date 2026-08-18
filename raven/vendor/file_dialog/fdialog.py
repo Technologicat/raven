@@ -1597,7 +1597,12 @@ class FileDialog:
         # this is and work it out themselves.
         listed_dir = os.path.abspath(str(default_path))
         try:
-            dpg.configure_item(f"ex_path_input_{self.instance_tag}", default_value=os.getcwd())
+            # Only when it would actually change. A rebuild happens on every keystroke in the find field
+            # and on every Tab, and the directory is the same for all of them — reconfiguring the widget
+            # each time is churn nobody asked for, in the one field the user is not interacting with.
+            path_field = f"ex_path_input_{self.instance_tag}"  # tag
+            if dpg.get_value(path_field) != default_path:
+                dpg.configure_item(path_field, default_value=default_path)
             # Compiled once per rebuild rather than per entry: on a directory of thousands, the split is
             # the part worth hoisting out of the loop.
             matches_name_filter = common_utils.make_search_matcher(file_name_filter or "")
@@ -1649,11 +1654,18 @@ class FileDialog:
                 # picked means erasing the query returns the cursor to whatever happened to match first
                 # rather than to `..`.
                 navigator = self._navigator()
-                if len(entries) > 1 and entries[0].is_parent:
+                if entries:
                     if file_name_filter:
                         # A search shows its first hit. Always — typing a query is a fresh intent, so it
                         # overrides wherever the cursor had got to, including an entry arrowed to earlier.
-                        navigator.set_current(1, anchor=False)
+                        #
+                        # `..` is one of the things it can hit. The listing keeps it whatever is typed, so
+                        # it is always there to escape through, but it answers the query like any other
+                        # name: type `..` and the cursor lands on it, which is how "go up" is reachable by
+                        # search rather than by knowing a separate key. When the query matches nothing at
+                        # all the cursor stays there too, that being the one row left to act on.
+                        hits = (i for i, entry in enumerate(entries) if matches_name_filter(entry.name))
+                        navigator.set_current(next(hits, 0), anchor=False)  # 0, the way out, if none match
                     elif not navigator.is_anchored:
                         # No query, and nobody moved the cursor: it belongs at `..`, the resting place.
                         # A cursor that *was* moved is left alone — `set_listing` has already returned it

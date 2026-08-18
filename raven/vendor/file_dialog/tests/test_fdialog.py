@@ -998,6 +998,37 @@ def test_a_search_puts_the_cursor_on_its_first_hit(dialog):
     assert dialog._table_cursor.current == 1
 
 
+def test_the_parent_entry_answers_a_search_like_any_other_name(make_dialog, tmp_path):
+    """Typing `..` puts the cursor on `..`, so "go up" is reachable by search and not only by a key.
+
+    The listing keeps `..` whatever is typed — it is the way out, and must stay available when a query
+    matches nothing — but that is a separate thing from whether it can be *searched for*.
+    """
+    # `a.txt` matters: the query must match something *besides* `..`, or the listing collapses to one row
+    # and any rule at all leaves the cursor on it. This is the case that tells "first match" apart from
+    # "first match after the parent".
+    (tmp_path / "a.txt").touch()
+    dialog = make_dialog(pick="file", filter_list=[".*"], file_filter=".*")
+
+    dialog.reset_dir(file_name_filter=".")  # matches `..` and `a.txt` alike
+
+    assert len(dialog._row_entries) == 2, "precondition: both rows are showing"
+    assert dialog._table_cursor.current == 0
+    assert dialog._row_entries[0].is_parent
+
+
+def test_a_search_matching_nothing_leaves_the_cursor_on_the_way_out(make_dialog, tmp_path):
+    """The one row left to act on, so Enter still escapes a query that found nothing."""
+    (tmp_path / "album").mkdir()
+    dialog = make_dialog(pick="file", filter_list=[".*"], file_filter=".*")
+
+    dialog.reset_dir(file_name_filter="zzqqxx")
+
+    assert shown(dialog) == []
+    assert dialog._table_cursor.current == 0
+    assert dialog._row_entries[0].is_parent
+
+
 def test_the_grid_moves_its_cursor_onto_the_first_hit_too(dialog):
     """Both views, or the rule is a property of the table rather than of the dialog."""
     dialog.set_grid_mode(True)
