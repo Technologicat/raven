@@ -2,6 +2,7 @@
 
 __all__ = ["absolutize_filename", "canonical_path",
            "strip_ext", "make_cache_filename", "validate_cache_mtime", "create_directory",
+           "user_directory",
            "open_file", "open_in_file_manager",
            "make_blank_index_array", "bail",
            "bibtex_header_key", "bibtex_field_value", "bibtex_unbalanced_field_names",
@@ -113,6 +114,73 @@ def create_directory(path: Union[str, pathlib.Path]) -> None:
 # def clear_and_create_directory(path: str) -> None:
 #     delete_directory_recursively(path)
 #     create_directory(path)
+
+# The XDG names for the directories a "places" shortcut list offers, keyed by the English folder name that
+# is also the fallback. `XDG_DOWNLOAD_DIR` is singular where the others are plural; that is the spec, not a
+# typo here.
+_XDG_USER_DIRS = {"Desktop": "XDG_DESKTOP_DIR",
+                  "Downloads": "XDG_DOWNLOAD_DIR",
+                  "Documents": "XDG_DOCUMENTS_DIR",
+                  "Music": "XDG_MUSIC_DIR",
+                  "Pictures": "XDG_PICTURES_DIR",
+                  "Videos": "XDG_VIDEOS_DIR"}
+
+def _xdg_user_dirs_file() -> pathlib.Path:
+    """Where the XDG user-directory definitions live."""
+    config_home = os.environ.get("XDG_CONFIG_HOME") or "~/.config"
+    return pathlib.Path(config_home).expanduser() / "user-dirs.dirs"
+
+def _read_xdg_user_dir(xdg_key: str) -> pathlib.Path | None:
+    """Look `xdg_key` up in the user's `user-dirs.dirs`, or `None` if it is not answered there.
+
+    The file is shell fragments meant to be sourced — `XDG_PICTURES_DIR="$HOME/Kuvat"` — so an exported
+    value takes precedence over the file, that being what sourcing it would have produced.
+    """
+    from_env = os.environ.get(xdg_key)
+    if from_env:
+        return pathlib.Path(os.path.expandvars(from_env)).expanduser()
+
+    path = _xdg_user_dirs_file()
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:  # no such file, or unreadable — neither is exceptional, the file is optional
+        return None
+
+    for line in lines:
+        line = line.strip()
+        if line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        if key.strip() != xdg_key:
+            continue
+        value = value.strip().strip('"').strip("'")
+        if not value:
+            return None  # present but unset: nothing to say, so fall back like a missing key
+        return pathlib.Path(os.path.expandvars(value)).expanduser()
+    return None
+
+def user_directory(name: str) -> pathlib.Path:
+    """Where the user's `name` directory actually is. `name` is the English folder name — "Pictures", "Home", ...
+
+    Accepts "Home" and the six keys of `_XDG_USER_DIRS`; anything else resolves to `~/<name>`, which is also
+    what every name falls back to when the platform has nothing better to say.
+
+    The returned path is not checked for existence — a user may genuinely have no `Videos` directory, and
+    whether that means "skip this shortcut" or "offer it anyway" is the caller's decision, not this one's.
+    """
+    # Only Linux and the BSDs rename these directories on disk; `~/Pictures` is `~/Kuvat` on a Finnish
+    # desktop, and joining `~` with an English name finds nothing. Windows and macOS localize the *displayed*
+    # name and leave the directory itself in English, so the fallback is the right answer there.
+    home = pathlib.Path("~").expanduser()
+    if name == "Home":
+        return home
+    if sys.platform not in ("win32", "darwin"):
+        xdg_key = _XDG_USER_DIRS.get(name)
+        if xdg_key is not None:
+            from_xdg = _read_xdg_user_dir(xdg_key)
+            if from_xdg is not None:
+                return from_xdg
+    return home / name
 
 def _os_open(path: str | pathlib.Path) -> None:
     """Hand `path` to the operating system's default open mechanism.

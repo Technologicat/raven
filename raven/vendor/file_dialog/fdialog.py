@@ -6,9 +6,7 @@ __all__ = ["FileDialog"]
 import logging
 logger = logging.getLogger(__name__)
 
-import glob
 import os
-import platform
 import psutil
 import textwrap
 import threading
@@ -586,35 +584,22 @@ class FileDialog:
                         self._refresh_target_notification()
 
         def get_directory_path(directory_name):
+            """Where the shortcut named `directory_name` should go, or `None` if this user has no such place.
+
+            `None` rather than a fallback path, because a shortcut that silently goes somewhere else is
+            worse than one that is not offered: the panel omits the row instead.
+            """
+            # `common_utils.user_directory` is what knows that these directories are renamed on disk on
+            # Linux — `~/Pictures` is `~/Kuvat` on a Finnish desktop — and reads the XDG definitions.
+            # Joining `~` with an English name, which is what this did, finds nothing there.
+            directory_path = common_utils.user_directory(directory_name)
             try:
-                # Check for Linux or MacOS
-                if platform.system() in ["Linux", "Darwin"] and directory_name.lower() == "home":
-                    directory_path = os.path.expanduser("~")
-                # Check for Windows
-                elif platform.system() == "Windows" and directory_name.lower() == "home":
-                    directory_path = os.path.expanduser("~")
-                else:
-                    # Attempt to join the home directory with the specified directory name
-                    directory_path = os.path.join(os.path.expanduser("~"), directory_name)
-
-                # Verify if the directory exists
-                os.listdir(directory_path)  # Test access
-            except FileNotFoundError:
-                # Search for the directory in the user's home folder
-                search_path = os.path.expanduser("~/*/" + directory_name)
-                directory_path = glob.glob(search_path)
-                if directory_path:
-                    try:
-                        os.listdir(directory_path[0])  # Test access to the found path
-                        directory_path = directory_path[0]  # Use the found path
-                    except FileNotFoundError:
-                        message_box("File dialog - Error", "Could not find the selected directory")
-                        return "."
-                else:
-                    message_box("File dialog - Error", "Could not find the selected directory")
-                    return "."
-
-            return directory_path
+                os.listdir(directory_path)  # test access, not just existence
+            except OSError:
+                logger.debug(f"get_directory_path: instance '{self.tag}' ({self.instance_tag}): "
+                             f"no usable '{directory_name}' at '{directory_path}', omitting the shortcut")
+                return None
+            return str(directory_path)
 
         def _icon_name_for_extension(file_name: str) -> Optional[str]:
             """Which icon `file_name`'s extension asks for, or `None` for a type with no icon of its own.
@@ -1445,7 +1430,8 @@ class FileDialog:
             # The places, resolved once. Held as data rather than as seven locals per branch: the two
             # `user_style` layouts were each spelling out the same seven lookups and then seven near-identical
             # rows, and a keyboard cursor over this panel needs the list to be something it can index anyway.
-            self._places = {label: get_directory_path(label) for label, _icon in _PLACES}
+            self._places = {label: path for label, _icon in _PLACES
+                            if (path := get_directory_path(label)) is not None}
 
             # horizontal group (shot_menu + dir_list)
             with dpg.group(horizontal=True):
@@ -1453,6 +1439,8 @@ class FileDialog:
                 if (self.user_style == 0):
                     with dpg.child_window(tag=f"shortcut_menu_{self.instance_tag}", width=200, resizable_x=True, show=self.show_shortcuts_menu, height=-info_px):
                         for label, icon in _PLACES:
+                            if label not in self._places:  # this user has no such directory
+                                continue
                             with dpg.group(horizontal=True):
                                 dpg.add_image(getattr(self, icon))
                                 # `label=label` binds this row's label at definition time; a bare closure over
@@ -1472,6 +1460,8 @@ class FileDialog:
                 elif (self.user_style == 1):
                     with dpg.child_window(tag=f"shortcut_menu_{self.instance_tag}", width=40, show=self.show_shortcuts_menu, height=-info_px):
                         for label, icon in _PLACES:
+                            if label not in self._places:  # this user has no such directory
+                                continue
                             dpg.add_image_button(getattr(self, icon), callback=lambda label=label: chdir(self._places[label]))
 
                         dpg.add_separator()

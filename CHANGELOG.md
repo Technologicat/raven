@@ -132,6 +132,9 @@
 
 *Constellation-wide*
 
+- **the file browser's shortcuts work on a desktop that is not in English.** Linux renames these directories on disk — a Finnish desktop has `~/Kuvat`, not `~/Pictures` — and the browser looked for the English names only, so on such a system every shortcut but *Home* failed to find its directory and reported an error as the dialog opened. It now reads the directories the desktop actually defines. A place you genuinely do not have is left out of the panel rather than offered and broken.
+  - Windows and macOS were never affected: they translate the name their file manager *shows* and keep the directory itself in English.
+
 - the file browser's shortcut to your pictures is now labelled **Pictures**, after the folder it opens. It said "Images" while going to `~/Pictures` — which is what Linux, macOS and Windows all call that folder.
 
 - **the file browser closes faster, and the button that opens it no longer looks dead afterwards.** Closing it rebuilt the whole file listing — twice, if you picked something — although the listing was already hidden and gets rebuilt on the next open anyway. The apps run one action at a time, so whatever you clicked next had to wait for that wasted work, which is why the attach button could ignore a click, its own click animation included. On a directory of ~1600 files that was roughly half a second per close.
