@@ -40,7 +40,7 @@ class Attribute:
 
     def __eq__(self, other):
         if type(other) is type:
-            return type(self) == other
+            return type(self) is other
         return super().__eq__(other)
 
 

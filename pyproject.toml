@@ -288,14 +288,17 @@ markers = [
 # pytest already reports pass/fail per test, so coverage of the test
 # files themselves would just add rows without insight. The omit glob
 # uses `*/tests/*` (plural) to catch all the scattered `tests/` dirs
-# under raven/<subpkg>/tests/. We also omit `*/vendor/*` to mirror
-# ruff's existing exclusion of `raven/vendor` (third-party code we
-# carry, but don't develop or own — coverage of those lines is not
-# our signal).
+# under raven/<subpkg>/tests/. Under `raven/vendor` we omit exactly what
+# ruff excludes, and for the same reason: code we carry as upstream
+# shipped it. `file_dialog` and `DearPyGui_Markdown` are our forks, so
+# their coverage is our signal and they are measured with the rest.
 source = ["raven"]
 omit = [
     "*/tests/*",
-    "*/vendor/*",
+    "*/vendor/tha3/*",
+    "*/vendor/kokoro_fastapi/*",
+    "*/vendor/anime4k/*",
+    "*/vendor/IconsFontAwesome6.py",
 ]
 
 [tool.ruff]
@@ -307,7 +310,15 @@ exclude = [
     "build",
     "dist",
     ".venv",
-    "raven/vendor",
+    # Only the parts of `raven/vendor` we do not develop. `file_dialog` and `DearPyGui_Markdown` are our
+    # forks — substantially extended here, and carrying our own tests — so they are linted like the rest of
+    # the tree. The three below are as upstream shipped them, give or take a performance tune in `tha3`
+    # (`no_grad` -> `inference_mode`), a provenance comment in `kokoro_fastapi` and docstrings in `anime4k`;
+    # linting them would report on somebody else's style. `IconsFontAwesome6.py` is a generated table.
+    "raven/vendor/tha3",
+    "raven/vendor/kokoro_fastapi",
+    "raven/vendor/anime4k",
+    "raven/vendor/IconsFontAwesome6.py",
     "briefs",
 ]
 
