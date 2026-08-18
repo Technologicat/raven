@@ -234,6 +234,20 @@ reflex is the safe one:
 
 A test that needs neither takes no marker, which is the overwhelmingly common case.
 
+### A test that fakes a home directory must set `USERPROFILE` as well as `HOME`
+
+`expanduser` reads `HOME` through `posixpath` and `USERPROFILE` through `ntpath`, and **never consults
+`HOME` on Windows** (`ntpath.expanduser` checks `USERPROFILE`, then `HOMEDRIVE`/`HOMEPATH`). So a fixture
+that points `HOME` at a `tmp_path` redirects the suite on Linux and macOS while leaving the Windows runner
+resolving `~` to the real profile of whoever is running it.
+
+The failure is partial, which is what makes it confusing: `expandvars` *is* plain environment substitution
+on every platform, so anything going through it — expanding the `$HOME` inside an XDG value, say — works
+from `HOME` alone. Only the assertions that expand `~` themselves fail, and only on Windows.
+
+Set both. (Live case 2026-08-18: `TestUserDirectory` went green on ubuntu and macOS and took 7 failures on
+windows-latest.)
+
 ### Naming and placing a test module
 
 **`test_X.py` tests the module `X.py`, and lives in the `tests/` directory of X's own package.** So

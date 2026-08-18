@@ -736,8 +736,17 @@ class TestUserDirectory:
 
     @pytest.fixture
     def home(self, tmp_path, monkeypatch):
-        """A home directory of our own, with no inherited XDG settings leaking in from the real one."""
+        """A home directory of our own, with no inherited XDG settings leaking in from the real one.
+
+        Both variables are needed, and for different consumers. `expanduser` reads `HOME` through
+        `posixpath` and `USERPROFILE` through `ntpath` — never `HOME` on Windows — so setting only the
+        former leaves every fallback assertion pointing at the real profile of whoever runs the suite.
+        `expandvars`, which expands the `$HOME` inside an XDG value, uses plain environment substitution
+        on all platforms and so was satisfied by `HOME` alone; that is why the Windows runner failed on
+        exactly the tests that do *not* read an XDG file.
+        """
         monkeypatch.setenv("HOME", str(tmp_path))
+        monkeypatch.setenv("USERPROFILE", str(tmp_path))
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / ".config"))
         for key in utils._XDG_USER_DIRS.values():
             monkeypatch.delenv(key, raising=False)
