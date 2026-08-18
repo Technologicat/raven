@@ -757,13 +757,56 @@ then `_write_find_field`, which polls `is_item_active` rather than counting fram
 when the caret is already gone. Enter provides one of those for free: committing a single-line `InputText`
 deactivates it, which is why `chdir` can clear the field with a plain `set_value`.
 
-The cheap keys — Alt+Up, Ctrl+Up, Ctrl+H — remain genuinely cheap and can go in any order. **Ctrl+B and the
+The cheap keys were spent on 2026-08-18 — Alt+Up, Ctrl+Up, Ctrl+H and Ctrl+Space are in. **Ctrl+B and the
 places-panel migration are the big one left**, and `self._places` is its groundwork: the panel is menu items
 today, which have no focus state at all, so a keyboard cursor over it needs the places as data first.
 
 **When testing type filters, use Librarian's attach dialog rather than Cherrypick.** Cherrypick passes no
 `filter_list`, so it gets the default hundreds-of-extensions list and Ctrl+1 selects the filter already
 active — which looks like the key doing nothing.
+
+## What to build next, and in what order
+
+Written 2026-08-18 at the end of the day, for the session that picks this up.
+
+**Everything left needs the caret to have more than two homes, and that is one change rather than three.**
+The dialog tracks where the caret is in `_caret_in_listing`, a bool — because until now there were exactly
+two places it could be. Ctrl+L parks it on the path field, Ctrl+Shift+F on the type filter combo, Ctrl+B on
+the places panel: three more homes, and each of the three keys is small *once the flag can name them*.
+Widening it first is therefore the cheap order, and doing the keys one at a time means widening it three
+times, each time touching every branch that reads the flag.
+
+Two existing rules become general at the same moment, which is the other reason to do it once:
+
+- **Esc means "give me back the find field" from wherever the caret was parked**, cancelling only when it
+  is already there. One rule over whatever set of homes exists — worth writing against the general shape
+  rather than growing a branch per home.
+- **Bare Up / Down / Home / End mean different things per home** — the listing cursor from the find field,
+  the choices from the combo. That is the Raven combo idiom (`raven-avatar-settings-editor` is the
+  reference implementation, a `combobox_choice_map` plus dispatch on `dpg.get_focused_item()`), and it is
+  already how Tab makes Left and Right mean two things. A third and fourth home is more of the same.
+
+Suggested order, with what each actually costs:
+
+1. **Widen the caret home** — small, and unblocks the two below. No user-visible change on its own, so it
+   is also the one item that can land without a live test drive.
+2. **Ctrl+Shift+F, the type filter** — small once (1) is in: the combo idiom is copied, not invented.
+3. **Ctrl+L, the path field** — moderate, and the only one with real new machinery. It needs Tab completion
+   against the filesystem (directories only, candidates re-read per Tab, separator appended after a
+   completed component so repeated Tab walks down the tree), which is why it is not a cheap key: without
+   completion it lands the user in a field where they must type an absolute path by hand.
+4. **F1, the help card** — moderate, and deliberately *after* the keys: the card is the only place the
+   whole set is stated as prose, so writing it before the last key lands means writing it twice. Two
+   mechanics to get right, both recorded under "Discoverability": DPG does not stack modals, so the dialog
+   hides itself while the card is up; and `is_visible()` must keep returning `True` across that gap, or the
+   app underneath wakes up and re-enables its own hotkeys.
+5. **The navigation history** — the largest, fully designed above, and the one Juha asked for by name.
+   Independent of 1–4, so it can go first if the appetite is for building rather than refactoring.
+6. **Ctrl+B and the places-panel migration** — its own day, not a tail end of this one.
+
+**Items 1–4 and item 5 are each about a day's work, so both in one day is unlikely.** Which to drop is a
+real choice rather than a scheduling detail: 1–4 finish the keyboard, and 5 adds a capability the dialog has
+never had. Worth deciding at the start of the session rather than discovering at the end of it.
 
 ## Where the dialog stands
 
