@@ -1643,8 +1643,12 @@ class FileDialog:
                 # picked means erasing the query returns the cursor to whatever happened to match first
                 # rather than to `..`.
                 navigator = self._navigator()
-                if file_name_filter and len(entries) > 1 and entries[0].is_parent and navigator.current == 0:
-                    navigator.set_current(1, anchor=False)
+                if len(entries) > 1 and entries[0].is_parent and not navigator.is_anchored:
+                    # Read as one rule: a cursor nobody moved goes back to where it was before the search.
+                    # With a query typed that is the first hit; with none it is `..`, the resting place.
+                    # Both are placements rather than choices, so neither anchors — and a cursor the user
+                    # *did* move is left alone, `set_listing` having already returned it to its own entry.
+                    navigator.set_current(1 if file_name_filter else 0, anchor=False)
 
             logger.debug(f"reset_dir: instance '{self.tag}' ({self.instance_tag}), {len(self.shown_items)} entries "
                          f"as {'tiles' if self._grid_mode else 'rows'}: "

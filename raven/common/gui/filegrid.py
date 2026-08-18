@@ -283,6 +283,18 @@ class FileGrid(ThumbnailGrid):
             return None
     current_entry = property(fget=get_current_entry, doc="The entry the cursor is on, or `None`.")
 
+    def get_is_anchored(self) -> bool:
+        """Whether the cursor is where it is because someone put it there.
+
+        True once the cursor has been *moved* — by an arrow key, or by a caller passing `anchor=True` —
+        and False while it merely sits where a rebuild placed it. Named identically on `TableCursor`, so a
+        caller holding either can ask without knowing which it has.
+        """
+        with self._lock:
+            return self._anchor_path is not None
+    is_anchored = property(fget=get_is_anchored,
+                           doc="Whether the cursor's position was chosen rather than placed.")
+
     def set_current(self, idx: int, *, anchor: bool = True) -> None:
         """Move the cursor to entry `idx`, and record that entry as the one the user chose.
 

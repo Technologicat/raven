@@ -126,6 +126,19 @@ class TableCursor:
             return None
     current_key = property(fget=get_current_key, doc="The key the cursor is on, or `None`.")
 
+    def get_is_anchored(self) -> bool:
+        """Whether the cursor is where it is because someone put it there.
+
+        True once the cursor has been *moved* — by an arrow key, or by a caller passing `anchor=True` —
+        and False while it merely sits where a rebuild placed it. The distinction is what lets an owner
+        tell "the entry I chose" from "the entry that happened to be under the cursor", which are the same
+        position and want opposite treatment when the listing changes again.
+        """
+        with self._lock:
+            return self._anchor_key is not None
+    is_anchored = property(fget=get_is_anchored,
+                           doc="Whether the cursor's position was chosen rather than placed.")
+
     def set_current(self, idx: int, *, anchor: bool = True) -> None:
         """Move the cursor to row `idx`.
 

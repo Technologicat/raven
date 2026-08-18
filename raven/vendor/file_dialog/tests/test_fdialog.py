@@ -960,3 +960,34 @@ def test_landing_on_a_match_is_not_a_choice_the_user_made(dialog):
 
     assert dialog._table_cursor.get_current_key() != landed_on, \
         "the cursor followed an entry the user never chose"
+
+
+def test_erasing_the_query_returns_the_cursor_to_its_resting_place(dialog):
+    """One rule, read forwards: a cursor nobody moved goes back to where it was before the search.
+
+    With a query typed that is the first hit; with none it is `..`. Holding the *index* instead would
+    leave the cursor on whichever entry happened to occupy that row in the wider listing — a position
+    with no meaning to anyone.
+    """
+    dialog.reset_dir(file_name_filter="photo")
+    assert dialog._table_cursor.current == 1
+
+    dialog.reset_dir()
+
+    assert dialog._table_cursor.current == 0
+    assert dialog._row_entries[0].is_parent, "which is `..`"
+
+
+def test_a_cursor_the_user_moved_is_left_where_it_belongs(dialog):
+    """The other half, and why this is one rule rather than a special case for the empty query.
+
+    Arrowing somewhere is a choice, so it anchors — and the cursor then returns to *that entry* when the
+    listing changes, rather than being sent back to `..` along with the unchosen ones.
+    """
+    dialog.reset_dir()
+    dialog._table_cursor.set_current(3)  # as an arrow key would
+    chosen = dialog._table_cursor.get_current_key()
+
+    dialog.reset_dir(file_name_filter="")  # a rebuild of the same directory
+
+    assert dialog._table_cursor.get_current_key() == chosen
