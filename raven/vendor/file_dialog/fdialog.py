@@ -469,30 +469,7 @@ class FileDialog:
         # re-derived whenever the offered filters change.
         self._default_file_extension_was_given = (default_file_extension is not None)
 
-        def _install_filters(filter_list, file_filter=None) -> None:
-            """Recompute the offered file type filters. Touches no widgets; callers refresh the GUI."""
-            self.filter_list = list(filter_list)
-            self._filters = [_normalize_filter(entry) for entry in self.filter_list]
-            self._filter_labels = [label for label, _extensions in self._filters]
-            self._filter_extensions = dict(self._filters)
-            # Every extension any filter knows of. Save mode uses this to decide whether a typed filename already
-            # carries an extension, so it accepts any offered one rather than only the active filter's.
-            self._all_extensions = tuple(sorted({ext
-                                                 for _label, extensions in self._filters if extensions is not None
-                                                 for ext in extensions}))
-            # `None` means "the first item", which is what a caller listing the types it wants almost always means.
-            self._set_type_filter(self._filter_labels[0] if file_filter is None else file_filter)
-
-            # A save dialog's default extension is nearly always the one extension its filter names, so derive
-            # it rather than making the caller write it a third time. Only for a filter naming exactly one:
-            # among several there is no principled choice, and silently picking the first would be a rule
-            # nobody could predict from a call site.
-            if not self._default_file_extension_was_given:
-                if self._active_extensions is not None and len(self._active_extensions) == 1:
-                    self.default_file_extension = self._active_extensions[0]
-                else:
-                    self.default_file_extension = None
-        _install_filters(self.filter_list, self.file_filter)
+        self._install_filters(self.filter_list, self.file_filter)
 
 
 
@@ -564,32 +541,7 @@ class FileDialog:
                         self._refresh_target_notification()
 
 
-        def _icon_for(entry) -> Union[str, int]:
-            """The small icon shown at the left of `entry`'s row."""
-            if entry.is_dir:
-                return self.img_mini_folder
-            if entry.kind == filelisting.KIND_BROKEN_LINK:
-                return self.img_mini_error
-            icon_name = _icon_name_for_extension(entry.name)
-            if icon_name is None:
-                return self.img_mini_document
-            return getattr(self, f"img_{icon_name}")
 
-        def _tile_icon_for(entry) -> Optional[str]:
-            """Which icon `entry`'s *tile* gets in grid view, or `None` to decode the image itself.
-
-            `None` is what puts an entry in the thumbnail queue, so it is the answer for exactly the files
-            worth looking at — which is the whole reason the grid view exists. Everything else gets a
-            picture of its type, because a picker that shows only what it can preview is lying about the
-            contents of the directory.
-            """
-            if entry.is_dir:
-                return "folder"  # the large one; `mini_folder` is 16px and unusable at tile size
-            if entry.kind == filelisting.KIND_BROKEN_LINK:
-                return "mini_error"
-            if entry.name.lower().endswith(_DECODABLE_IMAGE_EXTENSIONS):
-                return None
-            return _icon_name_for_extension(entry.name) or "document"
 
         def _make_row(entry, callback, parent=f"explorer_{self.instance_tag}", selected_paths=()):
             """Build one table row from a `filelisting.FileEntry`.
@@ -642,7 +594,7 @@ class FileDialog:
 
             with dpg.table_row(parent=parent):
                 with dpg.group(horizontal=True):
-                    dpg.add_image(_icon_for(entry), **kwargs_image)
+                    dpg.add_image(self._icon_for(entry), **kwargs_image)
                     cell_name = dpg.add_selectable(label=entry.name, **kwargs_cell)
                 cell_time = dpg.add_selectable(label=filelisting.format_mtime(entry.mtime), **kwargs_cell)
                 cell_type = dpg.add_selectable(label=filelisting.format_kind(entry), **kwargs_cell)
@@ -718,7 +670,7 @@ class FileDialog:
             which is the intended use, rebuilding here would be work thrown away: that call rebuilds anyway,
             and on a directory of thousands each rebuild is the couple of seconds the dialog is already slow by.
             """
-            _install_filters(filter_list, file_filter)
+            self._install_filters(filter_list, file_filter)
             dpg.configure_item(self.combo_file_filter, items=self._filter_labels)
             dpg.set_value(self.combo_file_filter, self.file_filter)
             dpg.set_value(self.text_file_filter_extensions, self._describe_type_filter(self.file_filter))
@@ -860,20 +812,6 @@ class FileDialog:
         # The header itself stays, because `resizable` is a header-drag gesture and filename lengths vary
         # enormously between users and directories — which is exactly when a fixed Name column hurts.
 
-        def sort_by(sort_key, descending=None):
-            """Order the listing by `sort_key`, and rebuild it.
-
-            `descending`: `None` (the default) is the click semantics — asking for the criterion already in
-            force reverses it, and any other criterion starts ascending. Pass a bool to say which way
-            outright, which is what restoring a remembered order wants.
-            """
-            if descending is None:
-                descending = (not self._sort_descending) if sort_key is self._sort_key else False
-            self._sort_key = sort_key
-            self._sort_descending = descending
-            self._draw_sort_indicators()
-            self._update_search()  # re-lists the current directory under the current find query
-        self.sort_by = sort_by  # instance-injected for the same reason as `set_type_filter` above.
 
         def _make_sort_row():
             """The sort buttons, plus the view toggle, on one row above the listing.
@@ -889,7 +827,7 @@ class FileDialog:
                     with dpg.group(horizontal=True):
                         button = dpg.add_button(label=label, width=70,
                                                 user_data=sort_key,
-                                                callback=lambda s, a, u: sort_by(u))
+                                                callback=lambda s, a, u: self.sort_by(u))
                         # The keys are numbered by position, so the tooltip is the only place a user finds
                         # out *which* number this button is without counting the row.
                         with dpg.tooltip(button):
@@ -929,44 +867,18 @@ class FileDialog:
                 self._grid = filegrid.FileGrid(parent=f"grid_host_{self.instance_tag}",  # tag
                                                width=self._grid_size[0], height=self._grid_size[1],
                                                icon_assets=icon_assets,
-                                               icon_name_for=_tile_icon_for,
+                                               icon_name_for=self._tile_icon_for,
                                                selectable_for=self._is_choosable,
                                                tile_size=self.thumbnail_size,
                                                thumbnail_device=self.thumbnail_device,
                                                allow_multi_select=self.multi_selection,
-                                               on_current_entry_changed=_grid_current_changed,
-                                               on_selection_changed_entries=_grid_selection_changed,
+                                               on_current_entry_changed=self._grid_current_changed,
+                                               on_selection_changed_entries=self._grid_selection_changed,
                                                on_activate=_grid_activate)
             return self._grid
 
 
-        def _grid_selection_changed(entries):
-            """The grid's selection is the dialog's, filtered to what can actually be returned.
 
-            This is what makes Ctrl+click mean in the grid what it means in the table. Without it the
-            dialog knew only about the *cursor*, so a user could mark five images, press OK, and get one —
-            which is worse than not offering the gesture, and is what `allow_multi_select` denies outright
-            when the dialog was not opened for multi-selection.
-            """
-            self.selected_files.clear()
-            self.selected_files.extend(entry.path for entry in entries if self._is_choosable(entry))
-            self._refresh_target_notification()
-
-        def _grid_current_changed(entry):
-            """Single click in the grid: select, exactly as clicking a row does.
-
-            The selection callback has already recorded the click; what is left is save mode's habit of
-            offering the clicked name as the name to save as.
-            """
-            # Before the choosability test: the promised target follows the cursor wherever it lands, and
-            # a cursor sitting on something unreturnable is exactly when the line has to say so.
-            self._refresh_target_notification()
-            if not self._is_choosable(entry):
-                return
-            if self.save_mode:
-                basename, _ext = os.path.splitext(entry.name)
-                dpg.set_value(f"ex_search_{self.instance_tag}", basename)
-                self._update_search()
 
         def _grid_activate(entry):
             """Double click in the grid: descend into the directory, or accept the file."""
@@ -1004,7 +916,7 @@ class FileDialog:
             if enabled:
                 self._resize_grid()
                 if self.is_visible():
-                    _start_grid_ticker()
+                    self._start_grid_ticker()
             if rebuild:
                 self._update_search()  # rebuild into the view that is now on screen
         self.set_grid_mode = set_grid_mode  # instance-injected for the same reason as `set_type_filter` above.
@@ -1040,46 +952,6 @@ class FileDialog:
         self._reset_grid_mode_for_opening = _reset_grid_mode_for_opening  # instance-injected, as `set_type_filter` above.
 
 
-        def _start_grid_ticker():
-            """Run the grid's per-frame work on a thread of the dialog's own, for as long as it is on screen.
-
-            The grid needs `update()` every frame and the decoder needs polling, and `FileDialog` is a
-            widget inside apps that own their render loops — so requiring every host app to call something
-            would be a landmine: the app that forgets is the one whose thumbnails never appear. DPG permits
-            item work from any thread, and `visible_on_screen` reads what the last frame drew.
-
-            **It exists only while the dialog is up, and closing it joins the thread**, which is the part
-            that is not merely tidy. A thread that calls DPG cannot outlive the DPG context: after
-            `destroy_context` every call into the library is into freed memory, and the failure is a
-            segfault rather than an exception — the guard would have to be a DPG call itself. Tying the
-            thread's life to the dialog being visible keeps it inside a window where the context provably
-            exists. (Found by the test suite, which builds and tears down contexts for a living.)
-            """
-            if self._ticker is not None and self._ticker.is_alive():
-                return
-
-            def tick_loop():
-                while not self._ticker_stop.wait(_GRID_TICK_INTERVAL):
-                    try:
-                        # The app closing with the picker still open is the one exit this thread is not
-                        # told about, and the one that races `destroy_context`. The render loop stops
-                        # first, so this reads False well before the context goes — and it is only ever
-                        # consulted from a thread that started while a *visible* dialog was rendering,
-                        # which is what makes False mean "stopped" here rather than "not started yet".
-                        if not dpg.is_dearpygui_running():
-                            return
-                        if self._grid is None or not self._grid_mode or not self.is_visible():
-                            continue
-                        self._resize_grid()
-                        self._grid.tick()
-                    except Exception as exc:
-                        logger.error(f"tick_loop: instance '{self.tag}' ({self.instance_tag}): {type(exc)}: {exc}")
-
-            self._ticker_stop.clear()
-            self._ticker = threading.Thread(target=tick_loop, daemon=True,
-                                            name=f"fdialog_grid_tick_{self.instance_tag}")
-            self._ticker.start()
-        self._start_grid_ticker = _start_grid_ticker  # instance-injected for the same reason as `set_type_filter` above.
 
         # --------------------------------------------------------------------------------
         # The table's keyboard cursor. The grid brings its own; this gives the other view one under the
@@ -1087,13 +959,6 @@ class FileDialog:
 
 
 
-        def _row_extent(idx):
-            """Where row `idx` sits inside the table's scrollable content, as `(top, height)`."""
-            metrics = self._row_metrics()
-            if metrics is None or not (0 <= idx < len(self._row_themes)):
-                return None
-            origin, pitch = metrics
-            return origin + idx * pitch, pitch
 
 
         def _scroll_row_into_view(idx):
@@ -1102,7 +967,7 @@ class FileDialog:
             Scrolling only when the row is outside the visible band is what keeps arrow navigation from
             yanking the listing on every keypress.
             """
-            extent = _row_extent(idx)
+            extent = self._row_extent(idx)
             height = self._view_height()
             table = f"explorer_{self.instance_tag}"  # tag
             if extent is None or not height:
@@ -1126,17 +991,10 @@ class FileDialog:
                              f"scrolling to {max(0.0, float(new_top))}")
                 dpg.set_y_scroll(table, max(0.0, float(new_top)))
 
-        def _rows_per_page():
-            """Most of a screenful, keeping one row of context to read the new position against."""
-            height = self._view_height()
-            metrics = self._row_metrics()
-            if not height or metrics is None:
-                return 1
-            return max(1, int(height / metrics[1]) - 1)
 
         self._table_cursor = TableCursor(on_paint=self._paint_row,
                                          on_scroll_into_view=_scroll_row_into_view,
-                                         page_size=_rows_per_page,
+                                         page_size=self._rows_per_page,
                                          # The promised target follows the cursor now, so it has to be
                                          # rewritten whenever the cursor moves — including by a rebuild.
                                          on_current_changed=lambda _idx: self._refresh_target_notification())
@@ -1202,7 +1060,7 @@ class FileDialog:
                 n = key - dpg.mvKey_1
                 if shift:
                     if n < len(_SORT_CRITERIA):
-                        sort_by(_SORT_CRITERIA[n][0])
+                        self.sort_by(_SORT_CRITERIA[n][0])
                 elif n < len(self._filter_labels):
                     set_type_filter(self._filter_labels[n])
                 return
@@ -1707,6 +1565,147 @@ class FileDialog:
         else:
             # TODO: We really need a message box that works while the file dialog is modal.
             logger.warning(f"message_box: Cannot display message box while file_dialog is in modal. Message follows:\n{title}:\t{message}\n")
+
+    def _grid_current_changed(self, entry):
+        """Single click in the grid: select, exactly as clicking a row does.
+
+        The selection callback has already recorded the click; what is left is save mode's habit of
+        offering the clicked name as the name to save as.
+        """
+        # Before the choosability test: the promised target follows the cursor wherever it lands, and
+        # a cursor sitting on something unreturnable is exactly when the line has to say so.
+        self._refresh_target_notification()
+        if not self._is_choosable(entry):
+            return
+        if self.save_mode:
+            basename, _ext = os.path.splitext(entry.name)
+            dpg.set_value(f"ex_search_{self.instance_tag}", basename)
+            self._update_search()
+    def _grid_selection_changed(self, entries):
+        """The grid's selection is the dialog's, filtered to what can actually be returned.
+
+        This is what makes Ctrl+click mean in the grid what it means in the table. Without it the
+        dialog knew only about the *cursor*, so a user could mark five images, press OK, and get one —
+        which is worse than not offering the gesture, and is what `allow_multi_select` denies outright
+        when the dialog was not opened for multi-selection.
+        """
+        self.selected_files.clear()
+        self.selected_files.extend(entry.path for entry in entries if self._is_choosable(entry))
+        self._refresh_target_notification()
+    def _icon_for(self, entry) -> Union[str, int]:
+        """The small icon shown at the left of `entry`'s row."""
+        if entry.is_dir:
+            return self.img_mini_folder
+        if entry.kind == filelisting.KIND_BROKEN_LINK:
+            return self.img_mini_error
+        icon_name = _icon_name_for_extension(entry.name)
+        if icon_name is None:
+            return self.img_mini_document
+        return getattr(self, f"img_{icon_name}")
+    def _install_filters(self, filter_list, file_filter=None) -> None:
+        """Recompute the offered file type filters. Touches no widgets; callers refresh the GUI."""
+        self.filter_list = list(filter_list)
+        self._filters = [_normalize_filter(entry) for entry in self.filter_list]
+        self._filter_labels = [label for label, _extensions in self._filters]
+        self._filter_extensions = dict(self._filters)
+        # Every extension any filter knows of. Save mode uses this to decide whether a typed filename already
+        # carries an extension, so it accepts any offered one rather than only the active filter's.
+        self._all_extensions = tuple(sorted({ext
+                                             for _label, extensions in self._filters if extensions is not None
+                                             for ext in extensions}))
+        # `None` means "the first item", which is what a caller listing the types it wants almost always means.
+        self._set_type_filter(self._filter_labels[0] if file_filter is None else file_filter)
+
+        # A save dialog's default extension is nearly always the one extension its filter names, so derive
+        # it rather than making the caller write it a third time. Only for a filter naming exactly one:
+        # among several there is no principled choice, and silently picking the first would be a rule
+        # nobody could predict from a call site.
+        if not self._default_file_extension_was_given:
+            if self._active_extensions is not None and len(self._active_extensions) == 1:
+                self.default_file_extension = self._active_extensions[0]
+            else:
+                self.default_file_extension = None
+    def _row_extent(self, idx):
+        """Where row `idx` sits inside the table's scrollable content, as `(top, height)`."""
+        metrics = self._row_metrics()
+        if metrics is None or not (0 <= idx < len(self._row_themes)):
+            return None
+        origin, pitch = metrics
+        return origin + idx * pitch, pitch
+    def _rows_per_page(self):
+        """Most of a screenful, keeping one row of context to read the new position against."""
+        height = self._view_height()
+        metrics = self._row_metrics()
+        if not height or metrics is None:
+            return 1
+        return max(1, int(height / metrics[1]) - 1)
+    def _start_grid_ticker(self):
+        """Run the grid's per-frame work on a thread of the dialog's own, for as long as it is on screen.
+
+        The grid needs `update()` every frame and the decoder needs polling, and `FileDialog` is a
+        widget inside apps that own their render loops — so requiring every host app to call something
+        would be a landmine: the app that forgets is the one whose thumbnails never appear. DPG permits
+        item work from any thread, and `visible_on_screen` reads what the last frame drew.
+
+        **It exists only while the dialog is up, and closing it joins the thread**, which is the part
+        that is not merely tidy. A thread that calls DPG cannot outlive the DPG context: after
+        `destroy_context` every call into the library is into freed memory, and the failure is a
+        segfault rather than an exception — the guard would have to be a DPG call itself. Tying the
+        thread's life to the dialog being visible keeps it inside a window where the context provably
+        exists. (Found by the test suite, which builds and tears down contexts for a living.)
+        """
+        if self._ticker is not None and self._ticker.is_alive():
+            return
+
+        def tick_loop():
+            while not self._ticker_stop.wait(_GRID_TICK_INTERVAL):
+                try:
+                    # The app closing with the picker still open is the one exit this thread is not
+                    # told about, and the one that races `destroy_context`. The render loop stops
+                    # first, so this reads False well before the context goes — and it is only ever
+                    # consulted from a thread that started while a *visible* dialog was rendering,
+                    # which is what makes False mean "stopped" here rather than "not started yet".
+                    if not dpg.is_dearpygui_running():
+                        return
+                    if self._grid is None or not self._grid_mode or not self.is_visible():
+                        continue
+                    self._resize_grid()
+                    self._grid.tick()
+                except Exception as exc:
+                    logger.error(f"tick_loop: instance '{self.tag}' ({self.instance_tag}): {type(exc)}: {exc}")
+
+        self._ticker_stop.clear()
+        self._ticker = threading.Thread(target=tick_loop, daemon=True,
+                                        name=f"fdialog_grid_tick_{self.instance_tag}")
+        self._ticker.start()
+    def _tile_icon_for(self, entry) -> Optional[str]:
+        """Which icon `entry`'s *tile* gets in grid view, or `None` to decode the image itself.
+
+        `None` is what puts an entry in the thumbnail queue, so it is the answer for exactly the files
+        worth looking at — which is the whole reason the grid view exists. Everything else gets a
+        picture of its type, because a picker that shows only what it can preview is lying about the
+        contents of the directory.
+        """
+        if entry.is_dir:
+            return "folder"  # the large one; `mini_folder` is 16px and unusable at tile size
+        if entry.kind == filelisting.KIND_BROKEN_LINK:
+            return "mini_error"
+        if entry.name.lower().endswith(_DECODABLE_IMAGE_EXTENSIONS):
+            return None
+        return _icon_name_for_extension(entry.name) or "document"
+    def sort_by(self, sort_key, descending=None):
+        """Order the listing by `sort_key`, and rebuild it.
+
+        `descending`: `None` (the default) is the click semantics — asking for the criterion already in
+        force reverses it, and any other criterion starts ascending. Pass a bool to say which way
+        outright, which is what restoring a remembered order wants.
+        """
+        if descending is None:
+            descending = (not self._sort_descending) if sort_key is self._sort_key else False
+        self._sort_key = sort_key
+        self._sort_descending = descending
+        self._draw_sort_indicators()
+        self._update_search()  # re-lists the current directory under the current find query
 
     def _navigator(self):
         """Whichever view is on screen, as the thing that answers to `navigate_*`.
