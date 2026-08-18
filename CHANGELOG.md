@@ -132,6 +132,8 @@
 
 *Constellation-wide*
 
+- the file browser's shortcut to your pictures is now labelled **Pictures**, after the folder it opens. It said "Images" while going to `~/Pictures` — which is what Linux, macOS and Windows all call that folder.
+
 - **the file browser closes faster, and the button that opens it no longer looks dead afterwards.** Closing it rebuilt the whole file listing — twice, if you picked something — although the listing was already hidden and gets rebuilt on the next open anyway. The apps run one action at a time, so whatever you clicked next had to wait for that wasted work, which is why the attach button could ignore a click, its own click animation included. On a directory of ~1600 files that was roughly half a second per close.
   - Long listings are cheaper to display too: the browser now draws only the rows on screen, where it used to draw all of them on every frame.
 
