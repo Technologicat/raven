@@ -13,6 +13,50 @@ importer first. Recorded here rather than in that item because a trigger nobody 
 the tool for finding things in the backlog cannot be gated on someone remembering to look for it *in* the
 backlog. The recurring moment to ask is the triage step in the release procedure.
 
+## `WidgetFlash`'s three targets are one paint list and a message
+
+*Cluster: gui-animation · Cost: M · Gate: none · Filed: 2026-08-20 · **Agreed to build at the start of the
+next session** — this entry exists to survive a context boundary, not to wait in the pile*
+
+`target`, `target_tooltip` and `target_text` read as three roles and are not. Nothing treats the tooltip
+specially: it gets the same animated theme bound as the button, and `PopupBg` is simply the entry a window
+picks up from it. What separates the three is which colour channel each one happens to use, which is a
+property of the widget rather than of the parameter.
+
+**The split is accidental, and here is the evidence.** The flash theme adds `mvThemeCol_Text` and never
+animates it — the id is not captured and `render_frame` moves only the background colours. So a tooltip's
+caption *snaps* to the highlight colour and snaps back at the end, while a text `target` genuinely *fades*.
+Same job, two visual behaviours, and nobody chose that; it fell out of the text branch existing.
+
+**The genuinely separate axis is the message.** A flash paints some widgets and says something in one
+place, and today the say-target is welded to `target_text` — which is why the file dialog passes its status
+line twice, once as "flash this" and once as "say it here". Not two roles; a message with no home of its
+own.
+
+The shape, then: `target` keeps its identity as the dedup key and the first thing that paints, an
+`also_flash` sequence carries the tooltip and its caption, and `message` gains a `message_target` that
+defaults to `target`. Dedup stays keyed on `target`, so the reify/ghost state machine — the part with the
+tests and the sharp edges — is untouched.
+
+**The painting rule has to be stated carefully, because a button has both channels** (Juha): its text stays
+readable during the flash by design, held at a constant colour while the background fades. So the rule is
+*the background carries the flash wherever there is one; the foreground carries it only where there is
+none* — and where a widget has both, the foreground is held readable for the duration. Not "each widget
+flashes the channel it has", which would paint a button's text and background the same colour and hide the
+label.
+
+**One sub-question needs measuring before it is decided.** Letting the caption fade rather than snap needs
+a destination colour, and a text widget with no explicit colour of its own reports DPG's `r = -1` sentinel
+— the exact fault that made a status line fade to black on 2026-08-19. Either captions declare a colour, or
+the `TODO: read from global theme` sitting next to the hardcoded `45, 45, 48` button background gets
+answered for both. Whether DPG exposes the effective global theme colour at all is unverified; measure it
+rather than assuming either way.
+
+23 constructor call sites (fdialog 7, librarian 9, visualizer 4, cherrypick 1, the two wrappers, 8 in
+tests), all keyword-argument, so each is a read-and-rewrite rather than a puzzle.
+
+Discovered while closing the `message=None` contract gap in the same class (2026-08-20).
+
 ## Anonymous lambdas where a named callable exists
 
 `operator.attrgetter` / `itemgetter` for `key=` and similar, `unpythonic.namelambda` where a lambda is

@@ -1089,8 +1089,16 @@ Suggested order, with what each actually costs:
      here: on a case-sensitive filesystem a case-insensitive match would show neutral for something Tab
      cannot complete, which is the one thing the colour must never do. Worth a comment at the code, since
      the two fields sitting one above the other now differ deliberately.
-   - **`~` and relative paths** need deciding: whether the field expands them, and therefore whether it
-     validates the expansion or the literal text.
+   - **`~` expands, and the colour validates the expansion** (Juha, 2026-08-19). The backend takes `~` to
+     *mean* the home directory, so a path carrying one is resolved before anything is asked of it — which
+     is what makes the colour honest: green says Enter will go there, and it can only say that about the
+     path that will actually be opened.
+
+     **The field itself expands only on commit.** What stands in it while typing is what was typed, so a
+     `~` the user entered does not silently become eight characters of somewhere else under the caret,
+     and the field stops fighting the person editing it. The two halves are the same decision seen from
+     the two sides of the commit: the *meaning* is the expansion from the first keystroke, the *text* is
+     the literal until Enter.
 
    **The find field gets the same treatment** (Juha, 2026-08-19): a query matching nothing leaves a listing
    holding only `..`, and today the field says nothing about it. So this is one dialog-wide convention, not
@@ -1188,10 +1196,10 @@ never had. Worth deciding at the start of the session rather than discovering at
 build), then **5**, **6** and **7**, each its own day. Ctrl+L finishes the *keyboard* in the sense items
 1–3 meant; the other three are capability and polish rather than the key set.
 
-One question still open inside item 3, and it needs answering before the colouring is written rather than
-during: **what `~` does in the path field** — whether it is expanded, and therefore whether the colour
-validates the expansion or the literal text. The other three cases (empty fragment, hidden directories,
-exact-not-smart-case) are decided above.
+**Nothing is open inside item 3 any more.** The last question — what `~` does — was settled on 2026-08-19:
+it expands in the backend, the field shows the literal until Enter, and the colour validates the expansion.
+That and the other three cases (empty fragment, hidden directories, exact-not-smart-case) are decided
+above, so the colouring can be written rather than designed.
 
 ## Where the dialog stands
 
