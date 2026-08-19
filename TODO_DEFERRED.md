@@ -59,14 +59,32 @@ That makes it a design choice rather than a lookup: either declare the defaults 
 read them back from there, giving the flash and everything else one named source, or keep the constants but
 move them beside that theme so the two cannot drift apart in silence.
 
-**And the surveyed call sites push towards the first.** Across `raven/` (excluding `DearPyGui_Markdown`,
-whose text could not be coloured except through inline tags until recently), 85 of 368 `add_text` sites
-declare a `color=`. Of the widgets actually passed as `target_text` — the tooltip captions — the count is
-zero: every one sampled is a bare `add_text`, the sole exception being the file dialog's `text_target`,
-given a colour on 2026-08-19 to stop exactly this fade-to-black. Its sibling `text_notification` is bare
-and carries four flashes. So "let captions declare a colour" is not a small tidy-up of a few call sites; it
-is every caption in the tree, plus a silent fade to black waiting for whoever adds the next one without
-knowing.
+**And the surveyed call sites settle it.** Across `raven/` (excluding `DearPyGui_Markdown`, whose text could
+not be coloured except through inline tags until recently), 85 of 368 `add_text` sites declare a `color=`.
+Of the widgets actually passed as `target_text` — the tooltip captions — the count is zero: every one
+sampled is a bare `add_text`, the sole exception being the file dialog's `text_target`, given a colour on
+2026-08-19 to stop exactly this fade-to-black.
+
+They are bare **correctly**, which is the part that decides the design. The colours in use are almost all
+dimming or semantic — grey `(140, 140, 140)` nineteen times, `(180, 180, 180)`, `(120, 120, 120)`, plus
+`hint_color`, `help_heading_color`, `_CAUTION_COLOR` and the green/blue accents — so the convention in
+practice is *declare a colour when the text departs from normal*, and plain labels take the default. The
+per-file split says the same: `visualizer/annotation.py` is 25 coloured to 1 bare, `common/gui/helpcard.py`
+5 to 1, while the app skeletons run the other way (`librarian/app.py` 4:57, `avatar/settings_editor/app.py`
+2:49, `xdot_viewer` and `cherrypick` none at all). A tooltip caption is normal text. Requiring every
+caption to declare a colour would break that convention rather than repair a lapse.
+
+**So the fix is to declare the default once** (Juha): `guiutils.setup` already builds a global theme for the
+rounded corners, and a `mvThemeCol_Text` belongs in it. Note the value then needs no reading back through
+DPG — it is a named constant in `guiutils`, used to build the theme and imported by `animation` as the fade
+destination whenever `get_item_configuration` returns the sentinel. Reading it out of the theme item
+recovers a number Python already has.
+
+Do it in two steps, because we still cannot see the value we are matching. Bind a wrong colour to the
+global theme and every uncoloured text in every app shifts at once; use it *only* as the flash's fallback
+and nothing moves — `finish` restores the sentinel, so the widget snaps to the true default at the end
+regardless, and a slightly-off constant costs a small jump as the fade lands rather than a global recolour.
+Constant and fallback first, check by eye that the fade lands clean, then bind it to the theme.
 
 23 constructor call sites (fdialog 7, librarian 9, visualizer 4, cherrypick 1, the two wrappers, 8 in
 tests), all keyword-argument, so each is a read-and-rewrite rather than a puzzle.
