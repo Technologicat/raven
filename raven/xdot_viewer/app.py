@@ -546,7 +546,13 @@ def _on_key(sender, app_data) -> None:
     #   - the help card (search "HelpWindow")
     #   - any tooltip naming the key (search its bracketed hint, e.g. "[Ctrl+O]")
 
-    if dpg.is_item_focused("search_input"):
+    # Only the two chords that *commit* the search edit belong to the field, and they are gated on
+    # `is_item_focused` because committing deactivates it — a handler asking `is_item_active` would run
+    # after the state it tests for had already cleared. Everything else must fall through: ImGui gives nav
+    # focus to the first navigable item of a window by itself, so this field reports focused with nobody
+    # having touched it, and gating the *whole* handler on that took Ctrl+O and its siblings out from app
+    # start. See `dpg-notes.md`, "Keyboard input"; `raven-visualizer` carries the same pair.
+    if dpg.is_item_focused("search_input") and key in (dpg.mvKey_Return, dpg.mvKey_Escape):  # tag
         if key == dpg.mvKey_Return:  # accept and unfocus
             dpg.focus_item(widget.get_dpg_widget_id())
             widget.next_match()  # jump the view to the first match
@@ -570,7 +576,9 @@ def _on_key(sender, app_data) -> None:
                 dpg.focus_item(_app_state["search_input"])
         elif key == dpg.mvKey_E:
             dpg.focus_item("filter_combo")
-    else:  # BARE KEYS - BE VERY CAREFUL HERE
+    # *Active*, not *focused*: the caret really being in the search field is what must silence the bare
+    # keys, or an `f` typed into a search would zoom the graph to fit instead of reaching the field.
+    elif not dpg.is_item_active("search_input"):  # tag  # BARE KEYS - BE VERY CAREFUL HERE
         # Combo keyboard navigation (Up/Down/Home/End/Esc while combo focused)
         focused_alias = dpg.get_item_alias(dpg.get_focused_item())
         if focused_alias in _combobox_choice_map:

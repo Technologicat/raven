@@ -338,7 +338,7 @@ class FileDialog:
         save_mode=False,
         default_file_extension=None,
         default_path=os.getcwd(),
-        filter_list=[".*", ".exe", ".bat", ".sh", ".msi", ".apk", ".bin", ".cmd", ".com", ".jar", ".out", ".py", ".pyl", ".phs", ".js", ".json", ".java", ".c", ".cpp", ".cs", ".h", ".rs", ".vbs", ".php", ".pl", ".rb", ".go", ".swift", ".ts", ".asm", ".lua", ".sh", ".bat", ".r", ".dart", ".ps1", ".html", ".htm", ".xml", ".css", ".ini", ".yaml", ".yml", ".config", ".md", ".rst", ".txt", ".rtf", ".doc", ".docx", ".pdf", ".odt", ".tex", ".log", ".csv", ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tiff", ".svg", ".webp", ".ico", ".psd", ".ai", ".eps", ".tga", ".wav", ".mp3", ".ogg", ".flac", ".aac", ".m4a", ".wma", ".aiff", ".mid", ".midi", ".opus", ".mp4", ".mkv", ".avi", ".mov", ".wmv", ".flv", ".webm", ".mpeg", ".mpg", ".3gp", ".m4v", ".blend", ".fbx", ".obj", ".stl", ".3ds", ".dae", ".ply", ".glb", ".gltf", ".csv", ".sql", ".db", ".dbf", ".mdb", ".accdb", ".sqlite", ".xml", ".json", ".zip", ".rar", ".7z", ".tar", ".gz", ".iso", ".bz2", ".xz", ".tgz", ".cab", ".vdi", ".vmdk", ".vhd", ".vhdx", ".ova", ".ovf", ".qcow2", ".dockerfile", ".bak", ".old", ".sav", ".tmp", ".bk", ".ppack", ".mlt", ".torrent", ".ics"],
+        filter_list=None,
         file_filter=None,
         callback=None,
         show_dir_size=False,
@@ -415,6 +415,10 @@ class FileDialog:
 
                                     Matching is by case-insensitive suffix, so an entry like ".tar.gz" works, and
                                     ".png" matches "PHOTO.PNG".
+
+                                    `None` (the default) offers only ".*", every file. A dialog that wants
+                                    type filters knows which types it is for; one that does not say is
+                                    better off not offering the choice at all.
             file_filter:            str, The file type filter selected when the dialog is opened. This is an item's
                                     *label*, e.g. ".py" for a bare-string item or "Images" for a pair.
                                     `None` (the default) selects the first item of `filter_list`, which is what a
@@ -486,7 +490,11 @@ class FileDialog:
         self.save_mode = save_mode
         self.default_file_extension = default_file_extension
         self.default_path = os.getcwd() if default_path == "cwd" else default_path
-        self.filter_list = filter_list
+        # A caller that named no types gets the one filter that means "no filtering". The old default was a
+        # list of some 170 extensions, which reads in the combo as a junk drawer of formats the app has
+        # nothing to do with — `.vhd`, `.qcow2`, `.msi` — and is at its most absurd in a folder picker,
+        # where the listing has no files in it to be filtered.
+        self.filter_list = [".*"] if filter_list is None else filter_list
         self.file_filter = file_filter
         self.callback = callback
         self.show_dir_size = show_dir_size
@@ -2121,7 +2129,13 @@ class FileDialog:
             # two filters, and the mnemonic is carried by what the key *does* rather than by a label — the
             # combo is labelled `Show`, so a key named after the label would name the wrong control, and
             # nothing has to be re-learned if the label changes again.
-            if shift:
+            # The shifted chord is a toggle, and that is what makes the pair usable rather than a nicety.
+            # The two share a letter, so the way to reach for Ctrl+F right after Ctrl+Shift+F is to keep the
+            # modifiers down and press F again — which is the shifted chord a second time. Modifier state is
+            # read when the handler runs, so a Shift still held from a moment ago is indistinguishable from
+            # one meant, and the caret would silently stay on the filter. Toggling means the second press
+            # lands in the field whether or not the finger left Shift.
+            if shift and self._caret_home is not CaretHome.FILTER:
                 self._focus_type_filter()
             else:
                 self._focus_field()
