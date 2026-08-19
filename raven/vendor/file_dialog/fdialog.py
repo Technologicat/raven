@@ -791,9 +791,21 @@ class FileDialog:
                                       height=self.selec_height + 8,
                                       border=False, no_scrollbar=True, no_scroll_with_mouse=True):
                     self.text_target = dpg.add_text("", show=self.returns_dir)
-                dpg.add_text('Show')
-                self.combo_file_filter = dpg.add_combo(items=self._filter_labels,
-                                                       callback=self.filter_combo_selector, default_value=self.file_filter, width=-1)
+                # The label and the combo are one control, and this is what says so. It also decides
+                # whether the caret can ever come back from here: `focus_item` is refused when focus sits
+                # on an item at *window level* and the target is inside a child window, so a click on a
+                # combo sitting directly in the dialog window left the find field unreachable — Ctrl+F,
+                # Tab-back and Escape all fired and none of them arrived. Inside a child window the same
+                # click is a child→child move away from the field, which works.
+                #
+                # Borderless, unpadded and background-free, so the grouping costs nothing on screen.
+                with dpg.child_window(tag=f"type_filter_area_{self.instance_tag}",  # tag
+                                      width=-1, height=self.selec_height + 8,
+                                      border=False, no_scrollbar=True, no_scroll_with_mouse=True):
+                    with dpg.group(horizontal=True):
+                        dpg.add_text('Show')
+                        self.combo_file_filter = dpg.add_combo(items=self._filter_labels,
+                                                               callback=self.filter_combo_selector, default_value=self.file_filter, width=-1)
                 with dpg.tooltip(self.combo_file_filter):
                     dpg.add_text("Show only files of this type [Ctrl+1 ... Ctrl+9]")
                     dpg.add_text("Browse the types with Up / Down / Home / End [Ctrl+Shift+F]")
