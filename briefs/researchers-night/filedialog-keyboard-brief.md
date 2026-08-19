@@ -975,7 +975,8 @@ Suggested order, with what each actually costs:
    the cursor lands on the first match, Enter descends, repeat. That is incremental completion, and being
    fragment-based and smart-case it beats prefix-based Tab completion at its own job.
 
-   **It should exist, for the two things the find field cannot do — and neither of them involves typing:**
+   **Agreed 2026-08-19: the simplified field is worth having, on the paste case.** It should exist for the
+   two things the find field cannot do, and neither of them involves typing:
 
    - **Paste.** A path arrives from a terminal, a browser, a message. Ctrl+L, Ctrl+V, Enter. Completion is
      irrelevant to a path that is already complete, and nothing else in the dialog accepts one.
@@ -1093,19 +1094,19 @@ Suggested order, with what each actually costs:
    remove no code (DPG does not browse a combo by itself; that is custom in every Raven app that has one),
    and change nothing a user could see. The mark has to be drawn either way.
 
-   **Which splits this item in two, and the second half is not this brief's to spend** (Juha, 2026-08-19):
+   **Which makes this item fleet-wide, and it has to land in one session** (Juha, 2026-08-19).
+   Keyboard-browsable combos are in `raven-librarian`, `raven-xdot-viewer` and both avatar editors, and
+   every one has the same invisible focus for the same reason. So the mark belongs in `raven/common/gui/`,
+   as something a combo opts into with one call — the `filedrop.install(...)` shape.
 
-   - **7a, the listing's mark** — a tint on the child window's border saying the arrow keys land here.
-     Local to `FileDialog`, small, and unblocked.
-   - **7b, a focus mark for combos** — *fleet-wide the moment it exists.* Keyboard-browsable combos are in
-     `raven-librarian`, `raven-xdot-viewer`, and both avatar editors, and every one of them has the same
-     invisible-focus problem for the same reason. Marking the file dialog's and leaving theirs bare would
-     be the worse outcome of the two, so this belongs in `raven/common/gui/` as something each combo opts
-     into with one call — the `filedrop.install(...)` shape — and it wants deciding as its own piece of
-     work rather than as a tail end of the file dialog's keyboard.
+   **Splitting it is the tempting mistake.** The listing's mark is local and small, and doing that half
+   first would work — and would leave the constellation half-marked, with the other half's fix living as a
+   TODO among a hundred others, which is where such things stop being found. An inconsistency introduced
+   on purpose is a debt that goes invisible the moment the session ends. So: one session, all of it, or
+   not yet.
 
-   Doing 7a alone is coherent: the listing is the home that most needs saying, and it is the one no combo
-   convention could cover anyway.
+   That also sets its size honestly. This is not a tail end of the file dialog's keyboard; it is its own
+   day, alongside Ctrl+B and the places panel.
 
    **Nor should the dispatch move onto focus.** `raven-avatar-settings-editor` routes its combo browsing by
    asking whether the focused item is one of two named combos, and that works there — it has a text entry
