@@ -980,8 +980,15 @@ Suggested order, with what each actually costs:
 
    - **Paste.** A path arrives from a terminal, a browser, a message. Ctrl+L, Ctrl+V, Enter. Completion is
      irrelevant to a path that is already complete, and nothing else in the dialog accepts one.
-   - **Teleport.** The find field goes *down* from here, and `..` up one level. Reaching `/mnt/data/scans/`
-     from `~/Documents` means walking up and back down through fragments; the path field is the jump.
+   - **Teleport, and specifically to a short root.** The find field goes *down* from here, and `..` up one
+     level, so reaching an unrelated branch means walking up and back down. In practice what gets typed is
+     `/mnt` or `/tmp` — "a couple of characters, and I'll rather navigate via the file search" (Juha) — and
+     that is exactly the gap the places panel leaves, since it covers home and the standard folders and the
+     drives cover `/`, but not a mount point someone happens to use.
+
+   **Which is the measure of how much this field has to be**: somewhere to paste a whole path, and
+   somewhere to type four characters. Neither wants completion, and a future session finding the typing
+   awkward should reach for the places panel or a bookmark before reaching for a completer.
 
    **So the feature is "give the address bar the keyboard", and that is cheap.** `on_enter=True` already
    navigates, and DPG's `InputText` already pastes — what is missing is only the focus key, Escape giving
