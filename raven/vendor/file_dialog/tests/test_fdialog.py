@@ -1422,6 +1422,24 @@ def test_the_card_swallows_the_keys_the_listing_would_have_acted_on(card_up):
     assert card_up._table_cursor.current == before
 
 
+def test_the_dialog_waits_for_escape_to_come_up_before_returning(card_up):
+    """A held Escape closes the card and then closes the dialog behind it, unless the return waits.
+
+    ImGui dismisses the topmost modal popup on Escape without being asked, and this dialog's close handler
+    is `cancel` — so a dialog restored while the key is still down is dismissed the frame it appears, and
+    the picker returns nothing. Only a *held* key does it; a tap is over before the dialog draws, which is
+    why the driven test that first checked this sequence passed while a real press did not.
+    """
+    with held(dpg.mvKey_Escape):
+        card_up._handle_key(dpg.mvKey_Escape)
+        assert not window_is_shown(card_up)  # the card has gone, the dialog is not back yet...
+        assert card_up.is_visible()  # ...and the app must not conclude the picker is done with
+
+    card_up._handle_key_release(dpg.mvKey_Escape)
+
+    assert window_is_shown(card_up)
+
+
 @pytest.mark.parametrize("caret_in_listing", [False, True])
 def test_closing_the_card_returns_the_caret_where_it_was(card_up, caret_in_listing):
     """F1 costs the reading and nothing else: the dialog comes back in the mode it left in."""

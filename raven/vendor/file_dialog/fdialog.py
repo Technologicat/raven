@@ -220,6 +220,13 @@ def fdialog_hotkeys_callback(sender, app_data):
     visible_dialog_instance._handle_key(app_data)
 
 
+def fdialog_key_release_callback(sender, app_data):
+    """Route a key release to whichever dialog is on screen. Same division of labour as the press handler."""
+    if visible_dialog_instance is None:
+        return
+    visible_dialog_instance._handle_key_release(app_data)
+
+
 class FileDialog:
     _class_init_lock = threading.Lock()  # thread-safe asset loading
     _class_initialized = False
@@ -239,6 +246,7 @@ class FileDialog:
             # register our hotkey handler
             with dpg.handler_registry(tag="fdialog_handler_registry"):  # global (whole viewport)
                 dpg.add_key_press_handler(tag="fdialog_hotkeys_handler", callback=fdialog_hotkeys_callback)
+                dpg.add_key_release_handler(tag="fdialog_key_release_handler", callback=fdialog_key_release_callback)
 
             cls.fd_img_path = os.path.join(os.path.dirname(__file__), "images")
 
@@ -505,6 +513,8 @@ class FileDialog:
         # gap or the app underneath re-enables its own hotkeys while the card is showing.
         self._help_window = None
         self._help_card_up = False
+        # Set while the card is gone and the dialog is not back yet, waiting for Escape to be released.
+        self._restore_pending = False
         self.selec_height = 16
         # The listing's order, held as data rather than as the table's row order. A rebuild reproduces it,
         # which is what lets the listing be re-rendered — re-filtered, or shown a different way — without
@@ -1935,6 +1945,18 @@ class FileDialog:
     def _on_help_card_hidden(self) -> None:
         """The card has closed — by Esc, or by its own close button. Bring the dialog back."""
         self._help_card_up = False
+        # Not while Escape is still down. ImGui dismisses the topmost modal popup on Escape by itself, and
+        # this dialog's close handler is `cancel` — so a dialog put back under a held key is dismissed the
+        # frame it appears, and the picker returns nothing having been open a moment ago. A *tap* is over
+        # before the dialog draws, which is why this shows up under a real press and not under a driven one.
+        if dpg.is_key_down(dpg.mvKey_Escape):
+            self._restore_pending = True
+            return
+        self._restore_dialog_window()
+
+    def _restore_dialog_window(self) -> None:
+        """Put the dialog back on the screen, the card that replaced it having gone."""
+        self._restore_pending = False
         dpg.show_item(self.tag)  # tag
         # The caret went nowhere while the dialog was hidden, but focus did: the card took it. Return it to
         # whichever of its two homes the dialog was in, so F1 costs nothing but the reading.
@@ -1942,6 +1964,15 @@ class FileDialog:
             self._focus_listing()
         else:
             self._focus_field()
+
+    def _handle_key_release(self, key: int) -> None:
+        """Handle one key release for this dialog. Only one key is waited on, and only sometimes.
+
+        Escape leaving the keyboard is what lets a dialog come back after its help card: see
+        `_on_help_card_hidden` for why it may not come back before then.
+        """
+        if key == dpg.mvKey_Escape and self._restore_pending:
+            self._restore_dialog_window()
 
     def _handle_key(self, key: int) -> None:
         """Handle one key press for this dialog. Called by the module-level handler, which owns the
@@ -1957,6 +1988,8 @@ class FileDialog:
             if key == dpg.mvKey_Escape:
                 self._help_window.hide()
             return
+        if self._restore_pending:
+            return  # between the card and the dialog, with neither on the screen to act on
 
         # TODO (briefs/researchers-night/filedialog-keyboard-brief.md): the rest of the keyboard —
         # TODO: the focus-parking chords.
@@ -2218,7 +2251,7 @@ class FileDialog:
         answer must not change across that swap: an app that saw "no picker up" would re-enable its own
         hotkeys and file drops with the card sitting on the screen.
         """
-        return self._help_card_up or dpg.is_item_visible(self.tag)  # tag
+        return self._help_card_up or self._restore_pending or dpg.is_item_visible(self.tag)  # tag
 
     def _forget_listing(self):
         """Drop what the closed dialog knew about its listing, without touching the widgets.
