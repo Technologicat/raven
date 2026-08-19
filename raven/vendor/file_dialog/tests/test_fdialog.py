@@ -23,6 +23,7 @@ import pytest
 dpg = pytest.importorskip("dearpygui.dearpygui", reason="dearpygui not installed")
 
 from raven.common import filelisting  # noqa: E402 -- after importorskip by design
+from raven.common.gui import helpcard  # noqa: E402 -- after importorskip by design
 from raven.common.gui import utils as guiutils  # noqa: E402 -- after importorskip by design
 from raven.vendor.file_dialog.fdialog import FileDialog, _PLACES, _complete_from, _normalize_filter  # noqa: E402 -- after importorskip by design
 
@@ -1325,6 +1326,126 @@ def test_unmarking_a_folder_updates_what_ok_promises(make_dialog, tmp_path):
 
     assert [os.path.basename(p) for p in dialog.selected_files] == ["b_album"]
     assert dpg.get_value(dialog.text_target) == f"Will pick: {tmp_path / 'b_album'}"
+
+
+# --------------------------------------------------------------------------------
+# F1: the help card, and the swap it costs
+#
+# DPG stacks no modal over a modal, so the card can only appear with the dialog taken off the screen —
+# which is the whole of what can go wrong here. Two things must survive that gap: the app's belief that a
+# picker is up, and the dialog itself.
+
+def card_keys(dialog):
+    """The key labels the dialog's help card would list, column breaks and blank rows dropped."""
+    return [entry.key for entry in dialog._help_hotkey_info()
+            if entry is not helpcard.hotkey_new_column and entry.key]
+
+
+@pytest.fixture
+def no_frame_wait(monkeypatch):
+    """Let the dialog's wait-for-a-frame pass in a suite that renders none.
+
+    Opening the card waits for the dialog to leave ImGui's popup stack, and that wait is `required=True`
+    because without it the card never appears. In the app it runs on the callback thread and waits; here it
+    runs on the thread that would have to render the frame, and the guard refuses rather than hanging. So
+    the wait is the one piece of the sequence a test cannot have, and it stands in for a rendered frame.
+    """
+    monkeypatch.setattr(guiutils, "split_frame", lambda **kwargs: None)
+
+
+@pytest.fixture
+def card_up(dialog, no_frame_wait, monkeypatch):
+    """A dialog with its help card up, as far as a test with no rendered frames can take it.
+
+    `HelpWindow` declines to build during an app's first ten frames, and this suite renders none — DPG
+    aborts the process if asked to render without a mapped viewport. So the card is stubbed down to the two
+    answers the dialog reads from it: that it came up, and that closing it calls back. What is under test
+    is the dialog's half of the swap, which is where the state lives.
+    """
+    card = dialog._the_help_card()
+    monkeypatch.setattr(card, "show", lambda: True)
+    monkeypatch.setattr(card, "hide", dialog._on_help_card_hidden)
+    dpg.show_item(dialog.tag)  # tag  # as after `show_file_dialog`, without the listing rebuild
+    dialog._handle_key(dpg.mvKey_F1)
+    return dialog
+
+
+def window_is_shown(dialog):
+    """Whether the dialog's own window is on the screen. Not `is_visible`, which answers a wider question."""
+    return dpg.get_item_configuration(dialog.tag)["show"]  # tag
+
+
+def test_the_card_stays_quiet_about_keys_this_dialog_lacks(make_dialog):
+    """Ctrl+Space and Ctrl+T do nothing in some dialogs, and those cards must not offer them."""
+    assert "Ctrl+Space" in card_keys(make_dialog(multi_selection=True))
+    assert "Ctrl+Space" not in card_keys(make_dialog(multi_selection=False))
+    assert "Ctrl+T" in card_keys(make_dialog(pick="file"))
+    assert "Ctrl+T" not in card_keys(make_dialog(pick="dir"))
+
+
+def test_the_card_names_the_text_field_by_what_this_dialog_does_with_it(make_dialog):
+    """One field, two jobs: it finds files when opening and names one when saving."""
+    def typing_does(dialog):
+        return [entry.action for entry in dialog._help_hotkey_info()
+                if entry is not helpcard.hotkey_new_column and entry.key == "Type anything"]
+    assert typing_does(make_dialog(save_mode=False)) == ["Find in this folder"]
+    assert typing_does(make_dialog(save_mode=True)) == ["Name the file to save as"]
+
+
+def test_the_dialog_leaves_the_screen_without_leaving_sight(card_up):
+    """The window goes; the answer apps gate their own hotkeys and file drops on does not."""
+    assert not window_is_shown(card_up)
+    assert card_up.is_visible()
+
+
+def test_escape_over_the_card_closes_it_and_leaves_the_dialog_open(card_up, monkeypatch):
+    """The one key both windows have a claim on, and the reason only one handler ever sees it.
+
+    `HelpWindow`'s own Esc handling is switched off for this card (`handle_own_hotkeys=False`), so the
+    dialog closes it here — and having closed it, cannot also read the same Esc as "cancel".
+    """
+    cancelled = []
+    monkeypatch.setattr(card_up, "cancel", lambda: cancelled.append(True))
+
+    card_up._handle_key(dpg.mvKey_Escape)
+
+    assert not cancelled
+    assert not card_up._help_card_up
+    assert window_is_shown(card_up)
+
+
+def test_the_card_swallows_the_keys_the_listing_would_have_acted_on(card_up):
+    """Every key belongs to the card while it is up, or the cursor moves where nobody can see it."""
+    before = card_up._table_cursor.current
+    card_up._handle_key(dpg.mvKey_Down)
+    card_up._handle_key(dpg.mvKey_End)
+    assert card_up._table_cursor.current == before
+
+
+@pytest.mark.parametrize("caret_in_listing", [False, True])
+def test_closing_the_card_returns_the_caret_where_it_was(card_up, caret_in_listing):
+    """F1 costs the reading and nothing else: the dialog comes back in the mode it left in."""
+    card_up._caret_in_listing = caret_in_listing
+
+    card_up._help_window.hide()
+
+    assert window_is_shown(card_up)
+    assert card_up._caret_in_listing is caret_in_listing
+
+
+def test_a_card_that_cannot_be_built_leaves_the_dialog_where_it_was(dialog, no_frame_wait):
+    """The real path, unstubbed: with no frames rendered the card declines, and F1 must not eat the dialog.
+
+    Ten frames is the threshold `HelpWindow` waits for, and an app has long passed it by the time anything
+    can open a picker — so this is the impossible case. It is cheap to be right about, and the failure it
+    would produce is a hidden dialog with nothing over it, which reads as a crash.
+    """
+    dpg.show_item(dialog.tag)  # tag
+
+    dialog._handle_key(dpg.mvKey_F1)
+
+    assert not dialog._help_card_up
+    assert window_is_shown(dialog)
 
 
 @pytest.mark.gui

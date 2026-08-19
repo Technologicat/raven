@@ -16,10 +16,12 @@ from typing import Iterable, Optional, Union
 import dearpygui.dearpygui as dpg
 
 from unpythonic import timer
+from unpythonic.env import env
 
 from ...common import filelisting
 from ...common import utils as common_utils
 from ...common.gui import animation as gui_animation
+from ...common.gui import helpcard
 from ...common.gui import thumbnailgrid
 from ...common.gui import utils as guiutils
 from ...common.gui.tablecursor import TableCursor
@@ -37,6 +39,11 @@ _KEY_PAGE_DOWN = 518
 # number to build on — what it actually costs depends on what else is in flight. Generous, therefore, and
 # a bound rather than an estimate: the point is to fail with a log line instead of looping forever.
 _FIELD_DEACTIVATION_FRAMES = 30
+
+# The help card's size, in pixels. `HelpWindow` builds a fixed-size window with no scrollbar, so content
+# that does not fit is clipped away silently — a row added to the table past this point needs the height
+# raised with it, and a column needs the width.
+_HELP_CARD_SIZE = (1250, 640)
 
 
 # The shortcuts the places panel offers, in the order they are shown: the label, which is also the folder
@@ -492,6 +499,12 @@ class FileDialog:
         # the two are not the same question — the field is inactive whenever anything else has been
         # clicked, and that must not silently rebind the arrow keys.
         self._caret_in_listing = False
+        # The help card, built on first F1 — see `_the_help_card` — and whether it is currently up. The
+        # flag is what the dialog is hidden behind: DPG will not stack a modal over a modal, so showing the
+        # card means taking the dialog off the screen, and `is_visible` has to keep saying yes across that
+        # gap or the app underneath re-enables its own hotkeys while the card is showing.
+        self._help_window = None
+        self._help_card_up = False
         self.selec_height = 16
         # The listing's order, held as data rather than as the table's row order. A rebuild reproduces it,
         # which is what lets the listing be re-rendered — re-filtered, or shown a different way — without
@@ -1821,11 +1834,129 @@ class FileDialog:
         self.selected_files.append(entry.path)
         self.ok()
 
+    def _help_hotkey_info(self):
+        """The keys this dialog answers to, as `helpcard` entries, in reading order.
+
+        Built per instance rather than as a constant, because several keys exist only in some dialogs —
+        marking a selection needs a dialog that takes more than one file, and the grid needs one that lists
+        files at all. A card offering a key that does nothing here is worse than one that stays quiet about
+        it, and the dialog's shape is fixed at construction, so the question can be answered once.
+
+        Keys are spelled out as words. The UI font is OpenSans, which has no arrow glyphs at all, so "↑" in
+        a label renders as a missing-glyph box.
+        """
+        typing_finds = ("Name the file to save as" if self.save_mode else "Find in this folder")
+        return [entry for entry in (
+            # --- Column 1: moving through the listing, and acting on what the cursor is on ---
+            env(key_indent=0, key="Up / Down", action_indent=0, action="Move the cursor one row", notes=""),
+            env(key_indent=0, key="Page Up / Page Down", action_indent=0, action="Move about a screenful", notes=""),
+            env(key_indent=0, key="Home / End", action_indent=0, action="First / last entry", notes=""),
+            env(key_indent=0, key="Left / Right", action_indent=0, action="Previous / next entry", notes="Once Tab is in the listing"),
+            helpcard.hotkey_blank_entry,
+            env(key_indent=0, key="Enter", action_indent=0, action="Go as deep as this entry allows", notes="Into a folder, or accept a file"),
+            env(key_indent=0, key="Ctrl+Enter", action_indent=0, action="Accept without going deeper", notes="The OK button"),
+            env(key_indent=0, key="Esc", action_indent=0, action="Cancel", notes=""),
+            (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Mark or unmark this entry", notes="Ctrl+click, without the mouse")
+             if self.multi_selection else None),
+            helpcard.hotkey_blank_entry,
+            env(key_indent=0, key="Alt+Up", action_indent=0, action="Up one level", notes=""),
+            env(key_indent=1, key="Ctrl+Up", action_indent=1, action="...the same, one-handed", notes=""),
+            env(key_indent=0, key="Ctrl+Home", action_indent=0, action="Back to the starting folder", notes=""),
+            env(key_indent=0, key="F5", action_indent=0, action="Re-read this folder", notes=""),
+
+            helpcard.hotkey_new_column,
+
+            # --- Column 2: the text field, and what the listing shows ---
+            env(key_indent=0, key="Type anything", action_indent=0, action=typing_finds, notes="Fragments, in any order"),
+            env(key_indent=0, key="Tab", action_indent=0, action="Caret to the listing", notes="Completing what you typed"),
+            env(key_indent=1, key="Tab", action_indent=1, action="...and back, carrying the name", notes="Of whatever the cursor is on"),
+            env(key_indent=0, key="Ctrl+F", action_indent=0, action="Caret back to the field", notes="Keeping what you typed"),
+            helpcard.hotkey_blank_entry,
+            env(key_indent=0, key="Ctrl+1 ... Ctrl+9", action_indent=0, action="Show the Nth file type", notes=""),
+            env(key_indent=0, key="Ctrl+Shift+1 ... Ctrl+Shift+4", action_indent=0, action="Sort by name / date / type / size", notes="Again to reverse"),
+            env(key_indent=0, key="Ctrl+H", action_indent=0, action="Show or hide hidden files", notes=""),
+            (env(key_indent=0, key="Ctrl+T", action_indent=0, action="Thumbnails, or the list", notes="")
+             if self._grid_is_available() else None),
+            helpcard.hotkey_blank_entry,
+            env(key_indent=0, key="F1", action_indent=0, action="This card", notes=""),
+        ) if entry is not None]
+
+    def _the_help_card(self):
+        """The card listing this dialog's keys, built on first use.
+
+        Deferred because most dialogs are never asked for it, and building one costs a window and a table
+        of some two dozen rows.
+        """
+        if self._help_window is None:
+            self._help_window = helpcard.HelpWindow(hotkey_info=self._help_hotkey_info(),
+                                                    width=_HELP_CARD_SIZE[0],
+                                                    height=_HELP_CARD_SIZE[1],
+                                                    # Centering is on the reference window's *size*, taken
+                                                    # from the origin, so this lands the card on the middle
+                                                    # of the dialog less the dialog's own position — 50 px
+                                                    # up and left of where the dialog sits. Near enough that
+                                                    # the card appears where the dialog was, which is where
+                                                    # the reader is looking.
+                                                    reference_window=self.tag,  # tag
+                                                    # All `HelpWindow` wants of this is a spacer height. 20
+                                                    # is the constellation's GUI font size, the figure
+                                                    # `min_size` is measured at and the one the grid view
+                                                    # takes by default.
+                                                    themes_and_fonts=env(font_size=20),
+                                                    # The dialog is hidden while the card is up, so the
+                                                    # title is the only thing left saying whose keys these
+                                                    # are.
+                                                    label=f"{self.title} — keyboard",
+                                                    handle_own_hotkeys=False,
+                                                    on_hide=self._on_help_card_hidden)
+        return self._help_window
+
+    def _show_help_card(self) -> None:
+        """F1: put the dialog away and show the card of its keys.
+
+        Away rather than behind, because DPG will not stack a modal over a modal: shown while the dialog is
+        up, the card would never appear, and no error would say so.
+        """
+        self._help_card_up = True  # set first, so `is_visible` never dips while the swap is in progress
+        dpg.hide_item(self.tag)  # tag
+        # Hiding is not immediate, and the wait is load-bearing rather than cosmetic. A window leaves
+        # ImGui's popup stack only once a frame has drawn without it, and a modal opened while another is
+        # still on that stack never appears — DPG then treats the card as closed and fires its close
+        # handler, so it undoes itself some 80 ms after F1 with nothing in the log to say why.
+        guiutils.split_frame(operation="file dialog: making room for the help card", required=True)
+        if not self._the_help_card().show():
+            # The card declines to exist during an app's first few frames. Nothing is on screen at that
+            # point that could have pressed F1, but a dialog left hidden with no card over it would be a
+            # dead app, so put it back rather than reason about who could reach this.
+            logger.info(f"_show_help_card: instance '{self.tag}' ({self.instance_tag}), the card was not built; restoring the dialog.")
+            self._help_card_up = False
+            dpg.show_item(self.tag)  # tag
+
+    def _on_help_card_hidden(self) -> None:
+        """The card has closed — by Esc, or by its own close button. Bring the dialog back."""
+        self._help_card_up = False
+        dpg.show_item(self.tag)  # tag
+        # The caret went nowhere while the dialog was hidden, but focus did: the card took it. Return it to
+        # whichever of its two homes the dialog was in, so F1 costs nothing but the reading.
+        if self._caret_in_listing:
+            self._focus_listing()
+        else:
+            self._focus_field()
+
     def _handle_key(self, key: int) -> None:
         """Handle one key press for this dialog. Called by the module-level handler, which owns the
         registry and decides *which* dialog is listening; this decides what the key does.
         """
         ctrl = dpg.is_key_down(dpg.mvKey_LControl) or dpg.is_key_down(dpg.mvKey_RControl)
+
+        # While the card is up it is the only thing on screen, so every key belongs to it — and this is the
+        # only handler that will act on one, the card being built with `handle_own_hotkeys=False`. That is
+        # what keeps Escape from being read twice: closing the card here means it cannot also reach the
+        # branch below that cancels the dialog.
+        if self._help_card_up:
+            if key == dpg.mvKey_Escape:
+                self._help_window.hide()
+            return
 
         # TODO (briefs/researchers-night/filedialog-keyboard-brief.md): the rest of the keyboard —
         # TODO: the focus-parking chords.
@@ -1901,6 +2032,8 @@ class FileDialog:
             self.cancel()
         elif key == dpg.mvKey_F5:
             self.refresh()
+        elif key == dpg.mvKey_F1:
+            self._show_help_card()
         elif ctrl and key == dpg.mvKey_Home:
             self.back_to_default_path()
         elif ctrl and key == dpg.mvKey_F:
@@ -2076,12 +2209,16 @@ class FileDialog:
             self._grid = None
 
     def is_visible(self):
-        """Return whether the dialog is currently on screen.
+        """Return whether the dialog is currently on screen — its help card included.
 
         Apps ask this to suppress hotkeys and drops while a modal picker is up. Having it here is what keeps
         `tag` from having to be known outside the constructor that set it.
+
+        F1 swaps the dialog's window for the card's, the two being modal and DPG stacking no such pair. The
+        answer must not change across that swap: an app that saw "no picker up" would re-enable its own
+        hotkeys and file drops with the card sitting on the screen.
         """
-        return dpg.is_item_visible(self.tag)  # tag
+        return self._help_card_up or dpg.is_item_visible(self.tag)  # tag
 
     def _forget_listing(self):
         """Drop what the closed dialog knew about its listing, without touching the widgets.
