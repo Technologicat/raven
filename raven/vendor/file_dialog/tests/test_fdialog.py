@@ -1329,6 +1329,104 @@ def test_unmarking_a_folder_updates_what_ok_promises(make_dialog, tmp_path):
 
 
 # --------------------------------------------------------------------------------
+# Ctrl+Shift+F: the type filter as a place the caret can be
+#
+# The filter is browsed from `_caret_home` rather than from DPG's focus, and deliberately: the combo lives
+# at window level while the find field lives inside the listing's child window, which is the one direction
+# `focus_item` refuses. Focus put on the combo could not come back.
+
+def test_ctrl_shift_f_hands_the_arrows_to_the_type_filter(dialog):
+    with held(dpg.mvKey_LControl, dpg.mvKey_LShift):
+        dialog._handle_key(dpg.mvKey_F)
+    assert dialog._caret_home is CaretHome.FILTER
+
+
+def test_ctrl_f_still_means_the_find_field(dialog):
+    """The two share a letter, and the unshifted one must not be swallowed by the shifted one."""
+    dialog._focus_type_filter()
+    with held(dpg.mvKey_LControl):
+        dialog._handle_key(dpg.mvKey_F)
+    assert dialog._caret_home is CaretHome.FIELD
+
+
+def test_the_arrows_browse_the_offered_types(dialog):
+    """Every press applies, which is what makes watching the listing re-filter the useful part of it."""
+    offered = dialog._filter_labels
+    dialog._focus_type_filter()
+
+    dialog._handle_key(dpg.mvKey_Down)
+    assert dialog.file_filter == offered[1]
+
+    dialog._handle_key(dpg.mvKey_Up)
+    assert dialog.file_filter == offered[0]
+
+    dialog._handle_key(dpg.mvKey_End)
+    assert dialog.file_filter == offered[-1]
+
+    dialog._handle_key(dpg.mvKey_Home)
+    assert dialog.file_filter == offered[0]
+
+
+def test_browsing_stops_at_the_ends_rather_than_wrapping(dialog):
+    dialog._focus_type_filter()
+
+    dialog._handle_key(dpg.mvKey_Up)  # already on the first
+    assert dialog.file_filter == dialog._filter_labels[0]
+
+    dialog._handle_key(dpg.mvKey_End)
+    dialog._handle_key(dpg.mvKey_Down)  # already on the last
+    assert dialog.file_filter == dialog._filter_labels[-1]
+
+
+def test_browsing_the_types_re_filters_the_listing(dialog):
+    """The filter is applied, not merely recorded — this is the half a user actually watches."""
+    dialog._focus_type_filter()
+    dialog._handle_key(dpg.mvKey_Down)  # ".*" -> "Images"
+    assert shown(dialog) == ["photo.png", "scan.JPG"]
+
+
+def test_escape_hands_the_caret_back_before_it_cancels(dialog, monkeypatch):
+    """One rule over whatever set of homes exists: Escape returns the caret, and cancels only from home."""
+    cancelled = []
+    monkeypatch.setattr(dialog, "cancel", lambda: cancelled.append(True))
+    dialog._focus_type_filter()
+
+    dialog._handle_key(dpg.mvKey_Escape)
+    assert dialog._caret_home is CaretHome.FIELD
+    assert not cancelled
+
+    dialog._handle_key(dpg.mvKey_Escape)
+    assert cancelled
+
+
+def test_a_modified_key_is_not_the_filter_home_s_business(dialog):
+    """Ctrl+Home means the default folder wherever the caret is parked; only bare keys are per-home."""
+    before = dialog.file_filter
+    dialog._focus_type_filter()
+    with held(dpg.mvKey_LControl):
+        dialog._handle_key(dpg.mvKey_Home)
+    assert dialog.file_filter == before
+
+
+def test_tab_out_of_the_filter_does_not_rewrite_the_find_field(dialog):
+    """Completion is what leaving the *find field* does, and the caret is not there.
+
+    The query has to be one a completion would visibly change, or the test cannot tell the two behaviours
+    apart: "p" matches both `photo.png` and `paper.pdf`, whose common prefix is "p" again, so completing
+    would be a no-op and the assertion would hold either way. "ph" matches one entry, and completing it
+    would leave "photo.png" in the field.
+    """
+    dpg.set_value(dialog.search_field, "ph")
+    dialog._update_search()
+    dialog._focus_type_filter()
+
+    dialog._handle_key(dpg.mvKey_Tab)
+
+    assert dialog._caret_home is CaretHome.LISTING
+    assert dpg.get_value(dialog.search_field) == "ph"
+
+
+# --------------------------------------------------------------------------------
 # F1: the help card, and the swap it costs
 #
 # DPG stacks no modal over a modal, so the card can only appear with the dialog taken off the screen —

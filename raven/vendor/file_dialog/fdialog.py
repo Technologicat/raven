@@ -82,6 +82,7 @@ class CaretHome(enum.Enum):
     """
     FIELD = "field"  # the find field — which is the filename field, in save mode
     LISTING = "listing"  # the table or the thumbnail grid, whichever view is up
+    FILTER = "filter"  # the file type combo
 
 
 # The sort criteria a dialog offers, in the order its buttons appear — which is also the order Ctrl+Shift+N
@@ -778,6 +779,8 @@ class FileDialog:
                 self.combo_file_filter = dpg.add_combo(items=self._filter_labels,
                                                        callback=self.filter_combo_selector, default_value=self.file_filter, width=-1)
                 with dpg.tooltip(self.combo_file_filter):
+                    dpg.add_text("Show only files of this type [Ctrl+1 ... Ctrl+9]")
+                    dpg.add_text("Browse the types with Up / Down / Home / End [Ctrl+Shift+F]")
                     self.text_file_filter_extensions = dpg.add_text(self._describe_type_filter(self.file_filter))
 
             with dpg.group(horizontal=True):
@@ -1899,6 +1902,7 @@ class FileDialog:
             env(key_indent=0, key="Ctrl+F", action_indent=0, action="Caret back to the field", notes="Keeping what you typed"),
             helpcard.hotkey_blank_entry,
             env(key_indent=0, key="Ctrl+1 ... Ctrl+9", action_indent=0, action="Show the Nth file type", notes=""),
+            env(key_indent=1, key="Ctrl+Shift+F", action_indent=1, action="...or browse them", notes="Up / Down / Home / End"),
             env(key_indent=0, key="Ctrl+Shift+1 ... Ctrl+Shift+4", action_indent=0, action="Sort by name / date / type / size", notes="Again to reverse"),
             env(key_indent=0, key="Ctrl+H", action_indent=0, action="Show or hide hidden files", notes=""),
             (env(key_indent=0, key="Ctrl+T", action_indent=0, action="Thumbnails, or the list", notes="")
@@ -2021,12 +2025,16 @@ class FileDialog:
                 # it — the mirror of the outbound order below.
                 self._fill_field_from_cursor()
                 self._focus_field()
-            else:
+            elif self._caret_home is CaretHome.FIELD:
                 # Order is load-bearing: the completion is a write to the find field, and a field with the
                 # caret in it reverts one. Leaving is what makes the write possible, so the caret goes
                 # first and the completion follows it out.
                 self._focus_listing()
                 self._complete_find_field()
+            else:
+                # Parked on a control. Tab still means the listing, but there is no completion to apply:
+                # completing is what leaving the *find field* does, and that is not where the caret is.
+                self._focus_listing()
             return
 
         # Ctrl and a number picks the Nth type filter; add Shift and it picks the Nth sort criterion.
@@ -2051,6 +2059,21 @@ class FileDialog:
         if key == dpg.mvKey_Up and (alt or ctrl):
             self.chdir("..")
             return
+
+        # Bare keys belong to whichever home the caret is in, and the type filter's are the four that
+        # browse a combo plus the one that gives the caret back. Modified keys are not the home's business:
+        # Ctrl+H and F5 mean the same wherever the caret is parked.
+        if self._caret_home is CaretHome.FILTER and not (ctrl or alt or shift):
+            if key in (dpg.mvKey_Up, dpg.mvKey_Down, dpg.mvKey_Home, dpg.mvKey_End):
+                self._browse_type_filter(key)
+                return
+            if key == dpg.mvKey_Escape:
+                # Escape hands the caret back to the find field from wherever it was parked, and cancels
+                # the dialog only once it is already there. Nothing is restored on the way out, unlike a
+                # draft in the path field: the combo applied every step as it was made, and reverting would
+                # undo a change the user watched happen and kept going past.
+                self._focus_field()
+                return
 
         nav = self._navigator()
         if key == dpg.mvKey_Up:
@@ -2086,7 +2109,14 @@ class FileDialog:
         elif ctrl and key == dpg.mvKey_Home:
             self.back_to_default_path()
         elif ctrl and key == dpg.mvKey_F:
-            self._focus_field()
+            # Ctrl+F narrows the listing by name fragment; Ctrl+Shift+F narrows it by type. Same listing,
+            # two filters, and the mnemonic is carried by what the key *does* rather than by a label — the
+            # combo is labelled `Show`, so a key named after the label would name the wrong control, and
+            # nothing has to be re-learned if the label changes again.
+            if shift:
+                self._focus_type_filter()
+            else:
+                self._focus_field()
         elif ctrl and key == dpg.mvKey_Spacebar:
             self._toggle_cursor_selection()
         elif ctrl and key == dpg.mvKey_H:
@@ -2192,7 +2222,52 @@ class FileDialog:
         # button ignores Space and Enter instead of pressing itself. Pinned by
         # `test_a_focused_button_ignores_the_keys_that_would_press_it`, since nothing in the API reports it.
         self._caret_home = CaretHome.LISTING
+        self._park_focus()
+
+    def _park_focus(self) -> None:
+        """Take the caret out of the find field, leaving DPG's focus somewhere harmless."""
+        # The same target serves every home that is not the field, for the reason spelled out in
+        # `_focus_listing`: it has to be inside the listing's child window or the caret can never be
+        # brought back. Which home has the keys is decided by `_caret_home`, not by what DPG considers
+        # focused, so there is nothing for the focus itself to say.
         dpg.focus_item(self.button_refresh)
+
+    def _focus_type_filter(self) -> None:
+        """Hand the bare arrow keys to the file type combo, without handing it DPG's focus.
+
+        Esc, or Tab, takes them away again.
+        """
+        # The combo does not get DPG's focus, and that is a constraint rather than a choice: it sits at
+        # window level while the find field sits inside the listing's child window, and `focus_item` is
+        # refused in exactly that direction. Focus put on the combo could never come back, so Escape would
+        # strand the caret there and typing would go nowhere for the rest of the dialog's life.
+        #
+        # Nothing is lost. DPG combos have no keyboard operation of their own, so the arrows are this
+        # dialog's to route either way; what focus would have bought is a highlight saying where the keys
+        # went, and that is a mark every home here is owed equally.
+        self._caret_home = CaretHome.FILTER
+        self._park_focus()
+
+    def _browse_type_filter(self, key: int) -> None:
+        """Move the type filter by one of Up / Down / Home / End, and apply the result immediately."""
+        # The Raven combo idiom, copied rather than invented: a hotkey hands a combo the arrows, and the
+        # choices are stepped through with them. `raven-avatar-settings-editor` is the reference.
+        #
+        # Applying on every press is the point rather than a shortcut — watching the listing re-filter as
+        # you go is how the right filter gets found — and it is also why Escape restores nothing here.
+        labels = self._filter_labels
+        if not labels:
+            return
+        index = labels.index(self.file_filter) if self.file_filter in labels else 0
+        if key == dpg.mvKey_Down:
+            index = min(index + 1, len(labels) - 1)
+        elif key == dpg.mvKey_Up:
+            index = max(index - 1, 0)
+        elif key == dpg.mvKey_Home:
+            index = 0
+        else:  # End
+            index = len(labels) - 1
+        self.set_type_filter(labels[index])
 
     def show_file_dialog(self):
         # Timed alongside `reset_dir`'s own phases, because "the dialog takes a moment to appear" can mean
