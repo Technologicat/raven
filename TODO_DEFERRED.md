@@ -80,11 +80,16 @@ DPG — it is a named constant in `guiutils`, used to build the theme and import
 destination whenever `get_item_configuration` returns the sentinel. Reading it out of the theme item
 recovers a number Python already has.
 
-Do it in two steps, because we still cannot see the value we are matching. Bind a wrong colour to the
-global theme and every uncoloured text in every app shifts at once; use it *only* as the flash's fallback
-and nothing moves — `finish` restores the sentinel, so the widget snaps to the true default at the end
-regardless, and a slightly-off constant costs a small jump as the fade lands rather than a global recolour.
-Constant and fallback first, check by eye that the fade lands clean, then bind it to the theme.
+**The value is measured off a screenshot, which is where `(45, 45, 48)` came from** (Juha) — DPG not
+exposing it is an inconvenience rather than a wall, so there is no need to guess a value and then check
+whether the apps still look right. Declaring the measured colour is a no-op by construction, which makes
+this one step rather than two.
+
+The one way that measurement goes wrong is specific to text: glyphs are antialiased where a button
+background is flat, so a sampled glyph pixel is a blend of the text colour and what is behind it, weighted
+by coverage. An edge pixel reads consistently too dark. Sample the interior of a thick stem, or take the
+channel-wise maximum over a patch of text, which finds a fully covered pixel wherever one exists.
+`import -window <id>` captures without focus, so this can also be done without a human squinting at pixels.
 
 23 constructor call sites (fdialog 7, librarian 9, visualizer 4, cherrypick 1, the two wrappers, 8 in
 tests), all keyword-argument, so each is a read-and-rewrite rather than a puzzle.
