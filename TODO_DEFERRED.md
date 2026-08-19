@@ -45,12 +45,19 @@ none* — and where a widget has both, the foreground is held readable for the d
 flashes the channel it has", which would paint a button's text and background the same colour and hide the
 label.
 
-**One sub-question needs measuring before it is decided.** Letting the caption fade rather than snap needs
-a destination colour, and a text widget with no explicit colour of its own reports DPG's `r = -1` sentinel
-— the exact fault that made a status line fade to black on 2026-08-19. Either captions declare a colour, or
-the `TODO: read from global theme` sitting next to the hardcoded `45, 45, 48` button background gets
-answered for both. Whether DPG exposes the effective global theme colour at all is unverified; measure it
-rather than assuming either way.
+**One sub-question, measured 2026-08-20 so the morning need not start there.** Letting the caption fade
+rather than snap needs a destination colour, and a text widget with no explicit colour of its own reports
+DPG's `r = -1` sentinel — the fault that made a status line fade to black on 2026-08-19. The `TODO: read
+from global theme` beside the hardcoded `45, 45, 48` button background cannot be answered as written: DPG
+2.3.1 exposes exactly two theme getters, `get_item_theme` and `get_item_disabled_theme`, both returning the
+bound theme *item*. There is no global-theme getter and no way to ask what colour an item actually renders
+with. (Juha's read, from when the TODO was filed, was that no documented way existed; still true.) Raven's
+own global theme in `guiutils` sets styles only and no colours, so the values in effect are ImGui's
+built-in defaults, undeclared on our side too.
+
+That makes it a design choice rather than a lookup: either declare the defaults in Raven's global theme and
+read them back from there, giving the flash and everything else one named source, or keep the constants but
+move them beside that theme so the two cannot drift apart in silence.
 
 23 constructor call sites (fdialog 7, librarian 9, visualizer 4, cherrypick 1, the two wrappers, 8 in
 tests), all keyword-argument, so each is a read-and-rewrite rather than a puzzle.

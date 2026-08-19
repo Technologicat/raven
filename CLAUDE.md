@@ -410,17 +410,26 @@ windowing problem is now one bug in one place), and **the second consumer finds 
 hid** — wiring the grid into a second app surfaced three missing pieces in `raven.common.gui.animation`
 within an hour, none of them grid-specific.
 
-**The bar in `raven/common/` is higher than in an app, and deliberately so.** This is the layer everything
-else is built on, in ways nobody has thought of yet and possibly years from now — so an awkward shape here
-is not paid once, it is paid by every future caller, and by then it is load-bearing and expensive to move.
-An app can carry an oddity that its own code works around; a foundation cannot, because the workaround
-would have to be written again at each call site by someone who no longer remembers why.
+**The bar tracks how deep the code sits, not which package it is in.** `raven/common/` is the clearest
+case, but the lower layers inside an app package are held to it too — Librarian's `chattree` and `hybridir`
+are the worked examples. These are the parts worth reusing even if Raven itself turns out to have been the
+wrong idea, so they are written to outlive it.
 
-So the things that are ordinarily fine to defer are worth settling here while the code is in front of you:
-an asymmetry between two paths through the same class, a parameter that means two things, a documented
+An awkward shape down there is not paid once. It is paid by every future caller, possibly in another
+project and possibly years from now, and by the time anyone minds it is load-bearing and expensive to move.
+An app can carry an oddity that its own code works around; a foundation cannot, because the workaround has
+to be written again at each call site by someone who no longer remembers why.
+
+So things that are ordinarily fine to defer are worth settling here while the code is in front of you: an
+asymmetry between two paths through the same class, a parameter that means two things, a documented
 contract one branch honours and another does not. The test is not whether it bites today — no live caller
 may reach it — but whether a caller arriving later would have to learn the exception before they could use
 the thing.
+
+**App-level code is judged differently, and that is not a grudging allowance.** For the frontends, GUI code
+especially, the criteria are that it works and that it stays reasonably maintainable. Holding a DPG
+callback to the foundation's bar spends review on the wrong thing: it has one consumer, it is greppable,
+and it can be rewritten the day the app changes shape.
 
 ### Vendored / adopted dependencies (`raven/vendor/`)
 
