@@ -268,12 +268,10 @@ print()
 # win is the avatar-paused window: while the user is reading, the avatar pauses after
 # `idle_timeout`, and from there onward we coast at the throttled rate.
 #
-# Ambient animator caveat: the startup `PulsatingColor` cycles (gray for the LLM / DOCS /
-# WEB indicators, red for the mic button, red for the DOCS indicator while indexing, red
-# for the backend status pill) run continuously and stay registered for the lifetime of the app. They show up in
-# `gui_animation.animator.active_count` even when idle. We snapshot the count here as the
-# baseline; only animations *above* baseline (button flashes, smooth scrolls) count as
-# "busy". A more elegant ambient/transient split is in TODO_DEFERRED.
+# The indicator pulsations (gray for the LLM / DOCS / WEB indicators, red for the mic button,
+# red for the DOCS indicator while indexing, red for the backend status pill) run for the
+# lifetime of the app, so they are *ambient* and `transient_count` leaves them out. Only a
+# button flash or a smooth scroll counts as being busy.
 
 IDLE_SLEEP_S = 0.08   # ~12 fps when idle
 INPUT_ACTIVE_S = 0.5  # stay at full fps for this long after last user input
@@ -289,8 +287,6 @@ _WINDOW_PADDING = 8      # DPG's default WindowPadding; `setup_themes` overrides
 # window widths; if the icon or the font changes, re-measure rather than trusting this number.
 _AI_WARNING_CENTERING_BIAS = 7
 
-_AMBIENT_ANIMATOR_COUNT = gui_animation.animator.active_count
-
 _last_input_ns: int = 0  # monotonic_ns timestamp of last user input
 
 def _is_busy() -> bool:
@@ -303,7 +299,7 @@ def _is_busy() -> bool:
         return True
     if "retriever" in globals() and retriever.is_indexing():
         return True
-    return gui_animation.animator.active_count > _AMBIENT_ANIMATOR_COUNT
+    return gui_animation.animator.transient_count > 0
 
 def _on_any_input(*_args) -> None:
     global _last_input_ns

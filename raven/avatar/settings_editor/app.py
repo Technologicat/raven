@@ -133,8 +133,6 @@ with dpg.theme(tag="my_pulsating_red_text_theme"):
 IDLE_SLEEP_S = 0.08   # ~12 fps when idle
 INPUT_ACTIVE_S = 0.5  # stay at full fps for this long after last user input
 
-_AMBIENT_ANIMATOR_COUNT = gui_animation.animator.active_count
-
 _last_input_ns: int = 0  # monotonic_ns timestamp of last user input
 
 def _is_busy() -> bool:
@@ -143,7 +141,7 @@ def _is_busy() -> bool:
         return True
     if gui_instance is not None and gui_instance.dpg_avatar_renderer.animator_running:
         return True
-    return gui_animation.animator.active_count > _AMBIENT_ANIMATOR_COUNT
+    return gui_animation.animator.transient_count > 0
 
 def _on_any_input(*_args) -> None:
     global _last_input_ns

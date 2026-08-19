@@ -174,7 +174,7 @@ def _is_busy() -> bool:
     """True when the render loop should run at full frame rate."""
     if (time.monotonic_ns() - _last_input_ns) < INPUT_ACTIVE_S * 1e9:
         return True
-    return gui_animation.animator.active_count > 0  # e.g. fdialog button flash
+    return gui_animation.animator.transient_count > 0  # e.g. fdialog button flash
 
 def _on_any_input(*_args) -> None:
     global _last_input_ns
