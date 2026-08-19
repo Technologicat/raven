@@ -83,6 +83,7 @@
   - **Ctrl+Shift+F hands the arrow keys to the file type list**, where Up / Down step through the offered types and Home / End go to the ends; each step applies at once, so you can watch the listing narrow as you go. Esc gives the keyboard back to the find field. The mnemonic pairs with Ctrl+F: one filters the listing by name, the other by type.
   - **F1 lists the lot**, on a card that names the dialog it belongs to. The keys for the listing itself have no button to carry a tooltip, so this is where they can be found at all. It offers only what the dialog in front of you can actually do: marking several files appears where several may be picked, thumbnails where there are files to show, and the text field is described as finding or as naming according to whether you are opening or saving. Esc closes the card and leaves the dialog as you left it.
 
+- **the file dialog offers file types only where an app asked for them.** A dialog whose caller named no types used to list some 170 extensions — `.vhd`, `.qcow2`, `.msi` and the rest — which is a menu of formats the app has nothing to do with, and in a folder picker it filters a listing that holds no files at all. It now offers "all files" and nothing else.
 - **the cursor breathes.** The blue mark showing which entry the keyboard is on now pulses slowly, in the file dialog's list and in every thumbnail grid — Raven-cherrypick's included, where it is the same mark on a tile. It costs no frame rate when nothing else is happening: apps that drop to a low frame rate while you read keep doing so, and the pulse simply runs at that rate.
 - **the file dialog can show hidden files and folders**, from a Hidden checkbox next to Thumbnails or with **Ctrl+H**. Whether they were shown was fixed when the app built its dialog and had no control at all, so a dotfile — or a config directory in a folder picker — was simply out of reach. The choice holds until you change it back.
 
@@ -135,9 +136,13 @@
 
 *Raven-xdot-viewer*
 
+- **the keyboard shortcuts work again from app start.** Ctrl+O, Ctrl+F, F1, F11 and the rest were dead until you clicked somewhere: the search field counts as focused from the moment the window appears, with nobody having touched it, and every shortcut was being held back for it. Typing in the search field still keeps the plain keys to itself, which is what the check was for.
+
 - dismissing an error dialog no longer also acts on the graph behind it. The dialog floats over the canvas, so clicking its button re-centered the view on whichever node happened to sit under the pointer. 0.2.8 fixed the keyboard half of this; the mouse half was still open, because the graph's handlers are global — they fire wherever the cursor is — and decided "is the mouse over the graph?" geometrically, which cannot tell that a dialog is covering it.
 
 *Constellation-wide*
+
+- **clicking the file browser's type filter no longer costs you the keyboard.** Once you had clicked it — to read what the options were, say — the shortcuts that put the caret back in the name field (Ctrl+F, Tab, Esc) stopped doing anything, silently, for as long as that dialog stayed open. The same was true of OK and Cancel, which normally close the dialog and so never showed it, except when confirming an overwrite.
 
 - **the file browser's shortcuts work on a desktop that is not in English.** Linux renames these directories on disk — a Finnish desktop has `~/Kuvat`, not `~/Pictures` — and the browser looked for the English names only, so on such a system every shortcut but *Home* failed to find its directory and reported an error as the dialog opened. It now reads the directories the desktop actually defines. A place you genuinely do not have is left out of the panel rather than offered and broken.
   - Windows and macOS were never affected: they translate the name their file manager *shows* and keep the directory itself in English.

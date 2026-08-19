@@ -875,6 +875,29 @@ that from the code.
     DPG's own metrics window. That also retired the startup `_AMBIENT_ANIMATOR_COUNT` snapshot two apps
     carried, which was only ever correct for animations that existed before the line ran.
 
+- **Nothing clickable sits directly in the dialog window any more**, and that turned out to be a
+  correctness constraint rather than tidiness. `focus_item` is refused when focus sits on an item at
+  *window level* and the target is inside a child window, so one click on such a control strands the caret
+  for the rest of that dialog's life — Ctrl+F, Tab-back and Escape-to-the-field all fire, return, and
+  arrive nowhere, with nothing reporting it.
+  - Found live on 2026-08-19: clicking the type-filter combo to read its options killed Ctrl+F. The
+    `Show` label and the combo now share a borderless child window, which costs nothing on screen (the row
+    is pixel-identical) and says what was true anyway — they are one control.
+  - **OK and Cancel were the same trap**, reasoned to rather than stumbled on. They look harmless because
+    clicking one closes the dialog, leaving no rest-of-the-dialog for a stranded caret to spoil — except
+    at the overwrite confirmation, where the first click on OK deliberately leaves it open, which is
+    exactly when a user reaches for the filename field to change the name instead.
+  - `test_nothing_clickable_sits_directly_in_the_dialog_window` walks the widget tree and fails on any
+    clickable item no child window encloses. Worth asserting rather than remembering: the two offenders
+    were missable for opposite reasons, one looking inert and the other looking self-closing.
+
+**Open, and worth settling before the places panel:** whether Escape from the *listing* should also hand
+the caret back rather than cancel. The rule as built applies to parked controls — the type filter today,
+the path field and the places panel to come — and the listing is deliberately excluded, since Esc-closes-a-
+dialog is the strongest convention in play and Tab and Ctrl+F already return from there. But that leaves
+one home answering Escape differently from the others, which a user has to learn rather than derive. The
+help card currently states the simple rule ("Esc — Cancel"), so changing this means changing that too.
+
 **Not built:** Ctrl+L, Ctrl+B, the places-panel migration, and the navigation history —
 Alt+Left / Alt+Right and the mouse's back and forward buttons, which is the one item here that arrived
 after the dialog started being built rather than with the original design.
