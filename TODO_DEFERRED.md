@@ -87,9 +87,18 @@ this one step rather than two.
 
 The one way that measurement goes wrong is specific to text: glyphs are antialiased where a button
 background is flat, so a sampled glyph pixel is a blend of the text colour and what is behind it, weighted
-by coverage. An edge pixel reads consistently too dark. Sample the interior of a thick stem, or take the
-channel-wise maximum over a patch of text, which finds a fully covered pixel wherever one exists.
-`import -window <id>` captures without focus, so this can also be done without a human squinting at pixels.
+by coverage. An edge pixel reads consistently too dark. Render at a large size and sample the interior of a
+straight vertical stem — `I`, `H`, `l`, never a curve or a diagonal — or take the channel-wise maximum over
+a patch of text, which finds a fully covered pixel wherever one exists. Size matters because a stem at the
+app's own font size is about two pixels wide and may have no fully covered pixel at all. Get the size from
+`dpg.add_font(file, size)`, which rasterizes an atlas at that size; a global font scale would resample the
+existing atlas instead, and then even a stem interior is a blend.
+
+Exactly, if judging saturation by eye is unappealing: a pixel is `α·C_text + (1 - α)·C_bg`, and the
+background is ours to set through the theme. Render the same glyph over two known backgrounds and sample
+the same pixel — two equations, both `α` and `C_text`, no saturated pixel required, and it self-checks,
+since a bad reading lands `α` outside [0, 1]. `import -window <id>` captures without focus either way, so
+none of this needs a human squinting at pixels.
 
 23 constructor call sites (fdialog 7, librarian 9, visualizer 4, cherrypick 1, the two wrappers, 8 in
 tests), all keyword-argument, so each is a read-and-rewrite rather than a puzzle.
