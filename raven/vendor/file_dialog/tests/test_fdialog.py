@@ -34,8 +34,19 @@ def test_normalize_bare_string_is_its_own_label():
 
 
 def test_normalize_catch_all_matches_everything():
-    """`None` in place of an extension tuple is the ".*" catch-all, distinct from an empty tuple."""
-    assert _normalize_filter(".*") == (".*", None)
+    """`None` in place of an extension tuple is the ".*" catch-all, distinct from an empty tuple.
+
+    It is also the one entry whose label is not what the caller wrote: `.*` is glob syntax, and a user
+    reading a combo should not have to.
+    """
+    assert _normalize_filter(".*") == ("All files", None)
+
+
+def test_the_catch_all_is_still_selectable_by_the_spelling_callers_use(make_dialog):
+    """Renaming it for the screen must not break `file_filter=".*"`, which is how call sites ask for it."""
+    dialog = make_dialog(filter_list=[".png", ".*"], file_filter=".*")
+    assert dialog.file_filter == "All files"
+    assert dialog._active_extensions is None, "it still matches every file"
 
 
 def test_normalize_pair_separates_label_from_extensions():
@@ -301,7 +312,7 @@ def test_replacing_the_filter_list_leaves_a_closed_listing_alone(dialog):
 def test_replacing_the_filter_list_updates_the_offered_labels(dialog):
     """The combo has to forget the old items, or the user can still pick a filter that no longer exists."""
     dialog.set_filter_list([("Documents", [".md", ".pdf"]), ".*"])
-    assert dpg.get_item_configuration(dialog.combo_file_filter)["items"] == ["Documents", ".*"]
+    assert dpg.get_item_configuration(dialog.combo_file_filter)["items"] == ["Documents", "All files"]
     assert dpg.get_value(dialog.combo_file_filter) == "Documents"
 
 

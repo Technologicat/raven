@@ -85,6 +85,17 @@ class CaretHome(enum.Enum):
     FILTER = "filter"  # the file type combo
 
 
+# How a caller writes "every file" in a `filter_list`, and what the combo calls it. The two differ because
+# `.*` is glob syntax, which belongs in the call site rather than in front of a user.
+#
+# The label says *files* and not "files and folders", which reads as the friendlier phrasing and would be
+# wrong: a type filter is applied to files only — `filelisting.list_directory` says so, and must, since a
+# filter that hid directories would hide the way to the files it selects. Folders are listed under every
+# filter, so naming them here would imply the others exclude them.
+_CATCH_ALL = ".*"
+_CATCH_ALL_LABEL = "All files"
+
+
 # The sort criteria a dialog offers, in the order its buttons appear — which is also the order Ctrl+Shift+N
 # indexes, so the two rows read off one list and cannot drift apart.
 _SORT_CRITERIA = [(filelisting.SortKey.NAME, "Name"),
@@ -219,8 +230,8 @@ def _normalize_filter(entry: Union[str, tuple[str, Iterable[str]]]) -> tuple[str
     own label and matches that one suffix, which is the original single-extension form.
     """
     if isinstance(entry, str):
-        if entry == ".*":
-            return (entry, None)
+        if entry == _CATCH_ALL:
+            return (_CATCH_ALL_LABEL, None)
         return (entry, (entry.lower(),))
     label, extensions = entry
     return (label, tuple(sorted({ext.lower() for ext in extensions})))
@@ -1100,6 +1111,10 @@ class FileDialog:
             self._grid.set_size(*size)
 
     def _set_type_filter(self, label: str) -> None:
+        # `.*` is how a caller asks for the catch-all and `All files` is what it is called on screen, so a
+        # request written the first way has to find the item offered under the second.
+        if label == _CATCH_ALL and _CATCH_ALL_LABEL in self._filter_extensions:
+            label = _CATCH_ALL_LABEL
         self.file_filter = label
         if label in self._filter_extensions:
             self._active_extensions = self._filter_extensions[label]
