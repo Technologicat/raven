@@ -122,7 +122,10 @@ def submit(self, function: Callable, env: env) -> Symbol:
 
 Patterns:
 
-- One-line summary, then blank line, then details.
+- One-line summary, then blank line, then details — where *details* means arguments, return value, and
+  which cases are handled. Why the shape was chosen, what went wrong the other way, which failure it
+  prevents: those go in a comment below the `def`, where the maintainer who needs them is reading. A second
+  docstring paragraph that is none of the three is the tell.
 - Parameters documented inline with backtick-quoted names and indented descriptions.
 - **NOTE** / **CAUTION** markers for gotchas.
 - Reference external resources (URLs, other modules) directly in docstrings.
