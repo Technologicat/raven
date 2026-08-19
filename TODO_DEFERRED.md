@@ -2782,7 +2782,12 @@ its own fix, and lives in "Emoji support in the Markdown renderer" below.
 
 ## Chat view drops a character mid-message ("What" renders as " hat")
 
-*Cluster: markdown-renderer · Cost: ? · Gate: ? · Filed: 2026-07-19*
+*Cluster: markdown-renderer · Cost: ? · Gate: Researchers' Night, 2026-09-25 · Filed: 2026-07-19*
+
+**To be fixed before Researchers' Night** (decided 2026-08-19, Juha). It is not confined to the chat view:
+`FileDialog`'s new help card lost its whole header line in one app run and had it in the next, from the
+same code — so the bug is on the path every `dpg_markdown.add_text` caller takes, and what it drops scales
+from a letter to a line.
 
 **Absorbs "`dpg_markdown` intermittently drops a single letter from rendered text"** (merged 2026-08-12).
 That was the same defect reported from the renderer's end rather than the chat view's, and its sighting is

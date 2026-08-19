@@ -2,8 +2,9 @@
 
 **Status: mostly built.** The design below was settled on 2026-08-13 (Juha and Claude); the listing cursor,
 Enter's rules, Tab and its completion and fill, the sort and filter chords, Alt+Up / Ctrl+Up and the
-"Will pick" line are in and live-tested. Still to build: Ctrl+L, Ctrl+Shift+F, Ctrl+B, F1, the
-places-panel migration, and the navigation history added on 2026-08-18. **See "What is built" near the end for the current state** — including the
+"Will pick" line are in and live-tested, as is the F1 help card. Still to build: Ctrl+L, Ctrl+Shift+F,
+Ctrl+B, the places-panel migration, and the navigation history added on 2026-08-18.
+**See "What is built" near the end for the current state** — including the
 several places where the design below was overtaken by what building it taught, each noted there rather
 than edited into the design, so the reasoning stays legible.
 
@@ -823,7 +824,37 @@ that from the code.
   refreshed the promised-target line, so in a directory picker the line could name the folder the user
   had just stopped choosing.
 
-**Not built:** Ctrl+L, Ctrl+Shift+F, Ctrl+B, F1, the places-panel migration, and the navigation history —
+- **F1 opens a card of this dialog's keys**, built on `helpcard.HelpWindow` like the six apps that have
+  one, and built **per dialog rather than once**: Ctrl+Space appears only where more than one file can be
+  taken, Ctrl+T only where files are listed, and the text field is described as finding or as naming
+  depending on the mode. The dialog's shape is fixed at construction, so the question is answered once and
+  the card never offers a key that does nothing here.
+  - **The card carries three openings that `HelpWindow` did not have**, all of them the same fact in
+    different places: a card can belong to something other than the app. `handle_own_hotkeys=False` stops
+    the shared handler claiming Escape, `label` says whose keys are listed once the owner is off the
+    screen, and `show` now reports whether the card came up — which a caller that hid something behind it
+    needs and one that merely opens a card can ignore.
+  - **Hiding the dialog is not enough to make room; a frame has to pass.** A window leaves ImGui's popup
+    stack only once a frame has drawn without it, and the second modal is refused until then — after which
+    DPG treats it as *closed* and fires its close handler, so the card undid itself 80 ms after F1 and put
+    the dialog back. The symptom reads exactly like F1 being delivered twice, and the thing that tells them
+    apart is that the card measures `0x0` and never became visible. Recorded in `dpg-notes.md`.
+  - **Escape closes the card; the next Escape cancels the dialog.** One handler sees the key, which is the
+    whole reason for the opt-out above.
+    - **And the dialog comes back only once Escape is released**, which needs a key-release handler beside
+      the press one. ImGui dismisses the topmost modal popup on Escape by itself, and this dialog's close
+      handler is `cancel` — so a dialog restored under a still-held key was dismissed the frame it appeared
+      and the picker returned nothing. `is_visible` answers yes across that wait too, there being nothing on
+      the screen while it lasts.
+    - **The driven test passed and the real press failed**, which is worth remembering rather than fixing
+      once: `xdotool key Escape` holds the key about 12 ms and a finger holds it for hundreds, so anything
+      that depends on a key still being down is invisible to a tapped test. Drive it as
+      `keydown` / `sleep 0.6` / `keyup`. Recorded in `dpg-notes.md`.
+  - The card is a fixed size and `HelpWindow` gives it no scrollbar, so **a row added past what fits is
+    clipped in silence.** 1250×640 was measured against the longest column at `font_size=20`, with room for
+    the one row a multi-selection dialog adds.
+
+**Not built:** Ctrl+L, Ctrl+Shift+F, Ctrl+B, the places-panel migration, and the navigation history —
 Alt+Left / Alt+Right and the mouse's back and forward buttons, which is the one item here that arrived
 after the dialog started being built rather than with the original design.
 
@@ -877,17 +908,18 @@ Suggested order, with what each actually costs:
    against the filesystem (directories only, candidates re-read per Tab, separator appended after a
    completed component so repeated Tab walks down the tree), which is why it is not a cheap key: without
    completion it lands the user in a field where they must type an absolute path by hand.
-4. **F1, the help card** — moderate, and deliberately *after* the keys: the card is the only place the
-   whole set is stated as prose, so writing it before the last key lands means writing it twice. Two
-   mechanics to get right, both recorded under "Discoverability": DPG does not stack modals, so the dialog
-   hides itself while the card is up; and `is_visible()` must keep returning `True` across that gap, or the
-   app underneath wakes up and re-enables its own hotkeys.
+4. ~~**F1, the help card**~~ — **built 2026-08-19**, out of order: it went first rather than last. The
+   argument for last was that the card is the only place the whole set is stated as prose, so writing it
+   early means writing it twice — which held, and cost about four lines. What it bought was that every key
+   already built became findable, and the two mechanics that turned out to be the real work — the modal
+   swap and its two frame-timing traps — are independent of which keys exist. Adding Ctrl+L or Ctrl+B to
+   the card later is one entry each.
 5. **The navigation history** — the largest, fully designed above, and the one Juha asked for by name.
    Independent of 1–4, so it can go first if the appetite is for building rather than refactoring.
 6. **Ctrl+B and the places-panel migration** — its own day, not a tail end of this one.
 
-**Items 1–4 and item 5 are each about a day's work, so both in one day is unlikely.** Which to drop is a
-real choice rather than a scheduling detail: 1–4 finish the keyboard, and 5 adds a capability the dialog has
+**Items 1–3 and item 5 are each about a day's work, so both in one day is unlikely.** Which to drop is a
+real choice rather than a scheduling detail: 1–3 finish the keyboard, and 5 adds a capability the dialog has
 never had. Worth deciding at the start of the session rather than discovering at the end of it.
 
 ## Where the dialog stands

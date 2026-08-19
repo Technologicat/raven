@@ -799,6 +799,14 @@ apart, LControl / LShift / LAlt alike), alongside a companion pseudo-key — 663
 665 for Alt — that no `mvKey_*` constant names. A handler that acts on a bare modifier keycode therefore
 fires over and over while the key is down.
 
+**And a synthetic tap is far shorter than a human press, which hides anything that depends on how long a
+key is held.** `xdotool key Escape` holds it about 12 ms; a finger holds it for hundreds. Where the app
+does something *while* the key is down — or where ImGui does, as it does on Escape, dismissing the topmost
+modal popup by itself — a driven test passes and a real press fails, which is the worst direction for a
+check to be wrong in. Drive such keys as `keydown` / `sleep 0.6` / `keyup`. (Live case 2026-08-19: Escape
+over `FileDialog`'s help card. Tapped, the card closed and the dialog returned; held, the dialog was put
+back under the still-down key and ImGui dismissed it, so the picker cancelled itself.)
+
 ## Investigation history
 
 - 2026-08-17: Surveyed which chords survive a single-line `InputText` holding the caret, ahead of building
