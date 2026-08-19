@@ -2327,14 +2327,14 @@ class FileDialog:
 
         Esc, or Tab, takes them away again.
         """
-        # The combo does not get DPG's focus, and that is a constraint rather than a choice: it sits at
-        # window level while the find field sits inside the listing's child window, and `focus_item` is
-        # refused in exactly that direction. Focus put on the combo could never come back, so Escape would
-        # strand the caret there and typing would go nowhere for the rest of the dialog's life.
+        # The combo does not get DPG's focus, and every home here is the same way: which one has the keys
+        # is `_caret_home`, and DPG's focus is parked somewhere harmless and inside the listing's child
+        # window. One answer to "where do the arrows go", rather than that answer plus whatever
+        # `get_focused_item` happens to say — which is also why the flag is not derived from it.
         #
-        # Nothing is lost. DPG combos have no keyboard operation of their own, so the arrows are this
-        # dialog's to route either way; what focus would have bought is a highlight saying where the keys
-        # went, and that is a mark every home here is owed equally.
+        # DPG combos have no keyboard operation of their own, so the arrows are this dialog's to route
+        # either way. What focus would buy is a highlight saying where the keys went, and that mark is owed
+        # to every home equally, so it is one job rather than a freebie for this one.
         self._caret_home = CaretHome.FILTER
         self._park_focus()
 
