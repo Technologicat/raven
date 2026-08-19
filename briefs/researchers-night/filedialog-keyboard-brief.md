@@ -949,8 +949,9 @@ Two existing rules become general at the same moment, which is the other reason 
 **Agreed 2026-08-19, for the session after this one:** start with the **find field's colouring** (item 8).
 It is independent of everything else, wanted in its own right, and it is where the convention gets settled
 against a working reference — so the path field inherits a decided thing rather than deciding it. Then
-Ctrl+L with the path colouring, *if* the field turns out reasonably buildable once the completion question
-above is faced; if it does not, drop back to whatever else here is still open rather than forcing it.
+Ctrl+L with the path colouring, which the completion question turned out to *shrink* rather than block:
+without completion the key is focus, Escape, and colour, and its value is paste and teleport rather than
+typing.
 
 Suggested order, with what each actually costs:
 
@@ -958,7 +959,7 @@ Suggested order, with what each actually costs:
    change, no live drive needed.
 2. ~~**Ctrl+Shift+F, the type filter**~~ — **built 2026-08-19**, and small as predicted once (1) was in.
    The one surprise was that the combo cannot hold focus at all; see "What is built".
-3. **Ctrl+L, the path field** — moderate, and the only one with real new machinery.
+3. **Ctrl+L, the path field** — small, once the completion question is settled below.
 
    **Tab completion in it is not buildable in the shape the find field uses** (2026-08-19). Writing the
    completion is the solved half: take the caret away, write, as `_write_find_field` does. Handing the
@@ -968,17 +969,27 @@ Suggested order, with what each actually costs:
    retyped; a completed path is the entire thing the user was building, and losing it to one keystroke is
    worse than never having completed at all.
 
-   So the key needs another way to be useful, and there are three, in rising order of ambition:
+   **And without completion, typing a path by hand is useless** (Juha) — nobody hand-types
+   `…/briefs/researchers-night/`. Which raises the right question: whether this key should exist at all,
+   given that **the dialog already completes paths, better, through the find field.** Type a fragment,
+   the cursor lands on the first match, Enter descends, repeat. That is incremental completion, and being
+   fragment-based and smart-case it beats prefix-based Tab completion at its own job.
 
-   - **The recolouring below may be enough.** Typing a path with live feedback that it is going somewhere —
-     green on arrival — removes most of what completion was for, which was avoiding a blind typo.
-   - **Complete without giving the field back.** Tab writes the completion and leaves the caret parked
-     elsewhere, so nothing is armed; the user presses Ctrl+L to resume typing. Whether that reads as
-     helpful or as the field going dead under them is a live-test question, not an armchair one.
-   - **Show candidates in the listing instead of completing the text.** What is typed narrows the listing
-     to the matching subdirectories, and the cursor and Enter take it from there — no text is written, so
-     nothing is armed, and it reuses the machinery the dialog is already built around. The most work, and
-     the only option that turns the constraint into a feature.
+   **It should exist, for the two things the find field cannot do — and neither of them involves typing:**
+
+   - **Paste.** A path arrives from a terminal, a browser, a message. Ctrl+L, Ctrl+V, Enter. Completion is
+     irrelevant to a path that is already complete, and nothing else in the dialog accepts one.
+   - **Teleport.** The find field goes *down* from here, and `..` up one level. Reaching `/mnt/data/scans/`
+     from `~/Documents` means walking up and back down through fragments; the path field is the jump.
+
+   **So the feature is "give the address bar the keyboard", and that is cheap.** `on_enter=True` already
+   navigates, and DPG's `InputText` already pastes — what is missing is only the focus key, Escape giving
+   the caret back, and the colouring. This item moves out of "the only one with real new machinery": the
+   machinery was the completion, and the completion is neither buildable nor wanted.
+
+   The colouring earns more here than it would have for typing, too: a pasted path that is stale, mistyped
+   at the far end, or from another machine goes red on arrival rather than after Enter and a dismissed
+   modal.
 
    ### Recolouring as you type
 
