@@ -704,7 +704,7 @@ The mode-flag fallback survives for grid view, which has nothing focusable in it
 **Out of scope, worth recording**: an audio cue for the overwrite warning, and for whatever other warnings the
 dialog grows. Visual-only feedback is a gap for the same audience this brief is about.
 
-## What is built, as of 2026-08-18
+## What is built, as of 2026-08-19
 
 The table above is the design. This is the state of it, so the next session does not have to reconstruct
 that from the code.
@@ -925,6 +925,51 @@ today, which have no focus state at all, so a keyboard cursor over it needs the 
 `filter_list`, so it gets the default hundreds-of-extensions list and Ctrl+1 selects the filter already
 active — which looks like the key doing nothing.
 
+### Added 2026-08-19 (afternoon)
+
+**Item 8 is built and live-tested**: the find field is white with nothing typed, green when the folder
+holds a match, red when it does not, recoloured in `reset_dir` beside `_refresh_target_notification` on the
+argument that every route into the listing changes both. Two rulings the brief did not anticipate, both
+pinned by tests:
+
+- **`..` counts as a hit**, though it is never in `shown_items`. It answers a query like any other name, so
+  red would deny a row that is on screen and about to work.
+- **A save dialog is left uncoloured.** There the field names the file to be written, so matching nothing
+  is the ordinary case; and the inversion that suggests itself — colouring by whether the name is *taken*,
+  as an early overwrite warning — lies in both directions. Red reads as "there is something wrong with this
+  name" when the name is fine and it is the write that wants a second look; green reads as approval of the
+  one outcome the dialog stops to ask about twice.
+
+**The type filter is gone from both directory modes**, with Ctrl+1…9 inert, Ctrl+Shift+F falling through
+to plain Ctrl+F, and the two rows off the help card. A type filter applies to files only, and must, or it
+would hide the folders you navigate through — so in `"dir"` it narrows an empty set and in
+`"dir-with-contents"` it narrows scenery. The target line takes the whole row where no combo shares it.
+
+**The dialog can report a problem at all now**, which it could not: DPG stacks no modal over a modal, so
+`message_box` logged and returned, and every error in a picker — permission denied, not-a-directory, a
+listing that failed — reached only a log. Reports go on the **target line**, not the notification line
+above the buttons: that one is short, and is where the eye already is when clicking OK. Each names what it
+failed on, since the report outlives the moment it describes.
+
+This needed three additions to `WidgetFlash`, all of which are the general shape rather than dialog-local:
+a text `target` can carry a `message` (that branch used to fade a colour and drop the message); a
+`message_duration` separate from the fade, because a report wants the flash quick and the text readable
+while an acknowledgement wants them as one gesture; and `set_text_under_flash`, so a derived status line
+can be updated *through* a flash — writing plainly wipes the message mid-sentence, and letting the flash
+restore what it captured puts back a value from two navigations ago.
+
+**A text target needs a colour of its own**, or the fade runs to black: DPG reports an unset colour as the
+`r = -1` sentinel rather than the theme's, which it does not expose.
+
+Four bugs fixed in passing, one of which is worth knowing beyond this dialog: **a DPG callback is passed as
+many arguments as it declares**, so the `lambda label=label:` idiom for binding a loop variable gets the
+*sender* in that parameter. The places panel carried that for a sprint before a use turned it into
+`KeyError: 152`. Recorded in `dpg-notes.md`.
+
+**Item 8's convention is therefore settled**, which is what item 3 was waiting on. The colours are
+`_TEXT_NEUTRAL` / `_TEXT_GOOD` / `_TEXT_BAD` in `fdialog.py`, plus `_ALARM_RED` for a report — louder than
+`_TEXT_BAD`, deliberately, since a soft red is right for "nothing matched" and wrong for "that failed".
+
 ## What to build next, and in what order
 
 Written 2026-08-18 at the end of the day, for the session that picks this up.
@@ -1123,21 +1168,25 @@ Suggested order, with what each actually costs:
    in them, which is why focus parks on the refresh button in the first place. "The arrows belong to
    whatever is focused" cannot express "the arrows drive the listing", and `_caret_home` can.
 
-8. **The find field says whether it found anything** — small, independent of every other item here, and
-   wanted whether or not Ctrl+L ever happens. A query matching nothing currently leaves a listing holding
-   `..` alone and the field says nothing about why. Copy `raven-visualizer`'s search field exactly (see the
-   colours and the mechanism under item 3): white with nothing typed, green when the listing has matches,
-   red when it does not.
-   - **Doing this first is what makes the path field cheap.** The convention gets settled here, against a
-     working reference and on the simpler of the two fields, so Ctrl+L inherits a decided thing instead of
-     deciding it while also solving completion.
-   - Note the two fields will then disagree about *matching*, deliberately: the find field is smart-case
-     because it searches, and the path field must be exact because it addresses. Same colours, different
-     rule, and worth a comment at each so the difference reads as chosen.
+8. ~~**The find field says whether it found anything**~~ — **built 2026-08-19**, see "Added 2026-08-19"
+   above. Doing it first did what it was meant to: the convention is settled against a working reference,
+   so item 3 inherits it rather than deciding it.
+   - The two fields will disagree about *matching*, deliberately: the find field is smart-case because it
+     searches, and the path field must be exact because it addresses. Same colours, different rule, and
+     worth a comment at each so the difference reads as chosen.
 
 **Items 1–3 and item 5 are each about a day's work, so both in one day is unlikely.** Which to drop is a
 real choice rather than a scheduling detail: 1–3 finish the keyboard, and 5 adds a capability the dialog has
 never had. Worth deciding at the start of the session rather than discovering at the end of it.
+
+**Standing 2026-08-19, end of day.** Built: 1, 2, 4, 8. Left: **3** (Ctrl+L, small — the next thing to
+build), then **5**, **6** and **7**, each its own day. Ctrl+L finishes the *keyboard* in the sense items
+1–3 meant; the other three are capability and polish rather than the key set.
+
+One question still open inside item 3, and it needs answering before the colouring is written rather than
+during: **what `~` does in the path field** — whether it is expanded, and therefore whether the colour
+validates the expansion or the literal text. The other three cases (empty fragment, hidden directories,
+exact-not-smart-case) are decided above.
 
 ## Where the dialog stands
 
