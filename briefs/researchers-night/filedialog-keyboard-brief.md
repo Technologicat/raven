@@ -1093,6 +1093,20 @@ Suggested order, with what each actually costs:
    remove no code (DPG does not browse a combo by itself; that is custom in every Raven app that has one),
    and change nothing a user could see. The mark has to be drawn either way.
 
+   **Which splits this item in two, and the second half is not this brief's to spend** (Juha, 2026-08-19):
+
+   - **7a, the listing's mark** — a tint on the child window's border saying the arrow keys land here.
+     Local to `FileDialog`, small, and unblocked.
+   - **7b, a focus mark for combos** — *fleet-wide the moment it exists.* Keyboard-browsable combos are in
+     `raven-librarian`, `raven-xdot-viewer`, and both avatar editors, and every one of them has the same
+     invisible-focus problem for the same reason. Marking the file dialog's and leaving theirs bare would
+     be the worse outcome of the two, so this belongs in `raven/common/gui/` as something each combo opts
+     into with one call — the `filedrop.install(...)` shape — and it wants deciding as its own piece of
+     work rather than as a tail end of the file dialog's keyboard.
+
+   Doing 7a alone is coherent: the listing is the home that most needs saying, and it is the one no combo
+   convention could cover anyway.
+
    **Nor should the dispatch move onto focus.** `raven-avatar-settings-editor` routes its combo browsing by
    asking whether the focused item is one of two named combos, and that works there — it has a text entry
    too, and arrows in it simply go to the text caret, because nothing claims them. The shape does not
