@@ -855,7 +855,27 @@ that from the code.
     clipped in silence.** 1250×640 was measured against the longest column at `font_size=20`, with room for
     the one row a multi-selection dialog adds.
 
-**Not built:** Ctrl+L, Ctrl+Shift+F, Ctrl+B, the places-panel migration, and the navigation history —
+- **Ctrl+Shift+F hands the arrows to the type filter**, and Esc hands them back to the find field. The
+  combo idiom copied from `raven-avatar-settings-editor`, with one departure that is a constraint rather
+  than taste: **the combo never gets DPG's focus.** It sits at window level while the find field sits inside
+  the listing's child window, and that is the one direction `focus_item` refuses — so focus put on the combo
+  could never come back, and Escape would strand the caret there for the rest of the dialog's life. The
+  arrows are routed from `_caret_home` instead, which is what that type is for, and a DPG combo has no
+  keyboard operation of its own to lose. What focus would have bought is the mark under item 7.
+  - Escape is now the general rule the design asked for, over a set of homes: hand the caret back, and
+    cancel only once it is already there. Nothing is restored on the way out, the combo having applied
+    every step as it was made.
+
+- **Both cursors breathe**, at one period shared from `thumbnailgrid.CURSOR_PULSE_SECONDS`. The table's is
+  a theme colour, so one `PulsatingColor` drives all six variants the mark is drawn in; the grid's is a
+  drawn rectangle that no theme reaches, so `ThumbnailGrid` recolours it once a frame from the same
+  `pulsating_alpha`. Two marks meaning one thing have to be the same shade at the same moment.
+  - **It costs no frame rate.** The animator now separates *ambient* animations from ones that report
+    activity, so an idle throttle keeps throttling — measured live at ~10 FPS with the pulse running, from
+    DPG's own metrics window. That also retired the startup `_AMBIENT_ANIMATOR_COUNT` snapshot two apps
+    carried, which was only ever correct for animations that existed before the line ran.
+
+**Not built:** Ctrl+L, Ctrl+B, the places-panel migration, and the navigation history —
 Alt+Left / Alt+Right and the mouse's back and forward buttons, which is the one item here that arrived
 after the dialog started being built rather than with the original design.
 
@@ -902,9 +922,10 @@ Two existing rules become general at the same moment, which is the other reason 
 
 Suggested order, with what each actually costs:
 
-1. **Widen the caret home** — small, and unblocks the two below. No user-visible change on its own, so it
-   is also the one item that can land without a live test drive.
-2. **Ctrl+Shift+F, the type filter** — small once (1) is in: the combo idiom is copied, not invented.
+1. ~~**Widen the caret home**~~ — **built 2026-08-19** as `CaretHome`. Went as advertised: no user-visible
+   change, no live drive needed.
+2. ~~**Ctrl+Shift+F, the type filter**~~ — **built 2026-08-19**, and small as predicted once (1) was in.
+   The one surprise was that the combo cannot hold focus at all; see "What is built".
 3. **Ctrl+L, the path field** — moderate, and the only one with real new machinery. It needs Tab completion
    against the filesystem (directories only, candidates re-read per Tab, separator appended after a
    completed component so repeated Tab walks down the tree), which is why it is not a cheap key: without
