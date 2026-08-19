@@ -959,10 +959,19 @@ Suggested order, with what each actually costs:
 
    ### Recolouring as you type
 
-   Sketched 2026-08-19 (Juha). The field is coloured by whether what is typed can lead anywhere — red when
-   it cannot, green when it can, plain when nothing is typed, following the Visualizer's search field
-   below. Two checks, which are one rule wearing two hats — *the text so far cannot be completed to an
-   existing directory*:
+   Sketched 2026-08-19 (Juha). The field is coloured by what the typed text *is*, and the three states are
+   not the search field's three — a path being typed has a middle state that a query does not:
+
+   | state | colour | meaning |
+   |---|---|---|
+   | names an existing directory | green | Enter goes there |
+   | a valid prefix, not yet a directory | neutral | nothing is wrong; keep typing |
+   | cannot lead anywhere | red | Enter would fail |
+
+   **Green means Enter works**, which is the whole value of having a positive state: `/home/jje/Doc` is on
+   its way to `Documents` and perfectly fine, but it is not somewhere you can go, and colouring it green
+   would promise something the key does not deliver. Two checks decide it, one rule wearing two hats —
+   *the text so far cannot be completed to an existing directory*:
 
    - **Up to the last separator**, that directory must exist on disk. One `isdir`, cheap.
    - **After the last separator**, the fragment must be a prefix of at least one subdirectory of it. That
@@ -976,9 +985,11 @@ Suggested order, with what each actually costs:
 
    Four cases the rule has to answer explicitly, because each one can make the colour lie:
 
-   - **An empty fragment is neutral if its parent exists.** Typing `/some/dir/` leaves nothing after the
-     separator, which is a prefix of everything — and of nothing at all when the directory has no
-     subdirectories. Red there would be wrong: the path is valid and Enter should take it.
+   - **An empty fragment needs no rule of its own**, which is a point in the three-state model's favour.
+     Typing `/some/dir/` leaves nothing after the separator, and asking whether that prefixes any
+     subdirectory is the wrong question — it is a prefix of all of them, and of none when the directory is
+     empty. The first check already answers it: `/some/dir/` names an existing directory, so it is green,
+     and Enter takes it whether or not anything lives inside.
    - **Hidden directories should count, whatever the Hidden checkbox says.** Typing `.conf` when `.config`
      exists must not go red because a toggle elsewhere is off. A dot typed into a path field is an
      intention, not a browsing preference.
