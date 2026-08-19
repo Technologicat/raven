@@ -3,6 +3,7 @@
 
 __all__ = ["FileDialog"]
 
+import enum
 import logging
 logger = logging.getLogger(__name__)
 
@@ -63,6 +64,24 @@ _PLACES = [("Home", "img_home"),
            ("Music", "img_music_folder"),
            ("Pictures", "img_picture_folder"),
            ("Videos", "img_videos")]
+
+
+class CaretHome(enum.Enum):
+    """Where this dialog is taking keys — the caret's home, named rather than counted.
+
+    Two rules read it, and both are written against *whichever* home it is rather than against a particular
+    one, which is what lets a new one be an entry here plus a branch in the dispatch:
+
+      - Bare Up / Down / Home / End mean whatever the home they arrive in says they mean.
+      - Escape hands the caret back to the find field from wherever it was parked, and cancels the dialog
+        only once it is already there.
+
+    It is held rather than derived from `dpg.is_item_active` on the find field, because the two are not the
+    same question: the field goes inactive whenever anything at all is clicked, and that must not silently
+    rebind the arrow keys.
+    """
+    FIELD = "field"  # the find field — which is the filename field, in save mode
+    LISTING = "listing"  # the table or the thumbnail grid, whichever view is up
 
 
 # The sort criteria a dialog offers, in the order its buttons appear — which is also the order Ctrl+Shift+N
@@ -502,11 +521,8 @@ class FileDialog:
         # could re-measure them are exactly the ones a clipping table may not have drawn.
         self._row_metrics_cache = None
         self._sort_indicators = {}  # SortKey -> drawlist tag, one per sort button
-        # Which of the dialog's two keyboard modes is up: the caret in the find field, or in the listing.
-        # Tab swaps them. Held as a flag rather than derived from `is_item_active` on the field, because
-        # the two are not the same question — the field is inactive whenever anything else has been
-        # clicked, and that must not silently rebind the arrow keys.
-        self._caret_in_listing = False
+        # Where the dialog is taking keys; Tab swaps the two that exist. See `CaretHome`.
+        self._caret_home = CaretHome.FIELD
         # The help card, built on first F1 — see `_the_help_card` — and whether it is currently up. The
         # flag is what the dialog is hidden behind: DPG will not stack a modal over a modal, so showing the
         # card means taking the dialog off the screen, and `is_visible` has to keep saying yes across that
@@ -1650,7 +1666,7 @@ class FileDialog:
             #
             # Unless the listing had the caret, in which case it keeps it: arriving is not a reason to
             # change modes, and in grid view it would cost the arrow keys that Tab was needed to free.
-            if not self._caret_in_listing:
+            if self._caret_home is not CaretHome.LISTING:
                 self._focus_field()
         except PermissionError as e:
             self.message_box("File dialog - PerimssionError", f"Cannot open the folder because is a system folder or the access is denied\n\nMore info:\n{e}")
@@ -1959,8 +1975,8 @@ class FileDialog:
         self._restore_pending = False
         dpg.show_item(self.tag)  # tag
         # The caret went nowhere while the dialog was hidden, but focus did: the card took it. Return it to
-        # whichever of its two homes the dialog was in, so F1 costs nothing but the reading.
-        if self._caret_in_listing:
+        # whichever home the dialog was in, so F1 costs nothing but the reading.
+        if self._caret_home is CaretHome.LISTING:
             self._focus_listing()
         else:
             self._focus_field()
@@ -2000,7 +2016,7 @@ class FileDialog:
         # moves focus nor inserts anything — so the key is ours to define, and this is the only way
         # to reach the state where the find field is inactive.
         if key == dpg.mvKey_Tab:
-            if self._caret_in_listing:
+            if self._caret_home is CaretHome.LISTING:
                 # Written before the caret returns, the field being writable only while it does not have
                 # it — the mirror of the outbound order below.
                 self._fill_field_from_cursor()
@@ -2045,13 +2061,13 @@ class FileDialog:
             nav.navigate_page_up()
         elif key == _KEY_PAGE_DOWN:
             nav.navigate_page_down()
-        elif key == dpg.mvKey_Left and self._caret_in_listing:
+        elif key == dpg.mvKey_Left and self._caret_home is CaretHome.LISTING:
             # Left and Right are not unwanted while the caret is in the find field, they are
             # *occupied* — a single-line entry spends them on the text caret. Tab is what frees them,
             # which is why the grid is only now completely reachable: its rows hold several tiles, so
             # without a horizontal step every column but the first was unvisitable from the keyboard.
             nav.navigate_prev()
-        elif key == dpg.mvKey_Right and self._caret_in_listing:
+        elif key == dpg.mvKey_Right and self._caret_home is CaretHome.LISTING:
             nav.navigate_next()
         elif key == dpg.mvKey_Home and not ctrl:
             nav.navigate_first()
@@ -2152,7 +2168,7 @@ class FileDialog:
 
     def _focus_field(self) -> None:
         """Put the caret back in the find field, where typing filters the listing."""
-        self._caret_in_listing = False
+        self._caret_home = CaretHome.FIELD
         dpg.focus_item(self.search_field)
 
     def _focus_listing(self) -> None:
@@ -2175,7 +2191,7 @@ class FileDialog:
         # A button is also safe to park on: DPG leaves ImGui's keyboard-nav activation off, so a focused
         # button ignores Space and Enter instead of pressing itself. Pinned by
         # `test_a_focused_button_ignores_the_keys_that_would_press_it`, since nothing in the API reports it.
-        self._caret_in_listing = True
+        self._caret_home = CaretHome.LISTING
         dpg.focus_item(self.button_refresh)
 
     def show_file_dialog(self):

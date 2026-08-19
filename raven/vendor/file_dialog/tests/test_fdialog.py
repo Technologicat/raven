@@ -25,7 +25,7 @@ dpg = pytest.importorskip("dearpygui.dearpygui", reason="dearpygui not installed
 from raven.common import filelisting  # noqa: E402 -- after importorskip by design
 from raven.common.gui import helpcard  # noqa: E402 -- after importorskip by design
 from raven.common.gui import utils as guiutils  # noqa: E402 -- after importorskip by design
-from raven.vendor.file_dialog.fdialog import FileDialog, _PLACES, _complete_from, _normalize_filter  # noqa: E402 -- after importorskip by design
+from raven.vendor.file_dialog.fdialog import CaretHome, FileDialog, _PLACES, _complete_from, _normalize_filter  # noqa: E402 -- after importorskip by design
 
 
 def test_normalize_bare_string_is_its_own_label():
@@ -620,17 +620,17 @@ def test_closing_from_the_tick_thread_does_not_try_to_join_it(dialog):
 def test_the_caret_starts_in_the_find_field(dialog):
     """Whatever the previous dialog was doing, a fresh one is ready to be typed into."""
     dialog.show_file_dialog()
-    assert dialog._caret_in_listing is False
+    assert dialog._caret_home is CaretHome.FIELD
 
 
 def test_tab_moves_the_caret_to_the_listing_and_back(dialog):
     dialog.reset_dir()
 
     dialog._handle_key(dpg.mvKey_Tab)
-    assert dialog._caret_in_listing is True
+    assert dialog._caret_home is CaretHome.LISTING
 
     dialog._handle_key(dpg.mvKey_Tab)
-    assert dialog._caret_in_listing is False
+    assert dialog._caret_home is CaretHome.FIELD
 
 
 def test_left_and_right_belong_to_the_text_caret_until_tab(dialog):
@@ -681,12 +681,12 @@ def test_focusing_the_find_field_brings_the_caret_with_it(dialog):
     """
     dialog.reset_dir()
     dialog._handle_key(dpg.mvKey_Tab)
-    assert dialog._caret_in_listing is True
+    assert dialog._caret_home is CaretHome.LISTING
 
     with mock.patch.object(dpg, "is_key_down", lambda key: key in (dpg.mvKey_LControl,)):
         dialog._handle_key(dpg.mvKey_F)
 
-    assert dialog._caret_in_listing is False
+    assert dialog._caret_home is CaretHome.FIELD
 
 
 # --------------------------------------------------------------------------------
@@ -895,7 +895,7 @@ def test_tab_completes_the_find_field_and_hands_over_the_arrow_keys(make_dialog,
     dialog._handle_key(dpg.mvKey_Tab)
 
     assert dpg.get_value(dialog.search_field) == "readme."
-    assert dialog._caret_in_listing is True
+    assert dialog._caret_home is CaretHome.LISTING
 
 
 def test_tab_back_fills_the_field_from_the_cursor(make_dialog, tmp_path):
@@ -916,7 +916,7 @@ def test_tab_back_fills_the_field_from_the_cursor(make_dialog, tmp_path):
     dialog._handle_key(dpg.mvKey_Tab)                 # ...and back
 
     assert dpg.get_value(dialog.search_field) == picked
-    assert dialog._caret_in_listing is False
+    assert dialog._caret_home is CaretHome.FIELD
     assert shown(dialog) == [picked], "the listing narrows to what was picked"
 
 
@@ -947,7 +947,7 @@ def test_tab_leaves_the_field_alone_when_there_is_nothing_to_complete(make_dialo
     dialog._handle_key(dpg.mvKey_Tab)
 
     assert dpg.get_value(dialog.search_field) == ""  # the filter came from `reset_dir`, not from typing
-    assert dialog._caret_in_listing is True, "the caret still moves; only the completion declined"
+    assert dialog._caret_home is CaretHome.LISTING, "the caret still moves; only the completion declined"
 
 
 # --------------------------------------------------------------------------------
@@ -1440,15 +1440,15 @@ def test_the_dialog_waits_for_escape_to_come_up_before_returning(card_up):
     assert window_is_shown(card_up)
 
 
-@pytest.mark.parametrize("caret_in_listing", [False, True])
-def test_closing_the_card_returns_the_caret_where_it_was(card_up, caret_in_listing):
+@pytest.mark.parametrize("home", [CaretHome.FIELD, CaretHome.LISTING])
+def test_closing_the_card_returns_the_caret_where_it_was(card_up, home):
     """F1 costs the reading and nothing else: the dialog comes back in the mode it left in."""
-    card_up._caret_in_listing = caret_in_listing
+    card_up._caret_home = home
 
     card_up._help_window.hide()
 
     assert window_is_shown(card_up)
-    assert card_up._caret_in_listing is caret_in_listing
+    assert card_up._caret_home is home
 
 
 def test_a_card_that_cannot_be_built_leaves_the_dialog_where_it_was(dialog, no_frame_wait):
