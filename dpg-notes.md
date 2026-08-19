@@ -55,6 +55,39 @@ This means:
 - Event handlers **block each other** (single callback thread, serial execution).
 - Heavy work in a callback delays all subsequent callbacks.
 
+## A callback is passed as many arguments as it declares
+
+DPG fills a callback's parameters positionally from `(sender, app_data, user_data)`, taking **as many as
+the signature declares** and no more. `dearpygui.run_callbacks` is that rule written out:
+
+```python
+sig = inspect.signature(job[0])
+args = []
+for arg in range(len(sig.parameters)):
+    args.append(job[arg + 1])
+job[0](*args)
+```
+
+So a zero-argument callback is called with nothing, and a one-argument callback receives the **sender** —
+which is what makes the loop-variable idiom unsafe here:
+
+```python
+for label, icon in places:
+    dpg.add_menu_item(label=label, callback=lambda label=label: chdir(places[label]))  # broken
+```
+
+That lambda declares one parameter, so DPG passes the sender into it and the default never applies. The
+binding is silently replaced by a widget id. **Pass the value in `user_data` instead**, with a callback
+taking all three parameters — a signature wide enough for the full triple cannot be shadowed.
+
+The failure is invisible until the parameter is *read*. Raven's file dialog carried these lambdas for a
+sprint while the bound label went unused; the day one of them became a dict key, clicking a shortcut
+raised `KeyError: 152`. Nothing about the traceback points at the dispatch rule.
+
+`len(sig.parameters)` counts every kind of parameter, `*args` and keyword-only included — so `lambda *_:`
+declares one and receives only the sender, and the arity is not a count of what the function can usefully
+absorb.
+
 ## GLFW callbacks are the exception: they run *on* the render thread
 
 Everything above describes DPG's own callback registry. A callback registered directly with **GLFW** does

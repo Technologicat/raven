@@ -54,6 +54,7 @@ commentary in a trailing `(…)`. `·` separates targets. That shape is not deco
 | create widgets, set values or make textures off the main thread | *Threading* → Thread architecture · *Raven DPG app structure* → Background work and thread safety |
 | call `split_frame` anywhere at all | *Threading* → `split_frame()` mechanism · *Threading* → Use `guiutils.split_frame`, not `dpg.split_frame` |
 | register a frame callback | *Threading* → `set_frame_callback` holds one callback per frame number |
+| wire a callback that has to know *which* item it came from | *Threading* → A callback is passed as many arguments as it declares (the loop-variable lambda is shadowed by the sender; use `user_data`) |
 | handle a file drop, or write any GLFW-side callback | *Threading* → GLFW callbacks are the exception: they run *on* the render thread |
 | diagnose a hang with no traceback, or a background-task race | *Threading* → Three-way deadlock pattern · *Threading* → Diagnosing background-task races |
 | reach for `dpg.mutex()` | *Threading* → `dpg.mutex()` — the atomicity tool that Raven cannot currently use |
