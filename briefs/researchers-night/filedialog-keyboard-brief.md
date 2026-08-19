@@ -959,8 +959,9 @@ Suggested order, with what each actually costs:
 
    ### Recolouring as you type
 
-   Sketched 2026-08-19 (Juha). The field turns red while what is typed cannot lead anywhere, and is neutral
-   otherwise. Two checks, which are one rule wearing two hats — *the text so far cannot be completed to an
+   Sketched 2026-08-19 (Juha). The field is coloured by whether what is typed can lead anywhere — red when
+   it cannot, green when it can, plain when nothing is typed, following the Visualizer's search field
+   below. Two checks, which are one rule wearing two hats — *the text so far cannot be completed to an
    existing directory*:
 
    - **Up to the last separator**, that directory must exist on disk. One `isdir`, cheap.
@@ -988,11 +989,27 @@ Suggested order, with what each actually costs:
    - **`~` and relative paths** need deciding: whether the field expands them, and therefore whether it
      validates the expansion or the literal text.
 
-   **Open, and bigger than this key: the find field has the same no-match state and says nothing about it.**
-   A query matching nothing leaves a listing holding only `..`. If red-on-no-match is worth having, it is
-   worth having in both fields — and that makes it a dialog-wide convention to settle rather than a detail
-   of Ctrl+L. Note there is nothing to copy: the fleet has no no-match colouring today, only
-   `guiutils`' `disablable_red_widget_theme` at `(255, 96, 96)`, which is meant for dangerous buttons.
+   **The find field gets the same treatment** (Juha, 2026-08-19): a query matching nothing leaves a listing
+   holding only `..`, and today the field says nothing about it. So this is one dialog-wide convention, not
+   a detail of Ctrl+L.
+
+   **Copy `raven-visualizer`'s search field**, which has had it all along — `app.py`, "Color the search
+   field". Three states rather than two, and the third is the one worth having:
+
+   | state | colour | |
+   |---|---|---|
+   | nothing typed | `(255, 255, 255)` | white — no search active |
+   | matches | `(180, 255, 180)` | green |
+   | matches nothing | `(255, 128, 128)` | red |
+
+   The positive state is what makes it a readout instead of a warning: green says the thing you are typing
+   *works*, which in the path field means Enter will go there. Note the red is `(255, 128, 128)` here and
+   not the `(255, 96, 96)` of `guiutils`' `disablable_red_widget_theme` — that one is for dangerous buttons,
+   and reusing it would say the wrong thing.
+
+   The mechanism is worth copying too: one theme bound once to the field, holding a single
+   `add_theme_color`, and the colour changed with `dpg.set_value` on that colour item. No rebinding, and no
+   theme per state — the same technique `PulsatingColor` uses to breathe a colour.
 
    **The cost to watch is the first keystroke after a separator**, which is the one that reads a directory.
    Navigation already does that synchronously, so it is not a new kind of cost — but it lands on every
