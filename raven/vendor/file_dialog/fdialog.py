@@ -101,8 +101,10 @@ _CATCH_ALL_LABEL = "All files"
 #
 # Two places use them, and they are the same three answers in both: the find field says whether what was
 # typed finds anything, and the target line says whether what was asked for could be done.
-_TEXT_NEUTRAL = (255, 255, 255)  # nothing to report. Also DPG's own text color, which is what makes it the
-                                 # one to give a widget that has to fade back to something.
+#
+# The neutral one is also DPG's own text color, which is what makes it the one to give a widget that has to
+# fade back to something.
+_TEXT_NEUTRAL = (255, 255, 255)  # nothing to report
 _TEXT_GOOD = (180, 255, 180)
 _TEXT_BAD = (255, 128, 128)
 
@@ -262,6 +264,8 @@ def _normalize_filter(entry: Union[str, tuple[str, Iterable[str]]]) -> tuple[str
 
 # Hotkey support
 visible_dialog_instance = None  # fdialog is modal so There Can Be Only One (TM). If needed, could use a list, and check which one has keyboard focus, but that might not always work.
+
+
 def fdialog_hotkeys_callback(sender, app_data):
     """Route a key press to whichever dialog is on screen.
 
@@ -603,85 +607,14 @@ class FileDialog:
 
         self._install_filters(self.filter_list, self.file_filter)
 
-
-
-        # low-level functions
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-        # --------------------------------------------------------------------------------
-        # Sorting.
-        #
-        # One row of buttons above the listing, serving both views, with the table header's own semantics:
-        # click to sort ascending, click again for descending.
-        #
-        # Not "buttons for the grid, header clicks for the table", which was the first shape and is wrong.
-        # ImGui draws the header's sort arrow from its *own* state, so a sort chosen in grid view would
-        # leave the header asserting an order the data no longer has. Turning the header's sorting off
-        # removes the second source of truth by construction rather than by keeping two things in step.
-        #
-        # It costs the familiar click-the-header gesture and buys two things beyond that guarantee: sorting
-        # becomes keyboard-operable, which ImGui's header sorting is not at all, and the control does not
-        # move when the view does.
-        #
-        # The header itself stays, because `resizable` is a header-drag gesture and filename lengths vary
-        # enormously between users and directories — which is exactly when a fixed Name column hurts.
-
-
-
-        # --------------------------------------------------------------------------------
-        # Grid view.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-        # --------------------------------------------------------------------------------
         # The table's keyboard cursor. The grid brings its own; this gives the other view one under the
         # same method names, so `_handle_key` picks a navigator and stops caring which view is up.
-
-
-
-
-
-
-
         self._table_cursor = TableCursor(on_paint=self._paint_row,
                                          on_scroll_into_view=self._scroll_row_into_view,
                                          page_size=self._rows_per_page,
                                          # The promised target follows the cursor now, so it has to be
                                          # rewritten whenever the cursor moves — including by a rebuild.
                                          on_current_changed=lambda _idx: self._refresh_target_notification())
-
-
-
-
-        # --------------------------------------------------------------------------------
-        # Hotkeys.
-
 
         # main file dialog header
         with dpg.window(label=self.title, tag=self.tag, on_close=self.cancel, no_resize=self.no_resize, show=False, modal=self.modal, width=self.width, height=self.height, min_size=self.min_size, no_collapse=True, pos=(50, 50)):
@@ -1502,6 +1435,16 @@ class FileDialog:
         images", say — where the automatic rule deliberately does not fire and the user has to find this.
         Next to the controls they are already using is where they will.
         """
+        # Buttons rather than the table header's own sorting, which is turned off. ImGui draws the header's
+        # sort arrow from its *own* state, so a sort chosen in grid view would leave the header asserting an
+        # order the data no longer has — and "buttons for the grid, header clicks for the table" was the
+        # first shape here for exactly that reason. Turning the header's sorting off removes the second
+        # source of truth by construction rather than by keeping two of them in step.
+        #
+        # It costs the familiar click-the-header gesture and buys two things beyond that guarantee: sorting
+        # becomes keyboard-operable, which ImGui's header sorting is not at all, and the control does not
+        # move when the view does. The header's own semantics are kept — click to sort ascending, click
+        # again for descending.
         with dpg.group(horizontal=True):
             dpg.add_text("Sort by")
             for n, (sort_key, label) in enumerate(_SORT_CRITERIA, start=1):
