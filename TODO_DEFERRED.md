@@ -92,7 +92,9 @@ straight vertical stem — `I`, `H`, `l`, never a curve or a diagonal — or tak
 a patch of text, which finds a fully covered pixel wherever one exists. Size matters because a stem at the
 app's own font size is about two pixels wide and may have no fully covered pixel at all. Get the size from
 `dpg.add_font(file, size)`, which rasterizes an atlas at that size; a global font scale would resample the
-existing atlas instead, and then even a stem interior is a blend.
+existing atlas instead, and then even a stem interior is a blend. `xdotwidget` already does the rasterize-
+per-size thing for the same reason — `graph_text_fonts` in `renderer.py` is a list of `(atlas_size_px,
+font_id)` and the renderer binds whichever atlas is closest to the size it needs, rather than scaling one.
 
 Exactly, if judging saturation by eye is unappealing: a pixel is `α·C_text + (1 - α)·C_bg`, and the
 background is ours to set through the theme. Render the same glyph over two known backgrounds and sample
