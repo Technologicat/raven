@@ -847,9 +847,10 @@ that from the code.
       and the picker returned nothing. `is_visible` answers yes across that wait too, there being nothing on
       the screen while it lasts.
     - **The driven test passed and the real press failed**, which is worth remembering rather than fixing
-      once: `xdotool key Escape` holds the key about 12 ms and a finger holds it for hundreds, so anything
-      that depends on a key still being down is invisible to a tapped test. Drive it as
-      `keydown` / `sleep 0.6` / `keyup`. Recorded in `dpg-notes.md`.
+      once: `xdotool key Escape` holds the key about 12 ms and a finger holds it for a hundred and
+      something, so anything that depends on a key still being down is invisible to a tapped test. Drive it
+      as `keydown` / `sleep` / `keyup`, with the sleep chosen against the machine's repeat delay — under it
+      for one press, over it for auto-repeat as well. Recorded in `dpg-notes.md`.
   - The card is a fixed size and `HelpWindow` gives it no scrollbar, so **a row added past what fits is
     clipped in silence.** 1250×640 was measured against the longest column at `font_size=20`, with room for
     the one row a multi-selection dialog adds.

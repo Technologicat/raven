@@ -800,12 +800,20 @@ apart, LControl / LShift / LAlt alike), alongside a companion pseudo-key — 663
 fires over and over while the key is down.
 
 **And a synthetic tap is far shorter than a human press, which hides anything that depends on how long a
-key is held.** `xdotool key Escape` holds it about 12 ms; a finger holds it for hundreds. Where the app
-does something *while* the key is down — or where ImGui does, as it does on Escape, dismissing the topmost
-modal popup by itself — a driven test passes and a real press fails, which is the worst direction for a
-check to be wrong in. Drive such keys as `keydown` / `sleep 0.6` / `keyup`. (Live case 2026-08-19: Escape
-over `FileDialog`'s help card. Tapped, the card closed and the dialog returned; held, the dialog was put
-back under the still-down key and ImGui dismissed it, so the picker cancelled itself.)
+key is held.** `xdotool key Escape` holds it about 12 ms; a finger holds it for a hundred and something.
+Where the app does something *while* the key is down — or where ImGui does, as it does on Escape,
+dismissing the topmost modal popup by itself — a driven test passes and a real press fails, which is the
+worst direction for a check to be wrong in.
+
+Drive such keys as `keydown` / `sleep` / `keyup`, and **pick the sleep against the machine's keyboard
+repeat delay** (250 ms on both dev machines here, and a per-machine setting rather than a constant to hard-code):
+below it for *one press*, above it to additionally exercise auto-repeat. The two are different tests — a
+handler that fires twice is not the same fault as one that runs while a key is down — so a 600 ms hold
+that reproduces a bug has not said which of them it found.
+
+(Live case 2026-08-19: Escape over `FileDialog`'s help card. Tapped, the card closed and the dialog
+returned; held, the dialog was put back under the still-down key and ImGui dismissed it, so the picker
+cancelled itself.)
 
 ## Investigation history
 
