@@ -1032,6 +1032,15 @@ class PulsatingColor(Animation):
                               This is parameterized so you can create your own and
                               attach it to any theme component you want.
 
+                              May also be a list or tuple of them, which then pulsate as one — same color,
+                              same phase, one animation. That is what a mark drawn by more than one theme
+                              needs: a table cursor whose cells wear different alignments needs a theme
+                              variant per alignment, and they are one cursor.
+
+                              The color is shared, not per widget: `self.rgb` holds it, and assigning to
+                              that attribute recolors every widget this animation drives (which is how
+                              `raven-conference-timer` changes its pause glow while it runs).
+
         Example::
 
             with dpg.theme(tag="my_pulsating_red_text_theme"):
@@ -1053,8 +1062,11 @@ class PulsatingColor(Animation):
         """
         super().__init__(ambient=ambient)
         self.cycle_duration = cycle_duration
-        self.theme_color_widget = theme_color_widget
-        self.rgb = dpg.get_value(theme_color_widget)[:3]  # get the initial RGB color
+        # A DPG widget is a tag or an ID, so anything that is neither a `str` nor an `int` is a collection
+        # of them. Normalized here so that the render loop has one shape to write to.
+        self.theme_color_widgets = ([theme_color_widget] if isinstance(theme_color_widget, (str, int))
+                                    else list(theme_color_widget))
+        self.rgb = dpg.get_value(self.theme_color_widgets[0])[:3]  # get the initial RGB color
 
     @classmethod
     def _compute_alpha(cls, x: float) -> int:
@@ -1078,7 +1090,9 @@ class PulsatingColor(Animation):
 
         animation_pos = pulsation_envelope(cycle_pos)
         alpha = self._compute_alpha(animation_pos)
-        dpg.set_value(self.theme_color_widget, (*self.rgb, alpha))
+        color = (*self.rgb, alpha)
+        for theme_color_widget in self.theme_color_widgets:
+            dpg.set_value(theme_color_widget, color)
 
         return action_continue
 

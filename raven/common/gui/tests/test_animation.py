@@ -533,6 +533,56 @@ class TestCommandedScrollBox:
         assert unbox(commanded) != 99999, "precondition: DPG must have clamped the request, or this proves nothing"
 
 
+class TestPulsatingColor:
+    """One animation may drive several theme colors, which is what a mark drawn by several themes needs."""
+
+    @staticmethod
+    def _a_theme_color():
+        with dpg.theme():
+            with dpg.theme_component(dpg.mvAll):
+                return dpg.add_theme_color(dpg.mvThemeCol_Text, (80, 160, 255))
+
+    def test_several_colors_pulsate_as_one(self, dpg_context):
+        """Same alpha on every widget, from one animation — a cursor split across theme variants is still
+        one cursor, and two animations over it could drift out of phase."""
+        colors = [self._a_theme_color() for _ in range(3)]
+        pulse = animation.animator.add(animation.PulsatingColor(cycle_duration=2.0, theme_color_widget=colors))
+        try:
+            animation.animator.render_frame()
+            alphas = {tuple(dpg.get_value(color)) for color in colors}
+            assert len(alphas) == 1, f"the widgets disagree: {alphas}"
+        finally:
+            animation.animator.cancel(pulse)
+
+    def test_assigning_the_color_recolors_every_widget(self, dpg_context):
+        """`raven-conference-timer` recolors its pause glow while it runs, and that has to keep working."""
+        colors = [self._a_theme_color() for _ in range(2)]
+        pulse = animation.animator.add(animation.PulsatingColor(cycle_duration=2.0, theme_color_widget=colors))
+        try:
+            pulse.rgb = (255, 0, 0)
+            animation.animator.render_frame()
+            assert all(tuple(dpg.get_value(color))[:3] == (255, 0, 0) for color in colors)
+        finally:
+            animation.animator.cancel(pulse)
+
+    def test_one_widget_is_taken_as_itself_rather_than_as_a_collection(self, dpg_context, request):
+        """The single-widget spelling is what every existing caller uses, and a *tag* is the trap in it.
+
+        A DPG widget is a tag or an ID, so "not a collection" has to be decided by type. A string tag is
+        iterable, so a normalization that merely tried `list(...)` would take it apart into characters and
+        then write colors to widgets named "e", "x", "_" — silently, since `set_value` on a name nothing
+        answers to raises nothing.
+        """
+        tag = f"pulsating_color_{request.node.name}"  # tag
+        with dpg.theme():
+            with dpg.theme_component(dpg.mvAll):
+                dpg.add_theme_color(dpg.mvThemeCol_Text, (80, 160, 255), tag=tag)
+
+        pulse = animation.PulsatingColor(cycle_duration=2.0, theme_color_widget=tag)
+
+        assert pulse.theme_color_widgets == [tag]
+
+
 class TestAmbientAndTransient:
     """What the idle-framerate throttle asks, and why `active_count` is the wrong question for it.
 
