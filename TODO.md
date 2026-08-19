@@ -288,12 +288,6 @@ every tier, chosen on measurements rather than reputation.
 
 - **[Low]** Make clustering hyperparameters configurable, preferably in the GUI. Put defaults into `raven.visualizer.config`.
 
-- **[Low]** fdialog improvements. Three further FileDialog items live in `TODO_DEFERRED.md` (slow open + teardown input-dead-window on huge directories, image thumbnail previews, keyboard accessibility); treat the whole set as one work package rather than picking at it from two lists. Slow open and thumbnails interact — both are about what a listing row costs to build — so they want doing together.
-  - Add "go up to parent directory" button
-  - Change the "go to default directory" icon to something less confusing
-  - In save mode: if the user has picked a unique file extension in the filter combo, use that as the default extension. If multiple extensions or wildcards, use the API-provided default.
-  - Ctrl+F hotkey to focus the file name field is not always working. **[Verify]** exact conditions before fixing.
-
 - **[Low]** Drag'n'drop from OS file manager into the Raven window to open a dataset. **The hard part is done**: `raven.common.gui.filedrop` shipped 2026-08-10 and is wired into all six GUI apps, so the paths arrive; what is left for Visualizer is deciding what a dropped file *means* here (open a dataset? add to the current one?) and handling the unsupported-file case. The mechanism and its one real constraint — the callback runs on the render thread, so no `split_frame` and therefore no modal messagebox inside it — are in `dpg-notes.md`; the probes are in `investigations/dpg-dnd/`.
 
 - **[Low]** Live filtering by year (or other fields) in the visualization view, complementing import-time pre-filtering.

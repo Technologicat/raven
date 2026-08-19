@@ -1917,21 +1917,13 @@ clusters, as of 2026-07-27:
   own terms: figure- and equation-heavy literature extracts to prose that omits the argument, in exactly the
   corpus Raven exists to read.
 
-## FileDialog: image thumbnail previews (Lanczos'd)
-
-*Cluster: filedialog · Cost: M · Gate: next · Filed: 2026-07-17 · **Now a brief***
-
-Moved to `briefs/researchers-night/filedialog-thumbnails-brief.md` on 2026-08-13. The shared grid widget,
-its decoder and the extension hooks are built and shipped, with Cherrypick ported onto them; what remains is
-the dialog's own view, whose design the brief carries.
-
 ## FileDialog: keyboard accessibility
 
-*Cluster: filedialog · Cost: L · Gate: next · Filed: 2026-08-13 · **Now a brief***
+*Cluster: filedialog · Cost: L · Gate: RN2026 · Filed: 2026-08-13 · **Now a brief***
 
-Moved to `briefs/researchers-night/filedialog-keyboard-brief.md` on 2026-08-13. Designed in full and
-unbuilt; the brief carries the hotkey table, the Tab-completion rule, the Esc scope, the combo idiom, and
-the three live checks that remain.
+Moved to `briefs/researchers-night/filedialog-keyboard-brief.md` on 2026-08-13, and being built against it
+since 2026-08-18. The brief is the live artifact — it carries the build order, what has landed, and the
+questions still open — so this entry is a pointer and nothing more.
 
 ## Librarian's help card has no room to describe attachments
 
