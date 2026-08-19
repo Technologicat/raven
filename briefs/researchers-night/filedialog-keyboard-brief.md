@@ -918,6 +918,23 @@ Suggested order, with what each actually costs:
 5. **The navigation history** — the largest, fully designed above, and the one Juha asked for by name.
    Independent of 1–4, so it can go first if the appetite is for building rather than refactoring.
 6. **Ctrl+B and the places-panel migration** — its own day, not a tail end of this one.
+7. **A mark saying which home has the caret** — small, and raised on 2026-08-19 (Juha) once the homes
+   became a set rather than a pair: nothing on the screen says where the arrow keys will land.
+
+   **The mark goes on the widget, not on the cursor.** The tempting version is to paint the listing cursor
+   blue only while the listing has the keys, as a text box shows its caret only when focused — and it is
+   wrong here, because the cursor is not this dialog's focus indicator. It is *what Enter acts on*, from
+   either home: the main flow is to type a fragment, watch the cursor jump to the first match, and press
+   Enter. Dimming it while the find field has the caret hides the answer to "what am I about to open?"
+   exactly when it is being asked, and Ctrl+Enter's resting-on-`..` behaviour needs it visible too.
+
+   So: tint the listing's child window border, and the grid's outer edge, while the caret is there. One
+   indicator rather than a per-row state, and the same mechanism serves the places panel — where ImGui
+   draws nothing of its own, unlike the combo and the path field, which highlight themselves.
+
+   It also stays clear of the table cursor's theme product, which `_initialize_class` warns about by name:
+   three alignments times cursor-or-not is affordable, and a third axis is six more themes and the moment
+   to stop binding whole themes per cell.
 
 **Items 1–3 and item 5 are each about a day's work, so both in one day is unlikely.** Which to drop is a
 real choice rather than a scheduling detail: 1–3 finish the keyboard, and 5 adds a capability the dialog has
