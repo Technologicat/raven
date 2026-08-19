@@ -921,9 +921,10 @@ The cheap keys were spent on 2026-08-18 — Alt+Up, Ctrl+Up, Ctrl+H and Ctrl+Spa
 places-panel migration are the big one left**, and `self._places` is its groundwork: the panel is menu items
 today, which have no focus state at all, so a keyboard cursor over it needs the places as data first.
 
-**When testing type filters, use Librarian's attach dialog rather than Cherrypick.** Cherrypick passes no
-`filter_list`, so it gets the default hundreds-of-extensions list and Ctrl+1 selects the filter already
-active — which looks like the key doing nothing.
+**When testing type filters, use Librarian's attach dialog rather than Cherrypick**, and the reason is now
+twofold. Cherrypick passes no `filter_list`, so it gets the catch-all and Ctrl+1 selects the filter already
+active — which looks like the key doing nothing. And since 2026-08-19 its dialog has no type filter at all:
+it is `pick="dir-with-contents"`, and a dialog that returns a directory does not offer one.
 
 ### Added 2026-08-19 (afternoon)
 
@@ -975,11 +976,12 @@ many arguments as it declares**, so the `lambda label=label:` idiom for binding 
 Written 2026-08-18 at the end of the day, for the session that picks this up.
 
 **Everything left needs the caret to have more than two homes, and that is one change rather than three.**
-The dialog tracks where the caret is in `_caret_in_listing`, a bool — because until now there were exactly
-two places it could be. Ctrl+L parks it on the path field, Ctrl+Shift+F on the type filter combo, Ctrl+B on
-the places panel: three more homes, and each of the three keys is small *once the flag can name them*.
-Widening it first is therefore the cheap order, and doing the keys one at a time means widening it three
-times, each time touching every branch that reads the flag.
+The dialog tracked where the caret was in `_caret_in_listing`, a bool, there being exactly two places it
+could be. Ctrl+L parks it on the path field, Ctrl+Shift+F on the type filter combo, Ctrl+B on the places
+panel: three more homes, and each of the three keys is small *once the flag can name them*. Widening it
+first is therefore the cheap order, and doing the keys one at a time means widening it three times, each
+time touching every branch that reads the flag. (Done on 2026-08-19 — the flag is `CaretHome` now, and the
+argument held: Ctrl+Shift+F cost an afternoon of live-testing rather than a redesign.)
 
 Two existing rules become general at the same moment, which is the other reason to do it once:
 
@@ -1003,7 +1005,10 @@ Suggested order, with what each actually costs:
 1. ~~**Widen the caret home**~~ — **built 2026-08-19** as `CaretHome`. Went as advertised: no user-visible
    change, no live drive needed.
 2. ~~**Ctrl+Shift+F, the type filter**~~ — **built 2026-08-19**, and small as predicted once (1) was in.
-   The one surprise was that the combo cannot hold focus at all; see "What is built".
+   The surprise was a *click trap*: a control sitting directly in the dialog window strands the caret,
+   `focus_item` being refused from window level into a child window. Both offenders are in child windows
+   now. That fix left the combo able to hold focus after all — which buys nothing, DPG drawing nothing on
+   a focused combo (see item 7). See "What is built".
 3. **Ctrl+L, the path field** — small, once the completion question is settled below.
 
    **Tab completion in it is not buildable in the shape the find field uses** (2026-08-19). Writing the
