@@ -410,6 +410,18 @@ windowing problem is now one bug in one place), and **the second consumer finds 
 hid** — wiring the grid into a second app surfaced three missing pieces in `raven.common.gui.animation`
 within an hour, none of them grid-specific.
 
+**The bar in `raven/common/` is higher than in an app, and deliberately so.** This is the layer everything
+else is built on, in ways nobody has thought of yet and possibly years from now — so an awkward shape here
+is not paid once, it is paid by every future caller, and by then it is load-bearing and expensive to move.
+An app can carry an oddity that its own code works around; a foundation cannot, because the workaround
+would have to be written again at each call site by someone who no longer remembers why.
+
+So the things that are ordinarily fine to defer are worth settling here while the code is in front of you:
+an asymmetry between two paths through the same class, a parameter that means two things, a documented
+contract one branch honours and another does not. The test is not whether it bites today — no live caller
+may reach it — but whether a caller arriving later would have to learn the exception before they could use
+the thing.
+
 ### Vendored / adopted dependencies (`raven/vendor/`)
 
 **`raven/vendor/` is *adopted* code — effectively ours to fix and extend, not pristine upstream snapshots.**
