@@ -343,6 +343,18 @@ itself first and restore itself when the inner one closes. Whatever the *app* ke
 is up" must keep answering yes across that gap, or the app un-suppresses its own hotkeys and file drops
 exactly while the inner window is on screen.
 
+**And hiding the outer one is not enough: a frame has to be drawn without it first.** `hide_item` takes
+effect at the next frame, so a modal shown in the same callback still meets the first one on ImGui's popup
+stack and is refused. What happens then is worse than nothing appearing: DPG concludes the second window
+is closed and **fires its `on_close` callback**, so a card that hides its owner on show and restores it on
+close undoes itself — the dialog comes back, the card was never seen, and the log says only that something
+was shown and then hidden 80 ms later. Wait for a frame between the hide and the show
+(`guiutils.split_frame`, from a callback thread — never the render thread) and both windows behave.
+
+Measured 2026-08-19, driving `raven-xdot-viewer`'s open dialog with `xdotool`. The tell that it is this and
+not a key being delivered twice: the inner window's measured size is `0x0` and `is_item_visible` is still
+`False` after a rendered frame, meaning it never drew at all.
+
 ## Investigation history
 
 - 2026-04-03: Discovered `min_size` default causing phantom padding in
