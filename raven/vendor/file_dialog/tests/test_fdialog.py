@@ -23,6 +23,7 @@ import pytest
 dpg = pytest.importorskip("dearpygui.dearpygui", reason="dearpygui not installed")
 
 from raven.common import filelisting  # noqa: E402 -- after importorskip by design
+from raven.common.gui import animation  # noqa: E402 -- after importorskip by design
 from raven.common.gui import helpcard  # noqa: E402 -- after importorskip by design
 from raven.common.gui import utils as guiutils  # noqa: E402 -- after importorskip by design
 from raven.vendor.file_dialog.fdialog import CaretHome, FileDialog, _PLACES, _complete_from, _normalize_filter  # noqa: E402 -- after importorskip by design
@@ -92,6 +93,20 @@ def dpg_context():
     dpg.destroy_context()
 
 
+def _release_animations():
+    """Drop anything this module left with the process-wide animator.
+
+    Nothing here renders animator frames, so an animation started by a dialog — a button's acknowledgement
+    flash, the cursor's pulsation — never advances and so never finishes. It stays registered, holding
+    widgets from *this* module's DPG context, and the next test module to render a frame writes to them
+    after the context is gone: `Item not found`, blamed on whatever that module was doing.
+
+    Today the suite is spared by collection order alone (`common/` sorts before `vendor/`), which is the
+    same kind of luck that `dpg-notes.md` records for the `--run-gui` group.
+    """
+    animation.animator.clear()
+
+
 @pytest.fixture
 def dialog(dpg_context, tmp_path, request):
     """A `FileDialog` over a populated temporary directory.
@@ -105,13 +120,16 @@ def dialog(dpg_context, tmp_path, request):
         pathlib.Path(tmp_path, name).touch()
 
     old_cwd = os.getcwd()
-    yield FileDialog(tag=f"test_file_dialog_{request.node.name}",
-                     default_path=str(tmp_path),
-                     filter_list=[".*",
-                                  ("Images", [".png", ".jpg", ".webp"]),
-                                  ("Documents", [".md", ".pdf"]),
-                                  ".tar.gz"],
-                     file_filter=".*")
+    built = FileDialog(tag=f"test_file_dialog_{request.node.name}",
+                       default_path=str(tmp_path),
+                       filter_list=[".*",
+                                    ("Images", [".png", ".jpg", ".webp"]),
+                                    ("Documents", [".md", ".pdf"]),
+                                    ".tar.gz"],
+                       file_filter=".*")
+    yield built
+    built.destroy()
+    _release_animations()
     os.chdir(old_cwd)
 
 
@@ -124,15 +142,17 @@ def make_dialog(dpg_context, tmp_path, request):
     within one test.
     """
     old_cwd = os.getcwd()
-    built = 0
+    dialogs = []
 
     def build(**kwargs):
-        nonlocal built
-        built += 1
-        return FileDialog(tag=f"test_file_dialog_{request.node.name}_{built}",
-                          default_path=str(tmp_path),
-                          **kwargs)
+        dialogs.append(FileDialog(tag=f"test_file_dialog_{request.node.name}_{len(dialogs) + 1}",
+                                  default_path=str(tmp_path),
+                                  **kwargs))
+        return dialogs[-1]
     yield build
+    for dialog in dialogs:
+        dialog.destroy()
+    _release_animations()
     os.chdir(old_cwd)
 
 

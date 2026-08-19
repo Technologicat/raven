@@ -286,6 +286,11 @@ class FileDialog:
                 with dpg.theme_component(dpg.mvAll):
                     dpg.add_theme_color(dpg.mvThemeCol_Text, guiutils.DISABLED_TEXT_COLOR, category=dpg.mvThemeCat_Core)
 
+            # Every colour the cursor is drawn in, across all of the variants below, so one animation can
+            # pulsate the lot. They are one cursor however many themes it takes to draw it, and separate
+            # animations over them would be free to drift out of phase.
+            cls.cursor_color_widgets = []
+
             # A cursor twin for every theme a row cell can wear. Only one theme binds per item, so the
             # cursor's colour cannot be *added* to a cell that already carries an alignment — each base
             # theme needs a variant saying the same thing plus "the cursor is here".
@@ -301,8 +306,9 @@ class FileDialog:
                 with dpg.theme() as theme:
                     for enabled in (True, False):
                         with dpg.theme_component(dpg.mvAll, enabled_state=enabled):
-                            dpg.add_theme_color(dpg.mvThemeCol_Text, thumbnailgrid.CURSOR_COLOR,
-                                                category=dpg.mvThemeCat_Core)
+                            cls.cursor_color_widgets.append(
+                                dpg.add_theme_color(dpg.mvThemeCol_Text, thumbnailgrid.CURSOR_COLOR,
+                                                    category=dpg.mvThemeCat_Core))
                             if align_x is not None:
                                 dpg.add_theme_style(dpg.mvStyleVar_SelectableTextAlign, x=align_x, y=.5)
                 return theme
@@ -532,6 +538,8 @@ class FileDialog:
         self._help_card_up = False
         # Set while the card is gone and the dialog is not back yet, waiting for Escape to be released.
         self._restore_pending = False
+        # The cursor's pulsation, which runs only while this dialog is on screen. See `_start_cursor_pulse`.
+        self._cursor_pulse = None
         self.selec_height = 16
         # The listing's order, held as data rather than as the table's row order. A rebuild reproduces it,
         # which is what lets the listing be re-rendered — re-filtered, or shown a different way — without
@@ -2224,6 +2232,32 @@ class FileDialog:
         self._caret_home = CaretHome.LISTING
         self._park_focus()
 
+    def _start_cursor_pulse(self) -> None:
+        """Set the table cursor breathing, for as long as this dialog is on screen."""
+        # Only while it is open, rather than for the app's lifetime. The animation is ambient — it never
+        # ends on its own and says nothing is happening — but it still has to be *drawn*, so leaving one
+        # registered after the dialog closes would keep the app rendering a mark nobody can see.
+        #
+        # The grid view is not driven from here. Its cursor is a drawn border rather than themed text, so
+        # `ThumbnailGrid` pulsates its own, and does it for every app that shows a grid.
+        if self._cursor_pulse is not None:
+            return
+        self._cursor_pulse = gui_animation.animator.add(
+            gui_animation.PulsatingColor(cycle_duration=thumbnailgrid.CURSOR_PULSE_SECONDS,
+                                         theme_color_widget=self.cursor_color_widgets))
+
+    def _stop_cursor_pulse(self) -> None:
+        """Stop the cursor breathing, and leave it at full strength."""
+        if self._cursor_pulse is None:
+            return
+        gui_animation.animator.cancel(self._cursor_pulse)
+        self._cursor_pulse = None
+        # The animation leaves behind whatever alpha it wrote last, and the themes belong to the class
+        # rather than to this dialog — so a half-faded cursor would be what the next dialog to use them
+        # starts from.
+        for theme_color_widget in self.cursor_color_widgets:
+            dpg.set_value(theme_color_widget, thumbnailgrid.CURSOR_COLOR)
+
     def _park_focus(self) -> None:
         """Take the caret out of the find field, leaving DPG's focus somewhere harmless."""
         # The same target serves every home that is not the field, for the reason spelled out in
@@ -2295,6 +2329,7 @@ class FileDialog:
 
         if self._grid_mode:
             self._start_grid_ticker()
+        self._start_cursor_pulse()
 
         # A dialog always opens ready to be typed into, whichever mode the previous one closed in.
         self._focus_field()
@@ -2324,9 +2359,11 @@ class FileDialog:
     def destroy(self):
         """Release what the dialog holds outside its widget tree. Call before destroying the DPG context.
 
-        Only the grid view holds anything: a thumbnail decoder with its own threads, and the tick thread
-        that feeds it. A dialog that was never switched to the grid has nothing to do here.
+        Two things: the cursor's pulsation, which is registered with the process-wide animator and would
+        outlive both this dialog and the DPG context its theme colours belong to, and — if the grid view was
+        ever switched to — a thumbnail decoder with its own threads and the tick thread that feeds it.
         """
+        self._stop_cursor_pulse()
         self._stop_grid_ticker()
         if self._grid is not None:
             self._grid.destroy()
@@ -2360,10 +2397,14 @@ class FileDialog:
         nothing, and `reset_dir` starts by deleting them on the next open.
 
         The grid's tick thread is the exception, and does stop: it costs whether or not anyone is looking,
-        and it must not be running when the app tears the DPG context down.
+        and it must not be running when the app tears the DPG context down. So does the cursor pulsation,
+        for the same reason at a smaller scale — it is a frame's worth of work per frame, spent drawing a
+        mark on a window nobody is looking at.
         """
         self.selected_files.clear()
         self.shown_items.clear()
+        # Released in the reverse of the order `show_file_dialog` acquires them.
+        self._stop_cursor_pulse()
         self._stop_grid_ticker()
 
     def refresh(self):

@@ -26,7 +26,7 @@ Thread-safe: all public methods and mouse handlers are guarded by an `RLock` (re
 methods call each other internally).
 """
 
-__all__ = ["CURSOR_COLOR", "ThumbnailGrid"]
+__all__ = ["CURSOR_COLOR", "CURSOR_PULSE_SECONDS", "ThumbnailGrid"]
 
 import logging
 import threading
@@ -64,6 +64,11 @@ _TILE_SPACING = 4
 # — different marks because the two widgets have different channels free, the same hue because it is the
 # same idea.
 CURSOR_COLOR = (80, 160, 255, 255)
+
+# How long one breath of the cursor's pulsation takes, in seconds. Exported alongside the colour and for the
+# same reason: a table cursor and a grid cursor that pulsate at different rates read as two different things
+# blinking at each other rather than as one mark.
+CURSOR_PULSE_SECONDS = 2.0
 
 
 class ThumbnailGrid:
