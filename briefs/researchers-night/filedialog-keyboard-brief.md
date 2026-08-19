@@ -956,6 +956,48 @@ Suggested order, with what each actually costs:
    against the filesystem (directories only, candidates re-read per Tab, separator appended after a
    completed component so repeated Tab walks down the tree), which is why it is not a cheap key: without
    completion it lands the user in a field where they must type an absolute path by hand.
+
+   ### Recolouring as you type
+
+   Sketched 2026-08-19 (Juha). The field turns red while what is typed cannot lead anywhere, and is neutral
+   otherwise. Two checks, which are one rule wearing two hats — *the text so far cannot be completed to an
+   existing directory*:
+
+   - **Up to the last separator**, that directory must exist on disk. One `isdir`, cheap.
+   - **After the last separator**, the fragment must be a prefix of at least one subdirectory of it. That
+     needs a listing, cached per parent — it is read once when the parent is checked and reused for every
+     further keystroke in the same component.
+
+   **What red predicts is a modal.** `on_path_enter` currently answers a bad path with a message box —
+   *"Invalid path / No such file or directory"* — that has to be dismissed. So this is not decoration and
+   not an analogy to a search box: it is that same information, moved to before the commit and made free.
+   The message box stays as the backstop, since a directory can vanish between the typing and the Enter.
+
+   Four cases the rule has to answer explicitly, because each one can make the colour lie:
+
+   - **An empty fragment is neutral if its parent exists.** Typing `/some/dir/` leaves nothing after the
+     separator, which is a prefix of everything — and of nothing at all when the directory has no
+     subdirectories. Red there would be wrong: the path is valid and Enter should take it.
+   - **Hidden directories should count, whatever the Hidden checkbox says.** Typing `.conf` when `.config`
+     exists must not go red because a toggle elsewhere is off. A dot typed into a path field is an
+     intention, not a browsing preference.
+   - **Match exactly, not smart-case.** The find field's smart-case rule is right for *searching* and wrong
+     here: on a case-sensitive filesystem a case-insensitive match would show neutral for something Tab
+     cannot complete, which is the one thing the colour must never do. Worth a comment at the code, since
+     the two fields sitting one above the other now differ deliberately.
+   - **`~` and relative paths** need deciding: whether the field expands them, and therefore whether it
+     validates the expansion or the literal text.
+
+   **Open, and bigger than this key: the find field has the same no-match state and says nothing about it.**
+   A query matching nothing leaves a listing holding only `..`. If red-on-no-match is worth having, it is
+   worth having in both fields — and that makes it a dialog-wide convention to settle rather than a detail
+   of Ctrl+L. Note there is nothing to copy: the fleet has no no-match colouring today, only
+   `guiutils`' `disablable_red_widget_theme` at `(255, 96, 96)`, which is meant for dangerous buttons.
+
+   **The cost to watch is the first keystroke after a separator**, which is the one that reads a directory.
+   Navigation already does that synchronously, so it is not a new kind of cost — but it lands on every
+   component of a typed path rather than on an explicit move, so a slow or network mount is worth trying
+   before deciding whether the listing needs to go off-thread.
 4. ~~**F1, the help card**~~ — **built 2026-08-19**, out of order: it went first rather than last. The
    argument for last was that the card is the only place the whole set is stated as prose, so writing it
    early means writing it twice — which held, and cost about four lines. What it bought was that every key
