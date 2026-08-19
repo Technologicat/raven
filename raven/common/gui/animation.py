@@ -3,7 +3,7 @@
 __all__ = ["Animator", "animator",  # controller and its global instance (need only one per app)
            "Animation", "Overlay",  # base classes
            "Dimmer",  # overlays
-           "WidgetFlash", "flash_button", "highlight_widget",  # the flash animation, and its two conveniences
+           "WidgetFlash", "flash_button", "highlight_widget", "set_text_under_flash",  # the flash animation, its two conveniences, and writing to a widget one has borrowed
            "SmoothScrolling", "PulsatingColor",  # animations
            "ScrollEndFlasher", "WHEEL_SETTLE_FRAMES",  # animated overlay, and the wheel-settle delay it uses
            "pulsation_envelope", "pulsating_alpha",  # utilities: the curve pulsating animations follow, and the alpha it yields
@@ -322,6 +322,7 @@ class WidgetFlash(Animation):
                  target_tooltip: Union[str, int],
                  target_text: Union[str, int],
                  duration: float,
+                 message_duration: Optional[float] = None,
                  flash_color: Tuple = (96, 128, 96),
                  text_color: Tuple = (180, 255, 180)):
         """Animation to flash a GUI widget (and its tooltip, if visible) to draw the user's attention.
@@ -359,7 +360,20 @@ class WidgetFlash(Animation):
                        The text can be inside the tooltip (when `target_tooltip is not None`),
                        but is really completely independent of `target` and `target_tooltip`.
 
-        `duration`: float, animation duration in seconds.
+                       It may also *be* `target`, which is how a status line says something in the color
+                       that says it: the line's own text color fades while the message stands in it.
+
+        `duration`: float, how long the flash itself takes, in seconds — the fade from `flash_color` or
+                    `text_color` back to what the widget had.
+
+        `message_duration`: float, how long `message` stays, in seconds. `None` (the default) is "as long
+                            as the flash", which is what an acknowledgement wants: the fade and the word
+                            are one gesture.
+
+                            A *report* wants them apart. The fade is what catches the eye, so it has to be
+                            quick; the message has to be readable, so it has to stay. Give the fade its
+                            second and the message its three, and the flash holds the faded color until
+                            the message has had its dwell.
 
         `flash_color`: tuple `(R, G, B)`, each component in [0, 255]. Default is light green.
                        The background color a button-like `target` starts from. Unused for a text `target`.
@@ -367,6 +381,11 @@ class WidgetFlash(Animation):
         `text_color`: tuple `(R, G, B)`, each component in [0, 255]. Default is light green.
                       For a button-like `target`, the (constant) text color during the flash. For a text
                       `target`, the color its text starts from before fading back to its own.
+
+                      **A text `target` needs a color of its own to fade back to** — give it one at
+                      `add_text(color=...)`. DPG reports an unset color as the sentinel `r = -1` rather
+                      than as the theme's color, which it does not expose, so a widget that never
+                      declared one has no destination and the fade runs toward negative, i.e. to black.
         """
         super().__init__()
         self.instance_lock = threading.Lock()
@@ -376,6 +395,7 @@ class WidgetFlash(Animation):
         self.target_tooltip = target_tooltip
         self.target_text = target_text
         self.duration = duration
+        self.message_duration = message_duration
         self.flash_color = flash_color
         self.text_color = text_color
 
@@ -394,17 +414,25 @@ class WidgetFlash(Animation):
 
         self.start()
 
+    def _total_duration(self) -> float:
+        """How long this flash runs: the fade, or the message's dwell where that is asked to be longer."""
+        if self.message_duration is None:
+            return self.duration
+        return max(self.duration, self.message_duration)
+
     def render_frame(self, t: int) -> sym:
         if not self.reified:  # ghost mode
             return action_cancel
 
         dt = (t - self.t0) / 10**9  # seconds since t0
-        animation_pos = dt / self.duration
 
-        if animation_pos >= 1.0:
+        # The flash ends when the fade does, unless a message is asked to outstay it — then the fade
+        # completes and holds while the message finishes its dwell. Clamped rather than run past 1, so the
+        # color sits at the widget's own for the remainder instead of overshooting it.
+        if dt >= self._total_duration():
             return action_finish
 
-        r = numutils.clamp(animation_pos)
+        r = numutils.clamp(dt / self.duration)
         r = numutils.nonanalytic_smooth_transition(r)
 
         if self.target_is_text:
@@ -473,6 +501,15 @@ class WidgetFlash(Animation):
                         self.original_target_color = [255.0 * c for c in dpg.get_item_configuration(self.target)["color"]]
                     if self.original_target_color is None:  # target vanished between construction and here
                         return
+                    # The message is independent of which visual channel fades, so a text target carries one
+                    # too. Only the text is taken: the color here is this branch's own business, and binding
+                    # the flash theme to `target_text` as well would fight the fade where the two widgets
+                    # are the same one — which is the case this exists for, a status line saying something
+                    # went wrong in the color that says so.
+                    if self.target_text is not None and self.message is not None:
+                        with guiutils.nonexistent_ok():
+                            self.original_message = dpg.get_value(self.target_text)
+                            dpg.set_value(self.target_text, self.message)
                     type(self).instances[self.target] = self
                     self.reified = True
                     return
@@ -532,6 +569,10 @@ class WidgetFlash(Animation):
             if self.target_is_text:
                 with guiutils.nonexistent_ok():
                     dpg.configure_item(self.target, color=self.original_target_color)
+                if self.original_message is not None:  # `None`: there was no message to put back
+                    with guiutils.nonexistent_ok():
+                        dpg.set_value(self.target_text, self.original_message)
+                    self.original_message = None
                 self.original_target_color = None
                 self.reified = False
                 with type(self).class_lock:
@@ -617,6 +658,35 @@ def highlight_widget(*,
                              duration=duration,
                              flash_color=color,
                              text_color=color))
+
+def set_text_under_flash(widget: Union[str, int], text: str) -> None:
+    """Set `widget`'s text, whoever currently owns it.
+
+    Where a `WidgetFlash` is showing a message over `widget`, `text` becomes what it restores when it ends,
+    and the message on screen is left to finish saying what it says. Otherwise this is `dpg.set_value`.
+
+    For a status line whose text is *derived* from app state and rewritten whenever that state moves. A
+    plain write during a flash would wipe the message in the moment it is meant to be read, and be undone
+    anyway a second later — the flash putting back the value it captured, which by then names something
+    that has since moved on.
+    """
+    # Ghosts need no handling: only a reified instance is ever registered, so this can only return the
+    # animation actually on the widget. One arriving *later* is harmless too — it restarts the running
+    # instance and rewrites its message, leaving `original_message` alone, which is the value written here.
+    flash = WidgetFlash.instances.get(widget)
+    if flash is not None:
+        with flash.instance_lock:
+            # `reified` is a *timing* guard, and a live one: `finish` runs on the render thread while this
+            # runs on whichever thread the GUI event came in on, so the flash can end — and unregister
+            # itself — between the lookup above and the lock here. It has then already restored, and
+            # writing through would drop the value on the floor.
+            #
+            # `original_message is None` means this flash is not holding the widget's text at all — it may
+            # be flashing only a color — so there is nothing to write through to, and the widget is ours.
+            if flash.reified and flash.original_message is not None:
+                flash.original_message = text
+                return
+    dpg.set_value(widget, text)
 
 # --------------------------------------------------------------------------------
 

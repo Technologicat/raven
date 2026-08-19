@@ -106,6 +106,85 @@ class TestTextTarget:
         dpg.delete_item(text)
         _run_flash_to_completion(text)  # the flash notices the widget is gone and ends
 
+    def test_a_text_target_can_carry_a_message_too(self, widgets):
+        """Which is how a status line says something in the color that says it: one widget, both channels.
+
+        The message and the color are independent of each other, so the text branch has to do both — it
+        used to fade the color and drop the message on the floor, leaving a caller with a red line and
+        nothing written on it.
+        """
+        text, _ = widgets
+        dpg.set_value(text, "")
+
+        animation.animator.add(animation.WidgetFlash(message="cannot open that", target=text,
+                                                     target_tooltip=None, target_text=text,
+                                                     duration=0.5, text_color=FLASH_COLOR))
+        animation.animator.render_frame()
+        assert dpg.get_value(text) == "cannot open that"
+        assert _widget_color(text) == list(FLASH_COLOR)
+
+        _run_flash_to_completion(text)
+        assert dpg.get_value(text) == "", "the line goes back to what it was showing"
+        assert _widget_color(text) == list(TOOL_COLOR)
+
+    def test_writing_under_a_flash_changes_what_it_restores(self, widgets):
+        """A derived status line moves on while a message is being read; what comes back must be current.
+
+        The flash captured the line before any of that, so restoring what it found puts back a value that
+        has since stopped being true — and nothing corrects it, the next write only happening when the
+        state moves again.
+        """
+        text, _ = widgets
+        dpg.set_value(text, "before")
+
+        animation.animator.add(animation.WidgetFlash(message="something went wrong", target=text,
+                                                     target_tooltip=None, target_text=text,
+                                                     duration=0.3, text_color=FLASH_COLOR))
+        animation.set_text_under_flash(text, "after")
+        assert dpg.get_value(text) == "something went wrong", "the message keeps the line while it runs"
+
+        _run_flash_to_completion(text)
+        assert dpg.get_value(text) == "after"
+
+    def test_writing_with_no_flash_is_an_ordinary_write(self, widgets):
+        """The caller has one call for both cases, so it cannot pick the wrong one."""
+        text, _ = widgets
+        animation.set_text_under_flash(text, "plain")
+        assert dpg.get_value(text) == "plain"
+
+    def test_writing_under_a_color_only_flash_reaches_the_widget(self, widgets):
+        """`highlight_widget` borrows the color and not the text, so there is nothing to write through to."""
+        text, _ = widgets
+        dpg.set_value(text, "before")
+        animation.highlight_widget(widget=text, duration=0.3, color=FLASH_COLOR)
+
+        animation.set_text_under_flash(text, "after")
+        assert dpg.get_value(text) == "after"
+
+    def test_a_message_can_outstay_the_fade(self, widgets):
+        """A report wants the two apart: the fade catches the eye and must be quick, the message is read.
+
+        A fade slow enough to be a comfortable reading time does not register as a flash at all, which is
+        how one number for both ends up serving neither.
+        """
+        text, _ = widgets
+        dpg.set_value(text, "")
+
+        flash = animation.WidgetFlash(message="cannot open that", target=text, target_tooltip=None,
+                                      target_text=text, duration=0.05, message_duration=5.0,
+                                      text_color=FLASH_COLOR)
+        animation.animator.add(flash)
+        time.sleep(0.1)  # past the fade, nowhere near the dwell
+        animation.animator.render_frame()
+
+        assert text in animation.WidgetFlash.instances, "the flash runs until the message has had its time"
+        assert dpg.get_value(text) == "cannot open that"
+        assert _widget_color(text) == list(TOOL_COLOR), "the color holds where the fade left it"
+
+        flash.duration = flash.message_duration = 0.05  # let it end, rather than sleeping out the dwell
+        _run_flash_to_completion(text)
+        assert dpg.get_value(text) == ""
+
 
 class TestButtonTarget:
     def test_restores_the_theme_the_widget_actually_had(self, widgets):
