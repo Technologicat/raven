@@ -863,8 +863,8 @@ that from the code.
   - **This was a hard constraint when it was written and is a design choice now**, which is worth knowing
     before anyone "simplifies" it. The combo then sat at window level, the one position `focus_item` cannot
     move focus *out of* into a child window, so focus put on it could never have come back. Wrapping it (see
-    the click-trap entry below) moved it child-side, where focusing it would work — and would come with a
-    highlight for free. That makes it a live option for item 7 rather than something ruled out.
+    the click-trap entry below) moved it child-side, where focusing it would work. It would also gain
+    nothing — see item 7 — so the choice stands on its own reasons.
   - Escape is now the general rule the design asked for, over a set of homes: hand the caret back, and
     cancel only once it is already there. Nothing is restored on the way out, the combo having applied
     every step as it was made.
@@ -983,20 +983,19 @@ Suggested order, with what each actually costs:
    three alignments times cursor-or-not is affordable, and a third axis is six more themes and the moment
    to stop binding whole themes per cell.
 
-   **For the type filter specifically there is now a cheaper option than a drawn mark**, opened up by the
-   click-trap fix: the combo lives in a child window, so it *can* hold DPG's focus, and a focused combo
-   already draws its own highlight. Taking it would mean this one home is marked by DPG and the others by
-   us, so the question is whether the two marks can be made to read as one thing — worth answering before
-   building anything, since matching them is the whole point of the item.
+   **The type filter is no exception to it, and there is no shortcut for that one** (asked and answered
+   2026-08-19). The click-trap fix left the combo able to hold DPG's focus, which briefly looked like a
+   free mark — it is not: **DPG draws nothing on a focused combo.** So focusing it would buy no highlight,
+   remove no code (DPG does not browse a combo by itself; that is custom in every Raven app that has one),
+   and change nothing a user could see. The mark has to be drawn either way.
 
-   **Focusing it would not simplify anything else, and dispatching *on* focus would be a step back**
-   (asked and answered 2026-08-19). DPG does nothing with the arrows or Home/End on a focused combo — the
-   browsing is custom in every Raven app that has one — so `_browse_type_filter` stays either way, and
-   `_caret_home` stays because the other two homes are not combos. `raven-avatar-settings-editor` can
-   dispatch on `dpg.get_focused_item()` because every parked home it has *is* a combo; here that would
-   reintroduce the thing the flag was introduced to prevent, since the find field goes inactive whenever
-   anything is clicked and a click must not silently rebind the arrow keys. So: focus it for the highlight
-   if item 7 wants it, and keep the flag as the answer to which home has the keys.
+   **Nor should the dispatch move onto focus.** `raven-avatar-settings-editor` routes its combo browsing by
+   asking whether the focused item is one of two named combos, and that works there — it has a text entry
+   too, and arrows in it simply go to the text caret, because nothing claims them. The shape does not
+   transfer, for a reason that has nothing to do with combos: **this dialog's arrows have to drive the
+   listing, which cannot hold focus at all.** A table's rows and a grid's drawlist have nothing focusable
+   in them, which is why focus parks on the refresh button in the first place. "The arrows belong to
+   whatever is focused" cannot express "the arrows drive the listing", and `_caret_home` can.
 
 **Items 1–3 and item 5 are each about a day's work, so both in one day is unlikely.** Which to drop is a
 real choice rather than a scheduling detail: 1–3 finish the keyboard, and 5 adds a capability the dialog has
