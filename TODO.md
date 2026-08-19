@@ -41,6 +41,12 @@ already decided.
   - **Now briefed as one job**, `briefs/researchers-night/markdown-block-rendering-brief.md`, and much
     smaller than these three read: the barriers are in Raven's own code rather than the vendored renderer,
     and one change to the colour wrapper fixes headings outright. That brief is the tracker.
+- **Markdown renderer: text goes missing** — a character, or most of a section. **Moved onto the demo path
+  2026-08-19** (Juha), on a sighting that finally shows the shape: one `raven-xdot-viewer` run drew both of
+  its help cards with most of the unstyled prose absent and every bold, italic and coloured run intact, and
+  the next run drew them correctly. That is a card rendering half-empty in front of an audience, and it can
+  happen to a chat message just as easily. The item in `TODO_DEFERRED.md` carries what is on the screen and
+  why it points at the font atlas rather than at the text pipeline.
 - **Librarian: in-flight AI turn bleeds into a new chat** (turn-sequencing race).
 - **Thinking mode is a wall of text on a projector.** Details under Librarian / Chat UI; here is why it is
   phase 1 rather than polish. A thinking model spends most of the turn reasoning, and right now every word
@@ -58,9 +64,6 @@ measures 0.00 GiB today only because its filter chain is empty; these go into ex
 **Explicitly *not* on the demo path**, each for a recorded reason:
 
 - *Avatar stutter* — deprioritized; a warm-up handles it without knowing the cause.
-- *Chat view drops a character* — three sightings now, none reproducible on demand, so still nothing to
-  test a fix against. The third points at the font atlas rather than at the text pipeline, which is a
-  cheaper thing to check than the render-thread race — but not on the demo path either way.
 - *RAG reranking* — **now off the list entirely: measured and rejected** (2026-08-06, see the struck item
   below and `investigations/retrieval/REPORT.md` §2). It was parked here as "quality work, not
   correctness"; it turns out not to be quality work either.

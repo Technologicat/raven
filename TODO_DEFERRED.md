@@ -2780,14 +2780,36 @@ Raised during webfetch GUI smoke-testing (2026-06-03); flagged for a dedicated d
 from a combined emoji + super/subscript item on 2026-07-27 — the emoji half is a separate problem with
 its own fix, and lives in "Emoji support in the Markdown renderer" below.
 
-## Chat view drops a character mid-message ("What" renders as " hat")
+## The Markdown renderer drops text — one character, or most of a section
 
-*Cluster: markdown-renderer · Cost: ? · Gate: Researchers' Night, 2026-09-25 · Filed: 2026-07-19*
+*Cluster: markdown-renderer · Cost: ? · Gate: RN2026 · Filed: 2026-07-19*
 
-**To be fixed before Researchers' Night** (decided 2026-08-19, Juha). It is not confined to the chat view:
-`FileDialog`'s new help card lost its whole header line in one app run and had it in the next, from the
-same code — so the bug is on the path every `dpg_markdown.add_text` caller takes, and what it drops scales
-from a letter to a line.
+**On the demo path as of 2026-08-19** (Juha), where it had been explicitly kept off for want of anything to
+test a fix against.
+
+**The 2026-08-19 sighting is the one to work from: it is the same signature at a scale that shows its
+shape.** Seen in `raven-xdot-viewer`, in a single app run that damaged both help cards it drew — the file
+dialog's card lost its whole header line, and the app's own card lost most of the prose in the three
+Markdown sections below its hotkey table. The next run of the same binary drew both correctly.
+
+What is on the screen, which is worth having exactly because none of it is a guess:
+
+- **The hotkey table above is perfect.** It is `dpg.add_text` in a DPG table, not Markdown.
+- **The styled runs survived** — every bold word, every italic word, every red character.
+- **The unstyled runs mostly did not**, but were not collapsed: the few surviving characters sit spread
+  across each line with blank space where the rest belongs, so the line was laid out at full width.
+- **The survivors are a small alphabet** — u, v, w, m, p, z, C, k, O, R, x — repeating across lines that
+  otherwise share no words.
+
+**This is what the 2026-08 triage predicted, and it predicted it in detail** (`briefs/todo-triage-output-2026-08.md`,
+"start the investigation at the atlas"): a glyph that fails to rasterize draws blank while keeping its
+advance width, `dpg_markdown` loads its own fonts at runtime per size and family, and atlas packing varies
+between launches. Right-sized gaps, variant-specific, intermittent across runs, and — the part that sharpens
+it — the *regular* face is the one that failed while bold and italic were fine, in a window whose plain DPG
+text was drawn from a different font item and was unaffected.
+
+So this is no longer "sometimes a letter goes missing" but "sometimes a whole face comes up mostly empty,
+and a one-character loss is the small end of it". Start at the atlas.
 
 **Absorbs "`dpg_markdown` intermittently drops a single letter from rendered text"** (merged 2026-08-12).
 That was the same defect reported from the renderer's end rather than the chat view's, and its sighting is
