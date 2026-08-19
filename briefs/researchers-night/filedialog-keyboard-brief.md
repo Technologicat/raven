@@ -946,16 +946,39 @@ Two existing rules become general at the same moment, which is the other reason 
   reference implementation, a `combobox_choice_map` plus dispatch on `dpg.get_focused_item()`), and it is
   already how Tab makes Left and Right mean two things. A third and fourth home is more of the same.
 
+**Agreed 2026-08-19, for the session after this one:** start with the **find field's colouring** (item 8).
+It is independent of everything else, wanted in its own right, and it is where the convention gets settled
+against a working reference — so the path field inherits a decided thing rather than deciding it. Then
+Ctrl+L with the path colouring, *if* the field turns out reasonably buildable once the completion question
+above is faced; if it does not, drop back to whatever else here is still open rather than forcing it.
+
 Suggested order, with what each actually costs:
 
 1. ~~**Widen the caret home**~~ — **built 2026-08-19** as `CaretHome`. Went as advertised: no user-visible
    change, no live drive needed.
 2. ~~**Ctrl+Shift+F, the type filter**~~ — **built 2026-08-19**, and small as predicted once (1) was in.
    The one surprise was that the combo cannot hold focus at all; see "What is built".
-3. **Ctrl+L, the path field** — moderate, and the only one with real new machinery. It needs Tab completion
-   against the filesystem (directories only, candidates re-read per Tab, separator appended after a
-   completed component so repeated Tab walks down the tree), which is why it is not a cheap key: without
-   completion it lands the user in a field where they must type an absolute path by hand.
+3. **Ctrl+L, the path field** — moderate, and the only one with real new machinery.
+
+   **Tab completion in it is not buildable in the shape the find field uses** (2026-08-19). Writing the
+   completion is the solved half: take the caret away, write, as `_write_find_field` does. Handing the
+   field *back* is the half that has no answer — refocusing an `InputText` arms ImGui's select-all, DPG
+   exposes no caret or selection API to clear it (`dpg-notes.md`), and the next character therefore
+   replaces the whole content. The find field accepts that trade because a lost query is a few characters
+   retyped; a completed path is the entire thing the user was building, and losing it to one keystroke is
+   worse than never having completed at all.
+
+   So the key needs another way to be useful, and there are three, in rising order of ambition:
+
+   - **The recolouring below may be enough.** Typing a path with live feedback that it is going somewhere —
+     green on arrival — removes most of what completion was for, which was avoiding a blind typo.
+   - **Complete without giving the field back.** Tab writes the completion and leaves the caret parked
+     elsewhere, so nothing is armed; the user presses Ctrl+L to resume typing. Whether that reads as
+     helpful or as the field going dead under them is a live-test question, not an armchair one.
+   - **Show candidates in the listing instead of completing the text.** What is typed narrows the listing
+     to the matching subdirectories, and the cursor and Enter take it from there — no text is written, so
+     nothing is armed, and it reuses the machinery the dialog is already built around. The most work, and
+     the only option that turns the constraint into a feature.
 
    ### Recolouring as you type
 
@@ -1066,6 +1089,18 @@ Suggested order, with what each actually costs:
    listing, which cannot hold focus at all.** A table's rows and a grid's drawlist have nothing focusable
    in them, which is why focus parks on the refresh button in the first place. "The arrows belong to
    whatever is focused" cannot express "the arrows drive the listing", and `_caret_home` can.
+
+8. **The find field says whether it found anything** — small, independent of every other item here, and
+   wanted whether or not Ctrl+L ever happens. A query matching nothing currently leaves a listing holding
+   `..` alone and the field says nothing about why. Copy `raven-visualizer`'s search field exactly (see the
+   colours and the mechanism under item 3): white with nothing typed, green when the listing has matches,
+   red when it does not.
+   - **Doing this first is what makes the path field cheap.** The convention gets settled here, against a
+     working reference and on the simpler of the two fields, so Ctrl+L inherits a decided thing instead of
+     deciding it while also solving completion.
+   - Note the two fields will then disagree about *matching*, deliberately: the find field is smart-case
+     because it searches, and the path field must be exact because it addresses. Same colours, different
+     rule, and worth a comment at each so the difference reads as chosen.
 
 **Items 1–3 and item 5 are each about a day's work, so both in one day is unlikely.** Which to drop is a
 real choice rather than a scheduling detail: 1–3 finish the keyboard, and 5 adds a capability the dialog has
