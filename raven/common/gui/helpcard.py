@@ -30,6 +30,8 @@ visible_help_window_instance = None  # fdialog is modal so There Can Be Only One
 def helpcard_hotkeys_callback(sender, app_data):
     if visible_help_window_instance is None:
         return
+    if not visible_help_window_instance.handle_own_hotkeys:
+        return  # this card's owner routes keys to it, so Escape reaches one handler rather than two
 
     key = app_data  # for documentation only
     # shift_pressed = dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)
@@ -46,7 +48,12 @@ class HelpWindow:
     @classmethod
     def _initialize_class(cls) -> None:
         with cls._class_init_lock:
-            if cls._class_initialized:
+            # The registry belongs to the DPG context that created it, and `dpg.destroy_context` takes it
+            # along while leaving this flag set — so ask the context whether it is still there rather than
+            # trusting the flag alone. An app holds one context for its whole life and never meets this; a
+            # test suite meets it on the second context it builds, and the symptom is a card that quietly
+            # stops answering Esc.
+            if cls._class_initialized and dpg.does_item_exist("helpcard_handler_registry"):  # tag
                 return
             cls._class_initialized = True
 
@@ -67,7 +74,9 @@ class HelpWindow:
                  gui_font: Optional[int] = None,
                  on_render_extras: Optional[Callable] = None,
                  on_show: Optional[Callable] = None,
-                 on_hide: Optional[Callable] = None):
+                 on_hide: Optional[Callable] = None,
+                 label: str = "Help",
+                 handle_own_hotkeys: bool = True):
         """Set up the help window. You only need one instance per app (or per main view, which has different hotkeys).
 
         `hotkey_info`: The main part of the help window is a human-readable hotkey table, created from this.
@@ -140,6 +149,18 @@ class HelpWindow:
 
                    These can be useful e.g. if the app needs to enter a modal mode (disable some UI animations etc.)
                    while a modal dialog (such as the help window) is on the screen.
+
+        `label`: The window title. Worth setting when the card belongs to something other than the app as a
+                 whole — a dialog's card appears with that dialog hidden behind it (see `handle_own_hotkeys`),
+                 so the title is what says whose keys are being listed.
+
+        `handle_own_hotkeys`: Whether this card closes itself on Esc, via the module-level key handler that
+                              every `HelpWindow` shares. True (the default) is right for an app's own card.
+
+                              Pass False when the card belongs to another modal window that already has a key
+                              handler of its own — a file dialog offering a card of its keys. That owner then
+                              closes the card by calling `hide`, and is free to bind whatever else it likes
+                              while the card is up.
         """
         self.gui_uuid = str(uuid.uuid4())  # used in GUI widget tags
         self.hotkey_info = hotkey_info
@@ -167,6 +188,8 @@ class HelpWindow:
         self.on_render_extras = on_render_extras
         self.on_show = on_show
         self.on_hide = on_hide
+        self.label = label
+        self.handle_own_hotkeys = handle_own_hotkeys
 
         self._window = None
 
@@ -200,7 +223,7 @@ class HelpWindow:
 
         # --------------------------------------------------------------------------------
 
-        help_window = dpg.add_window(show=False, label="Help", tag=f"help_window_{self.gui_uuid}",
+        help_window = dpg.add_window(show=False, label=self.label, tag=f"help_window_{self.gui_uuid}",
                                      modal=True,
                                      on_close=self.hide,
                                      no_collapse=True,
@@ -276,16 +299,26 @@ class HelpWindow:
         self._window = help_window
         logger.info("HelpWindow._render: Done.")
 
-    def show(self) -> None:
-        """Show the help window.
+    def show(self) -> bool:
+        """Show the help window. Returns whether it is now up.
 
         This also auto-centers the help window on the reference window.
 
         The `on_show` handler, if set, will be called.
+
+        `False` means the GUI has not run long enough to build the card yet (the first few frames after app
+        start), and nothing was done. Callers that hide something *behind* the card need this answer; a
+        caller that merely opens a card can ignore it.
         """
         global visible_help_window_instance
         logger.info("HelpWindow.show: Showing window.")
         self._render()
+        # `_render` declines to build during the first few frames, and a window that does not exist cannot
+        # be positioned or shown. Reported rather than raised: this is a timing condition, not a mistake at
+        # the call site.
+        if self._window is None:
+            logger.info("HelpWindow.show: Window was not built, nothing to show.")
+            return False
         self.reposition(_force=True)
         dpg.show_item(self._window)  # For some reason, we need to do this *after* `set_item_pos` for a modal window, or this works only every other time (1, 3, 5, ...). Maybe a modal must be inside the viewport to successfully show it?
         visible_help_window_instance = self
@@ -293,6 +326,7 @@ class HelpWindow:
             self.on_show()
         dpg.focus_item(self._window)
         logger.info("HelpWindow.show: Done.")
+        return True
 
     def hide(self) -> None:
         """Close the help window, if it is open.
