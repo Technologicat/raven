@@ -2238,8 +2238,11 @@ class FileDialog:
         # ends on its own and says nothing is happening — but it still has to be *drawn*, so leaving one
         # registered after the dialog closes would keep the app rendering a mark nobody can see.
         #
-        # The grid view is not driven from here. Its cursor is a drawn border rather than themed text, so
-        # `ThumbnailGrid` pulsates its own, and does it for every app that shows a grid.
+        # The grid's cursor is a drawn border, which no theme reaches, so `ThumbnailGrid` breathes its own
+        # and every app showing a grid gets it. Started and stopped alongside this one so that a dialog that
+        # has been in grid view leaves nothing running behind it either.
+        if self._grid is not None:
+            self._grid.start_cursor_pulse()
         if self._cursor_pulse is not None:
             return
         self._cursor_pulse = gui_animation.animator.add(
@@ -2248,6 +2251,8 @@ class FileDialog:
 
     def _stop_cursor_pulse(self) -> None:
         """Stop the cursor breathing, and leave it at full strength."""
+        if self._grid is not None:
+            self._grid.stop_cursor_pulse()
         if self._cursor_pulse is None:
             return
         gui_animation.animator.cancel(self._cursor_pulse)

@@ -31,10 +31,12 @@ __all__ = ["CURSOR_COLOR", "CURSOR_PULSE_SECONDS", "ThumbnailGrid"]
 import logging
 import threading
 from collections.abc import Callable, Sequence
-from typing import Optional
+from typing import Optional, Union
 
 import numpy as np
 import dearpygui.dearpygui as dpg
+
+from unpythonic import sym
 
 from ...vendor.IconsFontAwesome6 import IconsFontAwesome6 as fa
 from . import animation as gui_animation
@@ -69,6 +71,20 @@ CURSOR_COLOR = (80, 160, 255, 255)
 # same reason: a table cursor and a grid cursor that pulsate at different rates read as two different things
 # blinking at each other rather than as one mark.
 CURSOR_PULSE_SECONDS = 2.0
+
+
+class _CursorPulse(gui_animation.Animation):
+    """Breathe whichever tile currently carries the cursor mark."""
+
+    def __init__(self, grid: "ThumbnailGrid"):
+        super().__init__(ambient=True)
+        self._grid = grid
+
+    def render_frame(self, t: int) -> sym:
+        if (t - self.t0) / 10**9 > CURSOR_PULSE_SECONDS:  # prevent loss of accuracy in long sessions
+            self.reset()
+        self._grid.paint_cursor(gui_animation.pulsating_alpha(self.t0, t, CURSOR_PULSE_SECONDS))
+        return gui_animation.action_continue
 
 
 class ThumbnailGrid:
@@ -172,6 +188,13 @@ class ThumbnailGrid:
         self._current: int = -1
         self._selected: set[int] = set()
 
+        # The drawn rectangle that marks the cursor, and which tile it belongs to, so the pulsation has
+        # something to recolour. Both are `None` whenever the mark is not on screen — a cursor scrolled out
+        # of the built range has no rectangle, and neither does a grid nobody has put a cursor in yet.
+        self._cursor_rect: Optional[Union[str, int]] = None
+        self._cursor_rect_idx: Optional[int] = None
+        self._cursor_pulse: Optional[gui_animation.Animation] = None
+
         # DPG textures for thumbnails.  idx -> texture tag.
         self._textures: dict[int, str] = {}
 
@@ -239,6 +262,10 @@ class ThumbnailGrid:
 
         self._last_click_idx: int = -1  # for shift+click range selection
         self.input_enabled: bool = True
+
+        # A grid that exists has a cursor to mark, so this starts here and stops in `destroy`. An owner that
+        # keeps a grid it is not showing — a file dialog in table view — can stop it in the meantime.
+        self.start_cursor_pulse()
 
     # ------------------------------------------------------------------
     # Hooks for owners
@@ -624,9 +651,38 @@ class ThumbnailGrid:
     # Cleanup
     # ------------------------------------------------------------------
 
+    def start_cursor_pulse(self) -> None:
+        """Set the cursor mark breathing. Idempotent."""
+        # A drawn rectangle takes a colour, not a theme, so `PulsatingColor` cannot reach it and this
+        # recolours the item itself once a frame. It shares `pulsating_alpha` with that animation, so a grid
+        # cursor and a table cursor on screen together are the same shade at the same moment.
+        #
+        # Ambient: it says nothing is happening, so an app that throttles its idle frame rate should keep
+        # throttling. It still gets drawn at that rate, which is what makes a two-second cycle survive it.
+        if self._cursor_pulse is not None:
+            return
+        self._cursor_pulse = gui_animation.animator.add(_CursorPulse(self))
+
+    def stop_cursor_pulse(self) -> None:
+        """Stop the cursor breathing, and leave the mark at full strength. Idempotent."""
+        if self._cursor_pulse is None:
+            return
+        gui_animation.animator.cancel(self._cursor_pulse)
+        self._cursor_pulse = None
+        self.paint_cursor(255)
+
+    def paint_cursor(self, alpha: int) -> None:
+        """Set the alpha of the cursor mark, if it is currently drawn anywhere."""
+        if self._cursor_rect is None:
+            return
+        with guiutils.nonexistent_ok():
+            dpg.configure_item(self._cursor_rect, color=(*self._current_color[:3], alpha))
+
     def destroy(self) -> None:
         """Remove all DPG items.  Call on app shutdown."""
         with self._lock:
+            # Released in the reverse of the order they were acquired.
+            self.stop_cursor_pulse()
             # Before the child window goes: a scroll still in flight would keep writing to a deleted item.
             gui_animation.SmoothScrolling.stop(self._child_window_tag)
             if self._owns_scroll_end_flasher:
@@ -812,6 +868,12 @@ class ThumbnailGrid:
     def _draw_tile(self, idx: int, drawlist_tag: str) -> None:
         """Draw a single tile's contents on its drawlist."""
         dpg.delete_item(drawlist_tag, children_only=True)
+        if idx == self._cursor_rect_idx:
+            # The cursor mark was among the children that just went. Forgotten here rather than checked for
+            # later: DPG reuses the ids of deleted items, so a stale one does not stay invalid, it starts
+            # naming something else.
+            self._cursor_rect = None
+            self._cursor_rect_idx = None
         ts = self._tile_size
 
         # Thumbnail image (or owner-supplied icon, or placeholder).
@@ -847,9 +909,10 @@ class ThumbnailGrid:
 
         # Current-entry indicator (inner border).
         if idx == self._current:
-            dpg.draw_rectangle(pmin=(3, 3), pmax=(ts - 4, ts - 4),
-                               color=self._current_color, thickness=2,
-                               parent=drawlist_tag)
+            self._cursor_rect = dpg.draw_rectangle(pmin=(3, 3), pmax=(ts - 4, ts - 4),
+                                                   color=self._current_color, thickness=2,
+                                                   parent=drawlist_tag)
+            self._cursor_rect_idx = idx
 
         # Position number (lower-left corner).
         if self._show_position_numbers and idx in self._visible:

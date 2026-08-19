@@ -6,7 +6,7 @@ __all__ = ["Animator", "animator",  # controller and its global instance (need o
            "WidgetFlash", "flash_button", "highlight_widget",  # the flash animation, and its two conveniences
            "SmoothScrolling", "PulsatingColor",  # animations
            "ScrollEndFlasher", "WHEEL_SETTLE_FRAMES",  # animated overlay, and the wheel-settle delay it uses
-           "pulsation_envelope",  # utility: the cosine-squared curve used by pulsating animations
+           "pulsation_envelope", "pulsating_alpha",  # utilities: the curve pulsating animations follow, and the alpha it yields
            "action_continue", "action_finish", "action_cancel"]  # return values for `render_frame`
 
 import logging
@@ -998,6 +998,23 @@ class SmoothScrolling(Animation):
 # --------------------------------------------------------------------------------
 # Pulsation envelope
 
+def pulsating_alpha(t0: int, now: int, cycle_duration: float) -> int:
+    """The alpha a pulsation is at right now. For pulsating something that has no theme color.
+
+    `t0`, `now`: as `time.monotonic_ns()`. `t0` is when the cycle last started.
+    `cycle_duration`: seconds for one complete cycle, which starts and ends fully opaque.
+
+    Returns the alpha, an int in [64, 255].
+    """
+    # Shared with `PulsatingColor` so that two marks meaning the same thing breathe together. A drawn shape
+    # is out of that animation's reach — DPG draw items take a colour, not a theme — so the alternative is
+    # a second copy of this arithmetic, drifting a shade off it.
+    cycle_pos = ((now - t0) / 10**9) / cycle_duration
+    cycle_pos = cycle_pos - float(int(cycle_pos))  # fractional part; raw position in the cycle
+    a_base = 64
+    return a_base + int((255 - a_base) * pulsation_envelope(cycle_pos))
+
+
 def pulsation_envelope(t: float) -> float:
     """Cosine-squared envelope: 1 at *t*=0, 0 at *t*=0.5, 1 at *t*=1.
 
@@ -1068,28 +1085,11 @@ class PulsatingColor(Animation):
                                     else list(theme_color_widget))
         self.rgb = dpg.get_value(self.theme_color_widgets[0])[:3]  # get the initial RGB color
 
-    @classmethod
-    def _compute_alpha(cls, x: float) -> int:
-        """Compute translucency.
-
-        `x`: float, [0, 1]. The animation control channel. More means brighter.
-
-        Returns the `alpha` value (int, [0, 255]).
-        """
-        a_base = 64
-        a_add = 255 - a_base
-        alpha = a_base + int(a_add * x)
-        return alpha
-
     def render_frame(self, t: int) -> sym:
-        dt = (t - self.t0) / 10**9  # seconds since t0
-        cycle_pos = dt / self.cycle_duration  # number of cycles since t0
-        if cycle_pos > 1.0:  # prevent loss of accuracy in long sessions
+        if (t - self.t0) / 10**9 > self.cycle_duration:  # prevent loss of accuracy in long sessions
             self.reset()
-        cycle_pos = cycle_pos - float(int(cycle_pos))  # fractional part; raw position in animation cycle
 
-        animation_pos = pulsation_envelope(cycle_pos)
-        alpha = self._compute_alpha(animation_pos)
+        alpha = pulsating_alpha(self.t0, t, self.cycle_duration)
         color = (*self.rgb, alpha)
         for theme_color_widget in self.theme_color_widgets:
             dpg.set_value(theme_color_widget, color)

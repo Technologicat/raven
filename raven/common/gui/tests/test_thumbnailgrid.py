@@ -13,6 +13,7 @@ import pytest
 
 dpg = pytest.importorskip("dearpygui.dearpygui", reason="dearpygui not installed")
 
+from raven.common.gui import animation  # noqa: E402 -- after importorskip by design
 from raven.common.gui.thumbnailgrid import ThumbnailGrid  # noqa: E402 -- after importorskip by design
 
 TILE = 100
@@ -465,6 +466,62 @@ def test_the_draw_hooks_are_called_for_every_tile_drawn(make_grid):
     finally:
         grid.destroy()
         dpg.delete_item(window)
+
+
+class TestCursorPulse:
+    """The cursor mark breathes, and the mark is a drawn item, so the animation recolours it by hand.
+
+    What has to hold is the bookkeeping around that: the animation must never be holding an id that DPG has
+    since handed to something else, and a grid must not leave one registered behind it.
+    """
+
+    def test_a_grid_breathes_from_the_moment_it_exists(self, make_grid):
+        before = animation.animator.active_count
+        grid = make_grid()
+        assert animation.animator.active_count - before == 1
+        assert grid._cursor_pulse is not None
+
+    def test_the_pulse_says_nothing_is_happening(self, make_grid):
+        """It runs for as long as the grid does, so an app watching for activity must not see it."""
+        before = animation.animator.transient_count
+        make_grid()
+        assert animation.animator.transient_count - before == 0
+
+    def test_destroying_a_grid_takes_its_pulse_with_it(self, make_grid):
+        grid = make_grid()
+        before = animation.animator.active_count
+        grid.destroy()
+        assert before - animation.animator.active_count == 1
+        assert grid._cursor_pulse is None
+
+    def test_the_mark_is_forgotten_when_its_tile_is_redrawn(self, make_grid):
+        """DPG hands the ids of deleted items out again, so a stale one names something else, not nothing.
+
+        The cursor is moved by writing `_current` rather than through `set_current`, and that is what makes
+        this a test: `set_current` redraws the tile the cursor moved *to*, which sets the mark's id to the
+        new one and so hides whether the old one was ever let go of. Here the only thing that can clear it
+        is the redraw of the tile it was on.
+        """
+        grid = make_grid()
+        grid.set_current(0)
+        grid.update()
+        assert grid._cursor_rect is not None, "precondition: the cursor mark was drawn"
+
+        drawlist = grid._tile_drawlists[0]
+        grid._draw_tile(0, drawlist)  # redrawn while it still carries the cursor: the mark comes back
+        assert grid._cursor_rect is not None
+
+        grid._current = 1  # the cursor is elsewhere, and nothing has drawn it there
+        grid._draw_tile(0, drawlist)
+
+        assert grid._cursor_rect is None
+        assert grid._cursor_rect_idx is None
+
+    def test_painting_a_cursor_that_is_not_on_screen_is_harmless(self, make_grid):
+        """A cursor scrolled out of the built range has no rectangle, and the animation still ticks."""
+        grid = make_grid()
+        grid._cursor_rect = None
+        grid.paint_cursor(128)  # must not raise
 
 
 def test_border_colour_comes_from_the_hook(make_grid):
