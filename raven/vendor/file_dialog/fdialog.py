@@ -96,6 +96,29 @@ _CATCH_ALL = ".*"
 _CATCH_ALL_LABEL = "All files"
 
 
+# What the dialog's text says by its color. The same three `raven-visualizer` paints its search field with,
+# so an answer looks the same wherever a Raven app gives one.
+#
+# Two places use them, and they are the same three answers in both: the find field says whether what was
+# typed finds anything, and the target line says whether what was asked for could be done.
+_TEXT_NEUTRAL = (255, 255, 255)  # nothing to report. Also DPG's own text color, which is what makes it the
+                                 # one to give a widget that has to fade back to something.
+_TEXT_GOOD = (180, 255, 180)
+_TEXT_BAD = (255, 128, 128)
+
+# Louder, and deliberately so. `_TEXT_BAD` is soft because it reports a *state* — that nothing here matches
+# what you typed, which is an ordinary thing for a search to say and no reason to raise a voice. This one
+# marks something that just went wrong, or a question that has to be answered before anything proceeds, and
+# it is the same red the OK button flashes to ask one. Overrides the green `WidgetFlash` flashes by default.
+_ALARM_RED = (255, 32, 32)
+
+# Reporting a problem, in two times rather than one, because the two do different jobs. The fade from
+# `_ALARM_RED` back to `_TEXT_NEUTRAL` is what catches the eye, and a slow one catches nothing — it has to
+# read as a flash. The message then has to be read, which takes longer than that.
+_REPORT_FLASH_SECONDS = 1.0
+_REPORT_TEXT_SECONDS = 3.0
+
+
 # The sort criteria a dialog offers, in the order its buttons appear — which is also the order Ctrl+Shift+N
 # indexes, so the two rows read off one list and cannot drift apart.
 _SORT_CRITERIA = [(filelisting.SortKey.NAME, "Name"),
@@ -662,7 +685,14 @@ class FileDialog:
 
         # main file dialog header
         with dpg.window(label=self.title, tag=self.tag, on_close=self.cancel, no_resize=self.no_resize, show=False, modal=self.modal, width=self.width, height=self.height, min_size=self.min_size, no_collapse=True, pos=(50, 50)):
-            info_px = 90
+            # What the listing gives up to the rows under it — it is `height=-info_px`, so this is the
+            # reservation for the target/type-filter row, the notification line, the buttons and the
+            # spacing between them. Under-count it and the window's content overflows: DPG answers that
+            # with a scrollbar, which takes its width off the right edge and clips the dialog there.
+            #
+            # The button row is named rather than folded in, because it is the term that moves. 66 is what
+            # the measured 90 leaves once a 24 px button row is taken out of it.
+            info_px = 66 + self._OKCANCEL_ROW_HEIGHT
 
             # The places, resolved once. Held as data rather than as seven locals per branch: the two
             # `user_style` layouts were each spelling out the same seven lookups and then seven near-identical
@@ -680,9 +710,7 @@ class FileDialog:
                                 continue
                             with dpg.group(horizontal=True):
                                 dpg.add_image(getattr(self, icon))
-                                # `label=label` binds this row's label at definition time; a bare closure over
-                                # the loop variable would leave every entry pointing at Videos.
-                                dpg.add_menu_item(label=label, callback=lambda label=label: self.chdir(self._places[label]))
+                                dpg.add_menu_item(label=label, user_data=self._places[label], callback=self.open_place)
 
                         dpg.add_separator()
 
@@ -692,21 +720,21 @@ class FileDialog:
                             for drive in drives:
                                 with dpg.group(horizontal=True):
                                     dpg.add_image(self.img_hard_disk)
-                                    dpg.add_menu_item(label=drive, user_data=drive, callback=self.open_drive)
+                                    dpg.add_menu_item(label=drive, user_data=drive, callback=self.open_place)
 
                 elif (self.user_style == 1):
                     with dpg.child_window(tag=f"shortcut_menu_{self.instance_tag}", width=40, show=self.show_shortcuts_menu, height=-info_px):
                         for label, icon in _PLACES:
                             if label not in self._places:  # this user has no such directory
                                 continue
-                            dpg.add_image_button(getattr(self, icon), callback=lambda label=label: self.chdir(self._places[label]))
+                            dpg.add_image_button(getattr(self, icon), user_data=self._places[label], callback=self.open_place)
 
                         dpg.add_separator()
 
                         with dpg.group():
                             drives = _get_all_drives()
                             for drive in drives:
-                                dpg.add_image_button(texture_tag=self.img_hard_disk, label=drive, user_data=drive, callback=self.open_drive)
+                                dpg.add_image_button(texture_tag=self.img_hard_disk, label=drive, user_data=drive, callback=self.open_place)
 
                 with dpg.child_window(height=-info_px):
                     # main explorer header
@@ -726,6 +754,13 @@ class FileDialog:
                         with dpg.group(horizontal=True):
                             search_hint = "Search files [Ctrl+F]" if not save_mode else "Filename to save as [Ctrl+F]"
                             self.search_field = dpg.add_input_text(hint=search_hint, callback=self._update_search, tag=f"ex_search_{self.instance_tag}", width=-1)
+
+                            # One theme, bound once, whose color is then moved by `set_value` — rebinding a
+                            # fresh theme per keystroke would leak one per character typed.
+                            with dpg.theme() as search_field_theme:
+                                with dpg.theme_component(dpg.mvInputText):
+                                    self._search_field_color = dpg.add_theme_color(dpg.mvThemeCol_Text, _TEXT_NEUTRAL)
+                            dpg.bind_item_theme(self.search_field, search_field_theme)
 
                         self._make_sort_row()
 
@@ -798,10 +833,15 @@ class FileDialog:
                 # measures later. Derived rather than written out, so it cannot go stale against the
                 # construction width the way the literal it replaced did.
                 with dpg.child_window(tag=f"target_area_{self.instance_tag}",  # tag
-                                      width=max(0, self.width - self._TYPE_FILTER_ROW_TAIL),
+                                      # The whole row where there is no combo beside it to leave room for,
+                                      # which is also where the longest paths are read: a folder picker.
+                                      width=(max(0, self.width - self._TYPE_FILTER_ROW_TAIL) if self._type_filter_is_available() else -1),
                                       height=self.selec_height + 8,
                                       border=False, no_scrollbar=True, no_scroll_with_mouse=True):
-                    self.text_target = dpg.add_text("", show=self.returns_dir)
+                    # Shown in every mode, though only a directory picker writes a target into it: it is
+                    # also the widest line the dialog has, and so where anything that has to be *read*
+                    # goes. A color of its own because a flash fades back to one — see `WidgetFlash`.
+                    self.text_target = dpg.add_text("", color=_TEXT_NEUTRAL)
                 # The label and the combo are one control, and this is what says so. It also decides
                 # whether the caret can ever come back from here: `focus_item` is refused when focus sits
                 # on an item at *window level* and the target is inside a child window, so a click on a
@@ -812,6 +852,7 @@ class FileDialog:
                 # Borderless, unpadded and background-free, so the grouping costs nothing on screen.
                 with dpg.child_window(tag=f"type_filter_area_{self.instance_tag}",  # tag
                                       width=-1, height=self.selec_height + 8,
+                                      show=self._type_filter_is_available(),
                                       border=False, no_scrollbar=True, no_scroll_with_mouse=True):
                     with dpg.group(horizontal=True):
                         dpg.add_text('Show')
@@ -834,7 +875,7 @@ class FileDialog:
             # Ctrl+F, by Tab, or by any other key. Which is precisely the moment a user reaches for it, to
             # change the name instead of overwriting.
             with dpg.child_window(tag=f"okcancel_area_{self.instance_tag}",  # tag
-                                  width=-1, height=self.selec_height + 8,
+                                  width=-1, height=self._OKCANCEL_ROW_HEIGHT,
                                   border=False, no_scrollbar=True, no_scroll_with_mouse=True):
                 with dpg.group(horizontal=True):
                     self.spacer_okcancel = dpg.add_spacer(width=int(self.width * 0.5))
@@ -880,6 +921,13 @@ class FileDialog:
     # point — the combo is meant to be as wide as the filter names need, not as wide as the window.
     _TYPE_FILTER_ROW_TAIL = 540
     _OKCANCEL_ROW_PADDING = 33  # matches the default theme: 3 * (8 outer + 3 inner)?
+
+    # A button is taller than a line of text or a combo, and this row holds buttons. ImGui sizes one as
+    # `font_size + 2 * FramePadding.y` — 26 px at the font size every app in the constellation uses, which
+    # is what `raven.cherrypick.config` and `raven.xdot_viewer.config` both call `TOOLBAR_H` — against the
+    # 24 px the rows above take. A child window clips what it holds, so those two pixels came off the
+    # bottom of the buttons, where `FrameRounding` is 6 and the curve is.
+    _OKCANCEL_ROW_HEIGHT = 32
 
     def _effective_target(self) -> Optional[str]:
         """What OK would return right now in a directory-picking mode. `None` in a file picker, which has
@@ -937,7 +985,33 @@ class FileDialog:
             # "Pick" rather than "open" or "save": the dialog hands a path back and has no idea what the
             # caller does with it. `raven-cherrypick` opens the folder, the pose editor batch-writes into
             # it — same dialog, and neither verb is the dialog's to claim.
-            dpg.set_value(self.text_target, f"Will pick: {target}" if target else "")
+            #
+            # Written through the flash, because this line is also where a problem is reported: while one
+            # is on screen the message keeps the line, and this becomes what appears once it has been read.
+            # A plain write would wipe the message mid-sentence, and a flash left to restore what it found
+            # would put back a target from before the folders the user has visited since.
+            gui_animation.set_text_under_flash(self.text_target, f"Will pick: {target}" if target else "")
+
+    def _recolor_find_field(self) -> None:
+        """Repaint the find field to say whether what is typed there finds anything here."""
+        # In save mode the field names the file to be written, so the find-mode meaning does not apply: a
+        # name nothing matches is the ordinary case there rather than a miss. Neither does the reading that
+        # suggests itself instead — coloring by whether the name is taken, as an early warning before the
+        # overwrite question is asked. Both directions of it say something false. Red would read as "there
+        # is something wrong with this name", when the name is fine and it is the *write* that wants a
+        # second look; green would read as approval of the one outcome the dialog stops to ask about twice.
+        if self.save_mode:
+            return
+        query = dpg.get_value(self.search_field)
+        if not query:
+            color = _TEXT_NEUTRAL
+        else:
+            # `..` counts, and is not in `shown_items`. The listing keeps it whatever is typed, but it
+            # answers a query like any other name — typing `..` puts the cursor on it, which is how going
+            # up is reachable by search. Red there would deny a row that is on screen and about to work.
+            found = bool(self.shown_items) or common_utils.make_search_matcher(query)(os.pardir)
+            color = _TEXT_GOOD if found else _TEXT_BAD
+        dpg.set_value(self._search_field_color, color)
 
     def _relayout(self) -> None:
         """Re-align the bottom rows against the window's *current* width.
@@ -959,7 +1033,10 @@ class FileDialog:
                                          self._OKCANCEL_ROW_PADDING))
         dpg.set_item_width(self.spacer_okcancel, okcancel_width)
         dpg.set_item_width(self.spacer_notification, okcancel_width)
-        dpg.set_item_width(f"target_area_{self.instance_tag}", max(0, width - self._TYPE_FILTER_ROW_TAIL))  # tag
+        # Only where a combo shares the row. Without one the area is `width=-1` and follows the window on
+        # its own, and writing a number over that would pin it to whatever width it was last resized to.
+        if self._type_filter_is_available():
+            dpg.set_item_width(f"target_area_{self.instance_tag}", max(0, width - self._TYPE_FILTER_ROW_TAIL))  # tag
 
     # high-level functions
 
@@ -1076,6 +1153,17 @@ class FileDialog:
         """
         return self.lists_files
 
+    def _type_filter_is_available(self) -> bool:
+        """Whether this dialog offers the file type filter at all.
+
+        The question is whether a file is what comes back. A dialog returning a directory chooses among
+        folders, and a type filter cannot narrow those — `list_directory` applies one to files only, and
+        must, since a filter that hid directories would hide the way to the files it selects. So in
+        `"dir"`, which lists no files, the combo narrows an empty set; in `"dir-with-contents"` it narrows
+        the scenery. Either way it is a control that cannot affect the answer.
+        """
+        return not self.returns_dir
+
     def _is_choosable(self, entry) -> bool:
         """Whether `entry` is a thing this dialog can return.
 
@@ -1157,8 +1245,21 @@ class FileDialog:
             height = dpg.get_item_height(modal_id)
             dpg.set_item_pos(modal_id, [viewport_width // 2 - width // 2, viewport_height // 2 - height // 2])
         else:
-            # TODO: We really need a message box that works while the file dialog is modal.
-            logger.warning(f"message_box: Cannot display message box while file_dialog is in modal. Message follows:\n{title}:\t{message}\n")
+            # DPG stacks no modal over a modal, so no box can be drawn while this dialog is up — which is
+            # every dialog Raven opens. The notification line above the buttons says it instead: it is in
+            # the window the user is already looking at, and needs nothing stacked over anything.
+            #
+            # Only the first line of `message` goes there. These messages are written as a sentence
+            # followed by the exception text, and a status line has room for the sentence; the whole of it
+            # still reaches the log, which is where an exception is of use anyway.
+            logger.warning(f"message_box: shown on the target line, this dialog being modal:\n{title}:\t{message}\n")
+            gui_animation.animator.add(gui_animation.WidgetFlash(message=message.split("\n", maxsplit=1)[0],
+                                                                 target=self.text_target,
+                                                                 target_tooltip=None,
+                                                                 target_text=self.text_target,
+                                                                 duration=_REPORT_FLASH_SECONDS,
+                                                                 message_duration=_REPORT_TEXT_SECONDS,
+                                                                 text_color=_ALARM_RED))
 
     def _grid_current_changed(self, entry):
         """Single click in the grid: select, exactly as clicking a row does.
@@ -1457,13 +1558,21 @@ class FileDialog:
             self._apply_automatic_grid_mode(rebuild=False)
 
     def on_path_enter(self):
+        typed = dpg.get_value(f"ex_path_input_{self.instance_tag}")  # tag
         try:
-            self.chdir(dpg.get_value(f"ex_path_input_{self.instance_tag}"))
+            self.chdir(typed)
         except FileNotFoundError:
-            self.message_box("Invalid path", "No such file or directory")
+            self.message_box("Invalid path", f"No such file or directory: {typed}")
 
-    def open_drive(self, sender, app_data, user_data):
-        self.chdir(user_data)
+    def open_place(self, sender, app_data, user_data):
+        """DPG GUI event handler: list the place this row stands for.
+
+        `user_data`: The directory the row opens — one of the user's directories, or a drive's root. A
+                     drive is a place: both are a name in the panel standing for somewhere to go, which
+                     is all a row of it means.
+        """
+        place_path = user_data
+        self.chdir(place_path)
 
     def _deselect_recursive(self, root):
         """Deselect all selectables inside DPG widget `root`, including `root` itself."""
@@ -1724,10 +1833,13 @@ class FileDialog:
             # change modes, and in grid view it would cost the arrow keys that Tab was needed to free.
             if self._caret_home is not CaretHome.LISTING:
                 self._focus_field()
+        # Each of these names what it failed on. The report outlives the moment — it stays for a few
+        # seconds, and the next thing the user does usually succeeds — so a message saying only "that
+        # folder" ends up sitting over a listing of somewhere else entirely, describing nothing on screen.
         except PermissionError as e:
-            self.message_box("File dialog - PerimssionError", f"Cannot open the folder because is a system folder or the access is denied\n\nMore info:\n{e}")
+            self.message_box("File dialog - access denied", f"Cannot open {path} — access denied.\n\nMore info:\n{e}")
         except NotADirectoryError as e:
-            self.message_box("File dialog - not a directory", f"The selected item is not a directory, but a file.\n\nMore info:\n{e}")
+            self.message_box("File dialog - not a directory", f"{path} is a file, not a folder.\n\nMore info:\n{e}")
 
     def reset_dir(self, file_name_filter=None):
         """Rebuild the listing of the working directory, optionally narrowed to `file_name_filter`.
@@ -1735,11 +1847,16 @@ class FileDialog:
         This *lists*; it does not navigate. Going somewhere is `chdir`, which moves the process and
         then calls this.
         """
+        # What this is a listing *of*, and the one thing here that is not `self.default_path` — that is the
+        # folder the caller wants each opening to start from, which is a different question and one this
+        # never asks.
+        #
         # Read from the process rather than accepted as an argument, so the two cannot disagree: `ok`
         # and the target notification both answer from `os.getcwd()`, and a listing built from
-        # anywhere else would be a dialog that shows you A and hands back B.
-        default_path = os.getcwd()
-        logger.debug(f"reset_dir: instance '{self.tag}' ({self.instance_tag}), called with file_name_filter = {file_name_filter}, default_path = '{str(default_path)}'")
+        # anywhere else would be a dialog that shows you A and hands back B. Already absolute, that being
+        # what `getcwd` returns.
+        listed_dir = os.getcwd()
+        logger.debug(f"reset_dir: instance '{self.tag}' ({self.instance_tag}), called with file_name_filter = {file_name_filter}, listing '{listed_dir}'")
         # Phase timings, so a slow open says *which* phase is slow rather than only that it was. Reading
         # the directory, deleting the old rows and creating the new ones have entirely different fixes,
         # and a report of "a couple of seconds" does not distinguish them.
@@ -1753,25 +1870,23 @@ class FileDialog:
         self._row_entries = []
         self._row_themes = []
 
-        # What this is a listing *of*. A rebuild of the same directory and a move to a different one
-        # look identical from here, and the cursor wants opposite things from them — hold its place
-        # across a re-filter, start at the top of somewhere new — so the views are told which directory
-        # this is and work it out themselves.
-        listed_dir = os.path.abspath(str(default_path))
+        # The views are told which directory this is, and work out the rest themselves: a rebuild of the
+        # same directory and a move to a different one look identical from here, and the cursor wants
+        # opposite things from them — hold its place across a re-filter, start at the top of somewhere new.
         try:
             # Only when it would actually change. A rebuild happens on every keystroke in the find field
             # and on every Tab, and the directory is the same for all of them — reconfiguring the widget
             # each time is churn nobody asked for, in the one field the user is not interacting with.
             path_field = f"ex_path_input_{self.instance_tag}"  # tag
-            if dpg.get_value(path_field) != default_path:
-                dpg.configure_item(path_field, default_value=default_path)
+            if dpg.get_value(path_field) != listed_dir:
+                dpg.configure_item(path_field, default_value=listed_dir)
             # Compiled once per rebuild rather than per entry: on a directory of thousands, the split is
             # the part worth hoisting out of the loop.
             matches_name_filter = common_utils.make_search_matcher(file_name_filter or "")
 
             # Enumerating, filtering and sorting all happen here, on data, before a widget is touched.
             with timer() as tim_list:
-                entries = filelisting.list_directory(default_path,
+                entries = filelisting.list_directory(listed_dir,
                                                      show_hidden=self.show_hidden_files,
                                                      dirs_only=not self.lists_files,
                                                      name_filter=matches_name_filter,
@@ -1841,19 +1956,21 @@ class FileDialog:
 
         # exceptions
         except FileNotFoundError:
-            logger.error(f"reset_dir: instance '{self.tag}' ({self.instance_tag}), invalid path: '{str(default_path)}'")
+            logger.error(f"reset_dir: instance '{self.tag}' ({self.instance_tag}), invalid path: '{listed_dir}'")
         except Exception as exc:
             # Logged with its traceback *before* the message box, which shows only `str(exc)`. A listing
             # error is otherwise reduced to one line with no stack — and where the dialog is modal the
             # box cannot even be shown, so the line goes to the log stripped of everything that would
             # locate it. Cost a CI round on a Windows-only failure that said "negative dimensions are
             # not allowed" and nothing about where.
-            logger.exception(f"reset_dir: instance '{self.tag}' ({self.instance_tag}), failed to list '{str(default_path)}'")
-            self.message_box("File dialog - Error", f"An unknown error has occured when listing the items, More info:\n{exc}")
+            logger.exception(f"reset_dir: instance '{self.tag}' ({self.instance_tag}), failed to list '{listed_dir}'")
+            self.message_box("File dialog - listing failed", f"Could not list {listed_dir}.\n\nMore info:\n{exc}")
 
         # Every path into here changes something the promised target depends on — which directory is
         # shown, and what survives the find field — so this is the one place that has to refresh it.
+        # The find field's color reads off the same two, and follows it for the same reason.
         self._refresh_target_notification()
+        self._recolor_find_field()
 
     def _the_grid(self):
         """The grid view, built on first use.
@@ -1920,9 +2037,10 @@ class FileDialog:
         """The keys this dialog answers to, as `helpcard` entries, in reading order.
 
         Built per instance rather than as a constant, because several keys exist only in some dialogs —
-        marking a selection needs a dialog that takes more than one file, and the grid needs one that lists
-        files at all. A card offering a key that does nothing here is worse than one that stays quiet about
-        it, and the dialog's shape is fixed at construction, so the question can be answered once.
+        marking a selection needs a dialog that takes more than one file, the grid needs one that lists
+        files at all, and the two type-filter keys need one that returns a file. A card offering a key that
+        does nothing here is worse than one that stays quiet about it, and the dialog's shape is fixed at
+        construction, so the question can be answered once.
 
         Keys are spelled out as words. The UI font is OpenSans, which has no arrow glyphs at all, so "↑" in
         a label renders as a missing-glyph box.
@@ -1954,8 +2072,10 @@ class FileDialog:
             env(key_indent=1, key="Tab", action_indent=1, action="...and back, carrying the name", notes="Of whatever the cursor is on"),
             env(key_indent=0, key="Ctrl+F", action_indent=0, action="Caret back to the field", notes="Keeping what you typed"),
             helpcard.hotkey_blank_entry,
-            env(key_indent=0, key="Ctrl+1 ... Ctrl+9", action_indent=0, action="Show the Nth file type", notes=""),
-            env(key_indent=1, key="Ctrl+Shift+F", action_indent=1, action="...or browse them", notes="Up / Down / Home / End"),
+            (env(key_indent=0, key="Ctrl+1 ... Ctrl+9", action_indent=0, action="Show the Nth file type", notes="")
+             if self._type_filter_is_available() else None),
+            (env(key_indent=1, key="Ctrl+Shift+F", action_indent=1, action="...or browse them", notes="Up / Down / Home / End")
+             if self._type_filter_is_available() else None),
             env(key_indent=0, key="Ctrl+Shift+1 ... Ctrl+Shift+4", action_indent=0, action="Sort by name / date / type / size", notes="Again to reverse"),
             env(key_indent=0, key="Ctrl+H", action_indent=0, action="Show or hide hidden files", notes=""),
             (env(key_indent=0, key="Ctrl+T", action_indent=0, action="Thumbnails, or the list", notes="")
@@ -2099,7 +2219,7 @@ class FileDialog:
             if shift:
                 if n < len(_SORT_CRITERIA):
                     self.sort_by(_SORT_CRITERIA[n][0])
-            elif n < len(self._filter_labels):
+            elif self._type_filter_is_available() and n < len(self._filter_labels):
                 self.set_type_filter(self._filter_labels[n])
             return
 
@@ -2172,7 +2292,10 @@ class FileDialog:
             # read when the handler runs, so a Shift still held from a moment ago is indistinguishable from
             # one meant, and the caret would silently stay on the filter. Toggling means the second press
             # lands in the field whether or not the finger left Shift.
-            if shift and self._caret_home is not CaretHome.FILTER:
+            #
+            # Where there is no filter to browse, the shifted chord falls through to the plain one rather
+            # than doing nothing: Ctrl+Shift+F is then a Ctrl+F pressed with a finger still on Shift.
+            if shift and self._caret_home is not CaretHome.FILTER and self._type_filter_is_available():
                 self._focus_type_filter()
             else:
                 self._focus_field()
@@ -2505,7 +2628,7 @@ class FileDialog:
                                                                          target=self.btn_ok,
                                                                          target_tooltip=None,
                                                                          target_text=self.text_notification,
-                                                                         flash_color=(255, 32, 32),  # red for warning, against the green this flashes by default
+                                                                         flash_color=_ALARM_RED,
                                                                          text_color=(255, 255, 255),
                                                                          duration=1.0))
                     return
@@ -2533,7 +2656,7 @@ class FileDialog:
                                                                              target=self.btn_ok,
                                                                              target_tooltip=None,
                                                                              target_text=self.text_notification,
-                                                                             flash_color=(255, 32, 32),  # red for warning, against the green this flashes by default
+                                                                             flash_color=_ALARM_RED,
                                                                              text_color=(255, 255, 255),
                                                                              duration=1.0))
                         return
@@ -2547,13 +2670,19 @@ class FileDialog:
                                                                          target=self.btn_ok,
                                                                          target_tooltip=None,
                                                                          target_text=self.text_notification,
-                                                                         flash_color=(255, 32, 32),  # red for warning, against the green this flashes by default
+                                                                         flash_color=_ALARM_RED,
                                                                          text_color=(255, 255, 255),
                                                                          duration=1.0))
                     return
         assert len(self.selected_files)  # at least one file selected if we get here
 
         # Save mode: Ensure presence of file extension.
+        #
+        # Before the overwrite check below, and that is the load-bearing part rather than an accident of
+        # where it was written. What gets written is the completed name, so that is what the guard has to
+        # ask about: reversed, a user who types `portrait` where `portrait.png` exists is asked about
+        # `portrait`, which does not exist, and the confirmation is skipped in exactly the case a user who
+        # lets the dialog name the file for them will be in.
         if self.save_mode and self.default_file_extension is not None:
             def ensure_ext(path):
                 path_lower = path.lower()
@@ -2572,12 +2701,17 @@ class FileDialog:
         double_okd = (current_time - self.last_ok_time < confirm_duration)
         self.last_ok_time = current_time
         if self.save_mode and os.path.exists(self.selected_files[0]) and not double_okd:
+            # A folder is not overwritten — it is written into, and whether that merges with what is
+            # already there or replaces it is the calling app's decision. The dialog hands back a path and
+            # nothing more, so the folder wording states what exists and stops there.
+            already_there = ("Folder exists — press again to confirm" if os.path.isdir(self.selected_files[0]) else
+                             "Press again to overwrite file")
             # Raven: Acknowledge the action in the GUI.
-            gui_animation.animator.add(gui_animation.WidgetFlash(message="Press again to overwrite file",
+            gui_animation.animator.add(gui_animation.WidgetFlash(message=already_there,
                                                                  target=self.btn_ok,
                                                                  target_tooltip=None,
                                                                  target_text=self.text_notification,
-                                                                 flash_color=(255, 32, 32),  # red for warning, against the green this flashes by default
+                                                                 flash_color=_ALARM_RED,
                                                                  text_color=(255, 255, 255),
                                                                  duration=confirm_duration))
             return

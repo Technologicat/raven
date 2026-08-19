@@ -26,6 +26,7 @@ from raven.common import filelisting  # noqa: E402 -- after importorskip by desi
 from raven.common.gui import animation  # noqa: E402 -- after importorskip by design
 from raven.common.gui import helpcard  # noqa: E402 -- after importorskip by design
 from raven.common.gui import utils as guiutils  # noqa: E402 -- after importorskip by design
+from raven.vendor.file_dialog import fdialog  # noqa: E402 -- after importorskip by design
 from raven.vendor.file_dialog.fdialog import CaretHome, FileDialog, _PLACES, _complete_from, _normalize_filter  # noqa: E402 -- after importorskip by design
 
 
@@ -346,6 +347,125 @@ def test_find_field_and_type_filter_compose(dialog):
     dialog.set_type_filter("Images")
     dialog.reset_dir(file_name_filter="o")
     assert shown(dialog) == ["photo.png"]  # "notes.md" also contains "o", but is not an image
+
+
+# --------------------------------------------------------------------------------
+# The color the find field answers in
+
+def find_field_color(dialog):
+    """The RGB the find field's text is painted in. DPG stores a theme color as four floats."""
+    return tuple(int(channel) for channel in dpg.get_value(dialog._search_field_color)[:3])
+
+
+def type_into_find_field(dialog, query):
+    """Put `query` in the find field the way a keystroke does, callback included."""
+    dpg.set_value(dialog.search_field, query)
+    dialog._update_search()
+
+
+def test_the_find_field_says_nothing_until_something_is_typed(dialog):
+    assert find_field_color(dialog) == fdialog._TEXT_NEUTRAL
+
+
+def test_the_find_field_goes_green_on_a_query_that_finds_something(dialog):
+    type_into_find_field(dialog, "photo")
+    assert find_field_color(dialog) == fdialog._TEXT_GOOD
+
+
+def test_the_find_field_goes_red_on_one_that_does_not(dialog):
+    type_into_find_field(dialog, "nosuchthing")
+    assert find_field_color(dialog) == fdialog._TEXT_BAD
+
+
+def test_erasing_the_query_takes_the_color_away_again(dialog):
+    type_into_find_field(dialog, "nosuchthing")
+    type_into_find_field(dialog, "")
+    assert find_field_color(dialog) == fdialog._TEXT_NEUTRAL
+
+
+def test_the_way_up_counts_as_something_found(make_dialog, tmp_path):
+    """`..` answers a query like any other name, and is the one row not in `shown_items`.
+
+    So a folder where nothing else matches still has a hit on screen — the cursor lands on it and Enter
+    goes up — and a red field would deny a row that is about to work.
+    """
+    pathlib.Path(tmp_path, "photo.png").touch()
+    dialog = make_dialog(filter_list=[".*"])
+    type_into_find_field(dialog, "..")
+    assert dialog.shown_items == [], "nothing but the way up matches"
+    assert find_field_color(dialog) == fdialog._TEXT_GOOD
+
+
+def test_a_save_dialog_does_not_color_the_name_being_typed(make_dialog, tmp_path):
+    """There the field names the file to be written, and matching nothing is the ordinary case."""
+    pathlib.Path(tmp_path, "photo.png").touch()
+    dialog = make_dialog(save_mode=True, filter_list=[".*"])
+    type_into_find_field(dialog, "a-name-nothing-here-has")
+    assert dialog.shown_items == []
+    assert find_field_color(dialog) == fdialog._TEXT_NEUTRAL
+
+
+# --------------------------------------------------------------------------------
+# Saving: what gets written, and the question asked before it
+#
+# The dialog owns the file extension — the caller states one, or a single-extension `filter_list` implies
+# it — so a user who types `portrait` gets `portrait.png` back. Which puts the extension and the overwrite
+# guard in one order: the guard has to see the *completed* name, or it misses the case the user is most
+# likely to be in.
+
+def accepting_dialog(make_dialog, **kwargs):
+    """A save dialog and the list its callback appends to. Empty means the OK was not accepted."""
+    accepted = []
+    dialog = make_dialog(save_mode=True, callback=accepted.append, **kwargs)
+    return dialog, accepted
+
+
+def saved_name(accepted):
+    """The basename of the single path a callback was handed."""
+    assert len(accepted) == 1, "exactly one OK went through"
+    assert len(accepted[0]) == 1, "a save dialog returns one path"
+    return os.path.basename(accepted[0][0])
+
+
+def test_saving_completes_a_name_typed_without_an_extension(make_dialog):
+    dialog, accepted = accepting_dialog(make_dialog, filter_list=[".png"])
+    type_into_find_field(dialog, "portrait")
+    dialog.ok()
+    assert saved_name(accepted) == "portrait.png"
+
+
+def test_saving_leaves_a_name_that_already_names_an_offered_type_alone(make_dialog):
+    """Any of the offered extensions is a real answer; only a name naming none of them gets the default."""
+    dialog, accepted = accepting_dialog(make_dialog,
+                                        filter_list=[("Images", [".png", ".jpg"])],
+                                        default_file_extension=".png")
+    type_into_find_field(dialog, "portrait.jpg")
+    dialog.ok()
+    assert saved_name(accepted) == "portrait.jpg"
+
+
+def test_the_overwrite_question_is_asked_about_the_completed_name(make_dialog, tmp_path):
+    """Typing `portrait` where `portrait.png` exists is an overwrite, and the guard has to see it as one.
+
+    Which it does only because the extension is added first. Reverse the two and the guard asks about
+    `portrait`, which does not exist — so the confirmation is skipped in exactly the case a user who
+    trusts the dialog to name the file for them will be in.
+    """
+    pathlib.Path(tmp_path, "portrait.png").touch()
+    dialog, accepted = accepting_dialog(make_dialog, filter_list=[".png"])
+    type_into_find_field(dialog, "portrait")
+    dialog.ok()
+    assert accepted == [], "the first OK asks the question instead of answering it"
+
+
+def test_pressing_ok_again_answers_it(make_dialog, tmp_path):
+    """The confirmation is a second click within a couple of seconds, not another modal."""
+    pathlib.Path(tmp_path, "portrait.png").touch()
+    dialog, accepted = accepting_dialog(make_dialog, filter_list=[".png"])
+    type_into_find_field(dialog, "portrait")
+    dialog.ok()
+    dialog.ok()
+    assert saved_name(accepted) == "portrait.png"
 
 
 # --------------------------------------------------------------------------------
@@ -738,6 +858,121 @@ def test_every_place_names_an_icon_the_dialog_has(dialog):
     """The icon is reached by `getattr`, so a typo would be an `AttributeError` while building the panel."""
     for label, icon in _PLACES:
         assert hasattr(dialog, icon), f"place '{label}' names a missing icon attribute '{icon}'"
+
+
+def place_rows(dialog):
+    """Every row of the places panel, as DPG would hand it to its callback: `(callback, sender, user_data)`.
+
+    The user's directories and the drives alike — a drive is a place, and they are wired the same way.
+    """
+    rows = []
+
+    def visit(item):
+        for slot in dpg.get_item_children(item).values():
+            for child in slot:
+                callback = dpg.get_item_callback(child)
+                path = dpg.get_item_user_data(child)
+                if callback is not None and isinstance(path, str):
+                    rows.append((callback, child, path))
+                visit(child)
+    visit(f"shortcut_menu_{dialog.instance_tag}")  # tag
+    return rows
+
+
+def test_clicking_a_place_goes_where_it_says(dialog):
+    """Called with the full (sender, app_data, user_data), which is what a row's callback has to accept.
+
+    That is the whole of the rule, and it is what a direct call to `open_place` would not check. DPG fills
+    a callback's parameters positionally and fills as many as it finds, so the `lambda label=label:` idiom
+    for binding a loop variable has its default overwritten by the sender — these rows looked up
+    `self._places[<widget id>]` and raised `KeyError`. A callback wide enough for all three cannot be
+    shadowed that way, so this refuses one that is not: it raises `TypeError` on the narrow lambda.
+    """
+    exercised = 0
+    for callback, sender, path in place_rows(dialog):
+        # Which drives exist, and which of them this user may enter, is a property of the machine — on one
+        # of ours `/boot/efi` is listed and unreadable. Refusing that is the dialog behaving correctly, and
+        # it is not what is under test here.
+        if not os.access(path, os.R_OK | os.X_OK):
+            continue
+        callback(sender, None, path)
+        assert os.path.realpath(os.getcwd()) == os.path.realpath(path)
+        exercised += 1
+    assert exercised, "no place was reachable, so nothing was tested"
+
+
+def test_a_modal_dialog_says_what_went_wrong_on_its_target_line(dialog):
+    """DPG stacks no modal over a modal, so a message box cannot be drawn while a picker is up.
+
+    Which is every picker Raven opens, so before this the whole of what a user got on a permission error
+    was a line in a log they were not reading. The target line rather than the one above the buttons: it
+    is the widest the dialog has, and the other is where the eye already is when clicking OK.
+    """
+    dialog.modal = True
+    dialog.message_box("File dialog - access denied", "Cannot open that folder.\n\nMore info:\nErrno 13")
+    assert dpg.get_value(dialog.text_target) == "Cannot open that folder."
+
+
+def test_the_exception_text_stays_out_of_the_line(dialog):
+    """A status line has room for the sentence; the traceback material is the log's business."""
+    dialog.modal = True
+    dialog.message_box("File dialog - listing failed", "Something failed.\n\nMore info:\n[Errno 13] denied")
+    assert "Errno" not in dpg.get_value(dialog.text_target)
+
+
+def test_a_refused_folder_is_named_in_the_report(make_dialog, tmp_path):
+    """The report outlives the moment it describes, so "that folder" ends up naming nothing on screen.
+
+    It stays for a few seconds, and what the user does next usually works — leaving the message sitting
+    over a listing of somewhere else.
+    """
+    forbidden = tmp_path / "forbidden"
+    forbidden.mkdir()
+    dialog = make_dialog(pick="dir")
+    dialog.modal = True
+
+    with mock.patch("os.chdir", side_effect=PermissionError(13, "Permission denied")):
+        dialog.chdir(str(forbidden))
+
+    assert str(forbidden) in dpg.get_value(dialog.text_target)
+
+
+def test_the_target_line_has_a_color_to_fade_back_to(dialog):
+    """DPG reports an unset text color as `r = -1`, and a flash fading toward that runs to black."""
+    assert dpg.get_item_configuration(dialog.text_target)["color"][0] >= 0
+
+
+def test_a_report_keeps_the_line_and_hands_back_where_you_actually_are(make_dialog, tmp_path):
+    """Go somewhere, be refused somewhere else, go somewhere that works — all inside the report's dwell.
+
+    Two things have to hold at once. The message keeps the line while it is being read, so a navigation
+    under it must not wipe it. And what comes back afterwards is where the user *now* is: the flash
+    captured the line before any of this, so restoring what it found would name the folder they were in
+    two moves ago, and nothing would correct it — the next refresh only happens when they move again.
+    """
+    for name in ("music", "pictures"):
+        (tmp_path / name).mkdir()
+    dialog = make_dialog(pick="dir")
+    dialog.modal = True
+
+    dialog.chdir(str(tmp_path / "music"))
+    dialog.message_box("File dialog - access denied", "Cannot open /boot/efi — access denied.\n\nMore info:\nErrno 13")
+    dialog.chdir(str(tmp_path / "pictures"))
+
+    assert dpg.get_value(dialog.text_target) == "Cannot open /boot/efi — access denied."
+
+    animation.animator.clear()  # stands in for the flash reaching its end and restoring
+    assert dpg.get_value(dialog.text_target) == f"Will pick: {tmp_path / 'pictures'}"
+
+
+def test_a_drive_is_a_place(dialog):
+    """One callback for every row in the panel, the drives included.
+
+    Nothing downstream of the path can tell the two apart: both are a name standing for somewhere to go.
+    """
+    rows = place_rows(dialog)
+    assert rows, "the panel offers at least one row"
+    assert {callback for callback, _sender, _path in rows} == {dialog.open_place}
 
 
 # --------------------------------------------------------------------------------
@@ -1508,6 +1743,44 @@ def test_tab_out_of_the_filter_does_not_rewrite_the_find_field(dialog):
 
 
 # --------------------------------------------------------------------------------
+# The type filter exists only where a file is what comes back
+#
+# A dialog returning a directory chooses among folders, which a type filter cannot narrow. Offering the
+# combo there is offering a lever that moves nothing — so it is not offered, and neither are the two keys
+# that reach it.
+
+@pytest.mark.parametrize("pick, offered", [("file", True), ("dir", False), ("dir-with-contents", False)])
+def test_the_combo_is_shown_only_where_the_filter_can_change_the_answer(make_dialog, pick, offered):
+    dialog = make_dialog(pick=pick, filter_list=[".png", ".jpg"])
+    area = f"type_filter_area_{dialog.instance_tag}"  # tag
+    assert dpg.get_item_configuration(area)["show"] is offered
+
+
+def test_ctrl_shift_f_falls_through_to_the_find_field_where_there_is_no_filter(make_dialog):
+    """Rather than doing nothing: with no filter to browse, it is a Ctrl+F pressed with Shift still down."""
+    dialog = make_dialog(pick="dir")
+    dialog._focus_listing()
+    with held(dpg.mvKey_LControl, dpg.mvKey_LShift):
+        dialog._handle_key(dpg.mvKey_F)
+    assert dialog._caret_home is CaretHome.FIELD
+
+
+def test_ctrl_n_does_not_pick_a_type_where_there_is_no_filter(make_dialog):
+    """The combo is hidden, so a key that silently changed what it shows would change it unobservably."""
+    dialog = make_dialog(pick="dir", filter_list=[".png", ".jpg"])
+    before = dialog.file_filter
+    with held(dpg.mvKey_LControl):
+        dialog._handle_key(dpg.mvKey_2)
+    assert dialog.file_filter == before
+
+
+def test_the_target_line_takes_the_whole_row_where_no_combo_shares_it(make_dialog):
+    """Which is the mode that reads the longest paths: a folder picker names the folder OK would return."""
+    dialog = make_dialog(pick="dir")
+    assert dpg.get_item_configuration(f"target_area_{dialog.instance_tag}")["width"] == -1  # tag
+
+
+# --------------------------------------------------------------------------------
 # F1: the help card, and the swap it costs
 #
 # DPG stacks no modal over a modal, so the card can only appear with the dialog taken off the screen —
@@ -1555,11 +1828,15 @@ def window_is_shown(dialog):
 
 
 def test_the_card_stays_quiet_about_keys_this_dialog_lacks(make_dialog):
-    """Ctrl+Space and Ctrl+T do nothing in some dialogs, and those cards must not offer them."""
+    """Ctrl+Space, Ctrl+T and the two type-filter keys do nothing in some dialogs; those cards stay quiet."""
     assert "Ctrl+Space" in card_keys(make_dialog(multi_selection=True))
     assert "Ctrl+Space" not in card_keys(make_dialog(multi_selection=False))
     assert "Ctrl+T" in card_keys(make_dialog(pick="file"))
     assert "Ctrl+T" not in card_keys(make_dialog(pick="dir"))
+    assert "Ctrl+1 ... Ctrl+9" in card_keys(make_dialog(pick="file"))
+    # Both dir modes, since one of them does list files — as scenery, which the filter still cannot select.
+    assert "Ctrl+1 ... Ctrl+9" not in card_keys(make_dialog(pick="dir"))
+    assert "Ctrl+Shift+F" not in card_keys(make_dialog(pick="dir-with-contents"))
 
 
 def test_the_card_names_the_text_field_by_what_this_dialog_does_with_it(make_dialog):
