@@ -815,30 +815,40 @@ class FileDialog:
                 self.spacer_notification = dpg.add_spacer(width=int(self.width * 0.5))
                 self.text_notification = dpg.add_text("")
 
-            with dpg.group(horizontal=True):
-                self.spacer_okcancel = dpg.add_spacer(width=int(self.width * 0.5))
-                # "Pick folder" rather than "OK" where OK does not need a selection: the label is the
-                # shortest place to say that pressing it now, with nothing selected, is a complete action.
-                # *Pick* rather than *use*, to match what these dialogs are called — a file picker.
-                self.btn_ok = dpg.add_button(label="Pick folder" if (self.returns_dir and not save_mode) else "OK",
-                                             width=100, tag=self.tag + "_return", callback=self.ok)
-                # Worth a tooltip precisely *because* this one changed: bare Enter used to press this
-                # button, and now it acts on the cursor instead — descending into a folder rather than
-                # accepting one. Anybody who learned the old behaviour learned it silently, and will
-                # un-learn it the same way unless the button says so.
-                with dpg.tooltip(self.btn_ok):
-                    if self.returns_dir:
-                        # Same first line whether or not this is a save: the dialog picks a folder either
-                        # way, and what the caller then does with it is not the dialog's to describe.
-                        second = ("Enter descends into the folder under the cursor." if save_mode else
-                                  "Enter descends into the folder under the cursor instead of picking it.")
-                        dpg.add_text(f"Pick the folder named above. [Ctrl+Enter]\n{second}")
-                    else:
-                        dpg.add_text("Accept the selection. [Ctrl+Enter]\n"
-                                     "Enter descends into the folder under the cursor, or picks a file.")
-                self.btn_cancel = dpg.add_button(label="Cancel", width=100, callback=self.cancel)
-                with dpg.tooltip(self.btn_cancel):
-                    dpg.add_text("Close without choosing anything. [Esc]")
+            # In a child window for the same reason the type filter is, and this pair is the subtler case:
+            # they are usually harmless *because* clicking one closes the dialog, so there is no "rest of
+            # the dialog's life" left for a stranded caret to matter in. The exception is the overwrite
+            # confirmation, where the first click on OK deliberately leaves the dialog open — and from that
+            # click on, focus sits at window level and the filename field can no longer be reached by
+            # Ctrl+F, by Tab, or by any other key. Which is precisely the moment a user reaches for it, to
+            # change the name instead of overwriting.
+            with dpg.child_window(tag=f"okcancel_area_{self.instance_tag}",  # tag
+                                  width=-1, height=self.selec_height + 8,
+                                  border=False, no_scrollbar=True, no_scroll_with_mouse=True):
+                with dpg.group(horizontal=True):
+                    self.spacer_okcancel = dpg.add_spacer(width=int(self.width * 0.5))
+                    # "Pick folder" rather than "OK" where OK does not need a selection: the label is the
+                    # shortest place to say that pressing it now, with nothing selected, is a complete action.
+                    # *Pick* rather than *use*, to match what these dialogs are called — a file picker.
+                    self.btn_ok = dpg.add_button(label="Pick folder" if (self.returns_dir and not save_mode) else "OK",
+                                                 width=100, tag=self.tag + "_return", callback=self.ok)
+                    # Worth a tooltip precisely *because* this one changed: bare Enter used to press this
+                    # button, and now it acts on the cursor instead — descending into a folder rather than
+                    # accepting one. Anybody who learned the old behaviour learned it silently, and will
+                    # un-learn it the same way unless the button says so.
+                    with dpg.tooltip(self.btn_ok):
+                        if self.returns_dir:
+                            # Same first line whether or not this is a save: the dialog picks a folder either
+                            # way, and what the caller then does with it is not the dialog's to describe.
+                            second = ("Enter descends into the folder under the cursor." if save_mode else
+                                      "Enter descends into the folder under the cursor instead of picking it.")
+                            dpg.add_text(f"Pick the folder named above. [Ctrl+Enter]\n{second}")
+                        else:
+                            dpg.add_text("Accept the selection. [Ctrl+Enter]\n"
+                                         "Enter descends into the folder under the cursor, or picks a file.")
+                    self.btn_cancel = dpg.add_button(label="Cancel", width=100, callback=self.cancel)
+                    with dpg.tooltip(self.btn_cancel):
+                        dpg.add_text("Close without choosing anything. [Esc]")
 
             # After the widgets exist, since it may flip the view: an image-typed filter comes up as a grid
             # unless the caller said otherwise. `rebuild=False` because `chdir` below lists the directory.

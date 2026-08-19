@@ -1349,6 +1349,56 @@ def test_unmarking_a_folder_updates_what_ok_promises(make_dialog, tmp_path):
 
 
 # --------------------------------------------------------------------------------
+# Nothing clickable may sit directly in the dialog window
+
+# The DPG item types a user can click to move focus. A tooltip's contents are not among them: they are not
+# reachable by a click, being visible only while the pointer rests elsewhere.
+_FOCUSABLE_BY_CLICK = {"mvButton", "mvImageButton", "mvCombo", "mvCheckbox", "mvInputText",
+                       "mvSelectable", "mvRadioButton", "mvListbox", "mvSliderInt", "mvSliderFloat",
+                       "mvInputInt", "mvInputFloat"}
+
+
+def _clickables_at_window_level(root):
+    """Every clickable item under `root` that no child window encloses."""
+    found = []
+
+    def visit(item, inside_child_window):
+        for slot in dpg.get_item_children(item).values():
+            for child in slot:
+                kind = dpg.get_item_type(child).split("::")[-1]
+                if kind == "mvTooltip":
+                    continue
+                if kind == "mvChildWindow":
+                    visit(child, True)
+                    continue
+                if not inside_child_window and kind in _FOCUSABLE_BY_CLICK:
+                    found.append((dpg.get_item_alias(child) or child, kind))
+                visit(child, inside_child_window)
+
+    visit(root, False)
+    return found
+
+
+def test_nothing_clickable_sits_directly_in_the_dialog_window(dialog):
+    """A click at window level strands the caret, and nothing reports it.
+
+    `focus_item` is refused when focus sits on an item at *window level* and the target is inside a child
+    window — measured on DPG 2.3.1, see `dpg-notes.md`. Since a click focuses whatever it lands on, one
+    click on a control sitting directly in the dialog window makes the find field unreachable for the rest
+    of that dialog's life: Ctrl+F, Tab-back and Escape-to-the-field all fire, return, and arrive nowhere.
+
+    Both offenders this caught are instructive about why the rule is easy to break. The type-filter combo
+    read as harmless because it is just a combo; the OK and Cancel buttons read as harmless because
+    clicking them closes the dialog — until the overwrite confirmation, where the first click on OK
+    deliberately leaves it open.
+    """
+    offenders = _clickables_at_window_level(dialog.tag)
+    assert offenders == [], (
+        "these are one click away from stranding the caret; wrap them in a borderless child window: "
+        f"{offenders}")
+
+
+# --------------------------------------------------------------------------------
 # Ctrl+Shift+F: the type filter as a place the caret can be
 #
 # The filter is browsed from `_caret_home` rather than from DPG's focus, and deliberately: the combo lives
