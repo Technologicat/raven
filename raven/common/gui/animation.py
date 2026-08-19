@@ -120,6 +120,20 @@ class Animator:
         with self._lock:
             return len(self._animations)
 
+    @property
+    def transient_count(self) -> int:
+        """Number of running animations that report the GUI is *doing* something. See `Animation.ambient`.
+
+        This is what an app's idle-framerate throttle should ask. `active_count` counts a pulsating
+        indicator too, so an app that watched it would run at full frame rate for as long as one was on
+        screen — which, for an indicator that pulsates whenever its widget exists, is for ever.
+
+        Throttling does not stop an ambient animation, it coarsens it: the render loop keeps drawing at its
+        idle rate, so a cycle measured in seconds still reads as a pulsation at a dozen frames a second.
+        """
+        with self._lock:
+            return sum(1 for animation in self._animations if not animation.ambient)
+
     def clear(self) -> None:
         """Terminate all registered animations and clear the list of registered animations.
 
@@ -132,14 +146,23 @@ class Animator:
 animator = Animator()
 
 class Animation:
-    def __init__(self):
+    def __init__(self, ambient: bool = False):
         """Base class for Raven's GUI animations.
 
         An `Animation` can be added to an `Animator`.
+
+        `ambient`: Whether this animation belongs to the GUI's resting state instead of reporting that
+                   something is happening. Read by `Animator.transient_count`, which is what an app's
+                   idle-framerate throttle should ask.
+
+                   Ambience is a property of the use, not of the class: the same pulsation is ambient as an
+                   indicator that cycles for as long as its widget exists, and transient when it is used to
+                   say "look here, this just changed".
         """
         super().__init__()
         # Keep this simple to avoid ravioli code.
-        # `t0` should be pretty much the only attribute defined in the base class.
+        # `t0` and `ambient` should be pretty much the only attributes defined in the base class.
+        self.ambient = ambient
         self.reset()
 
     def reset(self) -> None:
@@ -992,11 +1015,18 @@ def pulsation_envelope(t: float) -> float:
 class PulsatingColor(Animation):
     def __init__(self,
                  cycle_duration: float,
-                 theme_color_widget: Union[str, int]):
+                 theme_color_widget: Union[str, int],
+                 ambient: bool = True):
         """A simple cyclic animation to pulsate a color by varying its alpha.
 
         `cycle_duration`: seconds, for one complete cycle.
                           A cycle starts and ends with full alpha (fully opaque).
+
+        `ambient`: See `Animation`. Defaults to `True` here, unlike the base class: this animation never
+                   ends on its own, and every use of it in Raven is an indicator that cycles for as long as
+                   its widget is on screen. Pass `False` for a use that is not one — the frame rate is then
+                   held up while it plays. The transient "look here, this just changed" role belongs to
+                   `WidgetFlash`.
 
         `theme_color_widget`: DPG tag or ID of the theme color to pulsate.
                               This is parameterized so you can create your own and
@@ -1021,7 +1051,7 @@ class PulsatingColor(Animation):
         indicator icon bound to the theme appears, so that the pulsation animation always starts
         at the same animation frame.
         """
-        super().__init__()
+        super().__init__(ambient=ambient)
         self.cycle_duration = cycle_duration
         self.theme_color_widget = theme_color_widget
         self.rgb = dpg.get_value(theme_color_widget)[:3]  # get the initial RGB color

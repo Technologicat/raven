@@ -531,3 +531,51 @@ class TestCommandedScrollBox:
         actual = dpg.get_y_scroll(scroll_target)
         assert unbox(commanded) == actual, "the box still holds a position the panel never reached"
         assert unbox(commanded) != 99999, "precondition: DPG must have clamped the request, or this proves nothing"
+
+
+class TestAmbientAndTransient:
+    """What the idle-framerate throttle asks, and why `active_count` is the wrong question for it.
+
+    An ambient animation runs for as long as its widget exists, so an app that treated it as a sign of
+    activity would never idle again. `transient_count` is what excludes it; the flag is per instance
+    because ambience belongs to the use rather than to the class.
+    """
+
+    def test_an_animation_is_transient_unless_it_says_otherwise(self):
+        """The safe default: forgetting the flag costs frame rate, and hides nothing."""
+        assert animation.Animation().ambient is False
+
+    def test_an_ambient_animation_is_not_counted_as_activity(self, dpg_context):
+        with dpg.theme():
+            with dpg.theme_component(dpg.mvAll):
+                color = dpg.add_theme_color(dpg.mvThemeCol_Text, (255, 96, 96))
+
+        before_active = animation.animator.active_count
+        before_transient = animation.animator.transient_count
+
+        ambient = animation.animator.add(animation.PulsatingColor(cycle_duration=2.0,
+                                                                  theme_color_widget=color))
+        try:
+            assert animation.animator.active_count - before_active == 1
+            assert animation.animator.transient_count - before_transient == 0
+        finally:
+            animation.animator.cancel(ambient)
+
+    def test_the_same_animation_counts_as_activity_when_it_is_not_ambient(self, dpg_context):
+        """Same class, same widget, opposite answer — which is what makes this a property of the use.
+
+        `PulsatingColor` defaults the other way from the base class, so this is also what pins that the
+        default is a default and not a hard-wired answer.
+        """
+        with dpg.theme():
+            with dpg.theme_component(dpg.mvAll):
+                color = dpg.add_theme_color(dpg.mvThemeCol_Text, (255, 96, 96))
+
+        before = animation.animator.transient_count
+        transient = animation.animator.add(animation.PulsatingColor(cycle_duration=2.0,
+                                                                    theme_color_widget=color,
+                                                                    ambient=False))
+        try:
+            assert animation.animator.transient_count - before == 1
+        finally:
+            animation.animator.cancel(transient)
