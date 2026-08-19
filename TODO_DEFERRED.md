@@ -13,28 +13,6 @@ importer first. Recorded here rather than in that item because a trigger nobody 
 the tool for finding things in the backlog cannot be gated on someone remembering to look for it *in* the
 backlog. The recurring moment to ask is the triage step in the release procedure.
 
-## `WidgetFlash` does not honour its own "message=None means don't change"
-
-*Cluster: gui-animation · Cost: S · Gate: none · Filed: 2026-08-19 · **Agreed the same day to fix at the
-start of the next session** — this entry exists to survive a context boundary, not to wait in the pile*
-
-The docstring says `message` "Can be `None` for 'don't change'", and two paths ignore that and write the
-`None` through: the button branch of `start` does an unguarded
-`dpg.set_value(self.target_text, self.message)`, and the ghost path does the same when updating the
-instance already running on that widget. So a flash carrying a message, joined on the same widget by a
-`highlight_widget` (which passes `message=None`), has its text replaced by `None`.
-
-Noticed while adding the text-target message handling on 2026-08-19, which *does* guard — so the two
-branches now disagree about the same documented contract, and the asymmetry is the part worth fixing rather
-than the narrowness of the case.
-
-The fix is a guard in each place, and it is behaviour-neutral today: no live caller passes `message=None`
-together with a non-`None` `target_text` (checked across `raven/`). Which is also the reason it wants a
-test written deliberately rather than a quick edit — the case has to be constructed, and "it changed
-nothing" is not evidence either way.
-
-Discovered during the file dialog's error-reporting work (2026-08-19).
-
 ## Anonymous lambdas where a named callable exists
 
 `operator.attrgetter` / `itemgetter` for `key=` and similar, `unpythonic.namelambda` where a lambda is

@@ -242,6 +242,23 @@ class TestButtonTarget:
         assert dpg.get_item_theme(notification) == text_theme
         assert dpg.get_value(notification) == "ready", "the message must be restored too"
 
+    def test_a_message_of_none_leaves_the_text_alone(self, widgets):
+        """A message of `None` means "don't change" here too — a flash may want the color and nothing else.
+
+        The text branch honours it and this one did not, so the same argument meant two different things
+        depending on which kind of widget was being flashed, and the one that ignored it wrote the `None`
+        through onto the line.
+        """
+        text, button = widgets
+        dpg.set_value(text, "ready")
+
+        animation.flash_button(button=button, message=None, duration=0.3, text=text)
+        animation.animator.render_frame()
+        assert dpg.get_value(text) == "ready"
+
+        _run_flash_to_completion(button)
+        assert dpg.get_value(text) == "ready"
+
 
 class TestDeduplication:
     def test_second_flash_on_the_same_widget_does_not_reify(self, widgets):
@@ -273,6 +290,46 @@ class TestDeduplication:
 
         assert animation.WidgetFlash.instances.get(text) is reified
         assert _widget_color(text) == color_while_running  # the running flash was not undone
+
+    def test_a_ghost_with_no_message_leaves_the_words_where_they_are(self, widgets):
+        """A highlight landing on a widget that is mid-report restarts the fade and says nothing itself.
+
+        The ghost path took the joining instance's `message` unconditionally, so a `highlight_widget` —
+        which passes `None` — wiped the report it arrived on top of.
+        """
+        text, _ = widgets
+        dpg.set_value(text, "before")
+        reported = animation.WidgetFlash(message="something went wrong", target=text, target_tooltip=None,
+                                         target_text=text, duration=5.0, text_color=FLASH_COLOR)
+        animation.animator.add(reported)
+
+        animation.highlight_widget(widget=text, duration=5.0, color=FLASH_COLOR)
+        assert dpg.get_value(text) == "something went wrong"
+
+        reported.duration = 0.05  # let it end, rather than sleeping out the five seconds
+        _run_flash_to_completion(text)
+        assert dpg.get_value(text) == "before"
+
+    def test_a_ghosts_message_is_put_back_by_the_flash_it_joins(self, widgets):
+        """The instance being joined restores what it captured, so it has to capture before it is written to.
+
+        A color-only flash captured nothing, having nothing to put back — and then a message written through
+        it had no way home either, leaving it on the line after the animation had visibly ended.
+        """
+        text, _ = widgets
+        dpg.set_value(text, "before")
+        highlight = animation.WidgetFlash(message=None, target=text, target_tooltip=None, target_text=text,
+                                          duration=5.0, text_color=FLASH_COLOR)
+        animation.animator.add(highlight)
+        assert dpg.get_value(text) == "before", "a color-only flash does not touch the words"
+
+        animation.WidgetFlash(message="something went wrong", target=text, target_tooltip=None,
+                              target_text=text, duration=5.0)  # ghost: updates `highlight` and exits
+        assert dpg.get_value(text) == "something went wrong"
+
+        highlight.duration = 0.05
+        _run_flash_to_completion(text)
+        assert dpg.get_value(text) == "before"
 
 
 # ---------------------------------------------------------------------------

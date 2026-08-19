@@ -480,9 +480,18 @@ class WidgetFlash(Animation):
                 # If an instance is already running on this GUI element, just restart it (and update its message).
                 if self.target in type(self).instances:
                     other = type(self).instances[self.target]
-                    other.message = self.message
-                    if other.target_text is not None:
-                        dpg.set_value(other.target_text, other.message)
+                    # `message=None` is "don't change", so a flash joining one already running leaves the
+                    # words where they are and takes only the restart.
+                    if self.message is not None:
+                        other.message = self.message
+                        if other.target_text is not None:
+                            with guiutils.nonexistent_ok():
+                                # The instance being joined may have started with no message of its own, in
+                                # which case it captured nothing and restores nothing — and ours would stand
+                                # on that line for good.
+                                if other.original_message is None:
+                                    other.original_message = dpg.get_value(other.target_text)
+                                dpg.set_value(other.target_text, other.message)
                     other.reset()
                     return
 
@@ -547,7 +556,8 @@ class WidgetFlash(Animation):
                     with guiutils.nonexistent_ok():
                         self.original_message = dpg.get_value(self.target_text)
                         self.original_text_theme = dpg.get_item_theme(self.target_text)
-                        dpg.set_value(self.target_text, self.message)
+                        if self.message is not None:  # `None`: flash the text's color, leave its words alone
+                            dpg.set_value(self.target_text, self.message)
                         dpg.bind_item_theme(self.target_text, self.theme)
 
                 type(self).instances[self.target] = self
@@ -591,7 +601,8 @@ class WidgetFlash(Animation):
 
             if self.target_text is not None:
                 with guiutils.nonexistent_ok():
-                    dpg.set_value(self.target_text, self.original_message)
+                    if self.original_message is not None:  # `None`: there was no message to put back
+                        dpg.set_value(self.target_text, self.original_message)
                     dpg.bind_item_theme(self.target_text, self.original_text_theme)
 
             with guiutils.nonexistent_ok():
