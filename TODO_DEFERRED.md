@@ -59,6 +59,15 @@ That makes it a design choice rather than a lookup: either declare the defaults 
 read them back from there, giving the flash and everything else one named source, or keep the constants but
 move them beside that theme so the two cannot drift apart in silence.
 
+**And the surveyed call sites push towards the first.** Across `raven/` (excluding `DearPyGui_Markdown`,
+whose text could not be coloured except through inline tags until recently), 85 of 368 `add_text` sites
+declare a `color=`. Of the widgets actually passed as `target_text` — the tooltip captions — the count is
+zero: every one sampled is a bare `add_text`, the sole exception being the file dialog's `text_target`,
+given a colour on 2026-08-19 to stop exactly this fade-to-black. Its sibling `text_notification` is bare
+and carries four flashes. So "let captions declare a colour" is not a small tidy-up of a few call sites; it
+is every caption in the tree, plus a silent fade to black waiting for whoever adds the next one without
+knowing.
+
 23 constructor call sites (fdialog 7, librarian 9, visualizer 4, cherrypick 1, the two wrappers, 8 in
 tests), all keyword-argument, so each is a read-and-rewrite rather than a puzzle.
 
