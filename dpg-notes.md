@@ -418,6 +418,20 @@ Failing all of that, give auto-fit nothing to react to: a fixed-size child windo
 spacer sized to the largest state. Worth naming what that costs — the size stops changing *because it is
 always the largest state's size*, so a one-line message sits in a three-line box.
 
+## A hidden root window costs nothing per frame
+
+Measured 2026-08-20 on DPG 2.3.1, with vsync off: 400 buttons alone, 400 with a
+`dpg.tooltip` each, and 400 with a hidden root window plus a hover handler each
+all render in about 1 ms/frame, and which one comes out fastest changes between
+runs. So an app-owned tooltip window per widget is as free as the `dpg.tooltip`
+it replaces — which is what makes `raven.common.gui.tooltip.Tooltip` usable in
+Librarian's chat view, where 14 buttons per message put several hundred of them
+on screen at once.
+
+**Measure this with `vsync=False`.** With vsync on, all three variants report
+exactly 16.666 ms and the question goes unanswered while looking answered.
+`investigations/dpg-autosize/probe_many_tooltips.py` re-runs it.
+
 ## Window z-order
 
 DPG renders windows in creation order. The primary window (set via
