@@ -221,8 +221,9 @@ at a port nothing is listening on and Librarian's backend-status pill appears an
 was editing a `config.py` that carries local overrides and restoring it exactly afterwards — which is the
 one file class this repo is most careful about, so a flag is worth having for that reason alone.
 
-Six further entry points still read the configured server URL only: `raven-minichat`, `raven-indexer`, the
-importer CLI, `raven-dehyphenate`, `raven-pdf2bib`, and the avatar settings editor.
+**Every console script that talks to Raven-server takes `--server-url`**, and the three that talk to an LLM
+backend can be pointed at another one: `raven-librarian` through `--backend-url`, `raven-minichat` and
+`raven-pdf2bib` through their positional `url` argument. No exceptions to look up.
 
 ### Running Tests
 
