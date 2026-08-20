@@ -120,7 +120,12 @@ class TestTextTarget:
             assert dpg.get_item_configuration(bare)["color"][0] == -1.0, "DPG's undeclared-colour sentinel"
 
             animation.highlight_widget(widget=bare, duration=0.4, color=(255, 0, 0))
-            time.sleep(0.3)  # most of the way through the fade
+            # Wound forward rather than slept through. Sleeping 0.3s of a 0.4s fade leaves 0.1s of slack for
+            # everything between, and a loaded CI runner spends it: the flash then ends before the sample,
+            # the widget is handed back undeclared, and the sentinel reads as the pure red of r=0 — a
+            # failure that says "the fade ran to black" about a fade that had already finished correctly.
+            flash = animation.WidgetFlash.instances[bare]
+            flash.t0 = time.monotonic_ns() - int(0.75 * flash.duration * 10**9)
             animation.animator.render_frame()
 
             _, g, b = _widget_color(bare)
