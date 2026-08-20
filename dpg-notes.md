@@ -396,6 +396,28 @@ The first visible frame is the mis-sized one either way. So "hide it while it se
 neither does anything else that stops the widget being drawn — being drawn is what produces the measurement
 that auto-fit needs.
 
+**Nor does a window ImGui has never seen before**, which is the last plausible escape and the one worth
+recording so nobody spends an afternoon on it. A window created at runtime already holding its content is
+stale on its first visible frame too, and so is one built hidden and shown later:
+
+| first visible frame | second |
+|---|---|
+| created fresh, holding the long text: **100 × 100** | 371 × 105 |
+| pre-built hidden, shown later: **100 × 100** | 371 × 105 |
+| existing window, `set_value`: **100 × 100** | 371 × 105 |
+
+There is no measure-then-appear path — and note the stale size for a *new* window is DPG's default 100 × 100
+rather than anything to do with the content, so swapping in a freshly built tooltip trades a slightly wrong
+size for a briefly tiny one. (This is presumably also true of a tooltip's genuine first hover; nobody has
+sampled that frame.)
+
+**So the lag is unconditional: four mechanisms, one frame, every time.** What remains is to give auto-fit
+nothing to react to — a fixed-size child window as the content, a spacer sized to the widest and tallest
+state, or a message padded to the line count of the text it replaces. All three are the same bargain in
+different clothes, and it is worth naming before choosing one: **the size stops changing because it is
+always the largest state's size**, so a one-line message sits in a three-line box. A resize glitch on change
+or constant extra space; DPG offers no third answer while a tooltip cannot be sized.
+
 ## Window z-order
 
 DPG renders windows in creation order. The primary window (set via
