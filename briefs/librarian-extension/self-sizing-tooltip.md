@@ -1,0 +1,76 @@
+# A tooltip that resizes without a glitch frame
+
+**Status:** designed, measured, not yet built. Started 2026-08-20.
+
+## Why
+
+A `dpg.tooltip` whose caption changes while it is showing renders one frame at its old size — clipped when
+the caption grows, skirted when it shrinks. Raven-librarian does this on every toolbutton flash, where the
+resting caption is three lines and the acknowledgment is one, so the jump is large and draws the eye. Raven's
+apps otherwise go out of their way to avoid visible glitches, and software that *looks* glitchy is read as
+unreliable, so a half-fix is not worth having here.
+
+`investigations/dpg-autosize/` has the measurements. The short version: nothing that changes *when or how the
+content changes* helps — not mutation, not swapping pre-built widgets, not hiding, not rebuilding the
+tooltip (clean when the content shrinks, clipped when it grows, and a flash does one of each). An explicitly
+sized window has no lag at all, and `dpg.tooltip` cannot be sized: `configure_item(tooltip, width=…)` raises
+`width keyword does not exist`.
+
+What does work is what `raven.visualizer.annotation` and the XDot viewer already do without either having
+recorded why: **a tooltip is a window with no title bar, and an app-owned window can be positioned** — so it
+can be parked offscreen, shown there, allowed to autosize on a frame nobody sees, and only then moved to the
+cursor.
+
+## What to build
+
+`raven/common/gui/tooltip.py`, class `Tooltip`. This is `raven/common/`, so it is held to the foundation
+bar: the awkward shape here is paid by every future caller.
+
+- **The window.** `no_title_bar=True, autosize=True, show=False, no_collapse=True, no_scrollbar=True,
+  no_focus_on_appearing=True`, and `min_size=[1, 1]` — without which autosize will not shrink below roughly
+  100×100 and the empty skirt eats mouse events across its whole rect, as `dpg-notes.md` records.
+- **Hover in, hover out.** A `dpg.add_item_hover_handler` on the target shows it; there is no un-hover
+  handler, so un-hover needs a per-frame sweep calling `is_item_hovered`. `DearPyGui_Markdown`'s
+  `attribute_types._check_hovered_items` is the in-tree pattern, including the `does_item_exist` guard for a
+  target deleted mid-hover — which Librarian does constantly when the chat view rebuilds.
+- **Placement is not "at the cursor", and `guiutils.compute_tooltip_position_scalar` already does it** —
+  per-axis, with three algorithms and an `offset` defaulting to 20 px. The offset is load-bearing rather
+  than decorative: a tooltip under the cursor is a separate window, so it takes the hover away from the
+  widget beneath and suppresses the very events keeping it open. Its docstring recommends `"snap"` for x and
+  `"smooth"` for y, which is what the component should default to, and both should be parameters.
+- **`set_text(text)`** is the whole point, and owns the invariant *this window is always correctly sized for
+  its content*: park offscreen, show there, set the value, `guiutils.wait_for_resize`, then place and show
+  or hide again depending on whether it should be visible. It must do this even when hidden, since the next
+  hover of a stale-sized window is itself a glitch frame.
+- **Every piece of this already exists and is assembled by hand in two apps** — `wait_for_resize`,
+  `compute_tooltip_position_scalar`, `min_size=[1, 1]`, the offscreen park. That is the argument that the
+  component is the right shape rather than a new abstraction: it is the assembly that is missing, not the
+  parts.
+- **Not callable from the render thread.** `wait_for_resize` raises there rather than hanging. Flash
+  messages arrive on the DPG callback thread, so the normal path is fine; the constraint belongs in the
+  docstring.
+
+## How `WidgetFlash` reaches it
+
+Decided 2026-08-20 (Juha): **duck-typing.** `message_target` may be a DPG widget id *or* anything exposing
+`text` for get/set, and `WidgetFlash` routes through two small helpers instead of calling `dpg.set_value`
+directly. `set_text_under_flash` takes the same treatment.
+
+Rejected: a separate `message_tooltip` parameter. It is more honest at the signature and costs one more
+parameter on a class just narrowed from three target roles to one paint list plus a message — and the
+polymorphism here is real rather than a special case, since any future self-sizing widget works unchanged.
+
+## Order
+
+1. `Tooltip` plus its tests — the component alone, nothing else touched.
+2. The `WidgetFlash` duck-typing.
+3. Migrate Librarian's flashing tooltips onto it.
+
+Each step leaves the tree green and is committable on its own.
+
+## Afterwards
+
+`raven.visualizer.annotation` and the XDot viewer's tooltip are hand-rolled instances of this. Folding them
+in is the obvious follow-on and explicitly *not* part of this: both carry app-specific behaviour (the
+annotation double-buffers a whole content group and tracks which entries it lists) and the component should
+earn its shape on the simple case first. Note it as a candidate once the component has a second consumer.
