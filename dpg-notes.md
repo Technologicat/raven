@@ -395,10 +395,28 @@ It then `split_frame()`s so layout catches up, reads the now-correct size, posit
 `split_frame()`s again — the standard shape for needing a size before you can place something, subject to
 `split_frame` not being callable from the render thread (see *Threading*).
 
-The remaining option, if rebuilding is impractical, is to give auto-fit nothing to react to: a fixed-size
-child window as the content, or a spacer sized to the largest state. Worth naming what that costs before
-choosing it — the size stops changing *because it is always the largest state's size*, so a one-line
-message sits in a three-line box.
+**Raven's own answer, arrived at twice independently, is not to use `dpg.tooltip` for anything whose
+contents change.** A tooltip is a window with no title bar, and an app-owned window can be positioned —
+which is the whole difference, because it makes the offscreen settle available. `raven.visualizer.annotation`
+and the XDot viewer both build theirs that way. The annotation's swap is the full pattern:
+
+```python
+dpg.set_item_pos("annotation_tooltip_window", [w, h])  # offscreen, but not hidden -> rendered -> autosize runs
+dpg.show_item("annotation_tooltip_window")
+guiutils.wait_for_resize("annotation_tooltip_window")  # ...then move it where the user will look
+```
+
+It double-buffers the *content* on top of that — build a new group hidden, show it, `split_frame`, delete
+the old one — but that part is about the churn of many widgets, not about the size. The no-glitch property
+comes from the offscreen settle.
+
+Both windows also pass `min_size=[1, 1]`, without which autosize will not shrink below roughly 100×100 and
+a short annotation carries a skirt of empty window — which matters beyond looks, since a DPG window takes
+the mouse across its whole rect and the skirt becomes a dead zone.
+
+Failing all of that, give auto-fit nothing to react to: a fixed-size child window as the content, or a
+spacer sized to the largest state. Worth naming what that costs — the size stops changing *because it is
+always the largest state's size*, so a one-line message sits in a three-line box.
 
 ## Window z-order
 
