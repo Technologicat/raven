@@ -62,13 +62,31 @@ status_failed = sym("failed")
 # It is declared here rather than inherited: this used to work only because importing `llmclient` happened
 # to initialize the API as a module-import side effect, so the dependency was real but invisible, and
 # nothing would have reported it if that import were ever reordered away.
-api.initialize(raven_server_url=client_config.raven_server_url,
-               raven_api_key_file=client_config.raven_api_key_file)  # let it create a default executor
+#
+# `main` calls this before anything else, and it must, because the `MaybeRemoteService` constructed below
+# probes for the server. Doing it there rather than at import is what lets `--server-url` reach it at all:
+# at module scope there is no parsed command line yet.
+def _initialize_client_api(raven_server_url: str) -> None:
+    """Bring up `raven.client.api` against `raven_server_url`. Call once, before any `mayberemote` use."""
+    api.initialize(raven_server_url=raven_server_url,
+                   raven_api_key_file=client_config.raven_api_key_file)  # let it create a default executor
 
-# TODO: refactor: tools shouldn't load `visualizer_config`
-dehyphenator = mayberemote.Dehyphenator(allow_local=True,
-                                        model_name=visualizer_config.dehyphenation_model,
-                                        device_string=visualizer_config.devices["sanitize"]["device_string"])
+_dehyphenator = None  # built on first use; see `_get_dehyphenator`
+
+def _get_dehyphenator() -> "mayberemote.Dehyphenator":
+    """The dehyphenator, built the first time something asks for it.
+
+    Not built at import, because its constructor probes the Raven server: that needs the client API to be
+    up, which needs the command line to have been parsed, since `--server-url` is what decides which server
+    it probes.
+    """
+    global _dehyphenator
+    if _dehyphenator is None:
+        # TODO: refactor: tools shouldn't load `visualizer_config`
+        _dehyphenator = mayberemote.Dehyphenator(allow_local=True,
+                                                 model_name=visualizer_config.dehyphenation_model,
+                                                 device_string=visualizer_config.devices["sanitize"]["device_string"])
+    return _dehyphenator
 
 # --------------------------------------------------------------------------------
 # Utilities
@@ -823,7 +841,7 @@ def setup_prompts(llm_settings: env,
             error_info.write(f"Full LLM output trace for EXTRACT ABSTRACT:\n{'-' * 80}\n{full_output_trace(record)}\n")
             return status_failed, error_info.getvalue(), ""
 
-        abstract = dehyphenator.dehyphenate(abstract)
+        abstract = _get_dehyphenator().dehyphenate(abstract)
 
         return status, error_info.getvalue(), abstract
 
@@ -1029,6 +1047,7 @@ def main():
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
 
     parser.add_argument(dest="backend_url", nargs="?", default=librarian_config.llm_backend_url, type=str, metavar="url", help="where to access the LLM API")
+    parser.add_argument("--server-url", dest="server_url", default=None, type=str, metavar="url", help=f"Raven server to talk to, overriding the configured one (default: '{client_config.raven_server_url}'). Used for dehyphenating extracted abstracts.")
 
     conf = parser.add_argument_group("conference info", "Metadata for the conference; injected into all generated BibTeX entries.")
     conf.add_argument("--slug", dest="conference_slug", required=True, type=str, metavar="SLUG", help="Short conference identifier for BibTeX entry keys (e.g. ECCOMAS2024).")
@@ -1054,6 +1073,11 @@ def main():
     logsetup.configure(level=getattr(logging, opts.log_level),
                        logfile=opts.log,
                        allow=[__name__])  # match the original "module-only" filter intent
+
+    raven_server_url = opts.server_url if opts.server_url is not None else client_config.raven_server_url
+    if opts.server_url is not None:
+        logger.info(f"Using Raven server '{raven_server_url}' from --server-url, overriding the configured '{client_config.raven_server_url}'.")
+    _initialize_client_api(raven_server_url)
 
     if opts.retries < 1:
         logger.info(f"-r, --retries: At least one attempt is required, got {opts.retries}. Setting to 1.")

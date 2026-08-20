@@ -24,6 +24,9 @@ parser.add_argument('--log', metavar='PATH', default=None,
 parser.add_argument('--log-level', default='INFO',
                     choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
                     help='root logger level (default: INFO)')
+parser.add_argument('--server-url', metavar='URL', default=None,
+                    help='Raven server to talk to, overriding the configured one; e.g. http://localhost:5100. '
+                         'The LLM backend is the positional argument above; this is the other endpoint.')
 opts = parser.parse_args()
 
 import logging
@@ -88,7 +91,10 @@ def minimal_chat_client(backend_url) -> None:
         # Initialize the raven-server client before asking it anything. `llmclient` used to do this as a
         # module-import side effect, which meant every importer of it paid for the client dependency stack;
         # each app that actually talks to raven-server now says so itself, as `librarian.app` already did.
-        api.initialize(raven_server_url=client_config.raven_server_url,
+        raven_server_url = opts.server_url if opts.server_url is not None else client_config.raven_server_url
+        if opts.server_url is not None:
+            logger.info(f"Using Raven server '{raven_server_url}' from --server-url, overriding the configured '{client_config.raven_server_url}'.")
+        api.initialize(raven_server_url=raven_server_url,
                        raven_api_key_file=client_config.raven_api_key_file)  # let it create a default executor
 
         if not api.test_connection():

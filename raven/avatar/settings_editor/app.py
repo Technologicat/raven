@@ -20,6 +20,9 @@ parser = argparse.ArgumentParser(description="""Raven-avatar settings editor —
 parser.add_argument('-v', '--version', action='version', version=('%(prog)s ' + __version__))
 parser.add_argument('--log', metavar='PATH', default=None,
                     help='mirror stderr log to this file (overwritten each run)')
+parser.add_argument('--server-url', metavar='URL', default=None,
+                    help='Raven server to talk to, overriding the configured one; e.g. http://localhost:5100. '
+                         'This app is a front end for the server, so it does nothing without one.')
 parser.add_argument('--log-level', default='INFO',
                     choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
                     help='root logger level (default: INFO)')
@@ -91,7 +94,10 @@ logger.info(f"Libraries loaded in {tim.dt:0.6g}s.")
 # Module bootup
 
 bg = concurrent.futures.ThreadPoolExecutor()
-api.initialize(raven_server_url=client_config.raven_server_url,
+raven_server_url = opts.server_url if opts.server_url is not None else client_config.raven_server_url
+if opts.server_url is not None:
+    logger.info(f"Using Raven server '{raven_server_url}' from --server-url, overriding the configured '{client_config.raven_server_url}'.")
+api.initialize(raven_server_url=raven_server_url,
                raven_api_key_file=client_config.raven_api_key_file,
                executor=bg)  # reuse our executor for client background tasks
 audio.initialize(player={"device_name": client_config.tts_playback_audio_device},

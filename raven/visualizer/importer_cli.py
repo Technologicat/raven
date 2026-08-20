@@ -28,6 +28,10 @@ def main() -> None:
     parser.add_argument(dest="input_filenames", nargs="+", default=None, type=str, metavar="bib", help="Input, BibTeX file(s) to parse")
     parser.add_argument('--log', metavar='PATH', default=None,
                         help='mirror stderr log to this file (overwritten each run)')
+    parser.add_argument('--server-url', metavar='URL', default=None,
+                        help='Raven server to talk to, overriding the configured one; e.g. http://localhost:5100. '
+                             'Optional — the import pipeline loads NLP and embedding models locally when no '
+                             'server answers, so pointing this at nothing exercises that path.')
     parser.add_argument('--log-level', default='INFO',
                         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
                         help='root logger level (default: INFO)')
@@ -52,7 +56,10 @@ def main() -> None:
         from . import importer
     logger.info(f"    Done in {tim.dt:0.6g}s.")
 
-    api.initialize(raven_server_url=client_config.raven_server_url,
+    raven_server_url = opts.server_url if opts.server_url is not None else client_config.raven_server_url
+    if opts.server_url is not None:
+        logger.info(f"Using Raven server '{raven_server_url}' from --server-url, overriding the configured '{client_config.raven_server_url}'.")
+    api.initialize(raven_server_url=raven_server_url,
                    raven_api_key_file=client_config.raven_api_key_file)
 
     logger.info("Settings (for LOCAL models):")

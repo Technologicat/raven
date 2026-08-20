@@ -26,12 +26,13 @@ def main() -> None:
     parser.add_argument("-j", "--join-paragraphs", dest="join_paragraphs", action="store_true", default=False, help="For each input, send all paragraphs together for processing. May cause paragraphs to run together in the output, but if your input text is REALLY broken and contains newlines at arbitrary places, that's often the only way. If your input has clean paragraph breaks (double newline), you'll getter better results without this option.")
     parser.add_argument('-v', '--version', action='version', version=('%(prog)s ' + __version__))
     parser.add_argument("-V", "--verbose", dest="verbose", action="store_true", default=False, help="Print progress messages (to stderr).")
+    parser.add_argument("--server-url", dest="server_url", default=None, type=str, metavar="url", help=f"Raven server to talk to, overriding the configured one (default: '{client_config.raven_server_url}').")
     opts = parser.parse_args()
 
     if not opts.filenames:
         opts.filenames = [None]  # `None` -> `maybe_open` will open stdin instead.
 
-    api.initialize(raven_server_url=client_config.raven_server_url,
+    api.initialize(raven_server_url=(opts.server_url if opts.server_url is not None else client_config.raven_server_url),
                    raven_api_key_file=client_config.raven_api_key_file)
 
     # TODO: refactor: tools shouldn't load `visualizer_config`

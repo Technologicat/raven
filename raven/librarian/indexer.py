@@ -123,9 +123,11 @@ def main() -> None:
     parser.add_argument("-R", "--no-recursive", dest="recursive", action="store_false", help="Do not descend into subdirectories. Overrides the configured default.")
     parser.add_argument('-v', '--version', action='version', version=('%(prog)s ' + __version__))
     parser.add_argument("-q", "--quiet", dest="quiet", action="store_true", default=False, help="Print only the final summary, not per-document progress.")
+    parser.add_argument("--server-url", dest="server_url", default=None, type=str, metavar="url", help=f"Raven server to talk to, overriding the configured one (default: '{client_config.raven_server_url}'). Indexing computes embeddings, so this is where that happens.")
     opts = parser.parse_args()
 
-    client_api.initialize(raven_server_url=client_config.raven_server_url,
+    raven_server_url = opts.server_url if opts.server_url is not None else client_config.raven_server_url
+    client_api.initialize(raven_server_url=raven_server_url,
                           raven_api_key_file=client_config.raven_api_key_file)
 
     try:
