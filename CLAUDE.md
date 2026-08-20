@@ -46,9 +46,9 @@ index.
   explains why a single `active/` folder was tried and rejected on 2026-08-07.
 - **`investigations/`** — things we measured, profiled or reproduced. **One directory per investigation, holding
   its write-up, its scripts and its data together**, because a measurement whose apparatus lives in another tree
-  is not reproducible in practice however carefully it was written. Currently `context-injects`, `retrieval`,
-  `tool_budget`, `tool_refusal`, `vram`, `tha3-performance`, `anime4k-performance`, `dpg-focus`, `dpg-overlays`,
-  `dpg-dnd`.
+  is not reproducible in practice however carefully it was written. **`investigations/README.md` lists what is
+  there, one line each saying which question it answers** — read that rather than an enumeration here, which
+  went stale at ten of seventeen before anyone noticed.
 - **`TODO.md`** for planned work, **`TODO_DEFERRED.md`** for things noticed mid-task and set aside.
 - **`scripts/`** — repository-maintenance tooling: scripts that check *this repo*, run by a maintainer and
   not shipped in the wheel. Distinct from `raven/tools/`, which holds user-facing console scripts. Each is
@@ -445,7 +445,7 @@ Same shape applies to `nlp` (`nlptools` ↔ `natlang`), `stt`, `embeddings`, `sa
 ### Common Subsystems
 - `raven/common/video/` - Postprocessor, upscaler (PyTorch Anime4K), colorspace conversions, cel compositor
 - `raven/common/audio/` - Player, recorder, codec (PyAV streaming)
-- `raven/common/gui/` - Custom DearPyGui widgets (VU meter, GUI animation framework, messagebox)
+- `raven/common/gui/` - Custom DearPyGui widgets and the shared GUI vocabulary. Widgets: VU meter, messagebox, self-sizing tooltip, thumbnail grid and table cursor (one keyboard cursor, two views), help card, xdot canvas. Frameworks and vocabulary: the GUI animation framework, `filedrop` (OS file drag-and-drop, installed with one call per app), `keyboardmark` (the colour and pulse that say where the keyboard is, so every widget drawing that mark agrees), `layout_math`, `fontsetup`. `api-inventory raven/common/gui/` is the current list; this one is a sample.
 
 **"Every app does X" belongs in `raven/common/gui/`, as a component each app opts into with one call.** Not
 a base class to inherit and not a copy per app: `filedrop.install(...)` in all six GUI apps and
@@ -559,23 +559,28 @@ Target ~700 lines per module as a guideline, not a hard limit — some modules c
 
 ### Test coverage
 
-68 test modules as of 2026-08-03, ~1600 tests. Library and utility code is broadly covered; what is
-untested is the GUI layer and the Visualizer.
+88 test modules as of 2026-08-20, ~2750 tests (`pytest -m "not ml"`). Library and utility code is broadly
+covered, and the GUI layer is no longer the hole it was; what remains untested is the Visualizer and the
+large DPG frontends.
 
-- **`common/`** — numutils, smoothvalue, utils, bgtask, deviceinfo, docextract, logsetup, netutil, nlptools, readcsv, running_average, stringmaps; `text/` (normalize, speakable); `audio/` (codec, resample, utils) and `audio/speech/` (tts, stt, lipsync, and a TTS→STT round trip); `image/` (codec, lanczos, utils); `video/` (colorspace, compositor, postprocessor, upscaler); `gui/` (animation, fontsetup, layout_math, messagebox, utils, filedrop, and all of `xdotwidget/`).
-- **`librarian/`** — chattree, chatutil, hybridir, appstate, scaffold, llmclient, cleanup, imagestore, sidecarstore, textfilestore.
-- **Elsewhere** — `client/` (api, mayberemote), `papers/*`, `cherrypick/*`, `server/webfetch`, `xdot_viewer/dot_utils`.
+- **`common/`** — bgtask, datastorelock, deviceinfo, docextract, filelisting, logsetup, netutil, nlptools, numutils, readcsv, running_average, smoothvalue, stringmaps, utils; `text/` (normalize, speakable); `audio/` (codec, resample, utils) and `audio/speech/` (tts, stt, lipsync, and a TTS→STT round trip); `image/` (codec, lanczos, utils); `video/` (colorspace, compositor, postprocessor, upscaler); `gui/` (animation, filedrop, filegrid, fontsetup, gridnav, helpcard, layout_math, messagebox, tablecursor, thumbnailgrid, tileicons, tooltip, utils, a characterization of DPG's own focus semantics, and all of `xdotwidget/`).
+- **`librarian/`** — agent, appstate, chat_controller, chattree, chatutil, cleanup, hybridir, imagestore, indexer, llmclient, scaffold, sidecarstore, textfilestore.
+- **Elsewhere** — `vendor/file_dialog` (the largest single module's worth, at ~175 tests), `client/` (api, mayberemote), `papers/*`, `cherrypick/*`, `server/webfetch`, `xdot_viewer/dot_utils`.
 
 What is **not** covered:
 
 - **Visualizer has zero tests.** Still the biggest gap, and the refactor that motivated writing them
   landed without them — so what they would pin now is the new module boundaries rather than a rewrite
   in flight.
-- **The DPG frontends**: librarian `app`, `chat_controller`, `cleanup_dialog`, and every Visualizer GUI
-  module. **Not because DPG resists testing** — it runs without a mapped window, and `common/gui/tests/`
-  already drives a real context with an unmapped viewport. See `dpg-notes.md`, "Testing DPG code". The
-  barrier is that nobody has written them for the large frontend modules, which is a different and more
-  tractable problem than "untestable".
+- **The DPG frontends**: librarian `app` and `cleanup_dialog`, and every Visualizer GUI module. **Not
+  because DPG resists testing** — it runs without a mapped window, and `common/gui/tests/` already drives a
+  real context with an unmapped viewport. See `dpg-notes.md`, "Testing DPG code". The barrier is that nobody
+  has written them for the large frontend modules, which is a different and more tractable problem than
+  "untestable".
+  - **`vendor/file_dialog` is the proof, and it is a large frontend module by any measure**: 175 tests over
+    a 2900-line DPG widget, covering its listing rules, its keyboard, its colours and its promised target.
+    They are what made a month of keyboard work safe to do. Whatever is in the way for `app.py`, it is not
+    the toolkit.
   - **And they run in CI, on all three platforms**, since 2026-08-12: `dearpygui` and `mistletoe` are in
     `requirements-ci.txt`, which brought 57 tests that had only ever run on a dev machine into every push
     (2090 → 2147 passing). The open question was whether GLFW could get a context on a runner with no
