@@ -30,6 +30,9 @@ empty or missing: it names the code that has to have run first.
 | `themes_and_fonts`               | `unpythonic.env.env`        | `app.py` DPG bootup                   | DPG theme + font handles produced by `guiutils.bootup`.        |
 | `selection_data_idxs_box`        | `box(np.ndarray)`           | `app.py` selection-management section | Boxed current selection (indices into `dataset.sorted_*`).     |
 | `filedialog_save`                | `FileDialog` / None         | `app.py` `initialize_filedialogs`     | The save-word-cloud `FileDialog` instance.                     |
+| `copy_report_tooltip`            | `gui_tooltip.Tooltip`       | `app.py` info-panel toolbar           | Caption of the copy-report button. A `Tooltip` rather than a tag, because a flash rewrites it and a `dpg.tooltip` would draw one frame at its old size. |
+| `word_cloud_tooltip`             | `gui_tooltip.Tooltip`       | `app.py` main toolbar                 | Caption of the word-cloud toggle button; `word_cloud` swaps in a "please wait" while rendering. |
+| `word_cloud_save_tooltip`        | `gui_tooltip.Tooltip`       | `app.py` word-cloud toolbar           | Caption of the save button; the acknowledgment names the saved file. |
 | `enter_modal_mode`               | callable                    | `app.py` modal-window utilities       | Prepare GUI for showing a modal (hide annotation, etc.).       |
 | `exit_modal_mode`                | callable                    | `app.py` modal-window utilities       | Restore GUI after closing a modal.                             |
 | `is_any_modal_window_visible`    | callable → bool             | `app.py` modal-window utilities       | Whether some modal window is currently open.                   |

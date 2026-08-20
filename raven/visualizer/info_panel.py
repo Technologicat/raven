@@ -477,8 +477,7 @@ def _copy_report_to_clipboard(*, report_format):
     gui_animation.flash_button(button="copy_report_to_clipboard_button",  # tag
                                message=f"Copied to clipboard! ({'plain text' if report_format == 'txt' else 'Markdown'})",
                                duration=gui_config.acknowledgment_duration,
-                               tooltip="copy_report_tooltip",  # tag
-                               text="copy_report_tooltip_text")  # tag
+                               tooltip=app_state.copy_report_tooltip)
 
 
 def copy_current_entry_to_clipboard():

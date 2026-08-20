@@ -85,6 +85,7 @@ with timer() as tim:
     from ..common.gui import helpcard
     from ..common.gui import messagebox
     from ..common.gui import filedrop
+    from ..common.gui import tooltip as gui_tooltip
     from ..common.gui import utils as guiutils
 
     from .app_state import app_state  # Visualizer-wide shared state namespace (see `app_state.py`)
@@ -802,8 +803,9 @@ with timer() as tim:
                                        enabled=False)
                         dpg.bind_item_font("copy_report_to_clipboard_button", app_state.themes_and_fonts.icon_font_solid)  # tag
                         dpg.bind_item_theme("copy_report_to_clipboard_button", "disablable_widget_theme")  # tag
-                        with dpg.tooltip("copy_report_to_clipboard_button", tag="copy_report_tooltip"):  # tag
-                            dpg.add_text("Copy report to clipboard [F8]\n    no modifier: as plain text\n    with Shift: as Markdown", tag="copy_report_tooltip_text")  # TODO: DRY duplicate definitions for labels
+                        # Self-sizing: the copy acknowledgment replaces this three-line caption with one line.
+                        app_state.copy_report_tooltip = gui_tooltip.Tooltip("copy_report_to_clipboard_button",  # tag
+                                                                            "Copy report to clipboard [F8]\n    no modifier: as plain text\n    with Shift: as Markdown")  # TODO: DRY duplicate definitions for labels
 
                         # Static header text
                         dpg.add_text("Item information", color=(255, 255, 255, 255), tag="item_information_title")
@@ -1084,9 +1086,9 @@ with timer() as tim:
                                indent=gui_config.toolbutton_indent,
                                width=gui_config.toolbutton_w)
                 dpg.bind_item_font("word_cloud_button", app_state.themes_and_fonts.icon_font_solid)  # tag
-                with dpg.tooltip("word_cloud_button", tag="word_cloud_tooltip"):  # tag
-                    dpg.add_text("Toggle word cloud window [F10]",
-                                 tag="word_cloud_button_tooltip_text")
+                # Self-sizing: `word_cloud` swaps in a "please wait" caption while a cloud is rendering.
+                app_state.word_cloud_tooltip = gui_tooltip.Tooltip("word_cloud_button",  # tag
+                                                                    "Toggle word cloud window [F10]")
 
                 # Miscellaneous controls
 
@@ -1212,8 +1214,9 @@ with timer() as tim:
                            indent=gui_config.toolbutton_indent,
                            width=gui_config.toolbutton_w)
             dpg.bind_item_font("word_cloud_save_button", app_state.themes_and_fonts.icon_font_solid)  # tag
-            with dpg.tooltip("word_cloud_save_button", tag="word_cloud_save_tooltip"):  # tag
-                dpg.add_text("Save word cloud as PNG [Ctrl+S]", tag="word_cloud_save_tooltip_text")
+            # Self-sizing: the save acknowledgment names the file, which is longer than the caption.
+            app_state.word_cloud_save_tooltip = gui_tooltip.Tooltip("word_cloud_save_button",  # tag
+                                                                     "Save word cloud as PNG [Ctrl+S]")
 
     # BibTeX importer integration. This allows invoking the BibTeX importer from the Raven-visualizer GUI.
     with dpg.window(show=False, modal=False, no_title_bar=False, tag="importer_window",

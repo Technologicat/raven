@@ -135,7 +135,7 @@ def _render_worker(*, task_env):
             else:
                 dpg.set_item_label("word_cloud_window", "Word cloud [updating]")
                 dpg.set_item_label("word_cloud_button", fa.ICON_CLOUD_BOLT)
-                dpg.set_value("word_cloud_button_tooltip_text", "Generating word cloud, just for you. Please wait. [F10]")
+                app_state.word_cloud_tooltip.text = "Generating word cloud, just for you. Please wait. [F10]"
                 gui_animation.flash_button(button="word_cloud_button",  # tag
                                            duration=gui_config.acknowledgment_duration)  # the tooltip is handled manually, so it is not flashed along
 
@@ -174,7 +174,7 @@ def _render_worker(*, task_env):
     finally:
         dpg.set_item_label("word_cloud_window", "Word cloud")  # TODO: DRY duplicate definitions for labels
         dpg.set_item_label("word_cloud_button", fa.ICON_CLOUD)
-        dpg.set_value("word_cloud_button_tooltip_text", "Toggle word cloud window [F10]")  # TODO: DRY duplicate definitions for labels
+        app_state.word_cloud_tooltip.text = "Toggle word cloud window [F10]"  # TODO: DRY duplicate definitions for labels
 
 
 def toggle_window():
@@ -227,8 +227,7 @@ def save_to_file(filename):
     gui_animation.flash_button(button="word_cloud_save_button",  # tag
                                message=f"Saved to '{filename}'!",
                                duration=gui_config.acknowledgment_duration,
-                               tooltip="word_cloud_save_tooltip",  # tag
-                               text="word_cloud_save_tooltip_text")  # tag
+                               tooltip=app_state.word_cloud_save_tooltip)
 
     def write_task():
         logger.debug(f"save_to_file.write_task: Saving word cloud image to '{filename}'.")
