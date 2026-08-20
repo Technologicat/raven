@@ -1357,17 +1357,22 @@ with timer() as tim:
                             captured at GUI-build time). `ensure_exists` creates the directory first — for the documents drop
                             folder, which may not exist yet on a fresh install."""
                             def callback() -> None:
+                                # The `try` covers opening the folder and nothing else, so that a fault in
+                                # the acknowledgment is not caught here and reported as the folder having
+                                # failed to open. One flash, outside it, for the same reason: a broken
+                                # acknowledgment reported through a second acknowledgment breaks twice and
+                                # says so once. Same shape as `chat_controller`'s action buttons.
                                 try:
                                     directory = get_dir()
                                     if ensure_exists:
                                         common_utils.create_directory(directory)
                                     common_utils.open_in_file_manager(directory)
-                                    gui_animation.flash_button(button=button_tag, tooltip=tooltip,
-                                                               ok=True, message=ok_message, duration=gui_config.acknowledgment_duration)
+                                    ok, message = True, ok_message
                                 except Exception as exc:  # noqa: BLE001 -- opening a folder must never crash the GUI
                                     logger.error(f"open-folder utility ({button_tag}): {type(exc)}: {exc}")
-                                    gui_animation.flash_button(button=button_tag, tooltip=tooltip,
-                                                               ok=False, message="Couldn't open folder", duration=gui_config.acknowledgment_duration)
+                                    ok, message = False, "Couldn't open folder"
+                                gui_animation.flash_button(button=button_tag, tooltip=tooltip,
+                                                           ok=ok, message=message, duration=gui_config.acknowledgment_duration)
                             return callback
 
                         # The callback is bound after the button rather than at creation, because it flashes
