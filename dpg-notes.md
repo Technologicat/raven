@@ -429,6 +429,15 @@ front but also steals keyboard focus.
 initialization (before the render loop), not lazily during hover. Windows
 created mid-render-loop may end up behind earlier windows.
 
+**But a primary window is the exception, and it is the one that matters here.**
+Measured 2026-08-20 on DPG 2.3.1: a window created 60 frames into the render
+loop draws in front of the primary window, which is what "the primary window is
+always at the back" says and what the 2026-04-03 entry below reads as denying.
+So a tooltip window built as a chat view rebuilds is fine, as long as the app
+sets a primary window — Librarian and Visualizer both do. The rule still binds
+between two ordinary windows.
+`investigations/dpg-autosize/probe_zorder.py` re-runs it in a few seconds.
+
 ## A modal window does not stack over another modal window
 
 `show_item` on a second modal while one is already up does nothing visible. The call succeeds, no error
