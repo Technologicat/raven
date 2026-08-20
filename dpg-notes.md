@@ -353,70 +353,52 @@ appearance, but the bottom then has zero padding.
 to the content group for bottom padding. Typically N=2 balances well against
 the font's natural ascender space.
 
-## An autosize window is one frame behind its content
+## An autosize window is one frame behind its content — and whether that shows depends on the window's age
 
-Change what an autosize window contains, and exactly one rendered frame shows the **new content at the old
-size** — too narrow for a longer caption, too wide for a shorter one. ImGui auto-fits from the content size
-it measured on the *previous* frame, so the size and the content it describes are never the same frame's.
+`get_item_rect_size` on an autosize window reports the size auto-fit computed from the content it measured
+on the *previous* frame. So after any content change there is one frame where the reported size describes
+the content that was there before. Measured 2026-08-20 on DPG 2.3.1, an autosize window holding one text
+item, width in pixels:
 
-**How the content changed makes no difference.** Measured 2026-08-20 on DPG 2.3.1, an autosize window
-holding one text item, width in pixels:
+| frame | `set_value` | hide/show two widgets | hidden window, reshown | window created fresh | explicit `width=` |
+|---|---|---|---|---|---|
+| +1 | 100 | 100 | 100 | 100 | **371** |
+| +2 | 371 | 371 | 371 | 371 | 371 |
 
-| frame | `set_value` on the text | hide one text, show a longer one | explicit `width=`, set the same moment |
-|---|---|---|---|
-| +1 | 100 (stale) | 100 (stale) | **371 (correct)** |
-| +2 | 371 | 371 | 371 |
+**That table is nearly useless on its own, and the trap is worth stating before the finding.** The reported
+size is stale in every case except an explicitly sized window, which suggests every case glitches equally.
+Photographs of those same frames say otherwise:
 
-So swapping between two pre-built widgets — the instinct that it is faster than mutating one — buys
-nothing, and neither would double-buffering the content. The lag is in auto-fit, not in the content change.
-
-**An explicitly sized window has no lag at all**, which is the only way measured to make the first frame
-correct. But it is unavailable exactly where this bites: **`dpg.configure_item(tooltip, width=...)` raises
-`width keyword does not exist`** — a tooltip's size is auto-fit and cannot be set. In the same run the
-autosize window snapped to 371 on frame +1 while the tooltip beside it was still at 53.
-
-What is left is to keep the stale frame off screen rather than to remove it.
-`raven.client.avatar_controller.reposition_subtitle` is the worked example: it parks the subtitle at
-`(main_window_w, main_window_h)` — offscreen — `split_frame()`s so layout catches up, reads the size that
-is now correct, positions the widget, and `split_frame()`s again. Same shape available to anything else
-that needs a size before it can place or reveal something, with the usual constraint that `split_frame`
-cannot be called from the render thread (see *Threading*).
-
-**Offscreen, not hidden, and that distinction is the whole trick.** A hidden item is not laid out and keeps
-whatever metrics it last had, so hiding something across the change *defers* the stale frame instead of
-skipping it. Measured the same day, same window, width in pixels:
-
-| | window | text item |
-|---|---|---|
-| hidden, then the text changed to a longer one | 100 | 37 — still the *old* text's width |
-| shown again, frame +1 | 100 (stale) | 355 |
-| shown again, frame +2 | 371 | 355 |
-
-The first visible frame is the mis-sized one either way. So "hide it while it settles" does not work, and
-neither does anything else that stops the widget being drawn — being drawn is what produces the measurement
-that auto-fit needs.
-
-**Nor does a window ImGui has never seen before**, which is the last plausible escape and the one worth
-recording so nobody spends an afternoon on it. A window created at runtime already holding its content is
-stale on its first visible frame too, and so is one built hidden and shown later:
-
-| first visible frame | second |
+| | frame +1, on screen |
 |---|---|
-| created fresh, holding the long text: **100 × 100** | 371 × 105 |
-| pre-built hidden, shown later: **100 × 100** | 371 × 105 |
-| existing window, `set_value`: **100 × 100** | 371 × 105 |
+| existing window, `set_value` | **drawn, clipped** — the new text in the old window |
+| existing window, hidden and reshown | **drawn, clipped** — identically |
+| window created fresh, already holding the content | **not drawn at all** |
 
-There is no measure-then-appear path — and note the stale size for a *new* window is DPG's default 100 × 100
-rather than anything to do with the content, so swapping in a freshly built tooltip trades a slightly wrong
-size for a briefly tiny one. (This is presumably also true of a tooltip's genuine first hover; nobody has
-sampled that frame.)
+A window ImGui has not laid out before is measured and *withheld* for that frame, then appears fitted. So a
+freshly built window never shows a stale frame, while an existing one always does — and `get_item_rect_size`
+cannot tell the two apart, because it reports the same 100 either way. **Measure this with pixels, not with
+the geometry API.** (Live case: three conclusions were drawn from the reported sizes and two were wrong,
+until Juha objected that a tooltip has never once been seen to glitch on first hover — which the metric
+says it should.)
 
-**So the lag is unconditional: four mechanisms, one frame, every time.** What remains is to give auto-fit
-nothing to react to — a fixed-size child window as the content, a spacer sized to the widest and tallest
-state, or a message padded to the line count of the text it replaces. All three are the same bargain in
-different clothes, and it is worth naming before choosing one: **the size stops changing because it is
-always the largest state's size**, so a one-line message sits in a three-line box. A resize glitch on change
-or constant extra space; DPG offers no third answer while a tooltip cannot be sized.
+**Hence the fix for a tooltip whose caption changes: build a new one, rather than editing or re-showing the
+existing one.** Editing it is what makes the flash of a wrong-sized tooltip that a changing caption is
+notorious for. Note that a tooltip cannot be sized out of the problem instead —
+`dpg.configure_item(tooltip, width=...)` raises `width keyword does not exist`.
+
+**And a hidden item is not laid out at all**, keeping whatever metrics it last had — its own width stays at
+the *old* text's 37 while hidden, however long it stays hidden. Which is why
+`raven.client.avatar_controller.reposition_subtitle` parks the subtitle offscreen at
+`(main_window_w, main_window_h)` rather than hiding it: it needs the thing drawn in order to measure it.
+It then `split_frame()`s so layout catches up, reads the now-correct size, positions the widget, and
+`split_frame()`s again — the standard shape for needing a size before you can place something, subject to
+`split_frame` not being callable from the render thread (see *Threading*).
+
+The remaining option, if rebuilding is impractical, is to give auto-fit nothing to react to: a fixed-size
+child window as the content, or a spacer sized to the largest state. Worth naming what that costs before
+choosing it — the size stops changing *because it is always the largest state's size*, so a one-line
+message sits in a three-line box.
 
 ## Window z-order
 
