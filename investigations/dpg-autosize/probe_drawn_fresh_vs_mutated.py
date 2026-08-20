@@ -3,7 +3,8 @@
 Renders exactly one frame at a time and then stops, so whatever is on screen is that frame and can be
 photographed. `get_item_rect_size` is recorded alongside, so the two can be compared directly.
 """
-import json, os, time
+import json
+import time
 import dearpygui.dearpygui as dpg
 from raven.common.gui import utils as guiutils
 

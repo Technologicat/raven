@@ -5,7 +5,8 @@ Three ways of changing it, measured the same way:
   B  hide one text widget, show a longer one    (Juha's proposal)
   C  set_value, plus an explicit size the same frame
 """
-import json, time
+import json
+import time
 import dearpygui.dearpygui as dpg
 from raven.common.gui import utils as guiutils
 
@@ -50,27 +51,36 @@ def watch(tag, n=6):
 settle(60, "baseline-short")
 
 # A: set_value
-dpg.set_value(auto_a, LONG); dpg.set_value(tip_a, LONG)
+dpg.set_value(auto_a, LONG)
+dpg.set_value(tip_a, LONG)
 measure("A-set_value(before any frame)")
 watch("A")
 
 # back to short
-dpg.set_value(auto_a, SHORT); dpg.set_value(tip_a, SHORT); settle(30, "reset")
+dpg.set_value(auto_a, SHORT)
+dpg.set_value(tip_a, SHORT)
+settle(30, "reset")
 
 # B: show/hide swap
-dpg.hide_item(auto_a); dpg.show_item(auto_b)
-dpg.hide_item(tip_a); dpg.show_item(tip_b)
+dpg.hide_item(auto_a)
+dpg.show_item(auto_b)
+dpg.hide_item(tip_a)
+dpg.show_item(tip_b)
 measure("B-swap(before any frame)")
 watch("B")
 
 # back to short
-dpg.show_item(auto_a); dpg.hide_item(auto_b)
-dpg.show_item(tip_a); dpg.hide_item(tip_b); settle(30, "reset")
+dpg.show_item(auto_a)
+dpg.hide_item(auto_b)
+dpg.show_item(tip_a)
+dpg.hide_item(tip_b)
+settle(30, "reset")
 
 # C: set_value plus an explicit width, computed without rendering
 text_w = dpg.get_text_size(LONG)[0]
 padded = int(text_w + 2 * guiutils.DPG_WINDOW_PADDING)
-dpg.set_value(auto_a, LONG); dpg.set_value(tip_a, LONG)
+dpg.set_value(auto_a, LONG)
+dpg.set_value(tip_a, LONG)
 dpg.configure_item(auto, autosize=False, width=padded)
 measure(f"C-set_value+width({padded}, text {text_w:.0f})")
 watch("C")

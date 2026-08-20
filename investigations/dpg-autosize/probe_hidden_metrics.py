@@ -3,7 +3,8 @@
 (a) Does a hidden text item report metrics at all?
 (b) Hide the window, change the text, show it again — is the first visible frame correct?
 """
-import json, time
+import json
+import time
 import dearpygui.dearpygui as dpg
 from raven.common.gui import utils as guiutils
 
@@ -28,25 +29,35 @@ def frames(n):
     for _ in range(n):
         dpg.render_dearpygui_frame()
 
-frames(60); note("visible, short")
+frames(60)
+note("visible, short")
 
 # (a) metrics of a hidden item
-dpg.hide_item(caption); frames(3); note("caption hidden")
-dpg.set_value(caption, LONG); frames(3); note("hidden, text changed to long")
+dpg.hide_item(caption)
+frames(3)
+note("caption hidden")
+dpg.set_value(caption, LONG)
+frames(3)
+note("hidden, text changed to long")
 dpg.show_item(caption)
 for i in range(4):
-    frames(1); note(f"caption reshown +{i + 1}")
+    frames(1)
+    note(f"caption reshown +{i + 1}")
 
 # reset
-dpg.set_value(caption, SHORT); frames(30); note("reset to short")
+dpg.set_value(caption, SHORT)
+frames(30)
+note("reset to short")
 
 # (b) hide the whole window across the change
 dpg.hide_item(auto)
 dpg.set_value(caption, LONG)
-frames(3); note("window hidden, text changed")
+frames(3)
+note("window hidden, text changed")
 dpg.show_item(auto)
 for i in range(4):
-    frames(1); note(f"window reshown +{i + 1}")
+    frames(1)
+    note(f"window reshown +{i + 1}")
 
 with open("HIDE_LOG", "w") as f:
     json.dump(log, f)

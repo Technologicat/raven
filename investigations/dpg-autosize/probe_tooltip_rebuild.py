@@ -4,7 +4,8 @@ A: mutate the caption of the live tooltip            (today's behaviour)
 B: delete the tooltip, build a new one with the message
 C: ...then delete that and rebuild the original      (the way back)
 """
-import json, time
+import json
+import time
 import dearpygui.dearpygui as dpg
 from raven.common.gui import utils as guiutils
 

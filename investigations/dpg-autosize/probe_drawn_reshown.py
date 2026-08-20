@@ -2,7 +2,8 @@
 
 If yes, the fix is `hide -> set_value -> show`. If no, the tooltip has to be built fresh.
 """
-import json, time
+import json
+import time
 import dearpygui.dearpygui as dpg
 from raven.common.gui import utils as guiutils
 
