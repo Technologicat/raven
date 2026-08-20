@@ -685,7 +685,7 @@ class WidgetFlash(Animation):
 def flash_button(*,
                  button: str | int,
                  duration: float,
-                 tooltip: str | int | None = None,
+                 tooltip: str | int | object | None = None,
                  text: str | int | None = None,
                  message: str | None = None,
                  ok: bool = True) -> None:
@@ -699,6 +699,14 @@ def flash_button(*,
     `button`: the button to flash (DPG tag or ID).
     `duration`: flash duration in seconds.
     `tooltip`: the button's tooltip to flash along with it, if any (`None` to flash the button alone).
+               Either kind of tooltip:
+
+                 - A DPG tag or ID flashes that widget, and `text` separately names the caption inside it.
+                 - A `tooltip.Tooltip` supplies both: its window and its caption flash, and `message` goes
+                   through it, so the tooltip resizes to the message without a mis-sized frame in between.
+                   Passing `text` as well raises `ValueError` — the tooltip already knows its caption, so a
+                   second one named beside it can only be a mistake about which tooltip this is.
+
     `text`: the text widget whose content becomes `message` during the flash, and which flashes along with
             the button — typically the caption inside `tooltip`, but independent of it.
     `message`: text shown in `text` for the flash duration, then restored. `None` (the default) leaves the
@@ -707,11 +715,21 @@ def flash_button(*,
     `ok`: `True` (default) flashes green (success); `False` flashes red (failure). The green matches
           `WidgetFlash`'s own default colors, so a plain success acknowledgment need not think about color.
     """
+    # A `Tooltip` is adapted here rather than at each call site, so that no call site has to know how one is
+    # put together. A DPG tag is a `str` or an `int`, so the two cases cannot be confused.
+    if tooltip is None or isinstance(tooltip, (str, int)):
+        also_flash = [widget for widget in (tooltip, text) if widget is not None]
+        message_target = text
+    else:
+        if text is not None:
+            raise ValueError(f"flash_button: button '{button}': `text` was given alongside a `Tooltip`, which supplies its own caption; pass one or the other.")
+        also_flash = [tooltip.window, tooltip.caption]
+        message_target = tooltip
     animator.add(WidgetFlash(target=button,
                              duration=duration,
-                             also_flash=[widget for widget in (tooltip, text) if widget is not None],
+                             also_flash=also_flash,
                              message=message,
-                             message_target=text,
+                             message_target=message_target,
                              flash_color=((96, 128, 96) if ok else (150, 96, 96)),
                              text_color=((180, 255, 180) if ok else (255, 180, 180))))
 

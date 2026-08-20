@@ -375,6 +375,40 @@ class TestPaintList:
         assert any("message" in record.message for record in caplog.records)
 
 
+class TestFlashButtonTooltipAdapter:
+    """`flash_button` takes either kind of tooltip, so that no call site has to know how a `Tooltip` is built."""
+
+    def test_a_tooltip_object_supplies_both_the_paint_list_and_the_message_target(self, widgets):
+        """It is one object standing for two widgets plus a text channel, and all three have to land."""
+        _, button = widgets
+        tip = tooltip.Tooltip(button, "resting caption")
+        try:
+            animation.flash_button(button=button, duration=5.0, tooltip=tip, message="Copied!")
+            flash = animation.WidgetFlash.instances[button]
+            assert flash.also_flash == (tip.window, tip.caption), "both of the tooltip's widgets are painted"
+            assert flash.message_target is tip, "and the message goes through the tooltip, not into its caption"
+        finally:
+            tip.destroy()
+
+    def test_a_dpg_tooltip_still_takes_its_caption_separately(self, widgets):
+        """The plain case is the majority of call sites, and a tag is not a tooltip object."""
+        text, button = widgets
+        animation.flash_button(button=button, duration=5.0, tooltip=text, text=text, message="Copied!")
+        flash = animation.WidgetFlash.instances[button]
+        assert flash.also_flash == (text, text)
+        assert flash.message_target == text
+
+    def test_a_caption_given_alongside_a_tooltip_object_is_a_call_site_bug(self, widgets):
+        """`text` has nothing to do in that case, so naming one means the call site has the wrong tooltip in mind."""
+        _, button = widgets
+        tip = tooltip.Tooltip(button, "resting caption")
+        try:
+            with pytest.raises(ValueError):
+                animation.flash_button(button=button, duration=5.0, tooltip=tip, text=tip.caption, message="Copied!")
+        finally:
+            tip.destroy()
+
+
 class TestDeduplication:
     def test_second_flash_on_the_same_widget_does_not_reify(self, widgets):
         """At most one flash owns a widget; the loser goes into ghost mode."""

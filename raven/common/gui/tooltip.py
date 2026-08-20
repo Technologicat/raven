@@ -117,6 +117,11 @@ class Tooltip:
         `x_algorithm`, `y_algorithm`: how the tooltip is placed along each axis when the cursor is near an
                                       edge of the viewport. See `guiutils.compute_tooltip_position_scalar`
                                       for what each one does; the defaults are the pairing it recommends.
+
+        Two DPG widgets are public, for a caller that needs to paint the tooltip itself: `window` is the
+        tooltip's window, and `caption` the text item inside it. `animation.flash_button` accepts a
+        `Tooltip` in its `tooltip=` parameter and finds them itself, so reach for them directly only when
+        building a `WidgetFlash` by hand.
         """
         self.target = target
         self.offset = (offset, offset) if isinstance(offset, int) else tuple(offset)
