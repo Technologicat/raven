@@ -87,12 +87,24 @@ knowing how a `Tooltip` is put together: `also_flash=(tip.window, tip.caption)` 
 `message_target=tip` so the text goes through the staged path. That keeps `text=` for the plain
 `dpg.tooltip` case, which the apps still use everywhere a caption never changes.
 
-Then the Librarian sites: each `with dpg.tooltip(button): dpg.add_text(caption)` whose caption is replaced
-by a flash message becomes a `Tooltip(button, caption)`. Only the ones that *flash* need it — a caption
-that is written once is better off as a `dpg.tooltip`, and the component's docstring says so.
+Then the call sites: each `with dpg.tooltip(button): dpg.add_text(caption)` whose caption is replaced by a
+flash message becomes a `Tooltip(button, caption)`. Only the ones that *flash* need it — a caption written
+once is better off as a `dpg.tooltip`, and the component's docstring says so.
+
+**Visualizer is in scope too** (Juha, 2026-08-20), not only Librarian. Counting `flash_button` sites that
+carry a caption: Librarian about 13 (`app.py` 10, `chat_controller.py` 3) and Visualizer about 4
+(`word_cloud.py` 2, `info_panel.py` 2), plus the two sites that build a `WidgetFlash` directly and have
+tooltips — Librarian's delete-subtree confirmation and its send gate. Cherrypick's one flash has no
+tooltip, and the file dialog's flashes write to a notification *line* rather than to a caption, so neither
+of those apps is affected.
+
+The second consumer is the point rather than a bonus: `CLAUDE.md` observes that wiring a component into a
+second app is what surfaces the API gaps the first one hid, and doing Librarian alone would leave this one
+shaped by exactly one caller.
 
 **This step wants live testing**, since it changes what a real tooltip does on screen and the whole point
-is how it looks.
+is how it looks. Librarian's copy-chatlog button is the sharpest case: a three-line caption replaced by a
+one-line acknowledgment, which is the jump that started all this.
 
 ## Afterwards
 
