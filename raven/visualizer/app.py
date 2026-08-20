@@ -25,6 +25,10 @@ parser.add_argument('--log', metavar='PATH', default=None,
 parser.add_argument('--log-level', default='INFO',
                     choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
                     help='root logger level (default: INFO)')
+parser.add_argument('--server-url', metavar='URL', default=None,
+                    help='Raven server to talk to, overriding the configured one; e.g. http://localhost:5100. '
+                         'Optional here — the importer loads NLP and embedding models locally when no server '
+                         'answers — so pointing this at nothing is how to exercise that fallback.')
 opts = parser.parse_args()
 
 import logging
@@ -1880,7 +1884,10 @@ logger.info("App bootup...")
 # `raven.client.api` must be initialized before any mayberemote call. The BibTeX importer uses
 # mayberemote for NLP during the import pipeline, so it needs this. No server connection is
 # made here — that happens lazily on the first HTTP call.
-api.initialize(raven_server_url=client_config.raven_server_url,
+raven_server_url = opts.server_url if opts.server_url is not None else client_config.raven_server_url
+if opts.server_url is not None:
+    logger.info(f"Using Raven server '{raven_server_url}' from --server-url, overriding the configured '{client_config.raven_server_url}'.")
+api.initialize(raven_server_url=raven_server_url,
                raven_api_key_file=client_config.raven_api_key_file)
 
 # Probe the server once at startup, so its presence or absence is explicit in the log rather than
@@ -1888,9 +1895,9 @@ api.initialize(raven_server_url=client_config.raven_server_url,
 # optional — the importer falls back to loading NLP/embedding models locally — so both outcomes are
 # informational, not errors.
 if api.raven_server_available():
-    logger.info(f"Raven-server is available at '{client_config.raven_server_url}'; server-side acceleration will be used where applicable.")
+    logger.info(f"Raven-server is available at '{raven_server_url}'; server-side acceleration will be used where applicable.")
 else:
-    logger.info(f"Raven-server is not available at '{client_config.raven_server_url}'; running standalone, models will be loaded locally as needed.")
+    logger.info(f"Raven-server is not available at '{raven_server_url}'; running standalone, models will be loaded locally as needed.")
 
 app_state.bg = concurrent.futures.ThreadPoolExecutor()  # for info panel and tooltip annotation updates
 # Subsystem task managers (annotation, info panel, word cloud) are created lazily inside their own modules on first use.
