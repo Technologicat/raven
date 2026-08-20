@@ -63,6 +63,16 @@ DISABLED_TEXT_COLOR = (0.50 * 255, 0.50 * 255, 0.50 * 255, 1.00 * 255)
 # colour as the sentinel `(-1, 0, 0, 1)` — a widget that never declared one has no destination of its own.
 DEFAULT_TEXT_COLOR = (255, 255, 255)
 
+# The background a button rests at, for animations that have to fade one back to normal. Measured the same
+# way as `DEFAULT_TEXT_COLOR`, and opaque: a button renders identically over black and over white, so this
+# is the colour rather than a composite of it against what happens to be behind.
+#
+# Declared in the global theme for a reason the text colour only has in principle. The value this replaced
+# was `(45, 45, 48)`, correct when someone measured it and silently wrong by the time anyone looked again —
+# so the fade ran to a colour a shade too dark and snapped at the end. Declaring it is what stops a
+# transcription of a default from drifting away from the default.
+DEFAULT_BUTTON_BG_COLOR = (51, 51, 55)
+
 # ---------------------------------------------------------------------------
 # Fonts & themes
 # ---------------------------------------------------------------------------
@@ -309,6 +319,7 @@ def setup_themes() -> env:
             # so without this the value exists only inside the toolkit, and code that needs to fade back to
             # normal text has nothing to aim at.
             dpg.add_theme_color(dpg.mvThemeCol_Text, DEFAULT_TEXT_COLOR, category=dpg.mvThemeCat_Core)
+            dpg.add_theme_color(dpg.mvThemeCol_Button, DEFAULT_BUTTON_BG_COLOR, category=dpg.mvThemeCat_Core)
             dpg.add_theme_style(dpg.mvStyleVar_FrameRounding, 6, category=dpg.mvThemeCat_Core)
             dpg.add_theme_style(dpg.mvStyleVar_WindowRounding, 8, category=dpg.mvThemeCat_Core)
             dpg.add_theme_style(dpg.mvStyleVar_ChildRounding, 8, category=dpg.mvThemeCat_Core)

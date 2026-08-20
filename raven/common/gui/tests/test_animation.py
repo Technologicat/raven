@@ -135,16 +135,15 @@ class TestTextTarget:
     def test_a_text_target_can_carry_a_message_too(self, widgets):
         """Which is how a status line says something in the color that says it: one widget, both channels.
 
-        The message and the color are independent of each other, so the text branch has to do both — it
-        used to fade the color and drop the message on the floor, leaving a caller with a red line and
-        nothing written on it.
+        Painting and saying are independent, so a widget can be asked for both at once — and naming no
+        `message_target` puts the message on `target`, which is the whole shape of this case.
         """
         text, _ = widgets
         dpg.set_value(text, "")
 
-        animation.animator.add(animation.WidgetFlash(message="cannot open that", target=text,
-                                                     target_tooltip=None, target_text=text,
-                                                     duration=0.5, text_color=FLASH_COLOR))
+        animation.animator.add(animation.WidgetFlash(target=text, duration=0.5,
+                                                     message="cannot open that",
+                                                     text_color=FLASH_COLOR))
         animation.animator.render_frame()
         assert dpg.get_value(text) == "cannot open that"
         assert _widget_color(text) == list(FLASH_COLOR)
@@ -163,9 +162,9 @@ class TestTextTarget:
         text, _ = widgets
         dpg.set_value(text, "before")
 
-        animation.animator.add(animation.WidgetFlash(message="something went wrong", target=text,
-                                                     target_tooltip=None, target_text=text,
-                                                     duration=0.3, text_color=FLASH_COLOR))
+        animation.animator.add(animation.WidgetFlash(target=text, duration=0.3,
+                                                     message="something went wrong",
+                                                     text_color=FLASH_COLOR))
         animation.set_text_under_flash(text, "after")
         assert dpg.get_value(text) == "something went wrong", "the message keeps the line while it runs"
 
@@ -196,9 +195,8 @@ class TestTextTarget:
         text, _ = widgets
         dpg.set_value(text, "")
 
-        flash = animation.WidgetFlash(message="cannot open that", target=text, target_tooltip=None,
-                                      target_text=text, duration=0.05, message_duration=5.0,
-                                      text_color=FLASH_COLOR)
+        flash = animation.WidgetFlash(target=text, duration=0.05, message="cannot open that",
+                                      message_duration=5.0, text_color=FLASH_COLOR)
         animation.animator.add(flash)
         time.sleep(0.1)  # past the fade, nowhere near the dwell
         animation.animator.render_frame()
@@ -269,11 +267,10 @@ class TestButtonTarget:
         assert dpg.get_value(notification) == "ready", "the message must be restored too"
 
     def test_a_message_of_none_leaves_the_text_alone(self, widgets):
-        """A message of `None` means "don't change" here too — a flash may want the color and nothing else.
+        """A message of `None` means "don't change", so a flash may ask for the color and nothing else.
 
-        The text branch honours it and this one did not, so the same argument meant two different things
-        depending on which kind of widget was being flashed, and the one that ignored it wrote the `None`
-        through onto the line.
+        The failure it guards against is writing the `None` through onto the line — which reads as the
+        word "None", not as an empty line, so it is loud but only where somebody is looking.
         """
         text, button = widgets
         dpg.set_value(text, "ready")
@@ -286,6 +283,49 @@ class TestButtonTarget:
         assert dpg.get_value(text) == "ready"
 
 
+class TestPaintList:
+    def test_each_widget_is_painted_by_the_channel_it_has(self, dpg_context):
+        """One list, two kinds of widget, and the widget decides — not the argument it arrived in.
+
+        A caption alongside a button is a text item, so its own colour carries the flash and fades. Taking
+        the button's animated theme instead would give it that theme's text colour, which is held constant
+        for readability — so the caption would snap to the highlight and snap back, where a text `target`
+        in the same role fades.
+        """
+        with dpg.window() as window:
+            button = dpg.add_button(label="b")
+            caption = dpg.add_text("ready", color=TOOL_COLOR)
+        try:
+            animation.animator.add(animation.WidgetFlash(target=button, duration=5.0,
+                                                         also_flash=(caption,),
+                                                         flash_color=(255, 0, 0), text_color=(255, 0, 0)))
+            animation.animator.render_frame()
+
+            assert dpg.get_item_theme(button) is not None, "the background channel: an animated theme"
+            assert dpg.get_item_theme(caption) is None, "the foreground channel: no theme involved"
+            assert _widget_color(caption) != list(TOOL_COLOR), "the caption is being painted"
+
+            animation.WidgetFlash.instances[button].duration = 0.05  # let it end
+            _run_flash_to_completion(button)
+            assert dpg.get_item_theme(button) is None
+            assert _widget_color(caption) == list(TOOL_COLOR), "and handed back what it had"
+        finally:
+            animation.animator.clear()
+            dpg.delete_item(window)
+
+    def test_a_message_with_nowhere_to_go_says_so(self, widgets, caplog):
+        """Silently dropping it is how two flashes carried an inert `message=""` for months.
+
+        A widget with a background cannot show text, so a message needs a `message_target` naming one that
+        can. Getting nothing on screen and nothing in the log leaves a call site that looks like it says
+        something and does not.
+        """
+        _, button = widgets
+        with caplog.at_level("WARNING"):
+            animation.animator.add(animation.WidgetFlash(target=button, duration=0.3, message="lost"))
+        assert any("message" in record.message for record in caplog.records)
+
+
 class TestDeduplication:
     def test_second_flash_on_the_same_widget_does_not_reify(self, widgets):
         """At most one flash owns a widget; the loser goes into ghost mode."""
@@ -293,8 +333,7 @@ class TestDeduplication:
         animation.highlight_widget(widget=text, duration=5.0, color=FLASH_COLOR)
         reified = animation.WidgetFlash.instances[text]
 
-        ghost = animation.WidgetFlash(message=None, target=text, target_tooltip=None, target_text=None,
-                                      duration=5.0)
+        ghost = animation.WidgetFlash(target=text, duration=5.0)
         assert not ghost.reified
         assert animation.WidgetFlash.instances[text] is reified
 
@@ -310,8 +349,7 @@ class TestDeduplication:
         animation.animator.render_frame()
         color_while_running = _widget_color(text)
 
-        ghost = animation.WidgetFlash(message=None, target=text, target_tooltip=None, target_text=None,
-                                      duration=5.0)
+        ghost = animation.WidgetFlash(target=text, duration=5.0)
         ghost.finish()
 
         assert animation.WidgetFlash.instances.get(text) is reified
@@ -325,8 +363,8 @@ class TestDeduplication:
         """
         text, _ = widgets
         dpg.set_value(text, "before")
-        reported = animation.WidgetFlash(message="something went wrong", target=text, target_tooltip=None,
-                                         target_text=text, duration=5.0, text_color=FLASH_COLOR)
+        reported = animation.WidgetFlash(target=text, duration=5.0, message="something went wrong",
+                                         text_color=FLASH_COLOR)
         animation.animator.add(reported)
 
         animation.highlight_widget(widget=text, duration=5.0, color=FLASH_COLOR)
@@ -344,13 +382,12 @@ class TestDeduplication:
         """
         text, _ = widgets
         dpg.set_value(text, "before")
-        highlight = animation.WidgetFlash(message=None, target=text, target_tooltip=None, target_text=text,
-                                          duration=5.0, text_color=FLASH_COLOR)
+        highlight = animation.WidgetFlash(target=text, duration=5.0, text_color=FLASH_COLOR)
         animation.animator.add(highlight)
         assert dpg.get_value(text) == "before", "a color-only flash does not touch the words"
 
-        animation.WidgetFlash(message="something went wrong", target=text, target_tooltip=None,
-                              target_text=text, duration=5.0)  # ghost: updates `highlight` and exits
+        animation.WidgetFlash(target=text, duration=5.0,
+                              message="something went wrong")  # ghost: updates `highlight` and exits
         assert dpg.get_value(text) == "something went wrong"
 
         highlight.duration = 0.05

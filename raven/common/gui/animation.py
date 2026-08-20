@@ -15,9 +15,10 @@ logger = logging.getLogger(__name__)
 import math
 import threading
 import time
-from typing import Callable, Optional, Tuple, Union
+from typing import Callable, Optional, Sequence, Tuple, Union
 
 from unpythonic import box, sym
+from unpythonic.env import env  # the class; `from unpythonic import env` gets the submodule of that name
 
 from ..smoothvalue import SmoothInt, CALIBRATION_FPS
 
@@ -317,54 +318,57 @@ class WidgetFlash(Animation):
 
     # TODO: We could also customize `__new__` to return the existing instance, see `unpythpnic.symbol.sym`.
     def __init__(self,
-                 message: str,
                  target: Union[str, int],
-                 target_tooltip: Union[str, int],
-                 target_text: Union[str, int],
                  duration: float,
+                 also_flash: Sequence[Union[str, int]] = (),
+                 message: Optional[str] = None,
+                 message_target: Union[str, int, None] = None,
                  message_duration: Optional[float] = None,
                  flash_color: Tuple = (96, 128, 96),
                  text_color: Tuple = (180, 255, 180)):
-        """Animation to flash a GUI widget (and its tooltip, if visible) to draw the user's attention.
+        """Animation to flash one or more GUI widgets to draw the user's attention.
 
         Two uses, sharing one transient fade-out shape. As an *acknowledgment*, it tells the user that
         pressing a button actually took, when the action has no other immediately visible effect. As a
         *highlight*, it draws the eye to the widget a navigation jump just landed on.
 
-        Which visual channel is animated depends on what `target` is, because the two kinds of widget have
-        nothing in common to fade:
+        A flash does two independent things, and they are separate arguments because they are separate
+        ideas: it **paints** widgets, and it **says** something in one place.
 
-          - A **text widget** has no background, so its own text color is faded from `text_color` back to
-            whatever it was. Set per-widget (`configure_item`), which is where an `add_text(color=...)` keeps
-            its color — a theme's text color would not override that.
-          - **Anything else** is treated as a button-like widget: an animated theme fades its background
-            (and its tooltip's popup background) from `flash_color` back to the default.
+        Painting follows the widget, not the argument it arrived in — *the background carries the flash
+        wherever there is one, and the foreground carries it only where there is none*:
+
+          - A **text item** has no background, so its own color is faded from `text_color` back to the
+            color it rests in. Applied per-item (`configure_item`), which is the only thing that overrides
+            an `add_text(color=...)`.
+          - **Everything else** has a background, faded from `flash_color` by an animated theme. Such a
+            widget usually also has a label, and that is held at `text_color` for the duration rather than
+            faded with the background, so it stays readable while the thing behind it flashes.
 
         Each GUI element (determined by `target`) can only have one `WidgetFlash` animation running at a
         time. If an instance already exists, trying to create the animation will restart the existing
         instance instead (and update its message to `message`).
 
-        `message`: str, text to show in the `target_text` widget while the animation is running.
-                   Original content will be restored automatically when the animation finishes normally.
-                   Can be `None` for "don't change", or also when `target_text is None`.
-
-        `target`: DPG tag or ID, the widget to animate. A text widget flashes its text color; anything else
-                  flashes its background. Whatever theme it had is restored when the flash ends.
-
-        `target_tooltip`: DPG tag or ID, the tooltip to animate (by flashing its background).
-                          Can be `None`.
-
-        `target_text`: DPG tag or ID, the text widget to animate (by changing the text content,
-                       and the text color, for the duration of the animation). Can be `None`.
-
-                       The text can be inside the tooltip (when `target_tooltip is not None`),
-                       but is really completely independent of `target` and `target_tooltip`.
-
-                       It may also *be* `target`, which is how a status line says something in the color
-                       that says it: the line's own text color fades while the message stands in it.
+        `target`: DPG tag or ID, the widget to flash. Also the animation's identity: it is what "one flash
+                  per widget" is counted by, and what a later flash on the same widget restarts.
 
         `duration`: float, how long the flash itself takes, in seconds — the fade from `flash_color` or
-                    `text_color` back to what the widget had.
+                    `text_color` back to what the widget rests in.
+
+        `also_flash`: further widgets to flash along with `target`, each painted by the rule above. A
+                      button's tooltip and the caption inside it are the usual pair. They are flashed but
+                      not counted: de-duplication looks only at `target`.
+
+        `message`: str, text to show in `message_target` while the animation is running. The original
+                   content is restored when the animation finishes normally. `None` (the default) is
+                   "don't change", which is what a pure highlight wants.
+
+        `message_target`: DPG tag or ID, the widget the message is shown in. Defaults to `target` where
+                          `target` is a text item, which is how a status line says something in the color
+                          that says it — the line's own color fades while the message stands in it.
+
+                          Name it explicitly when the thing being flashed cannot show text: a button's
+                          message belongs in its tooltip's caption, not on the button.
 
         `message_duration`: float, how long `message` stays, in seconds. `None` (the default) is "as long
                             as the flash", which is what an acknowledgement wants: the fade and the word
@@ -376,45 +380,58 @@ class WidgetFlash(Animation):
                             the message has had its dwell.
 
         `flash_color`: tuple `(R, G, B)`, each component in [0, 255]. Default is light green.
-                       The background color a button-like `target` starts from. Unused for a text `target`.
+                       The background color a flashed widget starts from. Unused for a text item.
 
         `text_color`: tuple `(R, G, B)`, each component in [0, 255]. Default is light green.
-                      For a button-like `target`, the (constant) text color during the flash. For a text
-                      `target`, the color its text starts from before fading back to its own.
+                      For a widget with a background, the (constant) color of its label during the flash.
+                      For a text item, the color it starts from before fading back to its own.
 
-                      A text `target` needs no color of its own: one that declared none fades back to
+                      A text item needs no color of its own: one that declared none fades back to
                       `guiutils.DEFAULT_TEXT_COLOR`, and is handed back with none declared.
         """
         super().__init__()
         self.instance_lock = threading.Lock()
 
-        self.message = message
         self.target = target
-        self.target_tooltip = target_tooltip
-        self.target_text = target_text
         self.duration = duration
+        self.also_flash = tuple(also_flash)
+        self.message = message
+        # A message needs somewhere to appear, and a widget that has a background usually cannot show one —
+        # so the default is `target` only where `target` can. Naming no target for a message that exists is
+        # a call-site mistake rather than a way of suppressing it, and silently dropping it is how the file
+        # dialog carried two flashes with an inert `message=""` for months.
+        if message_target is None and self._is_text_item(target):
+            message_target = target
+        if message is not None and message_target is None:
+            logger.warning(f"WidgetFlash.__init__: message '{message}' has no `message_target` to appear in, and `target` cannot show text; the message will not be shown.")
+        self.message_target = message_target
         self.message_duration = message_duration
         self.flash_color = flash_color
         self.text_color = text_color
 
         # These are used during animation
         self.theme = None
+        self.animated_theme_colors = ()  # the theme's background entries, all faded together
         self.original_message = None
-        self.target_is_text = False  # set in `start`; selects which visual channel is animated
-        # For a text target: what it had, to be put back verbatim, and where the fade runs to. These differ
-        # where the widget declared no color of its own — it must be handed back declaring none, but the
-        # fade still needs somewhere to arrive.
-        self.original_target_color = None
-        self.resting_target_color = None
-        # Whatever was bound before we bound ours. One snapshot per widget, because these are three independent
-        # widgets that each may or may not have had a theme: restoring a single shared snapshot to all of them
-        # hands two of them a theme belonging to the third.
-        self.original_target_theme = None
-        self.original_tooltip_theme = None
-        self.original_text_theme = None
+        # One record per widget taken over, in the order they were taken, holding what `finish` needs to
+        # hand that widget back. Per widget rather than per role, because these are independent widgets that
+        # each may or may not have had a theme or a color of its own: restoring one shared snapshot to all
+        # of them hands most of them something belonging to another.
+        self.painted = []
         self.reified = False  # `True`: running; `False`: ghost mode, update other instance and exit.
 
         self.start()
+
+    @staticmethod
+    def _is_text_item(widget: Union[str, int]) -> bool:
+        """Whether `widget` is a DPG text item, which is what decides how it flashes.
+
+        Read from DPG rather than declared by the caller: which channel a widget has is a property of the
+        widget, and asking is both shorter and harder to get wrong than an argument saying so.
+        """
+        with guiutils.nonexistent_ok():
+            return dpg.get_item_type(widget).endswith("mvText")
+        return False  # a widget that is gone flashes nothing, whichever kind it was
 
     def _total_duration(self) -> float:
         """How long this flash runs: the fade, or the message's dwell where that is asked to be longer."""
@@ -437,32 +454,33 @@ class WidgetFlash(Animation):
         r = numutils.clamp(dt / self.duration)
         r = numutils.nonanalytic_smooth_transition(r)
 
-        if self.target_is_text:
-            # The target may be deleted mid-flash (a chat view rebuild does exactly this), and then there is
-            # nothing left to fade. Ending here rather than pressing on lets `finish` release the resources.
-            if not dpg.does_item_exist(self.target):
-                return action_finish
-            R0, G0, B0 = self.text_color
-            R1, G1, B1, A1 = self.resting_target_color  # the color the widget rests in once the flash is over
-            R = R0 * (1.0 - r) + R1 * r
-            G = G0 * (1.0 - r) + G1 * r
-            B = B0 * (1.0 - r) + B1 * r
-            with guiutils.nonexistent_ok():
-                dpg.configure_item(self.target, color=(R, G, B, A1))
-            return action_continue
+        # The target may be deleted mid-flash (a chat view rebuild does exactly this), and then there is
+        # nothing left to fade. Ending here rather than pressing on lets `finish` release the resources.
+        if not dpg.does_item_exist(self.target):
+            return action_finish
 
-        R0, G0, B0 = self.flash_color
-        R1, G1, B1 = 45, 45, 48  # default button background color  TODO: read from global theme
-        R = R0 * (1.0 - r) + R1 * r
-        G = G0 * (1.0 - r) + G1 * r
-        B = B0 * (1.0 - r) + B1 * r
-        dpg.set_value(self.highlight_button_color, (R, G, B))
-        dpg.set_value(self.highlight_hovered_color, (R, G, B))
-        dpg.set_value(self.highlight_active_color, (R, G, B))
-        dpg.set_value(self.highlight_popupbg_color, (R, G, B))
-        dpg.set_value(self.highlight_disabled_button_color, (R, G, B))
-        dpg.set_value(self.highlight_disabled_hovered_color, (R, G, B))
-        dpg.set_value(self.highlight_disabled_active_color, (R, G, B))
+        # Each text item fades its own color, toward the color it rests in.
+        R0, G0, B0 = self.text_color
+        for record in self.painted:
+            if not record.is_text:
+                continue
+            R1, G1, B1, A1 = record.resting_color
+            with guiutils.nonexistent_ok():
+                dpg.configure_item(record.widget,
+                                   color=(R0 * (1.0 - r) + R1 * r,
+                                          G0 * (1.0 - r) + G1 * r,
+                                          B0 * (1.0 - r) + B1 * r,
+                                          A1))
+
+        # ...and one animated theme fades the background of everything else, all of them at once.
+        if self.theme is not None:
+            R0, G0, B0 = self.flash_color
+            R1, G1, B1 = guiutils.DEFAULT_BUTTON_BG_COLOR
+            faded = (R0 * (1.0 - r) + R1 * r,
+                     G0 * (1.0 - r) + G1 * r,
+                     B0 * (1.0 - r) + B1 * r)
+            for color_item in self.animated_theme_colors:
+                dpg.set_value(color_item, faded)
 
         return action_continue
 
@@ -486,92 +504,115 @@ class WidgetFlash(Animation):
                     # words where they are and takes only the restart.
                     if self.message is not None:
                         other.message = self.message
-                        if other.target_text is not None:
+                        if other.message_target is not None:
                             with guiutils.nonexistent_ok():
                                 # The instance being joined may have started with no message of its own, in
                                 # which case it captured nothing and restores nothing — and ours would stand
                                 # on that line for good.
                                 if other.original_message is None:
-                                    other.original_message = dpg.get_value(other.target_text)
-                                dpg.set_value(other.target_text, other.message)
+                                    other.original_message = dpg.get_value(other.message_target)
+                                dpg.set_value(other.message_target, other.message)
                     other.reset()
                     return
 
-                # Which visual channel to animate. A text item has no background to flash, so the text color
-                # is all there is; anything else is treated as button-like. Read from DPG rather than declared
-                # by the caller, so that existing call sites need no new argument.
-                self.target_is_text = False
-                with guiutils.nonexistent_ok():
-                    self.target_is_text = dpg.get_item_type(self.target).endswith("mvText")
+                widgets = (self.target, *self.also_flash)
 
-                if self.target_is_text:
-                    # `get_item_configuration` reports color as normalized floats while `configure_item` takes
-                    # 0-255, so scale on the way in; the round trip is then exact, including the `r = -1`
-                    # sentinel DPG uses for "no explicit color" (which restores to unset, as it should).
-                    with guiutils.nonexistent_ok():
-                        self.original_target_color = [255.0 * c for c in dpg.get_item_configuration(self.target)["color"]]
-                    if self.original_target_color is None:  # target vanished between construction and here
-                        return
-                    # Where the fade lands. Usually the widget's own color, but DPG reports "no explicit
-                    # color" as the sentinel `(-1, 0, 0, 1)` rather than as the color in effect — and that
-                    # is the common case, since Raven declares a text color only where the text departs
-                    # from normal. Fading toward the sentinel runs to black. Restoring it, on the other
-                    # hand, is exactly right: a widget that declared no color must be handed back none.
-                    self.resting_target_color = list(self.original_target_color)
-                    if self.resting_target_color[0] < 0.0:
-                        self.resting_target_color[:3] = guiutils.DEFAULT_TEXT_COLOR
-                    # The message is independent of which visual channel fades, so a text target carries one
-                    # too. Only the text is taken: the color here is this branch's own business, and binding
-                    # the flash theme to `target_text` as well would fight the fade where the two widgets
-                    # are the same one — which is the case this exists for, a status line saying something
-                    # went wrong in the color that says so.
-                    if self.target_text is not None and self.message is not None:
-                        with guiutils.nonexistent_ok():
-                            self.original_message = dpg.get_value(self.target_text)
-                            dpg.set_value(self.target_text, self.message)
-                    type(self).instances[self.target] = self
-                    self.reified = True
+                # One theme serves every widget that has a background, so it is built once and only if some
+                # widget needs it — a flash on text alone allocates nothing to release.
+                if any(not self._is_text_item(widget) for widget in widgets):
+                    self._make_theme()
+
+                for widget in widgets:
+                    record = self._take_over(widget)
+                    if record is not None:
+                        self.painted.append(record)
+
+                if not self.painted:  # everything we were given is already gone; nothing to animate
+                    self._destroy_theme()
                     return
 
-                with dpg.theme(tag=f"acknowledgement_highlight_theme_{type(self).id_counter}") as self.theme:  # create unique DPG ID each time
-                    with dpg.theme_component(dpg.mvAll):
-                        # common
-                        dpg.add_theme_color(dpg.mvThemeCol_Text, self.text_color)
-                        # button
-                        self.highlight_button_color = dpg.add_theme_color(dpg.mvThemeCol_Button, self.flash_color)
-                        self.highlight_hovered_color = dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, self.flash_color)
-                        self.highlight_active_color = dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, self.flash_color)
-                        # tooltip
-                        self.highlight_popupbg_color = dpg.add_theme_color(dpg.mvThemeCol_PopupBg, self.flash_color)
-                    # Button in disabled state (see also "disablable_widget_theme" in `raven.common.gui.utils`)
-                    disabled_color = (0.50 * 255, 0.50 * 255, 0.50 * 255, 1.00 * 255)
-                    with dpg.theme_component(dpg.mvButton, enabled_state=False):
-                        dpg.add_theme_color(dpg.mvThemeCol_Text, disabled_color, category=dpg.mvThemeCat_Core)
-                        self.highlight_disabled_button_color = dpg.add_theme_color(dpg.mvThemeCol_Button, self.flash_color, category=dpg.mvThemeCat_Core)
-                        self.highlight_disabled_hovered_color = dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, self.flash_color, category=dpg.mvThemeCat_Core)
-                        self.highlight_disabled_active_color = dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, self.flash_color, category=dpg.mvThemeCat_Core)
-                type(self).id_counter += 1
-
-                # Capture what was bound before we take the widget over, so `finish` puts back exactly that.
-                # `get_item_theme` returns `None` for an unbound widget and `bind_item_theme` accepts `None`
-                # to unbind, so the round trip is symmetric and needs no special case for "had no theme".
-                with guiutils.nonexistent_ok():
-                    self.original_target_theme = dpg.get_item_theme(self.target)
-                    dpg.bind_item_theme(self.target, self.theme)
-                if self.target_tooltip is not None:
+                # Last, and independent of all of the above: the flash paints widgets and says something,
+                # and where it says it has nothing to do with what it paints.
+                if self.message_target is not None and self.message is not None:
                     with guiutils.nonexistent_ok():
-                        self.original_tooltip_theme = dpg.get_item_theme(self.target_tooltip)
-                        dpg.bind_item_theme(self.target_tooltip, self.theme)
-                if self.target_text is not None:
-                    with guiutils.nonexistent_ok():
-                        self.original_message = dpg.get_value(self.target_text)
-                        self.original_text_theme = dpg.get_item_theme(self.target_text)
-                        if self.message is not None:  # `None`: flash the text's color, leave its words alone
-                            dpg.set_value(self.target_text, self.message)
-                        dpg.bind_item_theme(self.target_text, self.theme)
+                        self.original_message = dpg.get_value(self.message_target)
+                        dpg.set_value(self.message_target, self.message)
 
                 type(self).instances[self.target] = self
                 self.reified = True  # This is the instance that animates `self.target`.
+
+    def _make_theme(self) -> None:
+        """Build the animated theme shared by every flashed widget that has a background."""
+        with dpg.theme(tag=f"acknowledgement_highlight_theme_{type(self).id_counter}") as self.theme:  # create unique DPG ID each time
+            with dpg.theme_component(dpg.mvAll):
+                # The label of a widget whose background is flashing is held here, at a constant color, so
+                # that it stays readable throughout. Deliberately not animated: fading it along with the
+                # background would run the two toward each other and hide the label mid-flash.
+                dpg.add_theme_color(dpg.mvThemeCol_Text, self.text_color)
+                # button
+                button_color = dpg.add_theme_color(dpg.mvThemeCol_Button, self.flash_color)
+                hovered_color = dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, self.flash_color)
+                active_color = dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, self.flash_color)
+                # tooltip
+                popupbg_color = dpg.add_theme_color(dpg.mvThemeCol_PopupBg, self.flash_color)
+            # Button in disabled state (see also "disablable_widget_theme" in `raven.common.gui.utils`)
+            with dpg.theme_component(dpg.mvButton, enabled_state=False):
+                dpg.add_theme_color(dpg.mvThemeCol_Text, guiutils.DISABLED_TEXT_COLOR, category=dpg.mvThemeCat_Core)
+                disabled_button_color = dpg.add_theme_color(dpg.mvThemeCol_Button, self.flash_color, category=dpg.mvThemeCat_Core)
+                disabled_hovered_color = dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, self.flash_color, category=dpg.mvThemeCat_Core)
+                disabled_active_color = dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, self.flash_color, category=dpg.mvThemeCat_Core)
+        type(self).id_counter += 1
+
+        # Every background in the theme fades together, so `render_frame` walks this rather than naming
+        # each one. Which entry a given widget picks up is DPG's business: a button takes the button
+        # colors, a tooltip takes `PopupBg`, and neither needs to be told which it is.
+        self.animated_theme_colors = (button_color, hovered_color, active_color, popupbg_color,
+                                      disabled_button_color, disabled_hovered_color, disabled_active_color)
+
+    def _destroy_theme(self) -> None:
+        """Release the animated theme, if one was built."""
+        if self.theme is not None:
+            with guiutils.nonexistent_ok():
+                dpg.delete_item(self.theme)
+            self.theme = None
+            self.animated_theme_colors = ()
+
+    def _take_over(self, widget: Union[str, int]) -> Optional[env]:
+        """Start flashing `widget`; return what `finish` needs to hand it back, or `None` if it is gone."""
+        if self._is_text_item(widget):
+            # `get_item_configuration` reports color as normalized floats while `configure_item` takes
+            # 0-255, so scale on the way in; the round trip is then exact, including the sentinel DPG uses
+            # for "no explicit color" (which restores to unset, as it should).
+            original_color = None
+            with guiutils.nonexistent_ok():
+                original_color = [255.0 * c for c in dpg.get_item_configuration(widget)["color"]]
+            if original_color is None:  # vanished between construction and here
+                return None
+            # Where the fade lands. Usually the widget's own color, but DPG reports "no explicit color" as
+            # the sentinel `(-1, 0, 0, 1)` rather than as the color in effect — and that is the common
+            # case, since Raven declares a text color only where the text departs from normal. Fading
+            # toward the sentinel runs to black. Restoring it, on the other hand, is exactly right: a
+            # widget that declared no color must be handed back declaring none.
+            resting_color = list(original_color)
+            if resting_color[0] < 0.0:
+                resting_color[:3] = guiutils.DEFAULT_TEXT_COLOR
+            return env(widget=widget, is_text=True, original_theme=None,
+                       original_color=original_color, resting_color=resting_color)
+
+        # Capture what was bound before we take the widget over, so `finish` puts back exactly that.
+        # `get_item_theme` returns `None` for an unbound widget and `bind_item_theme` accepts `None` to
+        # unbind, so the round trip is symmetric and needs no special case for "had no theme" — which is
+        # also why the success flag is separate rather than read off `original_theme`.
+        original_theme = None
+        bound = False
+        with guiutils.nonexistent_ok():
+            original_theme = dpg.get_item_theme(widget)
+            dpg.bind_item_theme(widget, self.theme)
+            bound = True
+        if not bound:
+            return None
+        return env(widget=widget, is_text=False, original_theme=original_theme,
+                   original_color=None, resting_color=None)
 
     def finish(self) -> None:
         """Clean up resources upon the end of the animation."""
@@ -586,40 +627,24 @@ class WidgetFlash(Animation):
             if not self.reified:
                 return
 
-            if self.target_is_text:
+            # Hand each widget back what it had, rather than assuming it was the standard theme or a
+            # declared color. Binding a fixed theme here would silently *give* one to a widget that had
+            # none, so a flash would leave a visible mark on the thing it was only supposed to point at.
+            # Reversed, so widgets are released in the opposite order to the one they were taken in.
+            for record in reversed(self.painted):
                 with guiutils.nonexistent_ok():
-                    dpg.configure_item(self.target, color=self.original_target_color)
-                if self.original_message is not None:  # `None`: there was no message to put back
-                    with guiutils.nonexistent_ok():
-                        dpg.set_value(self.target_text, self.original_message)
-                    self.original_message = None
-                self.original_target_color = None
-                self.resting_target_color = None
-                self.reified = False
-                with type(self).class_lock:
-                    type(self).instances.pop(self.target, None)
-                return
+                    if record.is_text:
+                        dpg.configure_item(record.widget, color=record.original_color)
+                    else:
+                        dpg.bind_item_theme(record.widget, record.original_theme)
+            self.painted = []
 
-            # Restore whatever the widget had, rather than assuming it was the standard button theme. Binding
-            # a fixed theme here would silently *give* one to a widget that had none, so a flash would leave a
-            # visible mark on the thing it was only supposed to draw attention to.
-            with guiutils.nonexistent_ok():
-                dpg.bind_item_theme(self.target, self.original_target_theme)
-
-            if self.target_tooltip is not None:
+            if self.original_message is not None:  # `None`: there was no message to put back
                 with guiutils.nonexistent_ok():
-                    dpg.bind_item_theme(self.target_tooltip, self.original_tooltip_theme)
+                    dpg.set_value(self.message_target, self.original_message)
+                self.original_message = None
 
-            if self.target_text is not None:
-                with guiutils.nonexistent_ok():
-                    if self.original_message is not None:  # `None`: there was no message to put back
-                        dpg.set_value(self.target_text, self.original_message)
-                    dpg.bind_item_theme(self.target_text, self.original_text_theme)
-
-            with guiutils.nonexistent_ok():
-                dpg.delete_item(self.theme)
-
-            self.theme = None
+            self._destroy_theme()
             self.reified = False
 
             with type(self).class_lock:
@@ -643,16 +668,16 @@ def flash_button(*,
     `message`: text shown in `text` for the flash duration, then restored (`None` leaves the text unchanged).
     `duration`: flash duration in seconds.
     `tooltip`: the button's tooltip to flash along with it, if any (`None` to flash the button alone).
-    `text`: the text widget whose content becomes `message` during the flash — typically the text inside
-            `tooltip`, but independent of it.
+    `text`: the text widget whose content becomes `message` during the flash, and which flashes along with
+            the button — typically the caption inside `tooltip`, but independent of it.
     `ok`: `True` (default) flashes green (success); `False` flashes red (failure). The green matches
           `WidgetFlash`'s own default colors, so a plain success acknowledgment need not think about color.
     """
-    animator.add(WidgetFlash(message=message,
-                             target=button,
-                             target_tooltip=tooltip,
-                             target_text=text,
+    animator.add(WidgetFlash(target=button,
                              duration=duration,
+                             also_flash=[widget for widget in (tooltip, text) if widget is not None],
+                             message=message,
+                             message_target=text,
                              flash_color=((96, 128, 96) if ok else (150, 96, 96)),
                              text_color=((180, 255, 180) if ok else (255, 180, 180))))
 
@@ -673,10 +698,7 @@ def highlight_widget(*,
              landing is not a success or failure report, so it deliberately avoids the green/red that
              `flash_button` uses to mean exactly that.
     """
-    animator.add(WidgetFlash(message=None,
-                             target=widget,
-                             target_tooltip=None,
-                             target_text=None,
+    animator.add(WidgetFlash(target=widget,
                              duration=duration,
                              flash_color=color,
                              text_color=color))

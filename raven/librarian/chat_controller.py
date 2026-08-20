@@ -1165,13 +1165,13 @@ class DPGChatMessage:
                 self.parent_view.chat_controller.app_state["HEAD"] = new_HEAD
                 self.parent_view.build()
             else:
-                gui_animation.animator.add(gui_animation.WidgetFlash(message="Press again to confirm.\nDeletion CANNOT BE UNDONE.",
-                                                                     target=delete_subtree_button,
-                                                                     target_tooltip=delete_subtree_tooltip,
-                                                                     target_text=delete_subtree_tooltip_text,
+                gui_animation.animator.add(gui_animation.WidgetFlash(target=delete_subtree_button,
+                                                                     duration=self.confirm_duration,
+                                                                     also_flash=(delete_subtree_tooltip, delete_subtree_tooltip_text),
+                                                                     message="Press again to confirm.\nDeletion CANNOT BE UNDONE.",
+                                                                     message_target=delete_subtree_tooltip_text,
                                                                      flash_color=(255, 32, 32),  # red: this one destroys data
-                                                                     text_color=(255, 255, 255),
-                                                                     duration=self.confirm_duration))
+                                                                     text_color=(255, 255, 255)))
         delete_subtree_button = dpg.add_button(label=fa.ICON_TRASH_CAN,
                                                callback=delete_subtree_callback,
                                                enabled=delete_enabled,

@@ -1038,13 +1038,13 @@ with timer() as tim:
                             # field's own callback and never consults it — so the rule lives here.
                             gate_reason = _describe_send_gate()
                             if gate_reason is not None:
-                                gui_animation.animator.add(gui_animation.WidgetFlash(message=gate_reason,
-                                                                                     target="chat_send_button",  # tag
-                                                                                     target_tooltip=None,
-                                                                                     target_text=None,
+                                # The flash says only "not now". The reason is already standing in the
+                                # send button's tooltip, which `_refresh_send_gate` keeps current, so
+                                # repeating it here would write the same string over itself.
+                                gui_animation.animator.add(gui_animation.WidgetFlash(target="chat_send_button",  # tag
+                                                                                     duration=1.0,
                                                                                      flash_color=(255, 32, 32),
-                                                                                     text_color=(255, 255, 255),
-                                                                                     duration=1.0))
+                                                                                     text_color=(255, 255, 255)))
                                 return
                             user_message_text = dpg.get_value("chat_field").strip()  # tag
                             # Snapshot the staged attachments and hand them off, then clear the staging. `chat_exchange`

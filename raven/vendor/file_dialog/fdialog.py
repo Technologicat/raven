@@ -1186,11 +1186,9 @@ class FileDialog:
             # followed by the exception text, and a status line has room for the sentence; the whole of it
             # still reaches the log, which is where an exception is of use anyway.
             logger.warning(f"message_box: shown on the target line, this dialog being modal:\n{title}:\t{message}\n")
-            gui_animation.animator.add(gui_animation.WidgetFlash(message=message.split("\n", maxsplit=1)[0],
-                                                                 target=self.text_target,
-                                                                 target_tooltip=None,
-                                                                 target_text=self.text_target,
+            gui_animation.animator.add(gui_animation.WidgetFlash(target=self.text_target,
                                                                  duration=_REPORT_FLASH_SECONDS,
+                                                                 message=message.split("\n", maxsplit=1)[0],
                                                                  message_duration=_REPORT_TEXT_SECONDS,
                                                                  text_color=_ALARM_RED))
 
@@ -2563,13 +2561,12 @@ class FileDialog:
                 save_as_file_name = dpg.get_value(f"ex_search_{self.instance_tag}")
                 if not save_as_file_name:
                     logger.debug(f"ok: instance '{self.tag}' ({self.instance_tag}), search field is empty, cannot save with empty filename; rejecting the ok.")
-                    gui_animation.animator.add(gui_animation.WidgetFlash(message="Please enter a filename",
-                                                                         target=self.btn_ok,
-                                                                         target_tooltip=None,
-                                                                         target_text=self.text_notification,
+                    gui_animation.animator.add(gui_animation.WidgetFlash(target=self.btn_ok,
+                                                                         duration=1.0,
+                                                                         message="Please enter a filename",
+                                                                         message_target=self.text_notification,
                                                                          flash_color=_ALARM_RED,
-                                                                         text_color=(255, 255, 255),
-                                                                         duration=1.0))
+                                                                         text_color=(255, 255, 255)))
                     return
                 full_path = os.path.join(os.getcwd(), save_as_file_name)
                 self.selected_files.append(full_path)
@@ -2591,13 +2588,12 @@ class FileDialog:
                         self.selected_files.extend(self.shown_items)
                     else:
                         logger.debug(f"ok: instance '{self.tag}' ({self.instance_tag}), multiple items are shown, multi_selection is disabled; rejecting the ok.")
-                        gui_animation.animator.add(gui_animation.WidgetFlash(message="Please select an item",
-                                                                             target=self.btn_ok,
-                                                                             target_tooltip=None,
-                                                                             target_text=self.text_notification,
+                        gui_animation.animator.add(gui_animation.WidgetFlash(target=self.btn_ok,
+                                                                             duration=1.0,
+                                                                             message="Please select an item",
+                                                                             message_target=self.text_notification,
                                                                              flash_color=_ALARM_RED,
-                                                                             text_color=(255, 255, 255),
-                                                                             duration=1.0))
+                                                                             text_color=(255, 255, 255)))
                         return
                 else:
                     logger.debug(f"ok: instance '{self.tag}' ({self.instance_tag}), no items shown (maybe nothing matches the search?); rejecting the ok.")
@@ -2605,13 +2601,12 @@ class FileDialog:
                         msg = "Please select at least one item"
                     else:
                         msg = "Please select an item"
-                    gui_animation.animator.add(gui_animation.WidgetFlash(message=msg,
-                                                                         target=self.btn_ok,
-                                                                         target_tooltip=None,
-                                                                         target_text=self.text_notification,
+                    gui_animation.animator.add(gui_animation.WidgetFlash(target=self.btn_ok,
+                                                                         duration=1.0,
+                                                                         message=msg,
+                                                                         message_target=self.text_notification,
                                                                          flash_color=_ALARM_RED,
-                                                                         text_color=(255, 255, 255),
-                                                                         duration=1.0))
+                                                                         text_color=(255, 255, 255)))
                     return
         assert len(self.selected_files)  # at least one file selected if we get here
 
@@ -2646,13 +2641,12 @@ class FileDialog:
             already_there = ("Folder exists — press again to confirm" if os.path.isdir(self.selected_files[0]) else
                              "Press again to overwrite file")
             # Raven: Acknowledge the action in the GUI.
-            gui_animation.animator.add(gui_animation.WidgetFlash(message=already_there,
-                                                                 target=self.btn_ok,
-                                                                 target_tooltip=None,
-                                                                 target_text=self.text_notification,
+            gui_animation.animator.add(gui_animation.WidgetFlash(target=self.btn_ok,
+                                                                 duration=confirm_duration,
+                                                                 message=already_there,
+                                                                 message_target=self.text_notification,
                                                                  flash_color=_ALARM_RED,
-                                                                 text_color=(255, 255, 255),
-                                                                 duration=confirm_duration))
+                                                                 text_color=(255, 255, 255)))
             return
 
         logger.debug(f"ok: instance '{self.tag}' ({self.instance_tag}), hiding dialog and returning {self.selected_files}.")
