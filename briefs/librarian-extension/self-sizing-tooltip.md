@@ -62,11 +62,37 @@ polymorphism here is real rather than a special case, since any future self-sizi
 
 ## Order
 
-1. `Tooltip` plus its tests — the component alone, nothing else touched.
-2. The `WidgetFlash` duck-typing.
-3. Migrate Librarian's flashing tooltips onto it.
+1. ~~`Tooltip` plus its tests~~ — **done 2026-08-20.**
+2. ~~The `WidgetFlash` duck-typing~~ — **done 2026-08-20.**
+3. Migrate Librarian's flashing tooltips onto it. **Not started.**
 
 Each step leaves the tree green and is committable on its own.
+
+### What building 1 and 2 changed about the design
+
+**The settle is a two-frame state machine, not a wait.** The brief assumed `wait_for_resize`, on the
+grounds that a flash's message arrives on the callback thread where waiting is legal. It does — but the
+*restore* comes from `WidgetFlash.finish`, which the animator calls **on the render thread**, and nothing
+ticked by the animator may wait for a frame. Handing that off to a worker thread was tried and is worse: it
+leaves the worker inside DPG at teardown, which is the shutdown fault already logged against the vendored
+markdown renderer, and it dumped core in the test suite. So the sweeper — which ticks every frame anyway —
+carries a queued change one step per tick: apply-and-park-offscreen, then place. No wait, no thread, and
+the interesting half becomes testable, since `animator.render_frame()` drives it in the suite exactly as
+the render loop does.
+
+### Step 3, as far as it has been thought through
+
+`flash_button` should accept a `Tooltip` in its `tooltip=` parameter and adapt, rather than every call site
+knowing how a `Tooltip` is put together: `also_flash=(tip.window, tip.caption)` for the paint list, and
+`message_target=tip` so the text goes through the staged path. That keeps `text=` for the plain
+`dpg.tooltip` case, which the apps still use everywhere a caption never changes.
+
+Then the Librarian sites: each `with dpg.tooltip(button): dpg.add_text(caption)` whose caption is replaced
+by a flash message becomes a `Tooltip(button, caption)`. Only the ones that *flash* need it — a caption
+that is written once is better off as a `dpg.tooltip`, and the component's docstring says so.
+
+**This step wants live testing**, since it changes what a real tooltip does on screen and the whole point
+is how it looks.
 
 ## Afterwards
 
