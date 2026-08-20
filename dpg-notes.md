@@ -941,6 +941,28 @@ does — it commits the edit. That is the commit-chord case above, so gate it on
 the dialog *stays open* afterwards (Enter descending into a directory, rather than accepting), the field
 has silently lost the caret and later typing goes nowhere until something reactivates it.
 
+**A global handler sees Enter before the field's own `on_enter` callback does, and sees the field already
+deactivated.** Measured 2026-08-20 on DPG 2.3.1, both fired within the same frame: the key-press handler
+runs first, reporting `is_item_active` False and `is_item_focused` True, and the field's callback follows.
+So a dialog that binds Enter globally *and* has an `on_enter=True` field will run both on one press, in
+that order — and `is_item_active` cannot tell it that the Enter belonged to the field, because ImGui has
+already cleared the active id by then. Track which control the caret is in and dispatch on that; the file
+dialog's `CaretHome` is the worked example, and `test_fdialog.py` pins the case in
+`test_enter_in_the_path_field_does_not_also_open_what_the_cursor_is_on`.
+
+**This bites only where both exist, and two of the three Raven fields deliberately have one.**
+`raven-visualizer`'s search field takes a plain per-keystroke `callback` and leaves Enter entirely to the
+global handler, gated on `is_item_focused`. `raven-librarian`'s composer does the opposite — the commit is
+wired at the widget with no global branch at all, because a *multiline* field is unfocused as well as
+deactivated by its commit chord, so no gate at that level can catch it. The file dialog's path field is the
+one place a field's own Enter and a global Enter both fire, and it is there because the dialog binds Enter
+for the listing behind the field.
+
+**`on_enter=True` buys Enter and costs every other keystroke**, the field's `callback` then firing only on
+the commit. An `add_item_edited_handler` on the same field still fires per keystroke — one frame after the
+key, carrying the new value — so a field that has to react as it is typed into (recolouring, validating)
+can have both. Measured the same day; the probe is `investigations/dpg-input-text/probe_input_text_enter.py`.
+
 Alt is the modifier that varies by desktop: nothing intercepted Alt+Up under Cinnamon, but window managers
 commonly bind Alt chords, and that is a statement about the desktop rather than about DPG. Both dev
 machines here run Cinnamon, so this one cannot be settled in-house — it is for users on other desktops to
