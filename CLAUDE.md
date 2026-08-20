@@ -357,6 +357,17 @@ Raven's apps are DPG, so verifying GUI work means running them — and the agent
   - **Prefer closing it through the window manager: `wmctrl -i -c <window-id>`.** Measured on `raven-librarian`: SIGTERM to the correct PID left the process running (twice, tens of seconds apart), while `wmctrl -c` shut it down within seconds. It is also the graceful path — it runs the app's own two-phase shutdown, so chat state is saved. Reserve the PID kill for a process with no window, or one that ignores the close.
   - **Then wait for the process to be gone before relaunching**, in the same Bash call (`for i in $(seq 1 25); do [ "$(pgrep -af raven-librarian | awk '$2 ~ /python/' | wc -l)" = 0 ] && break; sleep 2; done`). Skip the wait and you get *two* instances, after which `xdotool search --name` returns two window IDs and a `head -1` / `tail -1` picks an arbitrary one. A screenshot of the stale window then reads as "my edit didn't take". The tell is that the captured text matches an *earlier* revision of the source rather than the current one — check that before concluding anything about the change itself.
 - Needs `xdotool` and `xclip` installed (clipboard round-trip: press the hotkey, then `xclip -o -selection clipboard`). This is how a clipboard-export feature gets verified end-to-end rather than only through unit tests.
+- **To test what an app does when a dependency appears or disappears, own the moment it happens.** Point the
+  app at a port you control with `--backend-url` / `--server-url`, and put a TCP relay in front of the real
+  service; starting and stopping the relay is then an event timed to the millisecond, and no `config.py`
+  is edited. Twenty lines of `socket` and two `threading.Thread`s is the whole relay — `socat` does it too,
+  where installed.
+
+  The reason this matters is that the interesting behaviour usually lives in a window narrower than the
+  thing that would otherwise close it. Librarian's status pill wanted a backend that came up *during* a
+  one-second acknowledgment flash, while a three-second poll was racing to notice it first — unwinnable by
+  hand, and turning LM Studio on and off just produces whichever outcome the poll picks. With the relay the
+  click follows the port opening by 400 ms and the state is whatever you decided it should be.
 
 ### DPG Pitfalls
 
