@@ -474,11 +474,11 @@ def _copy_report_to_clipboard(*, report_format):
 
     dpg.set_clipboard_text(report_text)
 
-    gui_animation.animator.add(gui_animation.WidgetFlash(message=f"Copied to clipboard! ({'plain text' if report_format == 'txt' else 'Markdown'})",
-                                                         target="copy_report_to_clipboard_button",  # tag
-                                                         target_tooltip="copy_report_tooltip",  # tag
-                                                         target_text="copy_report_tooltip_text",  # tag
-                                                         duration=gui_config.acknowledgment_duration))
+    gui_animation.flash_button(button="copy_report_to_clipboard_button",  # tag
+                               message=f"Copied to clipboard! ({'plain text' if report_format == 'txt' else 'Markdown'})",
+                               duration=gui_config.acknowledgment_duration,
+                               tooltip="copy_report_tooltip",  # tag
+                               text="copy_report_tooltip_text")  # tag
 
 
 def copy_current_entry_to_clipboard():
@@ -511,11 +511,11 @@ def _copy_entry_to_clipboard(item):
 
     dpg.set_clipboard_text(f"{entry.author} ({entry.year}): {entry.title}")
 
-    gui_animation.animator.add(gui_animation.WidgetFlash(message="Copied to clipboard!",
-                                                         target=button,
-                                                         target_tooltip=tooltip,
-                                                         target_text=tooltip_text,
-                                                         duration=gui_config.acknowledgment_duration))
+    gui_animation.flash_button(button=button,
+                               message="Copied to clipboard!",
+                               duration=gui_config.acknowledgment_duration,
+                               tooltip=tooltip,
+                               text=tooltip_text)
 
 
 # --------------------------------------------------------------------------------

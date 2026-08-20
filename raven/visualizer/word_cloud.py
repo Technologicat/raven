@@ -136,11 +136,9 @@ def _render_worker(*, task_env):
                 dpg.set_item_label("word_cloud_window", "Word cloud [updating]")
                 dpg.set_item_label("word_cloud_button", fa.ICON_CLOUD_BOLT)
                 dpg.set_value("word_cloud_button_tooltip_text", "Generating word cloud, just for you. Please wait. [F10]")
-                gui_animation.animator.add(gui_animation.WidgetFlash(message=None,
-                                                                     target="word_cloud_button",
-                                                                     target_tooltip=None,  # we handle the tooltip manually
-                                                                     target_text=None,
-                                                                     duration=gui_config.acknowledgment_duration))
+                gui_animation.flash_button(button="word_cloud_button",  # tag
+                                           message=None,
+                                           duration=gui_config.acknowledgment_duration)  # the tooltip is handled manually, so it is not flashed along
 
                 # Combine keyword counts of the specified items
                 logger.debug(f"_render_worker: {task_env.task_name}: Collecting keywords for selected data points.")
@@ -227,11 +225,11 @@ def save_to_file(filename):
     logger.debug(f"save_to_file: Dispatching a save to '{filename}', and acknowledging in GUI.")
 
     # The animation can run while we're saving.
-    gui_animation.animator.add(gui_animation.WidgetFlash(message=f"Saved to '{filename}'!",
-                                                         target="word_cloud_save_button",
-                                                         target_tooltip="word_cloud_save_tooltip",
-                                                         target_text="word_cloud_save_tooltip_text",
-                                                         duration=gui_config.acknowledgment_duration))
+    gui_animation.flash_button(button="word_cloud_save_button",  # tag
+                               message=f"Saved to '{filename}'!",
+                               duration=gui_config.acknowledgment_duration,
+                               tooltip="word_cloud_save_tooltip",  # tag
+                               text="word_cloud_save_tooltip_text")  # tag
 
     def write_task():
         logger.debug(f"save_to_file.write_task: Saving word cloud image to '{filename}'.")

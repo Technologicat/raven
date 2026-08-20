@@ -1443,11 +1443,11 @@ with timer() as tim:
                         chat_controller.view.build()
                         dpg.focus_item("chat_field")  # tag  # Focus the chat field for convenience, since the whole point of a new chat is to immediately start a new conversation.
                         # Acknowledge the action in the GUI.
-                        gui_animation.animator.add(gui_animation.WidgetFlash(message="New chat started!",
-                                                                             target=new_chat_button,
-                                                                             target_tooltip=new_chat_tooltip,
-                                                                             target_text=new_chat_tooltip_text,
-                                                                             duration=gui_config.acknowledgment_duration))
+                        gui_animation.flash_button(button=new_chat_button,
+                                                   message="New chat started!",
+                                                   duration=gui_config.acknowledgment_duration,
+                                                   tooltip=new_chat_tooltip,
+                                                   text=new_chat_tooltip_text)
 
                     def copy_chatlog_to_clipboard_as_markdown_callback() -> None:
                         shift_pressed = dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)
@@ -1455,29 +1455,29 @@ with timer() as tim:
                             dpg.set_clipboard_text(chatlog_text)
                         # Acknowledge the action in the GUI.
                         mode = "with node IDs" if shift_pressed else "as-is"
-                        gui_animation.animator.add(gui_animation.WidgetFlash(message=f"Copied to clipboard! ({mode})",
-                                                                             target=copy_chat_button,
-                                                                             target_tooltip=copy_chat_tooltip,
-                                                                             target_text=copy_chat_tooltip_text,
-                                                                             duration=gui_config.acknowledgment_duration))
+                        gui_animation.flash_button(button=copy_chat_button,
+                                                   message=f"Copied to clipboard! ({mode})",
+                                                   duration=gui_config.acknowledgment_duration,
+                                                   tooltip=copy_chat_tooltip,
+                                                   text=copy_chat_tooltip_text)
 
                     def stop_text_generation_callback() -> None:
                         chat_controller.stop_ai_turn()
                         # Acknowledge the action in the GUI.
-                        gui_animation.animator.add(gui_animation.WidgetFlash(message="Interrupted!",
-                                                                             target=stop_generation_button,
-                                                                             target_tooltip=stop_generation_tooltip,
-                                                                             target_text=stop_generation_tooltip_text,
-                                                                             duration=gui_config.acknowledgment_duration))
+                        gui_animation.flash_button(button=stop_generation_button,
+                                                   message="Interrupted!",
+                                                   duration=gui_config.acknowledgment_duration,
+                                                   tooltip=stop_generation_tooltip,
+                                                   text=stop_generation_tooltip_text)
 
                     def stop_speech_callback() -> None:
                         avatar_controller.stop_tts()
                         # Acknowledge the action in the GUI.
-                        gui_animation.animator.add(gui_animation.WidgetFlash(message="Stopped speaking!",
-                                                                             target=stop_speech_button,
-                                                                             target_tooltip=stop_speech_tooltip,
-                                                                             target_text=stop_speech_tooltip_text,
-                                                                             duration=gui_config.acknowledgment_duration))
+                        gui_animation.flash_button(button=stop_speech_button,
+                                                   message="Stopped speaking!",
+                                                   duration=gui_config.acknowledgment_duration,
+                                                   tooltip=stop_speech_tooltip,
+                                                   text=stop_speech_tooltip_text)
 
                     def toggle_fullscreen():
                         dpg.toggle_viewport_fullscreen()
@@ -1574,11 +1574,11 @@ with timer() as tim:
                     #     else:
                     #         avatar_controller.stop_data_eyes(config=avatar_record)
                     #     # Acknowledge the action in the GUI.
-                    #     gui_animation.animator.add(gui_animation.WidgetFlash(message="Ran the action being tested!",
-                    #                                                          target=testing_button,
-                    #                                                          target_tooltip=testing_tooltip,
-                    #                                                          target_text=testing_tooltip_text,
-                    #                                                          duration=gui_config.acknowledgment_duration))
+                    #     gui_animation.flash_button(button=testing_button,
+                    #                                message="Ran the action being tested!",
+                    #                                duration=gui_config.acknowledgment_duration,
+                    #                                tooltip=testing_tooltip,
+                    #                                text=testing_tooltip_text)
                     # testing_button = dpg.add_button(label=fa.ICON_VOLCANO,
                     #                                 callback=testing_callback,
                     #                                 width=gui_config.toolbutton_w,

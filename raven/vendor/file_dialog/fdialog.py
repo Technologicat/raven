@@ -2534,21 +2534,17 @@ class FileDialog:
         logger.debug(f"refresh: instance '{self.tag}' ({self.instance_tag}), refreshing at cwd = '{cwd}'")
         self.reset_dir()
         # Raven: Acknowledge the action in the GUI.
-        gui_animation.animator.add(gui_animation.WidgetFlash(message="",
-                                                             target=self.button_refresh,
-                                                             target_tooltip=None,
-                                                             target_text=None,
-                                                             duration=1.0))
+        gui_animation.flash_button(button=self.button_refresh,
+                                   message=None,
+                                   duration=1.0)
 
     def back_to_default_path(self):
         logger.debug(f"back_to_default_path: instance '{self.tag}' ({self.instance_tag}), going back to '{self.default_path}'")
         self.chdir(self.default_path)
         # Raven: Acknowledge the action in the GUI.
-        gui_animation.animator.add(gui_animation.WidgetFlash(message="",
-                                                             target=self.button_back_to_default_path,
-                                                             target_tooltip=None,
-                                                             target_text=None,
-                                                             duration=1.0))
+        gui_animation.flash_button(button=self.button_back_to_default_path,
+                                   message=None,
+                                   duration=1.0)
 
     def _update_search(self):
         res = dpg.get_value(f"ex_search_{self.instance_tag}")

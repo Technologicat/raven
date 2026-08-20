@@ -767,12 +767,9 @@ def _on_compare_enter() -> None:
     dpg.set_value("cherrypick_compare_tooltip_text",
                   "Exit compare mode [Esc]")
     # Flash the button green.
-    gui_animation.animator.add(gui_animation.WidgetFlash(
-        message=None,
-        target="cherrypick_compare_btn",
-        target_tooltip=None,
-        target_text=None,
-        duration=1.0))
+    gui_animation.flash_button(button="cherrypick_compare_btn",  # tag
+                               message=None,
+                               duration=1.0)
     # Disable inapplicable toolbar items.
     for tag in _COMPARE_DISABLE_ITEMS:
         dpg.disable_item(tag)

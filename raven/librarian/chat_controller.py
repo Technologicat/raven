@@ -929,11 +929,11 @@ class DPGChatMessage:
             mode = "with node ID" if shift_pressed else "as-is"
             dpg.set_clipboard_text(f"{manifest}{header}{formatted_message}\n")
             # Acknowledge the action in the GUI.
-            gui_animation.animator.add(gui_animation.WidgetFlash(message=f"Copied to clipboard! ({mode})",
-                                                                 target=copy_message_button,
-                                                                 target_tooltip=copy_message_tooltip,
-                                                                 target_text=copy_message_tooltip_text,
-                                                                 duration=gui_config.acknowledgment_duration))
+            gui_animation.flash_button(button=copy_message_button,
+                                       message=f"Copied to clipboard! ({mode})",
+                                       duration=gui_config.acknowledgment_duration,
+                                       tooltip=copy_message_tooltip,
+                                       text=copy_message_tooltip_text)
         self.gui_button_callbacks["copy"] = copy_message_to_clipboard_callback
         copy_message_button = dpg.add_button(label=fa.ICON_COPY,
                                              callback=copy_message_to_clipboard_callback,
@@ -1048,11 +1048,11 @@ class DPGChatMessage:
                                                                                         video_offset=librarian_config.avatar_config.video_offset)
 
                     # Acknowledge the action in the GUI.
-                    gui_animation.animator.add(gui_animation.WidgetFlash(message="Sent to avatar!",
-                                                                         target=speak_message_button,
-                                                                         target_tooltip=speak_message_tooltip,
-                                                                         target_text=speak_message_tooltip_text,
-                                                                         duration=gui_config.acknowledgment_duration))
+                    gui_animation.flash_button(button=speak_message_button,
+                                              message="Sent to avatar!",
+                                              duration=gui_config.acknowledgment_duration,
+                                              tooltip=speak_message_tooltip,
+                                              text=speak_message_tooltip_text)
             speak_enabled = (role == "assistant")
             if speak_enabled:
                 self.gui_button_callbacks["speak"] = speak_message_callback
