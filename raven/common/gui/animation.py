@@ -379,10 +379,13 @@ class WidgetFlash(Animation):
                             second and the message its three, and the flash holds the faded color until
                             the message has had its dwell.
 
-        `flash_color`: tuple `(R, G, B)`, each component in [0, 255]. Default is light green.
-                       The background color a flashed widget starts from. Unused for a text item.
+        `flash_color`: tuple `(R, G, B)`, each component in [0, 255]. The background color a flashed widget
+                       starts from; unused for a text item, which has no background. Defaults to a deep
+                       green, dark enough to read `text_color` against.
 
-        `text_color`: tuple `(R, G, B)`, each component in [0, 255]. Default is light green.
+        `text_color`: tuple `(R, G, B)`, each component in [0, 255]. Defaults to a pale green — the
+                      foreground of the same pair, and chosen to stand out against `flash_color`.
+
                       The color text starts from, whether it is a flashed text item fading back to its own
                       color or the label of a widget whose background is flashing, fading to the resting
                       text color.
