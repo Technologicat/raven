@@ -360,6 +360,25 @@ Three things worth settling before building it:
   bottom of scrollable panels, and Librarian has the avatar, the jump-to-latest pill and the backend-status
   row. Pick per app, or pick a corner nothing else claims in any of them.
 
+## The semantic map's mouse interaction deserves a UX pass
+
+*Cluster: ? · Cost: ? · Gate: none · Filed: 2026-08-20 · See also: "Annotation tooltip build makes the selection pulsation choppy on a large dataset"*
+
+Raised by Juha (2026-08-20) as worth revisiting later, not now. The plotter's own help panel lists the
+bindings — pan on middle-drag, zoom-region on right-drag, reset on double-click, select on LMB-hold, and
+Shift/Ctrl+LMB to add and subtract — so the vocabulary is there; the question is whether it is the one a
+person reaches for. Juha's own note is that he *thinks* there was a middle-mouse mode he ended up not
+using, which is worth taking as a symptom rather than as a fact about the bindings: a mode nobody reaches
+for is either the wrong mode or an undiscoverable one.
+
+One concrete datum from driving it: **LMB-hold selection did not respond to a synthetic press-move-release**
+and only took with a deliberate pause after the press. That may be a `xdotool` timing artifact and may be a
+real dwell threshold; it was not chased. If it is real, it is felt by a person as a drag that sometimes does
+nothing.
+
+Not a blocker for anything: `F9` (and the full-frame toolbutton) selects all visible datapoints, which is
+what a demo or a test wants anyway.
+
 ## Annotation tooltip build makes the selection pulsation choppy on a large dataset
 
 *Cluster: ? · Cost: ? · Gate: ? · Filed: 2026-08-14*
