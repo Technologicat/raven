@@ -23,7 +23,7 @@ from ...common import filelisting
 from ...common import utils as common_utils
 from ...common.gui import animation as gui_animation
 from ...common.gui import helpcard
-from ...common.gui import thumbnailgrid
+from ...common.gui import keyboardmark
 from ...common.gui import utils as guiutils
 from ...common.gui.tablecursor import TableCursor
 
@@ -356,7 +356,7 @@ class FileDialog:
                     for enabled in (True, False):
                         with dpg.theme_component(dpg.mvAll, enabled_state=enabled):
                             cls.cursor_color_widgets.append(
-                                dpg.add_theme_color(dpg.mvThemeCol_Text, thumbnailgrid.CURSOR_COLOR,
+                                dpg.add_theme_color(dpg.mvThemeCol_Text, keyboardmark.COLOR,
                                                     category=dpg.mvThemeCat_Core))
                             if align_x is not None:
                                 dpg.add_theme_style(dpg.mvStyleVar_SelectableTextAlign, x=align_x, y=.5)
@@ -2555,7 +2555,7 @@ class FileDialog:
         if self._cursor_pulse is not None:
             return
         self._cursor_pulse = gui_animation.animator.add(
-            gui_animation.PulsatingColor(cycle_duration=thumbnailgrid.CURSOR_PULSE_SECONDS,
+            gui_animation.PulsatingColor(cycle_duration=keyboardmark.PULSE_SECONDS,
                                          theme_color_widget=self.cursor_color_widgets))
 
     def _stop_cursor_pulse(self) -> None:
@@ -2570,7 +2570,7 @@ class FileDialog:
         # rather than to this dialog — so a half-faded cursor would be what the next dialog to use them
         # starts from.
         for theme_color_widget in self.cursor_color_widgets:
-            dpg.set_value(theme_color_widget, thumbnailgrid.CURSOR_COLOR)
+            dpg.set_value(theme_color_widget, keyboardmark.COLOR)
 
     def _park_focus(self) -> None:
         """Take the caret out of the find field, leaving DPG's focus somewhere harmless."""

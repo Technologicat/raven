@@ -26,7 +26,7 @@ Thread-safe: all public methods and mouse handlers are guarded by an `RLock` (re
 methods call each other internally).
 """
 
-__all__ = ["CURSOR_COLOR", "CURSOR_PULSE_SECONDS", "ThumbnailGrid"]
+__all__ = ["ThumbnailGrid"]
 
 import logging
 import threading
@@ -40,6 +40,7 @@ from unpythonic import sym
 
 from ...vendor.IconsFontAwesome6 import IconsFontAwesome6 as fa
 from . import animation as gui_animation
+from . import keyboardmark
 from . import utils as guiutils
 from .gridnav import resolve_nav_target
 
@@ -60,18 +61,6 @@ def _next_tag(prefix: str) -> str:
 # Spacing between tiles (pixels).
 _TILE_SPACING = 4
 
-# The colour that means "the cursor is here", wherever a cursor is drawn. Exported because a listing can be
-# shown as a grid or as a table, and one mark meaning one thing across both is what lets a reader glance at
-# either and know what they are looking at. The grid draws it as an inner border and a table as text colour
-# — different marks because the two widgets have different channels free, the same hue because it is the
-# same idea.
-CURSOR_COLOR = (80, 160, 255, 255)
-
-# How long one breath of the cursor's pulsation takes, in seconds. Exported alongside the colour and for the
-# same reason: a table cursor and a grid cursor that pulsate at different rates read as two different things
-# blinking at each other rather than as one mark.
-CURSOR_PULSE_SECONDS = 2.0
-
 
 class _CursorPulse(gui_animation.Animation):
     """Breathe whichever tile currently carries the cursor mark."""
@@ -81,9 +70,9 @@ class _CursorPulse(gui_animation.Animation):
         self._grid = grid
 
     def render_frame(self, t: int) -> sym:
-        if (t - self.t0) / 10**9 > CURSOR_PULSE_SECONDS:  # prevent loss of accuracy in long sessions
+        if (t - self.t0) / 10**9 > keyboardmark.PULSE_SECONDS:  # prevent loss of accuracy in long sessions
             self.reset()
-        self._grid.paint_cursor(gui_animation.pulsating_alpha(self.t0, t, CURSOR_PULSE_SECONDS))
+        self._grid.paint_cursor(gui_animation.pulsating_alpha(self.t0, t, keyboardmark.PULSE_SECONDS))
         return gui_animation.action_continue
 
 
@@ -111,7 +100,7 @@ class ThumbnailGrid:
                  item_spacing_y: int = 4,
                  scrollbar_size: int = 14,
                  selection_tint: tuple = (255, 255, 255, 40),
-                 current_color: tuple = CURSOR_COLOR,
+                 current_color: tuple = keyboardmark.COLOR,
                  border_color: tuple = (60, 60, 65, 255),
                  empty_tile_color: tuple = (55, 55, 58, 255),
                  show_position_numbers: bool = True,

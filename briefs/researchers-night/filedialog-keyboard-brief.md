@@ -713,7 +713,7 @@ that from the code.
 **Working, live-tested:**
 
 - **The listing has a cursor**, in both views, drawn as blue text in the table and as the grid's own inner
-  border — one `CURSOR_COLOR`, so the mark means the same thing in either. Up / Down / Page Up / Page Down /
+  border — one `keyboardmark.COLOR`, so the mark means the same thing in either. Up / Down / Page Up / Page Down /
   Home / End move it.
 - **Enter goes as deep as it can**, acting on the cursor: `..` and directories descend, a choosable file is
   accepted, a file in a folder picker is scenery and Enter declines it. **Ctrl+Enter** commits without
@@ -870,7 +870,7 @@ that from the code.
     cancel only once it is already there. Nothing is restored on the way out, the combo having applied
     every step as it was made.
 
-- **Both cursors breathe**, at one period shared from `thumbnailgrid.CURSOR_PULSE_SECONDS`. The table's is
+- **Both cursors breathe**, at one period shared from `keyboardmark.PULSE_SECONDS`. The table's is
   a theme colour, so one `PulsatingColor` drives all six variants the mark is drawn in; the grid's is a
   drawn rectangle that no theme reaches, so `ThumbnailGrid` recolours it once a frame from the same
   `pulsating_alpha`. Two marks meaning one thing have to be the same shade at the same moment.
@@ -1224,7 +1224,7 @@ Suggested order, with what each actually costs:
    day, alongside Ctrl+B and the places panel.
 
    **The look, decided 2026-08-20 (Juha): a thin, blue, pulsating border.** Blue and pulsating because the
-   listing cursor already is — so the mark takes `thumbnailgrid.CURSOR_COLOR` and `CURSOR_PULSE_SECONDS`
+   listing cursor already is — so the mark takes `keyboardmark.COLOR` and `keyboardmark.PULSE_SECONDS`
    rather than inventing a second convention, and a Raven app says *"this is where the keyboard is"* the
    same way wherever you meet it. Thin, because it frames a control the user is reading rather than
    competing with it. That the idiom is recognisable across the constellation is a reason for the component
