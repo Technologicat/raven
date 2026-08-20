@@ -3,15 +3,12 @@
 Implementation briefs for the Librarian work of summer 2026. Completed briefs move to `done/`; live
 probes shared across briefs live in `manual_tests/`.
 
-**Unnumbered and independent of the run below**: `self-sizing-tooltip.md` — a `raven/common/gui` component
-so a tooltip whose caption changes stops rendering one frame at the wrong size, which every toolbutton
-flash in Librarian currently does. Designed and measured 2026-08-20
-(`investigations/dpg-autosize/`), not yet built. It is filed here because Librarian is the first consumer,
-not because it belongs to this sprint's scope.
-
 **Closed so far**, in `done/`: 01 (webfetch), 02 (LM Studio compat), 03 (content parts, including §D),
-07 (export disclosure), 08 (context injects), 10 (RAG tool surface). **09 is the one in progress**, and the
-last thing v0.2.8 is waiting on.
+07 (export disclosure), 08 (context injects), 10 (RAG tool surface), and the unnumbered
+`self-sizing-tooltip` — a `raven/common/gui` component so a tooltip whose caption changes stops rendering
+one frame at the wrong size. It was filed here because Librarian was the first consumer, not because it
+belonged to this sprint's scope; Visualizer took it too. Measurements in `investigations/dpg-autosize/`.
+**09 is the one in progress**, and the last thing v0.2.8 is waiting on.
 
 ## Order of work, decided 2026-07-29
 

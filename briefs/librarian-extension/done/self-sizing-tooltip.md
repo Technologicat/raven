@@ -1,6 +1,7 @@
 # A tooltip that resizes without a glitch frame
 
-**Status:** designed, measured, not yet built. Started 2026-08-20.
+**Status:** done, 2026-08-20 — built, adopted in Librarian and Visualizer, and confirmed live. Started the
+same day.
 
 ## Why
 
@@ -64,8 +65,7 @@ polymorphism here is real rather than a special case, since any future self-sizi
 
 1. ~~`Tooltip` plus its tests~~ — **done 2026-08-20.**
 2. ~~The `WidgetFlash` duck-typing~~ — **done 2026-08-20.**
-3. ~~Migrate Librarian's and Visualizer's flashing tooltips onto it~~ — **done 2026-08-20**, except for one
-   site named under "What is left" below.
+3. ~~Migrate Librarian's and Visualizer's flashing tooltips onto it~~ — **done 2026-08-20.**
 
 Each step leaves the tree green and is committable on its own.
 
@@ -135,13 +135,19 @@ direction.
 wrapping" but "wrap at zero pixels". Every migrated tooltip came up as a one-glyph column. DPG's sentinel is
 `-1`.
 
-### What is left
+### What is left: nothing. The one open site was declined
 
-**Visualizer's per-entry copy button** (`info_panel.py`, in the entry-header button columns). Its caption is
-rewritten by a flash like the rest, but it is rebuilt on every selection change, in a build that can be
-cancelled part-way — so disposing of a window per entry needs a teardown hook on both the swap and the
-cancel path, and a long listing would create and destroy hundreds per rebuild. The steady-state cost is
-measured and fine; the *churn* cost is not. Decide that before wiring it.
+**Visualizer's per-entry copy button** (`info_panel.py`, in the entry-header button columns) keeps its plain
+`dpg.tooltip`. Juha, 2026-08-20: it does not glitch in practice on either of his machines, so the case for
+migrating it never arose.
+
+Worth recording *why it was the one site in question*, since a later reader will notice the asymmetry: it is
+rebuilt on every selection change, in a build that can be cancelled part-way, so disposing of a window per
+entry needs a teardown hook on both the swap and the cancel path — and a long listing would create and
+destroy hundreds per rebuild. The steady-state cost of many tooltip windows is measured and fine; that
+*churn* cost is not, and nothing has made it worth measuring.
+
+If it ever does start glitching, that is the work, and this is the reason it was not done first.
 
 ## Afterwards
 
