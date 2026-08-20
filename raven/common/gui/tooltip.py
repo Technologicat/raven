@@ -24,20 +24,32 @@ from . import utils as guiutils
 # mouse leaves — which covers a *deleted* target too, since a missing item reports as not hovered — and
 # `destroy` calls it for a tooltip being dismantled while the app keeps running.
 _visible = set()
-_visible_lock = threading.Lock()
 
-class _HoverSweeper(gui_animation.Animation):
+# Tooltips with a text change in flight. Separate from `_visible` because a change can be made to a tooltip
+# that is *not* on screen, and it must still be settled — otherwise the next hover shows the stale size,
+# which is the same glitch by a slower route.
+_pending = set()
+
+_sweep_lock = threading.Lock()  # guards both sets
+
+class _Sweeper(gui_animation.Animation):
     def __init__(self):
-        """Hides each shown tooltip once the mouse leaves the widget it belongs to.
+        """Carries each tooltip's pending text change forward, and hides tooltips the mouse has left.
 
-        One of these serves every tooltip in the app. It is ambient — a tooltip appearing is not the GUI
+        One of these serves every tooltip in the app, and it is ambient: a tooltip appearing is not the GUI
         *doing* something, so an idle-framerate throttle should not be held open by it.
+
+        Both jobs live here because both need a frame to have passed, and because the render loop already
+        ticks the animator in every Raven app — so a tooltip needs nothing wired into the app that hosts it.
         """
         super().__init__(ambient=True)
 
     def render_frame(self, t: int) -> sym:
-        with _visible_lock:
+        with _sweep_lock:
+            advancing = list(_pending)
             leaving = [tooltip for tooltip in _visible if not tooltip.should_be_visible]
+        for tooltip in advancing:
+            tooltip._advance()
         for tooltip in leaving:
             tooltip._hide()
         return gui_animation.action_continue
@@ -55,7 +67,7 @@ def _ensure_sweeper() -> None:
     """Register the shared sweeper, unless it is already running."""
     global _sweeper
     if _sweeper is None:
-        _sweeper = _HoverSweeper()
+        _sweeper = _Sweeper()
         gui_animation.animator.add(_sweeper)
 
 class Tooltip:
@@ -102,6 +114,8 @@ class Tooltip:
         self.x_algorithm = x_algorithm
         self.y_algorithm = y_algorithm
         self._shown = False
+        self._pending_text = None  # queued by `text`, applied by `_advance` on the render thread
+        self._settling = False  # ...and one frame later, the window has resized and can be placed
         self._text_lock = threading.Lock()
 
         with dpg.window(show=False,
@@ -146,50 +160,64 @@ class Tooltip:
     def _set_text(self, text: str) -> None:
         """Set the text, keeping the window's size correct on every frame that reaches the screen.
 
-        Callable from any thread. Settling the new size means waiting for a frame, which cannot be done
-        *by* the thread that renders them — so from the render loop this returns immediately and the
-        settle happens on a worker. The text lands either way; only the moment differs.
+        Callable from any thread, including the render loop. The change is queued and applied over the next
+        two frames by the sweeper, so this returns before the new text is on screen.
         """
-        if guiutils.is_render_thread():
-            # A flash restores its message from `finish`, which the animator calls on the render thread, so
-            # this is an ordinary path rather than a misuse to be reported. Handing off costs a thread per
-            # change, which is affordable because the text of a tooltip changes when a person does
-            # something — never per frame.
-            threading.Thread(target=self._settle_text, args=(text,), daemon=True).start()
-            return
-        self._settle_text(text)
-
-    def _settle_text(self, text: str) -> None:
-        """Apply `text` and let the window resize to it out of sight. Never call from the render thread.
-
-        The window is parked offscreen and shown *there* while it resizes: autosize fits a window to the
-        content it measured on the previous frame, so the frame in between shows the new text at the old
-        size. Hiding it across that frame does not help — a hidden item is not laid out, so the stale frame
-        simply moves to whenever it is shown again. It has to be drawn somewhere, and offscreen is where
-        nobody is looking. See `investigations/dpg-autosize/`.
-        """
-        with self._text_lock:  # two changes in flight would park, resize and place over each other
-            with guiutils.nonexistent_ok():
-                if dpg.get_value(self.caption) == text:
-                    return  # nothing moves, so nothing needs to settle
-                was_shown = self._shown
-                viewport_w = dpg.get_viewport_client_width()
-                viewport_h = dpg.get_viewport_client_height()
-                dpg.set_item_pos(self.window, [viewport_w, viewport_h])  # offscreen, but drawn, so it resizes
-                dpg.set_value(self.caption, text)
-                dpg.show_item(self.window)
-                guiutils.wait_for_resize(self.window)
-                if was_shown and self.should_be_visible:
-                    self._place()
-                else:
-                    dpg.hide_item(self.window)
+        with self._text_lock:
+            self._pending_text = text
+        with _sweep_lock:
+            _pending.add(self)
+        _ensure_sweeper()
 
     text = property(fget=_get_text, fset=_set_text,
                     doc="""The tooltip's text. Assigning to it resizes the window without a visible glitch.
 
-                        Assignable from any thread. From the render loop the assignment returns before the
-                        new text is on screen, since settling the size means waiting for a frame and that
-                        thread is the one that would have to draw it.""")
+                        Assignable from any thread. The assignment returns before the new text is on
+                        screen: making the window the right size for it takes a frame, so the change is
+                        applied over the next two.""")
+
+    def _advance(self) -> None:
+        """Carry a queued text change one frame further. Called by the sweeper, on the render thread.
+
+        Autosize fits a window to the content it measured on the *previous* frame, so a window whose text
+        just changed is drawn once at the old size — clipped when the text grew, skirted when it shrank.
+        The way around it is to let that frame happen where nobody is looking: park the window offscreen
+        and show it *there* (a hidden item is not laid out at all, so hiding it merely postpones the bad
+        frame), let the frame pass, and only then bring it to the cursor.
+
+        Hence two frames and a small state machine rather than a wait. Waiting is the natural way to write
+        this — `guiutils.wait_for_resize` exists for it — but the wait cannot be performed by the thread
+        that renders the frames, and handing it to a worker leaves that worker inside DPG when the app
+        tears down. See `investigations/dpg-autosize/`.
+        """
+        with self._text_lock:
+            pending, self._pending_text = self._pending_text, None
+            settling, self._settling = self._settling, False
+
+        if pending is not None:
+            with guiutils.nonexistent_ok():
+                if dpg.get_value(self.caption) == pending:
+                    return  # nothing moves, so nothing needs to settle
+                dpg.set_item_pos(self.window, [dpg.get_viewport_client_width(),
+                                               dpg.get_viewport_client_height()])  # offscreen, but drawn
+                dpg.set_value(self.caption, pending)
+                dpg.show_item(self.window)
+            with self._text_lock:
+                self._settling = True
+            return
+
+        if settling:  # the offscreen frame has been drawn, so the window now fits its text
+            with guiutils.nonexistent_ok():
+                if self._shown and self.should_be_visible:
+                    self._place()
+                else:
+                    dpg.hide_item(self.window)
+
+        with self._text_lock:
+            at_rest = self._pending_text is None and not self._settling
+        if at_rest:
+            with _sweep_lock:
+                _pending.discard(self)
 
     def _place(self) -> None:
         """Position the tooltip near the cursor and show it. The window must already be correctly sized."""
@@ -217,7 +245,7 @@ class Tooltip:
             self._shown = True
         if not self._shown:  # the target went away between the handler firing and the placement
             return
-        with _visible_lock:
+        with _sweep_lock:
             _visible.add(self)
         _ensure_sweeper()
 
@@ -226,7 +254,7 @@ class Tooltip:
         with guiutils.nonexistent_ok():
             dpg.hide_item(self.window)
         self._shown = False
-        with _visible_lock:
+        with _sweep_lock:
             _visible.discard(self)
 
     def destroy(self) -> None:
@@ -236,6 +264,11 @@ class Tooltip:
         while the app keeps running.
         """
         self._hide()
+        with self._text_lock:  # a change still in flight has nowhere to land now
+            self._pending_text = None
+            self._settling = False
+        with _sweep_lock:
+            _pending.discard(self)
         with guiutils.nonexistent_ok():
             dpg.bind_item_handler_registry(self.target, 0)
         guiutils.maybe_delete_item(self.handler_registry)

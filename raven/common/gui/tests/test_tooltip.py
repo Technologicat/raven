@@ -6,9 +6,9 @@ showing tooltip takes it down, and that `destroy` releases what it took.
 
 What they cannot reach is the resize itself, and the reason is worth stating so nobody adds a test that
 hangs. Settling a new size means waiting for the window to be laid out, and a wait needs frames; frames need
-a mapped viewport, which these tests deliberately do not have (see `test_animation.py`). Assignments made
-here are handed to a worker that waits for a frame nobody will ever render — harmless, since it is a daemon
-thread, but it does mean **no test may assert that assigned text has arrived**.
+a mapped viewport, which these tests deliberately do not have (see `test_animation.py`). What
+*is* reachable is the two-frame state machine that applies a change, because it advances on animator ticks
+rather than by waiting: `animator.render_frame()` drives it here exactly as the render loop would.
 """
 
 import pytest
@@ -37,6 +37,7 @@ def target(dpg_context):
     yield button
     animation.animator.clear()
     tooltip_module._visible.clear()
+    tooltip_module._pending.clear()
     dpg.delete_item(window)
 
 
@@ -63,22 +64,50 @@ class TestConstruction:
 
 
 class TestText:
-    def test_setting_the_same_text_is_a_no_op(self, target):
-        """Which is what lets it skip the resize wait — and is why this one can be tested at all here."""
+    def test_setting_the_same_text_does_not_move_the_window(self, target):
+        """Nothing changes size, so there is nothing to settle and no reason to park anything offscreen."""
         tip = Tooltip(target, "same")
-        tip.text = "same"  # no wait, so no RuntimeError even on the render thread
+        tip.text = "same"
+        animation.animator.render_frame()
         assert tip.text == "same"
+        assert not dpg.is_item_shown(tip.window), "never shown, not even offscreen"
 
-    def test_setting_text_from_the_render_thread_hands_off_instead_of_blocking(self, target):
+    def test_setting_text_from_the_render_thread_neither_waits_nor_raises(self, target):
         """A flash restores its message from `finish`, which the animator calls on the render thread.
 
-        Settling the size means waiting for a frame, and that thread is the one that would have to draw it
-        — so the assignment must return rather than wait. It must also not raise: this is an ordinary
-        caller, not a misuse. pytest runs on the main thread, which is the render thread by Raven's
-        convention, so simply getting here exercises the hand-off.
+        Anything the animator ticks runs *inside* the render loop, so it must never wait for a frame — the
+        thread that would have to draw it is the one waiting. Assignment therefore queues rather than
+        blocks, and must not raise either: this is an ordinary caller, not a misuse. pytest runs on the main
+        thread, which is the render thread by Raven's convention, so getting here at all exercises it.
         """
         tip = Tooltip(target, "before")
-        tip.text = "after"  # neither raises nor blocks; the worker settles it out of band
+        tip.text = "after"  # returns immediately; the sweeper carries it
+
+    def test_a_queued_change_lands_over_the_next_two_frames(self, target):
+        """One frame to apply it offscreen and let the window resize there, one to put the window back.
+
+        The offscreen step is the whole trick, so it is what the first tick has to do: parking the window
+        where the mis-sized frame cannot be seen, rather than skipping a frame that has to happen somewhere.
+        """
+        tip = Tooltip(target, "before")
+        tip.text = "after"
+        assert tip.text == "before", "queued, not yet applied"
+        assert tip in tooltip_module._pending
+
+        animation.animator.render_frame()
+        assert tip.text == "after", "applied, and the window is resizing offscreen"
+        assert tip in tooltip_module._pending, "still in flight until it has been put back"
+
+        animation.animator.render_frame()
+        assert tip not in tooltip_module._pending, "settled"
+        assert not dpg.is_item_shown(tip.window), "and hidden again, since nothing is hovering the target"
+
+    def test_a_change_to_an_unhovered_tooltip_is_still_settled(self, target):
+        """Otherwise the resize is merely deferred to the next hover, which is the same glitch, later."""
+        tip = Tooltip(target, "before")
+        assert not tip._shown
+        tip.text = "after"
+        assert tip in tooltip_module._pending, "queued even though nothing is on screen"
 
 
 class TestVisibility:
