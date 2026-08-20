@@ -27,6 +27,7 @@ which the reported sizes say it should. Every claim here past that point is from
 | `probe_hidden_metrics.py` | does hiding something across the change skip the stale frame? | no — a hidden item is not laid out and keeps its old metrics, so the first visible frame is the stale one. This is why `reposition_subtitle` parks the subtitle *offscreen* rather than hiding it |
 | `probe_drawn_fresh_vs_mutated.py` | is the stale frame actually drawn? | **a window ImGui has not laid out before is not drawn at all** on that frame, then appears fitted. An existing, mutated one is drawn clipped |
 | `probe_drawn_reshown.py` | does hiding and re-showing an existing window get that same treatment? | no — drawn clipped. Only genuine first layout is withheld |
+| `probe_tooltip_offset.py` | where does DPG place a tooltip, relative to the cursor? | **(25, 10)** — and no API will tell you: `rect_min` raises for a window, `get_item_pos` reports `(0, 0)`. Diff two captures of the *same* hovered button at two cursor positions, so the hover highlight cancels and only the tooltip is left. Re-measure on a DPG upgrade |
 | `probe_tooltip_rebuild.py` | so: delete the tooltip and build a new one holding the message? | clean when the content **shrinks**, clipped when it **grows**. Entry to a flash is a shrink, the restore is a grow, so this fixes half of it |
 
 `read_screenshot_colors.py` is the shared reader — brightest/dominant colours out of a capture, used to

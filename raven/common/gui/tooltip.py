@@ -80,7 +80,7 @@ class Tooltip:
                  *,
                  tag: Optional[str] = None,
                  wrap: int = 0,
-                 offset: int = 20,
+                 offset: int | tuple[int, int] = (25, 10),
                  x_algorithm: str = "snap",
                  y_algorithm: str = "smooth"):
         """A tooltip for `target`, whose text can change without a mis-sized frame.
@@ -102,7 +102,13 @@ class Tooltip:
         `wrap`: wrap width in pixels for the text, or 0 for no wrapping (the default). Note the window
                 fits itself to the text, so an unwrapped tooltip is as wide as its longest line.
 
-        `offset`: how far from the mouse cursor to place the tooltip, in pixels.
+        `offset`: how far from the mouse cursor to place the tooltip, in pixels: `(x, y)`, or one number
+                  for both axes.
+
+                  The default is where DPG puts its own tooltips, measured off the screen because DPG
+                  reports a tooltip window's position through no API at all. Matching it is what lets a
+                  tooltip migrated to this class sit exactly where the plain `dpg.tooltip` beside it does.
+                  It is deliberately not square: DPG offsets further horizontally than vertically.
 
                   **Not decorative.** A tooltip is a separate window, so one placed under the cursor takes
                   the hover away from the widget beneath it — which is the very hover keeping the tooltip
@@ -113,7 +119,7 @@ class Tooltip:
                                       for what each one does; the defaults are the pairing it recommends.
         """
         self.target = target
-        self.offset = offset
+        self.offset = (offset, offset) if isinstance(offset, int) else tuple(offset)
         self.x_algorithm = x_algorithm
         self.y_algorithm = y_algorithm
         self._shown = False
@@ -231,12 +237,12 @@ class Tooltip:
                                                                    cursor_pos=mouse_x,
                                                                    tooltip_size=tooltip_w,
                                                                    viewport_size=dpg.get_viewport_client_width(),
-                                                                   offset=self.offset),
+                                                                   offset=self.offset[0]),
                           guiutils.compute_tooltip_position_scalar(algorithm=self.y_algorithm,
                                                                    cursor_pos=mouse_y,
                                                                    tooltip_size=tooltip_h,
                                                                    viewport_size=dpg.get_viewport_client_height(),
-                                                                   offset=self.offset)])
+                                                                   offset=self.offset[1])])
         dpg.show_item(self.window)
 
     def _on_hover(self, sender, app_data, user_data) -> None:

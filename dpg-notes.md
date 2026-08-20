@@ -1085,6 +1085,24 @@ button`, render ten frames, and compare `get_widget_pos` of the innermost child 
 `test_get_widget_pos_is_viewport_coordinates_however_deeply_nested` in
 `raven/common/gui/tests/test_utils.py`.
 
+## A tooltip's position is not readable, and its offset from the cursor is (25, 10)
+
+Nothing DPG exposes reports where a tooltip window actually is. `get_item_rect_min` raises
+`KeyError: 'rect_min'` (windows have none, as the previous section covers), `get_item_pos` returns
+`(0, 0)`, and `guiutils.get_widget_pos` inherits that, since it accumulates `get_item_pos` up a parent
+chain a tooltip does not have. So a question as ordinary as "where does DPG put a tooltip" has to be
+answered from pixels.
+
+Measured 2026-08-20 on DPG 2.3.1, by screenshotting the same hovered button with the cursor at two
+positions and diffing — which cancels the button's hover highlight and leaves only the tooltip:
+
+**A tooltip's top-left sits at the cursor plus (25, 10)**, identical at both positions. Note it is not
+square; DPG offsets further horizontally than vertically, presumably to clear the mouse pointer glyph,
+which is taller than it is wide. `raven.common.gui.tooltip.Tooltip` defaults to this pair so that a
+tooltip migrated to it lands where the plain `dpg.tooltip` beside it would.
+
+`investigations/dpg-autosize/probe_tooltip_offset.py` re-measures it, which a DPG upgrade is reason to do.
+
 # Drawlists
 
 ## Never size a drawlist to a scroll extent — it will take the X session down
