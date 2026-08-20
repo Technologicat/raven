@@ -55,6 +55,19 @@ This means:
 - Event handlers **block each other** (single callback thread, serial execution).
 - Heavy work in a callback delays all subsequent callbacks.
 
+**An exception in a callback prints its traceback and is then dropped.** Measured
+2026-08-20 on DPG 2.3.1: a `ValueError` raised inside a frame callback wrote a
+full Python traceback to stderr, the render loop carried on, and the process
+exited 0. Nothing is swallowed, and nothing stops either.
+
+That is the budget a deliberate `raise` in GUI code is working with, and it is
+worth knowing which half you are relying on. As a *report* it is good — the
+control visibly does nothing and a traceback says why, which beats a warning in
+a log nobody is tailing. As a *guard* it is nothing: the next callback runs as
+if it had not happened, so a raise cannot protect an invariant the rest of the
+app depends on. Reproduce with `set_frame_callback(30, lambda s, a, u: 1 / 0)`
+around a mapped viewport.
+
 ## A callback is passed as many arguments as it declares
 
 DPG fills a callback's parameters positionally from `(sender, app_data, user_data)`, taking **as many as
