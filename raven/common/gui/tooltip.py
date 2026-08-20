@@ -102,6 +102,7 @@ class Tooltip:
         self.x_algorithm = x_algorithm
         self.y_algorithm = y_algorithm
         self._shown = False
+        self._text_lock = threading.Lock()
 
         with dpg.window(show=False,
                         modal=False,
@@ -145,8 +146,21 @@ class Tooltip:
     def _set_text(self, text: str) -> None:
         """Set the text, keeping the window's size correct on every frame that reaches the screen.
 
-        **Not callable from the render thread**, where the wait below raises rather than hanging. Text
-        normally arrives from a DPG callback or a background task, both of which are fine.
+        Callable from any thread. Settling the new size means waiting for a frame, which cannot be done
+        *by* the thread that renders them — so from the render loop this returns immediately and the
+        settle happens on a worker. The text lands either way; only the moment differs.
+        """
+        if guiutils.is_render_thread():
+            # A flash restores its message from `finish`, which the animator calls on the render thread, so
+            # this is an ordinary path rather than a misuse to be reported. Handing off costs a thread per
+            # change, which is affordable because the text of a tooltip changes when a person does
+            # something — never per frame.
+            threading.Thread(target=self._settle_text, args=(text,), daemon=True).start()
+            return
+        self._settle_text(text)
+
+    def _settle_text(self, text: str) -> None:
+        """Apply `text` and let the window resize to it out of sight. Never call from the render thread.
 
         The window is parked offscreen and shown *there* while it resizes: autosize fits a window to the
         content it measured on the previous frame, so the frame in between shows the new text at the old
@@ -154,26 +168,28 @@ class Tooltip:
         simply moves to whenever it is shown again. It has to be drawn somewhere, and offscreen is where
         nobody is looking. See `investigations/dpg-autosize/`.
         """
-        with guiutils.nonexistent_ok():
-            if dpg.get_value(self.caption) == text:
-                return  # nothing moves, so nothing needs to settle
-            was_shown = self._shown
-            viewport_w = dpg.get_viewport_client_width()
-            viewport_h = dpg.get_viewport_client_height()
-            dpg.set_item_pos(self.window, [viewport_w, viewport_h])  # offscreen, but drawn, so it resizes
-            dpg.set_value(self.caption, text)
-            dpg.show_item(self.window)
-            guiutils.wait_for_resize(self.window)
-            if was_shown:
-                self._place()
-            else:
-                dpg.hide_item(self.window)
+        with self._text_lock:  # two changes in flight would park, resize and place over each other
+            with guiutils.nonexistent_ok():
+                if dpg.get_value(self.caption) == text:
+                    return  # nothing moves, so nothing needs to settle
+                was_shown = self._shown
+                viewport_w = dpg.get_viewport_client_width()
+                viewport_h = dpg.get_viewport_client_height()
+                dpg.set_item_pos(self.window, [viewport_w, viewport_h])  # offscreen, but drawn, so it resizes
+                dpg.set_value(self.caption, text)
+                dpg.show_item(self.window)
+                guiutils.wait_for_resize(self.window)
+                if was_shown and self.should_be_visible:
+                    self._place()
+                else:
+                    dpg.hide_item(self.window)
 
     text = property(fget=_get_text, fset=_set_text,
                     doc="""The tooltip's text. Assigning to it resizes the window without a visible glitch.
 
-                        Assign from a DPG callback or a background thread, never from the render loop: the
-                        resize has to be waited for, and waiting in the render loop is what deadlocks it.""")
+                        Assignable from any thread. From the render loop the assignment returns before the
+                        new text is on screen, since settling the size means waiting for a frame and that
+                        thread is the one that would have to draw it.""")
 
     def _place(self) -> None:
         """Position the tooltip near the cursor and show it. The window must already be correctly sized."""

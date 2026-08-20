@@ -5,10 +5,10 @@ handler, that "on screen" and enrolment in the sweeper's set cannot disagree, th
 showing tooltip takes it down, and that `destroy` releases what it took.
 
 What they cannot reach is the resize itself, and the reason is worth stating so nobody adds a test that
-hangs. `text` waits for the window to be laid out at its new size, and a wait needs frames; frames need a
-mapped viewport, which these tests deliberately do not have (see `test_animation.py`). The wait raises from
-the render thread rather than hanging, and pytest's main thread *is* that thread — so the constraint the
-docstring states is itself assertable, which is the next best thing.
+hangs. Settling a new size means waiting for the window to be laid out, and a wait needs frames; frames need
+a mapped viewport, which these tests deliberately do not have (see `test_animation.py`). Assignments made
+here are handed to a worker that waits for a frame nobody will ever render — harmless, since it is a daemon
+thread, but it does mean **no test may assert that assigned text has arrived**.
 """
 
 import pytest
@@ -69,15 +69,16 @@ class TestText:
         tip.text = "same"  # no wait, so no RuntimeError even on the render thread
         assert tip.text == "same"
 
-    def test_setting_text_from_the_render_thread_raises(self, target):
-        """Rather than hanging, which is what waiting for a frame from the thread that renders them does.
+    def test_setting_text_from_the_render_thread_hands_off_instead_of_blocking(self, target):
+        """A flash restores its message from `finish`, which the animator calls on the render thread.
 
-        pytest runs on the main thread, and every Raven app drives its render loop from there, so this is
-        the same thread the docstring warns about.
+        Settling the size means waiting for a frame, and that thread is the one that would have to draw it
+        — so the assignment must return rather than wait. It must also not raise: this is an ordinary
+        caller, not a misuse. pytest runs on the main thread, which is the render thread by Raven's
+        convention, so simply getting here exercises the hand-off.
         """
         tip = Tooltip(target, "before")
-        with pytest.raises(RuntimeError):
-            tip.text = "after"
+        tip.text = "after"  # neither raises nor blocks; the worker settles it out of band
 
 
 class TestVisibility:
