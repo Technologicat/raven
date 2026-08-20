@@ -672,6 +672,9 @@ def _remove_staged_file(staged: env) -> None:
         staged_files.remove(staged)
     with guiutils.nonexistent_ok():
         dpg.delete_item(staged.strip_group_tag)  # the chip group (icon + filename + remove button)
+    for tooltip in (staged.icon_tooltip, staged.label_tooltip):  # windows at the root; the chip group does not hold them
+        if tooltip is not None:
+            tooltip.destroy()
     _refresh_composer_layout()
     _refresh_send_gate()
 
@@ -700,8 +703,6 @@ def _add_staged_file(path: str) -> None:
     strip_group_tag = f"staged_file_group_{idx}"  # tag
     icon_tag = f"staged_file_icon_{idx}"  # tag
     label_tag = f"staged_file_label_{idx}"  # tag
-    icon_tooltip_text_tag = f"staged_file_icon_tooltip_text_{idx}"  # tag
-    label_tooltip_text_tag = f"staged_file_label_tooltip_text_{idx}"  # tag
     remove_button_tag = f"staged_file_remove_{idx}"  # tag
     staged = env(raw=None,  # filled in by the extraction task, along with `status`
                  text=None,
@@ -714,8 +715,8 @@ def _add_staged_file(path: str) -> None:
                  error_message=None,
                  icon_tag=icon_tag,
                  label_tag=label_tag,
-                 icon_tooltip_text_tag=icon_tooltip_text_tag,
-                 label_tooltip_text_tag=label_tooltip_text_tag)
+                 icon_tooltip=None,  # the two `Tooltip`s below, once the chip's widgets exist
+                 label_tooltip=None)
     with dpg.group(parent="chat_attachments_strip", horizontal=True, tag=strip_group_tag):  # tag
         dpg.add_text(fa.ICON_FILE_LINES, tag=icon_tag)  # tag  # a document glyph stands in for the image thumbnail
         dpg.bind_item_font(icon_tag, themes_and_fonts.icon_font_solid)  # tag
@@ -724,11 +725,11 @@ def _add_staged_file(path: str) -> None:
         # name is always available via the tooltips.
         dpg.add_text(name, wrap=420, tag=label_tag)  # tag
         # Both the icon and the name carry the chip's state, so both answer when hovered. A failed chip's
-        # colour says *that* something is wrong; only the tooltip can say what.
-        with dpg.tooltip(icon_tag):  # tag
-            dpg.add_text(name, tag=icon_tooltip_text_tag)  # tag
-        with dpg.tooltip(label_tag):  # tag
-            dpg.add_text(name, tag=label_tooltip_text_tag)  # tag
+        # colour says *that* something is wrong; only the tooltip can say what. Self-sizing, because the
+        # caption grows from a bare filename to a filename plus an explanation while the chip is hovered —
+        # reading a large PDF takes seconds, which is exactly when someone is hovering it to ask why.
+        staged.icon_tooltip = gui_tooltip.Tooltip(icon_tag, name)  # tag
+        staged.label_tooltip = gui_tooltip.Tooltip(label_tag, name)  # tag
         dpg.add_button(label=fa.ICON_XMARK,
                        width=gui_config.toolbutton_w,
                        callback=lambda: _remove_staged_file(staged),
@@ -761,12 +762,12 @@ def _apply_staged_file_appearance(staged: env) -> None:
         theme, detail = "my_attachment_error_theme", staged.error_message  # tag
     else:
         theme, detail = None, None  # ready: the app's ordinary text colour, and nothing more to say
-    tooltip = f"{staged.name}\n\n{detail}" if detail else staged.name
+    caption = f"{staged.name}\n\n{detail}" if detail else staged.name
     with guiutils.nonexistent_ok():
         for item in (staged.icon_tag, staged.label_tag):
             dpg.bind_item_theme(item, theme)
-        for item in (staged.icon_tooltip_text_tag, staged.label_tooltip_text_tag):
-            dpg.set_value(item, tooltip)
+    for tooltip in (staged.icon_tooltip, staged.label_tooltip):
+        tooltip.text = caption
 
 
 def _make_extraction_task(staged: env) -> Callable[[env], None]:
