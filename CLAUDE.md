@@ -211,6 +211,19 @@ to watch.
   the two `raven-check-*`, and `raven-pdf2bib` (which has `--log-level` but not `--log`). Audited
   2026-08-17. That is a gap to close rather than a convention with exceptions.
 
+**To point an app at a different endpoint — or at nothing — use `--backend-url` and `--server-url`**
+(2026-08-20). `raven-librarian` takes both (the LLM backend and the Raven server); `raven-visualizer` takes
+`--server-url`, the only one it uses. Each logs the override against the configured value it replaced.
+
+This is how a *degraded* state gets exercised on purpose, which is otherwise awkward: aim `--backend-url`
+at a port nothing is listening on and Librarian's backend-status pill appears and stays, and aim
+`--server-url` likewise and the Visualizer's importer falls back to loading models locally. The alternative
+was editing a `config.py` that carries local overrides and restoring it exactly afterwards — which is the
+one file class this repo is most careful about, so a flag is worth having for that reason alone.
+
+Six further entry points still read the configured server URL only: `raven-minichat`, `raven-indexer`, the
+importer CLI, `raven-dehyphenate`, `raven-pdf2bib`, and the avatar settings editor.
+
 ### Running Tests
 
 ```bash
