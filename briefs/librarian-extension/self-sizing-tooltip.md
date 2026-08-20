@@ -91,6 +91,12 @@ Then the call sites: each `with dpg.tooltip(button): dpg.add_text(caption)` whos
 flash message becomes a `Tooltip(button, caption)`. Only the ones that *flash* need it — a caption written
 once is better off as a `dpg.tooltip`, and the component's docstring says so.
 
+**A modal cannot spawn a window, so a modal's tooltips cannot be migrated** (Juha, 2026-08-20). Being a
+window is what makes this one placeable, so there is no version of it that works there. `FileDialog` — the
+file picker the constellation's apps share — is a modal, which rules it out on top of the reason below; the
+messagebox is a modal too and has no tooltips. The app windows that host them are not modal, so everything
+migrated here is unaffected.
+
 **Visualizer is in scope too** (Juha, 2026-08-20), not only Librarian. Counting `flash_button` sites that
 carry a caption: Librarian about 13 (`app.py` 10, `chat_controller.py` 3) and Visualizer about 4
 (`word_cloud.py` 2, `info_panel.py` 2), plus the two sites that build a `WidgetFlash` directly and have

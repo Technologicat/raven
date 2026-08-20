@@ -92,6 +92,10 @@ class Tooltip:
 
         For a caption that is written once and never changes, `dpg.tooltip` is simpler and equivalent.
 
+        **Not usable from inside a modal**, which cannot spawn a window — and this is a window, which is
+        the whole reason it can be placed. A modal dialog's tooltips stay `dpg.tooltip` and keep the
+        resize glitch; there is currently nothing to be done about that.
+
         `target`: DPG tag or ID. The widget this tooltip belongs to: it appears while the mouse is over
                   that widget, and goes away when the mouse leaves.
 

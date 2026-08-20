@@ -71,6 +71,7 @@ with timer() as tim:
     from ..common.gui import helpcard
     from ..common.gui import messagebox
     from ..common.gui import filedrop
+    from ..common.gui import tooltip as gui_tooltip
     from ..common.gui import utils as guiutils
     from ..common.gui.vumeter import DPGVUMeter
 
@@ -491,10 +492,10 @@ def _describe_backend_status(status: sym) -> tuple[str, str, str]:
 def _refresh_backend_status_pill(status: sym) -> None:
     """Put `status` into the composer's status row, and show the row."""
     global _backend_pill_shown
-    icon, label, tooltip = _describe_backend_status(status)
+    icon, label, caption = _describe_backend_status(status)
     dpg.set_value("backend_status_icon", icon)  # tag
     dpg.configure_item("backend_status_button", label=label)  # tag
-    dpg.set_value("backend_status_tooltip_text", tooltip)  # tag
+    backend_status_tooltip.text = caption
     if status is llmclient.backend_ready:
         dpg.bind_item_theme("backend_status_icon", "my_steady_green_backend_theme")  # tag
         dpg.bind_item_theme("backend_status_button", "my_steady_green_backend_theme")  # tag
@@ -576,8 +577,7 @@ def _request_backend_reconnect() -> None:
     gui_animation.flash_button(button="backend_status_button",  # tag
                                message="Checking the LLM backend...",
                                duration=gui_config.acknowledgment_duration,
-                               tooltip="backend_status_tooltip",  # tag
-                               text="backend_status_tooltip_text")  # tag
+                               tooltip=backend_status_tooltip)
     _start_backend_status_poll(delay_first_probe=False)
 
 def _refresh_composer_layout() -> None:
@@ -848,8 +848,7 @@ def _refresh_send_gate() -> None:
     reason = _describe_send_gate()
     with guiutils.nonexistent_ok():
         dpg.configure_item("chat_send_button", enabled=(reason is None))  # tag
-        dpg.set_value("chat_send_tooltip_text",  # tag
-                      reason if reason is not None else f"Send to AI [{_send_key_label()}]")
+    chat_send_tooltip.text = reason if reason is not None else f"Send to AI [{_send_key_label()}]"
 
 def _attach_callback(selected_files) -> None:
     """FileDialog callback: route each selected file to image or document staging by its extension.
@@ -891,8 +890,7 @@ def show_attach_dialog() -> None:
     if _filedialog_attach is None:
         return
     gui_animation.flash_button(button="chat_attach_button",  # tag
-                               tooltip="chat_attach_tooltip",  # tag
-                               text="chat_attach_tooltip_text",  # tag
+                               tooltip=chat_attach_tooltip,
                                message="Opening the file browser…",  # shown in the tooltip while it's hovered during the flash
                                duration=gui_config.acknowledgment_duration)
     _filedialog_attach.set_filter_list(_attach_filter_list())  # the loaded model may have changed since the dialog was built
@@ -1025,8 +1023,10 @@ with timer() as tim:
                             dpg.add_button(label="",
                                            callback=lambda: _request_backend_reconnect(),
                                            tag="backend_status_button")  # tag
-                            with dpg.tooltip("backend_status_button", tag="backend_status_tooltip"):  # tag
-                                dpg.add_text("", tag="backend_status_tooltip_text")  # tag
+                            # Self-sizing, because this caption is rewritten on every status change and
+                            # again by the click flash — and a `dpg.tooltip` is drawn once at its previous
+                            # size each time that happens.
+                            backend_status_tooltip = gui_tooltip.Tooltip("backend_status_button", "")  # tag
 
                         def send_message_to_ai_callback() -> None:
                             # Grab and strip the message. The trailing newline the multiline widget inserts on the
@@ -1092,14 +1092,14 @@ with timer() as tim:
                             # Acknowledge in GUI
                             pulsating_red_text_glow.reset()  # start new pulsation cycle
                             dpg.bind_item_theme(record_audio_message_button, "my_pulsating_red_text_theme")  # tag
-                            dpg.set_value(record_audio_message_tooltip_text, "Stop speaking and send to AI [Ctrl+Shift+Enter]")
+                            record_audio_message_tooltip.text = "Stop speaking and send to AI [Ctrl+Shift+Enter]"
 
                             # Actually start capturing audio
                             audio_recorder.require().start(on_autostop=stop_recording_audio_message)
                         def stop_recording_audio_message() -> None:
                             # Acknowledge in GUI
                             dpg.bind_item_theme(record_audio_message_button, "disablable_widget_theme")  # tag
-                            dpg.set_value(record_audio_message_tooltip_text, "Speak to AI [Ctrl+Shift+Enter]")  # TODO: DRY the tooltip labels
+                            record_audio_message_tooltip.text = "Speak to AI [Ctrl+Shift+Enter]"  # TODO: DRY the tooltip labels
 
                             # Stop recording (if still recording; we may have been triggered by autostop)
                             rec = audio_recorder.require()
@@ -1187,30 +1187,28 @@ with timer() as tim:
                                            tag="chat_attach_button")  # tag
                             dpg.bind_item_font("chat_attach_button", themes_and_fonts.icon_font_solid)  # tag
                             dpg.bind_item_theme("chat_attach_button", "disablable_widget_theme")  # tag
-                            with dpg.tooltip("chat_attach_button", tag="chat_attach_tooltip"):  # tag
-                                # One text widget under one tag (only one branch runs), so the click-flash can
-                                # briefly swap in an "opening…" acknowledgment and restore the help text after.
-                                if model_is_vlm is True:
-                                    dpg.add_text("Attach file(s) to your message [Ctrl+Shift+O].\n\n"
-                                                 "Documents and images are both accepted.\n"
-                                                 f"    Documents: {_ATTACH_DOC_EXTS_TEXT}\n"
-                                                 f"    Images: {_ATTACH_IMAGE_EXTS_TEXT}",
-                                                 tag="chat_attach_tooltip_text")
-                                elif model_is_vlm is None:
-                                    dpg.add_text("Attach file(s) to your message [Ctrl+Shift+O].\n\n"
-                                                 f"    Documents: {_ATTACH_DOC_EXTS_TEXT}\n"
-                                                 f"    Images: {_ATTACH_IMAGE_EXTS_TEXT}\n\n"
-                                                 "Documents work with any model. Images require a vision model —\n"
-                                                 "your LLM backend didn't report whether the loaded model can see images, so an\n"
-                                                 "image is allowed on faith and the backend will error on send if it can't. LM\n"
-                                                 "Studio reports the flag, so it can confirm capability up front.",
-                                                 tag="chat_attach_tooltip_text")
-                                else:  # False — confirmed text-only; listing image formats would only offer what is refused
-                                    dpg.add_text("Attach file(s) to your message [Ctrl+Shift+O].\n\n"
-                                                 f"    Documents: {_ATTACH_DOC_EXTS_TEXT}\n\n"
-                                                 "Documents work with any model. The loaded model is text-only, so\n"
-                                                 "images can't be attached — load a vision model (VLM) at your LLM backend for those.",
-                                                 tag="chat_attach_tooltip_text")
+                            # One caption whichever branch runs, so the click-flash can briefly swap in an
+                            # "opening…" acknowledgment and restore the help text after. Self-sizing, because
+                            # that swap is a four-line caption turning into a one-line one and back.
+                            if model_is_vlm is True:
+                                chat_attach_caption = ("Attach file(s) to your message [Ctrl+Shift+O].\n\n"
+                                                       "Documents and images are both accepted.\n"
+                                                       f"    Documents: {_ATTACH_DOC_EXTS_TEXT}\n"
+                                                       f"    Images: {_ATTACH_IMAGE_EXTS_TEXT}")
+                            elif model_is_vlm is None:
+                                chat_attach_caption = ("Attach file(s) to your message [Ctrl+Shift+O].\n\n"
+                                                       f"    Documents: {_ATTACH_DOC_EXTS_TEXT}\n"
+                                                       f"    Images: {_ATTACH_IMAGE_EXTS_TEXT}\n\n"
+                                                       "Documents work with any model. Images require a vision model —\n"
+                                                       "your LLM backend didn't report whether the loaded model can see images, so an\n"
+                                                       "image is allowed on faith and the backend will error on send if it can't. LM\n"
+                                                       "Studio reports the flag, so it can confirm capability up front.")
+                            else:  # False — confirmed text-only; listing image formats would only offer what is refused
+                                chat_attach_caption = ("Attach file(s) to your message [Ctrl+Shift+O].\n\n"
+                                                       f"    Documents: {_ATTACH_DOC_EXTS_TEXT}\n\n"
+                                                       "Documents work with any model. The loaded model is text-only, so\n"
+                                                       "images can't be attached — load a vision model (VLM) at your LLM backend for those.")
+                            chat_attach_tooltip = gui_tooltip.Tooltip("chat_attach_button", chat_attach_caption)  # tag
 
                             dpg.add_button(label=fa.ICON_PAPER_PLANE,
                                            callback=send_message_to_ai_callback,
@@ -1218,10 +1216,10 @@ with timer() as tim:
                                            tag="chat_send_button")  # TODO: disable this button while AI is writing
                             dpg.bind_item_font("chat_send_button", themes_and_fonts.icon_font_solid)  # tag
                             dpg.bind_item_theme("chat_send_button", "disablable_widget_theme")  # tag
-                            with dpg.tooltip("chat_send_button"):  # tag
-                                # Tagged because `_refresh_send_gate` swaps in the reason sending is blocked.
-                                # A disabled button with an unchanged tooltip is a button that looks broken.
-                                dpg.add_text(f"Send to AI [{_send_key_label()}]", tag="chat_send_tooltip_text")  # tag
+                            # Self-sizing, because `_refresh_send_gate` swaps in the reason sending is
+                            # blocked. A disabled button with an unchanged tooltip is a button that looks
+                            # broken, and the reasons are longer than the resting caption.
+                            chat_send_tooltip = gui_tooltip.Tooltip("chat_send_button", f"Send to AI [{_send_key_label()}]")  # tag
 
                             record_audio_message_button = dpg.add_button(label=fa.ICON_MICROPHONE,
                                                                          callback=record_audio_message_callback,
@@ -1229,8 +1227,10 @@ with timer() as tim:
                                                                          tag="record_audio_message_button")  # TODO: disable this button while AI is writing
                             dpg.bind_item_font("record_audio_message_button", themes_and_fonts.icon_font_solid)  # tag
                             dpg.bind_item_theme("record_audio_message_button", "disablable_widget_theme")  # tag
-                            with dpg.tooltip("record_audio_message_button") as record_audio_message_tooltip:  # tag
-                                record_audio_message_tooltip_text = dpg.add_text("Speak to AI [Ctrl+Shift+Enter]")  # TODO: DRY the tooltip labels
+                            # Self-sizing: the caption says what a click does *now*, so it changes each time
+                            # recording starts or stops.
+                            record_audio_message_tooltip = gui_tooltip.Tooltip("record_audio_message_button",  # tag
+                                                                               "Speak to AI [Ctrl+Shift+Enter]")  # TODO: DRY the tooltip labels
                             mic_vu_meter = DPGVUMeter(width=gui_config.vu_meter_w,
                                                       height=gui_config.vu_meter_h,
                                                       border=1,
@@ -1349,7 +1349,7 @@ with timer() as tim:
                     with dpg.group(horizontal=True):
                         dpg.add_text("Open folder:")
 
-                        def _make_open_folder_callback(*, get_dir, button_tag, tooltip_tag, text_tag, ok_message, ensure_exists=False):
+                        def _make_open_folder_callback(*, get_dir, button_tag, tooltip, ok_message, ensure_exists=False):
                             """Build a click callback that opens a directory in the file manager, flashing the button on success/failure.
 
                             `get_dir` is called at click time (so a value like the active datastore path is read fresh, not
@@ -1361,43 +1361,42 @@ with timer() as tim:
                                     if ensure_exists:
                                         common_utils.create_directory(directory)
                                     common_utils.open_in_file_manager(directory)
-                                    gui_animation.flash_button(button=button_tag, tooltip=tooltip_tag, text=text_tag,
+                                    gui_animation.flash_button(button=button_tag, tooltip=tooltip,
                                                                ok=True, message=ok_message, duration=gui_config.acknowledgment_duration)
                                 except Exception as exc:  # noqa: BLE001 -- opening a folder must never crash the GUI
                                     logger.error(f"open-folder utility ({button_tag}): {type(exc)}: {exc}")
-                                    gui_animation.flash_button(button=button_tag, tooltip=tooltip_tag, text=text_tag,
+                                    gui_animation.flash_button(button=button_tag, tooltip=tooltip,
                                                                ok=False, message="Couldn't open folder", duration=gui_config.acknowledgment_duration)
                             return callback
 
-                        open_docs_dir_callback = _make_open_folder_callback(get_dir=lambda: librarian_config.llm_docs_dir,
-                                                                            button_tag="util_open_docs_dir_button",
-                                                                            tooltip_tag="util_open_docs_dir_tooltip",
-                                                                            text_tag="util_open_docs_dir_tooltip_text",
-                                                                            ok_message="Opened documents folder",
-                                                                            ensure_exists=True)
-                        open_datastore_dir_callback = _make_open_folder_callback(get_dir=lambda: pathlib.Path(chat_controller.datastore.datastore_file).expanduser().resolve().parent,
-                                                                                 button_tag="util_open_datastore_dir_button",
-                                                                                 tooltip_tag="util_open_datastore_dir_tooltip",
-                                                                                 text_tag="util_open_datastore_dir_tooltip_text",
-                                                                                 ok_message="Opened chat data folder")
-
+                        # The callback is bound after the button rather than at creation, because it flashes
+                        # a tooltip that does not exist until the button it belongs to does.
                         dpg.add_button(label=fa.ICON_FOLDER_TREE,
-                                       callback=open_docs_dir_callback,
                                        width=gui_config.toolbutton_w,
                                        tag="util_open_docs_dir_button")  # tag
                         dpg.bind_item_font("util_open_docs_dir_button", themes_and_fonts.icon_font_solid)  # tag
                         dpg.bind_item_theme("util_open_docs_dir_button", "disablable_widget_theme")  # tag
-                        with dpg.tooltip("util_open_docs_dir_button", tag="util_open_docs_dir_tooltip"):  # tag
-                            dpg.add_text("Open the documents folder\n(drop files in this folder for the AI to search)", tag="util_open_docs_dir_tooltip_text")  # tag
+                        util_open_docs_dir_tooltip = gui_tooltip.Tooltip("util_open_docs_dir_button",  # tag
+                                                                          "Open the documents folder\n(drop files in this folder for the AI to search)")
+                        dpg.set_item_callback("util_open_docs_dir_button",  # tag
+                                              _make_open_folder_callback(get_dir=lambda: librarian_config.llm_docs_dir,
+                                                                         button_tag="util_open_docs_dir_button",
+                                                                         tooltip=util_open_docs_dir_tooltip,
+                                                                         ok_message="Opened documents folder",
+                                                                         ensure_exists=True))
 
                         dpg.add_button(label=fa.ICON_DATABASE,
-                                       callback=open_datastore_dir_callback,
                                        width=gui_config.toolbutton_w,
                                        tag="util_open_datastore_dir_button")  # tag
                         dpg.bind_item_font("util_open_datastore_dir_button", themes_and_fonts.icon_font_solid)  # tag
                         dpg.bind_item_theme("util_open_datastore_dir_button", "disablable_widget_theme")  # tag
-                        with dpg.tooltip("util_open_datastore_dir_button", tag="util_open_datastore_dir_tooltip"):  # tag
-                            dpg.add_text("Open the chat data folder\n(chat history + attached files)", tag="util_open_datastore_dir_tooltip_text")  # tag
+                        util_open_datastore_dir_tooltip = gui_tooltip.Tooltip("util_open_datastore_dir_button",  # tag
+                                                                               "Open the chat data folder\n(chat history + attached files)")
+                        dpg.set_item_callback("util_open_datastore_dir_button",  # tag
+                                              _make_open_folder_callback(get_dir=lambda: pathlib.Path(chat_controller.datastore.datastore_file).expanduser().resolve().parent,
+                                                                         button_tag="util_open_datastore_dir_button",
+                                                                         tooltip=util_open_datastore_dir_tooltip,
+                                                                         ok_message="Opened chat data folder"))
 
                     # A destructive action gets its own row rather than a third seat on the folder row above:
                     # that row's label would start lying, and "delete things forever" should not sit a few
@@ -1411,8 +1410,8 @@ with timer() as tim:
                                        tag="util_cleanup_button")  # tag
                         dpg.bind_item_font("util_cleanup_button", themes_and_fonts.icon_font_solid)  # tag
                         dpg.bind_item_theme("util_cleanup_button", "disablable_widget_theme")  # tag
-                        with dpg.tooltip("util_cleanup_button", tag="util_cleanup_tooltip"):  # tag
-                            dpg.add_text("Clean up and save the chat data\n(shows what would be deleted first)", tag="util_cleanup_tooltip_text")  # tag
+                        util_cleanup_tooltip = gui_tooltip.Tooltip("util_cleanup_button",  # tag
+                                                                    "Clean up and save the chat data\n(shows what would be deleted first)")
 
         # NOTE: If you add or remove buttons here, update also `number_of_below_chat_buttons` and/or `number_of_separators` (search for them in this module).
         # The bottom row is split into two child windows that mirror the panels above them: the chat-side
@@ -1446,8 +1445,7 @@ with timer() as tim:
                         gui_animation.flash_button(button=new_chat_button,
                                                    message="New chat started!",
                                                    duration=gui_config.acknowledgment_duration,
-                                                   tooltip=new_chat_tooltip,
-                                                   text=new_chat_tooltip_text)
+                                                   tooltip=new_chat_tooltip)
 
                     def copy_chatlog_to_clipboard_as_markdown_callback() -> None:
                         shift_pressed = dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)
@@ -1458,8 +1456,7 @@ with timer() as tim:
                         gui_animation.flash_button(button=copy_chat_button,
                                                    message=f"Copied to clipboard! ({mode})",
                                                    duration=gui_config.acknowledgment_duration,
-                                                   tooltip=copy_chat_tooltip,
-                                                   text=copy_chat_tooltip_text)
+                                                   tooltip=copy_chat_tooltip)
 
                     def stop_text_generation_callback() -> None:
                         chat_controller.stop_ai_turn()
@@ -1467,8 +1464,7 @@ with timer() as tim:
                         gui_animation.flash_button(button=stop_generation_button,
                                                    message="Interrupted!",
                                                    duration=gui_config.acknowledgment_duration,
-                                                   tooltip=stop_generation_tooltip,
-                                                   text=stop_generation_tooltip_text)
+                                                   tooltip=stop_generation_tooltip)
 
                     def stop_speech_callback() -> None:
                         avatar_controller.stop_tts()
@@ -1476,8 +1472,7 @@ with timer() as tim:
                         gui_animation.flash_button(button=stop_speech_button,
                                                    message="Stopped speaking!",
                                                    duration=gui_config.acknowledgment_duration,
-                                                   tooltip=stop_speech_tooltip,
-                                                   text=stop_speech_tooltip_text)
+                                                   tooltip=stop_speech_tooltip)
 
                     def toggle_fullscreen():
                         dpg.toggle_viewport_fullscreen()
@@ -1489,8 +1484,7 @@ with timer() as tim:
                                                      tag="chat_new_button")
                     dpg.bind_item_font("chat_new_button", themes_and_fonts.icon_font_solid)  # tag
                     dpg.bind_item_theme("chat_new_button", "disablable_widget_theme")  # tag
-                    new_chat_tooltip = dpg.add_tooltip("chat_new_button")  # tag
-                    new_chat_tooltip_text = dpg.add_text("Start new chat [Ctrl+N]", parent=new_chat_tooltip)
+                    new_chat_tooltip = gui_tooltip.Tooltip("chat_new_button", "Start new chat [Ctrl+N]")  # tag
 
                     dpg.add_button(label=fa.ICON_DIAGRAM_PROJECT,
                                    callback=lambda: None,  # TODO
@@ -1510,8 +1504,8 @@ with timer() as tim:
                                                       tag="chat_copy_to_clipboard_button")
                     dpg.bind_item_font("chat_copy_to_clipboard_button", themes_and_fonts.icon_font_solid)  # tag
                     dpg.bind_item_theme("chat_copy_to_clipboard_button", "disablable_widget_theme")  # tag
-                    copy_chat_tooltip = dpg.add_tooltip("chat_copy_to_clipboard_button")  # tag
-                    copy_chat_tooltip_text = dpg.add_text("Copy this conversation to clipboard [F8]\n    no modifier: as-is\n    with Shift: include message node IDs", parent=copy_chat_tooltip)
+                    copy_chat_tooltip = gui_tooltip.Tooltip("chat_copy_to_clipboard_button",  # tag
+                                                             "Copy this conversation to clipboard [F8]\n    no modifier: as-is\n    with Shift: include message node IDs")
 
                     stop_generation_button = dpg.add_button(label=fa.ICON_SQUARE,
                                                             callback=stop_text_generation_callback,
@@ -1520,8 +1514,8 @@ with timer() as tim:
                                                             tag="chat_stop_generation_button")
                     dpg.bind_item_font("chat_stop_generation_button", themes_and_fonts.icon_font_solid)  # tag
                     dpg.bind_item_theme("chat_stop_generation_button", "disablable_widget_theme")  # tag
-                    stop_generation_tooltip = dpg.add_tooltip("chat_stop_generation_button")  # tag
-                    stop_generation_tooltip_text = dpg.add_text("Interrupt the AI [Ctrl+G]\nThis stops the AI when it is writing.", parent=stop_generation_tooltip)
+                    stop_generation_tooltip = gui_tooltip.Tooltip("chat_stop_generation_button",  # tag
+                                                                   "Interrupt the AI [Ctrl+G]\nThis stops the AI when it is writing.")
 
                     stop_speech_button = dpg.add_button(label=fa.ICON_COMMENT_SLASH,
                                                         callback=stop_speech_callback,
@@ -1530,8 +1524,7 @@ with timer() as tim:
                                                         tag="chat_stop_speech_button")
                     dpg.bind_item_font("chat_stop_speech_button", themes_and_fonts.icon_font_solid)  # tag
                     dpg.bind_item_theme("chat_stop_speech_button", "disablable_widget_theme")  # tag
-                    stop_speech_tooltip = dpg.add_tooltip("chat_stop_speech_button")  # tag
-                    stop_speech_tooltip_text = dpg.add_text("Stop speaking [Ctrl+S]", parent=stop_speech_tooltip)
+                    stop_speech_tooltip = gui_tooltip.Tooltip("chat_stop_speech_button", "Stop speaking [Ctrl+S]")  # tag
 
                     add_separator(line=False)
 
@@ -2122,8 +2115,7 @@ def _on_cleanup_committed(result: env) -> None:
     message = (f"Reclaimed {len(result.deleted_sidecars)} attachment(s)" if result.deleted_sidecars
                else "Saved; nothing to reclaim")
     gui_animation.flash_button(button="util_cleanup_button",  # tag
-                               tooltip="util_cleanup_tooltip",  # tag
-                               text="util_cleanup_tooltip_text",  # tag
+                               tooltip=util_cleanup_tooltip,
                                ok=True, message=message, duration=gui_config.acknowledgment_duration)
 
 cleanup_dialog = DPGCleanupDialog(datastore=datastore,
