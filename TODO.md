@@ -47,6 +47,13 @@ already decided.
   the next run drew them correctly. That is a card rendering half-empty in front of an audience, and it can
   happen to a chat message just as easily. The item in `TODO_DEFERRED.md` carries what is on the screen and
   why it points at the font atlas rather than at the text pipeline.
+- **The MD renderer itself gets overhauled, and that is not the same work as the two items above** (Juha,
+  2026-08-20). Both of those are framed as defects, and the block-rendering brief says outright that its
+  barriers are in Raven's own code rather than in the vendored renderer — so neither covers changing the
+  renderer. **Scope undecided as of filing**; what is decided is that parts of it are going to be rewritten
+  before Researchers' Night. Worth its own line now because two phase-1 items land in that code, and because
+  it is what the `vendor/` → `forks/` split under Cross-cutting is waiting to see.
+
 - **Librarian: in-flight AI turn bleeds into a new chat** (turn-sequencing race).
 - **Thinking mode is a wall of text on a projector.** Details under Librarian / Chat UI; here is why it is
   phase 1 rather than polish. A thinking model spends most of the turn reasoning, and right now every word
@@ -165,6 +172,13 @@ every tier, chosen on measurements rather than reputation.
 - **[High]** Revisit logging system: library modules should not reconfigure the logger (verify exact behavior against Python `logging` stdlib docs, but currently each module sets the log level, which is the entrypoint's responsibility). Move logging configuration to entrypoints only. Add a "detailed debug" level at that time for particularly spammy-but-useful log lines (e.g. `SmoothScrolling.render_frame`, `_managed_task`, `binary_search_item`).
 
 - **[Medium]** Flash the search field when focused by hotkey. Currently affects Visualizer main window, fdialog component, and XDot Viewer. **The enabler is done** (2026-07-30): `ButtonFlash` is now `WidgetFlash` and animates any widget — a text widget fades its own text color, anything else fades a theme background — with `animation.highlight_widget` as the convenience entry point, alongside `flash_button`. What remains is applying it at the three search fields, which is the actual item.
+
+- **[Medium]** Split `raven/vendor/` into `vendor/` and `forks/`. **Gate: after the FileDialog keyboard work is finished** (Juha, 2026-08-20) — the fork in question is the file dialog, and renaming its package mid-sprint buys nothing.
+  - **The defect is a false README, not an untidy name.** `raven/vendor/README.md` opens with *"None of this is Raven's work, and none of it is covered by Raven's own licence."* That is wrong on both counts for `file_dialog`: measured 2026-08-20, it arrived at 1233 lines and is now 5552, with 5037 lines added over 138 commits — roughly 78% of that tree is ours, under Raven's BSD, including 175 tests. A folder whose README cannot be true is the thing to fix; the rename is how.
+  - **The criterion is upstream mergeability, not how much we changed.** *Could this still take an upstream update?* Vendored code could — patches reapplied, upstream still worth reading, changes possibly worth sending back. A fork could not, and nobody would look. Cut that way, only `file_dialog` moves: nobody is merging upstream into 138 commits of our own keyboard.
+  - **Divergence magnitude is the axis that does not work**, and `DearPyGui_Markdown` is why — 490 lines over 12 commits is too much to read as a snapshot and too little to read as a fork, so sorting by size stalls on it. On the mergeability axis it is not awkward at all: guards added to otherwise-unchanged code, and an upstream release still merges. It stays vendored.
+  - **Which is provisional, and deliberately so.** The renderer is due an overhaul before Researchers' Night (see phase 1). If that work rewrites rather than guards, the answer to the mergeability question changes and the renderer moves too. **Re-ask it when that lands**, rather than assuming this entry settled it.
+  - Blast radius: 10 import sites in `raven/`, plus `pyproject.toml`, three docs and eight investigation scripts. Mechanical; `grep -c` afterwards is the check.
 
 - **[Medium]** Sweep the GUI styling constants into one module. Colours, pulse periods, flash durations, dwell and delay times are sprinkled through the tree, and many of them agree with each other by hand rather than by construction. **Gate: after the FileDialog keyboard brief reaches a closable state** — item 7 there adds another shared colour, and doing the sweep first would mean sweeping twice.
   - **The trigger that made it visible:** `raven.common.gui.keyboardmark` is the second constant to be pulled out of the widget that happened to need it first (the default text colour was the first). A third would be a pattern rather than a coincidence.
