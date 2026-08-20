@@ -14,6 +14,12 @@ parser.add_argument('--log', metavar='PATH', default=None,
 parser.add_argument('--log-level', default='INFO',
                     choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
                     help='root logger level (default: INFO)')
+parser.add_argument('--backend-url', metavar='URL', default=None,
+                    help='LLM backend to talk to, overriding the configured one; e.g. http://localhost:1234. '
+                         'Point it at nothing listening to see what the app does with no backend.')
+parser.add_argument('--server-url', metavar='URL', default=None,
+                    help='Raven server to talk to, overriding the configured one; e.g. http://localhost:5100. '
+                         'The other endpoint this app depends on, and the other one worth pointing elsewhere.')
 opts = parser.parse_args()
 
 import logging
@@ -132,14 +138,19 @@ gui_resize_task_manager = bgtask.TaskManager(name="librarian_gui_resize",  # de-
 attachment_task_manager = bgtask.TaskManager(name="librarian_attachment_extract",
                                              mode="concurrent",
                                              executor=bg)
-api.initialize(raven_server_url=client_config.raven_server_url,
+raven_server_url = opts.server_url if opts.server_url is not None else client_config.raven_server_url
+if opts.server_url is not None:
+    logger.info(f"Using Raven server '{raven_server_url}' from --server-url, overriding the configured '{client_config.raven_server_url}'.")
+api.initialize(raven_server_url=raven_server_url,
                raven_api_key_file=client_config.raven_api_key_file,
                executor=bg)  # reuse our executor for client background tasks
 audio.initialize(player={"device_name": client_config.tts_playback_audio_device},
                  recorder={"device_name": client_config.stt_capture_audio_device,
                            "executor": bg})
 
-llm_backend_url = librarian_config.llm_backend_url
+llm_backend_url = opts.backend_url if opts.backend_url is not None else librarian_config.llm_backend_url
+if opts.backend_url is not None:
+    logger.info(f"Using LLM backend '{llm_backend_url}' from --backend-url, overriding the configured '{librarian_config.llm_backend_url}'.")
 
 # These are initialized later, when the app starts
 avatar_instance_id = None
