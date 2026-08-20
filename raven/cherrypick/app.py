@@ -768,7 +768,6 @@ def _on_compare_enter() -> None:
                   "Exit compare mode [Esc]")
     # Flash the button green.
     gui_animation.flash_button(button="cherrypick_compare_btn",  # tag
-                               message=None,
                                duration=1.0)
     # Disable inapplicable toolbar items.
     for tag in _COMPARE_DISABLE_ITEMS:

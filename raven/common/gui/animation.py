@@ -318,12 +318,12 @@ class WidgetFlash(Animation):
 
     # TODO: We could also customize `__new__` to return the existing instance, see `unpythpnic.symbol.sym`.
     def __init__(self,
-                 target: Union[str, int],
+                 target: str | int,
                  duration: float,
-                 also_flash: Sequence[Union[str, int]] = (),
-                 message: Optional[str] = None,
-                 message_target: Union[str, int, None] = None,
-                 message_duration: Optional[float] = None,
+                 also_flash: Sequence[str | int] = (),
+                 message: str | None = None,
+                 message_target: str | int | None = None,
+                 message_duration: float | None = None,
                  flash_color: Tuple = (96, 128, 96),
                  text_color: Tuple = (180, 255, 180)):
         """Animation to flash one or more GUI widgets to draw the user's attention.
@@ -423,7 +423,7 @@ class WidgetFlash(Animation):
         self.start()
 
     @staticmethod
-    def _is_text_item(widget: Union[str, int]) -> bool:
+    def _is_text_item(widget: str | int) -> bool:
         """Whether `widget` is a DPG text item, which is what decides how it flashes.
 
         Read from DPG rather than declared by the caller: which channel a widget has is a property of the
@@ -577,7 +577,7 @@ class WidgetFlash(Animation):
             self.theme = None
             self.animated_theme_colors = ()
 
-    def _take_over(self, widget: Union[str, int]) -> Optional[env]:
+    def _take_over(self, widget: str | int) -> env | None:
         """Start flashing `widget`; return what `finish` needs to hand it back, or `None` if it is gone."""
         if self._is_text_item(widget):
             # `get_item_configuration` reports color as normalized floats while `configure_item` takes
@@ -651,11 +651,11 @@ class WidgetFlash(Animation):
                 type(self).instances.pop(self.target, None)
 
 def flash_button(*,
-                 button: Union[str, int],
-                 message: str,
+                 button: str | int,
                  duration: float,
-                 tooltip: Union[str, int, None] = None,
-                 text: Union[str, int, None] = None,
+                 tooltip: str | int | None = None,
+                 text: str | int | None = None,
+                 message: str | None = None,
                  ok: bool = True) -> None:
     """Flash a button as a non-intrusive acknowledgment of an action — green for success, red for failure.
 
@@ -665,11 +665,13 @@ def flash_button(*,
     failed without a modal dialog.
 
     `button`: the button to flash (DPG tag or ID).
-    `message`: text shown in `text` for the flash duration, then restored (`None` leaves the text unchanged).
     `duration`: flash duration in seconds.
     `tooltip`: the button's tooltip to flash along with it, if any (`None` to flash the button alone).
     `text`: the text widget whose content becomes `message` during the flash, and which flashes along with
             the button — typically the caption inside `tooltip`, but independent of it.
+    `message`: text shown in `text` for the flash duration, then restored. `None` (the default) leaves the
+               text unchanged, which is what an acknowledgment with nowhere to put words wants — a button
+               with no tooltip caption still flashes to say the click took.
     `ok`: `True` (default) flashes green (success); `False` flashes red (failure). The green matches
           `WidgetFlash`'s own default colors, so a plain success acknowledgment need not think about color.
     """
@@ -682,7 +684,7 @@ def flash_button(*,
                              text_color=((180, 255, 180) if ok else (255, 180, 180))))
 
 def highlight_widget(*,
-                     widget: Union[str, int],
+                     widget: str | int,
                      duration: float,
                      color: Tuple = (255, 255, 255)) -> None:
     """Flash `widget` to show the user where a navigation jump landed.

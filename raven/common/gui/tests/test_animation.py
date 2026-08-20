@@ -216,7 +216,7 @@ class TestButtonTarget:
         _, button = widgets
         assert dpg.get_item_theme(button) is None
 
-        animation.flash_button(button=button, message=None, duration=0.3)
+        animation.flash_button(button=button, duration=0.3)
         animation.animator.render_frame()
         assert dpg.get_item_theme(button) is not None  # the flash theme is bound while it runs
 
@@ -231,7 +231,7 @@ class TestButtonTarget:
                 dpg.add_theme_color(dpg.mvThemeCol_Button, (10, 20, 30))
         dpg.bind_item_theme(button, original)
 
-        animation.flash_button(button=button, message=None, duration=0.3)
+        animation.flash_button(button=button, duration=0.3)
         _run_flash_to_completion(button)
         assert dpg.get_item_theme(button) == original
 

@@ -2533,7 +2533,6 @@ class FileDialog:
         self.reset_dir()
         # Raven: Acknowledge the action in the GUI.
         gui_animation.flash_button(button=self.button_refresh,
-                                   message=None,
                                    duration=1.0)
 
     def back_to_default_path(self):
@@ -2541,7 +2540,6 @@ class FileDialog:
         self.chdir(self.default_path)
         # Raven: Acknowledge the action in the GUI.
         gui_animation.flash_button(button=self.button_back_to_default_path,
-                                   message=None,
                                    duration=1.0)
 
     def _update_search(self):

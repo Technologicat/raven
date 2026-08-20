@@ -137,7 +137,6 @@ def _render_worker(*, task_env):
                 dpg.set_item_label("word_cloud_button", fa.ICON_CLOUD_BOLT)
                 dpg.set_value("word_cloud_button_tooltip_text", "Generating word cloud, just for you. Please wait. [F10]")
                 gui_animation.flash_button(button="word_cloud_button",  # tag
-                                           message=None,
                                            duration=gui_config.acknowledgment_duration)  # the tooltip is handled manually, so it is not flashed along
 
                 # Combine keyword counts of the specified items
