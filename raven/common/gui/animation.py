@@ -31,25 +31,6 @@ from . import utils as guiutils
 # --------------------------------------------------------------------------------
 # Animation mechanism
 
-def _read_text(target: Union[str, int, object]) -> str:
-    """Read the text of `target`, which may be a DPG widget or a widget-like object with a `text` property."""
-    if hasattr(target, "text"):
-        return target.text
-    return dpg.get_value(target)
-
-def _write_text(target: Union[str, int, object], text: str) -> None:
-    """Write `text` into `target`, which may be a DPG widget or a widget-like object with a `text` property.
-
-    The pair exists so that a flash's message can land in something that knows how to *stage* the change —
-    `guiutils`' sibling `tooltip.Tooltip` resizes itself over two frames to avoid being drawn at the wrong
-    size, which a raw `dpg.set_value` would defeat. A DPG tag is a `str` or an `int` and has no `text`
-    attribute, so the two cases cannot be confused.
-    """
-    if hasattr(target, "text"):
-        target.text = text
-        return
-    dpg.set_value(target, text)
-
 action_continue = sym("continue")  # keep rendering
 action_finish = sym("finish")  # end animation, call the `finish` method
 action_cancel = sym("cancel")  # end animation without calling the `finish` method
@@ -217,6 +198,25 @@ class Animation:
 
     def finish(self) -> None:
         """Override this in a derived class, if you need to clean up any state for your animation when it finishes normally."""
+
+def _read_text(target: Union[str, int, object]) -> str:
+    """Read the text of `target`, which may be a DPG widget or a widget-like object with a `text` property."""
+    if hasattr(target, "text"):
+        return target.text
+    return dpg.get_value(target)
+
+def _write_text(target: Union[str, int, object], text: str) -> None:
+    """Write `text` into `target`, which may be a DPG widget or a widget-like object with a `text` property.
+
+    The pair exists so that a flash's message can land in something that knows how to *stage* the change —
+    the sibling module's `tooltip.Tooltip` resizes itself over two frames to avoid being drawn at the wrong
+    size, which a raw `dpg.set_value` would defeat. A DPG tag is a `str` or an `int` and has no `text`
+    attribute, so the two cases cannot be confused.
+    """
+    if hasattr(target, "text"):
+        target.text = text
+        return
+    dpg.set_value(target, text)
 
 # --------------------------------------------------------------------------------
 # Overlay window support
