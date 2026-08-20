@@ -353,6 +353,35 @@ appearance, but the bottom then has zero padding.
 to the content group for bottom padding. Typically N=2 balances well against
 the font's natural ascender space.
 
+## An autosize window is one frame behind its content
+
+Change what an autosize window contains, and exactly one rendered frame shows the **new content at the old
+size** — too narrow for a longer caption, too wide for a shorter one. ImGui auto-fits from the content size
+it measured on the *previous* frame, so the size and the content it describes are never the same frame's.
+
+**How the content changed makes no difference.** Measured 2026-08-20 on DPG 2.3.1, an autosize window
+holding one text item, width in pixels:
+
+| frame | `set_value` on the text | hide one text, show a longer one | explicit `width=`, set the same moment |
+|---|---|---|---|
+| +1 | 100 (stale) | 100 (stale) | **371 (correct)** |
+| +2 | 371 | 371 | 371 |
+
+So swapping between two pre-built widgets — the instinct that it is faster than mutating one — buys
+nothing, and neither would double-buffering the content. The lag is in auto-fit, not in the content change.
+
+**An explicitly sized window has no lag at all**, which is the only way measured to make the first frame
+correct. But it is unavailable exactly where this bites: **`dpg.configure_item(tooltip, width=...)` raises
+`width keyword does not exist`** — a tooltip's size is auto-fit and cannot be set. In the same run the
+autosize window snapped to 371 on frame +1 while the tooltip beside it was still at 53.
+
+What is left is to keep the stale frame off screen rather than to remove it.
+`raven.client.avatar_controller.reposition_subtitle` is the worked example: it parks the subtitle at
+`(main_window_w, main_window_h)` — offscreen — `split_frame()`s so layout catches up, reads the size that
+is now correct, positions the widget, and `split_frame()`s again. Same shape available to anything else
+that needs a size before it can place or reveal something, with the usual constraint that `split_frame`
+cannot be called from the render thread (see *Threading*).
+
 ## Window z-order
 
 DPG renders windows in creation order. The primary window (set via
