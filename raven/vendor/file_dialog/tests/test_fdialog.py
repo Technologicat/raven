@@ -1053,14 +1053,30 @@ def test_clicking_the_path_field_means_what_the_key_means(dialog, tmp_path):
     assert os.path.realpath(os.getcwd()) == os.path.realpath(str(tmp_path))
 
 
-def test_arriving_somewhere_repaints_the_path_field(dialog, tmp_path):
-    """The field is rewritten on every navigation, and a color left over from a draft would outlive it."""
+def test_arriving_somewhere_takes_the_color_away_again(dialog, tmp_path):
+    """A color left over from a draft would outlive the draft, and describe a path no longer standing there.
+
+    Neutral rather than green, though the field now names a folder that certainly exists: the three states
+    answer what the *user* asked for, and this is the dialog writing where they already are. Green here
+    would leave the field permanently green in ordinary use, which reports nothing when it matters.
+    """
     pathlib.Path(tmp_path, "albums").mkdir()
     type_into_path_field(dialog, str(pathlib.Path(tmp_path, "zzz")))
     assert path_field_color(dialog) == fdialog._TEXT_BAD
 
     dialog.chdir(str(tmp_path))
-    assert path_field_color(dialog) == fdialog._TEXT_GOOD
+    assert path_field_color(dialog) == fdialog._TEXT_NEUTRAL
+
+
+def test_abandoning_a_draft_takes_its_color_with_it(dialog, tmp_path):
+    """Escape restores the text, and a red left standing over a restored path would contradict it."""
+    dialog.chdir(str(tmp_path))
+    dialog._focus_path_field()
+    type_into_path_field(dialog, "/nowhere/at/all")
+    assert path_field_color(dialog) == fdialog._TEXT_BAD
+
+    dialog._handle_key(dpg.mvKey_Escape)
+    assert path_field_color(dialog) == fdialog._TEXT_NEUTRAL
 
 
 def test_the_folder_listing_behind_the_color_is_re_read_on_refresh(dialog, tmp_path):

@@ -1925,9 +1925,11 @@ class FileDialog:
             # each time is churn nobody asked for, in the one field the user is not interacting with.
             if dpg.get_value(self.path_field) != listed_dir:
                 dpg.configure_item(self.path_field, default_value=listed_dir)
-                # Whatever the field said a moment ago, it now names the directory on screen, so it is
-                # green. Repainted here rather than left to the edit handler, which fires on typing only.
-                self._recolor_path_field()
+                # Back to saying nothing, whatever a draft left it saying. The three states answer what the
+                # *user* asked for, and this is the dialog writing where they already are — which is not a
+                # question, so it gets no answer. Green here would leave the field permanently green in
+                # ordinary use, and a color that is always on reports nothing when it matters.
+                dpg.set_value(self._path_field_color, _TEXT_NEUTRAL)
             # A listing was just read, so anything cached about a half-typed path in this directory is from
             # before it. Cheap to drop and re-read on the next keystroke; wrong to keep across an F5, which
             # is what a user presses when they believe the folder has changed under them.
@@ -2492,7 +2494,10 @@ class FileDialog:
         # and reverting a write on the next frame. `_write_field` waits for it.
         self._focus_field()
         self._write_field(self.path_field, "path field", os.getcwd())
-        self._recolor_path_field()
+        # Neutral, not green, for the same reason arriving somewhere is: the three states answer what was
+        # asked for, and abandoning a draft asks nothing. `set_value` fires no edit handler, so this is the
+        # only thing that would repaint it.
+        dpg.set_value(self._path_field_color, _TEXT_NEUTRAL)
 
     def _focus_listing(self) -> None:
         """Take the caret out of the find field and give the listing the arrow keys.
