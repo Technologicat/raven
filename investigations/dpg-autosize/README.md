@@ -31,6 +31,7 @@ which the reported sizes say it should. Every claim here past that point is from
 | `probe_tooltip_rebuild.py` | so: delete the tooltip and build a new one holding the message? | clean when the content **shrinks**, clipped when it **grows**. Entry to a flash is a shrink, the restore is a grow, so this fixes half of it |
 | `probe_zorder.py` | may a tooltip window be built *during* the render loop, as a chat view rebuilds? | yes, where the app sets a primary window: one created 60 frames in draws in front of it. `dpg-notes.md`'s standing warning about lazy creation is about two ordinary windows |
 | `probe_many_tooltips.py` | can a chat view afford one window per tooltip — 14 buttons per message, several hundred on screen? | yes: 400 hidden root windows, 400 `dpg.tooltip`s and 400 bare buttons all cost about 1 ms/frame, and which wins changes per run. **Pass `vsync=False`**, or all three report 16.666 ms and answer nothing |
+| `probe_settle_size.py` | one offscreen frame is enough for the window to *be* the right size — is it enough to *read* it? | no. The window draws correctly on +1 while `get_item_rect_size` still reports the old size, and only catches up on +2. A placement computed on +1 therefore uses the previous size, which near a viewport edge picks the wrong side of the cursor |
 
 `read_screenshot_colors.py` is the shared reader — brightest/dominant colours out of a capture, used to
 tell a rendered colour from a coverage-weighted blend.

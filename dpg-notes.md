@@ -395,6 +395,20 @@ the geometry API.** (Live case: three conclusions were drawn from the reported s
 until Juha objected that a tooltip has never once been seen to glitch on first hover — which the metric
 says it should.)
 
+**The two halves catch up on different frames, which is what bites anything that *positions* the window.**
+The window is drawn at its new size on +1; `get_item_rect_size` only says so on +2. So code that lays the
+window out as soon as it looks right is computing from the size it used to be. Hiding it across the change
+does not help — a hidden item is not laid out at all, so the clock has not started.
+
+Where the position is cursor-plus-offset this is invisible, the answer being the same for any size. Near a
+viewport edge it is not: whether a window goes below the cursor or flips above it depends on the height, so
+the wrong height puts it below, overflowing, for exactly one frame, and something on the next frame moves
+it. **A window whose placement depends on its own size therefore needs two settle frames, not one.**
+`raven.common.gui.tooltip`'s `_SETTLE_FRAMES` is that count, and
+`investigations/dpg-autosize/probe_settle_size.py` prints the frame-by-frame sizes it came from. (Live case:
+Librarian's copy-conversation tooltip, whose three-line caption cannot fit below a cursor near the bottom of
+the window while the one-line acknowledgment it replaces can.)
+
 **Hence the fix for a tooltip whose caption changes: build a new one, rather than editing or re-showing the
 existing one.** Editing it is what makes the flash of a wrong-sized tooltip that a changing caption is
 notorious for. Note that a tooltip cannot be sized out of the problem instead —

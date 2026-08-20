@@ -35,6 +35,17 @@ _pending = set()
 
 _sweep_lock = threading.Lock()  # guards both sets
 
+# How many frames a text change is carried offscreen before the window is placed. Two, and both are needed
+# for different reasons: the first is where autosize fits the window to its new content, out of sight, and
+# the second is where `get_item_rect_size` catches up and starts reporting that new size.
+#
+# Placing on the first frame is what a reading of the autosize lag alone suggests, and it is wrong in a way
+# that only shows near a viewport edge: the placement is computed from the size the tooltip *used* to be, so
+# a caption that has just grown is put where the short one fitted, drawn once overflowing, and moved on the
+# frame after. Measured 2026-08-20 on DPG 2.3.1 — `investigations/dpg-autosize/probe_settle_size.py` prints
+# the reported size frame by frame.
+_SETTLE_FRAMES = 2
+
 class _Sweeper(gui_animation.Animation):
     def __init__(self):
         """Carries each tooltip's pending text change forward, keeps the shown ones under the cursor, and
@@ -150,7 +161,7 @@ class Tooltip:
         self.y_algorithm = y_algorithm
         self._shown = False
         self._pending_text = None  # queued by `text`, applied by `_advance` on the render thread
-        self._settling = False  # ...and one frame later, the window has resized and can be placed
+        self._settle_countdown = 0  # ...and placed once this many further frames have gone by offscreen
         self._text_lock = threading.Lock()
 
         with dpg.window(show=False,
@@ -208,40 +219,46 @@ class Tooltip:
                     doc="""The tooltip's text. Assigning to it resizes the window without a visible glitch.
 
                         Assignable from any thread. The assignment returns before the new text is on
-                        screen: making the window the right size for it takes a frame, so the change is
-                        applied over the next two.""")
+                        screen: making the window the right size for it, and being able to read that size
+                        back, takes a frame each, so the change is applied over the next three.""")
 
     def _advance(self) -> None:
         """Carry a queued text change one frame further. Called by the sweeper, on the render thread.
 
         Autosize fits a window to the content it measured on the *previous* frame, so a window whose text
         just changed is drawn once at the old size — clipped when the text grew, skirted when it shrank.
-        The way around it is to let that frame happen where nobody is looking: park the window offscreen
+        The way around it is to let those frames happen where nobody is looking: park the window offscreen
         and show it *there* (a hidden item is not laid out at all, so hiding it merely postpones the bad
-        frame), let the frame pass, and only then bring it to the cursor.
+        frame), let `_SETTLE_FRAMES` pass, and only then bring it to the cursor.
 
-        Hence two frames and a small state machine rather than a wait. Waiting is the natural way to write
-        this — `guiutils.wait_for_resize` exists for it — but the wait cannot be performed by the thread
-        that renders the frames, and handing it to a worker leaves that worker inside DPG when the app
-        tears down. See `investigations/dpg-autosize/`.
+        Hence a small state machine rather than a wait. Waiting is the natural way to write this —
+        `guiutils.wait_for_resize` exists for it — but the wait cannot be performed by the thread that
+        renders the frames, and handing it to a worker leaves that worker inside DPG when the app tears
+        down. See `investigations/dpg-autosize/`.
         """
         with self._text_lock:
             pending, self._pending_text = self._pending_text, None
-            settling, self._settling = self._settling, False
 
         if pending is not None:
+            applied = False
             with guiutils.nonexistent_ok():
-                if dpg.get_value(self.caption) == pending:
-                    return  # nothing moves, so nothing needs to settle
-                dpg.set_item_pos(self.window, [dpg.get_viewport_client_width(),
-                                               dpg.get_viewport_client_height()])  # offscreen, but drawn
-                dpg.set_value(self.caption, pending)
-                dpg.show_item(self.window)
-            with self._text_lock:
-                self._settling = True
-            return
+                if dpg.get_value(self.caption) != pending:
+                    dpg.set_item_pos(self.window, [dpg.get_viewport_client_width(),
+                                                   dpg.get_viewport_client_height()])  # offscreen, but drawn
+                    dpg.set_value(self.caption, pending)
+                    dpg.show_item(self.window)
+                    applied = True
+            if applied:
+                with self._text_lock:
+                    self._settle_countdown = _SETTLE_FRAMES
+                return
+            # Identical text, or a window that has gone away: nothing moves, so nothing needs to settle.
+            # Any countdown already running is left to finish — it belongs to an earlier change that does.
 
-        if settling:  # the offscreen frame has been drawn, so the window now fits its text
+        with self._text_lock:
+            remaining, self._settle_countdown = self._settle_countdown, max(0, self._settle_countdown - 1)
+
+        if remaining == 1:  # the settle frames have been drawn; the reported size is now the new one
             with guiutils.nonexistent_ok():
                 if self._shown and self.should_be_visible:
                     self._place()
@@ -249,7 +266,7 @@ class Tooltip:
                     dpg.hide_item(self.window)
 
         with self._text_lock:
-            at_rest = self._pending_text is None and not self._settling
+            at_rest = self._pending_text is None and not self._settle_countdown
         if at_rest:
             with _sweep_lock:
                 _pending.discard(self)
@@ -260,11 +277,11 @@ class Tooltip:
         Called by the sweeper on every frame a tooltip is on screen.
 
         A tooltip with a text change in flight is left alone: it is parked offscreen on purpose until the
-        frame that resizes it has been drawn, and bringing it to the cursor before then is exactly the
+        frames that resize it have been drawn, and bringing it to the cursor before then is exactly the
         mis-sized frame this class exists to avoid.
         """
         with self._text_lock:
-            mid_change = self._pending_text is not None or self._settling
+            mid_change = self._pending_text is not None or self._settle_countdown
         if mid_change:
             return
         with guiutils.nonexistent_ok():
@@ -317,7 +334,7 @@ class Tooltip:
         self._hide()
         with self._text_lock:  # a change still in flight has nowhere to land now
             self._pending_text = None
-            self._settling = False
+            self._settle_countdown = 0
         with _sweep_lock:
             _pending.discard(self)
         with guiutils.nonexistent_ok():

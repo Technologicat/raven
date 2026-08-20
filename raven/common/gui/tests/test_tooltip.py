@@ -93,11 +93,12 @@ class TestText:
         tip = Tooltip(target, "before")
         tip.text = "after"  # returns immediately; the sweeper carries it
 
-    def test_a_queued_change_lands_over_the_next_two_frames(self, target):
-        """One frame to apply it offscreen and let the window resize there, one to put the window back.
+    def test_a_queued_change_lands_over_the_next_three_frames(self, target):
+        """One tick to apply it offscreen, `_SETTLE_FRAMES` more there, and it is placed on the last of them.
 
         The offscreen step is the whole trick, so it is what the first tick has to do: parking the window
-        where the mis-sized frame cannot be seen, rather than skipping a frame that has to happen somewhere.
+        where the mis-sized frames cannot be seen, rather than skipping frames that have to happen
+        somewhere. Two of them are needed and not one — see `_SETTLE_FRAMES`.
         """
         tip = Tooltip(target, "before")
         tip.text = "after"
@@ -106,11 +107,45 @@ class TestText:
 
         animation.animator.render_frame()
         assert tip.text == "after", "applied, and the window is resizing offscreen"
-        assert tip in tooltip_module._pending, "still in flight until it has been put back"
+
+        for _ in range(tooltip_module._SETTLE_FRAMES - 1):
+            animation.animator.render_frame()
+            assert tip in tooltip_module._pending, "still in flight until the reported size has caught up"
 
         animation.animator.render_frame()
         assert tip not in tooltip_module._pending, "settled"
         assert not dpg.is_item_shown(tip.window), "and hidden again, since nothing is hovering the target"
+
+    def test_it_is_not_placed_while_the_reported_size_is_still_the_old_one(self, target, monkeypatch):
+        """`get_item_rect_size` catches up a frame later than the window itself does.
+
+        Placing as soon as the window has been laid out therefore computes the position from the size the
+        tooltip *used* to be. It looks harmless in the middle of the viewport, where the answer is
+        cursor-plus-offset either way — and near an edge it decides above-the-cursor versus below, so a
+        caption that has just grown is put where the short one fitted and moved on the frame after. That is
+        one visibly misplaced frame, reported from Librarian's copy-conversation button.
+
+        The lag is faked here, since nothing in this context renders.
+        """
+        near_the_bottom = (100.0, dpg.get_viewport_client_height() - 60)
+        monkeypatch.setattr(dpg, "get_mouse_pos", lambda local=True: near_the_bottom)
+        monkeypatch.setattr(dpg, "is_item_hovered", lambda item: True)
+        reported = [(200, 30)]  # one line; the whole point is that this changes late
+        monkeypatch.setattr(dpg, "get_item_rect_size", lambda item: reported[0])
+
+        tip = Tooltip(target, "one line")
+        tip._on_hover(None, None, None)
+
+        tip.text = "three\nlines\nof it"
+        animation.animator.render_frame()  # applied, parked offscreen
+        animation.animator.render_frame()  # the window has resized by now, but the report has not
+        assert dpg.get_item_pos(tip.window)[1] >= dpg.get_viewport_client_height(), "still parked, not placed by a stale size"
+
+        reported[0] = (200, 90)  # ...and only now does the report catch up
+        animation.animator.render_frame()
+
+        flipped_above_the_cursor = near_the_bottom[1] - tip.offset[1] - reported[0][1]
+        assert dpg.get_item_pos(tip.window)[1] == pytest.approx(flipped_above_the_cursor)
 
     def test_a_change_to_an_unhovered_tooltip_is_still_settled(self, target):
         """Otherwise the resize is merely deferred to the next hover, which is the same glitch, later."""
