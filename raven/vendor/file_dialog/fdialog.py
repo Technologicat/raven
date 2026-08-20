@@ -76,6 +76,16 @@ class CaretHome(enum.Enum):
       - Escape hands the caret back to the find field from wherever it was parked, and cancels the dialog
         only once it is already there.
 
+    **The homes are two tiers, and Escape means "up one tier".** `FIELD` and `LISTING` are *the main thing*,
+    and they are one tier because they are sister widgets: you type in one and watch the other, and Tab and
+    Ctrl+F move within the pair. Everything else is an auxiliary control reached by a chord, so Escape from
+    one abandons what was being done there and returns to the main thing — and from the main thing there is
+    nowhere left to go but out of the dialog.
+
+    So the listing answering Escape differently is not an exception to be tidied away: it is the rule, seen
+    from the tier that has no tier above it. A new home is classified by asking which tier it belongs to,
+    which is how the places panel is already answered.
+
     It is held rather than derived from `dpg.is_item_active` on the find field, because the two are not the
     same question: the field goes inactive whenever anything at all is clicked, and that must not silently
     rebind the arrow keys.
@@ -2113,7 +2123,12 @@ class FileDialog:
             helpcard.hotkey_blank_entry,
             env(key_indent=0, key="Enter", action_indent=0, action="Go as deep as this entry allows", notes="Into a folder, or accept a file"),
             env(key_indent=0, key="Ctrl+Enter", action_indent=0, action="Accept without going deeper", notes="The OK button"),
-            env(key_indent=0, key="Esc", action_indent=0, action="Cancel", notes=""),
+            # Two homes answer Escape by handing the caret back rather than cancelling, and a bare "Cancel"
+            # promises something else for both. It goes in the notes rather than a row of its own, and it is
+            # kept short enough not to wrap, for the same reason: column one is already the height the card
+            # was measured at, `HelpWindow` gives it no scrollbar, and either a fifteenth row or a second
+            # line here spends the margin the measurement left for the row a multi-selection dialog adds.
+            env(key_indent=0, key="Esc", action_indent=0, action="Cancel", notes="Or out of a side control"),
             (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Mark or unmark this entry", notes="Ctrl+click, without the mouse")
              if self.multi_selection else None),
             helpcard.hotkey_blank_entry,

@@ -895,12 +895,28 @@ that from the code.
     clickable item no child window encloses. Worth asserting rather than remembering: the two offenders
     were missable for opposite reasons, one looking inert and the other looking self-closing.
 
-**Open, and worth settling before the places panel:** whether Escape from the *listing* should also hand
-the caret back rather than cancel. The rule as built applies to parked controls — the type filter today,
-the path field and the places panel to come — and the listing is deliberately excluded, since Esc-closes-a-
-dialog is the strongest convention in play and Tab and Ctrl+F already return from there. But that leaves
-one home answering Escape differently from the others, which a user has to learn rather than derive. The
-help card currently states the simple rule ("Esc — Cancel"), so changing this means changing that too.
+**Settled 2026-08-20 (Juha): Escape stays as built, and the reason is that the homes are two tiers rather
+than a flat set.** This had been carried as open — whether Escape from the *listing* should hand the caret
+back rather than cancel, since excluding it leaves one home answering Escape differently from the others.
+It is not an exception:
+
+- **The find field and the listing are *the main thing*, and they are one tier because they are sister
+  widgets** — you type in one and watch the other, and the whole navigate-by-search flow is the pair
+  working together. Tab and Ctrl+F move *within* that tier, which is why neither needed Escape's help.
+- **The path field, the type filter and the places panel are auxiliary controls**, each reached by a chord
+  and each doing one thing off to the side.
+
+**So Escape means "up one tier".** From an auxiliary control: abandon what you were doing there and go back
+to the main thing. From the main thing: leave the dialog. That is what a human expects of Escape in almost
+any text entry — cancel this field's edit, put me back on whatever the window is *for* — and it is
+derivable rather than learned, which is what the open question was worried about.
+
+**Which also answers the places panel in advance**, and is why this was worth settling before item 6: the
+panel is auxiliary, so Escape from it returns to the find field, no new decision required. A fifth home
+would be classified the same way, by asking which tier it belongs to.
+
+**Recorded in `CaretHome`'s docstring as well as here**, because the shape it protects against is a future
+session reading the asymmetry as an oversight and "simplifying" it into one rule for all homes.
 
 **Not built:** Ctrl+B, the places-panel migration, and the navigation history — Alt+Left / Alt+Right and
 the mouse's back and forward buttons, which is the one item here that arrived after the dialog started
