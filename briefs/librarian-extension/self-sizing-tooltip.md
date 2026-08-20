@@ -64,7 +64,8 @@ polymorphism here is real rather than a special case, since any future self-sizi
 
 1. ~~`Tooltip` plus its tests~~ — **done 2026-08-20.**
 2. ~~The `WidgetFlash` duck-typing~~ — **done 2026-08-20.**
-3. Migrate Librarian's flashing tooltips onto it. **Not started.**
+3. ~~Migrate Librarian's and Visualizer's flashing tooltips onto it~~ — **done 2026-08-20**, except for one
+   site named under "What is left" below.
 
 Each step leaves the tree green and is committable on its own.
 
@@ -111,6 +112,36 @@ shaped by exactly one caller.
 **This step wants live testing**, since it changes what a real tooltip does on screen and the whole point
 is how it looks. Librarian's copy-chatlog button is the sharpest case: a three-line caption replaced by a
 one-line acknowledgment, which is the jump that started all this.
+
+### What building 3 changed about the design
+
+**The criterion turned out to be "the caption is rewritten", not "the button flashes".** The brief counted
+`flash_button` sites; the migration found three tooltips that no flash ever touches and that were being
+written through by tag anyway — Librarian's mic button (its caption says what a click does *now*), its
+staged-document chips (a filename grows an explanation while a large PDF is read, which takes seconds), and
+Visualizer's word-cloud button ("please wait" while a cloud renders). Same glitch, arrived at from the other
+direction.
+
+**Two things had to be measured before the chat view could be migrated at all**, and both are now in
+`dpg-notes.md` with probes in `investigations/dpg-autosize/`:
+
+- A window created *during* the render loop draws in front of the primary window. The standing note warned
+  against lazy creation and read as a prohibition; it is about two ordinary windows.
+- A hidden root window costs nothing per frame. This is the site that multiplies — 14 buttons per chat
+  message — and 400 of them measure the same as 400 `dpg.tooltip`s. (Measure with `vsync=False`, or every
+  variant reports 16.666 ms and the question goes unanswered while looking answered.)
+
+**One bug, and only the screen could have found it:** `Tooltip` defaulted `wrap=0`, which is not "no
+wrapping" but "wrap at zero pixels". Every migrated tooltip came up as a one-glyph column. DPG's sentinel is
+`-1`.
+
+### What is left
+
+**Visualizer's per-entry copy button** (`info_panel.py`, in the entry-header button columns). Its caption is
+rewritten by a flash like the rest, but it is rebuilt on every selection change, in a build that can be
+cancelled part-way — so disposing of a window per entry needs a teardown hook on both the swap and the
+cancel path, and a long listing would create and destroy hundreds per rebuild. The steady-state cost is
+measured and fine; the *churn* cost is not. Decide that before wiring it.
 
 ## Afterwards
 
