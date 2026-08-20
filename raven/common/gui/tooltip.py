@@ -79,7 +79,7 @@ class Tooltip:
                  text: str = "",
                  *,
                  tag: Optional[str] = None,
-                 wrap: int = 0,
+                 wrap: int = -1,
                  offset: int | tuple[int, int] = (25, 10),
                  x_algorithm: str = "snap",
                  y_algorithm: str = "smooth"):
@@ -103,8 +103,11 @@ class Tooltip:
 
         `tag`: DPG tag for the tooltip window, if you want one. IDs are used internally either way.
 
-        `wrap`: wrap width in pixels for the text, or 0 for no wrapping (the default). Note the window
+        `wrap`: wrap width in pixels for the text, in `dpg.add_text`'s spelling: pixels from the start of
+                the text until wrapping starts, or `-1` for no wrapping (the default). Note the window
                 fits itself to the text, so an unwrapped tooltip is as wide as its longest line.
+
+                `0` is not "no wrapping" — it wraps at zero pixels, which is one character per line.
 
         `offset`: how far from the mouse cursor to place the tooltip, in pixels: `(x, y)`, or one number
                   for both axes.

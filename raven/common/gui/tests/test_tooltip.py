@@ -53,6 +53,16 @@ class TestConstruction:
         tip = Tooltip(target)
         assert dpg.get_item_info(target)["handlers"] == tip.handler_registry
 
+    def test_the_default_is_no_wrapping_in_dpgs_spelling(self, target):
+        """`wrap` counts pixels, so the no-wrap sentinel is -1 and 0 wraps at zero — one character per line.
+
+        The window fits itself to its text, so a tooltip that wraps at zero collapses to a one-glyph column
+        the height of the whole caption. Nothing here renders, so only the value can be checked; the shape
+        it produces on screen is unmistakable and was how this was found.
+        """
+        tip = Tooltip(target, "a caption long enough to wrap if it were going to")
+        assert dpg.get_item_configuration(tip.caption)["wrap"] == -1
+
     def test_a_missing_target_is_not_fatal(self, dpg_context):
         """A chat view rebuild can delete the widget between deciding to build a tooltip and building it."""
         with dpg.window() as window:
