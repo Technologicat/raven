@@ -248,6 +248,28 @@ from `HOME` alone. Only the assertions that expand `~` themselves fail, and only
 Set both. (Live case 2026-08-18: `TestUserDirectory` went green on ubuntu and macOS and took 7 failures on
 windows-latest.)
 
+### Don't sleep through a duration to sample partway into it — wind the clock instead
+
+A test that starts a timed animation, sleeps most of its duration and then takes one sample is betting that
+everything in between fits in the remainder. On a dev machine it always does. **The macOS runner is where
+that bet is lost**, repeatedly and across unrelated tests (Juha's observation; the Linux and Windows runners
+in the same matrix pass the same test).
+
+The correct form is already in the suite: set the animation's `t0` back by the fraction you want to sample
+at, then render one frame. Deterministic, needs no sleep, and reads more clearly about what is being
+sampled. `test_animation.py`'s `sample_at` helper is the worked example.
+
+**The reason to care is not the flake, it is what the flake says.** These failures name the wrong cause.
+When `test_a_widget_with_no_colour_of_its_own_fades_back_to_the_default` lost this bet (2026-08-20), the
+flash had already finished and handed the widget back with no colour declared — and DPG reports an
+undeclared colour as a sentinel whose red channel is the very colour the fade started from, so the assertion
+fired with "the fade is heading for the default text colour, not for black" about a fade that had ended
+perfectly. Half an investigation goes into the mechanism the message points at before anyone checks the
+clock.
+
+So treat a macOS-only failure as a report about the *test*, not about macOS. It is the runner that keeps the
+suite honest about its timing assumptions, which is worth having.
+
 ### Naming and placing a test module
 
 **`test_X.py` tests the module `X.py`, and lives in the `tests/` directory of X's own package.** So
