@@ -383,8 +383,9 @@ class WidgetFlash(Animation):
                        The background color a flashed widget starts from. Unused for a text item.
 
         `text_color`: tuple `(R, G, B)`, each component in [0, 255]. Default is light green.
-                      For a widget with a background, the (constant) color of its label during the flash.
-                      For a text item, the color it starts from before fading back to its own.
+                      The color text starts from, whether it is a flashed text item fading back to its own
+                      color or the label of a widget whose background is flashing, fading to the resting
+                      text color.
 
                       A text item needs no color of its own: one that declared none fades back to
                       `guiutils.DEFAULT_TEXT_COLOR`, and is handed back with none declared.
@@ -412,6 +413,7 @@ class WidgetFlash(Animation):
         # These are used during animation
         self.theme = None
         self.animated_theme_colors = ()  # the theme's background entries, all faded together
+        self.animated_theme_text_color = None  # ...and its label entry, faded to a different destination
         self.original_message = None
         # One record per widget taken over, in the order they were taken, holding what `finish` needs to
         # hand that widget back. Per widget rather than per role, because these are independent widgets that
@@ -459,28 +461,27 @@ class WidgetFlash(Animation):
         if not dpg.does_item_exist(self.target):
             return action_finish
 
-        # Each text item fades its own color, toward the color it rests in.
-        R0, G0, B0 = self.text_color
+        def faded(start: Tuple, end: Tuple) -> Tuple:
+            """`start` where the flash begins, `end` where it lands, `r` of the way between them."""
+            return tuple(s * (1.0 - r) + e * r for s, e in zip(start, end))
+
+        # Each text item fades its own color toward the color it rests in, keeping the alpha it had.
         for record in self.painted:
             if not record.is_text:
                 continue
-            R1, G1, B1, A1 = record.resting_color
             with guiutils.nonexistent_ok():
                 dpg.configure_item(record.widget,
-                                   color=(R0 * (1.0 - r) + R1 * r,
-                                          G0 * (1.0 - r) + G1 * r,
-                                          B0 * (1.0 - r) + B1 * r,
-                                          A1))
+                                   color=faded(self.text_color, record.resting_color) + (record.resting_color[3],))
 
-        # ...and one animated theme fades the background of everything else, all of them at once.
+        # ...and one animated theme fades the background of everything else, all of them at once, with
+        # their labels running the same curve toward the resting *text* color. The two destinations are
+        # what keeps the label legible: it brightens as the background behind it darkens.
         if self.theme is not None:
-            R0, G0, B0 = self.flash_color
-            R1, G1, B1 = guiutils.DEFAULT_BUTTON_BG_COLOR
-            faded = (R0 * (1.0 - r) + R1 * r,
-                     G0 * (1.0 - r) + G1 * r,
-                     B0 * (1.0 - r) + B1 * r)
+            background = faded(self.flash_color, guiutils.DEFAULT_BUTTON_BG_COLOR)
             for color_item in self.animated_theme_colors:
-                dpg.set_value(color_item, faded)
+                dpg.set_value(color_item, background)
+            dpg.set_value(self.animated_theme_text_color,
+                          faded(self.text_color, guiutils.DEFAULT_TEXT_COLOR))
 
         return action_continue
 
@@ -545,10 +546,11 @@ class WidgetFlash(Animation):
         """Build the animated theme shared by every flashed widget that has a background."""
         with dpg.theme(tag=f"acknowledgement_highlight_theme_{type(self).id_counter}") as self.theme:  # create unique DPG ID each time
             with dpg.theme_component(dpg.mvAll):
-                # The label of a widget whose background is flashing is held here, at a constant color, so
-                # that it stays readable throughout. Deliberately not animated: fading it along with the
-                # background would run the two toward each other and hide the label mid-flash.
-                dpg.add_theme_color(dpg.mvThemeCol_Text, self.text_color)
+                # The label of a widget whose background is flashing. It fades to the resting text color
+                # while the background fades to the resting background — so the two move *apart* over the
+                # flash, and the label is at its most readable exactly where the background is dimmest.
+                # Fading it toward the *background's* destination is what would hide it mid-flash.
+                text_color = dpg.add_theme_color(dpg.mvThemeCol_Text, self.text_color)
                 # button
                 button_color = dpg.add_theme_color(dpg.mvThemeCol_Button, self.flash_color)
                 hovered_color = dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, self.flash_color)
@@ -568,6 +570,8 @@ class WidgetFlash(Animation):
         # colors, a tooltip takes `PopupBg`, and neither needs to be told which it is.
         self.animated_theme_colors = (button_color, hovered_color, active_color, popupbg_color,
                                       disabled_button_color, disabled_hovered_color, disabled_active_color)
+        # The label is separate because it fades somewhere else — toward the resting *text* color.
+        self.animated_theme_text_color = text_color
 
     def _destroy_theme(self) -> None:
         """Release the animated theme, if one was built."""
@@ -576,6 +580,7 @@ class WidgetFlash(Animation):
                 dpg.delete_item(self.theme)
             self.theme = None
             self.animated_theme_colors = ()
+            self.animated_theme_text_color = None
 
     def _take_over(self, widget: str | int) -> env | None:
         """Start flashing `widget`; return what `finish` needs to hand it back, or `None` if it is gone."""

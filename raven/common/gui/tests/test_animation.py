@@ -313,6 +313,32 @@ class TestPaintList:
             animation.animator.clear()
             dpg.delete_item(window)
 
+    def test_the_label_fades_as_well_as_the_background(self, widgets):
+        """And to a different destination, which is what keeps it legible the whole way.
+
+        Holding the label at `text_color` for the duration leaves it to snap when the theme unbinds. Fading
+        it toward the background's destination instead would run the two together and hide it mid-flash;
+        toward the resting *text* colour they move apart, the label brightening as the background dims.
+        """
+        _, button = widgets
+        animation.animator.add(animation.WidgetFlash(target=button, duration=10.0,
+                                                     flash_color=(96, 128, 96), text_color=(255, 0, 0)))
+        flash = animation.WidgetFlash.instances[button]
+
+        def sample_at(r):
+            """The label and background colours at fraction `r` of the fade, without waiting for a clock."""
+            flash.t0 = time.monotonic_ns() - int(r * flash.duration * 10**9)
+            animation.animator.render_frame()
+            return (list(dpg.get_value(flash.animated_theme_text_color))[:3],
+                    list(dpg.get_value(flash.animated_theme_colors[0]))[:3])
+
+        label_start, background_start = sample_at(0.0)
+        label_end, background_end = sample_at(0.99)
+
+        assert label_start != label_end, "the label fades rather than being held"
+        assert label_end[1] > label_start[1] and label_end[2] > label_start[2], "toward the resting text colour"
+        assert sum(background_end) < sum(background_start), "while the background darkens beneath it"
+
     def test_a_message_with_nowhere_to_go_says_so(self, widgets, caplog):
         """Silently dropping it is how two flashes carried an inert `message=""` for months.
 
