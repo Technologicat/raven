@@ -390,6 +390,22 @@ class TestFlashButtonTooltipAdapter:
         finally:
             tip.destroy()
 
+    def test_a_tooltip_windows_background_is_painted_as_well(self, widgets):
+        """A `dpg.tooltip` is a popup and a `Tooltip` is a window, and DPG colours those from different
+        theme entries. With only `PopupBg` in the theme, a self-sizing tooltip sat unflashed next to
+        neighbours that flashed — the button lit up and its caption stayed the colour of the app.
+        """
+        _, button = widgets
+        tip = tooltip.Tooltip(button, "resting caption")
+        try:
+            animation.flash_button(button=button, duration=5.0, tooltip=tip, message="Copied!")
+            flash = animation.WidgetFlash.instances[button]
+            painted = {dpg.get_item_configuration(color)["target"] for color in flash.animated_theme_colors}
+            assert dpg.mvThemeCol_WindowBg in painted
+            assert dpg.mvThemeCol_PopupBg in painted, "and the plain kind is still painted"
+        finally:
+            tip.destroy()
+
     def test_a_dpg_tooltip_still_takes_its_caption_separately(self, widgets):
         """The plain case is the majority of call sites, and a tag is not a tooltip object."""
         text, button = widgets

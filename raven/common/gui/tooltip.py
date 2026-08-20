@@ -37,24 +37,29 @@ _sweep_lock = threading.Lock()  # guards both sets
 
 class _Sweeper(gui_animation.Animation):
     def __init__(self):
-        """Carries each tooltip's pending text change forward, and hides tooltips the mouse has left.
+        """Carries each tooltip's pending text change forward, keeps the shown ones under the cursor, and
+        hides the ones the mouse has left.
 
         One of these serves every tooltip in the app, and it is ambient: a tooltip appearing is not the GUI
         *doing* something, so an idle-framerate throttle should not be held open by it.
 
-        Both jobs live here because both need a frame to have passed, and because the render loop already
-        ticks the animator in every Raven app — so a tooltip needs nothing wired into the app that hosts it.
+        All three jobs live here because each needs a frame to have passed, and because the render loop
+        already ticks the animator in every Raven app — so a tooltip needs nothing wired into the app that
+        hosts it.
         """
         super().__init__(ambient=True)
 
     def render_frame(self, t: int) -> sym:
         with _sweep_lock:
             advancing = list(_pending)
-            leaving = [tooltip for tooltip in _visible if not tooltip.should_be_visible]
+            visible = list(_visible)
         for tooltip in advancing:
             tooltip._advance()
-        for tooltip in leaving:
-            tooltip._hide()
+        for tooltip in visible:
+            if tooltip.should_be_visible:
+                tooltip._follow()
+            else:
+                tooltip._hide()
         return gui_animation.action_continue
 
     def finish(self) -> None:
@@ -82,7 +87,7 @@ class Tooltip:
                  wrap: int = -1,
                  offset: int | tuple[int, int] = (25, 10),
                  x_algorithm: str = "snap",
-                 y_algorithm: str = "smooth"):
+                 y_algorithm: str = "snap"):
         """A tooltip for `target`, whose text can change without a mis-sized frame.
 
         Use this instead of `dpg.tooltip` wherever the text changes while the tooltip may be on screen — a
@@ -123,7 +128,16 @@ class Tooltip:
 
         `x_algorithm`, `y_algorithm`: how the tooltip is placed along each axis when the cursor is near an
                                       edge of the viewport. See `guiutils.compute_tooltip_position_scalar`
-                                      for what each one does; the defaults are the pairing it recommends.
+                                      for what each one does.
+
+                                      Both default to `"snap"`, which places the tooltip at `offset` from
+                                      the cursor whenever it fits there — the same rule on both axes, and
+                                      the one DPG's own tooltips follow. What that buys beyond matching
+                                      them is that the position does not depend on the tooltip's *size*,
+                                      so a caption replaced by a shorter one stays where it was instead of
+                                      sliding as it shrinks. `"smooth"` is the better choice where the
+                                      caption is fixed and the cursor roams a large area — the plotter
+                                      annotation in Raven-visualizer is the case it was written for.
 
         Two DPG widgets are public, for a caller that needs to paint the tooltip itself: `window` is the
         tooltip's window, and `caption` the text item inside it. `animation.flash_button` accepts a
@@ -240,8 +254,24 @@ class Tooltip:
             with _sweep_lock:
                 _pending.discard(self)
 
+    def _follow(self) -> None:
+        """Keep the tooltip at its offset from the cursor as the mouse moves, the way DPG's own do.
+
+        Called by the sweeper on every frame a tooltip is on screen.
+
+        A tooltip with a text change in flight is left alone: it is parked offscreen on purpose until the
+        frame that resizes it has been drawn, and bringing it to the cursor before then is exactly the
+        mis-sized frame this class exists to avoid.
+        """
+        with self._text_lock:
+            mid_change = self._pending_text is not None or self._settling
+        if mid_change:
+            return
+        with guiutils.nonexistent_ok():
+            self._place()
+
     def _place(self) -> None:
-        """Position the tooltip near the cursor and show it. The window must already be correctly sized."""
+        """Position the tooltip near the cursor. The window must already be correctly sized."""
         mouse_x, mouse_y = dpg.get_mouse_pos(local=False)
         tooltip_w, tooltip_h = dpg.get_item_rect_size(self.window)
         dpg.set_item_pos(self.window,
@@ -255,7 +285,6 @@ class Tooltip:
                                                                    tooltip_size=tooltip_h,
                                                                    viewport_size=dpg.get_viewport_client_height(),
                                                                    offset=self.offset[1])])
-        dpg.show_item(self.window)
 
     def _on_hover(self, sender, app_data, user_data) -> None:
         """DPG GUI event handler: the mouse is over `target`. Fires every frame it stays there."""
@@ -263,6 +292,7 @@ class Tooltip:
             return
         with guiutils.nonexistent_ok():
             self._place()
+            dpg.show_item(self.window)
             self._shown = True
         if not self._shown:  # the target went away between the handler firing and the placement
             return

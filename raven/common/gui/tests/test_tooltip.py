@@ -147,6 +147,67 @@ class TestVisibility:
         assert not tip._shown
         assert tip not in tooltip_module._visible
 
+    def test_a_shown_tooltip_follows_the_cursor(self, target, monkeypatch):
+        """DPG's own tooltips hold a constant offset from the cursor; one that stays where it popped up
+        reads as stuck to the screen rather than attached to the mouse.
+
+        Hover and cursor position are both faked, because this context renders no frames: nothing is really
+        hovered, and the mouse never moves.
+        """
+        monkeypatch.setattr(dpg, "is_item_hovered", lambda item: True)
+        monkeypatch.setattr(dpg, "get_mouse_pos", lambda local=True: (100.0, 100.0))
+        tip = Tooltip(target, "hi")
+        tip._on_hover(None, None, None)
+        where_it_popped_up = list(dpg.get_item_pos(tip.window))
+
+        monkeypatch.setattr(dpg, "get_mouse_pos", lambda local=True: (250.0, 180.0))
+        animation.animator.render_frame()
+
+        assert list(dpg.get_item_pos(tip.window)) != where_it_popped_up
+
+    def test_a_tooltip_mid_resize_is_not_dragged_to_the_cursor(self, target, monkeypatch):
+        """It is parked offscreen on purpose until the frame that resizes it has been drawn.
+
+        Following the cursor before then would put it on screen at the size of what it said before, which
+        is the one frame this whole class exists to prevent.
+        """
+        monkeypatch.setattr(dpg, "is_item_hovered", lambda item: True)
+        monkeypatch.setattr(dpg, "get_mouse_pos", lambda local=True: (100.0, 100.0))
+        tip = Tooltip(target, "hi")
+        tip._on_hover(None, None, None)
+
+        tip.text = "a considerably longer caption"
+        animation.animator.render_frame()  # applies the text and parks the window offscreen
+
+        parked = list(dpg.get_item_pos(tip.window))
+        assert parked[0] >= dpg.get_viewport_client_width(), "parked, not placed"
+
+    def test_placement_does_not_depend_on_the_tooltips_size(self, target, monkeypatch):
+        """A three-line caption replaced by a one-line one must not slide as it shrinks.
+
+        The resize is invisible by construction; a placement rule that reads the size would then move the
+        tooltip on the frame after, which puts a visible jump back in a different place. Both axes default
+        to "snap" — cursor plus offset — for this, and it is what DPG's own tooltips do.
+        """
+        # The cursor sits at the middle of the viewport, where "smooth" weights its two candidate positions
+        # equally and so disagrees with "snap" by the most. Near an edge that weight goes to zero and the
+        # two rules agree whatever the size — a test placed there passes against either of them.
+        #
+        # Asked for, rather than assumed from the fixture's `create_viewport`: an unshown viewport reports
+        # its *client* size as DPG's built-in default, so the middle is not where the fixture's numbers say.
+        middle = (dpg.get_viewport_client_width() / 2, dpg.get_viewport_client_height() / 2)
+        monkeypatch.setattr(dpg, "get_mouse_pos", lambda local=True: middle)
+        tip = Tooltip(target, "hi")
+
+        monkeypatch.setattr(dpg, "get_item_rect_size", lambda item: (150, 90))  # three lines
+        tip._place()
+        where_the_long_caption_sat = list(dpg.get_item_pos(tip.window))
+
+        monkeypatch.setattr(dpg, "get_item_rect_size", lambda item: (150, 30))  # one line
+        tip._place()
+
+        assert list(dpg.get_item_pos(tip.window)) == where_the_long_caption_sat
+
     def test_a_second_hover_while_already_up_does_not_re_enrol(self, target):
         """The hover handler fires every frame the mouse stays put, so it has to be idempotent."""
         tip = Tooltip(target, "hi")

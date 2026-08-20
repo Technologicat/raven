@@ -1071,6 +1071,21 @@ Consequences, which are small:
 
 `dpg.get_item_theme(item)` returns `None` for an unbound widget, and `dpg.bind_item_theme(item, None)` unbinds — so capture-and-restore of a theme is symmetric with no special case. (`0` also unbinds; prefer `None`.)
 
+**An unshown viewport does not have the client size it was created with.** Measured
+2026-08-20 on DPG 2.3.1: after `create_viewport(width=400, height=300)` and
+`setup_dearpygui()`, `get_viewport_width()`/`get_viewport_height()` report `400`/`300`
+as asked, while `get_viewport_client_width()`/`_client_height()` report **1280×800** —
+DPG's built-in default, untouched until `show_viewport`. `get_viewport_configuration`
+shows both pairs side by side, which is the quickest way to see it.
+
+This matters in the default test suite, which never shows a viewport. Anything placing
+a widget relative to the viewport — a tooltip, an overlay, a centred dialog — is
+computed against 1280×800 there, so a test that reasons from the numbers it passed to
+`create_viewport` is reasoning about the wrong rectangle. **Ask for the client size
+rather than assuming it.** The failure is quiet: the position is merely *elsewhere*, and
+a fixture placed near an edge by accident can make two different placement rules agree,
+which is a test that passes against the behaviour it was written to reject.
+
 **A `mvTable` has no `rect_size` in its item state, so `guiutils.get_widget_size` answers with its *configured* size — which for an autosizing table is `-1`.** That is a faithful answer to a different question: `-1` is the layout directive "fill the available space", and the helper is reporting what the item was told, not what it became. The caller asked for pixels and got a directive, and nothing says so — a guard like `if not height` does not catch it, `-1` being truthy, and arithmetic against "the view's height" then computes against −1. Measured 2026-08-17 while giving the file dialog's table a keyboard cursor, where it scrolled the listing on the third arrow keypress.
 
 Note the fallback is not what rescues the child window beside it: `listing_area` is *also* configured `(-1, -1)`, and reports a real size because `get_item_rect_size` succeeds for it. The fallback runs only for items that have no `rect_size` at all — which is precisely where a configured `-1` cannot be resolved into anything. **So treat a negative from `get_widget_size` as "unknown", not as a size.**

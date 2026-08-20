@@ -582,8 +582,9 @@ class WidgetFlash(Animation):
                 button_color = dpg.add_theme_color(dpg.mvThemeCol_Button, self.flash_color)
                 hovered_color = dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, self.flash_color)
                 active_color = dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, self.flash_color)
-                # tooltip
+                # tooltip — either kind: a `dpg.tooltip` is a popup, and a `tooltip.Tooltip` is a window
                 popupbg_color = dpg.add_theme_color(dpg.mvThemeCol_PopupBg, self.flash_color)
+                windowbg_color = dpg.add_theme_color(dpg.mvThemeCol_WindowBg, self.flash_color)
             # Button in disabled state (see also "disablable_widget_theme" in `raven.common.gui.utils`)
             with dpg.theme_component(dpg.mvButton, enabled_state=False):
                 dpg.add_theme_color(dpg.mvThemeCol_Text, guiutils.DISABLED_TEXT_COLOR, category=dpg.mvThemeCat_Core)
@@ -594,8 +595,9 @@ class WidgetFlash(Animation):
 
         # Every background in the theme fades together, so `render_frame` walks this rather than naming
         # each one. Which entry a given widget picks up is DPG's business: a button takes the button
-        # colors, a tooltip takes `PopupBg`, and neither needs to be told which it is.
-        self.animated_theme_colors = (button_color, hovered_color, active_color, popupbg_color,
+        # colors, a `dpg.tooltip` takes `PopupBg`, a self-sizing `tooltip.Tooltip` takes `WindowBg` because
+        # it is a window, and none of them needs to be told which it is.
+        self.animated_theme_colors = (button_color, hovered_color, active_color, popupbg_color, windowbg_color,
                                       disabled_button_color, disabled_hovered_color, disabled_active_color)
         # The label is separate because it fades somewhere else — toward the resting *text* color.
         self.animated_theme_text_color = text_color
