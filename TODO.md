@@ -56,9 +56,15 @@ already decided.
     decided, which is why this is a pointer rather than a plan — but it is what the `vendor/` → `forks/`
     split under Cross-cutting is waiting to see, since a rewrite changes whether the renderer can still take
     an upstream update.
-  - Worth a look when the cluster is next read: **four items are marked `Gate: superseded`** and the
-    block-rendering brief accounts for three of them by name. Whether tables and the dead inline-`<think>`
-    handling are superseded by something else or were mis-set has not been checked.
+  - **The cluster wants promoting to a brief, and that is the next action here** (Juha, 2026-08-20).
+    Recognizing a cluster is what the `Cluster:` field records; nothing in the process turns a recognized
+    one into a brief, so this has stayed nine items that each have to be found separately — which is how a
+    search of `TODO.md` and the RN briefs concluded on 2026-08-20 that the renderer work was unfiled. **One
+    to two hours**, most of it scope, wording and edge cases rather than typing, so tomorrow at the earliest.
+  - The tell that it had outgrown a flat list: **four of the nine are marked `Gate: superseded`.** Items
+    inside a cluster superseding each other is structure the list cannot express, and the block-rendering
+    brief accounts for only three of them by name — whether tables and the dead inline-`<think>` handling
+    were superseded by something else or mis-set is now nobody's to say. Settle it while writing the brief.
 
 - **Librarian: in-flight AI turn bleeds into a new chat** (turn-sequencing race).
 - **Thinking mode is a wall of text on a projector.** Details under Librarian / Chat UI; here is why it is
