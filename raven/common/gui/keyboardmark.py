@@ -25,6 +25,12 @@ __all__ = ["COLOR", "PULSE_SECONDS"]
 
 # Names are bare because the module supplies the namespace: `keyboardmark.COLOR` at a call site, rather
 # than a `KEYBOARD_MARK_` prefix repeated inside the module that already says it.
+#
+# **Which makes the import style load-bearing here rather than merely preferred.** Import the module —
+# `from ..gui import keyboardmark` — and never the names inside it: `from ..gui.keyboardmark import COLOR`
+# leaves a bare `COLOR` at every use site, saying nothing about *which* colour it is or why that widget
+# should be wearing it. The bare names are readable only while the namespace is still attached to them, so
+# a module whose public names are deliberately short is the one place that rule cannot be relaxed.
 COLOR = (80, 160, 255, 255)
 
 # How long one breath takes, in seconds. Shared for the same reason the colour is: two marks pulsating at

@@ -52,6 +52,8 @@ Key points:
 - `__all__` is mandatory and placed immediately after the module docstring, before imports. Populated explicitly.
 - Logging setup immediately after `__all__`. The three-line `logging.basicConfig` / `logger = ...` pattern is standard.
 - Imports use `from ... import ...` style (not bare `import ...`), except for large namespaces like `numpy`, `torch`, `dearpygui`, and `json`.
+  - **What gets imported is the *module*, not the names inside it** — `from ..gui import keyboardmark`, then `keyboardmark.COLOR` at the call site. That is what keeps a use site saying where a name came from.
+  - **For a module whose public names are deliberately short, this stops being a preference.** `keyboardmark.COLOR` and `keyboardmark.PULSE_SECONDS` are bare because the module already supplies the noun; `from ..gui.keyboardmark import COLOR` leaves a bare `COLOR` that says neither which colour nor why this widget wears it, which is precisely the information the short name was leaning on the namespace to carry.
 - Internal imports use relative paths (`.module`, `..module`).
 - No star imports.
 - `as` renaming is used sparingly and consistently: `env as envcls` (when `env` is also a parameter name), `config as librarian_config` (disambiguation), `utils as common_utils` / `utils as guiutils` (disambiguation).
