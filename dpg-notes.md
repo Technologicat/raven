@@ -382,6 +382,20 @@ is now correct, positions the widget, and `split_frame()`s again. Same shape ava
 that needs a size before it can place or reveal something, with the usual constraint that `split_frame`
 cannot be called from the render thread (see *Threading*).
 
+**Offscreen, not hidden, and that distinction is the whole trick.** A hidden item is not laid out and keeps
+whatever metrics it last had, so hiding something across the change *defers* the stale frame instead of
+skipping it. Measured the same day, same window, width in pixels:
+
+| | window | text item |
+|---|---|---|
+| hidden, then the text changed to a longer one | 100 | 37 — still the *old* text's width |
+| shown again, frame +1 | 100 (stale) | 355 |
+| shown again, frame +2 | 371 | 355 |
+
+The first visible frame is the mis-sized one either way. So "hide it while it settles" does not work, and
+neither does anything else that stops the widget being drawn — being drawn is what produces the measurement
+that auto-fit needs.
+
 ## Window z-order
 
 DPG renders windows in creation order. The primary window (set via
