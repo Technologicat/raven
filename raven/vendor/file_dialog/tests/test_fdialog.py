@@ -1068,6 +1068,24 @@ def test_arriving_somewhere_takes_the_color_away_again(dialog, tmp_path):
     assert path_field_color(dialog) == fdialog._TEXT_NEUTRAL
 
 
+def test_arriving_where_you_typed_takes_the_color_with_it(dialog, tmp_path):
+    """The one case the rewrite guard hides: the field already names where Enter is about to land.
+
+    Typing a path in full and pressing Enter arrives somewhere the field is already showing, so there is
+    nothing to rewrite — and the green from the typing would be left standing over a navigation that has
+    finished, still answering a question nobody is asking any more.
+    """
+    target = pathlib.Path(tmp_path, "albums")
+    target.mkdir()
+    type_into_path_field(dialog, str(target))
+    assert path_field_color(dialog) == fdialog._TEXT_GOOD
+
+    dialog.on_path_enter()
+
+    assert os.path.realpath(os.getcwd()) == os.path.realpath(str(target)), "it went there"
+    assert path_field_color(dialog) == fdialog._TEXT_NEUTRAL
+
+
 def test_abandoning_a_draft_takes_its_color_with_it(dialog, tmp_path):
     """Escape restores the text, and a red left standing over a restored path would contradict it."""
     dialog.chdir(str(tmp_path))

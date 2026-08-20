@@ -1925,11 +1925,15 @@ class FileDialog:
             # each time is churn nobody asked for, in the one field the user is not interacting with.
             if dpg.get_value(self.path_field) != listed_dir:
                 dpg.configure_item(self.path_field, default_value=listed_dir)
-                # Back to saying nothing, whatever a draft left it saying. The three states answer what the
-                # *user* asked for, and this is the dialog writing where they already are — which is not a
-                # question, so it gets no answer. Green here would leave the field permanently green in
-                # ordinary use, and a color that is always on reports nothing when it matters.
-                dpg.set_value(self._path_field_color, _TEXT_NEUTRAL)
+            # Back to saying nothing, whatever a draft left it saying. The three states answer what the
+            # *user* asked for, and this is the dialog showing where they now are — which is not a question,
+            # so it gets no answer. Green at rest would leave the field permanently green in ordinary use,
+            # and a color that is always on reports nothing when it matters.
+            #
+            # Outside the rewrite guard above, and that is the whole difference: typing a path in full and
+            # pressing Enter arrives somewhere the field *already* names, so there is nothing to rewrite —
+            # and the green from the typing would be left standing over a navigation that has finished.
+            dpg.set_value(self._path_field_color, _TEXT_NEUTRAL)
             # A listing was just read, so anything cached about a half-typed path in this directory is from
             # before it. Cheap to drop and re-read on the next keystroke; wrong to keep across an F5, which
             # is what a user presses when they believe the folder has changed under them.
