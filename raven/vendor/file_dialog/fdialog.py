@@ -83,6 +83,7 @@ class CaretHome(enum.Enum):
     FIELD = "field"  # the find field — which is the filename field, in save mode
     LISTING = "listing"  # the table or the thumbnail grid, whichever view is up
     FILTER = "filter"  # the file type combo
+    PATH = "path"  # the path field, where a whole folder is pasted or a short root typed
 
 
 # How a caller writes "every file" in a `filter_list`, and what the combo calls it. The two differ because
@@ -574,8 +575,12 @@ class FileDialog:
         # could re-measure them are exactly the ones a clipping table may not have drawn.
         self._row_metrics_cache = None
         self._sort_indicators = {}  # SortKey -> drawlist tag, one per sort button
-        # Where the dialog is taking keys; Tab swaps the two that exist. See `CaretHome`.
+        # Where the dialog is taking keys. See `CaretHome`.
         self._caret_home = CaretHome.FIELD
+        # What the parent directory of a half-typed path holds, as `(parent, subdirectory names)`. One slot
+        # is enough: a path is typed one component at a time, so every keystroke between two separators asks
+        # about the same parent, and crossing a separator is the moment the old answer stops being wanted.
+        self._path_prefix_cache = None
         # The help card, built on first F1 — see `_the_help_card` — and whether it is currently up. The
         # flag is what the dialog is hidden behind: DPG will not stack a modal over a modal, so showing the
         # card means taking the dialog off the screen, and `is_visible` has to keep saying yes across that
@@ -682,7 +687,36 @@ class FileDialog:
                             dpg.set_item_callback(self.button_refresh, self.refresh)
                             dpg.set_item_callback(self.button_back_to_default_path, self.back_to_default_path)
 
-                            dpg.add_input_text(hint="Path", on_enter=True, callback=self.on_path_enter, default_value=os.getcwd(), width=-1, tag=f"ex_path_input_{self.instance_tag}")
+                            self.path_field = dpg.add_input_text(hint="Path", on_enter=True, callback=self.on_path_enter,
+                                                                 default_value=os.getcwd(), width=-1,
+                                                                 tag=f"ex_path_input_{self.instance_tag}")
+                            with dpg.tooltip(self.path_field):
+                                dpg.add_text("Folder to browse — paste or type a path, then Enter [Ctrl+L]")
+
+                            # Same three states as the find field below, and the same one-theme mechanism.
+                            # What they *mean* differs: this one says whether Enter would go anywhere.
+                            with dpg.theme() as path_field_theme:
+                                with dpg.theme_component(dpg.mvInputText):
+                                    self._path_field_color = dpg.add_theme_color(dpg.mvThemeCol_Text, _TEXT_NEUTRAL)
+                            dpg.bind_item_theme(self.path_field, path_field_theme)
+
+                            # `on_enter=True` buys Enter and costs every other keystroke: the field's own
+                            # callback then fires only on the commit, so the color has nowhere to hook. An
+                            # edited handler fires on each keystroke regardless of that flag (measured on
+                            # DPG 2.3.1, one frame after the key, carrying the new value), which is what
+                            # lets the field be a readout as it is typed into.
+                            #
+                            # The other two are the caret's, and they are what make *clicking* this field
+                            # mean what Ctrl+L means. Were they missing, a click would leave `_caret_home`
+                            # naming somewhere else and Enter would go two places at once: the global key
+                            # handler runs first and would descend into whatever the listing cursor is on,
+                            # with `on_path_enter` then navigating from there. An absolute path would still
+                            # arrive; a relative one would be read against a directory nobody chose.
+                            with dpg.item_handler_registry() as path_field_registry:
+                                dpg.add_item_edited_handler(callback=self._recolor_path_field)
+                                dpg.add_item_activated_handler(callback=self._on_path_field_activated)
+                                dpg.add_item_deactivated_handler(callback=self._on_path_field_deactivated)
+                            dpg.bind_item_handler_registry(self.path_field, path_field_registry)
 
                         with dpg.group(horizontal=True):
                             search_hint = "Search files [Ctrl+F]" if not save_mode else "Filename to save as [Ctrl+F]"
@@ -945,6 +979,77 @@ class FileDialog:
             found = bool(self.shown_items) or common_utils.make_search_matcher(query)(os.pardir)
             color = _TEXT_GOOD if found else _TEXT_BAD
         dpg.set_value(self._search_field_color, color)
+
+    def _recolor_path_field(self) -> None:
+        """Repaint the path field to say what Enter would do with what is typed there.
+
+        Three states, and the middle one is why there are three: green names an existing directory, so
+        Enter goes there; neutral is a path still being typed towards one; red cannot lead anywhere.
+        """
+        # What red predicts is the message the dialog would otherwise answer Enter with, moved to before
+        # the commit and made free. The message stays as the backstop — a directory can go away between
+        # the typing and the Enter — but it should be a surprise rather than the ordinary way to find out.
+        typed = dpg.get_value(self.path_field)
+        if not typed:
+            dpg.set_value(self._path_field_color, _TEXT_NEUTRAL)
+            return
+
+        # `~` is expanded before anything is asked, because the backend expands it too: green promises that
+        # Enter goes *there*, and it can only promise that about the path that will actually be opened.
+        # The field keeps showing what was typed — expanding under the caret would replace a character the
+        # user entered with eight of somewhere else, mid-edit.
+        expanded = os.path.expanduser(typed)
+        if os.path.isdir(expanded):
+            # Which also answers the trailing-separator case without a rule of its own: `/some/dir/` names
+            # an existing directory, so it is green, and Enter takes it whether or not anything is inside.
+            dpg.set_value(self._path_field_color, _TEXT_GOOD)
+            return
+
+        # Not a directory yet, so the question becomes whether it could still become one. Splitting on the
+        # last separator gives the two halves that decide it — `os.path.split` knows the platform's
+        # separators, including Windows accepting both.
+        parent, fragment = os.path.split(expanded)
+        # A bare name is relative to the working directory, which is what `os.chdir` would do with it.
+        parent = parent or os.curdir
+        color = _TEXT_BAD
+        if os.path.isdir(parent):
+            names = self._subdirectory_names(parent)
+            # Exact case, deliberately, where the find field one line below is smart-case. That field
+            # *searches*, and being generous there costs nothing; this one *addresses*, and on a
+            # case-sensitive filesystem a generous match would show neutral for a path that cannot be
+            # completed — the one thing the color must never say.
+            if any(name.startswith(fragment) for name in names):
+                color = _TEXT_NEUTRAL
+        dpg.set_value(self._path_field_color, color)
+
+    def _subdirectory_names(self, parent: str) -> tuple[str, ...]:
+        """The names of `parent`'s subdirectories, from a one-slot cache. Used to color the path field."""
+        # Hidden directories are in here whatever the Hidden checkbox says. A dot typed into a path field is
+        # an intention rather than a browsing preference, so `.conf` must not go red because a toggle
+        # elsewhere is off.
+        if self._path_prefix_cache is not None and self._path_prefix_cache[0] == parent:
+            return self._path_prefix_cache[1]
+        try:
+            with os.scandir(parent) as entries:
+                names = tuple(entry.name for entry in entries if entry.is_dir())
+        except OSError:  # unreadable, gone, or not a directory after all
+            names = ()
+        self._path_prefix_cache = (parent, names)
+        return names
+
+    def _on_path_field_activated(self) -> None:
+        """The path field just took the caret, by click or by Ctrl+L: record where the keys go."""
+        # A click has to mean what the key means, or Enter is read twice — see the handler registry this is
+        # bound from. `_focus_path_field` sets this too, and arrives here as well, which costs nothing.
+        self._caret_home = CaretHome.PATH
+
+    def _on_path_field_deactivated(self) -> None:
+        """The path field lost the caret: the keys go back to the find field, unless they went elsewhere."""
+        # Guarded rather than unconditional, because deactivation is also what *leaving deliberately* looks
+        # like. Tab out of here sets the listing as the home and the deactivation follows a frame later, so
+        # an unconditional write would silently undo it.
+        if self._caret_home is CaretHome.PATH:
+            self._caret_home = CaretHome.FIELD
 
     def _relayout(self) -> None:
         """Re-align the bottom rows against the window's *current* width.
@@ -1499,7 +1604,7 @@ class FileDialog:
             self._apply_automatic_grid_mode(rebuild=False)
 
     def on_path_enter(self):
-        typed = dpg.get_value(f"ex_path_input_{self.instance_tag}")  # tag
+        typed = dpg.get_value(self.path_field)
         try:
             self.chdir(typed)
         except FileNotFoundError:
@@ -1818,9 +1923,15 @@ class FileDialog:
             # Only when it would actually change. A rebuild happens on every keystroke in the find field
             # and on every Tab, and the directory is the same for all of them — reconfiguring the widget
             # each time is churn nobody asked for, in the one field the user is not interacting with.
-            path_field = f"ex_path_input_{self.instance_tag}"  # tag
-            if dpg.get_value(path_field) != listed_dir:
-                dpg.configure_item(path_field, default_value=listed_dir)
+            if dpg.get_value(self.path_field) != listed_dir:
+                dpg.configure_item(self.path_field, default_value=listed_dir)
+                # Whatever the field said a moment ago, it now names the directory on screen, so it is
+                # green. Repainted here rather than left to the edit handler, which fires on typing only.
+                self._recolor_path_field()
+            # A listing was just read, so anything cached about a half-typed path in this directory is from
+            # before it. Cheap to drop and re-read on the next keystroke; wrong to keep across an F5, which
+            # is what a user presses when they believe the folder has changed under them.
+            self._path_prefix_cache = None
             # Compiled once per rebuild rather than per entry: on a directory of thousands, the split is
             # the part worth hoisting out of the loop.
             matches_name_filter = common_utils.make_search_matcher(file_name_filter or "")
@@ -2012,6 +2123,7 @@ class FileDialog:
             env(key_indent=0, key="Tab", action_indent=0, action="Caret to the listing", notes="Completing what you typed"),
             env(key_indent=1, key="Tab", action_indent=1, action="...and back, carrying the name", notes="Of whatever the cursor is on"),
             env(key_indent=0, key="Ctrl+F", action_indent=0, action="Caret back to the field", notes="Keeping what you typed"),
+            env(key_indent=0, key="Ctrl+L", action_indent=0, action="Caret to the path field", notes="Paste a folder, Enter to go"),
             helpcard.hotkey_blank_entry,
             (env(key_indent=0, key="Ctrl+1 ... Ctrl+9", action_indent=0, action="Show the Nth file type", notes="")
              if self._type_filter_is_available() else None),
@@ -2189,6 +2301,20 @@ class FileDialog:
                 self._focus_field()
                 return
 
+        # The path field is the one home that is a text field with the caret really in it, so most of the
+        # bare keys are ImGui's and this dialog's job is to keep its hands off them: Home and End move
+        # within the text, and Enter commits through the field's own `on_enter` callback. Enter is the one
+        # that must not fall through — measured on DPG 2.3.1, the global handler runs *before* that
+        # callback, so a press reaching both would descend into whatever the listing cursor is on and
+        # navigate to the typed path from there, opening whatever it passed through on the way.
+        if self._caret_home is CaretHome.PATH and not (ctrl or alt or shift):
+            if key == dpg.mvKey_Escape:
+                self._abandon_path_draft()
+                return
+            if key in (dpg.mvKey_Up, dpg.mvKey_Down, _KEY_PAGE_UP, _KEY_PAGE_DOWN,
+                       dpg.mvKey_Home, dpg.mvKey_End, dpg.mvKey_Return):
+                return
+
         nav = self._navigator()
         if key == dpg.mvKey_Up:
             nav.navigate_row_up()
@@ -2240,6 +2366,20 @@ class FileDialog:
                 self._focus_type_filter()
             else:
                 self._focus_field()
+        elif ctrl and key == dpg.mvKey_L:
+            # What every browser and file manager binds to the address bar, and it means the same here.
+            # Deliberately without completion: writing one is the easy half and handing the field *back*
+            # has no answer — refocusing an `InputText` arms ImGui's select-all, which DPG exposes no way
+            # to clear, so the next character would replace the whole path. The find field accepts that
+            # trade because a lost query is a few characters retyped; a completed path is the entire thing
+            # the user was building.
+            #
+            # Which costs nothing, because this field is not for typing paths into. The dialog already
+            # completes them, better, through the find field — a fragment, Enter, repeat, and being
+            # fragment-based and smart-case it beats prefix completion at its own job. What only this can
+            # do is take a whole path from somewhere else (Ctrl+L, Ctrl+V, Enter) and reach a short root
+            # like `/mnt` that is nowhere near here and in nobody's places panel.
+            self._focus_path_field()
         elif ctrl and key == dpg.mvKey_Spacebar:
             self._toggle_cursor_selection()
         elif ctrl and key == dpg.mvKey_H:
@@ -2263,10 +2403,10 @@ class FileDialog:
         """
         return self._grid if (self._grid_mode and self._grid is not None) else self._table_cursor
 
-    def _write_find_field(self, text: str) -> bool:
-        """Put `text` in the find field and re-filter the listing. Returns whether the write landed.
+    def _write_field(self, widget: Union[str, int], name: str, text: str) -> bool:
+        """Put `text` into text field `widget`, called `name` in the log. Returns whether the write landed.
 
-        Only safe once the caret has left the field, which is the caller's job to have arranged.
+        Only safe once the caret has left that field, which is the caller's job to have arranged.
         """
         # ImGui's edit buffer owns an *active* `InputText`: `set_value` appears to work — `get_value`
         # immediately after reports the new string — and the next frame writes the old buffer back, firing
@@ -2274,17 +2414,23 @@ class FileDialog:
         # queued focus change does not achieve on the calling frame. How many frames it takes depends on
         # what else is in flight, so this polls rather than counting frames.
         for _ in range(_FIELD_DEACTIVATION_FRAMES):
-            if not dpg.is_item_active(self.search_field):
+            if not dpg.is_item_active(widget):
                 break
-            if not guiutils.split_frame(operation="file dialog: waiting for the find field to go inactive",
+            if not guiutils.split_frame(operation=f"file dialog: waiting for the {name} to go inactive",
                                         required=False):
                 return False  # no render loop to wait for; nothing would land anyway
         else:
-            logger.warning(f"_write_find_field: instance '{self.tag}' ({self.instance_tag}): the find field "
+            logger.warning(f"_write_field: instance '{self.tag}' ({self.instance_tag}): the {name} "
                            f"is still active after {_FIELD_DEACTIVATION_FRAMES} frames; not writing '{text}'")
             return False
 
-        dpg.set_value(self.search_field, text)
+        dpg.set_value(widget, text)
+        return True
+
+    def _write_find_field(self, text: str) -> bool:
+        """Put `text` in the find field and re-filter the listing. Returns whether the write landed."""
+        if not self._write_field(self.search_field, "find field", text):
+            return False
         self._update_search()  # `set_value` fires no callback, so the filter is re-run by hand
         return True
 
@@ -2323,6 +2469,30 @@ class FileDialog:
         """Put the caret back in the find field, where typing filters the listing."""
         self._caret_home = CaretHome.FIELD
         dpg.focus_item(self.search_field)
+
+    def _focus_path_field(self) -> None:
+        """Put the caret in the path field, where a folder is pasted or a short root typed.
+
+        Esc, or Tab, takes it away again.
+        """
+        # This home does get DPG's focus, unlike the type filter: it is a real text field, and the caret has
+        # to be in it for anything to be typed or pasted. Safe to focus for the reason the find field is —
+        # both live in the listing's child window, which is the side `focus_item` can reach from.
+        self._caret_home = CaretHome.PATH
+        dpg.focus_item(self.path_field)
+
+    def _abandon_path_draft(self) -> None:
+        """Escape from the path field: put back where we actually are, and hand the caret to the find field."""
+        # Restored, where escaping the type filter restores nothing — and the two are consistent rather
+        # than divergent. The combo applied every step as it was made, so there is nothing left to abandon;
+        # this field is a *draft* until Enter, and a half-typed path left standing over a listing of
+        # somewhere else is a field that lies about where you are.
+        #
+        # Written after the caret has been asked to leave, an active `InputText` owning ImGui's edit buffer
+        # and reverting a write on the next frame. `_write_field` waits for it.
+        self._focus_field()
+        self._write_field(self.path_field, "path field", os.getcwd())
+        self._recolor_path_field()
 
     def _focus_listing(self) -> None:
         """Take the caret out of the find field and give the listing the arrow keys.

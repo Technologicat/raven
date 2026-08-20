@@ -841,6 +841,242 @@ def test_focusing_the_find_field_brings_the_caret_with_it(dialog):
 
 
 # --------------------------------------------------------------------------------
+# Ctrl+L: the path field, and the color it answers in
+#
+# Three states rather than the find field's three-with-different-meanings: green says Enter goes there,
+# neutral says keep typing, red says Enter would fail. What red predicts is the report the dialog would
+# otherwise only give *after* the commit.
+
+def path_field_color(dialog):
+    """The RGB the path field's text is painted in."""
+    return tuple(int(channel) for channel in dpg.get_value(dialog._path_field_color)[:3])
+
+
+def type_into_path_field(dialog, text):
+    """Put `text` in the path field the way a keystroke does, edited handler included."""
+    dpg.set_value(dialog.path_field, text)
+    dialog._recolor_path_field()
+
+
+def test_the_path_field_says_nothing_when_it_is_empty(dialog):
+    type_into_path_field(dialog, "")
+    assert path_field_color(dialog) == fdialog._TEXT_NEUTRAL
+
+
+def test_the_path_field_is_green_on_a_folder_that_exists(dialog, tmp_path):
+    type_into_path_field(dialog, str(tmp_path))
+    assert path_field_color(dialog) == fdialog._TEXT_GOOD
+
+
+def test_the_path_field_is_neutral_on_a_path_still_being_typed(dialog, tmp_path):
+    """`.../albu` is not somewhere you can go, and nothing is wrong with it either."""
+    pathlib.Path(tmp_path, "albums").mkdir()
+    type_into_path_field(dialog, str(pathlib.Path(tmp_path, "albu")))
+    assert path_field_color(dialog) == fdialog._TEXT_NEUTRAL
+
+
+def test_the_path_field_is_red_when_nothing_could_complete_it(dialog, tmp_path):
+    pathlib.Path(tmp_path, "albums").mkdir()
+    type_into_path_field(dialog, str(pathlib.Path(tmp_path, "zzz")))
+    assert path_field_color(dialog) == fdialog._TEXT_BAD
+
+
+def test_only_folders_can_complete_a_path(dialog, tmp_path):
+    """A file is not somewhere to go, so a fragment that only a file starts with leads nowhere."""
+    pathlib.Path(tmp_path, "manuscript.txt").touch()
+    type_into_path_field(dialog, str(pathlib.Path(tmp_path, "manus")))
+    assert path_field_color(dialog) == fdialog._TEXT_BAD
+
+
+def test_a_trailing_separator_needs_no_rule_of_its_own(dialog, tmp_path):
+    """An *empty* directory with a separator typed after it is the case that catches a fragment rule.
+
+    Asking whether the empty fragment prefixes any subdirectory is the wrong question — it prefixes all of
+    them, and none of them here. The directory existing is what already answers it, and Enter takes it
+    whether or not anything lives inside.
+    """
+    empty = pathlib.Path(tmp_path, "nothing_here")
+    empty.mkdir()
+    type_into_path_field(dialog, f"{empty}{os.sep}")
+    assert path_field_color(dialog) == fdialog._TEXT_GOOD
+
+
+def test_a_hidden_folder_counts_however_the_checkbox_is_set(dialog, tmp_path):
+    """A dot typed into a path field is an intention, not a browsing preference."""
+    pathlib.Path(tmp_path, ".config").mkdir()
+    dialog.set_show_hidden_files(False)
+    type_into_path_field(dialog, str(pathlib.Path(tmp_path, ".conf")))
+    assert path_field_color(dialog) == fdialog._TEXT_NEUTRAL
+
+
+def test_the_path_field_matches_case_exactly(dialog, tmp_path):
+    """Where the find field one row below is smart-case, and deliberately so.
+
+    That field searches, and being generous costs nothing; this one addresses. On a case-sensitive
+    filesystem a generous match would show neutral for a path that can never be completed.
+    """
+    pathlib.Path(tmp_path, "Albums").mkdir()
+    type_into_path_field(dialog, str(pathlib.Path(tmp_path, "albu")))
+    assert path_field_color(dialog) == fdialog._TEXT_BAD
+
+
+def test_a_bare_name_is_read_against_the_folder_being_browsed(dialog, tmp_path):
+    """Which is what `os.chdir` would do with it, so the color has to agree."""
+    pathlib.Path(tmp_path, "albums").mkdir()
+    dialog.chdir(str(tmp_path))
+
+    type_into_path_field(dialog, "albu")
+    assert path_field_color(dialog) == fdialog._TEXT_NEUTRAL
+
+    type_into_path_field(dialog, "zzz")
+    assert path_field_color(dialog) == fdialog._TEXT_BAD
+
+
+def test_a_tilde_is_judged_by_what_it_expands_to(dialog, tmp_path, monkeypatch):
+    """Green promises Enter goes *there*, so it can only be said about the path that will be opened.
+
+    `USERPROFILE` as well as `HOME`: `expanduser` reads the latter through `posixpath` and never consults
+    it on Windows, where the former is what `ntpath` looks at.
+    """
+    home = pathlib.Path(tmp_path, "home")
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
+
+    type_into_path_field(dialog, "~")
+    assert path_field_color(dialog) == fdialog._TEXT_GOOD
+
+    type_into_path_field(dialog, f"~{os.sep}nosuchfolder")
+    assert path_field_color(dialog) == fdialog._TEXT_BAD
+
+
+def test_the_path_field_still_shows_what_was_typed(dialog, tmp_path, monkeypatch):
+    """The meaning expands from the first keystroke; the text stays literal until Enter.
+
+    Expanding under the caret would replace one character the user entered with a line of somewhere else,
+    mid-edit — a field fighting the person editing it.
+    """
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
+    type_into_path_field(dialog, "~")
+    assert dpg.get_value(dialog.path_field) == "~"
+
+
+def test_ctrl_l_puts_the_caret_in_the_path_field(dialog):
+    dialog.reset_dir()
+    with mock.patch.object(dpg, "is_key_down", lambda key: key in (dpg.mvKey_LControl,)):
+        dialog._handle_key(dpg.mvKey_L)
+    assert dialog._caret_home is CaretHome.PATH
+
+
+def test_enter_in_the_path_field_does_not_also_open_what_the_cursor_is_on(dialog, tmp_path):
+    """The path field commits through its own `on_enter` callback, and the global handler runs first.
+
+    So an Enter that fell through would descend into whatever the listing cursor is resting on — `..`, by
+    default — and navigate to the typed path from there, opening whatever it passed through on the way. An
+    absolute path would still arrive; a relative one would be read against a directory nobody chose.
+    """
+    dialog.chdir(str(tmp_path))
+    dialog._focus_path_field()
+
+    dialog._handle_key(dpg.mvKey_Return)
+
+    assert os.path.realpath(os.getcwd()) == os.path.realpath(str(tmp_path))
+
+
+def test_the_arrow_keys_belong_to_the_text_while_the_path_field_has_the_caret(dialog):
+    """Home and End move within a pasted path; nothing here may move the listing cursor under them.
+
+    Checked after each key rather than after the set, because Up and Down undo each other: a cursor that
+    moved for both would be back where it started by the end, and a single assertion there agrees with
+    the behaviour this rejects.
+    """
+    dialog.reset_dir()
+    dialog._table_cursor.set_current(2)
+    dialog._focus_path_field()
+
+    for key in (dpg.mvKey_Up, dpg.mvKey_Down, fdialog._KEY_PAGE_UP, fdialog._KEY_PAGE_DOWN,
+                dpg.mvKey_Home, dpg.mvKey_End):
+        dialog._handle_key(key)
+        assert dialog._table_cursor.current == 2, f"key {key} moved the listing cursor"
+
+
+def test_escape_abandons_the_draft_and_gives_the_caret_back(dialog, tmp_path):
+    """A half-typed path left standing over a listing of somewhere else is a field that lies.
+
+    Which is why this one restores and the type filter does not: the combo applied every step as it was
+    made, so it has nothing left to abandon. This field is a draft until Enter.
+    """
+    dialog.chdir(str(tmp_path))
+    dialog._focus_path_field()
+    type_into_path_field(dialog, "/somewhere/else/entirely")
+
+    dialog._handle_key(dpg.mvKey_Escape)
+
+    assert dpg.get_value(dialog.path_field) == os.getcwd()
+    assert dialog._caret_home is CaretHome.FIELD
+
+
+def test_leaving_the_path_field_deliberately_is_not_undone_by_the_deactivation(dialog):
+    """DPG reports the field going inactive a frame after Tab has already said where the caret went.
+
+    An unconditional "deactivated means back to the find field" would silently overwrite that, and the
+    arrow keys would stop driving the listing the user just asked for.
+    """
+    dialog.reset_dir()
+    dialog._focus_path_field()
+
+    dialog._handle_key(dpg.mvKey_Tab)
+    assert dialog._caret_home is CaretHome.LISTING
+
+    dialog._on_path_field_deactivated()  # as DPG's handler does, a frame later
+    assert dialog._caret_home is CaretHome.LISTING
+
+
+def test_clicking_the_path_field_means_what_the_key_means(dialog, tmp_path):
+    """Otherwise Enter goes two places at once for a user who never pressed Ctrl+L.
+
+    The wiring is asserted beside the consequence. A handler nobody is bound to would satisfy the second
+    half on its own, and the click route is exactly the one no keystroke test can reach.
+    """
+    dialog.chdir(str(tmp_path))
+    bound = dpg.get_item_info(dialog.path_field)["handlers"]
+    kinds = {dpg.get_item_type(handler) for handler in dpg.get_item_children(bound, slot=1)}
+    assert "mvAppItemType::mvActivatedHandler" in kinds
+    assert "mvAppItemType::mvDeactivatedHandler" in kinds
+    assert "mvAppItemType::mvEditedHandler" in kinds
+
+    dialog._on_path_field_activated()  # as DPG's handler does, on the click
+    assert dialog._caret_home is CaretHome.PATH
+
+    dialog._handle_key(dpg.mvKey_Return)
+    assert os.path.realpath(os.getcwd()) == os.path.realpath(str(tmp_path))
+
+
+def test_arriving_somewhere_repaints_the_path_field(dialog, tmp_path):
+    """The field is rewritten on every navigation, and a color left over from a draft would outlive it."""
+    pathlib.Path(tmp_path, "albums").mkdir()
+    type_into_path_field(dialog, str(pathlib.Path(tmp_path, "zzz")))
+    assert path_field_color(dialog) == fdialog._TEXT_BAD
+
+    dialog.chdir(str(tmp_path))
+    assert path_field_color(dialog) == fdialog._TEXT_GOOD
+
+
+def test_the_folder_listing_behind_the_color_is_re_read_on_refresh(dialog, tmp_path):
+    """It is cached per parent, and F5 is what a user presses when they think it has gone stale."""
+    dialog.chdir(str(tmp_path))
+    type_into_path_field(dialog, "albu")
+    assert path_field_color(dialog) == fdialog._TEXT_BAD, "nothing by that name yet"
+
+    pathlib.Path(tmp_path, "albums").mkdir()
+    dialog.refresh()
+
+    type_into_path_field(dialog, "albu")
+    assert path_field_color(dialog) == fdialog._TEXT_NEUTRAL
+
+
+# --------------------------------------------------------------------------------
 # The places panel
 
 def test_the_places_are_ordered_predictably():
