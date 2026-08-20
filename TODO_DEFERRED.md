@@ -360,7 +360,35 @@ Three things worth settling before building it:
   bottom of scrollable panels, and Librarian has the avatar, the jump-to-latest pill and the backend-status
   row. Pick per app, or pick a corner nothing else claims in any of them.
 
-## The semantic map's mouse interaction deserves a UX pass
+## A write to a flashed widget's *message target* is reverted when the flash ends
+
+*Cluster: ? · Cost: S–M · Gate: a design call on `WidgetFlash`'s indexing · Filed: 2026-08-20*
+
+`WidgetFlash` snapshots its `message_target`'s text when it reifies and writes that snapshot back in
+`finish`. `set_text_under_flash` exists so a concurrent writer can hand the flash a new value to restore
+instead — but it finds the flash with `WidgetFlash.instances.get(widget)`, and **`instances` is keyed by
+`target`**, the widget being *painted*. Where the two differ — a button flashing while its tooltip carries
+the words, which is every `flash_button` call with a message — the lookup misses, the write goes straight
+through, and the flash puts the stale text back a moment later.
+
+Pre-existing, and not caused by the tooltip migration: the same thing happened when these were
+`dpg.set_value` calls against a tooltip caption.
+
+**One live instance**, found by reading rather than by seeing it: Librarian's backend-status pill. Clicking
+it flashes "Checking the LLM backend…" for `acknowledgment_duration` (1.0 s) and starts a poll whose first
+probe is immediate (`delay_first_probe=False`); `_refresh_backend_status_pill` then writes the new status
+into the same tooltip, and the flash restores the pre-click text over it. Whether the probe really returns
+inside that second is **not measured** — plausible against a local backend, so treat the reachability as
+likely rather than confirmed. The tooltip then lies until the next status change.
+
+The other migrated sites are safe, and for reasons worth stating so nobody re-derives them: the send gate
+flashes with `message=None` (nothing is snapshotted, so nothing is restored), and the mic button, the
+staged-document chips and Visualizer's word-cloud button have captions that change but no flash carrying a
+message into them.
+
+The fix is a design call rather than a patch, which is why this is here: either index flashes by
+`message_target` as well as by `target`, or give `set_text_under_flash` the flash's key explicitly. Both
+touch `raven.common.gui`, which is held to the foundation bar.
 
 *Cluster: ? · Cost: ? · Gate: none · Filed: 2026-08-20 · See also: "Annotation tooltip build makes the selection pulsation choppy on a large dataset"*
 
