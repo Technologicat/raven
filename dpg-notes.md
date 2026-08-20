@@ -368,6 +368,16 @@ the font's natural ascender space.
 
 ## An autosize window is one frame behind its content — and whether that shows depends on the window's age
 
+**If you came here about a tooltip, the answer is `raven.common.gui.tooltip.Tooltip` and the rest of this
+section is why.** It is the packaged form of everything below, and Raven's tooltips that change their text
+already use it. Read on if you are building something else that resizes itself, or if you need to know what
+the component is protecting you from.
+
+**Except inside a modal, which cannot spawn a window — and being a window is exactly what makes that class
+work.** A modal's tooltips stay `dpg.tooltip` and keep the glitch, and there is currently nothing to be done
+about that. So the rest of this section is the live reference for anything inside `FileDialog` or a
+messagebox, rather than history.
+
 `get_item_rect_size` on an autosize window reports the size auto-fit computed from the content it measured
 on the *previous* frame. So after any content change there is one frame where the reported size describes
 the content that was there before. Measured 2026-08-20 on DPG 2.3.1, an autosize window holding one text
@@ -409,10 +419,17 @@ it. **A window whose placement depends on its own size therefore needs two settl
 Librarian's copy-conversation tooltip, whose three-line caption cannot fit below a cursor near the bottom of
 the window while the one-line acknowledgment it replaces can.)
 
-**Hence the fix for a tooltip whose caption changes: build a new one, rather than editing or re-showing the
-existing one.** Editing it is what makes the flash of a wrong-sized tooltip that a changing caption is
-notorious for. Note that a tooltip cannot be sized out of the problem instead —
-`dpg.configure_item(tooltip, width=...)` raises `width keyword does not exist`.
+**For a tooltip whose caption changes, none of this needs solving again: use
+`raven.common.gui.tooltip.Tooltip`.** It is a window rather than a `dpg.tooltip`, so it can be parked
+offscreen, settled there for `_SETTLE_FRAMES`, and only then placed — and it keeps DPG's own `(25, 10)`
+cursor offset and follows the mouse, so one sitting beside a plain `dpg.tooltip` is indistinguishable from
+it. A caption that is written once and never changes is still better off as a `dpg.tooltip`; the class
+docstring says so, and says the one thing it cannot do (a modal cannot spawn a window, so a modal's
+tooltips keep the glitch).
+
+Two dead ends worth knowing before reaching for them. **Rebuilding the tooltip fixes half of it** — clean
+when the caption shrinks, clipped when it grows, so a flash gets one of each. And **a tooltip cannot be
+sized out of the problem**: `dpg.configure_item(tooltip, width=...)` raises `width keyword does not exist`.
 
 **And a hidden item is not laid out at all**, keeping whatever metrics it last had — its own width stays at
 the *old* text's 37 while hidden, however long it stays hidden. Which is why

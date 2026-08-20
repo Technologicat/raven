@@ -66,6 +66,7 @@ commentary in a trailing `(…)`. `·` separates targets. That shape is not deco
 | park focus on a panel or child window | *Keyboard input* → `focus_item` cannot focus a child window — and does harm when asked to |
 | scroll programmatically, or follow a growing log | *Scrolling* → Three input paths move a scroll position, and DPG surfaces them differently · *Scrolling* → `max_y_scroll` moves when content is added |
 | set a window's size, or a tooltip's padding, or fight z-order | *Window sizing* (all of it) |
+| give a widget a tooltip whose text changes, or wonder why one flickers when it does | *Window sizing* → An autosize window is one frame behind its content — and whether that shows depends on the window's age (the answer is `raven.common.gui.tooltip.Tooltip`; the section is why) |
 | touch fonts, icons, super/subscripts or `dpg_markdown` | *Font atlas limits* (all of it) |
 | size a drawlist, or build anything that scrolls over a lot of content | *Drawlists* → Never size a drawlist to a scroll extent — it will take the X session down |
 | build a table, or wonder why a long listing costs frame time | *Tables* → Rows are submitted every frame unless the table clips |
