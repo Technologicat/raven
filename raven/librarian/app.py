@@ -495,7 +495,10 @@ def _refresh_backend_status_pill(status: sym) -> None:
     icon, label, caption = _describe_backend_status(status)
     dpg.set_value("backend_status_icon", icon)  # tag
     dpg.configure_item("backend_status_button", label=label)  # tag
-    backend_status_tooltip.text = caption
+    # Through the flash rather than around it: clicking the pill flashes "Checking the LLM backend…" into
+    # this same tooltip, and the probe it starts usually answers inside that second. A plain write would be
+    # put back by the flash when it ends, leaving the tooltip describing the state before the click.
+    gui_animation.set_text_under_flash(backend_status_tooltip, caption)
     if status is llmclient.backend_ready:
         dpg.bind_item_theme("backend_status_icon", "my_steady_green_backend_theme")  # tag
         dpg.bind_item_theme("backend_status_button", "my_steady_green_backend_theme")  # tag

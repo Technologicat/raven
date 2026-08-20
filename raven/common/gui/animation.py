@@ -757,11 +757,38 @@ def highlight_widget(*,
                              flash_color=color,
                              text_color=color))
 
-def set_text_under_flash(widget: Union[str, int], text: str) -> None:
+def _find_flash_holding(widget: Union[str, int, object]) -> Optional["WidgetFlash"]:
+    """The running flash whose message is standing in `widget`, or `None` if its text is nobody else's.
+
+    Found by *message target*, which is deliberately not what `WidgetFlash.instances` is keyed by: that key
+    is the widget being **painted**, and the two differ for every flash that says something somewhere else —
+    a button flashes while its tooltip carries the words. Looking up by the key alone therefore misses
+    exactly the case this is for, and misses it silently, since the fallback is an ordinary write that the
+    flash then undoes.
+
+    A scan rather than a second index. The registry holds only the flashes *currently running*, which is a
+    handful at the very most and usually none — and an index would have to be kept in step on both the
+    reify and the finish path, where letting the two diverge fails quietly in the same way.
+    """
+    # Snapshot under the class lock and match outside it. `finish` takes `instance_lock` and *then*
+    # `class_lock`; a caller of this takes `instance_lock` on what it finds, so holding `class_lock` across
+    # that would be the opposite order and could deadlock against a flash ending on the render thread.
+    with WidgetFlash.class_lock:
+        running = list(WidgetFlash.instances.values())
+    for flash in running:
+        if flash.message_target is not None and flash.message_target == widget:
+            return flash
+    return None
+
+def set_text_under_flash(widget: Union[str, int, object], text: str) -> None:
     """Set `widget`'s text, whoever currently owns it.
 
-    Where a `WidgetFlash` is showing a message over `widget`, `text` becomes what it restores when it ends,
-    and the message on screen is left to finish saying what it says. Otherwise this is `dpg.set_value`.
+    Where a `WidgetFlash` is showing a message in `widget`, `text` becomes what it restores when it ends,
+    and the message on screen is left to finish saying what it says. Otherwise this is an ordinary write.
+
+    `widget` is where the text *goes*, which need not be the widget that flashes: a button's message lives
+    in its tooltip, and this takes the tooltip. Anything a flash accepts as a `message_target` works here,
+    including a `tooltip.Tooltip`.
 
     For a status line whose text is *derived* from app state and rewritten whenever that state moves. A
     plain write during a flash would wipe the message in the moment it is meant to be read, and be undone
@@ -771,7 +798,7 @@ def set_text_under_flash(widget: Union[str, int], text: str) -> None:
     # Ghosts need no handling: only a reified instance is ever registered, so this can only return the
     # animation actually on the widget. One arriving *later* is harmless too — it restarts the running
     # instance and rewrites its message, leaving `original_message` alone, which is the value written here.
-    flash = WidgetFlash.instances.get(widget)
+    flash = _find_flash_holding(widget)
     if flash is not None:
         with flash.instance_lock:
             # `reified` is a *timing* guard, and a live one: `finish` runs on the render thread while this

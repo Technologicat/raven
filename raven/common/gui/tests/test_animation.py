@@ -176,6 +176,27 @@ class TestTextTarget:
         _run_flash_to_completion(text)
         assert dpg.get_value(text) == "after"
 
+    def test_writing_reaches_a_flash_that_paints_one_widget_and_speaks_in_another(self, widgets):
+        """The common shape, and the one a lookup by the flashed widget misses: a button flashes green while
+        its tooltip carries the words, so the text being written and the widget being painted are not the
+        same item.
+
+        Missing it is quiet — the write lands, and is then undone when the flash restores what it captured,
+        leaving the widget describing a state that has since moved on. Live case: Librarian's backend-status
+        pill, whose click flashes "Checking the LLM backend…" into the tooltip while the probe it starts
+        writes the real answer into the same place.
+        """
+        text, button = widgets
+        dpg.set_value(text, "before")
+
+        animation.animator.add(animation.WidgetFlash(target=button, duration=0.3,
+                                                     message="Checking…", message_target=text))
+        animation.set_text_under_flash(text, "after")
+        assert dpg.get_value(text) == "Checking…", "the message keeps the widget while it runs"
+
+        _run_flash_to_completion(button)
+        assert dpg.get_value(text) == "after", "and what comes back is the value written meanwhile"
+
     def test_writing_with_no_flash_is_an_ordinary_write(self, widgets):
         """The caller has one call for both cases, so it cannot pick the wrong one."""
         text, _ = widgets
