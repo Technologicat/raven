@@ -1223,6 +1223,19 @@ Suggested order, with what each actually costs:
    That also sets its size honestly. This is not a tail end of the file dialog's keyboard; it is its own
    day, alongside Ctrl+B and the places panel.
 
+   **The look, decided 2026-08-20 (Juha): a thin, blue, pulsating border.** Blue and pulsating because the
+   listing cursor already is — so the mark takes `thumbnailgrid.CURSOR_COLOR` and `CURSOR_PULSE_SECONDS`
+   rather than inventing a second convention, and a Raven app says *"this is where the keyboard is"* the
+   same way wherever you meet it. Thin, because it frames a control the user is reading rather than
+   competing with it. That the idiom is recognisable across the constellation is a reason for the component
+   to live in `raven/common/gui/`, not only a consequence of it.
+
+   **One thing to watch when it is live: two blue pulses can be on at once, meaning different things.**
+   With the caret on a side control, the mark pulses there while the listing cursor goes on pulsing at what
+   Enter would act on — which is correct, and is the whole reason the cursor is not dimmed (above), but it
+   has never been on screen before. If it reads as confusing, the fix is a shade or a weight rather than
+   dimming the cursor, since dimming is the option already rejected. Driving one is the only way to know.
+
    **Nor should the dispatch move onto focus.** `raven-avatar-settings-editor` routes its combo browsing by
    asking whether the focused item is one of two named combos, and that works there — it has a text entry
    too, and arrows in it simply go to the text caret, because nothing claims them. The shape does not
@@ -1251,9 +1264,14 @@ able to do, 6 rebuilds a panel as data so a cursor can walk it, and 7 is a `rave
 that every keyboard-browsable combo in the constellation opts into — which is why it has to land in one
 session rather than starting with the listing's half.
 
-**Which to take next is a real choice.** 5 is the one Juha asked for by name and is independent of
-everything; 7 is the one a user meets first, since nothing on screen currently says where the arrow keys
-will land.
+**Order settled 2026-08-20 (Juha): 6, then 7, then 5.** 6 is next, likely 2026-08-21, on the grounds that
+it *completes* the keyboard accessibility rather than adding to it — the places panel is the last thing in
+the dialog a keyboard cannot reach. 7 follows. 5 goes last because it is a new feature and logically
+separate from the rest, which is also what makes it the safe one to defer.
+
+**7 is estimated at a day or less** (Juha), by comparison with the self-sizing tooltip built on 2026-08-20
+— a custom widget with its own settle logic, its own placement and its own animation, delivered alongside
+other work in one day. This is about that size: one component, one opt-in call, four or five call sites.
 
 ## Where the dialog stands
 
