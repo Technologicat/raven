@@ -31,6 +31,25 @@ from . import utils as guiutils
 # --------------------------------------------------------------------------------
 # Animation mechanism
 
+def _read_text(target: Union[str, int, object]) -> str:
+    """Read the text of `target`, which may be a DPG widget or a widget-like object with a `text` property."""
+    if hasattr(target, "text"):
+        return target.text
+    return dpg.get_value(target)
+
+def _write_text(target: Union[str, int, object], text: str) -> None:
+    """Write `text` into `target`, which may be a DPG widget or a widget-like object with a `text` property.
+
+    The pair exists so that a flash's message can land in something that knows how to *stage* the change —
+    `guiutils`' sibling `tooltip.Tooltip` resizes itself over two frames to avoid being drawn at the wrong
+    size, which a raw `dpg.set_value` would defeat. A DPG tag is a `str` or an `int` and has no `text`
+    attribute, so the two cases cannot be confused.
+    """
+    if hasattr(target, "text"):
+        target.text = text
+        return
+    dpg.set_value(target, text)
+
 action_continue = sym("continue")  # keep rendering
 action_finish = sym("finish")  # end animation, call the `finish` method
 action_cancel = sym("cancel")  # end animation without calling the `finish` method
@@ -363,9 +382,14 @@ class WidgetFlash(Animation):
                    content is restored when the animation finishes normally. `None` (the default) is
                    "don't change", which is what a pure highlight wants.
 
-        `message_target`: DPG tag or ID, the widget the message is shown in. Defaults to `target` where
-                          `target` is a text item, which is how a status line says something in the color
-                          that says it — the line's own color fades while the message stands in it.
+        `message_target`: where the message is shown. A DPG tag or ID, or a widget-like object exposing a
+                          `text` property — `tooltip.Tooltip` is the one that matters, since it stages the
+                          change across two frames so the tooltip is never drawn at the wrong size for what
+                          it says.
+
+                          Defaults to `target` where `target` is a text item, which is how a status line
+                          says something in the color that says it — the line's own color fades while the
+                          message stands in it.
 
                           Name it explicitly when the thing being flashed cannot show text: a button's
                           message belongs in its tooltip's caption, not on the button.
@@ -514,8 +538,8 @@ class WidgetFlash(Animation):
                                 # which case it captured nothing and restores nothing — and ours would stand
                                 # on that line for good.
                                 if other.original_message is None:
-                                    other.original_message = dpg.get_value(other.message_target)
-                                dpg.set_value(other.message_target, other.message)
+                                    other.original_message = _read_text(other.message_target)
+                                _write_text(other.message_target, other.message)
                     other.reset()
                     return
 
@@ -539,8 +563,8 @@ class WidgetFlash(Animation):
                 # and where it says it has nothing to do with what it paints.
                 if self.message_target is not None and self.message is not None:
                     with guiutils.nonexistent_ok():
-                        self.original_message = dpg.get_value(self.message_target)
-                        dpg.set_value(self.message_target, self.message)
+                        self.original_message = _read_text(self.message_target)
+                        _write_text(self.message_target, self.message)
 
                 type(self).instances[self.target] = self
                 self.reified = True  # This is the instance that animates `self.target`.
@@ -649,7 +673,7 @@ class WidgetFlash(Animation):
 
             if self.original_message is not None:  # `None`: there was no message to put back
                 with guiutils.nonexistent_ok():
-                    dpg.set_value(self.message_target, self.original_message)
+                    _write_text(self.message_target, self.original_message)
                 self.original_message = None
 
             self._destroy_theme()
@@ -740,7 +764,7 @@ def set_text_under_flash(widget: Union[str, int], text: str) -> None:
             if flash.reified and flash.original_message is not None:
                 flash.original_message = text
                 return
-    dpg.set_value(widget, text)
+    _write_text(widget, text)
 
 # --------------------------------------------------------------------------------
 

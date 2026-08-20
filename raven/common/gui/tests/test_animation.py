@@ -30,7 +30,7 @@ from unpythonic import box, unbox
 
 dpg = pytest.importorskip("dearpygui.dearpygui", reason="dearpygui not installed (GUI toolkit absent in CI)")
 
-from raven.common.gui import animation  # noqa: E402 -- after importorskip by design
+from raven.common.gui import animation, tooltip  # noqa: E402 -- after importorskip by design
 
 
 TOOL_COLOR = (120, 200, 255)
@@ -338,6 +338,29 @@ class TestPaintList:
         assert label_start != label_end, "the label fades rather than being held"
         assert label_end[1] > label_start[1] and label_end[2] > label_start[2], "toward the resting text colour"
         assert sum(background_end) < sum(background_start), "while the background darkens beneath it"
+
+    def test_the_message_can_land_in_something_that_stages_its_own_change(self, widgets):
+        """A `Tooltip` resizes itself over two frames, which a raw `dpg.set_value` would drive straight past.
+
+        So the message channel asks the target to take the text rather than writing it in — the difference
+        between a tooltip that fits what it says and one that is briefly drawn at the size of what it said
+        before.
+        """
+        _, button = widgets
+        tip = tooltip.Tooltip(button, "resting caption")
+        try:
+            animation.animator.add(animation.WidgetFlash(target=button, duration=5.0,
+                                                         message="Copied!", message_target=tip))
+            assert tip.text == "resting caption", "queued, not written through"
+            animation.animator.render_frame()
+            assert tip.text == "Copied!"
+
+            animation.WidgetFlash.instances[button].duration = 0.05
+            _run_flash_to_completion(button)
+            animation.animator.render_frame()
+            assert tip.text == "resting caption", "and the restore is staged the same way"
+        finally:
+            tip.destroy()
 
     def test_a_message_with_nowhere_to_go_says_so(self, widgets, caplog):
         """Silently dropping it is how two flashes carried an inert `message=""` for months.

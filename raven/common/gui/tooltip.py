@@ -1,4 +1,7 @@
-"""A tooltip that resizes without ever rendering a frame at the wrong size."""
+"""A tooltip that resizes without ever rendering a frame at the wrong size.
+
+This module is licensed under the 2-clause BSD license, to facilitate integration anywhere.
+"""
 
 __all__ = ["Tooltip"]
 
