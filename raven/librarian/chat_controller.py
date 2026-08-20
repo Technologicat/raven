@@ -43,6 +43,7 @@ from ..common import numutils
 from ..common import utils as common_utils
 
 from ..common.gui import animation as gui_animation
+from ..common.gui import tooltip as gui_tooltip
 from ..common.gui import utils as guiutils
 
 from . import chattree
@@ -327,6 +328,9 @@ class DPGChatMessage:
         # under `gui_container_group`, so `demolish`'s children-only delete does not reach them - this is what
         # it deletes them by. A rebuilt message would otherwise leak one per attachment, per rebuild.
         self.owned_handler_registries = []
+        # Self-sizing tooltips created by `_add_tooltip`. Same story as the registries above: a `Tooltip`
+        # is a window at the root, so the children-only delete does not reach it either.
+        self.owned_tooltips = []
 
         # for "delete subtree" confirmation (cannot be undone)
         self.last_delete_click_time = None
@@ -757,10 +761,11 @@ class DPGChatMessage:
         button_id = dpg.add_button(label=icon, width=gui_config.toolbutton_w, parent=parent, enabled=enabled)
         dpg.bind_item_font(button_id, self.parent_view.themes_and_fonts.icon_font_solid)
         dpg.bind_item_theme(button_id, "disablable_widget_theme")  # tag
-        tooltip_id = dpg.add_tooltip(button_id)
-        text_id = dpg.add_text(tooltip_text, parent=tooltip_id)
-        if not enabled:
+        if not enabled:  # nothing will ever rewrite this caption, so it needs nothing that can resize
+            with dpg.tooltip(button_id):
+                dpg.add_text(tooltip_text)
             return
+        tooltip = self._add_tooltip(button_id, tooltip_text)
         def callback() -> None:
             try:
                 action()
@@ -768,9 +773,21 @@ class DPGChatMessage:
             except Exception as exc:  # noqa: BLE001 -- a secondary action must never crash the chat view
                 logger.error(f"DPGChatMessage._add_action_button: action failed: {type(exc)}: {exc}")
                 ok, message = False, fail_message
-            gui_animation.flash_button(button=button_id, tooltip=tooltip_id, text=text_id,
+            gui_animation.flash_button(button=button_id, tooltip=tooltip,
                                        ok=ok, message=message, duration=gui_config.acknowledgment_duration)
         dpg.set_item_callback(button_id, callback)
+
+    def _add_tooltip(self, target: Union[str, int], text: str) -> gui_tooltip.Tooltip:
+        """Give `target` a self-sizing tooltip, owned by this message.
+
+        For a caption a flash will rewrite. A `dpg.tooltip` renders one frame at its previous size when its
+        text changes, which under the cursor reads as a glitch; this one never does.
+
+        Returns the tooltip, to be handed to `gui_animation.flash_button` as its `tooltip`.
+        """
+        tooltip = gui_tooltip.Tooltip(target, text)
+        self.owned_tooltips.append(tooltip)
+        return tooltip
 
     def _make_clickable(self, items: List[Union[str, int]], *, action: Callable[[], None]) -> None:
         """Make `items` respond to a left click by running `action`, as a shortcut for a button below them.
@@ -835,6 +852,7 @@ class DPGChatMessage:
         with self.paragraphs_lock:
             old_container = self.gui_container_group
             old_registries, self.owned_handler_registries = self.owned_handler_registries, []
+            old_tooltips, self.owned_tooltips = self.owned_tooltips, []
             self.paragraphs = []
             self.gui_button_callbacks = {}
             self.gui_uuid = str(uuid.uuid4())
@@ -847,6 +865,8 @@ class DPGChatMessage:
             for registry in old_registries:  # not under the container group; see `_make_clickable`
                 with guiutils.nonexistent_ok():
                     dpg.delete_item(registry)
+            for tooltip in old_tooltips:  # nor are these; see `_add_tooltip`
+                tooltip.destroy()
             with guiutils.nonexistent_ok():
                 dpg.delete_item(old_container)
 
@@ -872,6 +892,9 @@ class DPGChatMessage:
                 with guiutils.nonexistent_ok():
                     dpg.delete_item(registry)
             self.owned_handler_registries = []
+            for tooltip in self.owned_tooltips:  # nor are these; see `_add_tooltip`
+                tooltip.destroy()
+            self.owned_tooltips = []
             with guiutils.nonexistent_ok():
                 dpg.delete_item(self.gui_container_group, children_only=True)  # clear old GUI content (needed if rebuilding)
 
@@ -932,8 +955,7 @@ class DPGChatMessage:
             gui_animation.flash_button(button=copy_message_button,
                                        message=f"Copied to clipboard! ({mode})",
                                        duration=gui_config.acknowledgment_duration,
-                                       tooltip=copy_message_tooltip,
-                                       text=copy_message_tooltip_text)
+                                       tooltip=copy_message_tooltip)
         self.gui_button_callbacks["copy"] = copy_message_to_clipboard_callback
         copy_message_button = dpg.add_button(label=fa.ICON_COPY,
                                              callback=copy_message_to_clipboard_callback,
@@ -942,8 +964,8 @@ class DPGChatMessage:
                                              parent=g)
         dpg.bind_item_font(copy_message_button, self.parent_view.themes_and_fonts.icon_font_solid)
         dpg.bind_item_theme(copy_message_button, "disablable_widget_theme")  # tag
-        copy_message_tooltip = dpg.add_tooltip(copy_message_button)
-        copy_message_tooltip_text = dpg.add_text("Copy message to clipboard\n    no modifier: as-is\n    with Shift: include message node ID", parent=copy_message_tooltip)
+        copy_message_tooltip = self._add_tooltip(copy_message_button,
+                                                 "Copy message to clipboard\n    no modifier: as-is\n    with Shift: include message node ID")
 
         # These are needed for enabling/disabling some buttons.
         system_prompt_node_ids = _get_all_system_prompt_node_ids(datastore=self.parent_view.chat_controller.datastore)
@@ -1051,8 +1073,7 @@ class DPGChatMessage:
                     gui_animation.flash_button(button=speak_message_button,
                                               message="Sent to avatar!",
                                               duration=gui_config.acknowledgment_duration,
-                                              tooltip=speak_message_tooltip,
-                                              text=speak_message_tooltip_text)
+                                              tooltip=speak_message_tooltip)
             speak_enabled = (role == "assistant")
             if speak_enabled:
                 self.gui_button_callbacks["speak"] = speak_message_callback
@@ -1064,8 +1085,7 @@ class DPGChatMessage:
                                                   parent=g)
             dpg.bind_item_font(speak_message_button, self.parent_view.themes_and_fonts.icon_font_solid)
             dpg.bind_item_theme(speak_message_button, "disablable_widget_theme")  # tag
-            speak_message_tooltip = dpg.add_tooltip(speak_message_button)
-            speak_message_tooltip_text = dpg.add_text("Have the avatar speak this message [Ctrl+S]", parent=speak_message_tooltip)
+            speak_message_tooltip = self._add_tooltip(speak_message_button, "Have the avatar speak this message [Ctrl+S]")
         else:
             dpg.add_spacer(width=gui_config.toolbutton_w, height=1, parent=g)
 
@@ -1167,9 +1187,9 @@ class DPGChatMessage:
             else:
                 gui_animation.animator.add(gui_animation.WidgetFlash(target=delete_subtree_button,
                                                                      duration=self.confirm_duration,
-                                                                     also_flash=(delete_subtree_tooltip, delete_subtree_tooltip_text),
+                                                                     also_flash=(delete_subtree_tooltip.window, delete_subtree_tooltip.caption),
                                                                      message="Press again to confirm.\nDeletion CANNOT BE UNDONE.",
-                                                                     message_target=delete_subtree_tooltip_text,
+                                                                     message_target=delete_subtree_tooltip,
                                                                      flash_color=(255, 32, 32),  # red: this one destroys data
                                                                      text_color=(255, 255, 255)))
         delete_subtree_button = dpg.add_button(label=fa.ICON_TRASH_CAN,
@@ -1180,8 +1200,8 @@ class DPGChatMessage:
                                                parent=g)
         dpg.bind_item_font(f"message_delete_branch_button_{self.gui_uuid}", self.parent_view.themes_and_fonts.icon_font_solid)  # tag
         dpg.bind_item_theme(f"message_delete_branch_button_{self.gui_uuid}", "disablable_widget_theme")  # tag
-        delete_subtree_tooltip = dpg.add_tooltip(f"message_delete_branch_button_{self.gui_uuid}")  # tag
-        delete_subtree_tooltip_text = dpg.add_text("Delete branch (subtree starting from this node, ALL descendants!)", parent=delete_subtree_tooltip)
+        delete_subtree_tooltip = self._add_tooltip(f"message_delete_branch_button_{self.gui_uuid}",  # tag
+                                                   "Delete branch (subtree starting from this node, ALL descendants!)")
 
         # "Approve denied host & retry" override. Appears ONLY on a webfetch tool result that the client-side
         # allowlist refused (such a node carries `webfetch_denied_host` in its generation_metadata, set by
