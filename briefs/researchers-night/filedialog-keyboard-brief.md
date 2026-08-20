@@ -1,9 +1,10 @@
 # FileDialog: keyboard accessibility
 
-**Status: mostly built.** The design below was settled on 2026-08-13 (Juha and Claude); the listing cursor,
-Enter's rules, Tab and its completion and fill, the sort and filter chords, Alt+Up / Ctrl+Up and the
-"Will pick" line are in and live-tested, as is the F1 help card. Still to build: Ctrl+L, Ctrl+Shift+F,
-Ctrl+B, the places-panel migration, and the navigation history added on 2026-08-18.
+**Status: the key set is complete; three capability items remain.** The design below was settled on
+2026-08-13 (Juha and Claude), and every key it names is in and live-tested — the listing cursor, Enter's
+rules, Tab and its completion and fill, the sort and filter chords, Alt+Up / Ctrl+Up, the "Will pick"
+line, the F1 help card, Ctrl+Shift+F, and Ctrl+L with the path field's colouring. Still to build:
+Ctrl+B, the places-panel migration, the caret mark, and the navigation history added on 2026-08-18.
 **See "What is built" near the end for the current state** — including the
 several places where the design below was overtaken by what building it taught, each noted there rather
 than edited into the design, so the reasoning stays legible.
@@ -901,9 +902,40 @@ dialog is the strongest convention in play and Tab and Ctrl+F already return fro
 one home answering Escape differently from the others, which a user has to learn rather than derive. The
 help card currently states the simple rule ("Esc — Cancel"), so changing this means changing that too.
 
-**Not built:** Ctrl+L, Ctrl+B, the places-panel migration, and the navigation history —
-Alt+Left / Alt+Right and the mouse's back and forward buttons, which is the one item here that arrived
-after the dialog started being built rather than with the original design.
+**Not built:** Ctrl+B, the places-panel migration, and the navigation history — Alt+Left / Alt+Right and
+the mouse's back and forward buttons, which is the one item here that arrived after the dialog started
+being built rather than with the original design.
+
+### Added 2026-08-20
+
+**Ctrl+L is built**, colouring included, and it came out as small as item 3 predicted once the completion
+question was answered by dropping it. Three things it taught that the design did not have:
+
+- **The colour answers what was *asked for*, not where you are.** Built first as "repaint whenever the
+  field changes", which put the same folder on screen white when the dialog opened and green after
+  navigating — one of those two lying about what the colour means. Neutral is the right resting state:
+  writing where the user already is asks nothing, so it gets no answer, and a field that is always green
+  reports nothing at the moment it matters. It needs no flag to tell the cases apart, which is what makes
+  it worth doing this way — `set_value` fires no edit handler, so the dialog's own writes are precisely
+  the ones that do not arrive there.
+- **A field's own Enter and a global Enter both fire, and the global one goes first.** Measured on DPG
+  2.3.1: the key-press handler runs before the field's `on_enter` callback and sees the field already
+  deactivated, so `is_item_active` cannot report whose Enter it was. Enter in the path field had therefore
+  always *also* descended into whatever the listing cursor was resting on — a fault that predates this
+  work and that the caret home fixes, since a click into the field now sets `CaretHome.PATH` exactly as
+  the key does. Recorded in `dpg-notes.md`, with `investigations/dpg-input-text/`.
+- **`on_enter=True` costs the per-keystroke callback, and an item-edited handler gets it back.** Which is
+  what makes a field able to commit on Enter *and* be a readout as it is typed into. Same measurement.
+
+**Escape restores the draft here and restores nothing on the type filter, and the two agree rather than
+diverge:** the combo applied every step as it was made, so it has nothing left to abandon, while this
+field is a draft until Enter and a half-typed path standing over a listing of somewhere else is a field
+that lies about where you are.
+
+**What is still worth a human check:** that Ctrl+L is not swallowed before it reaches the app. Synthetic
+input to a DPG window was unreliable on this desktop the day this was built — `xdotool key` chords went
+undelivered while `xdotool type` landed — so the live pass drove the widget from inside the process
+instead, which answers the colours and the help card but not the X-level delivery of that one chord.
 
 **The save-mode arrow-fill is superseded rather than pending.** This brief specified that arrowing fills
 the field in save mode, gated on a flag tracking whether the user had typed since the last programmatic
@@ -1009,7 +1041,9 @@ Suggested order, with what each actually costs:
    `focus_item` being refused from window level into a child window. Both offenders are in child windows
    now. That fix left the combo able to hold focus after all — which buys nothing, DPG drawing nothing on
    a focused combo (see item 7). See "What is built".
-3. **Ctrl+L, the path field** — small, once the completion question is settled below.
+3. ~~**Ctrl+L, the path field**~~ — **built 2026-08-20**, small as predicted once the completion question
+   below was answered by dropping it. See "Added 2026-08-20" for what building it taught; the design that
+   follows is left as it stood, since it is what the answer was reasoned from.
 
    **Tab completion in it is not buildable in the shape the find field uses** (2026-08-19). Writing the
    completion is the solved half: take the caret away, write, as `_write_find_field` does. Handing the
@@ -1192,14 +1226,18 @@ Suggested order, with what each actually costs:
 real choice rather than a scheduling detail: 1–3 finish the keyboard, and 5 adds a capability the dialog has
 never had. Worth deciding at the start of the session rather than discovering at the end of it.
 
-**Standing 2026-08-19, end of day.** Built: 1, 2, 4, 8. Left: **3** (Ctrl+L, small — the next thing to
-build), then **5**, **6** and **7**, each its own day. Ctrl+L finishes the *keyboard* in the sense items
-1–3 meant; the other three are capability and polish rather than the key set.
+**Standing 2026-08-20.** Built: 1, 2, 3, 4, 8. Left: **5** (navigation history), **6** (Ctrl+B and the
+places panel) and **7** (the caret mark, fleet-wide), each its own day.
 
-**Nothing is open inside item 3 any more.** The last question — what `~` does — was settled on 2026-08-19:
-it expands in the backend, the field shows the literal until Enter, and the colour validates the expansion.
-That and the other three cases (empty fragment, hidden directories, exact-not-smart-case) are decided
-above, so the colouring can be written rather than designed.
+**The keyboard is finished in the sense items 1–3 meant it.** Every home the design named has a key, and
+what remains is capability and polish rather than the key set: 5 adds something the dialog has never been
+able to do, 6 rebuilds a panel as data so a cursor can walk it, and 7 is a `raven/common/gui/` component
+that every keyboard-browsable combo in the constellation opts into — which is why it has to land in one
+session rather than starting with the listing's half.
+
+**Which to take next is a real choice.** 5 is the one Juha asked for by name and is independent of
+everything; 7 is the one a user meets first, since nothing on screen currently says where the arrow keys
+will land.
 
 ## Where the dialog stands
 
