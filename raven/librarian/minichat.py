@@ -13,12 +13,13 @@ from .. import __version__
 
 # Argparse runs at module top so logging is configured before heavy imports.
 # `librarian_config` isn't loaded yet (it's a heavy import), so the default for
-# the positional `backend_url` resolves later inside `main()`.
+# `--backend-url` resolves later inside `main()`.
 parser = argparse.ArgumentParser(description="""Minimal LLM chat client, for testing/debugging. You can use this for testing that Raven can connect to your LLM.""",
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
 parser.add_argument('-v', '--version', action='version', version=('%(prog)s ' + __version__))
-parser.add_argument(dest="backend_url", nargs="?", default=None, type=str, metavar="url",
-                    help="where to access the LLM API (default: from `raven/librarian/config.py`)")
+parser.add_argument('--backend-url', metavar='URL', default=None,
+                    help='LLM backend to talk to, overriding the configured one; e.g. http://localhost:1234 '
+                         '(default: from `raven/librarian/config.py`)')
 parser.add_argument('--log', metavar='PATH', default=None,
                     help='mirror stderr log to this file (overwritten each run)')
 parser.add_argument('--log-level', default='INFO',
@@ -26,7 +27,8 @@ parser.add_argument('--log-level', default='INFO',
                     help='root logger level (default: INFO)')
 parser.add_argument('--server-url', metavar='URL', default=None,
                     help='Raven server to talk to, overriding the configured one; e.g. http://localhost:5100. '
-                         'The LLM backend is the positional argument above; this is the other endpoint.')
+                         'Used for websearch, webfetch and the document database; this app asks for no local '
+                         'model fallback, so all three need a server.')
 opts = parser.parse_args()
 
 import logging

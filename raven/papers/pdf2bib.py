@@ -1046,7 +1046,7 @@ def main():
     parser = argparse.ArgumentParser(description="""Convert PDF conference abstracts into a BibTeX database. Extracts the PDF text and processes it with an OpenAI compatible LLM.""",
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
 
-    parser.add_argument(dest="backend_url", nargs="?", default=librarian_config.llm_backend_url, type=str, metavar="url", help="where to access the LLM API")
+    parser.add_argument("--backend-url", dest="backend_url", default=librarian_config.llm_backend_url, type=str, metavar="url", help=f"LLM backend to talk to, overriding the configured one (default: '{librarian_config.llm_backend_url}').")
     parser.add_argument("--server-url", dest="server_url", default=None, type=str, metavar="url", help=f"Raven server to talk to, overriding the configured one (default: '{client_config.raven_server_url}'). Used for dehyphenating extracted abstracts.")
 
     conf = parser.add_argument_group("conference info", "Metadata for the conference; injected into all generated BibTeX entries.")

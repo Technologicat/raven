@@ -221,9 +221,9 @@ at a port nothing is listening on and Librarian's backend-status pill appears an
 was editing a `config.py` that carries local overrides and restoring it exactly afterwards — which is the
 one file class this repo is most careful about, so a flag is worth having for that reason alone.
 
-**Every console script that talks to Raven-server takes `--server-url`**, and the three that talk to an LLM
-backend can be pointed at another one: `raven-librarian` through `--backend-url`, `raven-minichat` and
-`raven-pdf2bib` through their positional `url` argument. No exceptions to look up.
+**Every console script that talks to Raven-server takes `--server-url`, and every one that talks to an LLM
+backend takes `--backend-url`** — same spelling everywhere, no exceptions to look up. `raven-minichat` and
+`raven-pdf2bib` took the backend as a positional `url` until 2026-08-20; it is a flag on both now.
 
 ### Running Tests
 
