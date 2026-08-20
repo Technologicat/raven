@@ -382,10 +382,8 @@ class WidgetFlash(Animation):
                       For a button-like `target`, the (constant) text color during the flash. For a text
                       `target`, the color its text starts from before fading back to its own.
 
-                      **A text `target` needs a color of its own to fade back to** — give it one at
-                      `add_text(color=...)`. DPG reports an unset color as the sentinel `r = -1` rather
-                      than as the theme's color, which it does not expose, so a widget that never
-                      declared one has no destination and the fade runs toward negative, i.e. to black.
+                      A text `target` needs no color of its own: one that declared none fades back to
+                      `guiutils.DEFAULT_TEXT_COLOR`, and is handed back with none declared.
         """
         super().__init__()
         self.instance_lock = threading.Lock()
@@ -403,7 +401,11 @@ class WidgetFlash(Animation):
         self.theme = None
         self.original_message = None
         self.target_is_text = False  # set in `start`; selects which visual channel is animated
-        self.original_target_color = None  # for a text target: its own color, to fade back to
+        # For a text target: what it had, to be put back verbatim, and where the fade runs to. These differ
+        # where the widget declared no color of its own — it must be handed back declaring none, but the
+        # fade still needs somewhere to arrive.
+        self.original_target_color = None
+        self.resting_target_color = None
         # Whatever was bound before we bound ours. One snapshot per widget, because these are three independent
         # widgets that each may or may not have had a theme: restoring a single shared snapshot to all of them
         # hands two of them a theme belonging to the third.
@@ -441,7 +443,7 @@ class WidgetFlash(Animation):
             if not dpg.does_item_exist(self.target):
                 return action_finish
             R0, G0, B0 = self.text_color
-            R1, G1, B1, A1 = self.original_target_color  # the item's own color; no guessing needed here
+            R1, G1, B1, A1 = self.resting_target_color  # the color the widget rests in once the flash is over
             R = R0 * (1.0 - r) + R1 * r
             G = G0 * (1.0 - r) + G1 * r
             B = B0 * (1.0 - r) + B1 * r
@@ -510,6 +512,14 @@ class WidgetFlash(Animation):
                         self.original_target_color = [255.0 * c for c in dpg.get_item_configuration(self.target)["color"]]
                     if self.original_target_color is None:  # target vanished between construction and here
                         return
+                    # Where the fade lands. Usually the widget's own color, but DPG reports "no explicit
+                    # color" as the sentinel `(-1, 0, 0, 1)` rather than as the color in effect — and that
+                    # is the common case, since Raven declares a text color only where the text departs
+                    # from normal. Fading toward the sentinel runs to black. Restoring it, on the other
+                    # hand, is exactly right: a widget that declared no color must be handed back none.
+                    self.resting_target_color = list(self.original_target_color)
+                    if self.resting_target_color[0] < 0.0:
+                        self.resting_target_color[:3] = guiutils.DEFAULT_TEXT_COLOR
                     # The message is independent of which visual channel fades, so a text target carries one
                     # too. Only the text is taken: the color here is this branch's own business, and binding
                     # the flash theme to `target_text` as well would fight the fade where the two widgets
@@ -584,6 +594,7 @@ class WidgetFlash(Animation):
                         dpg.set_value(self.target_text, self.original_message)
                     self.original_message = None
                 self.original_target_color = None
+                self.resting_target_color = None
                 self.reified = False
                 with type(self).class_lock:
                     type(self).instances.pop(self.target, None)

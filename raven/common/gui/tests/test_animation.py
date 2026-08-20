@@ -106,6 +106,32 @@ class TestTextTarget:
         dpg.delete_item(text)
         _run_flash_to_completion(text)  # the flash notices the widget is gone and ends
 
+    def test_a_widget_with_no_colour_of_its_own_fades_back_to_the_default(self, dpg_context):
+        """Most text declares no colour — Raven declares one only where the text departs from normal.
+
+        DPG reports an undeclared colour as a sentinel rather than as the colour in effect, so a fade that
+        aims at what it read runs to black. The flash colour here is red rather than white so that the two
+        behaviours can disagree: fading to the default sends green and blue *up* from zero, and fading to
+        the sentinel leaves them there.
+        """
+        with dpg.window() as window:
+            bare = dpg.add_text("plain")  # no `color=`: the common case
+        try:
+            assert dpg.get_item_configuration(bare)["color"][0] == -1.0, "DPG's undeclared-colour sentinel"
+
+            animation.highlight_widget(widget=bare, duration=0.4, color=(255, 0, 0))
+            time.sleep(0.3)  # most of the way through the fade
+            animation.animator.render_frame()
+
+            _, g, b = _widget_color(bare)
+            assert g > 100 and b > 100, "the fade is heading for the default text colour, not for black"
+
+            _run_flash_to_completion(bare)
+            assert dpg.get_item_configuration(bare)["color"][0] == -1.0, "and it is handed back undeclared"
+        finally:
+            animation.animator.clear()
+            dpg.delete_item(window)
+
     def test_a_text_target_can_carry_a_message_too(self, widgets):
         """Which is how a status line says something in the color that says it: one widget, both channels.
 

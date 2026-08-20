@@ -6,7 +6,7 @@ This module is licensed under the 2-clause BSD license, to facilitate integratio
 __all__ = ["bootup", "load_extra_font",  # high-level bootup API, you usually want these two for app bootup
            "get_font_path",  # mostly internal, but available for exotic use cases
            "setup_default_font", "setup_icon_fonts", "setup_markdown", "setup_themes",  # granular low-level app bootup API
-           "DISABLED_TEXT_COLOR",
+           "DISABLED_TEXT_COLOR", "DEFAULT_TEXT_COLOR",
            "nonexistent_ok",
            "maybe_delete_item", "has_child_items",
            "get_widget_pos", "get_widget_size", "get_widget_relative_pos",
@@ -19,7 +19,7 @@ __all__ = ["bootup", "load_extra_font",  # high-level bootup API, you usually wa
            "compute_tooltip_position_scalar",  # re-exported from layout_math
            "add_toolbar_separator",
            "get_pixels_per_plotter_data_unit",
-           "DPG_WINDOW_PADDING", "DPG_FRAME_PADDING_Y"]  # default-theme metrics Raven has to know
+           "DPG_WINDOW_PADDING", "DPG_FRAME_PADDING_Y", "DPG_SCROLLBAR_SIZE"]  # default-theme metrics Raven has to know
 
 import logging
 logger = logging.getLogger(__name__)
@@ -48,6 +48,20 @@ from .layout_math import (screen_to_content, content_to_screen,  # noqa: F401 --
 # clickable, since it is the way out of the directory, while reading like the entries the dialog will not
 # return. Those reach for the colour directly rather than each inventing a grey.
 DISABLED_TEXT_COLOR = (0.50 * 255, 0.50 * 255, 0.50 * 255, 1.00 * 255)
+
+# The colour text renders in when it declares none of its own, which is the usual case: Raven's convention
+# is to give text a colour only where it departs from normal, so plain labels and tooltip captions are bare.
+#
+# Measured rather than looked up, because DPG offers no way to ask — it exposes only `get_item_theme`, which
+# hands back the bound theme item. Screenshot of uncoloured text rendered at 96 px, then the channel-wise
+# maximum: pure white, over a plateau of five thousand pixels. The size is what makes that trustworthy;
+# glyphs are antialiased, so at ordinary sizes a stem may have no fully covered pixel and every sample is a
+# coverage-weighted blend of the colour rather than the colour.
+#
+# `setup_themes` binds it into the global theme, so this is what the text *is* rather than a transcription
+# that can drift. Anything that has to fade *back* to normal text needs it, since DPG reports an undeclared
+# colour as the sentinel `(-1, 0, 0, 1)` — a widget that never declared one has no destination of its own.
+DEFAULT_TEXT_COLOR = (255, 255, 255)
 
 # ---------------------------------------------------------------------------
 # Fonts & themes
@@ -290,6 +304,11 @@ def setup_themes() -> env:
     with dpg.theme() as global_theme:
         with dpg.theme_component(dpg.mvAll):
             # dpg.add_theme_color(dpg.mvThemeCol_TitleBgActive, (53, 168, 84))  # same color as Linux Mint default selection color in the green theme
+            # Declaring the text colour changes nothing on screen — it is the measured value of what DPG
+            # already renders. What it buys is a *readable* one: DPG has no getter for a colour in effect,
+            # so without this the value exists only inside the toolkit, and code that needs to fade back to
+            # normal text has nothing to aim at.
+            dpg.add_theme_color(dpg.mvThemeCol_Text, DEFAULT_TEXT_COLOR, category=dpg.mvThemeCat_Core)
             dpg.add_theme_style(dpg.mvStyleVar_FrameRounding, 6, category=dpg.mvThemeCat_Core)
             dpg.add_theme_style(dpg.mvStyleVar_WindowRounding, 8, category=dpg.mvThemeCat_Core)
             dpg.add_theme_style(dpg.mvStyleVar_ChildRounding, 8, category=dpg.mvThemeCat_Core)
