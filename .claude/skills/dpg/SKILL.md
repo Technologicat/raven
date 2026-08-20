@@ -71,6 +71,7 @@ commentary in a trailing `(…)`. `·` separates targets. That shape is not deco
 | size a drawlist, or build anything that scrolls over a lot of content | *Drawlists* → Never size a drawlist to a scroll extent — it will take the X session down |
 | build a table, or wonder why a long listing costs frame time | *Tables* → Rows are submitted every frame unless the table clips |
 | fill rows lazily — thumbnails, previews, anything per-row and expensive | *Tables* → To find which rows are on screen, ask a cell — never the row |
+| ask where on the screen a widget is — to place something beside it, or to aim a driven click at it | *Testing DPG code* → Windows and child windows have no `rect_min`, and `get_item_pos` answers a different question (`guiutils.get_widget_pos`; `CLAUDE.md` → "Live GUI testing on a shared desktop" carries the screen-coordinate half) |
 | write a test that drives DPG | *Testing DPG code* → DPG runs without a mapped window, so GUI code is unit-testable (mind the headless ceiling: no `render_dearpygui_frame`, so no layout) |
 | benchmark two GUI configurations, or otherwise build a second context in one process | *Testing DPG code* → Context recreation is not reliably safe once real widgets have rendered |
 | start a new app, or wire its startup sequence | *Raven DPG app structure* → Startup sequence · *Raven DPG app structure* → Layout and GUI |
