@@ -47,12 +47,18 @@ already decided.
   the next run drew them correctly. That is a card rendering half-empty in front of an audience, and it can
   happen to a chat message just as easily. The item in `TODO_DEFERRED.md` carries what is on the screen and
   why it points at the font atlas rather than at the text pipeline.
-- **The MD renderer itself gets overhauled, and that is not the same work as the two items above** (Juha,
-  2026-08-20). Both of those are framed as defects, and the block-rendering brief says outright that its
-  barriers are in Raven's own code rather than in the vendored renderer — so neither covers changing the
-  renderer. **Scope undecided as of filing**; what is decided is that parts of it are going to be rewritten
-  before Researchers' Night. Worth its own line now because two phase-1 items land in that code, and because
-  it is what the `vendor/` → `forks/` split under Cross-cutting is waiting to see.
+- **The renderer itself gets worked on, and that job is already written down** — the `markdown-renderer`
+  cluster in `TODO_DEFERRED.md`, nine items as of 2026-08-20. Several are renderer-internal rather than
+  Raven-side: no way for it to report that it has finished, inline-code backgrounds stranded on reflow,
+  tables, colour emoji as inline images. **Read the cluster before starting**; the two bullets above are its
+  demo-path subset, not the whole of it.
+  - **Parts of it are going to be rewritten before Researchers' Night** (Juha, 2026-08-20). Scope not yet
+    decided, which is why this is a pointer rather than a plan — but it is what the `vendor/` → `forks/`
+    split under Cross-cutting is waiting to see, since a rewrite changes whether the renderer can still take
+    an upstream update.
+  - Worth a look when the cluster is next read: **four items are marked `Gate: superseded`** and the
+    block-rendering brief accounts for three of them by name. Whether tables and the dead inline-`<think>`
+    handling are superseded by something else or were mis-set has not been checked.
 
 - **Librarian: in-flight AI turn bleeds into a new chat** (turn-sequencing race).
 - **Thinking mode is a wall of text on a projector.** Details under Librarian / Chat UI; here is why it is
