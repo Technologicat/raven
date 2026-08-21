@@ -1318,10 +1318,18 @@ Suggested order, with what each actually costs:
    - **Librarian is missing it, and gaining it is two pieces of work.** Its chat-log hotkeys act on the
      bottommost message whatever is on screen; they should act on the **bottommost at least partially
      visible** message at the current scroll position, and that message's button row then wants the mark.
-     - **The routing is the larger half, and it is separable.** It is scroll-position arithmetic against
-       message extents and a behaviour change a user notices on its own, so it deserves its own item rather
-       than being quietly absorbed here. What item 7 owes is the mark, and the mark can be put on whichever
-       message the routing picks.
+     - **The routing needs no new arithmetic — the toolset is already symmetric** (Juha, 2026-08-21).
+       `raven.common.gui.widgetfinder` carries all four predicates —
+       `is_completely_below_target_y` / `is_completely_above_target_y` and
+       `is_partially_below_target_y` / `is_partially_above_target_y` — and `binary_search_widget` takes the
+       direction as a parameter. Visualizer's *topmost fully visible* item is
+       `info_panel._find_next_or_prev_item`, which is the reference to read: Librarian's case is the mirror
+       image, `is_partially_above_target_y` against the bottom of the content area searching leftwards. It
+       is in `raven.common.gui` rather than in Visualizer, so it is already shared.
+     - **Still separable, and still its own item**: it changes which message the hotkeys act on, which
+       users notice on its own and which wants its own testing. But it is *calling the right functions*
+       rather than deriving anything, so it is small. What item 7 owes is the mark, and the mark goes on
+       whichever message the routing picks.
 
    **So the contract is *frame this widget*, not *tint this panel*.** Most call sites are child windows and
    combos; these two are a group and a button row, and it is the two that decide the mechanism. Worth
