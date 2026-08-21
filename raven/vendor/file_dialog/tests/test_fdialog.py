@@ -2513,3 +2513,69 @@ def test_the_sort_row_fits_the_minimum_width(make_dialog):
     finally:
         dpg.hide_item(dialog.tag)  # tag
         dpg.bind_font(0)  # the module's other tests are not measuring, but leave them as they were found
+
+
+def _clear_the_popup_stack():
+    """Take every modal in this context off the screen, and give ImGui a frame to notice.
+
+    A modal opened while another modal is on ImGui's popup stack never appears — the same trap the F1 path
+    works around by hiding the dialog before showing the card. This module's context is shared, and the
+    tests that put a dialog on the screen have no reason to take it off again, so anything needing a
+    *visible* modal has to start from an empty stack rather than from whatever ran before it.
+    """
+    for item in dpg.get_all_items():
+        if dpg.get_item_type(item) == "mvAppItemType::mvWindowAppItem":
+            dpg.hide_item(item)
+    for _ in range(2):
+        dpg.render_dearpygui_frame()
+
+
+@pytest.mark.gui
+def test_the_help_card_is_as_tall_as_the_keys_this_dialog_has(make_dialog, no_frame_wait):
+    """A dialog offering fewer keys gets a shorter card, and no card is left shorter than its content.
+
+    `_HELP_CARD_SIZE` is one constant while the rows are per instance, so without the fit every card is
+    the height of the fullest one and a `"dir-with-contents"` picker carries a skirt of empty window
+    below its table.
+
+    Carries the `gui` marker: a table has no geometry until frames are rendered, and DPG aborts the
+    process if asked to render without a mapped viewport. Frames are rendered here rather than waited
+    for — `no_frame_wait` neuters the waits, this being the thread that would have to render them — so
+    what is checked is the height the fit arrives at, not the placement, which needs a real render loop.
+    """
+    guiutils.setup_default_font(20)
+    fullest = make_dialog(multi_selection=True, filter_list=[".*"], file_filter=".*")
+    leanest = make_dialog(pick="dir-with-contents")
+    dpg.show_viewport()
+    try:
+        for _ in range(12):  # `HelpWindow` declines to build during a context's first ten frames
+            dpg.render_dearpygui_frame()
+        _clear_the_popup_stack()
+
+        heights = {}
+        for name, dialog in (("fullest", fullest), ("leanest", leanest)):
+            card = dialog._the_help_card()
+            card.show()  # builds the window; its placement is off, no frame having been rendered for it
+            for _ in range(6):
+                dpg.render_dearpygui_frame()
+            dialog._fit_help_card_to_content()
+            for _ in range(6):
+                dpg.render_dearpygui_frame()
+
+            heights[name] = card.height
+            assert card.height >= card.measure_content_height(), f"the {name} card clips its own last row"
+
+            # Closing the card puts its dialog back, and that dialog is a modal — which is precisely what
+            # would keep the next card off the screen. Take it away again, and give it a frame to leave
+            # ImGui's popup stack, before the second dialog is asked for anything.
+            card.hide()
+            dpg.hide_item(dialog.tag)  # tag
+            for _ in range(2):
+                dpg.render_dearpygui_frame()
+
+        assert heights["leanest"] < heights["fullest"], (
+            f"both cards came out {heights['fullest']} px tall; the leaner one has two fewer rows to show")
+    finally:
+        for dialog in (fullest, leanest):
+            dpg.hide_item(dialog.tag)  # tag
+        dpg.bind_font(0)  # the module's other tests are not measuring, but leave them as they were found

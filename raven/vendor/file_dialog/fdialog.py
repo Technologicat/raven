@@ -41,21 +41,22 @@ _KEY_PAGE_DOWN = 518
 # a bound rather than an estimate: the point is to fail with a log line instead of looping forever.
 _FIELD_DEACTIVATION_FRAMES = 30
 
-# The help card's size, in pixels. `HelpWindow` builds a fixed-size window with no scrollbar, so content
-# that does not fit is clipped away silently — a row added past what fits needs the height raised with it,
-# and a column needs the width.
+# The size, in pixels, the help card is *built* at. `HelpWindow` builds a fixed-size window with no
+# scrollbar, so content that does not fit is clipped away silently — a column added past what fits needs
+# the width raised with it.
 #
-# **It is nearly full: about 23 px of slack against a 30 px row pitch**, measured 2026-08-21 by rendering
-# the tallest configuration the card has — multi-selection, a type filter, files to make tiles of, and a
-# places panel, thirty entries across the two columns. So there is room for **no** further row without
-# raising the height, and a cell that wraps to two lines costs as much as a row.
-#
-# **Measure it with the app's fonts booted.** A probe that goes straight from `setup_dearpygui` to building
-# widgets renders in ImGui's built-in font, which is both narrower and shorter than OpenSans — it reported
-# 190 px of slack here, eight times the truth — and has no glyph outside ASCII, so text containing an
-# em-dash comes back as `?` and looks like a bug in the app. `guiutils.bootup(font_size=...)`, before
-# `create_viewport`, is what makes a rendered measurement mean anything.
+# The width is a tuned figure and the only one that survives to the screen. The height does not:
+# `_fit_help_card_to_content` measures the built table on first show and replaces it, because the card's
+# rows are per instance while a constant is not. So this height governs only the frames before the fit,
+# and stands only if the measurement is unavailable — it wants to be roughly right rather than exact. 640
+# is what the tallest configuration measures at — multi-selection, a type filter, files to make tiles of,
+# and a places panel, which is every optional row the card has — so no configuration is built too short.
 _HELP_CARD_SIZE = (1250, 640)
+
+# How many times `_fit_help_card_to_content` may measure the card before settling for what it has. Two
+# would do for every configuration measured so far; three is one spare, and the loop stops as soon as the
+# answer repeats, so the cap costs nothing where it is not needed.
+_HELP_CARD_FIT_PASSES = 3
 
 
 # The shortcuts the places panel offers, in the order they are shown: the label, which is also the folder
@@ -2442,8 +2443,37 @@ class FileDialog:
                                                     # are.
                                                     label=f"{self.title} — keyboard",
                                                     handle_own_hotkeys=False,
+                                                    on_show=self._fit_help_card_to_content,
                                                     on_hide=self._on_help_card_hidden)
         return self._help_window
+
+    def _fit_help_card_to_content(self) -> None:
+        """Trim the card to the rows this dialog actually offers.
+
+        `_HELP_CARD_SIZE` is one constant and the card's content is per instance, so a height that fits the
+        fullest configuration leaves every other one with a skirt of empty window below the table — 77 px
+        of it in a `"dir-with-contents"` picker offering neither multi-selection nor a type filter, which
+        is Cherrypick's card.
+
+        Counting rows does not answer it. Several cells wrap to two lines and which ones do depends on the
+        column widths the table computes, so a row count predicted a 30 px difference between those two
+        configurations where the real one is 77.
+
+        Runs on every show and does its work on the first: the content is built once and never changes, so
+        every later call spends one frame confirming the height the card already has, and stops.
+        """
+        card = self._help_window
+        for _ in range(_HELP_CARD_FIT_PASSES):
+            # A table's column widths settle over more frames than the one `show` spends placing the card,
+            # and which cells wrap to two lines follows from those widths — so the first thing there is to
+            # measure is a layout still on its way somewhere. The fullest configuration measured 618 px on
+            # that frame against 640 settled, which is a wrapped line's worth of card cut off the bottom.
+            # Spend a frame, ask again, and stop when the answer stops moving.
+            guiutils.split_frame(operation="file dialog: settling the help card's layout", required=False)
+            height = card.measure_content_height()
+            if height is None or height == card.height:
+                break
+            card.height = height  # the property recenters, the height it was placed for having changed
 
     def _show_help_card(self) -> None:
         """F1: put the dialog away and show the card of its keys.

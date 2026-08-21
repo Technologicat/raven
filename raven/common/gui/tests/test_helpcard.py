@@ -78,3 +78,25 @@ def test_showing_a_card_before_the_gui_has_settled_reports_that_it_did_not(reque
         assert not card.is_visible()
     finally:
         dpg.destroy_context()
+
+
+def test_a_card_that_was_never_built_has_no_measurable_content(request):
+    """What a caller would size the window to is layout's answer, and layout needs a rendered frame.
+
+    The same condition as above, and the answer has to be `None` rather than a number: a caller asks this
+    in order to resize a window, so an invented figure would be acted on. The measured case needs frames
+    and so lives with the `gui` tests, in `raven/vendor/file_dialog/tests/test_fdialog.py`.
+    """
+    dpg.create_context()
+    dpg.create_viewport(width=100, height=100)  # never shown: tests must not steal focus
+    dpg.setup_dearpygui()
+    try:
+        with dpg.window(tag=f"reference_{request.node.name}"):  # tag
+            pass
+        card = helpcard.HelpWindow(hotkey_info=[env(key_indent=0, key="F1", action_indent=0, action="Help", notes="")],
+                                   width=400, height=200,
+                                   reference_window=f"reference_{request.node.name}",  # tag
+                                   themes_and_fonts=env(font_size=20))
+        assert card.measure_content_height() is None
+    finally:
+        dpg.destroy_context()

@@ -164,8 +164,8 @@ class HelpWindow:
         """
         self.gui_uuid = str(uuid.uuid4())  # used in GUI widget tags
         self.hotkey_info = hotkey_info
-        self.width = width
-        self.height = height
+        self._width = width
+        self._height = height
         self.reference_window = reference_window
 
         self.themes_and_fonts = themes_and_fonts
@@ -192,8 +192,43 @@ class HelpWindow:
         self.handle_own_hotkeys = handle_own_hotkeys
 
         self._window = None
+        self._content_group = None
 
         self._initialize_class()
+
+    def _apply_size(self) -> None:
+        """Push the current size onto the window, if there is one yet.
+
+        Recentering is part of this rather than left to the caller. `show` and `reposition` both keep the
+        card centered on its reference window, so a resize that quietly stopped doing so would leave the
+        caller repairing an invariant it had no way to know it had disturbed — and no public way to repair,
+        since centering on a size DPG has not laid out yet is exactly what `reposition` spends a rendered
+        frame on. Only while the card is on screen: recentering shows the window as a side effect of
+        measuring it, which would pop a hidden card onto the screen.
+        """
+        if self._window is None:  # not built yet; `_render` reads the size when it builds
+            return
+        dpg.configure_item(self._window, width=self._width, height=self._height)
+        if self.is_visible():
+            self.reposition(_force=True)
+
+    def _get_width(self) -> int:
+        return self._width
+    def _set_width(self, width: int) -> None:
+        if width != self._width:
+            self._width = width
+            self._apply_size()
+    width = property(fget=_get_width, fset=_set_width,
+                     doc="Width of the help window, in pixels. Read/write; setting it recenters the window.")
+
+    def _get_height(self) -> int:
+        return self._height
+    def _set_height(self, height: int) -> None:
+        if height != self._height:
+            self._height = height
+            self._apply_size()
+    height = property(fget=_get_height, fset=_set_height,
+                      doc="Height of the help window, in pixels. Read/write; setting it recenters the window.")
 
     def _render(self) -> None:
         """Construct the GUI. Called automatically when the window is shown for the first time."""
@@ -230,8 +265,8 @@ class HelpWindow:
                                      no_resize=True,
                                      no_scrollbar=True,
                                      no_scroll_with_mouse=True,
-                                     width=self.width,
-                                     height=self.height)
+                                     width=self._width,
+                                     height=self._height)
 
         if self.gui_font is not None:
             dpg.bind_item_font(help_window, self.gui_font)
@@ -297,6 +332,7 @@ class HelpWindow:
             logger.info("HelpWindow._render: No user extras renderer specified, skipping.")
 
         self._window = help_window
+        self._content_group = help_group
         logger.info("HelpWindow._render: Done.")
 
     def show(self) -> bool:
@@ -352,6 +388,34 @@ class HelpWindow:
         if self._window is None:
             return False
         return dpg.is_item_visible(self._window)
+
+    def measure_content_height(self) -> int | None:
+        """The window height that would exactly fit this card's content, in pixels.
+
+        Measured from the window's top edge, so the title bar is included and the answer is directly
+        comparable with `height`. The content ends in a spacer, which is what stands in for bottom padding.
+
+        `None` while there is nothing to measure: the card has not been built, or has not yet been drawn.
+        Layout is what produces geometry. `show` renders the card for a frame before it places it, so an
+        `on_show` handler is the earliest point at which there is an answer.
+
+        Nothing here acts on the number — the window keeps the size it was given. This is for a caller
+        whose card holds a different set of rows in different instances, and who would otherwise carry one
+        height tuned for the tallest of them.
+        """
+        if self._window is None or self._content_group is None:
+            return None
+        content_height = dpg.get_item_rect_size(self._content_group)[1]
+        if not content_height:  # a group that has never been laid out reports a zero rect
+            return None
+        # The group's own position, which is relative to the enclosing window, is the title bar plus the
+        # window's top padding — measured rather than assumed, both being font-size dependent. Deliberately
+        # not the difference of two viewport coordinates: `rect_min` is where the group was drawn on the
+        # last frame, so a window that has been moved since (which is exactly what `show` does before it
+        # calls `on_show`) would have the two halves of that subtraction a frame apart. A parent-relative
+        # position does not move when the window does.
+        content_top = dpg.get_item_pos(self._content_group)[1]
+        return int(content_top + content_height)
 
     def reposition(self, _force: bool = False) -> None:
         """Recenter the help window on its reference window.
