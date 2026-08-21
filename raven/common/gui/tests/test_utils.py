@@ -156,3 +156,49 @@ def test_get_widget_pos_is_viewport_coordinates_however_deeply_nested(dpg_contex
         assert seen[0] != seen[1]  # ...and the rendered position really did move
     finally:
         dpg.delete_item("probe_window")  # tag
+
+
+@pytest.mark.gui
+def test_a_park_has_to_be_renewed_every_frame_to_hold(dpg_context):
+    """ImGui pulls a parked window back inside the viewport on the frame after it was positioned.
+
+    Parking a window offscreen is how a caller measures one before placing it, and the pattern is only
+    sound for a single frame: ImGui clamps a window whose position did not come through the API that
+    frame, so a settle spanning several frames draws the window on screen for all but the first of them.
+    `park_offscreen` says so, and this is what holds it — the failure it guards is a tooltip or a help
+    card flashing in the corner, which no assertion elsewhere would notice.
+
+    The reference is read off a *child* item's `rect_min`, a true viewport position: a window has no
+    `rect_min`, and its `get_item_pos` reports the position that was set rather than the one drawn, so it
+    cannot tell the two behaviours apart at all.
+
+    Carries the `gui` marker: nothing has a drawn position until frames are rendered, and DPG aborts the
+    process if asked to render without a mapped viewport.
+    """
+    dpg.show_viewport()
+    try:
+        with dpg.window(tag="park_probe", width=600, height=400):
+            dpg.add_text("content", tag="park_probe_text")  # tag
+        for _ in range(3):
+            dpg.render_dearpygui_frame()
+
+        def drawn_x_over(frames, renew):
+            seen = []
+            guiutils.park_offscreen("park_probe")  # tag
+            for _ in range(frames):
+                if renew:
+                    guiutils.park_offscreen("park_probe")  # tag
+                dpg.render_dearpygui_frame()
+                seen.append(dpg.get_item_rect_min("park_probe_text")[0])  # tag
+            return seen
+
+        edge = dpg.get_viewport_client_width()
+        parked_once = drawn_x_over(3, renew=False)
+        renewed = drawn_x_over(3, renew=True)
+
+        assert parked_once[0] >= edge, "the frame right after positioning is the one park that holds"
+        assert min(parked_once[1:]) < edge, ("nothing was clamped, so this fixture cannot tell a renewed "
+                                             "park from an abandoned one")
+        assert min(renewed) >= edge, f"a renewed park was still pulled on screen: {renewed} against {edge}"
+    finally:
+        dpg.delete_item("park_probe")  # tag

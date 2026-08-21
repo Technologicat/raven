@@ -500,12 +500,20 @@ rather than leaving a corner, so a multi-frame settle draws the whole window in 
 `helpcard.HelpWindow.settle_offscreen` is the packaged form — set the position, show, wait one frame — and
 `fdialog._fit_help_card_to_content` calls it once per measuring pass for this reason.
 
-**Two consequences for code already in the tree.** Raven's existing parks — the annotation tooltip, the
-subtitle in `reposition_subtitle` — park once and then wait, so a 19 px corner of each is on screen for the
-frames after the first. Nobody has reported seeing it, which is what 19 px of an unlit window looks like,
-but it is there. And **`get_item_pos` is no use for catching this**: it reports the position that was *set*,
-so it says `(1500, 1000)` for a window ImGui is drawing at `(247, 360)`. Read the drawn position off a child
-item's `rect_min`, or take a screenshot.
+**How exposed the rest of the tree is, measured rather than assumed.** The rule bites a park only if it
+spends a *second* frame, and most do not: `wait_for_resize` returns after **one** frame in the ordinary case
+(measured 2026-08-21, logged by the function itself), so the annotation tooltip and `reposition_subtitle` —
+one `split_frame` each — are not reached by this. `tooltip.Tooltip` is the one that deliberately spends two,
+`_SETTLE_FRAMES` being 2, so its second frame is exposed in principle. In practice nobody has seen a
+tooltip glitch, and no probe written here reproduced one; the parks are renewed now because a park that is
+correct only by accident of timing is worth two lines to make correct outright, which is a weaker claim
+than a bug fixed.
+
+**`get_item_pos` is no use for catching any of this**: it reports the position that was *set*, so it says
+`(1500, 1000)` for a window ImGui is drawing at `(247, 360)`. Read the drawn position off a child item's
+`rect_min`, or take a screenshot. Held by the `gui`-marked
+`test_a_park_has_to_be_renewed_every_frame_to_hold` in `raven/common/gui/tests/test_utils.py`, which
+measures the renewed and abandoned parks in the same run so the fixture cannot stop discriminating.
 
 ## A hidden root window costs nothing per frame
 

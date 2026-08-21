@@ -15,7 +15,7 @@ __all__ = ["bootup", "load_extra_font",  # high-level bootup API, you usually wa
            "compute_zoom_to_fit",  # re-exported from layout_math
            "is_render_thread", "split_frame",  # frame waiting, guarded against deadlock
            "wait_for_resize",
-           "offscreen_position", "recenter_window",
+           "park_offscreen", "recenter_window",
            "compute_tooltip_position_scalar",  # re-exported from layout_math
            "add_toolbar_separator",
            "get_pixels_per_plotter_data_unit",
@@ -630,12 +630,18 @@ def split_frame(*, operation: str, required: bool = True) -> bool:
     return True
 
 def wait_for_resize(widget: Union[str, int],
-                    wait_frames_max: int = 10) -> bool:
+                    wait_frames_max: int = 10,
+                    *,
+                    keep_parked: bool = False) -> bool:
     """Wait until the on-screen size of `widget` (DPG tag or ID) changes.
 
     If `wait_frames_max` frames have elapsed without the size changing, return.
 
     Return `True` if the size changed, `False` otherwise.
+
+    `keep_parked`: pass `True` when the caller has parked the widget offscreen to resize it unseen. The
+                   park is then renewed before each frame waited, without which every frame but the first
+                   is drawn back inside the viewport — see `park_offscreen`.
 
     Waiting *is* the operation here, so calling this from the render loop thread raises
     `RuntimeError` instead of hanging. See `split_frame`.
@@ -643,6 +649,8 @@ def wait_for_resize(widget: Union[str, int],
     waited = 0
     old_size = get_widget_size(widget)
     while waited < wait_frames_max:
+        if keep_parked:
+            park_offscreen(widget)
         split_frame(operation=f"wait_for_resize: autosize of widget {widget}")  # let the autosize happen
         waited += 1
 
@@ -654,14 +662,21 @@ def wait_for_resize(widget: Union[str, int],
         logger.debug(f"wait_for_resize: timeout ({wait_frames_max} frames) when waiting for resize of DPG widget {widget}")
     return False
 
-def offscreen_position() -> Tuple[int, int]:
-    """A window position at which nothing will be seen: the viewport's bottom-right corner.
+def park_offscreen(widget: Union[str, int]) -> None:
+    """Move `widget` (DPG ID or tag) to where nothing will be seen: the viewport's bottom-right corner.
 
-    A window put here has its top-left corner at the far corner of the visible area, so the whole of it
-    falls outside however large it is. That is what makes a *drawn* window invisible — which is the only
-    way to give one geometry, since a hidden item is not laid out at all.
+    Its top-left corner then sits at the far corner of the visible area, so the whole of it falls outside
+    however large it is. This is how a window is given geometry without being seen — the only way, since a
+    hidden item is not laid out at all, so hiding it merely postpones the badly-sized frame.
+
+    **A park lasts one frame, so renew it before every frame you spend parked.** ImGui clamps a window back
+    inside the viewport on any frame whose position did not come through the API, and only the frame right
+    after this call is exempt. Measured 2026-08-21: a modal is pulled *fully* into view, an ordinary window
+    to 19 px shy of the corner, and `no_move` exempts neither. `wait_for_resize(..., keep_parked=True)` and
+    `helpcard.HelpWindow.settle_offscreen` are the two packaged forms; a per-frame state machine such as
+    `tooltip.Tooltip` calls this on each of its settling frames instead.
     """
-    return (dpg.get_viewport_client_width(), dpg.get_viewport_client_height())
+    dpg.set_item_pos(widget, (dpg.get_viewport_client_width(), dpg.get_viewport_client_height()))
 
 def recenter_window(thewindow: Union[str, int], *, reference_window: Union[str, int], update_window_size: bool = True) -> None:
     """Reposition `thewindow` (DPG ID or tag), so that it is centered on `reference_window`.
@@ -693,7 +708,9 @@ def recenter_window(thewindow: Union[str, int], *, reference_window: Union[str, 
         # reference is the maximized main window, which is the usual case and why this went unnoticed —
         # but a window centered on something smaller (a dialog offering a help card) parks in the middle
         # of the screen and is drawn there for the frame below, as a corner of itself.
-        dpg.set_item_pos(thewindow, offscreen_position())
+        #
+        # One frame is spent parked here, which is exactly what a park is good for; see `park_offscreen`.
+        park_offscreen(thewindow)
         dpg.show_item(thewindow)
         logger.debug(f"recenter_window: After show command: Window is visible? {dpg.is_item_visible(thewindow)}.")
         # Not required: without the frame we center on the pre-autosize size, so the window lands

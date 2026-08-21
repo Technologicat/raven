@@ -243,8 +243,7 @@ class Tooltip:
             applied = False
             with guiutils.nonexistent_ok():
                 if dpg.get_value(self.caption) != pending:
-                    dpg.set_item_pos(self.window, [dpg.get_viewport_client_width(),
-                                                   dpg.get_viewport_client_height()])  # offscreen, but drawn
+                    guiutils.park_offscreen(self.window)  # offscreen, but drawn
                     dpg.set_value(self.caption, pending)
                     dpg.show_item(self.window)
                     applied = True
@@ -257,6 +256,13 @@ class Tooltip:
 
         with self._text_lock:
             remaining, self._settle_countdown = self._settle_countdown, max(0, self._settle_countdown - 1)
+
+        if remaining > 1:  # more settling to come, so renew the park: it lasts exactly one frame
+            # Without this, every settling frame but the first is drawn back inside the viewport — ImGui
+            # clamps a window whose position did not come through the API that frame, so the tooltip
+            # appears as a 19 px corner of itself in the bottom right. See `guiutils.park_offscreen`.
+            with guiutils.nonexistent_ok():
+                guiutils.park_offscreen(self.window)
 
         if remaining == 1:  # the settle frames have been drawn; the reported size is now the new one
             with guiutils.nonexistent_ok():

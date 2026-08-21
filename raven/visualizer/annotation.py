@@ -373,11 +373,13 @@ def _render_worker(*, task_env, env=None):
                 # This reduces flickering e.g. when clicking on a datapoint, only changing its selection status.
                 if mouse_hover_set_changed:
                     w, h = dpg.get_item_rect_size("main_window")  # tag
-                    dpg.set_item_pos("annotation_tooltip_window", [w, h])  # tag  # offscreen, but not hidden -> will be rendered -> triggers the DPG autosize mechanism
+                    guiutils.park_offscreen("annotation_tooltip_window")  # tag  # offscreen, but not hidden -> will be rendered -> triggers the DPG autosize mechanism
                     dpg.show_item("annotation_tooltip_window")  # tag
 
                     # Tooltip window dimensions after autosizing not available yet, so we need to wait until we can compute the final position the tooltip.
-                    guiutils.wait_for_resize("annotation_tooltip_window")  # tag
+                    # `keep_parked`, because a park lasts one frame and this waits several: without it every
+                    # frame after the first is drawn back inside the viewport, as a corner of the tooltip.
+                    guiutils.wait_for_resize("annotation_tooltip_window", keep_parked=True)  # tag
                     tooltip_size = dpg.get_item_rect_size("annotation_tooltip_window")  # tag
 
                     # Position the tooltip elegantly, trying to keep the whole tooltip within the viewport area.

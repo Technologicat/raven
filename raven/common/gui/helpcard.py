@@ -377,15 +377,15 @@ class HelpWindow:
         these before calling `on_show`; a caller settling a layout that takes several frames calls this
         once per frame, which is also what keeps the card out of sight:
 
-        **A park lasts exactly one frame.** ImGui clamps a window back inside the viewport on any frame
-        where its position did not come through the API, and only the frame right after `set_item_pos` is
-        exempt. Measured 2026-08-21: a modal is pulled *fully* on screen, an ordinary window to 19 px shy
-        of the corner. So the position is re-set here every time rather than once at the start of a settle.
+        **A park lasts exactly one frame**, which is why the position is re-set on every call rather than
+        once at the start of a settle: ImGui pulls a window back inside the viewport on any frame whose
+        position did not come through the API, and a modal is pulled *fully* into view. See
+        `guiutils.park_offscreen`.
 
         The wait is not required: without it the card is merely unmeasurable, which costs a caller its
         chance to resize and nothing else.
         """
-        dpg.set_item_pos(self._window, guiutils.offscreen_position())
+        guiutils.park_offscreen(self._window)
         dpg.show_item(self._window)
         guiutils.split_frame(operation="help card: laying the card out where it cannot be seen", required=False)
 
