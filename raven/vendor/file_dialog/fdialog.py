@@ -2461,6 +2461,9 @@ class FileDialog:
 
         Runs on every show and does its work on the first: the content is built once and never changes, so
         every later call spends one frame confirming the height the card already has, and stops.
+
+        `show` calls this while the card is parked out of sight, so the frames spent settling are drawn
+        where nobody is looking and the card appears once, at the size it keeps.
         """
         card = self._help_window
         for _ in range(_HELP_CARD_FIT_PASSES):
@@ -2468,8 +2471,9 @@ class FileDialog:
             # and which cells wrap to two lines follows from those widths — so the first thing there is to
             # measure is a layout still on its way somewhere. The fullest configuration measured 618 px on
             # that frame against 640 settled, which is a wrapped line's worth of card cut off the bottom.
-            # Spend a frame, ask again, and stop when the answer stops moving.
-            guiutils.split_frame(operation="file dialog: settling the help card's layout", required=False)
+            # Spend a frame, ask again, and stop when the answer stops moving. Each frame is spent with the
+            # card parked out of sight, which `settle_offscreen` has to renew per frame — see its docstring.
+            card.settle_offscreen()
             height = card.measure_content_height()
             if height is None or height == card.height:
                 break

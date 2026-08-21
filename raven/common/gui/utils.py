@@ -15,7 +15,7 @@ __all__ = ["bootup", "load_extra_font",  # high-level bootup API, you usually wa
            "compute_zoom_to_fit",  # re-exported from layout_math
            "is_render_thread", "split_frame",  # frame waiting, guarded against deadlock
            "wait_for_resize",
-           "recenter_window",
+           "offscreen_position", "recenter_window",
            "compute_tooltip_position_scalar",  # re-exported from layout_math
            "add_toolbar_separator",
            "get_pixels_per_plotter_data_unit",
@@ -654,6 +654,15 @@ def wait_for_resize(widget: Union[str, int],
         logger.debug(f"wait_for_resize: timeout ({wait_frames_max} frames) when waiting for resize of DPG widget {widget}")
     return False
 
+def offscreen_position() -> Tuple[int, int]:
+    """A window position at which nothing will be seen: the viewport's bottom-right corner.
+
+    A window put here has its top-left corner at the far corner of the visible area, so the whole of it
+    falls outside however large it is. That is what makes a *drawn* window invisible — which is the only
+    way to give one geometry, since a hidden item is not laid out at all.
+    """
+    return (dpg.get_viewport_client_width(), dpg.get_viewport_client_height())
+
 def recenter_window(thewindow: Union[str, int], *, reference_window: Union[str, int], update_window_size: bool = True) -> None:
     """Reposition `thewindow` (DPG ID or tag), so that it is centered on `reference_window`.
 
@@ -680,9 +689,11 @@ def recenter_window(thewindow: Union[str, int], *, reference_window: Union[str, 
     # Render offscreen so we get the final size. Only needed if the size can change.
     if update_window_size:
         logger.debug("recenter_window: Updating window size.")
-        dpg.set_item_pos(thewindow,
-                         (reference_window_w,
-                          reference_window_h))
+        # The park has to be the *viewport's* corner, not the reference window's. They coincide when the
+        # reference is the maximized main window, which is the usual case and why this went unnoticed —
+        # but a window centered on something smaller (a dialog offering a help card) parks in the middle
+        # of the screen and is drawn there for the frame below, as a corner of itself.
+        dpg.set_item_pos(thewindow, offscreen_position())
         dpg.show_item(thewindow)
         logger.debug(f"recenter_window: After show command: Window is visible? {dpg.is_item_visible(thewindow)}.")
         # Not required: without the frame we center on the pre-autosize size, so the window lands

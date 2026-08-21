@@ -199,18 +199,14 @@ class HelpWindow:
     def _apply_size(self) -> None:
         """Push the current size onto the window, if there is one yet.
 
-        Recentering is part of this rather than left to the caller. `show` and `reposition` both keep the
-        card centered on its reference window, so a resize that quietly stopped doing so would leave the
-        caller repairing an invariant it had no way to know it had disturbed — and no public way to repair,
-        since centering on a size DPG has not laid out yet is exactly what `reposition` spends a rendered
-        frame on. Only while the card is on screen: recentering shows the window as a side effect of
-        measuring it, which would pop a hidden card onto the screen.
+        Placement is deliberately *not* part of this, and `show` is why: it resizes between parking the
+        card and placing it, so a setter that placed the card would place it twice — once for a size it is
+        about to stop having, in view of the reader. Resizing a card that is already up therefore leaves it
+        where it was, and `reposition` is what re-centers it.
         """
         if self._window is None:  # not built yet; `_render` reads the size when it builds
             return
         dpg.configure_item(self._window, width=self._width, height=self._height)
-        if self.is_visible():
-            self.reposition(_force=True)
 
     def _get_width(self) -> int:
         return self._width
@@ -219,7 +215,8 @@ class HelpWindow:
             self._width = width
             self._apply_size()
     width = property(fget=_get_width, fset=_set_width,
-                     doc="Width of the help window, in pixels. Read/write; setting it recenters the window.")
+                     doc="Width of the help window, in pixels. Read/write. Setting it while the card is up "
+                         "leaves the card where it is; call `reposition` to re-center it.")
 
     def _get_height(self) -> int:
         return self._height
@@ -228,7 +225,8 @@ class HelpWindow:
             self._height = height
             self._apply_size()
     height = property(fget=_get_height, fset=_set_height,
-                      doc="Height of the help window, in pixels. Read/write; setting it recenters the window.")
+                      doc="Height of the help window, in pixels. Read/write. Setting it while the card is up "
+                          "leaves the card where it is; call `reposition` to re-center it.")
 
     def _render(self) -> None:
         """Construct the GUI. Called automatically when the window is shown for the first time."""
@@ -340,7 +338,8 @@ class HelpWindow:
 
         This also auto-centers the help window on the reference window.
 
-        The `on_show` handler, if set, will be called.
+        The `on_show` handler, if set, will be called — while the card is drawn but parked out of sight, so
+        a handler that resizes it (to fit its content, say) does so before the reader sees anything.
 
         `False` means the GUI has not run long enough to build the card yet (the first few frames after app
         start), and nothing was done. Callers that hide something *behind* the card need this answer; a
@@ -355,14 +354,40 @@ class HelpWindow:
         if self._window is None:
             logger.info("HelpWindow.show: Window was not built, nothing to show.")
             return False
-        self.reposition(_force=True)
-        dpg.show_item(self._window)  # For some reason, we need to do this *after* `set_item_pos` for a modal window, or this works only every other time (1, 3, 5, ...). Maybe a modal must be inside the viewport to successfully show it?
+        # Draw the card before deciding where it goes. A hidden item is not laid out, so a card that has
+        # never been drawn has no geometry — and `on_show` is where a caller measures it. Placing it first
+        # and letting the handler resize it afterwards costs two placements, of which the reader sees the
+        # wrong one: `fdialog`'s card appeared centered at its built height and then jumped to its fitted
+        # one, over four frames.
+        self.settle_offscreen()
         visible_help_window_instance = self
         if self.on_show is not None:
             self.on_show()
+        self.reposition(_force=True)
+        dpg.show_item(self._window)  # For some reason, we need to do this *after* `set_item_pos` for a modal window, or this works only every other time (1, 3, 5, ...). Maybe a modal must be inside the viewport to successfully show it?
         dpg.focus_item(self._window)
         logger.info("HelpWindow.show: Done.")
         return True
+
+    def settle_offscreen(self) -> None:
+        """Draw the card one frame, outside the viewport, so that it has geometry nobody had to see.
+
+        For `measure_content_height`, which needs the card laid out — a hidden item is not laid out at all
+        — and for anything else that has to look at the card before it is placed. `show` spends one of
+        these before calling `on_show`; a caller settling a layout that takes several frames calls this
+        once per frame, which is also what keeps the card out of sight:
+
+        **A park lasts exactly one frame.** ImGui clamps a window back inside the viewport on any frame
+        where its position did not come through the API, and only the frame right after `set_item_pos` is
+        exempt. Measured 2026-08-21: a modal is pulled *fully* on screen, an ordinary window to 19 px shy
+        of the corner. So the position is re-set here every time rather than once at the start of a settle.
+
+        The wait is not required: without it the card is merely unmeasurable, which costs a caller its
+        chance to resize and nothing else.
+        """
+        dpg.set_item_pos(self._window, guiutils.offscreen_position())
+        dpg.show_item(self._window)
+        guiutils.split_frame(operation="help card: laying the card out where it cannot be seen", required=False)
 
     def hide(self) -> None:
         """Close the help window, if it is open.
