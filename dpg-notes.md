@@ -477,6 +477,36 @@ Failing all of that, give auto-fit nothing to react to: a fixed-size child windo
 spacer sized to the largest state. Worth naming what that costs — the size stops changing *because it is
 always the largest state's size*, so a one-line message sits in a three-line box.
 
+## An offscreen park lasts exactly one frame — ImGui pulls the window back
+
+The standard way to measure a window before placing it is to park it outside the viewport, render, and read
+its size (see the autosize section above, and `guiutils.recenter_window`). **That park survives one frame.**
+ImGui clamps a window back inside the viewport on every frame whose position did not come through the API,
+and only the frame immediately after `set_item_pos` is exempt.
+
+Measured 2026-08-21 on DPG 2.3.1, a 600×400 window parked at the corner of a 1200×800 viewport, reading the
+position its content was actually drawn at:
+
+| window | parked once, frames 1–4 | position re-set every frame |
+|---|---|---|
+| modal, with title bar | offscreen, then **fully on screen** for every frame after | stays offscreen |
+| plain window | offscreen, then **19 px shy of the corner** | stays offscreen |
+| `no_title_bar` + `no_move` | offscreen, then 19 px shy of the corner | stays offscreen |
+
+`no_move` does not exempt a window, and a *modal* is the worst case by far: ImGui drags it fully into view
+rather than leaving a corner, so a multi-frame settle draws the whole window in the middle of the screen.
+
+**So a settle that spans more than one frame must re-park before each frame.**
+`helpcard.HelpWindow.settle_offscreen` is the packaged form — set the position, show, wait one frame — and
+`fdialog._fit_help_card_to_content` calls it once per measuring pass for this reason.
+
+**Two consequences for code already in the tree.** Raven's existing parks — the annotation tooltip, the
+subtitle in `reposition_subtitle` — park once and then wait, so a 19 px corner of each is on screen for the
+frames after the first. Nobody has reported seeing it, which is what 19 px of an unlit window looks like,
+but it is there. And **`get_item_pos` is no use for catching this**: it reports the position that was *set*,
+so it says `(1500, 1000)` for a window ImGui is drawing at `(247, 360)`. Read the drawn position off a child
+item's `rect_min`, or take a screenshot.
+
 ## A hidden root window costs nothing per frame
 
 Measured 2026-08-20 on DPG 2.3.1, with vsync off: 400 buttons alone, 400 with a

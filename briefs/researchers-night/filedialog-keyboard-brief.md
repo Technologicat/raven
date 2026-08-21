@@ -821,6 +821,29 @@ Pinned by `test_the_help_card_is_as_tall_as_the_keys_this_dialog_has` (`gui`-mar
 `test_fdialog.py`), which was checked against the code without the fit and fails there with both cards at
 640.
 
+**The settle was visible, and is not any more** — raised by Juha the same afternoon, before he had seen it,
+and he was right. Filming the first F1 frame by frame (geometry per rendered frame, and a screenshot of the
+app window per frame) showed four wrong frames before the right one: a corner of the card at the park
+position, then the *whole card centered at its built height*, then the corner again, then the fitted card.
+About 66 ms, with the card jumping between two places. Two causes, both now fixed:
+
+- **`recenter_window`'s "offscreen" park was the reference window's corner**, which is offscreen only when
+  the reference is the maximized main window. A card centered on a dialog parked in the middle of the
+  screen. It parks at the viewport's corner now (`guiutils.offscreen_position`), which fixes the same
+  latent flash for every help card in the constellation.
+- **The card was placed before `on_show` could resize it.** `HelpWindow.show` now draws the card parked,
+  calls `on_show` there, and places it afterwards — so a handler that resizes does so before anything is
+  seen.
+
+And one DPG fact that had to be measured before either worked: **an offscreen park lasts exactly one
+frame.** ImGui clamps a window back inside the viewport on any frame whose position did not come through
+the API, and a *modal* is dragged fully into view rather than left with a corner showing. So the settle
+re-parks per frame (`HelpWindow.settle_offscreen`). In `dpg-notes.md` under *Window sizing*, with the
+measurements and the note that Raven's other offscreen parks leave a 19 px corner on screen.
+
+Filmed again after: one visible transition, from nothing to the fitted card. So the fallback Juha proposed
+— hand-specified dimensions per call site, updated whenever the card changes — is not needed.
+
 ### Added 2026-08-21
 
 **Item 6 is built and live-tested**: the panel is selectables, Ctrl+B parks the caret on it, the six
