@@ -70,6 +70,17 @@ _INVISIBLE = (*COLOR[:3], 0)
 _pulse_lock = threading.Lock()
 _pulse = None  # gui_animation.PulsatingColor, while at least one mark is lit
 
+# **Nothing here may call the animator while holding `_pulse_lock`**, and the reason is a lock-order
+# inversion that is invisible in a single-threaded reading of either side.
+#
+# The animator holds its own lock across `render_frame`, so an animation that lights or darkens a mark —
+# which the focus follower does on every frame — reaches this module *already holding it*: animator lock,
+# then `_pulse_lock`. A mark switched from anywhere else (a key handler, a scroll poll, a background task)
+# arrives the other way round: `_pulse_lock`, then the animator's lock via `add` or `cancel`. Two threads
+# doing those at once is a deadlock, and one with no traceback and no log line — the GUI simply stops.
+#
+# So the lock guards the decision, and the animator is called after it is released.
+
 
 def join_pulse(theme_color_widget: Union[str, int]) -> None:
     """Have `theme_color_widget` breathe with every other keyboard mark on screen.
@@ -82,11 +93,14 @@ def join_pulse(theme_color_widget: Union[str, int]) -> None:
             # Created with this widget rather than empty, because `PulsatingColor` reads the colour it
             # breathes off the first widget it is given.
             dpg.set_value(theme_color_widget, COLOR)
-            _pulse = gui_animation.animator.add(
-                gui_animation.PulsatingColor(cycle_duration=PULSE_SECONDS,
-                                             theme_color_widget=theme_color_widget))
+            _pulse = gui_animation.PulsatingColor(cycle_duration=PULSE_SECONDS,
+                                                  theme_color_widget=theme_color_widget)
+            to_register = _pulse
         else:
             _pulse.attach(theme_color_widget)
+            to_register = None
+    if to_register is not None:
+        gui_animation.animator.add(to_register)
 
 
 def leave_pulse(theme_color_widget: Union[str, int]) -> None:
@@ -96,12 +110,15 @@ def leave_pulse(theme_color_widget: Union[str, int]) -> None:
     writing a colour nobody can see once a frame.
     """
     global _pulse
+    to_cancel = None
     with _pulse_lock:
         if _pulse is not None:
             _pulse.detach(theme_color_widget)
             if not _pulse.theme_color_widgets:
-                gui_animation.animator.cancel(_pulse)
+                to_cancel = _pulse
                 _pulse = None
+    if to_cancel is not None:
+        gui_animation.animator.cancel(to_cancel)
     # Written after leaving, not before: the animation runs on the render thread, so a colour written while
     # this widget is still attached is one the very next frame can overwrite.
     with guiutils.nonexistent_ok():

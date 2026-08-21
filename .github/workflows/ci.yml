@@ -32,6 +32,12 @@ jobs:
 
   test:
     needs: lint
+    # A hung test step otherwise runs to GitHub's default of six hours, and reads as "still running" the
+    # whole time — which is indistinguishable from a slow queue until someone goes and looks. The suite
+    # takes about three minutes on every runner, so twenty is a long way past slow and a long way short of
+    # a wasted afternoon. (Live case 2026-08-21: a Windows job sat in `Run tests` for a quarter of an hour
+    # while the other three had long since passed.)
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
