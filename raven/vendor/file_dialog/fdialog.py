@@ -700,9 +700,10 @@ class FileDialog:
             # spacing between them. Under-count it and the window's content overflows: DPG answers that
             # with a scrollbar, which takes its width off the right edge and clips the dialog there.
             #
-            # The button row is named rather than folded in, because it is the term that moves. 66 is what
-            # the measured 90 leaves once a 24 px button row is taken out of it.
-            info_px = 66 + self._OKCANCEL_ROW_HEIGHT
+            # The two rows that hold a bordered control are named rather than folded in, because they are
+            # the terms that move. 62 is what the measured 90 leaves once a 24 px button row and the type
+            # filter's original 24 px are taken out of it.
+            info_px = 62 + self._TYPE_FILTER_ROW_HEIGHT + self._OKCANCEL_ROW_HEIGHT
 
             # The places, resolved once. Held as data rather than as seven locals per branch: the two
             # `user_style` layouts were each spelling out the same seven lookups and then seven near-identical
@@ -723,7 +724,12 @@ class FileDialog:
                 with dpg.child_window(height=-info_px):
                     # main explorer header
                     with dpg.group():
-                        with dpg.group(horizontal=True):
+                        # Held so the caret's mark can be put on the row rather than on the field: the
+                        # field carries a theme of its own — the three-colour readout below — and DPG binds
+                        # one theme per item, so a mark bound to the field would displace it. Themes compose
+                        # down the parent chain, so the row supplies the border and the field keeps its
+                        # colours.
+                        with dpg.group(horizontal=True) as self._path_row:
                             self.button_refresh = dpg.add_image_button(self.img_refresh, tag=f"button_refresh_{self.instance_tag}")
                             with dpg.tooltip(self.button_refresh):
                                 dpg.add_text("Refresh the current folder listing [F5]")
@@ -764,7 +770,7 @@ class FileDialog:
                                 dpg.add_item_deactivated_handler(callback=self._on_path_field_deactivated)
                             dpg.bind_item_handler_registry(self.path_field, path_field_registry)
 
-                        with dpg.group(horizontal=True):
+                        with dpg.group(horizontal=True) as self._find_row:  # marked, not the field; see `_path_row`
                             search_hint = "Search files [Ctrl+F]" if not save_mode else "Filename to save as [Ctrl+F]"
                             self.search_field = dpg.add_input_text(hint=search_hint, callback=self._update_search, tag=f"ex_search_{self.instance_tag}", width=-1)
 
@@ -780,8 +786,12 @@ class FileDialog:
                         # Both views live here, one shown at a time. A container of their own, so the grid
                         # can be sized to the area the table would have filled — which is not known at
                         # construction, the shortcuts panel being resizable.
+                        # Bordered, where the other structural child windows here are not: this is the one
+                        # the caret can be parked in, and its border is what says so. It is invisible until
+                        # then — the mark owns the border colour and keeps it transparent while unlit — so
+                        # the border costs nothing on screen when the keys are elsewhere.
                         with dpg.child_window(tag=f"listing_area_{self.instance_tag}",  # tag
-                                              width=-1, height=-1, border=False, no_scrollbar=True):
+                                              width=-1, height=-1, border=True, no_scrollbar=True):
                             dpg.add_group(tag=f"grid_host_{self.instance_tag}", show=self._grid_mode)  # tag
 
                             # main explorer table header
@@ -864,7 +874,7 @@ class FileDialog:
                 #
                 # Borderless, unpadded and background-free, so the grouping costs nothing on screen.
                 with dpg.child_window(tag=f"type_filter_area_{self.instance_tag}",  # tag
-                                      width=-1, height=self.selec_height + 8,
+                                      width=-1, height=self._TYPE_FILTER_ROW_HEIGHT,
                                       show=self._type_filter_is_available(),
                                       border=False, no_scrollbar=True, no_scroll_with_mouse=True):
                     with dpg.group(horizontal=True):
@@ -926,6 +936,34 @@ class FileDialog:
             dpg.add_item_resize_handler(callback=lambda *_: self._relayout())
         dpg.bind_item_handler_registry(self.tag, resize_registry)  # tag
 
+        # The caret's mark, one per home. Nothing on screen used to say where the arrow keys would land,
+        # which was tolerable while there were two homes and is not with five.
+        #
+        # **It goes on the widget, not on the listing cursor.** The tempting version is to paint the cursor
+        # blue only while the listing has the keys, as a text box shows its caret only when focused, and it
+        # is wrong here: that cursor is not this dialog's focus indicator but *what Enter acts on*, from
+        # every home. The main flow is to type a fragment, watch the cursor jump to the first match and
+        # press Enter — so dimming it while the find field has the caret would hide the answer to "what am
+        # I about to open?" exactly when it is being asked.
+        #
+        # Two blue pulses can therefore be on at once, meaning different things: the mark where the keys
+        # are, the cursor at what Enter would do. They breathe in step, being driven by one animation.
+        self._home_marks = {CaretHome.FIELD: keyboardmark.Mark(self._find_row, item_type=dpg.mvInputText),
+                            CaretHome.PATH: keyboardmark.Mark(self._path_row, item_type=dpg.mvInputText),
+                            CaretHome.FILTER: keyboardmark.Mark(self.combo_file_filter),
+                            CaretHome.LISTING: keyboardmark.Mark(f"listing_area_{self.instance_tag}",  # tag
+                                                                 kind=keyboardmark.MarkKind.PANEL,
+                                                                 # It was borderless, and a bordered child window
+                                                                 # is padded — 8 px on every side, which the rows
+                                                                 # would otherwise pay for the mark.
+                                                                 padding=(0, 0))}
+        if self.user_style in (0, 1):  # the styles that have a places panel at all
+            # Present in the compact style too, where it can never light: that style has no cursor, so the
+            # caret never goes there. Cheaper than a second condition that has to agree with
+            # `_places_are_navigable` for ever.
+            self._home_marks[CaretHome.PLACES] = keyboardmark.Mark(f"shortcut_menu_{self.instance_tag}",  # tag
+                                                                   kind=keyboardmark.MarkKind.PANEL)
+
     # Widths reserved at the right end of the two bottom rows, so both can be re-aligned against a window
     # width that is not the one they were built at.
     #
@@ -934,6 +972,13 @@ class FileDialog:
     # point — the combo is meant to be as wide as the filter names need, not as wide as the window.
     _TYPE_FILTER_ROW_TAIL = 540
     _OKCANCEL_ROW_PADDING = 33  # matches the default theme: 3 * (8 outer + 3 inner)?
+
+    # The type filter's row, which holds a combo. Same arithmetic as the button row below and the same
+    # symptom: a child window clips what it holds, and ImGui sizes a combo as `font_size + 2 *
+    # FramePadding.y` — 26 px at the font size every app in the constellation uses, against the 24 this row
+    # used to be. The two missing pixels came off the bottom of the combo, where nothing was drawn until the
+    # keyboard mark put a border there and the border came out three-sided.
+    _TYPE_FILTER_ROW_HEIGHT = 28
 
     # A button is taller than a line of text or a combo, and this row holds buttons. ImGui sizes one as
     # `font_size + 2 * FramePadding.y` — 26 px at the font size every app in the constellation uses, which
@@ -2841,9 +2886,25 @@ class FileDialog:
         self._caret_home_now = home
         if was_places or home is CaretHome.PLACES:
             self._paint_place(self._places_cursor.current, True)
+        self._repaint_home_mark()
 
     _caret_home = property(fget=_get_caret_home, fset=_set_caret_home,
                            doc="Where this dialog is taking keys. See `CaretHome`.")
+
+    def _repaint_home_mark(self) -> None:
+        """Light the mark on the home that has the keys, and darken the rest."""
+        for home, mark in self._home_marks.items():
+            mark.lit = (home is self._caret_home_now)
+
+    def _darken_home_marks(self) -> None:
+        """Take every caret mark off, whatever `_caret_home` says.
+
+        For a dialog that is going off screen: the mark's pulsation is a frame's worth of work per frame,
+        and the home it names is still the one the next opening will resume in — so the flag is left alone
+        and only the paint is dropped.
+        """
+        for mark in self._home_marks.values():
+            mark.lit = False
 
     def _focus_field(self) -> None:
         """Put the caret back in the find field, where typing filters the listing."""
@@ -3010,6 +3071,9 @@ class FileDialog:
 
         # A dialog always opens ready to be typed into, whichever mode the previous one closed in.
         self._focus_field()
+        # Unconditionally, where `_focus_field` repaints only on a change: a dialog reopening in the home it
+        # closed in leaves the flag untouched, and the mark would come back dark.
+        self._repaint_home_mark()
 
     def _stop_grid_ticker(self):
         """Stop the grid's tick thread and wait for it to notice.
@@ -3040,9 +3104,10 @@ class FileDialog:
         **after the render loop has exited and before `dpg.destroy_context()`** — and *not* from
         `dpg.set_exit_callback`, for which see below.
 
-        Releases the cursor's pulsation, which is registered with the process-wide animator and would
-        outlive both this dialog and the DPG context its theme colours belong to; and — if the grid view was
-        ever switched to — a thumbnail decoder with its own threads and the tick thread that feeds it.
+        Releases the cursor's pulsation and the caret's marks, both registered with the process-wide
+        animator and both outliving this dialog and the DPG context their theme colours belong to; and — if
+        the grid view was ever switched to — a thumbnail decoder with its own threads and the tick thread
+        that feeds it.
 
         Safe on a dialog that was never opened, and safe to call twice, so a caller can list every dialog it
         built without tracking which ones the user actually reached.
@@ -3066,6 +3131,8 @@ class FileDialog:
         # this join in exactly the spot the paragraph above rules out — true however many callbacks DPG
         # allowed. And it allows one: the slot is process-wide, so a widget taking it would silently
         # replace the host app's and break the app's shutdown to fix its own.
+        for mark in self._home_marks.values():
+            mark.detach()
         self._stop_cursor_pulse()
         self._stop_grid_ticker()
         if self._grid is not None:
@@ -3107,6 +3174,7 @@ class FileDialog:
         self.selected_files.clear()
         self.shown_items.clear()
         # Released in the reverse of the order `show_file_dialog` acquires them.
+        self._darken_home_marks()
         self._stop_cursor_pulse()
         self._stop_grid_ticker()
 

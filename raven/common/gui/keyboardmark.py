@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 
 import enum
 import threading
-from typing import Sequence, Union
+from typing import Optional, Sequence, Tuple, Union
 
 from unpythonic import sym
 
@@ -145,7 +145,9 @@ class Mark:
     def __init__(self,
                  target: Union[str, int],
                  kind: MarkKind = MarkKind.FRAME,
-                 thickness: int = 2):
+                 item_type: int = dpg.mvAll,
+                 thickness: int = 2,
+                 padding: Optional[Tuple[int, int]] = None):
         """The blue pulse that says *the keyboard is here*, on one widget, switched by `lit`.
 
         `target`: DPG tag or ID of the widget to mark.
@@ -156,13 +158,36 @@ class Mark:
                   leaves that theme in place. Most call sites already have such a group.
 
                   Marking a container marks *every* matching descendant — every framed widget under a
-                  `FRAME`, every child window under a `PANEL`. For a row of buttons that is the intent.
+                  `FRAME`, every child window under a `PANEL`. For a row of buttons that is the intent;
+                  where it is not, narrow it with `item_type`.
 
         `kind`: See `MarkKind`. Which of the two border styles is set, or `DOT` for a glyph that is coloured
                 instead of outlined.
 
+        `item_type`: An `mvInputText`-style DPG item type constant, narrowing the mark to descendants of
+                     that type. Defaults to `dpg.mvAll`, which is everything.
+
+                     This is what lets a widget be marked in place, inside whatever row it already lives
+                     in: the file dialog's path field shares a row with two image buttons, and
+                     `item_type=dpg.mvInputText` bounds the mark to the field without a group having to be
+                     invented around it. Scoping a component this way still reaches descendants of the
+                     bound container — measured, since a type filter could plausibly have meant "the bound
+                     item, if it is of this type".
+
         `thickness`: Border width in pixels, for the two edge forms. Thin by default: the mark frames a
                      control the reader is looking at, rather than competing with it.
+
+        `padding`: `mvStyleVar_WindowPadding` for the target, or `None` (default) to leave it alone.
+
+                   Only `PANEL` has a use for this, and it is the one place adopting a mark is not free.
+                   A child window has to be created `border=True` to have an edge to recolour at all, and
+                   ImGui's border flag also switches *on* `WindowPadding` — measured 8 px on every side,
+                   against exactly 0 for a borderless child. So a panel converted for the sake of a mark
+                   silently loses 16 px of content area in each direction unless it passes `(0, 0)` here,
+                   which restores the borderless layout to the pixel.
+
+                   Not the default, because a panel that always had a border has that padding by design and
+                   would be reflowed by taking it away.
 
         A mark starts unlit, so a call site can build one alongside its widget and switch it later::
 
@@ -170,30 +195,73 @@ class Mark:
             ...
             self._mark.lit = (self._caret_home is CaretHome.PLACES)
 
+        `target` may also be `None`, for a mark that **moves** — one that says which of many similar things
+        the keys act on, where the many are rebuilt as the view changes and a theme apiece would be waste.
+        Assign to `target` to move it; see the property.
+
         Call `detach` when the marked widget goes away; a mark holds a DPG theme and, while lit, a place in
         the shared pulse.
         """
-        self.target = target
         self.kind = kind
+        self._target = None
+        self._previous_theme = None
         self._lit_now = False
-        self._lock = threading.Lock()
-
-        # Captured so `detach` can put back whatever was there. A target that already has one is a call
-        # site that should have marked its group instead — say so, since the loss is otherwise silent and
-        # shows up as a widget that quietly stops being styled.
-        self._previous_theme = dpg.get_item_theme(target)
-        if self._previous_theme is not None:
-            logger.warning(f"Mark.__init__: target '{target}' already has a theme, which this mark displaces until detached. Mark the enclosing group instead, so the two compose.")
+        self._lock = threading.RLock()  # `target` and `lit` reach each other
 
         with dpg.theme() as theme:
-            with dpg.theme_component(dpg.mvAll):
+            with dpg.theme_component(item_type):
                 if kind is MarkKind.DOT:
                     self._color_widget = dpg.add_theme_color(dpg.mvThemeCol_Text, _INVISIBLE)
                 else:
                     self._color_widget = dpg.add_theme_color(dpg.mvThemeCol_Border, _INVISIBLE)
                     dpg.add_theme_style(_BORDER_SIZE_STYLE[kind], thickness)
+                # Set once and left alone, unlike the colour: it is layout, and a layout that changed with
+                # the caret would make the panel's contents jump every time the keys moved.
+                if padding is not None:
+                    dpg.add_theme_style(dpg.mvStyleVar_WindowPadding, *padding)
         self._theme = theme
-        dpg.bind_item_theme(target, theme)
+
+        if target is not None:
+            self.target = target
+            # Only at construction. A widget that already has a theme is usually a call site that meant to
+            # mark the group around it — themes compose down the parent chain, so that keeps both — and the
+            # loss is otherwise silent, showing up as a widget that quietly stops being styled.
+            #
+            # A *move* says nothing, because a mark that moves between many similar widgets is the case
+            # where giving them all a common theme and displacing it in turn is the intended design, and a
+            # warning per move would be a warning per keystroke.
+            if self._previous_theme is not None:
+                logger.warning(f"Mark.__init__: target '{target}' already has a theme, which this mark displaces until detached. Mark the enclosing group instead, so the two compose.")
+
+    def _get_target(self) -> Optional[Union[str, int]]:
+        """Which widget currently wears this mark, or `None`."""
+        return self._target
+
+    def _set_target(self, target: Optional[Union[str, int]]) -> None:
+        """Move the mark to another widget, giving the old one back the theme it had."""
+        with self._lock:
+            if target == self._target:
+                return
+            # Darkened first, so that a mark being moved is never briefly lit on the widget it is leaving.
+            # Assigning `None` is how a caller says *nothing is current*, and a lit mark bound to nothing
+            # would be a pulse animating a colour no widget is wearing.
+            if target is None:
+                self.lit = False
+            if self._target is not None:
+                with guiutils.nonexistent_ok():
+                    dpg.bind_item_theme(self._target, self._previous_theme)
+            self._target = target
+            self._previous_theme = None
+            if target is not None:
+                self._previous_theme = dpg.get_item_theme(target)
+                dpg.bind_item_theme(target, self._theme)
+
+    target = property(fget=_get_target, fset=_set_target,
+                      doc="""Which widget wears this mark. Assign to move it; `None` takes it off and darkens it.
+
+                          The widget it leaves gets back whatever theme it had, so the common shape for a
+                          moving mark is to give every candidate one theme saying *not me* and let the mark
+                          displace it in turn.""")
 
     def _get_lit(self) -> bool:
         """Whether this mark is currently showing."""
@@ -219,9 +287,7 @@ class Mark:
         Call this when the marked widget goes away. Safe to call more than once, and safe when the widget
         is already gone.
         """
-        self.lit = False
-        with guiutils.nonexistent_ok():
-            dpg.bind_item_theme(self.target, self._previous_theme)
+        self.target = None  # which darkens it and gives the widget back its theme
         guiutils.maybe_delete_item(self._theme)
 
 
@@ -241,10 +307,9 @@ def install_focus_follower(widgets: Sequence[Union[str, int]],
     Returns the animation driving it, for `gui_animation.animator.cancel` if it should ever stop. The marks
     it holds are detached when it is cancelled.
     """
-    # Keyed by ID, because `dpg.get_focused_item` answers with one: a tag compared against it never matches,
-    # and never matching looks exactly like "nothing is focused".
-    marks = {(dpg.get_alias_id(widget) if isinstance(widget, str) else widget): Mark(widget, kind=kind, thickness=thickness)
-             for widget in widgets}
+    # Compared against *both* names DPG may answer with, since `get_focused_item` gives a tagged widget's
+    # alias and an untagged one's ID. See `guiutils.item_identifiers`.
+    marks = [(guiutils.item_identifiers(widget), Mark(widget, kind=kind, thickness=thickness)) for widget in widgets]
 
     class _FocusFollower(gui_animation.Animation):
         def __init__(self):
@@ -254,12 +319,12 @@ def install_focus_follower(widgets: Sequence[Union[str, int]],
 
         def render_frame(self, t: int) -> sym:
             focused = dpg.get_focused_item()
-            for item_id, mark in marks.items():
-                mark.lit = (item_id == focused)
+            for identifiers, mark in marks:
+                mark.lit = (focused in identifiers)
             return gui_animation.action_continue
 
         def finish(self) -> None:
-            for mark in marks.values():
+            for _identifiers_, mark in marks:
                 mark.detach()
 
     return gui_animation.animator.add(_FocusFollower())

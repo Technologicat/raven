@@ -8,7 +8,7 @@ __all__ = ["bootup", "load_extra_font",  # high-level bootup API, you usually wa
            "setup_default_font", "setup_icon_fonts", "setup_markdown", "setup_themes",  # granular low-level app bootup API
            "DISABLED_TEXT_COLOR", "DEFAULT_TEXT_COLOR",
            "nonexistent_ok",
-           "maybe_delete_item", "has_child_items",
+           "maybe_delete_item", "has_child_items", "item_identifiers",
            "get_widget_pos", "get_widget_size", "get_widget_relative_pos",
            "get_mouse_relative_pos", "is_mouse_inside_widget",
            "screen_to_content", "content_to_screen", "zoom_keep_point",  # re-exported from layout_math
@@ -433,6 +433,33 @@ def maybe_delete_item(item: Union[str, int]) -> None:
 def has_child_items(widget: Union[str, int]) -> bool:
     """Return whether `widget` (DPG tag or ID) has child items in any of its slots."""
     return any(len(dpg.get_item_children(widget, slot=slot)) for slot in range(4))
+
+def item_identifiers(widget: Union[str, int]) -> set:
+    """Return every name DPG may answer with for `widget` — its tag and its numeric ID, whichever exist.
+
+    For testing whether a widget DPG handed back *is* one you are holding, when you cannot control which
+    form arrives::
+
+        if dpg.get_focused_item() in item_identifiers(my_combo):
+            ...
+    """
+    # **A getter that returns a widget answers with its alias when it has one, and with its ID when it does
+    # not** — measured 2026-08-21 on `get_focused_item`, which came back as the string `'filter_combo'` for
+    # a tagged combo and as a bare `71` for the untagged window above it. Same convention as `add_*`
+    # returning the tag it was given, except that here the caller never chose the form.
+    #
+    # So an identity test against one name is right for some widgets and quietly wrong for the rest, and
+    # the failure mode is the bad kind: never matching is indistinguishable from the widget never being the
+    # one asked about, so the feature does nothing and reports nothing. Comparing against the set is what
+    # makes the question answerable without knowing which form DPG felt like using.
+    identifiers = {widget}
+    if isinstance(widget, str):
+        identifiers.add(dpg.get_alias_id(widget))
+    else:
+        alias = dpg.get_item_alias(widget)
+        if alias:  # `""` when the item has none
+            identifiers.add(alias)
+    return identifiers
 
 # ---------------------------------------------------------------------------
 # Widget geometry

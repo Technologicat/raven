@@ -83,6 +83,31 @@ def test_recenter_window_degrades_instead_of_raising(dpg_context):
 
 
 # --------------------------------------------------------------------------------
+# Recognizing a widget DPG handed back
+
+def test_a_widget_is_recognized_by_either_name_dpg_may_answer_with(dpg_context, request):
+    """A getter returns an alias for a tagged item and an ID for an untagged one.
+
+    Testing against one name only is right for half the widgets and silently wrong for the other half —
+    and "never matches" is indistinguishable from "this widget is never the one", so whatever was gated on
+    it simply never happens and nothing is logged.
+    """
+    tag = f"{request.node.name}_button"
+    with dpg.window():
+        widget = dpg.add_button(tag=tag)
+    identifiers = guiutils.item_identifiers(widget)
+    assert tag in identifiers
+    assert dpg.get_alias_id(tag) in identifiers
+
+
+def test_an_untagged_widget_is_recognized_by_its_id_alone(dpg_context):
+    """And nothing else creeps in — an empty alias must not become a name that matches other unnamed items."""
+    with dpg.window():
+        widget = dpg.add_button()
+    assert guiutils.item_identifiers(widget) == {widget}
+
+
+# --------------------------------------------------------------------------------
 # Widget position, in viewport coordinates
 
 @pytest.mark.gui

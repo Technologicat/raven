@@ -134,6 +134,14 @@ class TestMarkAppearance:
         assert targets(panel.target, "mvThemeColor") == [dpg.mvThemeCol_Border]
         assert targets(dot.target, "mvThemeColor") == [dpg.mvThemeCol_Text]
 
+    def test_the_mark_can_be_narrowed_to_one_kind_of_descendant(self, make_widget, quiet_pulse):
+        """What lets a widget be marked inside a row it shares with widgets that must not be."""
+        widget = make_widget()
+        keyboardmark.Mark(widget, item_type=dpg.mvInputText)
+        theme = dpg.get_item_theme(widget)
+        component = dpg.get_item_children(theme, slot=1)[0]
+        assert dpg.get_item_configuration(component)["item_type"] == dpg.mvInputText
+
     def test_the_border_is_as_thick_as_it_was_asked_to_be(self, make_widget, quiet_pulse):
         widget = make_widget()
         keyboardmark.Mark(widget, thickness=5)
@@ -218,6 +226,74 @@ class TestSharedPulse:
         mark.lit = True
         assert gui_animation.animator.active_count == before
         assert keyboardmark._pulse.theme_color_widgets.count(mark._color_widget) == 1
+
+
+# --------------------------------------------------------------------------------
+# A mark that moves
+
+class TestMovingMark:
+    """One mark over many candidates — the Visualizer's current entry, Librarian's current message.
+
+    How many candidates there are is the user's business and has no upper bound: a selection can run to
+    thousands of entries, a chat to thousands of messages. A theme apiece would scale with that, so the
+    mark moves instead, and the widget it leaves has to come back exactly as it was.
+    """
+
+    def test_a_mark_can_be_built_with_nothing_to_mark_yet(self, make_widget, quiet_pulse):
+        mark = keyboardmark.Mark(None)
+        assert mark.target is None
+        assert mark.lit is False
+
+    def test_moving_the_mark_takes_it_off_the_widget_it_leaves(self, make_widget, quiet_pulse):
+        first = make_widget("button", "1")
+        second = make_widget("button", "2")
+        mark = keyboardmark.Mark(None)
+
+        mark.target = first
+        mark.lit = True
+        assert colors(first)[0][3] > 0.0
+
+        mark.target = second
+        assert theme_items(first) == []  # unthemed again, so nothing of the mark is left on it
+        assert colors(second)[0][3] > 0.0
+
+    def test_the_widget_it_leaves_gets_its_own_theme_back(self, make_widget, quiet_pulse):
+        """The shape a moving mark is meant for: every candidate wears a theme saying *not me*."""
+        first = make_widget("button", "1")
+        second = make_widget("button", "2")
+        with dpg.theme() as not_me:
+            with dpg.theme_component(dpg.mvAll):
+                dpg.add_theme_color(dpg.mvThemeCol_Text, (*keyboardmark.COLOR[:3], 0))
+        for widget in (first, second):
+            dpg.bind_item_theme(widget, not_me)
+
+        mark = keyboardmark.Mark(None, kind=keyboardmark.MarkKind.DOT)
+        mark.target = first
+        mark.target = second
+        assert dpg.get_item_theme(first) == not_me
+        assert dpg.get_item_theme(second) == mark._theme
+
+    def test_clearing_the_target_darkens_the_mark(self, make_widget, quiet_pulse):
+        """Otherwise the pulse would go on animating a colour no widget is wearing."""
+        mark = keyboardmark.Mark(make_widget())
+        mark.lit = True
+        mark.target = None
+        assert mark.lit is False
+        assert not keyboardmark.pulse_is_running()
+
+    def test_moving_a_mark_says_nothing_in_the_log(self, make_widget, quiet_pulse, caplog):
+        """The warning is for a call site that displaced a theme by accident, which a move never is."""
+        first = make_widget("button", "1")
+        second = make_widget("button", "2")
+        with dpg.theme() as not_me:
+            with dpg.theme_component(dpg.mvAll):
+                dpg.add_theme_color(dpg.mvThemeCol_Text, (*keyboardmark.COLOR[:3], 0))
+        dpg.bind_item_theme(second, not_me)
+
+        mark = keyboardmark.Mark(first)
+        with caplog.at_level("WARNING"):
+            mark.target = second
+        assert caplog.records == []
 
 
 # --------------------------------------------------------------------------------

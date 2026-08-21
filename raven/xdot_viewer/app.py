@@ -59,6 +59,7 @@ with timer() as tim:
     from ..common.gui import utils as guiutils
     from ..common.gui import helpcard
     from ..common.gui import animation as gui_animation
+    from ..common.gui import keyboardmark
     from ..common.gui import messagebox
     from ..common.gui import filedrop
     from ..vendor import DearPyGui_Markdown as dpg_markdown
@@ -832,6 +833,11 @@ def main() -> int:
                                        themes_and_fonts=themes_and_fonts,
                                        on_render_extras=render_help_extras)
     dpg.set_item_callback("help_button", _help_window.show)  # tag
+
+    # Say where the arrow keys are when Ctrl+E hands them to the layout-engine combo. DPG draws nothing on
+    # a focused combo, so without this the key appears to do nothing at all — the same blue pulse every
+    # Raven app uses for *the keyboard is here*.
+    keyboardmark.install_focus_follower(list(_combobox_choice_map.keys()))
 
     # --- Start app ---
     dpg.set_primary_window("main_window", True)

@@ -72,6 +72,7 @@ with timer() as tim:
 
     from ...common.gui import animation as gui_animation  # Raven's GUI animation system, nothing to do with the AI avatar.
     from ...common.gui import helpcard
+    from ...common.gui import keyboardmark
     from ...common.gui import messagebox
     from ...common.gui import filedrop
     from ...common.gui import utils as guiutils
@@ -1758,6 +1759,12 @@ def app_shutdown() -> None:
             pass
     logger.info("app_shutdown: done")
 atexit.register(app_shutdown)
+
+# Say where the arrow keys are when Ctrl+E hands them to a combo. DPG draws nothing on a focused combo, so
+# without this the key appears to do nothing — the same blue pulse every Raven app uses for *the keyboard is
+# here*. Named here rather than read off `combobox_choice_map`, which is built on the first keypress.
+keyboardmark.install_focus_follower([gui_instance.emotion_choice,
+                                     gui_instance.voice_choice])
 
 dpg.set_primary_window(gui_instance.window, True)  # Make this DPG "window" occupy the whole OS window (DPG "viewport").
 dpg.set_viewport_vsync(True)
