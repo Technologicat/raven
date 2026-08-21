@@ -1298,6 +1298,36 @@ Suggested order, with what each actually costs:
    has never been on screen before. If it reads as confusing, the fix is a shade or a weight rather than
    dimming the cursor, since dimming is the option already rejected. Driving one is the only way to know.
 
+   **Two more consumers, both outside the file dialog** (Juha, 2026-08-21). They change what the component
+   *is*, not merely how many places call it, so they are requirements rather than a longer call-site list:
+
+   - **Visualizer already has this indicator and it is built wrong.** The info panel marks which item the
+     hotkeys will act on with a custom **viewport** overlay, and a viewport overlay is unconditionally
+     on top — so it draws over the dimmer that is meant to be covering it. Replacing it with this component
+     does two jobs at once, and both are load-bearing: it **fixes a bug**, and it **brings the app into the
+     constellation's one way of saying "the keyboard is here"** — which is the same argument that makes
+     this item fleet-wide and single-session in the first place. A Visualizer left drawing its own private
+     mark would be exactly the deliberate inconsistency this entry warns against below.
+     - **It marks a group of buttons, which is the hardest requirement here**: a `group` is not a themed
+       widget with a border to tint, so "tint the child window's border" answers the file dialog's panels
+       and does not answer this. The general mechanism has to be a **drawn frame placed from the widget's
+       own geometry** (`guiutils.get_widget_pos` and its size), **parented into the same window as the
+       widget it marks** — which is exactly what the existing overlay got wrong, and the reason to write
+       the pitfall down rather than only the fix.
+
+   - **Librarian is missing it, and gaining it is two pieces of work.** Its chat-log hotkeys act on the
+     bottommost message whatever is on screen; they should act on the **bottommost at least partially
+     visible** message at the current scroll position, and that message's button row then wants the mark.
+     - **The routing is the larger half, and it is separable.** It is scroll-position arithmetic against
+       message extents and a behaviour change a user notices on its own, so it deserves its own item rather
+       than being quietly absorbed here. What item 7 owes is the mark, and the mark can be put on whichever
+       message the routing picks.
+
+   **So the contract is *frame this widget*, not *tint this panel*.** Most call sites are child windows and
+   combos; these two are a group and a button row, and it is the two that decide the mechanism. Worth
+   settling before the first line is written, because the panel-shaped version would look finished and then
+   fail to reach the consumer that motivated half the work.
+
    **Nor should the dispatch move onto focus.** `raven-avatar-settings-editor` routes its combo browsing by
    asking whether the focused item is one of two named combos, and that works there — it has a text entry
    too, and arrows in it simply go to the text caret, because nothing claims them. The shape does not
@@ -1313,12 +1343,50 @@ Suggested order, with what each actually costs:
      searches, and the path field must be exact because it addresses. Same colours, different rule, and
      worth a comment at each so the difference reads as chosen.
 
+9. **Type-ahead in the places panel** — raised 2026-08-21 (Juha) from using item 6: reaching Pictures takes
+   too many arrow presses for a list you can see all of at once.
+
+   **Decided: first-letter cycling, not incremental search.** Press a letter while the panel has the keys
+   and the cursor goes to the next row whose label starts with it, wrapping at the end; press it again for
+   the one after that; Shift for backwards. Nothing else changes, and no indicator is needed beyond the
+   cursor the panel already has.
+
+   **The incremental-search alternative was considered and rejected as over-engineered *here***, which is
+   worth recording because it is the better design in a different panel and someone will propose it again.
+   Nemo-style prefix matching — type several characters, jump to the first match, arrow between matches
+   only — solves *"my target is not on screen"*, and this panel has no such problem: it is about nine rows
+   and all of them are visible. What it would cost is a **mode**, and the mode lands on the one key this
+   dialog can least afford to overload. Escape would have to mean *cancel the match* while inside it, where
+   the settled two-tier rule says Escape means *up one tier* — a third meaning for Escape, in the dialog
+   whose Escape behaviour took the longest to settle. First-letter cycling needs no cancel, so the question
+   never arises.
+
+   It is also what Explorer's list view, Finder's, a GTK tree without search, and every combo box already
+   do, so it needs no teaching — and one press of `P` answers the case that prompted it.
+
+   **The awkward case is the drives, and it resolves itself.** Mount points all begin with `/`, so `/`
+   cycles through them; matching is on the row's label, because the label is what the user is looking at,
+   and any cleverer rule (match the basename, skip the leading slash) is one the user would have to be
+   told. Three of the standard folders share `D` — Desktop, Documents, Downloads — which is not a flaw in
+   the scheme but the case it exists for.
+
+   **Small, and genuinely a tail end of item 6** rather than its own day: bare letters currently reach
+   `_handle_key` and do nothing while the caret is on the panel, since DPG's focus is parked on the refresh
+   button and the find field is not taking them. So this is a branch in the existing `PLACES` block plus a
+   match-and-wrap helper.
+
 **Items 1–3 and item 5 are each about a day's work, so both in one day is unlikely.** Which to drop is a
 real choice rather than a scheduling detail: 1–3 finish the keyboard, and 5 adds a capability the dialog has
 never had. Worth deciding at the start of the session rather than discovering at the end of it.
 
 **Standing 2026-08-21.** Built: 1, 2, 3, 4, 6, 8. Left: **7** (the caret mark, fleet-wide) and **5**
-(navigation history), in that order, each its own day.
+(navigation history), in that order, each its own day — plus **9** (type-ahead in the places panel), which
+is small and can ride along with either.
+
+**7 grew on 2026-08-21 and is no longer "small".** Two consumers outside this dialog arrived with it — a
+Visualizer overlay that is built wrong, and a Librarian mark that does not exist yet — and between them
+they change the component from *tint a panel's border* to *frame an arbitrary widget*. Still one session,
+but read item 7's own entry before sizing it.
 
 **Every part of the dialog is now reachable from the keyboard.** That was what item 6 was for, and it is
 the line items 1–3 were aiming at: the places panel was the last control a keyboard could not touch. What
