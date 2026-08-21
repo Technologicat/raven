@@ -882,6 +882,23 @@ and render frames, exactly as predicted below. The core puts the fault in
 backend belonging to a context that `test_focus_semantics` has since destroyed. Reproduced with a
 same-day unrelated change both applied and stashed, so it is the collection, not any one test.
 
+The crashing thread, which is the whole of what the core says:
+
+```
+Thread 1 (the main thread; Python side: test_fdialog.py, test_the_sort_row_fits_the_minimum_width,
+          inside dpg.render_dearpygui_frame)
+#4  <signal handler called>
+#5  ImGui_ImplGlfw_WindowFocusCallback(GLFWwindow*, int)   from dearpygui/_dearpygui.so
+#6  _glfwInputWindowFocus                                  from dearpygui/_dearpygui.so
+#7  processEvent                                           from dearpygui/_dearpygui.so
+```
+
+Every other thread is idle in a futex or a driver wait, so the 2600-line full trace adds nothing; it is
+kept out of the repo for its size, under `00_stuff/segfault-run-gui/` on the machine that produced it.
+**The cores themselves outlive a weekend**: `systemd-coredump` writes them to `/var/lib/systemd/coredump/`
+on disk, and the tmpfiles rule keeps that directory for two weeks — so re-reading one with
+`coredumpctl --debugger-arguments=... gdb <PID>` is available for a while, not only on the day.
+
 The default `pytest -m "not ml"` is unaffected and green; only the opt-in `gui` group is red. **The
 practical consequence is that `--run-gui` currently cannot verify a `gui` test in the same run as the
 others** — a new one has to be checked with `-m gui` or by module, which is how the help-card fit test was
