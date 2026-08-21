@@ -1396,10 +1396,16 @@ def pose_editor_hotkeys_callback(sender, app_data):
                 dpg.set_value(choice_widget, choices[new_index])
                 if callback is not None:
                     callback(sender, app_data)  # the callback doesn't trigger automatically if we programmatically set the combobox value
+        # Matched against every name DPG may answer with, because this map holds both kinds of widget: the
+        # emotion and output-index combos carry tags, the morph panels' do not. `get_focused_item` returns
+        # an alias for the first kind and an ID for the second, so the previous `get_item_alias` normalizing
+        # step answered `""` for a morph panel's combo and matched nothing — which is why the arrow keys had
+        # never worked in them, despite the map listing them since it was written.
         focused_item = dpg.get_focused_item()
-        focused_item = dpg.get_item_alias(focused_item)
-        if focused_item in combobox_choice_map.keys():
-            browse(focused_item, combobox_choice_map[focused_item])
+        for choice_widget, choice_data in combobox_choice_map.items():
+            if focused_item in guiutils.item_identifiers(choice_widget):
+                browse(choice_widget, choice_data)
+                break
 
 with dpg.handler_registry(tag="pose_editor_handler_registry"):  # global (whole viewport)
     dpg.add_key_press_handler(tag="pose_editor_hotkeys_handler", callback=pose_editor_hotkeys_callback)
