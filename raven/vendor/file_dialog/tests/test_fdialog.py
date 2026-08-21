@@ -1183,11 +1183,6 @@ def place_is_cursor(dialog, idx):
     return dpg.get_item_info(cell)["theme"] == cursor_theme
 
 
-def user_place_count(dialog):
-    """How many rows of the panel are the user's own directories, before the drives."""
-    return len([label for label, _icon in _PLACES if label in dialog._places])
-
-
 def test_the_panel_is_built_from_selectables(dialog):
     """What the migration off `menu_item` was for, and the one thing a reader cannot see from the keys.
 
@@ -1216,17 +1211,23 @@ def test_ctrl_b_parks_the_caret_on_the_places_panel(dialog):
 def test_the_arrows_belong_to_the_panel_and_not_to_the_listing(dialog):
     """Two cursors are on screen while the panel has the keys, and only one of them may answer.
 
-    Asserted after every key rather than at the end: a down-then-up is a round trip, and a listing cursor
-    that moved with both would come back to where it started and agree with one that never moved.
+    The listing is checked after every key rather than at the end: a down-then-up is a round trip, and a
+    cursor that moved with both would come back to where it started and agree with one that never moved.
+
+    Movement is asserted as a direction rather than as an index, because how many rows this panel has is a
+    property of the machine — the user's standard folders are offered only where they exist, so a home
+    directory holding none of them leaves `Home` and the drives, and a run of fixed indices would pass here
+    and fail on a bare CI runner.
     """
     listing_start = dialog._table_cursor.current
     ctrl_press(dialog, dpg.mvKey_B)
-    for expected, key in ((1, dpg.mvKey_Down),
-                          (2, dpg.mvKey_Down),
-                          (1, dpg.mvKey_Up)):
+    seen = [dialog._places_cursor.current]
+    for key in (dpg.mvKey_Down, dpg.mvKey_Down, dpg.mvKey_Up):
         dialog._handle_key(key)
-        assert dialog._places_cursor.current == expected
+        seen.append(dialog._places_cursor.current)
         assert dialog._table_cursor.current == listing_start
+    assert seen[1] > seen[0], "Down did not move the panel's cursor"
+    assert seen[3] < seen[2], "Up did not move it back"
 
 
 def test_home_and_end_move_the_places_cursor(dialog):
@@ -1300,11 +1301,18 @@ def test_a_used_place_does_not_stay_lit(dialog):
 
 
 def test_a_click_moves_the_cursor_to_the_row_that_was_clicked(dialog):
-    """So Ctrl+B afterwards resumes from the mouse's last answer rather than the arrows'."""
-    idx = user_place_count(dialog) - 1  # the last of the user's own directories, which is readable
-    assert idx > 0, "this user has too few places for a click to move anything"
+    """So Ctrl+B afterwards resumes from the mouse's last answer rather than the arrows'.
+
+    The last row, whatever it is: which of the user's standard folders exist is a property of the machine,
+    and only the drives are there on every one. Navigating is mocked out because that last row may then be
+    a mount this user cannot enter — where the click *goes* is `test_clicking_a_place_goes_where_it_says`,
+    and this is about the cursor.
+    """
+    idx = len(dialog._place_themes) - 1
+    assert idx > 0, "the panel has too few rows for a click to move anything"
     cell = dialog._place_themes[idx][0]
-    dialog.open_place(cell, None, dpg.get_item_user_data(cell))
+    with mock.patch.object(FileDialog, "chdir"):
+        dialog.open_place(cell, None, dpg.get_item_user_data(cell))
     assert dialog._places_cursor.current == idx
 
 
