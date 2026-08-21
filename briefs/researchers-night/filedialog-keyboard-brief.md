@@ -1432,9 +1432,23 @@ Suggested order, with what each actually costs:
 real choice rather than a scheduling detail: 1–3 finish the keyboard, and 5 adds a capability the dialog has
 never had. Worth deciding at the start of the session rather than discovering at the end of it.
 
-**Standing 2026-08-21.** Built: 1, 2, 3, 4, 6, 8. Left: **7** (the caret mark, fleet-wide) and **5**
-(navigation history), in that order, each its own day — plus **9** (type-ahead in the places panel), which
-is small and can ride along with either.
+**Standing 2026-08-21.** Built: 1, 2, 3, 4, 6, 8, 9. Left: **7** (the caret mark, fleet-wide) and **5**
+(navigation history), in that order, each its own day — plus **10**, the help card's cosmetic pass, which
+is deliberately last.
+
+10. **The help card wants a cosmetic pass** — raised 2026-08-21 (Juha), and deferred on purpose until the
+    keys stop changing: every item above adds or moves a row, so tidying the card before the last one
+    lands means tidying it twice.
+
+    Known so far, one measured and one from the same render:
+
+    - **The em-dash in the title renders as `?`.** `label=f"{self.title} — keyboard"` reaches the window's
+      title bar as `Help card probe ? keyboard` — a substitution character rather than a missing-glyph box,
+      which points at the title being drawn through a different font path than the body, where em-dashes
+      are fine. Mechanism unverified; the symptom is a screenshot.
+    - **The card is much emptier than it looks in code.** About 190 px of unused height in the tallest
+      configuration, so the pass has room to spend on spacing rather than having to fight for it — or the
+      card could simply be shorter. See `_HELP_CARD_SIZE`.
 
 **7 grew on 2026-08-21 and is no longer "small".** Two consumers outside this dialog arrived with it — a
 Visualizer overlay that is built wrong, and a Librarian mark that does not exist yet — and between them
