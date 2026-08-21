@@ -1462,15 +1462,21 @@ is deliberately last.
     keys stop changing: every item above adds or moves a row, so tidying the card before the last one
     lands means tidying it twice.
 
-    Known so far, one measured and one from the same render:
+    **What the pass is actually for: the card is a fixed height sized for its tallest configuration.**
+    `_HELP_CARD_SIZE` is one constant, and the card's content is per-instance — a dialog with no type
+    filter and no multi-selection is four rows shorter. So Librarian's card is right-sized while
+    Cherrypick's, which is `dir-with-contents` and offers neither, carries about 110 px of empty space
+    below the table. Measured at the extremes: ~23 px of slack in the tallest configuration against a
+    ~30 px row pitch, and ~110 px in Cherrypick's.
 
-    - **The em-dash in the title renders as `?`.** `label=f"{self.title} — keyboard"` reaches the window's
-      title bar as `Help card probe ? keyboard` — a substitution character rather than a missing-glyph box,
-      which points at the title being drawn through a different font path than the body, where em-dashes
-      are fine. Mechanism unverified; the symptom is a screenshot.
-    - **The card is much emptier than it looks in code.** About 190 px of unused height in the tallest
-      configuration, so the pass has room to spend on spacing rather than having to fight for it — or the
-      card could simply be shorter. See `_HELP_CARD_SIZE`.
+    That points at sizing the card to its content. Worth noting where the fix belongs: **`HelpWindow` has
+    eight consumers**, and it is only *this* one whose content varies per instance — every other app has a
+    fixed hotkey list whose height was tuned once and is correct. So the fix likely belongs in `fdialog`,
+    passing a height it computes, rather than in the shared component.
+
+    **The em-dash in the title is fine.** It was reported here as rendering `?`, from a probe that never
+    called `guiutils.bootup` and so drew everything in DPG's built-in font, which is ASCII-only. Raven
+    loads OpenSans and the title reads correctly in every app.
 
 **7 grew on 2026-08-21 and is no longer "small".** Two consumers outside this dialog arrived with it — a
 Visualizer overlay that is built wrong, and a Librarian mark that does not exist yet — and between them

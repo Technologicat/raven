@@ -13,6 +13,50 @@ importer first. Recorded here rather than in that item because a trigger nobody 
 the tool for finding things in the backlog cannot be gated on someone remembering to look for it *in* the
 backlog. The recurring moment to ask is the triage step in the release procedure.
 
+## `is_dearpygui_running()` is not a safe guard against `destroy_context`, and two loops use it as one
+
+*Cluster: abnormal-exit · Cost: S for the narrowing, M for a correct fix · Gate: a correct fix needs the two-phase shutdown helper below · Filed: 2026-08-21 · See also: the fleet shutdown item*
+
+Closing `raven-cherrypick` with Alt+F4 segfaulted (Juha, 2026-08-21). `coredumpctl` on the core puts the
+crash in `dpg.is_dearpygui_running()` — **on a background thread**, after `destroy_context()` had freed the
+library:
+
+```
+Thread 1 (LWP 89532):
+#0  is_dearpygui_running(_object*, _object*, _object*) from dearpygui/_dearpygui.so
+#1..#6  Python frames
+#7  start_thread
+```
+
+**The call that crashed is the guard against the crash.** `fdialog.py`'s grid tick loop polls
+`dpg.is_dearpygui_running()` to notice the app closing while the picker is open, under a comment that says
+in as many words that a guard against a freed context "would have to be a DPG call itself" — and then uses
+one. `raven/common/gui/filedrop.py` does the same, though its worker is normally parked on a queue rather
+than in the call. There is no safe DPG-side answer: **any** call into the library after teardown is into
+freed memory, so the flag has to be Python-side and set before the context goes.
+
+Intermittent for a reason that is now measurable: the tick interval is 1/60 s, so the window in which the
+poll can land between the render loop stopping and `destroy_context` is about 16 ms. That also explains why
+neither Juha nor a driven repro could trigger it again on demand.
+
+**The right shape already exists twice, and neither copy is reachable from here** (Juha, 2026-08-21).
+`raven/librarian/app.py` keeps a module-level `_shutting_down`, set as the very first action of its cancel
+phase and checked before anything touches DPG; `raven/client/avatar_controller.py` keeps
+`gui_updates_safe` per instance, for the same job. Both are Python-side flags, which is exactly right and
+is what `is_dearpygui_running` should have been. But one is a global in an app module and the other is
+instance state, so a **shared widget** — `FileDialog`, used by six apps — can read neither. That missing
+piece is the actual gap: a process-wide "the context is going away" flag in `raven.common.gui`, set by each
+app's cancel phase, that shared widgets can consult.
+
+**Two levels of fix.** The narrowing is cheap and local — set the ticker's stop `Event` from
+`dpg.set_exit_callback` (cancel only, no waiting, per the rules in the shutdown item) and delete the
+`is_dearpygui_running` poll, so nothing calls DPG after the flag is set. That leaves a smaller race: the
+thread can already be inside `_grid.tick()`. The correct fix is the two-phase teardown below, where the app
+*joins* every DPG-touching thread before `destroy_context` — which is what `FileDialog.destroy` already
+does, and which Cherrypick's exit path does not call.
+
+Discovered while chasing the FileDialog help card's cosmetic pass (2026-08-21).
+
 ## Main-row `+` and `-` both zoom out on a non-US keyboard
 
 *Cluster: keyboard-accessibility · Cost: S, once the keys are chosen · Gate: needs a decision on which keys carry zoom · Filed: 2026-08-21 · See also: `dpg-notes.md` → "A punctuation `mvKey_*` is a US-layout assumption"*
@@ -3045,6 +3089,10 @@ shared helper / per-app conversion must handle, beyond the two-phase skeleton:
   helper must own a *global* "all DPG-touching threads stop before `destroy_context`" barrier, not just per-task
   drains. A `does_item_exist`/`nonexistent_ok` guard was added at the worker's `bind_item_handler_registry`
   (quieted the "Item not found" spam) but does NOT fix the segfault (other DPG calls + `split_frame` remain).
+  - **A second, separate offender, diagnosed from a core dump on 2026-08-21 — see the item below.** Closing
+    `raven-cherrypick` with Alt+F4 segfaulted (Juha), and `coredumpctl` put the crash in
+    `dpg.is_dearpygui_running()` on a background thread. Not this worker, and worth stating because the
+    markdown worker is the obvious suspect for any teardown segfault and was wrongly assumed to be this one.
 
 Per-app exposure (the bug needs a waiting drain in the exit callback AND a `split_frame`-using background task
 that can be busy at close):

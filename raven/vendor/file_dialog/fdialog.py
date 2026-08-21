@@ -45,13 +45,16 @@ _FIELD_DEACTIVATION_FRAMES = 30
 # that does not fit is clipped away silently — a row added past what fits needs the height raised with it,
 # and a column needs the width.
 #
-# **There is room for several more rows, measured 2026-08-21** by rendering the tallest configuration the
-# card has — multi-selection, a type filter, files to make tiles of, and a places panel, thirty entries
-# across the two columns — where the content ends about 190 px above the bottom edge.
+# **It is nearly full: about 23 px of slack against a 30 px row pitch**, measured 2026-08-21 by rendering
+# the tallest configuration the card has — multi-selection, a type filter, files to make tiles of, and a
+# places panel, thirty entries across the two columns. So there is room for **no** further row without
+# raising the height, and a cell that wraps to two lines costs as much as a row.
 #
-# What consumes that margin is a cell **wrapping** to two lines, which several action and note cells
-# already do, rather than another key. So the thing to keep short is a phrase, and the thing to check
-# before trusting any figure here is a render: the card clips in silence, and nothing else will say so.
+# **Measure it with the app's fonts booted.** A probe that goes straight from `setup_dearpygui` to building
+# widgets renders in ImGui's built-in font, which is both narrower and shorter than OpenSans — it reported
+# 190 px of slack here, eight times the truth — and has no glyph outside ASCII, so text containing an
+# em-dash comes back as `?` and looks like a bug in the app. `guiutils.bootup(font_size=...)`, before
+# `create_viewport`, is what makes a rendered measurement mean anything.
 _HELP_CARD_SIZE = (1250, 640)
 
 
