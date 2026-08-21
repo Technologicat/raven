@@ -1012,6 +1012,11 @@ This is a hazard for probes and driven-GUI tests, not for apps — but it fails 
 invents a finding: the chord looks like it does not carry its modifier, and that reads as a DPG
 limitation rather than as an artifact of the harness. Hold synthetic modifiers across frames.
 
+**The other half of driving a live app is in `CLAUDE.md` → "Live GUI testing on a shared desktop"** —
+stealing and restoring focus, keeping the whole sequence in one command, finding the window, closing the
+app afterwards. The two halves are one activity split across two documents by topic, so each points at the
+other: arriving at the etiquette without the fidelity traps is how they get rediscovered.
+
 Related, and visible in any such log: **held modifier keys arrive as repeated key presses** (~50 ms
 apart, LControl / LShift / LAlt alike), alongside a companion pseudo-key — 663 for Ctrl, 664 for Shift,
 665 for Alt — that no `mvKey_*` constant names. A handler that acts on a bare modifier keycode therefore
