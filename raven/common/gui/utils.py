@@ -632,16 +632,17 @@ def split_frame(*, operation: str, required: bool = True) -> bool:
 def wait_for_resize(widget: Union[str, int],
                     wait_frames_max: int = 10,
                     *,
-                    keep_parked: bool = False) -> bool:
+                    park_each_frame: bool = False) -> bool:
     """Wait until the on-screen size of `widget` (DPG tag or ID) changes.
 
     If `wait_frames_max` frames have elapsed without the size changing, return.
 
     Return `True` if the size changed, `False` otherwise.
 
-    `keep_parked`: pass `True` when the caller has parked the widget offscreen to resize it unseen. The
-                   park is then renewed before each frame waited, without which every frame but the first
-                   is drawn back inside the viewport — see `park_offscreen`.
+    `park_each_frame`: pass `True` when the caller has parked the widget offscreen to resize it unseen.
+                       `park_offscreen` is then called before each frame waited, which is what it takes:
+                       a park holds for one frame, so every frame after the first would otherwise be drawn
+                       back inside the viewport.
 
     Waiting *is* the operation here, so calling this from the render loop thread raises
     `RuntimeError` instead of hanging. See `split_frame`.
@@ -649,7 +650,7 @@ def wait_for_resize(widget: Union[str, int],
     waited = 0
     old_size = get_widget_size(widget)
     while waited < wait_frames_max:
-        if keep_parked:
+        if park_each_frame:
             park_offscreen(widget)
         split_frame(operation=f"wait_for_resize: autosize of widget {widget}")  # let the autosize happen
         waited += 1
@@ -672,7 +673,7 @@ def park_offscreen(widget: Union[str, int]) -> None:
     **A park lasts one frame, so renew it before every frame you spend parked.** ImGui clamps a window back
     inside the viewport on any frame whose position did not come through the API, and only the frame right
     after this call is exempt. Measured 2026-08-21: a modal is pulled *fully* into view, an ordinary window
-    to 19 px shy of the corner, and `no_move` exempts neither. `wait_for_resize(..., keep_parked=True)` and
+    to 19 px shy of the corner, and `no_move` exempts neither. `wait_for_resize(..., park_each_frame=True)` and
     `helpcard.HelpWindow.settle_offscreen` are the two packaged forms; a per-frame state machine such as
     `tooltip.Tooltip` calls this on each of its settling frames instead.
     """

@@ -377,9 +377,10 @@ def _render_worker(*, task_env, env=None):
                     dpg.show_item("annotation_tooltip_window")  # tag
 
                     # Tooltip window dimensions after autosizing not available yet, so we need to wait until we can compute the final position the tooltip.
-                    # `keep_parked`, because a park lasts one frame and this waits several: without it every
-                    # frame after the first is drawn back inside the viewport, as a corner of the tooltip.
-                    guiutils.wait_for_resize("annotation_tooltip_window", keep_parked=True)  # tag
+                    # `park_each_frame`, because a park holds for one frame and this waits for up to ten:
+                    # without it every frame after the first is drawn back inside the viewport, as a corner
+                    # of the tooltip.
+                    guiutils.wait_for_resize("annotation_tooltip_window", park_each_frame=True)  # tag
                     tooltip_size = dpg.get_item_rect_size("annotation_tooltip_window")  # tag
 
                     # Position the tooltip elegantly, trying to keep the whole tooltip within the viewport area.
