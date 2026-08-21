@@ -920,12 +920,19 @@ message the hotkeys would act on. Inherent to marking the row; the mark reappear
 into view. Not obviously worth fixing, and the alternatives (a mark on the message body, a floating
 indicator) both cost more than the ambiguity does.
 
-**And one claim that is reasoned rather than observed.** The Visualizer's old highlight was a rectangle on
-the viewport drawlist, which is unconditionally above every window; the replacement is a theme on a widget
-inside the info panel, so window z-order governs it. That the dimmer now covers it follows from where the
-mark lives, but the dimmer was never caught in the act — two attempts at photographing a rebuild were both
-too fast, on 101 items and on a large dataset. The modal case was handled before and still is, by clearing
-the mark outright.
+**And the z-order claim is confirmed, by a case nobody was aiming at** (Juha, 2026-08-21). The Visualizer's
+old highlight was a rectangle on the viewport drawlist, which is unconditionally above every window; the
+replacement is a theme on a widget inside the info panel, so window z-order governs it. The evidence is the
+**word cloud window**: the old highlight drew on top of it, the new one does not.
+
+**Worth keeping as a method, because two attempts at the obvious case had failed.** The bug was framed
+around the dimmer, which is up for a fraction of a second during a rebuild, and photographing it missed
+twice — on a 101-item dataset and on a large one. The word cloud is a member of the same class (a window
+laid over the info panel) that *stays up as long as you like*. So when a transient will not be caught,
+look for a persistent instance of whatever class it belongs to, rather than trying harder to time the
+shutter.
+
+The modal case was handled before and still is, by clearing the mark outright.
 
 ### Added 2026-08-21
 
@@ -1333,7 +1340,8 @@ Suggested order, with what each actually costs:
 
    - **Visualizer already has this indicator and it is built wrong.** The info panel marks which item the
      hotkeys will act on with a custom **viewport** overlay, and a viewport overlay is unconditionally
-     on top — so it draws over the dimmer that is meant to be covering it. Replacing it with this component
+     on top — so it draws over the dimmer that is meant to be covering it. (Confirmed on 2026-08-21, on
+     the word cloud window rather than on the dimmer — see the closing section.) Replacing it with this component
      does two jobs at once, and both are load-bearing: it **fixes a bug**, and it **brings the app into the
      constellation's one way of saying "the keyboard is here"** — which is the same argument that makes
      this item fleet-wide and single-session in the first place. A Visualizer left drawing its own private

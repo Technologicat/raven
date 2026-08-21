@@ -60,7 +60,7 @@
 
 - the info panel marks its ends when the wheel *arrives* at one, where previously it only did so once you were already there and turned the wheel again. A single click of the wheel onto the end used to be silent.
 
-- the buttons of the current info panel item now wear the same blue mark every other Raven app uses for *the keyboard is here*, in place of a glow of their own. It is drawn as part of the panel, so whatever covers the panel covers it too.
+- the buttons of the current info panel item now wear the same blue mark every other Raven app uses for *the keyboard is here*, in place of a glow of their own. It is drawn as part of the panel, so whatever covers the panel covers it too — the old glow floated on top of the word cloud window.
 
 - the importer's two LLM steps — cluster keyword extraction and abstract summarization — no longer run as a conversation with the assistant character. Both outputs are parsed by the importer rather than read by a person, while the character card asks for Markdown, for a reported train of thought, and for conversational prose — all of which had to be undone before the result could be used. Each of the two prompts already states its own task, so what the character contributed was only the part working against it. Expect cleaner keyword lists, and summaries that start with the summary.
 
