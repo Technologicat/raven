@@ -46,11 +46,12 @@ _FIELD_DEACTIVATION_FRAMES = 30
 # and a column needs the width.
 #
 # **There is room for several more rows, measured 2026-08-21** by rendering the tallest configuration the
-# card has (multi-selection, a type filter, files to make tiles of, and a places panel — thirty entries
-# across the two columns): the content ends about 190 px above the bottom edge. An earlier note here said
-# fourteen rows was the limit and that each new one needed the height raised; that was inferred rather than
-# measured, and it is wrong. The margin is there to absorb *wrapping* — several action and note cells run to
-# two lines — so what actually eats it is a long phrase, not another key.
+# card has — multi-selection, a type filter, files to make tiles of, and a places panel, thirty entries
+# across the two columns — where the content ends about 190 px above the bottom edge.
+#
+# What consumes that margin is a cell **wrapping** to two lines, which several action and note cells
+# already do, rather than another key. So the thing to keep short is a phrase, and the thing to check
+# before trusting any figure here is a render: the card clips in silence, and nothing else will say so.
 _HELP_CARD_SIZE = (1250, 640)
 
 
@@ -2369,9 +2370,8 @@ class FileDialog:
             env(key_indent=0, key="Ctrl+Enter", action_indent=0, action="Accept without going deeper", notes="The OK button"),
             # Two homes answer Escape by handing the caret back rather than cancelling, and a bare "Cancel"
             # promises something else for both. It goes in the notes rather than a row of its own, and is
-            # kept to one line because a wrapped note is the ugly cell rather than because the card is
-            # short of room — see `_HELP_CARD_SIZE`, where the "no space left" claim this used to make is
-            # corrected against a measurement.
+            # kept to one line because a wrapped note cell is the untidy one — and because wrapping is what
+            # consumes the card's spare height, as `_HELP_CARD_SIZE` records.
             env(key_indent=0, key="Esc", action_indent=0, action="Cancel", notes="Or out of a side control"),
             (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Mark or unmark this entry", notes="Ctrl+click, without the mouse")
              if self.multi_selection else None),
