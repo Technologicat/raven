@@ -968,6 +968,41 @@ commonly bind Alt chords, and that is a statement about the desktop rather than 
 machines here run Cinnamon, so this one cannot be settled in-house — it is for users on other desktops to
 report. Which is the argument for Ctrl+Up existing as an alias regardless of what Alt does.
 
+## A punctuation `mvKey_*` is a US-layout assumption, and it fails silently elsewhere
+
+DPG reports **keycodes, not characters** — `add_key_press_handler` and its siblings are the whole input API,
+and there is no typed-character handler anywhere in it (checked 2026-08-21; `add_char_remap` is font-atlas
+machinery). Letters are safe: a letter key yields the same code shifted or not, on every Latin layout. **A
+punctuation constant is not.**
+
+Measured on a Finnish (`fi`, pc105) layout, DearPyGui 2.3.1:
+
+| pressed | reported | note |
+|---|---|---|
+| `/` — which is **Shift+7** here | `mvKey_7` **+ Shift** | `mvKey_Slash` (600) never fires at all |
+| `+` — the key right of `0` | **`mvKey_Minus` (598)** | *not* `mvKey_Plus`, which is 61 — a stale pre-2.0 code |
+| `,` and `.` | `mvKey_Comma`, `mvKey_Period` | these do agree with US |
+| numpad `/`, `+`, `-` | `mvKey_Divide`, `mvKey_Add`, `mvKey_Subtract` | separate codes, layout-independent |
+
+**So a hotkey on `mvKey_Plus` is dead on this keyboard, and worse than dead where a neighbouring constant
+catches the code instead.** `raven-cherrypick` and `raven-xdot-viewer` both zoom in on
+`(mvKey_Plus, mvKey_Add)` and out on `(mvKey_Minus, mvKey_Subtract)`; since the `+` key reports 598, which
+*is* `mvKey_Minus`, pressing `+` zooms **out**. The numpad keys are unaffected, which is how it goes
+unnoticed.
+
+Two consequences worth carrying:
+
+- **Prefer letters, function keys and the named editing keys for hotkeys.** They are the layout-stable set.
+  Punctuation needs either a numpad alias or a deliberate decision to be US-only.
+- **Anything matching *text* from key events cannot be done with punctuation.** A type-ahead over a list, for
+  instance, matches letter keys only — and that restriction is also what leaves Shift free to mean a
+  direction, since Shift is never needed to produce a letter.
+
+Not established: *why* the mapping lands where it does. Two of the observations fit "the constant follows the
+physical US position" and one does not (`xdotool key minus` also reported 598, where the physical argument
+predicts `mvKey_Slash`), and xdotool may synthesize an unmapped keysym on a scratch keycode. The table above
+is measured and repeatable; the mechanism behind it is not settled here.
+
 ## Tab reaches a global handler and still moves ImGui's nav, after a programmatic focus
 
 An `InputText` never inserts a Tab, which makes it easy to conclude that Tab is the app's to define. It is,

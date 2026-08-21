@@ -1336,6 +1336,23 @@ Suggested order, with what each actually costs:
    settling before the first line is written, because the panel-shaped version would look finished and then
    fail to reach the consumer that motivated half the work.
 
+   **The form has to be a parameter, and the reason is perceptual rather than a matter of taste** (Juha,
+   2026-08-21). A pulsating border's claim on the eye scales with its **perimeter**, so framing something
+   long — Librarian's per-message button row is the case — puts far more motion on screen than framing a
+   combo, for a mark that means exactly the same thing. A dot's claim is constant whatever it marks. So the
+   component offers at least two forms, a frame around the widget and a small dot beside it (to the left of
+   the first button, for that row), and the call site picks by how long the outline would be.
+
+   - **What must *not* vary is the vocabulary**: `keyboardmark.COLOR` and `keyboardmark.PULSE_SECONDS` are
+     the whole point, and two marks breathing at different rates read as two things blinking at each other.
+     One hue, one rhythm, two shapes.
+   - **The dot costs something the frame does not**: somewhere to sit. A frame is drawn from the widget's
+     own bounds, while a dot needs a side and a gap that the consumer's layout has to actually have — so
+     adopting it is not purely a call-site argument, and a site may need a spacer.
+   - **Decide Librarian's form by looking, in the same session.** The item is fleet-wide and single-session
+     by the argument below, so "we will pick the shape later" would leave exactly the half-marked
+     constellation that argument exists to prevent. Render the row both ways and choose.
+
    **Nor should the dispatch move onto focus.** `raven-avatar-settings-editor` routes its combo browsing by
    asking whether the focused item is one of two named combos, and that works there — it has a text entry
    too, and arrows in it simply go to the text caret, because nothing claims them. The shape does not
@@ -1376,15 +1393,29 @@ Suggested order, with what each actually costs:
    It is also what Explorer's list view, Finder's, a GTK tree without search, and every combo box already
    do, so it needs no teaching — and one press of `P` answers the case that prompted it.
 
-   **The awkward case is the drives on POSIX, and it resolves itself.** There, mount points all begin with
-   `/`, so `/` cycles through them. On Windows they are drive letters — `C:\`, `D:\` — which are distinct
-   from each other and reach a drive in one press, so the scheme is *better* there than here rather than
-   merely tolerable; a rule tuned to the POSIX shape would have been tuned to the worse of the two.
+   **It matches letter keys only, and that is forced by what DPG gives us** (measured 2026-08-21). DPG has
+   no typed-character handler at all — `add_key_press_handler` and its siblings are the whole input API, and
+   they report **physical keycodes**. A keycode is not a character, and the gap is layout-shaped: on a
+   Nordic keyboard `/` is Shift+7, so it produces `mvKey_7` and `mvKey_Slash` is never pressed at all,
+   except on a numeric keypad that small laptops do not have (Juha, 2026-08-21).
 
-   Matching is on the row's label, because the label is what the user is looking at, and any cleverer rule
-   (match the basename, skip the leading slash) is one they would have to be told. Three standard folders
-   share `D` — Desktop, Documents, Downloads, joined by `D:\` on Windows — which is not a flaw in the
-   scheme but the case it exists for.
+   So punctuation is not a usable type-ahead key here, and the rule is: **a letter key jumps to the next
+   label starting with that letter.** Letters are the safe subset — a letter key yields the same keycode
+   shifted or not, on every Latin layout — which is also what rescues **Shift for backwards**: Shift is
+   never needed to *produce* a letter, so it is free to mean a direction. It would not have been free if
+   punctuation were in scope, because there Shift is part of how the character is made.
+
+   **Which leaves the POSIX drives unreachable by type-ahead, and that is acceptable rather than a hole.**
+   They all begin with `/`; they are also the last rows in the panel, so `End` lands among them and the
+   arrows do the rest, over a list short enough to see whole. On Windows they are drive letters — `C:\`,
+   `D:\` — so they become ordinary type-ahead targets for free, and the scheme is *better* there than here.
+
+   Matching is on the row's label, because the label is what the user is looking at. **Matching a drive's
+   basename instead** — `/boot/efi` by `e` — was considered and rejected twice over: it is a rule the user
+   would have to be told, and it would make one key mean *first letter of the label* for a folder and
+   *first letter of the last path component* for a drive. Three standard folders share `D` — Desktop,
+   Documents, Downloads, joined by `D:\` on Windows — which is not a flaw in the scheme but the case it
+   exists for.
 
    **Small, and genuinely a tail end of item 6** rather than its own day: bare letters currently reach
    `_handle_key` and do nothing while the caret is on the panel, since DPG's focus is parked on the refresh
