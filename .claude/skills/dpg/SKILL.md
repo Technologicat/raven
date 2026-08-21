@@ -57,6 +57,7 @@ commentary in a trailing `(…)`. `·` separates targets. That shape is not deco
 | wire a callback that has to know *which* item it came from | *Threading* → A callback is passed as many arguments as it declares (the loop-variable lambda is shadowed by the sender; use `user_data`) |
 | handle a file drop, or write any GLFW-side callback | *Threading* → GLFW callbacks are the exception: they run *on* the render thread |
 | diagnose a hang with no traceback, or a background-task race | *Threading* → Three-way deadlock pattern · *Threading* → Diagnosing background-task races |
+| work out why hotkeys stopped responding, while the app is plainly still alive | *Threading* → Hotkeys dead while the mouse wheel still scrolls means the *callback thread* is blocked |
 | reach for `dpg.mutex()` | *Threading* → `dpg.mutex()` — the atomicity tool that Raven cannot currently use |
 | upload, replace or delete a texture | *Threading* → Texture upload ordering · *Raven DPG app structure* → Textures |
 | build a widget that will later be rebuilt or swapped | *Raven DPG app structure* → DPG item management (version-counted tags; alias rebinding) |

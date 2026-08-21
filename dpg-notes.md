@@ -68,6 +68,28 @@ if it had not happened, so a raise cannot protect an invariant the rest of the
 app depends on. Reproduce with `set_frame_callback(30, lambda s, a, u: 1 / 0)`
 around a mapped viewport.
 
+## Hotkeys dead while the mouse wheel still scrolls means the *callback thread* is blocked
+
+A useful three-way fingerprint, because the two threads above fail separately and the symptoms name which:
+
+| symptom | what is stuck |
+|---|---|
+| keys dead, wheel scrolls, animations still run | the **callback thread** — something long is running in a callback, and every later key is *queued behind it*, not lost |
+| keys dead, wheel dead, nothing animates | the **render loop** |
+| both alive but the app does the wrong thing | neither; a state bug |
+
+The asymmetry is not a quirk. A key press reaches Python through the callback queue, so a callback that takes
+three seconds delays every key pressed in those three seconds. A **mouse wheel scroll is applied by ImGui
+itself, inside the frame** — it never enters the queue, which is the same fact that forces Raven to *poll*
+for reader scrolling (`DPGLinearizedChatView.update_jump_to_latest_pill`) rather than hooking an event.
+
+So "the keyboard went dead for a while and the wheel was fine" is not a keyboard bug to chase. Find what ran
+long in a callback. (Live case 2026-08-21: switching a chat sibling near the top of a long Librarian chat
+rebuilds the view on the callback thread; measured 38 ms, 289 ms and **3038 ms** for three switches, and
+during the last of those every hotkey looked dead. The same fault is recorded from the other end in
+`raven/vendor/file_dialog/fdialog.py`'s `_forget_listing`, where a rebuild on close left the *opening*
+button looking dead afterwards.)
+
 ## A callback is passed as many arguments as it declares
 
 DPG fills a callback's parameters positionally from `(sender, app_data, user_data)`, taking **as many as

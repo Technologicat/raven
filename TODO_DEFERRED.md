@@ -13,6 +13,55 @@ importer first. Recorded here rather than in that item because a trigger nobody 
 the tool for finding things in the backlog cannot be gated on someone remembering to look for it *in* the
 backlog. The recurring moment to ask is the triage step in the release procedure.
 
+## Switching a chat sibling rebuilds the view on the callback thread, so it eats every key pressed meanwhile
+
+*Cluster: librarian-responsiveness · Cost: M · Gate: none — **wanted mid-term** (Juha, 2026-08-21) · Filed: 2026-08-21 · See also: the item below on what makes the rebuild slow*
+
+Reported by Juha while live-testing the keyboard mark: switching siblings near the top of a long chat leaves
+the scroll hotkeys dead, and the log stays where it was. Neither is what it looks like. The sibling callback
+runs `DPGLinearizedChatView.build()` synchronously, DPG dispatches callbacks one at a time, so every key
+pressed during the rebuild is **queued behind it** — and the scroll to the switched message only happens at
+the end. It is slow, not stuck, and everything arrives at once when the rebuild finishes.
+
+The tell that settles it: the **mouse wheel stays responsive throughout**, because ImGui applies wheel
+scrolling inside the frame and it never enters the callback queue. See `dpg-notes.md`, "Hotkeys dead while
+the mouse wheel still scrolls".
+
+**This predates the keyboard mark and was always reachable with the mouse** — clicking a sibling arrow did
+exactly the same. What changed on 2026-08-21 is that the per-message hotkeys now act on the message you are
+looking at, so switching siblings of an *early* message became possible from the keyboard, and early
+messages are where the rebuild has the most to redo. Juha's reading, which fits: the switcher was not
+stress-tested after PDF attachment support landed.
+
+**The fix is not "make the rebuild faster"** — that is the item below, and it is worth doing separately.
+This one is that a slow rebuild must not silently swallow input: either build off the callback thread, or
+say that a rebuild is in progress. The Visualizer already has the second in its info panel dimmer. The same
+fault is recorded from the other end in `fdialog.py`'s `_forget_listing`, where a rebuild on close left the
+*opening* button looking dead.
+
+## Rebuilding a chat branch takes seconds, and the cause is not any of the obvious candidates
+
+*Cluster: librarian-responsiveness · Cost: S to measure, ? to fix · Gate: none — **wanted mid-term** (Juha, 2026-08-21) · Filed: 2026-08-21*
+
+Three sibling switches in one session, timed from `DPGLinearizedChatView.build`'s log line to `scroll_view`'s:
+**38 ms, 289 ms, 3038 ms**. Worth an instrumented run, since the slow case is bad enough for a user to file
+it as broken (see the item above).
+
+What the same session **rules out**, so a measurement run does not start by re-checking them:
+
+- **Not the amount rendered.** The 3-second branch was the *shortest* of the three: `max_y_scroll` 1610 px
+  against 4483 and 4899.
+- **Not the exact-prompt-size computation.** That is a debounced background `ManagedTask`
+  (`_context_prefill_entrypoint`), not on the callback thread, and it reports the 60% figure the slow branch
+  showed.
+- **Not attachment I/O in the obvious place.** The row an attachment builds is three buttons and a name; it
+  reads no sidecar.
+
+What is known about the slow branch: three PDF attachments, ~60% of a 128Ki context, and much less rendered
+height than the branches that were fast. So the cost is per-message and not proportional to what is on
+screen. Untested suspicion worth trying first, and no more than a suspicion: URL-heavy Markdown, this chat
+being full of web-search replies and `dpg_markdown`'s link handling being the known-slow part.
+
 ## The pose editor's list browsing does nothing, and one of its three lists cannot even be reached
 
 *Cluster: ? · Cost: S to diagnose, ? to fix · Gate: none · Filed: 2026-08-21*
