@@ -1389,11 +1389,19 @@ Raised by Juha (2026-07-29).
 
 *Cluster: ? · Cost: ? · Gate: — · Filed: 2026-07-30*
 
-DPG exposes very few getters for theme state — there is no way to ask a theme for its colors or spacings —
-so code that wants to *restore* a value ends up guessing a literal instead. Found while widening `ButtonFlash`
-into `WidgetFlash`, where the theme-restore case turned out to be exactly this bug: `finish` rebound a fixed
-theme rather than the one the widget actually had, so flashing a widget that had no theme silently left one
-on it.
+DPG exposes very few getters for theme state, so code that wants to *restore* a value ends up guessing a
+literal instead. Found while widening `ButtonFlash` into `WidgetFlash`, where the theme-restore case turned
+out to be exactly this bug: `finish` rebound a fixed theme rather than the one the widget actually had, so
+flashing a widget that had no theme silently left one on it.
+
+**Narrower than filed, as of 2026-08-21: a theme's own contents *are* readable.** A theme is made of items
+like everything else, so walking `get_item_theme` → its components → their children reports which colour
+slot or style variable each one sets and what it sets it to (`dpg-notes.md`, "Themes";
+`raven/common/gui/tests/test_keyboardmark.py` reads a theme that way). What remains missing is the
+*resolved* value — "what colour will this widget actually draw with" — which needs the parent chain plus
+DPG's built-in default theme, and there is no getter for that default. Every item in the list below is of
+that second kind, so the list stands; the *reason* is now "the default theme cannot be asked", not "themes
+cannot be read".
 
 **The tell is intent, not syntax.** A literal is an instance of this whenever the code's *intent* is "be
 whatever the theme is" and the literal is standing in for a question it cannot ask. That covers cases which
