@@ -1560,6 +1560,13 @@ except KeyboardInterrupt:
 finally:
     logger.info("App render loop exited.")
 
+    # Before the context goes — see `FileDialog.destroy`. An opened dialog runs a tick thread that calls
+    # DPG, and joining it is waiting, which is why this is here and not in the exit callback.
+    for filedialog in (filedialog_open_image, filedialog_save_image, filedialog_open_json,
+                       filedialog_save_all_emotions):
+        if filedialog is not None:
+            filedialog.destroy()
+
     try:
         dpg.destroy_context()
     except BaseException:

@@ -2210,6 +2210,12 @@ def gui_shutdown() -> None:
     chat_controller.shutdown()
     avatar_controller.shutdown()
     dpg_avatar_renderer.stop(wait=True)
+    # Before the animator is cleared, since the dialog cancels its cursor pulsation through it — and well
+    # before `destroy_context`, because an opened dialog runs a tick thread that calls DPG. See
+    # `FileDialog.destroy`, which joins that thread and therefore belongs in this phase rather than in the
+    # exit callback.
+    if _filedialog_attach is not None:
+        _filedialog_attach.destroy()
     gui_animation.animator.clear()
     logger.info("gui_shutdown: done")
 

@@ -210,6 +210,21 @@ Related: for order-sensitive *input* handling, defer in the main loop rather tha
 via `set_frame_callback` — rapid input would overwrite the pending callback. See
 "Mitigation: defer the order-sensitive action" under Keyboard input.
 
+## `set_exit_callback` holds one callback, process-wide — a second call silently replaces the first
+
+Measured 2026-08-21 on DPG 2.3.1: register two, and only the **second** runs. Same shape as
+`set_frame_callback`, and the same failure — no error, no warning, just a callback that never fires.
+
+**Which makes it unusable from shared or library code.** Every Raven app registers one for its own teardown
+(`_gui_cancel_tasks`, `gui_shutdown`, …), so a widget that registers its own would silently disable the
+teardown of whichever app embeds it — a far worse bug than whatever it was trying to fix. The slot belongs
+to the application, and a shared widget wanting to know about shutdown needs the app to tell it: either the
+app calls the widget's own teardown from its cancel/drain phases, or there is a process-wide Python flag
+the widget can read.
+
+Worth stating because reaching for it is a natural move: "let a background thread know the render loop is
+stopping" is exactly what an exit callback is for, and it is exactly what a library must not use it for.
+
 ## The two internal queues
 
 - **`calls`** (thread-safe queue): Python user callbacks. Consumed by the

@@ -1345,6 +1345,13 @@ def _gui_shutdown() -> None:
     grid = _app_state["grid"]
     if grid is not None:
         grid.destroy()
+    # Last, because it was built first — and load-bearing rather than tidy. The dialog runs a tick thread
+    # while it is open, and `destroy` is what joins it; without this it is still calling DPG when
+    # `destroy_context` frees the library underneath it, which is a segfault rather than an exception.
+    # Reached here rather than from the exit callback because joining is waiting, and the exit callback
+    # runs inside `render_dearpygui_frame` where waiting deadlocks anything parked in `split_frame`.
+    if _filedialog_open is not None:
+        _filedialog_open.destroy()
 
 
 # ---------------------------------------------------------------------------

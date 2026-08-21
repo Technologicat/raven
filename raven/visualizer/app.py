@@ -1959,6 +1959,16 @@ finally:
 
     clear_background_tasks(wait=False)  # signal background tasks to exit
 
+    # Join each file dialog's tick thread before the context goes. A dialog that has been opened runs one,
+    # and it calls DPG — after `destroy_context` that is a call into freed memory, so the failure is a
+    # segfault rather than an exception. Here rather than in the exit callback, because joining is waiting
+    # and the exit callback runs inside `render_dearpygui_frame`, where waiting deadlocks anything parked
+    # in `split_frame`.
+    for filedialog in (filedialog_open, filedialog_open_import, filedialog_save_import,
+                       app_state.filedialog_save):
+        if filedialog is not None:
+            filedialog.destroy()
+
     try:
         dpg.destroy_context()
     except BaseException:

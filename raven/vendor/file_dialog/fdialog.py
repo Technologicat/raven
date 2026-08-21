@@ -439,6 +439,12 @@ class FileDialog:
         user_style=0
     ):
         """
+        **The app that builds one owns its shutdown: call `destroy` on it** once the render loop has
+        exited and before `dpg.destroy_context()`. A dialog that has been opened runs a thread that calls
+        DPG, and `destroy` is what joins it; skipping this crashes the app on exit, intermittently and
+        without a traceback. Because it joins, it must not be called from anywhere that cannot wait — in
+        particular not from `dpg.set_exit_callback`. See `destroy` for the whole of it.
+
         Arguments:
             title:                  str, File dialog window title.
             tag:                    str, File dialog window DPG tag.
@@ -2993,12 +2999,38 @@ class FileDialog:
             logger.warning(f"_stop_grid_ticker: instance '{self.tag}' ({self.instance_tag}), tick thread did not stop within the timeout")
 
     def destroy(self):
-        """Release what the dialog holds outside its widget tree. Call before destroying the DPG context.
+        """Release what the dialog holds outside its widget tree. **Every app that builds one must call this.**
 
-        Two things: the cursor's pulsation, which is registered with the process-wide animator and would
-        outlive both this dialog and the DPG context its theme colours belong to, and — if the grid view was
+        Not optional and not merely tidy: an app that skips it can crash on exit. Call it once per dialog,
+        **after the render loop has exited and before `dpg.destroy_context()`** — and *not* from
+        `dpg.set_exit_callback`, for which see below.
+
+        Releases the cursor's pulsation, which is registered with the process-wide animator and would
+        outlive both this dialog and the DPG context its theme colours belong to; and — if the grid view was
         ever switched to — a thumbnail decoder with its own threads and the tick thread that feeds it.
+
+        Safe on a dialog that was never opened, and safe to call twice, so a caller can list every dialog it
+        built without tracking which ones the user actually reached.
         """
+        # The two constraints are not independent, and both are load-bearing:
+        #
+        # **Before `destroy_context`**, because the tick thread calls DPG. Afterwards every call into the
+        # library is into freed memory, and the failure is a *segfault*, not an exception — so there is
+        # nothing to catch and nothing in the log. (Live case 2026-08-21: `raven-cherrypick` closed with
+        # Alt+F4 while a dialog was open, and the core dump put the crash in `dpg.is_dearpygui_running`
+        # on this thread. It is intermittent — the window is one tick, ~16 ms — so a clean shutdown proves
+        # nothing.)
+        #
+        # **Not from the exit callback**, because this *waits*: stopping the ticker joins it. DPG dispatches
+        # the exit callback from inside `render_dearpygui_frame`, where waiting deadlocks anything parked in
+        # `split_frame` — the frame cannot complete while the callback blocks, and `split_frame` needs the
+        # frame to complete. The exit callback is the place to *signal*; this is the place to *drain*.
+        #
+        # There is deliberately no self-registered `set_exit_callback` here to make this automatic, and it
+        # fails twice over. The exit callback is a place that cannot wait, so registering one would put
+        # this join in exactly the spot the paragraph above rules out — true however many callbacks DPG
+        # allowed. And it allows one: the slot is process-wide, so a widget taking it would silently
+        # replace the host app's and break the app's shutdown to fix its own.
         self._stop_cursor_pulse()
         self._stop_grid_ticker()
         if self._grid is not None:
