@@ -1203,6 +1203,14 @@ Two different registrations are in play, and only the first is universal:
 
 First use: `raven/common/gui/tests/test_animation.py`, covering `WidgetFlash`'s color/theme restoration and its ghost-vs-reified de-duplication — both of which had latent bugs that no amount of looking at the screen would have revealed.
 
+## A probe that measures anything must load the app's fonts first
+
+`guiutils.bootup(font_size=...)` — or at least `setup_default_font(...)` — before `create_viewport`. A probe that goes straight from `setup_dearpygui` to building widgets draws in ImGui's built-in font, which is both narrower and shorter than OpenSans, so **every pixel it reports is a measurement of an app nobody runs**. Sizing the help card that way reported 190 px of slack in a card that in fact had none to spare.
+
+The built-in font also has no glyph outside ASCII, so any text carrying an em-dash comes back as `?`. That reads as a bug in the app, and was investigated as one before the font was suspected — both failures from the same missing call, on 2026-08-21.
+
+The `gui`-marked tests do the same thing one call lower: `guiutils.setup_default_font(20)` at the top, `dpg.bind_font(0)` in the `finally`, since 20 is what every app in the constellation uses and the module's other tests are not measuring.
+
 ## Context recreation is not reliably safe once real widgets have rendered
 
 The cache paragraph above says bare cycles are fine, and they are — including 60 rendered frames on a shown viewport, clean over 8 trials. **That result does not extend to a cycle with an application's widgets in it**, which is the shape a benchmark reaches for when comparing two configurations in one process.
@@ -1215,7 +1223,7 @@ Consequences, which are small:
 
 - **An app never meets this**, holding one context for its whole life.
 - **The default test suite does not either**, using one module-scoped context per module and never rendering a frame (see the ceiling above).
-- **The `--run-gui` group does do this cycle, and is one module away from dying of it.** `test_focus_semantics.py`'s `mapped_viewport` fixture is *function*-scoped: a context created, shown, rendered and destroyed once per test, five times over. Adding any further module that maps a context and renders frames segfaults the group — measured 2026-08-13 at 3/3 with a table in it, 1/3 without, and *only* when `test_focus_semantics` runs first, which alphabetical collection order decides. The group passes today because the one other `gui` test (`test_filedrop`) sorts before it and renders no frames. See the deferred item "The `--run-gui` group segfaults if a second module maps a context".
+- **The `--run-gui` group does do this cycle, and has now died of it.** `test_focus_semantics.py`'s `mapped_viewport` fixture is *function*-scoped: a context created, shown, rendered and destroyed once per test, five times over. Any further module that maps a context and renders frames segfaults the group — measured 2026-08-13 at 3/3 with a table in it, 1/3 without, and *only* when `test_focus_semantics` runs first, which alphabetical collection order decides. `test_fdialog.py` acquired such tests, and as of **2026-08-21 `pytest -m "not ml" --run-gui` segfaults**, in `ImGui_ImplGlfw_WindowFocusCallback` reached from GLFW's `processEvent` — a focus event delivered to a backend whose context is gone. **So verify a new `gui` test with `-m gui` or one module at a time**, not with the whole group. See the deferred item "The `--run-gui` group segfaults if a second module maps a context".
   - The same shapes do **not** crash outside pytest: five focus-like cycles then a table-building cycle, six table cycles, twelve plain cycles, all clean over three runs each. So something about the pytest process is part of it, and an earlier guess here — that a *heavier subsystem* would be what tipped it — was wrong; 400 plain buttons did it too.
 - **A benchmark or probe must use one process per context.** Run configurations as subprocesses and compare their printed output. This is cheap, and it is the only reason the constraint matters at all.
 
@@ -1289,6 +1297,25 @@ button`, render ten frames, and compare `get_widget_pos` of the innermost child 
 `get_item_rect_min(button) - get_item_pos(button)`. It is the `gui`-marked
 `test_get_widget_pos_is_viewport_coordinates_however_deeply_nested` in
 `raven/common/gui/tests/test_utils.py`.
+
+**`rect_min` is where the item was *drawn*, so it lags a `set_item_pos` by a frame while `get_item_pos`
+does not.** Measured 2026-08-21: a window moved from `(100, 100)` to `(700, 300)` reports the new position
+from `get_item_pos` immediately and from its child group's `rect_min` only after the next frame; the
+group's own `get_item_pos` stays `(8, 34)` throughout, being parent-relative and so indifferent to where
+the window is.
+
+**The trap is a subtraction whose two halves come from different frames.** "How far below the window's top
+does the content start" reads naturally as `get_item_rect_min(child) - get_item_pos(window)`, and that is
+one number from the last frame drawn and one from now — correct only while nothing has moved. Where the
+question is an *offset within* a container, ask the child's own `get_item_pos`, which answers it directly
+and cannot go stale. (Live case: `helpcard.HelpWindow.measure_content_height`, called from `on_show` —
+which `show` reaches immediately after repositioning the window, so the two halves were always a frame
+apart.)
+
+**A group reports the full extent of its content, whether or not the window clips it.** Same session, a
+1221×606 group in a window forced to 400, 640 and 900 px tall: `get_item_rect_size` said 606 every time.
+So "how tall does my content want to be" is answerable from a window that is currently too short for it —
+which is what lets a measurement *grow* a fixed-size window and not only shrink one.
 
 ## A tooltip's position is not readable, and its offset from the cursor is (25, 10)
 
@@ -1388,6 +1415,22 @@ So the cell answers the question and the row does not, under either configuratio
 Row 0's appearance in the clipped answer is unexplained; it was not chased, because the cell-side answer is what the feature needs.
 
 **Rendered frames are required before any of this means anything** — visibility is a property of the last frame drawn, so it is unavailable headless (see "Testing DPG code"), and unavailable for a window shown microseconds ago.
+
+## A table's column widths take a second frame to settle, and text wrapping follows them
+
+Measured 2026-08-21, sizing the file dialog's help card to its content. The card is a two-column table of
+hotkeys in a 1250 px window; several of its cells hold text with `wrap=0`, which wraps at the column edge.
+On the **first** frame the table drew, the content group measured 584 px; from the frame after, 606 — a
+wrapped line's worth. Column widths are computed from what was submitted, and which cells need two lines
+follows from the widths, so the first frame is measuring a layout still on its way somewhere.
+
+So **a measurement of anything containing a table needs at least two rendered frames**, and the honest form
+is to re-ask until the answer stops moving rather than to pick a frame count. `fdialog`'s
+`_fit_help_card_to_content` is the worked example: split a frame, measure, apply, repeat, stop when the
+measurement equals what the window already is.
+
+The failure it prevents is quiet and one-directional: a card sized from the first frame comes out *short*,
+and a fixed-size DPG window with `no_scrollbar=True` clips the overflow away without a mark.
 
 ## What a sort callback receives
 

@@ -1,11 +1,11 @@
 # FileDialog: keyboard accessibility
 
-**Status: every key the design names is in; two items remain.** The design below was settled on
+**Status: every key the design names is in; one item remains.** The design below was settled on
 2026-08-13 (Juha and Claude), and every key it names is in and live-tested — the listing cursor, Enter's
 rules, Tab and its completion and fill, the sort and filter chords, Alt+Up / Ctrl+Up, the "Will pick"
-line, the F1 help card, Ctrl+Shift+F, Ctrl+L with the path field's colouring, and Ctrl+B with the
-places-panel migration and its type-ahead. Still to build: **7**, the caret mark, and **10**, the help
-card's cosmetic pass — and those two close this brief. The navigation history moved out on 2026-08-21 to
+line, the F1 help card, Ctrl+Shift+F, Ctrl+L with the path field's colouring, Ctrl+B with the
+places-panel migration and its type-ahead, and the help card's cosmetic pass. Still to build: **7**, the
+caret mark — which closes this brief. The navigation history moved out on 2026-08-21 to
 `briefs/filedialog-navigation-history-brief.md`, unscheduled.
 **See "What is built" near the end for the current state** — including the
 several places where the design below was overtaken by what building it taught, each noted there rather
@@ -780,6 +780,47 @@ session reading the asymmetry as an oversight and "simplifying" it into one rule
 and forward buttons — is the one item that arrived after the dialog started being built rather than with
 the original design, and it now has its own brief.
 
+### Added 2026-08-21 (afternoon): the help card fits its content
+
+**Item 10 is built.** The card is measured on first show and the window is sized to what it holds, so a
+dialog with fewer keys gets a shorter card instead of the fullest one's height with empty space under the
+table. `HelpWindow` gained the measurement (`measure_content_height`) and a live `width` / `height` pair
+that recenters when set; the policy — when to measure and what to do with the number — is
+`fdialog._fit_help_card_to_content`, per the call-site decision recorded in item 10.
+
+Measured before and after, at `font_size=20`:
+
+| dialog | before | after |
+|---|---|---|
+| Librarian's attach dialog, the fullest configuration | 640 | **640** |
+| a plain single-file open dialog | 640 | **623** |
+| Cherrypick's `dir-with-contents` folder picker | 640 | **563** |
+
+Three things the build settled that item 10's notes did not:
+
+- **The fullest card was not carrying 23 px of slack; it was carrying none.** 640 is exactly its content
+  height, which is why it is the one configuration the fit leaves alone. The earlier figure came from a
+  different measurement and is superseded rather than reconciled — and Cherrypick's skirt is 77 px, not
+  the ~110 estimated. The shape of the finding held: counting rows predicts 30 px where the truth is 77,
+  and the residue is the wrapping.
+
+- **One rendered frame is not enough to measure a table.** Column widths settle on the second frame and
+  which cells wrap follows from them, so the frame `show` spends placing the card reports 584 px of content
+  where the settled answer is 606 — a wrapped line short, which a `no_scrollbar` window then clips away
+  silently. The fit therefore re-asks until the answer stops moving rather than measuring once. Recorded
+  in `dpg-notes.md` under *Tables*.
+
+- **The offset of the content from the window's top has to be asked of the group, not computed.** The
+  natural spelling — the group's viewport `rect_min` minus the window's position — takes one number from
+  the last frame drawn and one from now, and `show` moves the window immediately before calling `on_show`.
+  The group's own `get_item_pos` is parent-relative and answers directly. Also in `dpg-notes.md`, under the
+  `rect_min` section, together with the finding that a group reports its full content extent even inside a
+  window too short to show it — which is what lets the fit grow a card as well as shrink one.
+
+Pinned by `test_the_help_card_is_as_tall_as_the_keys_this_dialog_has` (`gui`-marked, in
+`test_fdialog.py`), which was checked against the code without the fit and fails there with both cards at
+640.
+
 ### Added 2026-08-21
 
 **Item 6 is built and live-tested**: the panel is selectables, Ctrl+B parks the caret on it, the six
@@ -1312,13 +1353,13 @@ Suggested order, with what each actually costs:
 real choice rather than a scheduling detail: 1–3 finish the keyboard, and 5 adds a capability the dialog has
 never had. Worth deciding at the start of the session rather than discovering at the end of it.
 
-**Standing 2026-08-21.** Built: 1, 2, 3, 4, 6, 8, 9. Moved out: **5** (navigation history), now its own
-unscheduled brief. Left: **7** (the caret mark, fleet-wide) and **10** (the help card's cosmetic pass,
-deliberately last). **Those two close this brief.**
+**Standing 2026-08-21.** Built: 1, 2, 3, 4, 6, 8, 9, 10. Moved out: **5** (navigation history), now its
+own unscheduled brief. Left: **7** (the caret mark, fleet-wide). **That one closes this brief.**
 
-10. **The help card wants a cosmetic pass** — raised 2026-08-21 (Juha), and deferred on purpose until the
-    keys stop changing: every item above adds or moves a row, so tidying the card before the last one
-    lands means tidying it twice.
+10. ~~**The help card wants a cosmetic pass**~~ — **built 2026-08-21**, see "Added 2026-08-21 (afternoon)"
+    above, which also records where the figures below turned out wrong. Raised 2026-08-21 (Juha), and
+    deferred on purpose until the keys stop changing: every item above adds or moves a row, so tidying the
+    card before the last one lands means tidying it twice.
 
     **What the pass is actually for: the card is a fixed height sized for its tallest configuration.**
     `_HELP_CARD_SIZE` is one constant, and the card's content is per-instance — a dialog with no type
