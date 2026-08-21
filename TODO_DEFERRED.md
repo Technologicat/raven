@@ -13,6 +13,31 @@ importer first. Recorded here rather than in that item because a trigger nobody 
 the tool for finding things in the backlog cannot be gated on someone remembering to look for it *in* the
 backlog. The recurring moment to ask is the triage step in the release procedure.
 
+## Ctrl+Left / Ctrl+Right cannot flick between siblings, because each switch re-picks its own target
+
+*Cluster: librarian-keyboard · Cost: S to build, the design is the work · Gate: none — **raised for Monday** (Juha, 2026-08-21) · Filed: 2026-08-21*
+
+Flicking back and forth between two siblings to compare them does not work. Ctrl+Left switches, and then
+Ctrl+Right acts on **whatever message the new layout happens to put under the rule** — the branch you land
+on decides how tall things are, which decides which message is bottommost-with-a-visible-button-row, which
+decides what the next press switches. So the pair is not each other's inverse, and you cannot sit at one
+point in the tree and compare its alternatives, which is the whole point of having siblings.
+
+**A consequence of the routing added 2026-08-21**, and the price of making the target follow the eye: the
+rule is stateless and recomputed per press, which is exactly right for *starting* an action and wrong for
+*repeating* one. Before that change the target was always the last message, which cannot drift — it was
+simply the wrong message.
+
+**The shape of the fix is an anchor, and the design is deciding when it clears.** Remember the node a
+sibling flick is operating on, and keep flicking that node rather than re-deriving; the questions are what
+sets it (the first switch of a run), what clears it (scrolling away? a different hotkey? a new message
+arriving? a rebuild that no longer contains it?), and whether the mark should show the anchored node rather
+than the derived one while a run is in progress — it would have to, or the screen would disagree with the
+keys.
+
+Worth settling alongside the stall item below: a rebuild that takes seconds makes a flick feel worse than a
+drift, so the two are noticed together even though they are independent faults.
+
 ## Switching a chat sibling rebuilds the view on the callback thread, so it eats every key pressed meanwhile
 
 *Cluster: librarian-responsiveness · Cost: M · Gate: none — **wanted mid-term** (Juha, 2026-08-21) · Filed: 2026-08-21 · See also: the item below on what makes the rebuild slow*
