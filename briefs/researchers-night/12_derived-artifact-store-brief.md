@@ -34,6 +34,21 @@ Verified by reading the tree, not inferred. Three storage strategies for one cla
 All three are the same kind of object: derived from a source artifact, expensive, content-determined, not
 authoritative, regenerable. The divergence is historical, not designed.
 
+**"Once per process" is not as cheap as that line makes it sound, measured 2026-08-21.** The extraction runs
+inside `llmclient.count_branch_tokens`, which `update_context_fill_indicator` calls *immediately and
+synchronously on every HEAD change* — and a HEAD change happens inside a DPG callback, so it holds the
+callback thread. Switching a chat sibling onto a branch carrying three PDF attachments took **3038 ms**,
+against 38 ms and 289 ms for two switches that paid no extraction; every key pressed meanwhile queued behind
+it, so the app read as frozen. Details and the fingerprint that identifies this class of stall are in
+`TODO_DEFERRED.md` ("A HEAD change extracts every attached document synchronously") and `dpg-notes.md`
+("Hotkeys dead while the mouse wheel still scrolls").
+
+That does not change this brief's design, and it is not an argument for building it sooner than the rest of
+the sprint allows. What it changes is the *cost of not having it*: the once-per-process extraction is a
+user-visible stall on first visit to a branch, not merely an inelegant third storage strategy. It also means
+the migration has a cheap interim that does not wait for this brief — see the deferred item, which proposes
+letting the immediate count skip attachments it has not extracted yet, the readout already being two-stage.
+
 **And a fourth is arriving before this brief does.** Webfetch sidecarring (`TODO_DEFERRED.md:517`) ships in
 v0.2.8, ahead of this design. It follows the chat-attachment pattern, which is the *correct* pattern for it, so
 it does not make things worse — but it is a fourth call site that will want to become a registered producer,

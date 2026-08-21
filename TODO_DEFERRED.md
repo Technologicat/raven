@@ -39,28 +39,38 @@ say that a rebuild is in progress. The Visualizer already has the second in its 
 fault is recorded from the other end in `fdialog.py`'s `_forget_listing`, where a rebuild on close left the
 *opening* button looking dead.
 
-## Rebuilding a chat branch takes seconds, and the cause is not any of the obvious candidates
+## A HEAD change extracts every attached document synchronously, so landing on a PDF branch costs seconds
 
-*Cluster: librarian-responsiveness · Cost: S to measure, ? to fix · Gate: none — **wanted mid-term** (Juha, 2026-08-21) · Filed: 2026-08-21*
+*Cluster: librarian-responsiveness · Cost: S · Gate: none — **wanted mid-term** (Juha, 2026-08-21) · Filed: 2026-08-21 · See also: the item above, which is what makes this *visible* as a stall*
 
 Three sibling switches in one session, timed from `DPGLinearizedChatView.build`'s log line to `scroll_view`'s:
-**38 ms, 289 ms, 3038 ms**. Worth an instrumented run, since the slow case is bad enough for a user to file
-it as broken (see the item above).
+**38 ms, 289 ms, 3038 ms**. The slow one landed on a branch with three PDF attachments.
 
-What the same session **rules out**, so a measurement run does not start by re-checking them:
+**The chain, read out rather than guessed** (Juha's hunch, confirmed): `update_context_fill_indicator` runs
+an immediate local count on every HEAD change → `llmclient.count_branch_tokens` → for each `text_file` part
+→ `textfilestore.sidecar_to_text` → `docextract.extract_text_from_bytes` → **pypdf**. A HEAD change happens
+inside the sibling callback, so all of that is on DPG's callback thread.
 
-- **Not the amount rendered.** The 3-second branch was the *shortest* of the three: `max_y_scroll` 1610 px
-  against 4483 and 4899.
-- **Not the exact-prompt-size computation.** That is a debounced background `ManagedTask`
-  (`_context_prefill_entrypoint`), not on the callback thread, and it reports the 60% figure the slow branch
-  showed.
-- **Not attachment I/O in the obvious place.** The row an attachment builds is three buttons and a name; it
-  reads no sidecar.
+**It is a first-visit-per-session cost, which is why it reproduces so erratically.** `sidecar_to_text` is
+memoized in a process-level dict, so the first switch onto a branch pays for extracting its documents and
+every later switch to the same branch is instant. Two of the three timings above are cached-or-empty cases.
+Anyone re-testing this needs a *fresh app* and a branch not yet visited, or it will look fine.
 
-What is known about the slow branch: three PDF attachments, ~60% of a 128Ki context, and much less rendered
-height than the branches that were fast. So the cost is per-message and not proportional to what is on
-screen. Untested suspicion worth trying first, and no more than a suspicion: URL-heavy Markdown, this chat
-being full of web-search replies and `dpg_markdown`'s link handling being the known-slow part.
+Not any of these, all checked while looking: not the amount rendered (the 3-second branch was the
+*shortest*, `max_y_scroll` 1610 px against 4483 and 4899), not the exact-prompt-size prefill (a debounced
+background `ManagedTask`), not the attachment row (three buttons and a name, no sidecar read).
+
+**The durable fix is already designed elsewhere, and this item must not become a second copy of it.**
+`briefs/researchers-night/12_derived-artifact-store-brief.md` persists derived text — its motivating table
+names this very case, "not persisted, extracts on demand, memoized on the content-addressed filename". What
+that brief did not have is what this costs: a note recording the 3038 ms and the thread it happens on has
+been added to it.
+
+**What is left here is the interim, which does not wait for that brief.** Let the immediate count *skip*
+attachments whose text is not already extracted, and leave them to the debounced background pass. The
+readout is two-stage by construction — a local estimate, then the backend's exact figure — so "not counted
+yet" is a third state it is already shaped for rather than a new concept. Warming the cache off-thread is
+the other candidate and is strictly more work for the same symptom.
 
 ## The pose editor's list browsing does nothing, and one of its three lists cannot even be reached
 
