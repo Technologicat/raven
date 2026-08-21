@@ -890,6 +890,12 @@ Never matching is indistinguishable from nothing ever being focused — the feat
 logged nothing, while the app's own combo browsing worked throughout, which made it read as a drawing
 problem. `guiutils.item_identifiers` returns both names; three apps already normalized this by hand.
 
+**The switching rides on `_set_caret_home`**, which is where the places cursor was already repainted — one
+place every route out of a home passes through, rather than a repaint per route. So the mark inherits
+whatever that path already does about the spurious activate/deactivate pair this brief records above.
+**Whether a spurious round trip flashes the displaced home's mark for a frame has not been looked for**: it
+would take a frame-by-frame capture, and every drive of it settled on the right mark within a second.
+
 **Where the marks are, as built:**
 
 | what | mark | note |
