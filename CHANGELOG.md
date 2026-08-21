@@ -54,7 +54,8 @@
 
 - **the chat log now marks its ends when you reach them with the mouse wheel**, as it already did when you got there with the keyboard. The wheel is scrolled by the GUI toolkit itself, so nothing in Raven was watching it.
 
-- **the per-message hotkeys act on the message you are looking at**, rather than on the last one in the chat. Scroll back and reroll, branch, speak, edit or step between siblings, and it happens to the bottommost message on screen; a blue dot beside its buttons says which one that is. They used to always act on the end of the chat, which is off screen precisely when you have scrolled away from it.
+- **the per-message hotkeys act on the message you are looking at**, rather than on the last one in the chat. Scroll back and reroll, branch, speak, edit or step between siblings, and it happens to the bottommost message whose buttons are on screen — a blue dot beside them says which one that is. They used to always act on the end of the chat, which is off screen precisely when you have scrolled away from it.
+  - Reading a message taller than the window is the one case with no dot to show: its buttons are below the edge and no other message's are visible either, so the keys act on the message filling the view, and the dot returns as soon as a button row does.
 
 *Raven-visualizer*
 

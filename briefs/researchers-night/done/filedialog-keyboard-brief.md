@@ -914,11 +914,26 @@ keyboard routing at all — no focus dispatch anywhere in the app — so they ar
 and the mouse. A mark there would claim the arrow keys go somewhere they never go. Librarian's combo
 browsing is likewise commented out, so its only mark is the message dot.
 
-**One open question, raised by driving it.** Librarian's dot hangs on the current message's button row, so
-while you are reading the middle of a long message — its row below the fold — nothing on screen says which
-message the hotkeys would act on. Inherent to marking the row; the mark reappears as soon as a row comes
-into view. Not obviously worth fixing, and the alternatives (a mark on the message body, a floating
-indicator) both cost more than the ambiguity does.
+**Librarian's routing was mis-specced, and driving it is what showed why** (Juha, 2026-08-21). The rule as
+written here was *the bottommost at least partially visible message*, and it puts the target on a message
+whose button row is below the fold — so the hotkeys have a target and the screen says nothing about which,
+because the mark lives in that row. The revised rule:
+
+- **The bottommost message whose button row is fully on screen.** That is the row a mark can be drawn in
+  whole, which is the point of choosing it.
+- **Failing that, the bottommost message on screen at all** — the original rule, kept as the fallback for
+  the one case it is right for: a message taller than the panel covers the whole view, so *no* row is on
+  screen and there is nothing else the keys could sensibly act on. The mark is then invisible, which is
+  honest rather than a gap, and it comes back as soon as a row does.
+
+Both were driven: the dot follows the bottommost fully visible row, steps back a message when that row is
+nudged past the bottom edge by two wheel clicks, and disappears exactly while the view sits inside one long
+message.
+
+**The dot was also far too big**, being FontAwesome's filled circle in the icon font at 20 px beside 28 px
+buttons. It is `•` (U+2022) in the ordinary text font now — 6 px measured, no second font, no atlas space.
+The other candidates were checked at the same time: `·` U+00B7 renders at 4 px, while `●` U+25CF, `▪`
+U+25AA and `∙` U+2219 all come back as the missing-glyph box, being outside the ranges Raven's font loads.
 
 **And the z-order claim is confirmed, by a case nobody was aiming at** (Juha, 2026-08-21). The Visualizer's
 old highlight was a rectangle on the viewport drawlist, which is unconditionally above every window; the
@@ -1356,6 +1371,8 @@ Suggested order, with what each actually costs:
    - **Librarian is missing it, and gaining it is two pieces of work.** Its chat-log hotkeys act on the
      bottommost message whatever is on screen; they should act on the **bottommost at least partially
      visible** message at the current scroll position, and that message's button row then wants the mark.
+     (Revised on 2026-08-21 after driving it: *partially visible* is the wrong criterion, because it can
+     name a message whose button row — and so the mark — is below the fold. See the closing section.)
      - **The routing needs no new arithmetic — the toolset is already symmetric** (Juha, 2026-08-21).
        `raven.common.gui.widgetfinder` carries all four predicates —
        `is_completely_below_target_y` / `is_completely_above_target_y` and

@@ -303,13 +303,18 @@ def _get_all_greeting_node_ids(datastore: chattree.Forest) -> List[str]:
 # --------------------------------------------------------------------------------
 # The keyboard mark's slot in a message's button row
 
-# How much room the mark's dot takes at the left of the row, taken off the spacer that right-aligns the
-# buttons so that adding the dot did not move them.
+# The mark's dot. A bullet in the ordinary text font rather than an icon: measured 2026-08-21 at the font
+# size every app in the constellation uses, it is 6 px wide against 20 px for FontAwesome's filled circle,
+# which read as a blob beside a row of 28 px buttons. It also costs no font atlas space, where a second
+# icon font at a smaller size would.
 #
-# **Chosen, not measured**, and it does not need to be: the row is right-aligned into 64 px of deliberate
-# slack (see the spacer below), so being a few pixels out moves the whole button block by that much and
-# nothing collides. Worth measuring only if the dot is ever given a glyph of a very different width.
-_MARK_SLOT_W = 24
+# The other small glyphs are not options: `●` U+25CF, `▪` U+25AA and `∙` U+2219 all came back as the
+# missing-glyph box, so they are outside the ranges Raven's font loads. `·` U+00B7 does render, at 4 px.
+_MARK_GLYPH = "•"  # U+2022 BULLET
+
+# How much room it takes at the left of the row, taken off the spacer that right-aligns the buttons so that
+# adding the dot did not move them: the glyph's 6 px plus DPG's 8 px of item spacing.
+_MARK_SLOT_W = 14
 
 _unmarked_theme = None  # created on first use by `_get_unmarked_theme`
 
@@ -353,6 +358,7 @@ class DPGChatMessage:
         self.node_id = None  # populated by `build`
         self.gui_text_group = None  # populated by `build`
         self.gui_keyboard_mark_widget = None  # populated by `build`; the dot the keyboard mark lights when this message is the current one
+        self.gui_buttons_group = None  # populated by `build`; whether this is on screen decides which message the hotkeys act on
         self.gui_button_callbacks = {}  # {name0: callable0, ...} - to trigger button features programmatically
         self.text_indent_w = 0  # how far the text currently being rendered is inset from the message's left edge
         # Item handler registries created by `_make_clickable`. They live in DPG's handler-registry tree, not
@@ -564,9 +570,12 @@ class DPGChatMessage:
         # ----------------------------------------
         # buttons (below text)
 
+        # Held, because "is this message's button row on screen?" is what decides which message the
+        # per-message hotkeys act on. See `DPGChatController.get_current_message`.
         buttons_horizontal_layout_group = dpg.add_group(horizontal=True,
                                                         tag=f"chat_buttons_container_group_{self.gui_uuid}",
                                                         parent=text_vertical_layout_group)
+        self.gui_buttons_group = buttons_horizontal_layout_group
         number_of_message_buttons = 14
         chat_text_w = self.get_chat_text_width()
         dpg.add_spacer(width=chat_text_w - number_of_message_buttons * (gui_config.toolbutton_w + 8) - 64 - _MARK_SLOT_W,  # 8 = DPG outer margin; 64 = some space for sibling counter
@@ -580,10 +589,9 @@ class DPGChatMessage:
         # Present on every message and invisible on all but one. Hiding it instead would repack the row as
         # the reader scrolls, so it wears a theme that colours it transparent, and the mark displaces that
         # theme on whichever message is current.
-        self.gui_keyboard_mark_widget = dpg.add_text(fa.ICON_CIRCLE,
+        self.gui_keyboard_mark_widget = dpg.add_text(_MARK_GLYPH,
                                                      tag=f"chat_keyboard_mark_{self.gui_uuid}",
                                                      parent=buttons_horizontal_layout_group)
-        dpg.bind_item_font(self.gui_keyboard_mark_widget, self.parent_view.themes_and_fonts.icon_font_solid)
         dpg.bind_item_theme(self.gui_keyboard_mark_widget, _get_unmarked_theme())
 
         self.build_buttons(gui_parent=buttons_horizontal_layout_group)
@@ -3268,33 +3276,59 @@ class DPGChatController:
     def get_current_message(self) -> Optional[DPGChatMessage]:
         """Return the `DPGChatMessage` the per-message hotkeys act on, or `None` if the view is empty.
 
-        The **bottommost at least partially visible** message at the current scroll position, which for a
-        chat scrolled to the end is the last one — so this differs from `get_last_message` only once the
-        reader has scrolled back. Which is exactly when the difference matters: a reroll or a sibling step
-        aimed at a message off the bottom of the screen is an edit nobody can see happening.
+        **The bottommost message whose button row is fully on screen**, and failing that, the bottommost
+        message that is on screen at all. For a chat scrolled to the end both give the last message, so
+        this differs from `get_last_message` only once the reader has scrolled back — which is exactly when
+        the difference matters: a reroll aimed at a message off the bottom of the screen is an edit nobody
+        can see happening.
         """
+        # **The button row is the criterion rather than the message**, because the mark that says which
+        # message this is lives *in* that row. "The bottommost partially visible message" was the first
+        # rule here, and reading a long one put its row below the fold — so the hotkeys had a target and
+        # the screen said nothing about which it was.
+        #
+        # The fallback is that same first rule, and it is not a leftover: a message taller than the panel
+        # covers the whole view, so no button row is on screen at all and there is nothing else the keys
+        # could sensibly act on. The mark is then invisible, which is honest — there is no row to put it in
+        # — and it reappears as soon as one comes into view.
         history = self.current_chat_history
         if not history:
             return None
 
         _, panel_y = guiutils.get_widget_pos(self.view.gui_parent)
         _, panel_h = guiutils.get_widget_size(self.view.gui_parent)
+        top_y = panel_y
         bottom_y = panel_y + panel_h
 
-        # The predicate is *completely below the bottom edge* — the complement of "at least partially
-        # visible" — because a binary search needs its criterion to go false→true down the list, and
-        # visibility goes the other way. The complement has the same threshold, so this is the same
-        # question asked in the direction the search can answer.
+        by_row = {message.gui_buttons_group: message for message in history if message.gui_buttons_group is not None}
+
+        # A binary search needs its criterion to go false→true down the list, and visibility goes the other
+        # way — so each step below asks the complement, which has the same threshold, and takes the last
+        # widget that fails it.
         #
-        # `direction="left"` then returns the last message that is *not* below the fold. With the view
-        # scrolled to the end no message satisfies the criterion at all, and "the last that does not" is
-        # the last message, which is the answer there too.
+        # *Partially below the bottom edge* is the complement of *ends at or above it*, so `direction="left"`
+        # gives the bottommost row that fits entirely above the fold. That is the row a mark can be drawn in
+        # whole, which is the point of choosing it.
+        def hangs_past_the_bottom(widget):
+            return widgetfinder.is_partially_below_target_y(widget, target_y=bottom_y)
+
+        row = widgetfinder.binary_search_widget(widgets=list(by_row.keys()),
+                                                accept=hangs_past_the_bottom,
+                                                consider=None,  # every entry is a button row; no confounders to step over
+                                                skip=None,
+                                                direction="left")
+        # A row that clears the bottom edge may still be above the *top* one, and then it is not on screen
+        # either — which is the case where a single message covers the view, since every row is then either
+        # above it or below it.
+        if row is not None and widgetfinder.is_completely_above_target_y(row, target_y=top_y) is None:
+            return by_row[row]
+
         def is_below_the_fold(widget):
             return widgetfinder.is_completely_below_target_y(widget, target_y=bottom_y)
 
         widget = widgetfinder.binary_search_widget(widgets=[message.gui_container_group for message in history],
                                                    accept=is_below_the_fold,
-                                                   consider=None,  # every entry is a message; no confounders to step over
+                                                   consider=None,
                                                    skip=None,
                                                    direction="left")
         if widget is None:  # every message is below the fold, which a clamped scroll position should prevent
