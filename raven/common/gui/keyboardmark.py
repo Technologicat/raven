@@ -16,8 +16,9 @@ grid would have been dictating the colour of a combo's border in an app with no 
 
 `Mark` is the second of those, and it needs no drawing at all: it recolours the widget's own edge through a
 theme, so it clips, scrolls and stacks exactly as the widget does. The alternative it replaced — a rectangle
-on the viewport drawlist — is unconditionally on top, which draws it over dimmers and modals that are meant
-to be covering it.
+on the viewport drawlist — sits unconditionally above every window, so anything meant to cover it has to be
+answered by *hiding the mark by hand*, once per thing that can cover it. A theme needs none of that, which
+is the whole reason this ended up simpler than it was specified as.
 
 Widgets that draw their own mark into a canvas they already own (`thumbnailgrid`) tick `pulsating_alpha`
 against `PULSE_SECONDS` instead. Either way the rhythm is the shared one: `join_pulse` puts a theme colour
