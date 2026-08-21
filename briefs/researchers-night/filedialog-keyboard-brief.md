@@ -1,10 +1,10 @@
 # FileDialog: keyboard accessibility
 
-**Status: the key set is complete; three capability items remain.** The design below was settled on
+**Status: every key the design names is in; two items remain.** The design below was settled on
 2026-08-13 (Juha and Claude), and every key it names is in and live-tested — the listing cursor, Enter's
 rules, Tab and its completion and fill, the sort and filter chords, Alt+Up / Ctrl+Up, the "Will pick"
-line, the F1 help card, Ctrl+Shift+F, and Ctrl+L with the path field's colouring. Still to build:
-Ctrl+B, the places-panel migration, the caret mark, and the navigation history added on 2026-08-18.
+line, the F1 help card, Ctrl+Shift+F, Ctrl+L with the path field's colouring, and Ctrl+B with the
+places-panel migration. Still to build: the caret mark, and the navigation history added on 2026-08-18.
 **See "What is built" near the end for the current state** — including the
 several places where the design below was overtaken by what building it taught, each noted there rather
 than edited into the design, so the reasoning stays legible.
@@ -918,9 +918,49 @@ would be classified the same way, by asking which tier it belongs to.
 **Recorded in `CaretHome`'s docstring as well as here**, because the shape it protects against is a future
 session reading the asymmetry as an oversight and "simplifying" it into one rule for all homes.
 
-**Not built:** Ctrl+B, the places-panel migration, and the navigation history — Alt+Left / Alt+Right and
-the mouse's back and forward buttons, which is the one item here that arrived after the dialog started
-being built rather than with the original design.
+**Not built:** the navigation history — Alt+Left / Alt+Right and the mouse's back and forward buttons,
+which is the one item here that arrived after the dialog started being built rather than with the original
+design.
+
+### Added 2026-08-21
+
+**Item 6 is built and live-tested**: the panel is selectables, Ctrl+B parks the caret on it, the six
+movement keys walk it, Enter goes to the place under the cursor and Escape gives the caret back. Verified
+by driving a real dialog from inside its own process, and by the screenshots either side of each key —
+the panel at rest, the cursor on a row, and the panel at rest again after both exits.
+
+Four things the build settled that the design above did not:
+
+- **The panel is a list of rows, not a table.** The design said "in a table like the listing's", reasoning
+  from the widget the listing uses. The listing needs a table because it has four columns; this panel has
+  one, so a group per row is the whole of it — and it keeps the separator between the user's directories
+  and the drives working as an ordinary widget rather than as a table row that has to pretend to be one.
+
+- **The panel's cursor is drawn only while the panel has the keys**, where the listing's is drawn always.
+  Not an inconsistency: the listing's cursor is *what Enter acts on*, which is true from every home, so it
+  answers a question the user can ask at any time. This one is reachable only from inside the panel, so a
+  blue row left behind after Escape would promise a jump that Enter would not make. It is the same
+  reasoning item 7 uses to argue the mark belongs on the widget rather than on the listing cursor.
+  - **Which needs the transition, not the key.** Nine chords leave this panel, and unpainting at each of
+    them is nine chances to forget one. `_caret_home` is a property for this reason alone — the setter is
+    the one place all nine already pass through.
+
+- **Focus is parked exactly where the type filter parks it**, on the refresh button, and the migration off
+  `menu_item` still earned its keep. The design's argument was *selectables hold focus, so Ctrl+B needs no
+  special case*; that turned out to be the smaller half. What the migration actually bought is a widget
+  with **text to paint a cursor in**, which a `menu_item` does not have — and focus still stays parked,
+  because otherwise it would have to chase the cursor on every move to say something the colour already
+  says.
+
+- **The compact style is not keyboard-navigable, deliberately.** `user_style=1` is a 40 px strip of image
+  buttons with no text to colour, so Ctrl+B is silently ignored there — the same rule Ctrl+T follows where
+  the grid is not on offer. Nothing in Raven passes `user_style=1`; giving it a keyboard means giving it a
+  drawn mark, which is item 7's mechanism rather than this one's, so it waits for that if it is wanted.
+
+Page Up and Page Down work in the panel too, though the design table named only Up / Down / Home / End.
+They cost nothing — the panel drives the same cursor class the listing does, so picking that cursor is the
+whole of the key handling — and they stop being decorative on a machine with a long mount list, where
+`psutil.disk_partitions()` reports every snap.
 
 ### Added 2026-08-20
 
@@ -1184,7 +1224,8 @@ Suggested order, with what each actually costs:
    the card later is one entry each.
 5. **The navigation history** — the largest, fully designed above, and the one Juha asked for by name.
    Independent of 1–4, so it can go first if the appetite is for building rather than refactoring.
-6. **Ctrl+B and the places-panel migration** — its own day, not a tail end of this one.
+6. ~~**Ctrl+B and the places-panel migration** — its own day, not a tail end of this one.~~ Built
+   2026-08-21; see "Added 2026-08-21" below.
 7. **A mark saying which home has the caret** — small, and raised on 2026-08-19 (Juha) once the homes
    became a set rather than a pair: nothing on the screen says where the arrow keys will land.
 
@@ -1255,19 +1296,18 @@ Suggested order, with what each actually costs:
 real choice rather than a scheduling detail: 1–3 finish the keyboard, and 5 adds a capability the dialog has
 never had. Worth deciding at the start of the session rather than discovering at the end of it.
 
-**Standing 2026-08-20.** Built: 1, 2, 3, 4, 8. Left: **5** (navigation history), **6** (Ctrl+B and the
-places panel) and **7** (the caret mark, fleet-wide), each its own day.
+**Standing 2026-08-21.** Built: 1, 2, 3, 4, 6, 8. Left: **7** (the caret mark, fleet-wide) and **5**
+(navigation history), in that order, each its own day.
 
-**The keyboard is finished in the sense items 1–3 meant it.** Every home the design named has a key, and
-what remains is capability and polish rather than the key set: 5 adds something the dialog has never been
-able to do, 6 rebuilds a panel as data so a cursor can walk it, and 7 is a `raven/common/gui/` component
-that every keyboard-browsable combo in the constellation opts into — which is why it has to land in one
-session rather than starting with the listing's half.
+**Every part of the dialog is now reachable from the keyboard.** That was what item 6 was for, and it is
+the line items 1–3 were aiming at: the places panel was the last control a keyboard could not touch. What
+remains is polish and capability rather than reach — 7 is a `raven/common/gui/` component that every
+keyboard-browsable combo in the constellation opts into, which is why it has to land in one session rather
+than starting with the listing's half, and 5 adds something the dialog has never been able to do at all.
 
-**Order settled 2026-08-20 (Juha): 6, then 7, then 5.** 6 is next, likely 2026-08-21, on the grounds that
-it *completes* the keyboard accessibility rather than adding to it — the places panel is the last thing in
-the dialog a keyboard cannot reach. 7 follows. 5 goes last because it is a new feature and logically
-separate from the rest, which is also what makes it the safe one to defer.
+**Order settled 2026-08-20 (Juha): 6, then 7, then 5.** 6 landed 2026-08-21. 7 follows. 5 goes last
+because it is a new feature and logically separate from the rest, which is also what makes it the safe one
+to defer.
 
 **7 is estimated at a day or less** (Juha), by comparison with the self-sizing tooltip built on 2026-08-20
 — a custom widget with its own settle logic, its own placement and its own animation, delivered alongside

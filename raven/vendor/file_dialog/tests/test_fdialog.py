@@ -1171,6 +1171,165 @@ def test_clicking_a_place_goes_where_it_says(dialog):
     assert exercised, "no place was reachable, so nothing was tested"
 
 
+def ctrl_press(dialog, key):
+    """Send Ctrl+`key` to the dialog."""
+    with mock.patch.object(dpg, "is_key_down", lambda k: k == dpg.mvKey_LControl):
+        dialog._handle_key(key)
+
+
+def place_is_cursor(dialog, idx):
+    """Whether place row `idx` is currently drawn as the cursor."""
+    cell, _base_theme, cursor_theme = dialog._place_themes[idx]
+    return dpg.get_item_info(cell)["theme"] == cursor_theme
+
+
+def user_place_count(dialog):
+    """How many rows of the panel are the user's own directories, before the drives."""
+    return len([label for label, _icon in _PLACES if label in dialog._places])
+
+
+def test_the_panel_is_built_from_selectables(dialog):
+    """What the migration off `menu_item` was for, and the one thing a reader cannot see from the keys.
+
+    A `menu_item` cannot hold focus and cannot be asked to — `get_item_state` on one has no "focused" key
+    at all — so a panel built from them is reachable by mouse and by nothing else, whatever hotkey points
+    at it.
+    """
+    assert dialog._place_themes, "the panel built no rows"
+    for cell, _base_theme, _cursor_theme in dialog._place_themes:
+        assert dpg.get_item_type(cell) == "mvAppItemType::mvSelectable"
+
+
+def test_the_places_and_the_drives_are_one_list(dialog):
+    """One cursor runs over both, so they have to be one sequence in display order rather than two."""
+    labels = [label for label, _path in dialog._place_entries]
+    expected = [label for label, _icon in _PLACES if label in dialog._places]
+    assert labels[:len(expected)] == expected
+    assert labels[len(expected):] == fdialog._get_all_drives()
+
+
+def test_ctrl_b_parks_the_caret_on_the_places_panel(dialog):
+    ctrl_press(dialog, dpg.mvKey_B)
+    assert dialog._caret_home is CaretHome.PLACES
+
+
+def test_the_arrows_belong_to_the_panel_and_not_to_the_listing(dialog):
+    """Two cursors are on screen while the panel has the keys, and only one of them may answer.
+
+    Asserted after every key rather than at the end: a down-then-up is a round trip, and a listing cursor
+    that moved with both would come back to where it started and agree with one that never moved.
+    """
+    listing_start = dialog._table_cursor.current
+    ctrl_press(dialog, dpg.mvKey_B)
+    for expected, key in ((1, dpg.mvKey_Down),
+                          (2, dpg.mvKey_Down),
+                          (1, dpg.mvKey_Up)):
+        dialog._handle_key(key)
+        assert dialog._places_cursor.current == expected
+        assert dialog._table_cursor.current == listing_start
+
+
+def test_home_and_end_move_the_places_cursor(dialog):
+    ctrl_press(dialog, dpg.mvKey_B)
+    dialog._handle_key(dpg.mvKey_End)
+    assert dialog._places_cursor.current == len(dialog._place_entries) - 1
+    dialog._handle_key(dpg.mvKey_Home)
+    assert dialog._places_cursor.current == 0
+
+
+def test_enter_goes_to_the_place_under_the_cursor(dialog):
+    ctrl_press(dialog, dpg.mvKey_B)
+    target = dialog._places_cursor.current_key
+    dialog._handle_key(dpg.mvKey_Return)
+    assert os.path.realpath(os.getcwd()) == os.path.realpath(target)
+
+
+def test_enter_in_the_panel_leaves_the_listing_cursor_alone(dialog):
+    """Otherwise one Enter goes two places at once — the trap Ctrl+L walked into first."""
+    ctrl_press(dialog, dpg.mvKey_B)
+    with mock.patch.object(FileDialog, "_activate_cursor_entry") as activate:
+        dialog._handle_key(dpg.mvKey_Return)
+    activate.assert_not_called()
+
+
+def test_arriving_hands_the_caret_back_to_the_find_field(dialog):
+    """Both exits lead home: Escape without going anywhere, Enter having gone."""
+    ctrl_press(dialog, dpg.mvKey_B)
+    dialog._handle_key(dpg.mvKey_Return)
+    assert dialog._caret_home is CaretHome.FIELD
+
+
+def test_escape_gives_the_caret_back_without_going_anywhere(dialog):
+    """And without cancelling the dialog, which is what Escape means from the main thing rather than here."""
+    ctrl_press(dialog, dpg.mvKey_B)
+    dialog._handle_key(dpg.mvKey_Down)
+    here = os.getcwd()
+    with mock.patch.object(FileDialog, "cancel") as cancel:
+        dialog._handle_key(dpg.mvKey_Escape)
+    cancel.assert_not_called()
+    assert dialog._caret_home is CaretHome.FIELD
+    assert os.getcwd() == here
+
+
+def test_the_cursor_shows_only_while_the_panel_has_the_keys(dialog):
+    """Unlike the listing's, which Enter acts on from every home. This one would be promising a lie."""
+    assert not place_is_cursor(dialog, 0)
+    ctrl_press(dialog, dpg.mvKey_B)
+    assert place_is_cursor(dialog, 0)
+    dialog._handle_key(dpg.mvKey_Escape)
+    assert not place_is_cursor(dialog, 0)
+
+
+def test_leaving_by_a_route_that_is_not_escape_takes_the_cursor_with_it(dialog):
+    """Nine chords leave this panel, so unpainting cannot live at any one of them."""
+    ctrl_press(dialog, dpg.mvKey_B)
+    dialog._handle_key(dpg.mvKey_Down)
+    lit = dialog._places_cursor.current
+    assert place_is_cursor(dialog, lit)
+    ctrl_press(dialog, dpg.mvKey_L)  # off to the path field, which Escape is not the way to
+    assert dialog._caret_home is CaretHome.PATH
+    assert not place_is_cursor(dialog, lit)
+
+
+def test_a_used_place_does_not_stay_lit(dialog):
+    """A selectable is a toggle where a menu item was an action, and a place is not something to select."""
+    cell, _base_theme, _cursor_theme = dialog._place_themes[0]
+    dpg.set_value(cell, True)
+    dialog.open_place(cell, None, dpg.get_item_user_data(cell))
+    assert dpg.get_value(cell) is False
+
+
+def test_a_click_moves_the_cursor_to_the_row_that_was_clicked(dialog):
+    """So Ctrl+B afterwards resumes from the mouse's last answer rather than the arrows'."""
+    idx = user_place_count(dialog) - 1  # the last of the user's own directories, which is readable
+    assert idx > 0, "this user has too few places for a click to move anything"
+    cell = dialog._place_themes[idx][0]
+    dialog.open_place(cell, None, dpg.get_item_user_data(cell))
+    assert dialog._places_cursor.current == idx
+
+
+def test_ctrl_b_does_nothing_where_there_is_no_panel(make_dialog):
+    """A key that acts on a control nobody can see is worse than one that does nothing."""
+    dialog = make_dialog(show_shortcuts_menu=False)
+    ctrl_press(dialog, dpg.mvKey_B)
+    assert dialog._caret_home is CaretHome.FIELD
+
+
+def test_the_compact_panel_is_not_keyboard_navigable(make_dialog):
+    """`user_style=1` is a strip of image buttons, with no text for a cursor to be drawn in."""
+    dialog = make_dialog(user_style=1)
+    assert not dialog._places_are_navigable()
+    ctrl_press(dialog, dpg.mvKey_B)
+    assert dialog._caret_home is CaretHome.FIELD
+
+
+def test_the_help_card_offers_ctrl_b_only_where_the_panel_is(make_dialog):
+    def keys(dialog):
+        return [getattr(entry, "key", None) for entry in dialog._help_hotkey_info()]
+    assert "Ctrl+B" in keys(make_dialog())
+    assert "Ctrl+B" not in keys(make_dialog(show_shortcuts_menu=False))
+
+
 def test_a_modal_dialog_says_what_went_wrong_on_its_target_line(dialog):
     """DPG stacks no modal over a modal, so a message box cannot be drawn while a picker is up.
 

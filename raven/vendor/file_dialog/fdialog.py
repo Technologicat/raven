@@ -94,6 +94,7 @@ class CaretHome(enum.Enum):
     LISTING = "listing"  # the table or the thumbnail grid, whichever view is up
     FILTER = "filter"  # the file type combo
     PATH = "path"  # the path field, where a whole folder is pasted or a short root typed
+    PLACES = "places"  # the side panel of folder shortcuts and drives
 
 
 # How a caller writes "every file" in a `filter_list`, and what the combo calls it. The two differ because
@@ -585,8 +586,19 @@ class FileDialog:
         # could re-measure them are exactly the ones a clipping table may not have drawn.
         self._row_metrics_cache = None
         self._sort_indicators = {}  # SortKey -> drawlist tag, one per sort button
-        # Where the dialog is taking keys. See `CaretHome`.
-        self._caret_home = CaretHome.FIELD
+
+        # The places panel's rows, in display order, and the cell of each with the themes it wears
+        # normally and as the cursor. A drive is a place — both are a name standing for somewhere to go,
+        # which is all a row of this panel means — so the two kinds share one list and one cursor runs
+        # over both, separator and all.
+        self._place_entries = []  # (label, path)
+        self._place_themes = []  # (cell, base theme, cursor theme)
+        # `(origin, pitch)` for the panel's rows once two have been seen laid out; see `_place_metrics`.
+        self._place_metrics_cache = None
+
+        # Where the dialog is taking keys. Assigned directly here, ahead of the widgets: the property
+        # behind it repaints the places cursor, which needs the panel to exist. See `CaretHome`.
+        self._caret_home_now = CaretHome.FIELD
         # What the parent directory of a half-typed path holds, as `(parent, subdirectory names)`. One slot
         # is enough: a path is typed one component at a time, so every keystroke between two separators asks
         # about the same parent, and crossing a separator is the moment the old answer stops being wanted.
@@ -631,6 +643,13 @@ class FileDialog:
                                          # rewritten whenever the cursor moves — including by a rebuild.
                                          on_current_changed=lambda _idx: self._refresh_target_notification())
 
+        # The places panel's cursor, the same class over a much shorter list — which is the point of the
+        # class having been written against callbacks rather than against the table. Nothing here reports
+        # a promised target: a place is somewhere to go, and the dialog never returns one.
+        self._places_cursor = TableCursor(on_paint=self._paint_place,
+                                          on_scroll_into_view=self._scroll_place_into_view,
+                                          page_size=self._places_per_page)
+
         # main file dialog header
         with dpg.window(label=self.title, tag=self.tag, on_close=self.cancel, no_resize=self.no_resize, show=False, modal=self.modal, width=self.width, height=self.height, min_size=self.min_size, no_collapse=True, pos=(50, 50)):
             # What the listing gives up to the rows under it — it is `height=-info_px`, so this is the
@@ -656,19 +675,16 @@ class FileDialog:
                         for label, icon in _PLACES:
                             if label not in self._places:  # this user has no such directory
                                 continue
-                            with dpg.group(horizontal=True):
-                                dpg.add_image(getattr(self, icon))
-                                dpg.add_menu_item(label=label, user_data=self._places[label], callback=self.open_place)
+                            self._add_place_row(label, self._places[label], getattr(self, icon))
 
                         dpg.add_separator()
 
                         # i/e drives list
-                        with dpg.group():
-                            drives = _get_all_drives()
-                            for drive in drives:
-                                with dpg.group(horizontal=True):
-                                    dpg.add_image(self.img_hard_disk)
-                                    dpg.add_menu_item(label=drive, user_data=drive, callback=self.open_place)
+                        for drive in _get_all_drives():
+                            self._add_place_row(drive, drive, self.img_hard_disk)
+
+                    self._places_cursor.set_listing([path for _label, path in self._place_entries],
+                                                    listing_key="places")
 
                 elif (self.user_style == 1):
                     with dpg.child_window(tag=f"shortcut_menu_{self.instance_tag}", width=40, show=self.show_shortcuts_menu, height=-info_px):
@@ -1628,7 +1644,152 @@ class FileDialog:
                      is all a row of it means.
         """
         place_path = user_data
+        # A place is somewhere to go, not something to select, and a selectable is a toggle — so the row
+        # is cleared the moment it is used, the way the listing's rows are. Leaving it lit would assert a
+        # selection this panel has no concept of.
+        with guiutils.nonexistent_ok():
+            dpg.set_value(sender, False)
+        # Mouse and keyboard agree about where the cursor is, so Ctrl+B after a click resumes from the row
+        # that was clicked rather than from wherever the arrows last were.
+        for idx, (cell, _base_theme, _cursor_theme) in enumerate(self._place_themes):
+            if cell == sender:
+                self._places_cursor.set_current(idx)
+                break
+        if self._caret_home is CaretHome.LISTING:
+            # `chdir` hands the caret to the find field from every other home, and deliberately not from
+            # this one — arriving somewhere is no reason to change modes. Which leaves DPG's focus on the
+            # clicked row, outside the child window the listing's homes park in.
+            self._park_focus()
         self.chdir(place_path)
+
+    # ------------------------------------------------------------------
+    # The places panel — the side list of folder shortcuts and drives
+    # ------------------------------------------------------------------
+
+    def _add_place_row(self, label: str, path: str, icon) -> None:
+        """Build one row of the places panel: an icon, and a selectable that goes where the row says.
+
+        `label`: what the row reads — a directory name for one of the user's places, the mount point for
+                 a drive.
+        `path`: where it goes.
+        `icon`: the texture to show beside it.
+        """
+        # A selectable rather than a menu item, and for the keyboard rather than for the look: a
+        # `menu_item` cannot hold focus and cannot be asked to — `get_item_state` on one has no "focused"
+        # key at all — so a panel built from them is reachable by mouse and by nothing else. A selectable
+        # is what the listing's rows are made of, which also makes this the listing's cursor rather than a
+        # second kind of one.
+        with dpg.group(horizontal=True):
+            dpg.add_image(icon)
+            cell = dpg.add_selectable(label=label, user_data=path, callback=self.open_place,
+                                      height=self.selec_height)
+        dpg.bind_item_theme(cell, self.selec_alignt)
+        self._place_entries.append((label, path))
+        self._place_themes.append((cell, self.selec_alignt, self.selec_alignt_cursor))
+
+    def _places_are_navigable(self) -> bool:
+        """Whether the places panel is on screen and has rows for a cursor to move over.
+
+        False in the compact style, which is a strip of image buttons with no text to paint a cursor on,
+        and false where the caller asked for no panel at all.
+        """
+        return bool(self.show_shortcuts_menu and self._place_entries)
+
+    def _paint_place(self, idx: int, is_cursor: bool) -> None:
+        """Draw place row `idx` as the cursor row, or as an ordinary one.
+
+        The mark shows only while the panel has the keys, which is where this cursor differs from the
+        listing's. That one is what Enter acts on from every home, so it is true wherever the caret is;
+        this one is reachable only from inside the panel, so a blue row left behind after Escape would
+        promise something Enter would not do.
+        """
+        if not (0 <= idx < len(self._place_themes)):
+            return
+        cell, base_theme, cursor_theme = self._place_themes[idx]
+        lit = is_cursor and self._caret_home is CaretHome.PLACES
+        with guiutils.nonexistent_ok():
+            dpg.bind_item_theme(cell, cursor_theme if lit else base_theme)
+
+    def _focus_places(self) -> None:
+        """Hand the bare arrow keys to the places panel, without handing it DPG's focus.
+
+        Esc, or Tab, or going somewhere, takes them away again.
+        """
+        # Focus is parked exactly where the type filter parks it, and for the same reason: which home has
+        # the keys is `_caret_home`, and DPG's focus has one job here, which is to be somewhere that the
+        # find field can be reached from afterwards. A places row could hold focus — that is the whole
+        # point of the migration off menu items — but then focus would have to chase the cursor on every
+        # move, buying nothing the cursor's own colour does not already say.
+        self._caret_home = CaretHome.PLACES
+        self._park_focus()
+
+    def _open_cursor_place(self) -> None:
+        """Go to the place the panel's cursor is on. Enter's meaning inside the panel."""
+        # No special case for the return to the find field: `chdir` does that from every home but the
+        # listing, so Enter and a click leave by the same door. And where it fails — an unreadable mount
+        # is the usual way — it reports and does not move the caret, which leaves the panel holding the
+        # keys with its cursor still lit, ready for another try.
+        path = self._places_cursor.current_key
+        if path is None:
+            return
+        self.chdir(path)
+
+    def _places_height(self) -> float:
+        """The visible height of the places panel. The child window is what scrolls, here and in the notes."""
+        with guiutils.nonexistent_ok():
+            _, height = guiutils.get_widget_size(f"shortcut_menu_{self.instance_tag}")  # tag
+            return height if height > 0 else 0
+        return 0
+
+    def _place_extent(self, idx: int):
+        """Where place row `idx` sits inside the panel's scrollable content, as `(top, height)`.
+
+        Measured per row, where the listing extrapolates one pitch across all of its rows: the separator
+        between the user's directories and the drives makes these rows unevenly spaced, so there is no
+        single pitch that would answer for all of them. Affordable because the panel does not clip — it
+        is a handful of rows, all of them submitted every frame, so each one can be asked where it is.
+        """
+        if not (0 <= idx < len(self._place_themes)):
+            return None
+        cell = self._place_themes[idx][0]
+        with guiutils.nonexistent_ok():
+            # `get_item_pos` answers relative to the visible area, so a panel scrolled down reports its
+            # rows too high by exactly the scroll. Adding it back is what makes these content coordinates,
+            # which is what the scroll position is measured in.
+            _, local_top = dpg.get_item_pos(cell)
+            _, height = guiutils.get_widget_size(cell)
+            if height <= 0:  # not laid out yet
+                return None
+            return local_top + dpg.get_y_scroll(f"shortcut_menu_{self.instance_tag}"), height  # tag
+        return None
+
+    def _places_per_page(self) -> int:
+        """Most of a screenful of places, keeping one row of context to read the new position against."""
+        height = self._places_height()
+        extent = self._place_extent(0)
+        if not height or extent is None or extent[1] <= 0:
+            return 1
+        return max(1, int(height / extent[1]) - 1)
+
+    def _scroll_place_into_view(self, idx: int) -> None:
+        """Move the least that puts place row `idx` on screen, and nothing at all when it already is."""
+        extent = self._place_extent(idx)
+        height = self._places_height()
+        panel = f"shortcut_menu_{self.instance_tag}"  # tag
+        if extent is None or not height:
+            logger.debug(f"_scroll_place_into_view: instance '{self.tag}' ({self.instance_tag}), "
+                         f"row {idx}: no geometry (extent={extent}, panel height={height})")
+            return
+        row_top, row_height = extent
+        with guiutils.nonexistent_ok():
+            view_top = dpg.get_y_scroll(panel)
+            if row_top < view_top:
+                new_top = row_top
+            elif row_top + row_height > view_top + height:
+                new_top = row_top + row_height - height
+            else:
+                return
+            dpg.set_y_scroll(panel, max(0.0, float(new_top)))
 
     def _deselect_recursive(self, root):
         """Deselect all selectables inside DPG widget `root`, including `root` itself."""
@@ -2145,6 +2306,10 @@ class FileDialog:
             env(key_indent=1, key="Tab", action_indent=1, action="...and back, carrying the name", notes="Of whatever the cursor is on"),
             env(key_indent=0, key="Ctrl+F", action_indent=0, action="Caret back to the field", notes="Keeping what you typed"),
             env(key_indent=0, key="Ctrl+L", action_indent=0, action="Caret to the path field", notes="Paste a folder, Enter to go"),
+            # Column two now matches column one's fourteen rows at its longest, which is the height the
+            # card was measured at — so this is the last row either column has room for.
+            (env(key_indent=0, key="Ctrl+B", action_indent=0, action="Caret to the shortcuts panel", notes="Arrow to one, Enter to go")
+             if self._places_are_navigable() else None),
             helpcard.hotkey_blank_entry,
             (env(key_indent=0, key="Ctrl+1 ... Ctrl+9", action_indent=0, action="Show the Nth file type", notes="")
              if self._type_filter_is_available() else None),
@@ -2258,8 +2423,9 @@ class FileDialog:
         if self._restore_pending:
             return  # between the card and the dialog, with neither on the screen to act on
 
-        # TODO (briefs/researchers-night/filedialog-keyboard-brief.md): the rest of the keyboard —
-        # TODO: the focus-parking chords.
+        # TODO (briefs/researchers-night/filedialog-keyboard-brief.md): the navigation history —
+        # TODO: Alt+Left / Alt+Right, Ctrl+Left / Ctrl+Right in the listing, and the mouse's own back
+        # TODO: and forward buttons.
         shift = dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)
         alt = dpg.is_key_down(dpg.mvKey_LAlt) or dpg.is_key_down(dpg.mvKey_RAlt)
 
@@ -2336,7 +2502,25 @@ class FileDialog:
                        dpg.mvKey_Home, dpg.mvKey_End, dpg.mvKey_Return):
                 return
 
-        nav = self._navigator()
+        # The places panel needs no branch for the six movement keys — it is the same cursor class over
+        # different rows, so picking it below is enough. Only the two that *leave* differ, and both are
+        # the universal rules rather than anything this panel invents: Enter goes as deep as it can, and
+        # from in here the deepest thing there is is the place under the cursor; Escape gives the caret
+        # back to the main thing.
+        if self._caret_home is CaretHome.PLACES and not (ctrl or alt or shift):
+            if key == dpg.mvKey_Return:
+                self._open_cursor_place()
+                return
+            if key == dpg.mvKey_Escape:
+                # Nothing to restore on the way out, as with the type filter: moving this cursor changes
+                # only where the cursor is, so there is no draft left standing to abandon.
+                self._focus_field()
+                return
+
+        # Which cursor the movement keys drive. The listing's view, unless the caret is parked on the
+        # places panel — not `_navigator`, which answers *which view of the listing is up* and is asked
+        # that question by the rebuild too, where the answer must stay the listing's whatever has the keys.
+        nav = self._places_cursor if self._caret_home is CaretHome.PLACES else self._navigator()
         if key == dpg.mvKey_Up:
             nav.navigate_row_up()
         elif key == dpg.mvKey_Down:
@@ -2401,6 +2585,18 @@ class FileDialog:
             # do is take a whole path from somewhere else (Ctrl+L, Ctrl+V, Enter) and reach a short root
             # like `/mnt` that is nowhere near here and in nobody's places panel.
             self._focus_path_field()
+        elif ctrl and key == dpg.mvKey_B:
+            # `B` for bookmarks, which is what a browser and GTK's own file chooser call this panel.
+            #
+            # It is the counterpart of Ctrl+L rather than a duplicate of it: that one reaches anywhere at
+            # the cost of typing the whole path, this one reaches the handful of somewheres worth a row of
+            # their own, in two keys and an arrow. Between them they cover *starting over from elsewhere*,
+            # which the find field cannot do at all — it narrows what is here.
+            #
+            # Silently ignored where the panel is not on offer, as Ctrl+T is where the grid is not: a key
+            # that acts on a control nobody can see is worse than one that does nothing.
+            if self._places_are_navigable():
+                self._focus_places()
         elif ctrl and key == dpg.mvKey_Spacebar:
             self._toggle_cursor_selection()
         elif ctrl and key == dpg.mvKey_H:
@@ -2485,6 +2681,27 @@ class FileDialog:
         if completed is None:
             return
         self._write_find_field(completed)
+
+    def _get_caret_home(self) -> CaretHome:
+        """Which home currently has the keys."""
+        return self._caret_home_now
+
+    def _set_caret_home(self, home: CaretHome) -> None:
+        """Move the caret's home, repainting whatever marks depend on which one it is."""
+        # A property, where every other piece of this state is a plain attribute, because the places
+        # cursor is drawn only while that panel has the keys — and the panel is left by nine different
+        # routes (Escape, Enter, a click, Tab, Ctrl+F, Ctrl+L, Ctrl+Shift+F, a numbered filter, Ctrl+Home).
+        # Repainting at each of them is nine chances to forget one and leave a blue row behind claiming
+        # Enter would go there; repainting *here* is the one place all nine already pass through.
+        if home is self._caret_home_now:
+            return
+        was_places = self._caret_home_now is CaretHome.PLACES
+        self._caret_home_now = home
+        if was_places or home is CaretHome.PLACES:
+            self._paint_place(self._places_cursor.current, True)
+
+    _caret_home = property(fget=_get_caret_home, fset=_set_caret_home,
+                           doc="Where this dialog is taking keys. See `CaretHome`.")
 
     def _focus_field(self) -> None:
         """Put the caret back in the find field, where typing filters the listing."""
