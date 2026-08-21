@@ -986,9 +986,15 @@ Measured on a Finnish (`fi`, pc105) layout, DearPyGui 2.3.1:
 
 **So a hotkey on `mvKey_Plus` is dead on this keyboard, and worse than dead where a neighbouring constant
 catches the code instead.** `raven-cherrypick` and `raven-xdot-viewer` both zoom in on
-`(mvKey_Plus, mvKey_Add)` and out on `(mvKey_Minus, mvKey_Subtract)`; since the `+` key reports 598, which
-*is* `mvKey_Minus`, pressing `+` zooms **out**. The numpad keys are unaffected, which is how it goes
-unnoticed.
+`(mvKey_Plus, mvKey_Add)` and out on `(mvKey_Minus, mvKey_Subtract)`. **Both main-row keys report 598**,
+which *is* `mvKey_Minus` — so on this layout `+` and `-` alike zoom **out**, and the main keyboard has no
+zoom-in at all. The numpad is unaffected and is the only *keyboard* way in; the mouse zooms as it always
+did, which together with the numpad is how this survived unreported.
+
+Confirmed twice by different routes, which matters because the first route was suspect: the synthetic
+measurement was open to being an `xdotool` artifact (it may bind an unmapped keysym to a scratch keycode),
+and Juha then reported the same behaviour from ordinary use of both apps. Two physical keys really do arrive
+as one code here.
 
 Two consequences worth carrying:
 
@@ -998,10 +1004,12 @@ Two consequences worth carrying:
   instance, matches letter keys only — and that restriction is also what leaves Shift free to mean a
   direction, since Shift is never needed to produce a letter.
 
-Not established: *why* the mapping lands where it does. Two of the observations fit "the constant follows the
-physical US position" and one does not (`xdotool key minus` also reported 598, where the physical argument
-predicts `mvKey_Slash`), and xdotool may synthesize an unmapped keysym on a scratch keycode. The table above
-is measured and repeatable; the mechanism behind it is not settled here.
+Not established: *why* the mapping lands where it does. "The constant follows the physical US position" fits
+`+` → `mvKey_Minus` and fails for `-`, which by that argument should report `mvKey_Slash` and does not — and
+both are now confirmed from real keypresses, so neither is a synthesis artifact. (One candidate worth
+checking before theorising further: ImGui's key enum has `Minus` and `Equal` but **no `Plus`**, so a `+` key
+may have nowhere of its own to land.) The table above is measured and repeatable; the story behind it is not
+settled, and a hotkey design should lean on the table rather than on any account of it.
 
 ## Tab reaches a global handler and still moves ImGui's nav, after a programmatic focus
 

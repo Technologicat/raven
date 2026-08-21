@@ -13,7 +13,33 @@ importer first. Recorded here rather than in that item because a trigger nobody 
 the tool for finding things in the backlog cannot be gated on someone remembering to look for it *in* the
 backlog. The recurring moment to ask is the triage step in the release procedure.
 
+## Main-row `+` and `-` both zoom out on a non-US keyboard
+
+*Cluster: keyboard-accessibility · Cost: S, once the keys are chosen · Gate: needs a decision on which keys carry zoom · Filed: 2026-08-21 · See also: `dpg-notes.md` → "A punctuation `mvKey_*` is a US-layout assumption"*
+
+`raven-cherrypick` and `raven-xdot-viewer` zoom in on `(mvKey_Plus, mvKey_Add)` and out on
+`(mvKey_Minus, mvKey_Subtract)`. Measured on a Finnish layout: **both main-row keys report `mvKey_Minus`
+(598)**, so `+` and `-` alike zoom out and the main keyboard offers no zoom-in. `mvKey_Plus` is 61, a stale
+pre-2.0 code that cannot fire on any layout, so that half of the pair is dead everywhere. Confirmed twice —
+by a keycode probe and by Juha's own use of both apps.
+
+The numpad works, and so does the mouse, which is why nobody reported it. It is still a keyboard-accessibility
+hole, in the sprint that is about exactly that.
+
+**Why this needs a decision rather than a patch:** 598 cannot be reassigned, because on a US layout it is
+genuinely the `-` key and must keep meaning zoom out. The same code means opposite things on the two
+layouts, and DPG exposes nothing to tell them apart — GLFW's `glfwGetKeyName` would, and DPG does not wrap
+it. So the fix is to add layout-stable aliases (letters, function keys) and treat main-row `+`/`-` as a
+US-only convenience. Which keys is the open question; both apps already use many letters.
+
+`raven-xdot-viewer` carries a comment saying regular `+`/`-` are unreliable on non-US layouts, three lines
+above the binding. It never reached these notes or the other app with the same bug.
+
+Discovered while measuring what a Nordic `/` reports, for the places-panel type-ahead design (2026-08-21).
+
 ## Anonymous lambdas where a named callable exists
+
+*Cluster: hygiene-sweep · Cost: S · Gate: none · Filed: 2026-08-18*
 
 `operator.attrgetter` / `itemgetter` for `key=` and similar, `unpythonic.namelambda` where a lambda is
 genuinely the right shape but wants a name in a traceback. Found one in `librarian/cleanup.py` while
@@ -22,8 +48,6 @@ and there are likely more of the same shape across the tree.
 
 Worth a grep for `lambda` in `key=`, `sort`, `sorted`, `min`, `max` and callback arguments, then judging
 each: an anonymous lambda is not wrong, it is just usually not the clearest thing available.
-
-*Cluster: hygiene-sweep · Cost: S · Gate: none · Filed: 2026-08-18*
 
 Discovered during the getter/property sweep (2026-08-18).
 
@@ -46,8 +70,25 @@ focuses without *activating*, and the flash is active); and that the listing reb
 reproductions with and without the rebuild never showed it). A fourth guess written down as fact would be
 worth less than nothing.
 
-Left for whoever has a mechanism. The obvious fix — give the transient somewhere harmless to land — rests
-on the ruled-out premise, so it is not the quick win it looked like.
+**The mechanism turned up on 2026-08-21**, found while chasing a different symptom of the same cause — a Tab
+that appeared to do nothing after arriving from the places panel. **ImGui spends Tab on keyboard navigation
+whenever the find field holds a caret it got from `focus_item` rather than from a click** — Ctrl+F, Ctrl+L,
+or any arrival via `chdir` — and the item it navigates *to* is the path field. That is the activation: it
+selects-all, paints the text blue, and is undone a frame later when `_park_focus` lands. It explains the
+duration, the "field nobody touched", and why the three falsified guesses above all missed — none of them
+involved Tab's *other* consumer.
+
+Full write-up in `dpg-notes.md` → "Keyboard input" → "Tab reaches a global handler and still moves ImGui's
+nav, after a programmatic focus".
+
+**The non-cosmetic half of this is already fixed**: the same activate/deactivate pair was overwriting the
+caret home, so a Tab out of the listing was silently undone. `_on_path_field_deactivated` now restores the
+home the field displaced rather than naming one. **The flash itself remains** — ImGui still navigates there
+and the field still lights up for a frame or two.
+
+So this is no longer "left for whoever has a mechanism": it needs a way to keep ImGui's nav off that field,
+or a decision that a 25–100 ms flash is acceptable. Worth reconsidering the second option now that it is
+understood rather than mysterious.
 
 Discovered during the FileDialog keyboard work (2026-08-18).
 
