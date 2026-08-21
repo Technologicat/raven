@@ -13,6 +13,33 @@ importer first. Recorded here rather than in that item because a trigger nobody 
 the tool for finding things in the backlog cannot be gated on someone remembering to look for it *in* the
 backlog. The recurring moment to ask is the triage step in the release procedure.
 
+## The test suite hung once on Windows CI, in `cherrypick/tests/test_grid.py`
+
+*Cluster: ? · Cost: ? · Gate: a second occurrence — there is nothing to debug from one · Filed: 2026-08-21*
+
+CI run 32485490406, `test (windows-latest, 3.12)`, 2026-08-21: the `Run tests` step sat for fifteen minutes
+while ubuntu ×2 and macOS finished in about three, and was cancelled by hand. The `-v` log ends at
+`raven/cherrypick/tests/test_grid.py::test_entries_and_navigation_work_through_the_subclass` — its `PASSED`
+line carries the cancellation's timestamp, eleven minutes after the line before it, so the stall is in that
+test's teardown (`TriageGrid.destroy`, then the window delete) or in the next module's collection.
+
+**The same commit passed on all four runners when re-run**, and no other run has done this. So this is one
+observation, not a reproduction, and the code it points at is untouched by that day's work.
+
+**What makes it worth a line at all** is that the neighbourhood has a shape that could produce exactly this.
+`ThumbnailGrid.destroy` takes the grid's lock and then reaches the animator (`stop_cursor_pulse` →
+`animator.cancel`), while `_CursorPulse.render_frame` runs *under* the animator's lock and calls back into
+`paint_cursor`, which takes the grid's lock. That is a lock-order inversion, and it needs two threads to
+bite — which a test that never runs the animator should not have, so the theory does not fit the evidence
+without something else being true as well. Note it, do not act on it: a fix aimed at an unreproduced hang
+is a change nobody can check.
+
+`keyboardmark` had an inversion of the same shape between its pulse lock and the animator's, found while
+reading for this one and fixed on the spot (see `join_pulse`). That fix is unrelated to this stall.
+
+**A recurrence will now be loud rather than long**: the CI test job has a 20-minute timeout as of the same
+day, so the next one fails with a log instead of running to GitHub's six-hour default.
+
 ## `is_dearpygui_running()` is not a safe guard against `destroy_context`, and two loops use it as one
 
 *Cluster: abnormal-exit · Cost: S for the narrowing, M for a correct fix · Gate: a correct fix needs the two-phase shutdown helper below · Filed: 2026-08-21 · See also: the fleet shutdown item*

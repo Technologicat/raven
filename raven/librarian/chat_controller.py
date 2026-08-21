@@ -304,8 +304,11 @@ def _get_all_greeting_node_ids(datastore: chattree.Forest) -> List[str]:
 # The keyboard mark's slot in a message's button row
 
 # How much room the mark's dot takes at the left of the row, taken off the spacer that right-aligns the
-# buttons so that adding the dot did not move them. Measured on the built row at the font size every app in
-# the constellation uses; a few pixels out here only changes the gap before the first button.
+# buttons so that adding the dot did not move them.
+#
+# **Chosen, not measured**, and it does not need to be: the row is right-aligned into 64 px of deliberate
+# slack (see the spacer below), so being a few pixels out moves the whole button block by that much and
+# nothing collides. Worth measuring only if the dot is ever given a glyph of a very different width.
 _MARK_SLOT_W = 24
 
 _unmarked_theme = None  # created on first use by `_get_unmarked_theme`
