@@ -76,15 +76,21 @@ class CaretHome(enum.Enum):
       - Escape hands the caret back to the find field from wherever it was parked, and cancels the dialog
         only once it is already there.
 
-    **The homes are two tiers, and Escape means "up one tier".** `FIELD` and `LISTING` are *the main thing*,
-    and they are one tier because they are sister widgets: you type in one and watch the other, and Tab and
-    Ctrl+F move within the pair. Everything else is an auxiliary control reached by a chord, so Escape from
-    one abandons what was being done there and returns to the main thing — and from the main thing there is
-    nowhere left to go but out of the dialog.
+    **Escape means "up one tier".** `FIELD` and `LISTING` are *the main thing*, and they are one tier
+    because they are sister widgets: you type in one and watch the other, and Tab and Ctrl+F move within the
+    pair. Everything else is an auxiliary control reached by a chord, so Escape from one abandons what was
+    being done there and returns to the main thing — and from the main thing there is nowhere left to go but
+    out of the dialog.
 
     So the listing answering Escape differently is not an exception to be tidied away: it is the rule, seen
     from the tier that has no tier above it. A new home is classified by asking which tier it belongs to,
     which is how the places panel is already answered.
+
+    **Two tiers is what there happens to be, not what the rule allows.** "Up one tier" is defined for any
+    number of them, so something that stacks a further state on top of an auxiliary control — a typed-prefix
+    match inside a panel, say — is a third tier and Escape already knows what to do with it. Worth stating
+    because the tier count is the kind of incidental fact that gets read as a constraint, and then argued
+    against a design it never excluded.
 
     It is held rather than derived from `dpg.is_item_active` on the find field, because the two are not the
     same question: the field goes inactive whenever anything at all is clicked, and that must not silently

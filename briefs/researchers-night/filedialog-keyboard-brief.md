@@ -1363,20 +1363,28 @@ Suggested order, with what each actually costs:
    worth recording because it is the better design in a different panel and someone will propose it again.
    Nemo-style prefix matching — type several characters, jump to the first match, arrow between matches
    only — solves *"my target is not on screen"*, and this panel has no such problem: it is about nine rows
-   and all of them are visible. What it would cost is a **mode**, and the mode lands on the one key this
-   dialog can least afford to overload. Escape would have to mean *cancel the match* while inside it, where
-   the settled two-tier rule says Escape means *up one tier* — a third meaning for Escape, in the dialog
-   whose Escape behaviour took the longest to settle. First-letter cycling needs no cancel, so the question
-   never arises.
+   and all of them are visible.
+
+   **Escape is not the objection.** The settled rule is *Escape goes up one tier*, and that is N-tier by
+   construction rather than a rule about two — a match state would simply be a third tier and Escape would
+   already know what to do with it. What it costs instead is **state the user cannot see**: a prefix buffer
+   that has to be displayed to be usable, in the one panel with nowhere to display it, plus a rule for when
+   a keystroke *continues* the prefix and when it *starts a new one* — a timeout, which is a thing to tune
+   and to explain. First-letter cycling has no buffer, so none of that exists, and it answers the case that
+   prompted this in one press of `P`.
 
    It is also what Explorer's list view, Finder's, a GTK tree without search, and every combo box already
    do, so it needs no teaching — and one press of `P` answers the case that prompted it.
 
-   **The awkward case is the drives, and it resolves itself.** Mount points all begin with `/`, so `/`
-   cycles through them; matching is on the row's label, because the label is what the user is looking at,
-   and any cleverer rule (match the basename, skip the leading slash) is one the user would have to be
-   told. Three of the standard folders share `D` — Desktop, Documents, Downloads — which is not a flaw in
-   the scheme but the case it exists for.
+   **The awkward case is the drives on POSIX, and it resolves itself.** There, mount points all begin with
+   `/`, so `/` cycles through them. On Windows they are drive letters — `C:\`, `D:\` — which are distinct
+   from each other and reach a drive in one press, so the scheme is *better* there than here rather than
+   merely tolerable; a rule tuned to the POSIX shape would have been tuned to the worse of the two.
+
+   Matching is on the row's label, because the label is what the user is looking at, and any cleverer rule
+   (match the basename, skip the leading slash) is one they would have to be told. Three standard folders
+   share `D` — Desktop, Documents, Downloads, joined by `D:\` on Windows — which is not a flaw in the
+   scheme but the case it exists for.
 
    **Small, and genuinely a tail end of item 6** rather than its own day: bare letters currently reach
    `_handle_key` and do nothing while the caret is on the panel, since DPG's focus is parked on the refresh
