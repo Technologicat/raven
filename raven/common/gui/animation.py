@@ -1249,6 +1249,10 @@ class PulsatingColor(Animation):
                               needs: a table cursor whose cells wear different alignments needs a theme
                               variant per alignment, and they are one cursor.
 
+                              The set is not fixed at creation — see `attach` and `detach`, which is how a
+                              mark appearing while this one is already breathing joins its phase instead of
+                              starting a beat of its own.
+
                               The color is shared, not per widget: `self.rgb` holds it, and assigning to
                               that attribute recolors every widget this animation drives (which is how
                               `raven-conference-timer` changes its pause glow while it runs).
@@ -1274,11 +1278,35 @@ class PulsatingColor(Animation):
         """
         super().__init__(ambient=ambient)
         self.cycle_duration = cycle_duration
+        self._widgets_lock = threading.Lock()
         # A DPG widget is a tag or an ID, so anything that is neither a `str` nor an `int` is a collection
         # of them. Normalized here so that the render loop has one shape to write to.
         self.theme_color_widgets = ([theme_color_widget] if isinstance(theme_color_widget, (str, int))
                                     else list(theme_color_widget))
         self.rgb = dpg.get_value(self.theme_color_widgets[0])[:3]  # get the initial RGB color
+
+    def attach(self, theme_color_widget: Union[str, int]) -> None:
+        """Add `theme_color_widget` to those this animation drives, at the phase it is already at.
+
+        Nothing happens if it is attached already.
+        """
+        # The alternative — one animation per widget — would put them in step only if they all started at
+        # the same moment, and the whole point of a shared rhythm is that a mark appearing later joins the
+        # one already breathing rather than starting its own beat half a cycle out.
+        with self._widgets_lock:
+            if theme_color_widget not in self.theme_color_widgets:
+                self.theme_color_widgets.append(theme_color_widget)
+
+    def detach(self, theme_color_widget: Union[str, int]) -> None:
+        """Stop driving `theme_color_widget`, leaving it at whatever color it was last written.
+
+        Nothing happens if it is not attached.
+        """
+        with self._widgets_lock:
+            try:
+                self.theme_color_widgets.remove(theme_color_widget)
+            except ValueError:  # not attached
+                pass
 
     def render_frame(self, t: int) -> sym:
         if (t - self.t0) / 10**9 > self.cycle_duration:  # prevent loss of accuracy in long sessions
@@ -1286,7 +1314,9 @@ class PulsatingColor(Animation):
 
         alpha = pulsating_alpha(self.t0, t, self.cycle_duration)
         color = (*self.rgb, alpha)
-        for theme_color_widget in self.theme_color_widgets:
+        with self._widgets_lock:  # `attach` and `detach` can arrive from any thread, and this iterates
+            theme_color_widgets = list(self.theme_color_widgets)
+        for theme_color_widget in theme_color_widgets:
             dpg.set_value(theme_color_widget, color)
 
         return action_continue

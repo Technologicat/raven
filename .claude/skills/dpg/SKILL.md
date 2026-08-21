@@ -71,6 +71,8 @@ commentary in a trailing `(…)`. `·` separates targets. That shape is not deco
 | give a widget a tooltip whose text changes, or wonder why one flickers when it does | *Window sizing* → An autosize window is one frame behind its content — and whether that shows depends on the window's age (the answer is `raven.common.gui.tooltip.Tooltip`; the section is why) |
 | touch fonts, icons, super/subscripts or `dpg_markdown` | *Font atlas limits* (all of it) |
 | size a drawlist, or build anything that scrolls over a lot of content | *Drawlists* → Never size a drawlist to a scroll extent — it will take the X session down |
+| place a drawn shape at a particular spot inside a window | *Drawlists* → A drawlist ignores `pos`, and reports back the position it was asked for (there is no floating drawlist; reach for a theme or an overlay window) |
+| highlight a widget, or give one an indicator it can be shown and hidden | *Themes* → A theme bound to a container reaches its children, and a child's own theme still applies · *Themes* → A border is drawn inside the item rect, so turning one on moves nothing (`raven.common.gui.keyboardmark`) |
 | build a table, or wonder why a long listing costs frame time | *Tables* → Rows are submitted every frame unless the table clips |
 | fill rows lazily — thumbnails, previews, anything per-row and expensive | *Tables* → To find which rows are on screen, ask a cell — never the row |
 | ask where on the screen a widget is — to place something beside it, or to aim a driven click at it | *Testing DPG code* → Windows and child windows have no `rect_min`, and `get_item_pos` answers a different question (`guiutils.get_widget_pos`; `CLAUDE.md` → "Live GUI testing on a shared desktop" carries the screen-coordinate half) |

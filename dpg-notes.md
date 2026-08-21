@@ -1294,7 +1294,11 @@ Measure the **enclosing child window** instead — it reports a real size — an
 
 **Row pitch is not the height you asked for, either.** Cells created with `height=16` came out 18 px tall at a 22 px pitch, below a header occupying the first 26 px. So a row's position is worth reading off the row (`get_item_pos` on a cell, which answers in content coordinates, exactly what `set_y_scroll` wants) rather than computed from the height that was requested.
 
-There is **no getter for theme contents** — you cannot ask a theme for its colors or spacings. Code that needs to restore a themed value therefore tends to hardcode a measured literal instead; see the audit item in `TODO_DEFERRED.md`. Where a *per-widget* getter exists (as for a text widget's own color), use it — the gap is theme state specifically, not all of DPG.
+**A theme's contents are readable after all — by walking the item tree, since a theme is made of items like everything else.** Measured 2026-08-21: `dpg.get_item_theme(widget)` gives the theme, `dpg.get_item_children(theme, slot=1)` its theme components, and their slot-1 children are the individual color and style items. Each of those reports **which** slot or style variable it sets as `dpg.get_item_configuration(item)["target"]` — an `mvThemeCol_*` / `mvStyleVar_*` constant — and **what** it sets it to via `dpg.get_value(item)`: a 4-element RGBA in 0–255 for a color, a 2-element vector for a style (the second component is `-1` for a scalar style var).
+
+`raven/common/gui/tests/test_keyboardmark.py` reads a mark's theme this way rather than the component's private attributes, which is the shape to copy.
+
+What is still missing is a getter for the **resolved** value — "what color will this widget actually draw with" — which would have to walk the parent chain and fall back to DPG's built-in default theme, and there is no getter for that default. So code restoring a themed value still tends to hardcode a measured literal; see the audit item in `TODO_DEFERRED.md`, whose premise is narrower than it was written. Where a *per-widget* getter exists (as for a text widget's own color), it remains the direct answer.
 
 ## Windows and child windows have no `rect_min`, and `get_item_pos` answers a different question
 
@@ -1373,7 +1377,63 @@ tooltip migrated to it lands where the plain `dpg.tooltip` beside it would.
 
 `investigations/dpg-autosize/probe_tooltip_offset.py` re-measures it, which a DPG upgrade is reason to do.
 
+# Themes
+
+## A theme bound to a container reaches its children, and a child's own theme still applies
+
+Measured 2026-08-21. Binding a theme to a group, and to a child window, applies it to everything inside —
+and where a descendant carries a theme of its own, the two **compose per property** rather than the inner
+one replacing the outer. A button wearing a red-background theme, inside a group bound to a blue-border
+theme, comes out red with a blue border; a combo wearing a green-text theme, likewise.
+
+That is what makes an opt-in highlight possible at all. DPG binds **one theme per item**, so a component
+that marked a widget by binding a theme to it would silently drop whatever theme the widget already had —
+and there is no getter for a theme's contents (see "Introspection gaps to expect"), so it could not merge
+the two either. Marking the *enclosing group* sidesteps the whole problem: the mark supplies its property,
+the widget's own theme keeps supplying the rest, and unbinding restores exactly what was there.
+
+`raven.common.gui.keyboardmark.Mark` is built on this, and the consequence to know at a call site is that
+marking a container marks **every** matching descendant. For a row of buttons that is the intent; for a
+panel with buttons in it, choose the style variable that only the panel answers to (below).
+
+## A border is drawn inside the item rect, so turning one on moves nothing
+
+Same session. `mvThemeCol_Border` plus a border-size style gives a widget a visible outline:
+
+| style var | what it borders |
+|---|---|
+| `mvStyleVar_FrameBorderSize` | framed widgets — buttons, combos, input fields |
+| `mvStyleVar_ChildBorderSize` | child windows |
+
+Switching either from 0 to 2 left every tracked widget's `rect_min` **and** `rect_size` unchanged, across a
+2×2 button group, an 11-button row, and the text following each. So a border can be turned on and off as an
+indicator without the layout jumping, which is the property that decides whether this is usable as a mark
+at all.
+
+The two are separate style vars rather than one because the distinction is load-bearing: a theme carrying
+`FrameBorderSize` bound to a *panel* would border every button inside it, and one carrying
+`ChildBorderSize` bound to a *group of buttons* would do nothing.
+
 # Drawlists
+
+## A drawlist ignores `pos`, and reports back the position it was asked for
+
+Measured 2026-08-21, while looking for a way to draw a mark around an arbitrary widget. `dpg.add_drawlist`
+accepts `pos=`, and a drawlist created with one **is laid out in the normal flow anyway** — taking its
+place in the sequence and displacing everything after it by its full height. True in a window and in a
+child window alike, and `dpg.set_item_pos` afterwards changes nothing either.
+
+**The trap is that asking looks like confirmation.** `get_item_pos` returns the `pos` that was passed,
+whatever the item did with it, so the only witness is `get_item_rect_min` — which reports where the item
+was actually drawn. A drawlist created with `pos=(4, 46)` at the top of a child window's content reported
+`get_item_pos=[4, 46]` and `rect_min=[16, 16]`, and pushed the button below it down by 68 px. An ordinary
+item in the same probe honoured its `pos` exactly.
+
+So there is no "float a drawn overlay inside this window" — a drawn shape either goes in a drawlist that is
+already there (`thumbnailgrid` draws its cursor into the grid's own canvas), or in a floating overlay
+*window*, which is opaque to the mouse across its whole rect and stacks by window z-order rather than
+clipping to a panel (`investigations/dpg-overlays/`). Where the thing to be drawn is a highlight, prefer a
+theme — see "Themes" above, which is the mechanism `keyboardmark` ended up using for exactly this reason.
 
 ## Never size a drawlist to a scroll extent — it will take the X session down
 
