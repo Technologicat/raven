@@ -13,6 +13,33 @@ importer first. Recorded here rather than in that item because a trigger nobody 
 the tool for finding things in the backlog cannot be gated on someone remembering to look for it *in* the
 backlog. The recurring moment to ask is the triage step in the release procedure.
 
+## The pose editor's list browsing does nothing, and one of its three lists cannot even be reached
+
+*Cluster: ? · Cost: S to diagnose, ? to fix · Gate: none · Filed: 2026-08-21*
+
+Found by driving the app on 2026-08-21, while checking that the new keyboard mark lights there. It does —
+and what it revealed is that the feature it marks does not work:
+
+- **Ctrl+P focuses the emotion preset list and the mark appears on it. Up / Down / Home / End then do
+  nothing** — four presses, no change, and nothing in the log. Whether `browse` is not reached or is
+  reached and fails is not established. One candidate worth checking first: the value at rest is
+  `[custom]`, and `browse` starts with `choices.index(dpg.get_value(...))`, which raises if `[custom]` is
+  not one of `emotion_names`.
+- **Ctrl+I does not move the focus at all.** After pressing it, the mark was still on the emotion list —
+  which is the cheapest possible evidence, and only available now that there *is* a mark.
+- **The morph panels' lists have no way to be focused.** `PoseEditorGUI.focus_editor` exists, is bound to
+  nothing, and carries a TODO above it saying hotkeys for the morph groups are still to be added. So the
+  three-line entry each of them has in `combobox_choice_map` has never been reachable.
+
+Their map entries additionally could not have matched even with focus, because those lists are built
+without a tag and the dispatch recognized a focused item by alias only — fixed the same day, since a mark
+saying "the arrows are here" over a list that cannot receive them is worse than no mark. That fix is
+therefore **unexercised**: it is correct by construction and by `guiutils.item_identifiers`' tests, and
+nothing can drive it until a focus route exists.
+
+Whether the missing hotkey is worth adding is a separate question from why the two that exist misbehave,
+and the second is the one to answer first.
+
 ## The test suite hung once on Windows CI, in `cherrypick/tests/test_grid.py`
 
 *Cluster: ? · Cost: ? · Gate: a second occurrence — there is nothing to debug from one · Filed: 2026-08-21*

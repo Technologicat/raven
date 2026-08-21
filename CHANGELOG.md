@@ -146,7 +146,6 @@
 
 - in the pose editor, keyboard shortcuts no longer fire behind a modal dialog. Every failed character-image or emotion load is reported through one, and the guard that suppresses hotkeys did not count it as a dialog — so the Enter that dismissed the error also did whatever Enter does in the editor behind it.
 - in the settings editor, the same guard missed the backdrop-image browser, leaving hotkeys live while it was open. The app's four other file dialogs were already covered.
-- in the pose editor, the arrow keys now browse the morph panels' parameter lists, as they always could in the emotion and output lists. The pose editor had offered this for all of them since the feature was written, and it had never worked in the morph panels — those lists are built without a name, and the key handler recognized a focused list only by name.
 
 *Raven-xdot-viewer*
 
