@@ -873,13 +873,27 @@ has to settle.
 
 ## The `--run-gui` group segfaults if a second module maps a context
 
-*Cluster: testing · Cost: ? · Gate: next time a `gui` test is written · Filed: 2026-08-13*
+*Cluster: testing · Cost: ? · Gate: none — the group is red · Filed: 2026-08-13 · Updated: 2026-08-21*
 
-`pytest --run-gui` passes today, and stops passing the moment anyone adds a second `gui`-marked module that
-maps a viewport and renders frames. Not a hypothetical: writing one to pin DPG's row-visibility semantics
-segfaulted the group 3/3, and the test was dropped rather than shipped. What survives of it is
-`investigations/filedialog-performance/probe_row_visibility.py`, which answers the same question outside
-pytest, and the finding itself in `dpg-notes.md` under "To find which rows are on screen".
+**This has happened: `pytest -m "not ml" --run-gui` segfaults, as of 2026-08-21.** It dies in
+`test_fdialog.py::test_the_sort_row_fits_the_minimum_width`, which is the second module to map a viewport
+and render frames, exactly as predicted below. The core puts the fault in
+`ImGui_ImplGlfw_WindowFocusCallback` reached from GLFW's `processEvent` — a focus event delivered to a
+backend belonging to a context that `test_focus_semantics` has since destroyed. Reproduced with a
+same-day unrelated change both applied and stashed, so it is the collection, not any one test.
+
+The default `pytest -m "not ml"` is unaffected and green; only the opt-in `gui` group is red. **The
+practical consequence is that `--run-gui` currently cannot verify a `gui` test in the same run as the
+others** — a new one has to be checked with `-m gui` or by module, which is how the help-card fit test was
+checked on 2026-08-21.
+
+The prediction below stands as written, and its detail is still the best account of the mechanism.
+
+`pytest --run-gui` passed until 2026-08-21, and stops passing the moment anyone adds a second `gui`-marked
+module that maps a viewport and renders frames. Not a hypothetical even then: writing one to pin DPG's
+row-visibility semantics segfaulted the group 3/3, and the test was dropped rather than shipped. What
+survives of it is `investigations/filedialog-performance/probe_row_visibility.py`, which answers the same
+question outside pytest, and the finding itself in `dpg-notes.md` under "To find which rows are on screen".
 
 **What was measured (2026-08-13).**
 
@@ -890,17 +904,18 @@ pytest, and the finding itself in `dpg-notes.md` under "To find which rows are o
 - Order is what decides: new module *before* `test_focus_semantics` passes (11 tests), after it dies. Same
   files, same count.
 - Reducing the new module from six contexts to one module-scoped context did **not** help.
-- `test_filedrop`'s `gui` test is the only other one, and it is safe on two counts — it sorts first, and it
-  renders no frames.
+- `test_filedrop`'s `gui` test was the only other one, and it is safe on two counts — it sorts first, and
+  it renders no frames. `test_fdialog.py` has since acquired `gui` tests that do both, which is what tipped
+  it.
 
 **What was ruled out**, all clean at 3/3 in a bare script outside pytest: five focus-like cycles then a
 table cycle; six table cycles; twelve plain cycles; both orders of focus-like and table. So the crash needs
 the pytest process and does not reproduce from the widget recipe alone — which is where the investigation
 stopped.
 
-**Why it matters even though the suite is green.** The green depends on a filename sorting before another
-filename. Nobody writing the next `gui` test will know that, and what they will get is a segfault with no
-traceback, in a group that passed yesterday.
+**Why it mattered while the suite was still green.** The green depended on a filename sorting before
+another filename. Nobody writing the next `gui` test would know that, and what they would get is a
+segfault with no traceback, in a group that passed yesterday. That is what happened.
 
 **Routes worth weighing**, none investigated: run each `gui` module in its own process (`pytest-forked`, or a
 subprocess helper the test asserts against, which also sidesteps the focus-stealing problem); or make
@@ -3089,6 +3104,14 @@ shared helper / per-app conversion must handle, beyond the two-phase skeleton:
   helper must own a *global* "all DPG-touching threads stop before `destroy_context`" barrier, not just per-task
   drains. A `does_item_exist`/`nonexistent_ok` guard was added at the worker's `bind_item_handler_registry`
   (quieted the "Item not found" spam) but does NOT fix the segfault (other DPG calls + `split_frame` remain).
+  - **An idle worker is harmless, which is why the test suite can render a card at all.** Measured
+    2026-08-21 while giving the file dialog's help card a `gui` test: rendering any card starts this thread
+    (the card's header is `dpg_markdown.add_text`), and it then outlives every `destroy_context` in the
+    pytest process. It does no damage there because `_worker` reaches `dpg.split_frame()` only when its
+    queue is non-empty, and nothing queues more once the card is built — so it sits in its 15 ms sleep,
+    touching nothing. Clean over three context-create/render/destroy cycles with the orphan running. The
+    danger is unchanged and remains work queued *during* teardown; this only says the suite does not
+    provoke it.
   - **A second, separate offender, diagnosed from a core dump on 2026-08-21 — see the item below.** Closing
     `raven-cherrypick` with Alt+F4 segfaulted (Juha), and `coredumpctl` put the crash in
     `dpg.is_dearpygui_running()` on a background thread. Not this worker, and worth stating because the
