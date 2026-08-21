@@ -1346,9 +1346,15 @@ Suggested order, with what each actually costs:
    - **What must *not* vary is the vocabulary**: `keyboardmark.COLOR` and `keyboardmark.PULSE_SECONDS` are
      the whole point, and two marks breathing at different rates read as two things blinking at each other.
      One hue, one rhythm, two shapes.
-   - **The dot costs something the frame does not**: somewhere to sit. A frame is drawn from the widget's
-     own bounds, while a dot needs a side and a gap that the consumer's layout has to actually have — so
-     adopting it is not purely a call-site argument, and a site may need a spacer.
+   - **There are three candidate forms, and only one of them is free of screen estate.** Recolouring a
+     widget's *own* edge costs no space at all, and a combo has an edge to recolour — so try it first even
+     though a rounded rectangle *surrounding* the combo will probably look cleaner (Juha, 2026-08-21). The
+     other two both need room the consumer's layout has to actually have: a frame around a button group
+     needs margin on all four sides, and a dot needs a side and a gap. So for those, adopting the mark is
+     not purely a call-site argument and a site may need a spacer.
+   - **Which makes the order to try them: recolour, then surrounding frame, then dot** — cheapest in space
+     first, and each step is only taken if the previous one looks wrong. The dot is where a long outline
+     would put too much motion on screen, which is the button-row case above.
    - **Decide Librarian's form by looking, in the same session.** The item is fleet-wide and single-session
      by the argument below, so "we will pick the shape later" would leave exactly the half-marked
      constellation that argument exists to prevent. Render the row both ways and choose.
