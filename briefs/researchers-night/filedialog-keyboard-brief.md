@@ -1,10 +1,11 @@
 # FileDialog: keyboard accessibility
 
-**Status: every key the design names is in; two items remain.** The design below was settled on
+**Status: every key the design names is in; three items remain.** The design below was settled on
 2026-08-13 (Juha and Claude), and every key it names is in and live-tested — the listing cursor, Enter's
 rules, Tab and its completion and fill, the sort and filter chords, Alt+Up / Ctrl+Up, the "Will pick"
 line, the F1 help card, Ctrl+Shift+F, Ctrl+L with the path field's colouring, and Ctrl+B with the
-places-panel migration. Still to build: the caret mark, and the navigation history added on 2026-08-18.
+places-panel migration and its type-ahead. Still to build: **7**, the caret mark; **5**, the navigation
+history added on 2026-08-18; and **10**, the help card's cosmetic pass, which is last on purpose.
 **See "What is built" near the end for the current state** — including the
 several places where the design below was overtaken by what building it taught, each noted there rather
 than edited into the design, so the reasoning stays legible.
@@ -981,6 +982,25 @@ They cost nothing — the panel drives the same cursor class the listing does, s
 whole of the key handling — and they stop being decorative on a machine with a long mount list, where
 `psutil.disk_partitions()` reports every snap.
 
+**Item 9 is built too**, the same afternoon, and it came out as the tail end of item 6 that it was sized as.
+Two things the design above did not have:
+
+- **A "Drives" heading was built and then removed.** The idea was a titled section whose first letter jumped
+  to the block beneath it, which would have answered "take me to the drives" on a layout where `/` is
+  unreachable. Under first-letter-skipping-punctuation the drives are already individually reachable —
+  `/boot/efi` by `b` — so the heading earned only bare `/`, and that has a better answer in Ctrl+L. Removed
+  on Juha's call once the matching rule made it redundant.
+- **A numpad `mvKey_Divide` was considered and rejected** for reaching the drives: it works on a desktop and
+  fails on a laptop, which is exactly how the zoom-key bug filed the same day stayed hidden for months. A
+  second numpad-only affordance would have been repeating a mistake whose write-up was still warm.
+
+**F5 now rebuilds the places panel as well as the listing** — raised by Juha while item 9 was being built,
+and belonging to no numbered item. A drive plugged in while the dialog was open could not be browsed to
+without closing and reopening the dialog, or restarting the app. `_build_places_panel` is called from
+construction and from `refresh`, and the cursor re-anchors by path through `set_listing`, which is what
+makes rebuilding the whole panel safe where diffing it would only be less obviously so. The user's own
+directories are re-read too, a folder being as capable of appearing as a drive.
+
 ### Added 2026-08-20
 
 **Ctrl+L is built**, colouring included, and it came out as small as item 3 predicted once the completion
@@ -1245,8 +1265,8 @@ Suggested order, with what each actually costs:
    the card later is one entry each.
 5. **The navigation history** — the largest, fully designed above, and the one Juha asked for by name.
    Independent of 1–4, so it can go first if the appetite is for building rather than refactoring.
-6. ~~**Ctrl+B and the places-panel migration** — its own day, not a tail end of this one.~~ Built
-   2026-08-21; see "Added 2026-08-21" below.
+6. ~~**Ctrl+B and the places-panel migration**~~ — **built 2026-08-21**, and it was its own day as
+   predicted rather than a tail end of item 3. See "Added 2026-08-21" below.
 7. **A mark saying which home has the caret** — small, and raised on 2026-08-19 (Juha) once the homes
    became a set rather than a pair: nothing on the screen says where the arrow keys will land.
 
@@ -1374,8 +1394,10 @@ Suggested order, with what each actually costs:
      searches, and the path field must be exact because it addresses. Same colours, different rule, and
      worth a comment at each so the difference reads as chosen.
 
-9. **Type-ahead in the places panel** — raised 2026-08-21 (Juha) from using item 6: reaching Pictures takes
-   too many arrow presses for a list you can see all of at once.
+9. ~~**Type-ahead in the places panel**~~ — **built 2026-08-21**, the same day it was raised (Juha) from
+   using item 6: reaching Pictures took too many arrow presses for a list you can see all of at once. Small
+   as predicted, and a tail end of item 6 rather than a day of its own. See "Added 2026-08-21" below; the
+   design notes that follow are kept because they record what was rejected and why.
 
    **Decided: first-letter cycling, not incremental search.** Press a letter while the panel has the keys
    and the cursor goes to the next row whose label starts with it, wrapping at the end; press it again for
