@@ -165,7 +165,8 @@ class Mark:
                  kind: MarkKind = MarkKind.FRAME,
                  item_type: int = dpg.mvAll,
                  thickness: int = 2,
-                 padding: Optional[Tuple[int, int]] = None):
+                 padding: Optional[Tuple[int, int]] = None,
+                 tooltip: Optional[str] = None):
         """The blue pulse that says *the keyboard is here*, on one widget, switched by `lit`.
 
         `target`: DPG tag or ID of the widget to mark.
@@ -207,6 +208,21 @@ class Mark:
                    Not the default, because a panel that always had a border has that padding by design and
                    would be reflowed by taking it away.
 
+        `tooltip`: What hovering the marked widget says, or `None` (default) for no tooltip.
+
+                   Per call site, because what the mark *means* is per call site: on a combo it says which
+                   control the arrow keys are driving, and on a dot beside a row of buttons it says which
+                   of many similar things the hotkeys will act on. One wording could not serve both.
+
+                   It appears only while the mark is lit, and on whichever widget currently wears it — so a
+                   mark that moves takes its tooltip along, and a widget it has left says nothing. Both
+                   matter: a tooltip promising that the keys are here, on a control they are not currently
+                   pointed at, is worse than none.
+
+                   Where the marked widget has a tooltip already, this is a *second* one and they will
+                   fight; give it to a call site whose widget has none. The dot exists for the mark, so it
+                   is the natural place.
+
         A mark starts unlit, so a call site can build one alongside its widget and switch it later::
 
             self._mark = keyboardmark.Mark(self.places_panel, kind=keyboardmark.MarkKind.PANEL)
@@ -224,6 +240,8 @@ class Mark:
         self._target = None
         self._previous_theme = None
         self._lit_now = False
+        self._tooltip_text = tooltip
+        self._tooltip = None  # the DPG item, which belongs to whichever widget currently wears the mark
         self._lock = threading.RLock()  # `target` and `lit` reach each other
 
         with dpg.theme() as theme:
@@ -268,11 +286,21 @@ class Mark:
             if self._target is not None:
                 with guiutils.nonexistent_ok():
                     dpg.bind_item_theme(self._target, self._previous_theme)
+            # Rebuilt at the new target rather than moved, since which item a tooltip belongs to is fixed
+            # when it is created and is not readable afterwards.
+            #
+            # **The mark has to delete it, because nothing else will.** A DPG tooltip is not a child of the
+            # item it describes — measured 2026-08-21: it lands as a *sibling* in that item's window — so
+            # deleting the target leaves the tooltip behind, and a caller tearing down a subtree with a
+            # children-only delete does not reach it either. Same story as the `Tooltip` windows Librarian
+            # tracks by hand in `owned_tooltips`.
+            self._destroy_tooltip()
             self._target = target
             self._previous_theme = None
             if target is not None:
                 self._previous_theme = dpg.get_item_theme(target)
                 dpg.bind_item_theme(target, self._theme)
+                self._build_tooltip()
 
     target = property(fget=_get_target, fset=_set_target,
                       doc="""Which widget wears this mark. Assign to move it; `None` takes it off and darkens it.
@@ -295,9 +323,31 @@ class Mark:
                 join_pulse(self._color_widget)
             else:
                 leave_pulse(self._color_widget)
+            # A tooltip that outlived the mark would promise the keyboard is somewhere it is not, which is
+            # worse than saying nothing — so it comes and goes with the mark rather than with the widget.
+            if self._tooltip is not None:
+                with guiutils.nonexistent_ok():
+                    dpg.configure_item(self._tooltip, show=value)
 
     lit = property(fget=_get_lit, fset=_set_lit,
                    doc="Whether this mark is showing. Setting it joins or leaves the shared pulse.")
+
+    def _build_tooltip(self) -> None:
+        """Give the current target the mark's tooltip, if it was asked for one."""
+        if self._tooltip_text is None or self._target is None:
+            return
+        with guiutils.nonexistent_ok():
+            # Hidden unless the mark is currently lit — `_set_lit` is what shows it, and a mark moved while
+            # lit needs the new tooltip to arrive already showing.
+            self._tooltip = dpg.add_tooltip(self._target, show=self._lit_now)
+            dpg.add_text(self._tooltip_text, parent=self._tooltip)
+
+    def _destroy_tooltip(self) -> None:
+        """Take the tooltip off whichever widget has it."""
+        if self._tooltip is None:
+            return
+        guiutils.maybe_delete_item(self._tooltip)
+        self._tooltip = None
 
     def detach(self) -> None:
         """Take the mark off its widget and delete the theme behind it.

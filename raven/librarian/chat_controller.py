@@ -3347,7 +3347,11 @@ class DPGChatController:
         hotkey is pressed rather than shortly afterwards.
         """
         if self._current_message_mark is None:
-            self._current_message_mark = keyboardmark.Mark(None, kind=keyboardmark.MarkKind.DOT)
+            # The tooltip goes on the dot, which is a widget built for the mark and has none of its own —
+            # not on the button row, where it would be a second tooltip over buttons that each carry one.
+            self._current_message_mark = keyboardmark.Mark(None,
+                                                           kind=keyboardmark.MarkKind.DOT,
+                                                           tooltip="Message-specific hotkeys go to this message")
         message = self.get_current_message()
         target = message.gui_keyboard_mark_widget if message is not None else None
         self._current_message_mark.target = target

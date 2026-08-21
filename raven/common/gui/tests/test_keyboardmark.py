@@ -297,6 +297,54 @@ class TestMovingMark:
 
 
 # --------------------------------------------------------------------------------
+# What the mark says when you hover it
+
+class TestTooltip:
+    """A tooltip that outlives the mark promises the keyboard is somewhere it is not.
+
+    Which item a DPG tooltip belongs to is not readable once it is created — it lands as a sibling in the
+    target's window rather than as a child of the target — so these assert the tooltip's *lifetime* and its
+    shown state, and that it is on the right widget is checked by hovering a running app.
+    """
+
+    def test_a_mark_without_tooltip_text_builds_none(self, make_widget, quiet_pulse):
+        mark = keyboardmark.Mark(make_widget())
+        assert mark._tooltip is None
+
+    def test_the_tooltip_is_hidden_until_the_mark_is_lit(self, make_widget, quiet_pulse):
+        mark = keyboardmark.Mark(make_widget(), tooltip="the keys are here")
+        assert mark._tooltip is not None
+        assert dpg.get_item_configuration(mark._tooltip)["show"] is False
+
+        mark.lit = True
+        assert dpg.get_item_configuration(mark._tooltip)["show"] is True
+
+        mark.lit = False
+        assert dpg.get_item_configuration(mark._tooltip)["show"] is False
+
+    def test_a_moving_mark_takes_its_tooltip_along(self, make_widget, quiet_pulse):
+        first = make_widget("button", "1")
+        second = make_widget("button", "2")
+        mark = keyboardmark.Mark(None, tooltip="the keys are here")
+
+        mark.target = first
+        mark.lit = True
+        left_behind = mark._tooltip
+
+        mark.target = second
+        assert not dpg.does_item_exist(left_behind)  # nothing else would have deleted it
+        assert mark._tooltip is not None and mark._tooltip != left_behind
+        assert dpg.get_item_configuration(mark._tooltip)["show"] is True  # moved while lit: arrives showing
+
+    def test_detaching_takes_the_tooltip_with_it(self, make_widget, quiet_pulse):
+        mark = keyboardmark.Mark(make_widget(), tooltip="the keys are here")
+        tooltip = mark._tooltip
+        mark.detach()
+        assert not dpg.does_item_exist(tooltip)
+        assert mark._tooltip is None
+
+
+# --------------------------------------------------------------------------------
 # Giving the widget back
 
 class TestDetach:
