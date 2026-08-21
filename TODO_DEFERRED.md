@@ -3104,14 +3104,21 @@ shared helper / per-app conversion must handle, beyond the two-phase skeleton:
   helper must own a *global* "all DPG-touching threads stop before `destroy_context`" barrier, not just per-task
   drains. A `does_item_exist`/`nonexistent_ok` guard was added at the worker's `bind_item_handler_registry`
   (quieted the "Item not found" spam) but does NOT fix the segfault (other DPG calls + `split_frame` remain).
-  - **An idle worker is harmless, which is why the test suite can render a card at all.** Measured
-    2026-08-21 while giving the file dialog's help card a `gui` test: rendering any card starts this thread
-    (the card's header is `dpg_markdown.add_text`), and it then outlives every `destroy_context` in the
-    pytest process. It does no damage there because `_worker` reaches `dpg.split_frame()` only when its
-    queue is non-empty, and nothing queues more once the card is built — so it sits in its 15 ms sleep,
-    touching nothing. Clean over three context-create/render/destroy cycles with the orphan running. The
-    danger is unchanged and remains work queued *during* teardown; this only says the suite does not
-    provoke it.
+  - **Partly addressed 2026-08-21: both workers now stand down instead of polling a dead GUI.** Rendering
+    any card starts `CallInNextFrame._worker` (the card's header is `dpg_markdown.add_text`), and it
+    outlives every `destroy_context` in the process. Both workers went through a bare `dpg.split_frame()`,
+    which *raises* where no render loop is running; on a worker thread that killed the thread, which was
+    accidentally safe and reported itself as an unhandled-thread-exception warning. They now call
+    `guiutils.split_frame(..., required=False)` and **return** when the wait cannot happen, which is the
+    same outcome deliberately and quietly.
+    - **Retrying instead was measured to be much worse, so do not reintroduce it.** An attempt to re-queue
+      the work and poll every 15 ms segfaulted the `gui` group 1/1, in `split_frame` on the worker thread:
+      after `destroy_context` every call into DPG is into freed memory, so a worker that keeps trying is a
+      worker that eventually crashes the app on exit. 3/3 clean once it stands down instead.
+    - **What is left is the case the item is about**, and it is untouched: work queued *while* the GUI is
+      still up and running as teardown proceeds. Standing down needs the wait to fail first, and during a
+      normal shutdown there is a window where the loop still exists. The stop flag and the drain described
+      above are still what closes this.
   - **A second, separate offender, diagnosed from a core dump on 2026-08-21 — see the item below.** Closing
     `raven-cherrypick` with Alt+F4 segfaulted (Juha), and `coredumpctl` put the crash in
     `dpg.is_dearpygui_running()` on a background thread. Not this worker, and worth stating because the
