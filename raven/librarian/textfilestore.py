@@ -18,6 +18,8 @@ The shared sidecar mechanics (URL scheme, provenance skeleton, byte ingestion, G
     provenance metadata entry.
   - `sidecar_to_text`: resolve a stored `sidecar:` URL to the document's extracted plaintext, memoized on
     the content-addressed filename (so a chat with an attached PDF re-extracts it at most once per process).
+    `sidecar_text_if_extracted` is the same question asked without paying it — the answer if the work is
+    already done, `None` if it is not — for a caller that would rather do without than wait for pypdf.
   - `sidecar_refs_in_payload`: the GC mark-phase interpreter for `text_file` parts. Compose it (set union) with
     `imagestore.sidecar_refs_in_payload` when configuring a datastore's `sidecar_extractor`, so both attached
     images and attached documents are seen by the mark phase.
@@ -25,13 +27,14 @@ The shared sidecar mechanics (URL scheme, provenance skeleton, byte ingestion, G
 
 __all__ = ["store_file_as_sidecar",
            "remember_extracted_text",
-           "sidecar_to_text",
+           "sidecar_to_text", "sidecar_text_if_extracted",
            "sidecar_refs_in_payload"]
 
 import logging
 logger = logging.getLogger(__name__)
 
 import pathlib
+from typing import Optional
 
 from unpythonic.env import env
 
@@ -160,6 +163,21 @@ def sidecar_to_text(datastore: chattree.PersistentForest, url: str) -> str:
         text = "[no extractable text]"
     _extracted_text_cache[filename] = text
     return text
+
+
+def sidecar_text_if_extracted(url: str) -> Optional[str]:
+    """The extracted plaintext for `url`, but **only if extracting it has already happened**. Else `None`.
+
+    For a caller that wants the text if it is free and would rather do without it than wait — the GUI's
+    context-fill readout being the case this exists for. Extraction of a large PDF takes seconds, and that
+    readout is refreshed on every HEAD change, from a DPG callback: paying for it there freezes the keyboard
+    until it finishes, since DPG runs callbacks one at a time.
+
+    `None` therefore means *not extracted yet*, never *no text* — an unreadable document is cached as a
+    placeholder by `sidecar_to_text`, so a second call returns that rather than `None`.
+    """
+    filename = sidecarstore.sidecar_filename_from_url(url, caller="sidecar_text_if_extracted")
+    return _extracted_text_cache.get(filename)
 
 
 def sidecar_refs_in_payload(payload: dict) -> set[str]:

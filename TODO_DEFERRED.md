@@ -35,6 +35,12 @@ arriving? a rebuild that no longer contains it?), and whether the mark should sh
 than the derived one while a run is in progress — it would have to, or the screen would disagree with the
 keys.
 
+**Read the Visualizer's info panel first** (Juha, 2026-08-21): it has an extensive anchoring system that
+does the right thing ~99.9% of the time, and it has already answered the hard half of these questions —
+`info_panel._update_info_panel`'s `scroll_anchor_data`, the build-number-stripped tags that let an anchor
+survive a rebuild, and `_find_next_or_prev_item` for choosing one. Borrow the shape rather than inventing a
+second one; a chat message and an info panel entry are the same problem wearing different clothes.
+
 Worth settling alongside the stall item below: a rebuild that takes seconds makes a flick feel worse than a
 drift, so the two are noticed together even though they are independent faults.
 
@@ -85,17 +91,18 @@ Not any of these, all checked while looking: not the amount rendered (the 3-seco
 *shortest*, `max_y_scroll` 1610 px against 4483 and 4899), not the exact-prompt-size prefill (a debounced
 background `ManagedTask`), not the attachment row (three buttons and a name, no sidecar read).
 
-**The durable fix is already designed elsewhere, and this item must not become a second copy of it.**
-`briefs/researchers-night/12_derived-artifact-store-brief.md` persists derived text — its motivating table
-names this very case, "not persisted, extracts on demand, memoized on the content-addressed filename". What
-that brief did not have is what this costs: a note recording the 3038 ms and the thread it happens on has
-been added to it.
+**The interim shipped on 2026-08-21**, so the stall itself is gone: the readout's immediate count now passes
+`extract_attachments=False` and skips documents it has not extracted, leaving them to the debounced
+background prefill, which the two-stage readout was already shaped for. The undercount shows as `~X%` for
+the moment before the exact figure lands.
 
-**What is left here is the interim, which does not wait for that brief.** Let the immediate count *skip*
-attachments whose text is not already extracted, and leave them to the debounced background pass. The
-readout is two-stage by construction — a local estimate, then the backend's exact figure — so "not counted
-yet" is a third state it is already shaped for rather than a new concept. Warming the cache off-thread is
-the other candidate and is strictly more work for the same symptom.
+**What remains is the durable fix, and it is designed elsewhere — this item must not become a second copy
+of it.** `briefs/researchers-night/12_derived-artifact-store-brief.md` persists derived text, and its
+motivating table names this very case ("not persisted, extracts on demand, memoized on the
+content-addressed filename"). A note recording the 3038 ms and the thread it happened on has been added
+there. Until it lands, the extraction still happens once per process — just no longer where a keystroke is
+waiting behind it. The remaining user-visible cost is the first *wire build* of a chat with a big PDF, which
+is a wait during a request rather than a frozen GUI.
 
 ## The pose editor's list browsing does nothing, and one of its three lists cannot even be reached
 

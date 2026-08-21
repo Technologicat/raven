@@ -1248,6 +1248,45 @@ class TestSerializeHistoryForWire:
         # persona prefix and the `[Attached file: ...]` framing the fold adds, not a budget disagreement.
         assert counted == pytest.approx(wire_characters * self.settings.tokens_per_character, rel=0.05)
 
+    def test_the_readout_can_decline_to_extract_an_attachment_it_has_not_seen(self, tmp_path, monkeypatch):
+        """`extract_attachments=False` must skip an un-extracted document rather than pay for it.
+
+        What is being bought is not accuracy but *latency*: this count runs on every HEAD change, from a DPG
+        callback, and extracting a large PDF there holds the callback thread and freezes the keyboard. So
+        the assertions are about what is *not* counted, and about the figure admitting it.
+        """
+        from raven.librarian import chattree, textfilestore
+        monkeypatch.setattr("raven.librarian.config.context_reserve_fraction", 0.25)
+        monkeypatch.setattr("raven.librarian.config.docs_fetch_max_fraction_of_context", 0.10)
+        # A cache shared across the test session would decide the answer here, this being memoized on the
+        # content-addressed name and other tests storing documents of their own.
+        monkeypatch.setattr("raven.librarian.textfilestore._extracted_text_cache", {})
+        ds = chattree.PersistentForest(tmp_path / "chat.json", autosave=False)
+        stored = textfilestore.store_file_as_sidecar(ds, ("word " * 4000).encode("utf-8"), name="page.md",
+                                                     provenance_url="https://example.com/page",
+                                                     provenance_source="tool_result")
+        message = {"role": "tool", "content": [chatutil.text_content_part("(excerpt)"), stored.part]}
+        node_id = ds.create_node(payload={"message": message,
+                                          "general_metadata": {"sidecars": {stored.filename: stored.sidecar_metadata}}},
+                                 parent_id=None)
+        settings = env(**self.settings, tokenizer=None, backend_flavor="lmstudio")
+
+        # `store_file_as_sidecar` remembers the text it was handed, so extraction has already happened for
+        # this document — clearing the cache above is what makes it genuinely unseen.
+        skipped, skipped_is_exact = llmclient.count_branch_tokens(settings, ds, node_id, extract_attachments=False)
+        # States the contract, but note it cannot fail here: this fixture has no tokenizer, so the estimate
+        # path forces `is_exact` False whatever the attachments did. The size comparison below is what
+        # actually discriminates — checked by making the skip path extract anyway, which fails it.
+        assert skipped_is_exact is False
+
+        # And the default still pays for it, which is what the fetch budget needs.
+        extracted, _is_exact = llmclient.count_branch_tokens(settings, ds, node_id)
+        assert extracted > skipped
+
+        # Once extracted, the cheap path counts it too: the saving is per document per process, not forever.
+        again, _is_exact = llmclient.count_branch_tokens(settings, ds, node_id, extract_attachments=False)
+        assert again == extracted
+
     def test_image_part_preserved_and_sidecar_resolved(self, tmp_path):
         import base64
         from raven.librarian import chattree

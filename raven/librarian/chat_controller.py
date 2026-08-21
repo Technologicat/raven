@@ -3453,7 +3453,18 @@ class DPGChatController:
         if not self.gui_updates_safe:
             return
         try:
-            count, is_exact = llmclient.count_branch_tokens(self.llm_settings, self.datastore, self.app_state["HEAD"])
+            # **`extract_attachments=False` is what keeps this off the critical path.** This runs on every
+            # HEAD change, and a HEAD change happens inside a DPG callback — so extracting an attached PDF
+            # here (pypdf, seconds for a large one) holds the callback thread, and every key pressed
+            # meanwhile queues behind it. Measured 2026-08-21: switching to a branch with three PDFs took
+            # 3038 ms, against 38 ms for one with nothing to extract, and the app read as frozen throughout.
+            #
+            # The cost of skipping is an undercount for a moment, shown as `~X%`, which the debounced
+            # prefill below then replaces with the backend's exact figure. Trading a transient wrong number
+            # for a transient dead keyboard is the right way round: the number corrects itself and says it
+            # is approximate while it is wrong, where the freeze reads as the app having crashed.
+            count, is_exact = llmclient.count_branch_tokens(self.llm_settings, self.datastore, self.app_state["HEAD"],
+                                                            extract_attachments=False)
             self._render_context_fill(count, is_exact)
         except Exception:  # noqa: BLE001 -- a status readout must never break the GUI or a chat turn
             logger.exception("DPGChatController.update_context_fill_indicator: failed to update the context-fill readout")

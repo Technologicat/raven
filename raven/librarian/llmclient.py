@@ -1281,7 +1281,8 @@ def image_token_cost(settings: env, height: int, width: int) -> int:
 
 def count_branch_tokens(settings: env,
                         datastore: chattree.Forest,
-                        head_node_id: str) -> Tuple[int, bool]:
+                        head_node_id: str,
+                        extract_attachments: bool = True) -> Tuple[int, bool]:
     """Estimate the token size of the conversation ending at `head_node_id`. Returns `(count, is_exact)`.
 
     Counts the *visible conversation content* — every message from the root down to `head_node_id`. It
@@ -1300,10 +1301,26 @@ def count_branch_tokens(settings: env,
     Two callers, wanting the same number for different reasons: the GUI's context-fill readout, and the
     budget that decides how much of a document `fetch_document` may return. Shared so they cannot disagree
     about how full the context is.
+
+    `extract_attachments`: whether an attached document whose text is not extracted yet may be extracted
+                           here. `False` skips such attachments and forces `is_exact` to `False`; text
+                           already extracted is counted either way, so the answer is the same once a chat
+                           has been used.
+
+                           For a caller that must not *wait*, which is the GUI readout: extraction runs
+                           pypdf, and that readout is refreshed on every HEAD change from a DPG callback —
+                           where seconds of work freeze the keyboard, DPG running callbacks one at a time.
+                           The undercount it accepts is temporary by construction, the same readout being
+                           two-stage: a debounced background prefill replaces the figure with the backend's
+                           exact one a moment later.
+
+                           The budget caller passes the default, and must: an under-reported context would
+                           let `fetch_document` return more than actually fits.
     """
     text_segments = []
     attachments = []  # (extracted text, budget kind)
     image_tokens = 0
+    counted_every_attachment = True  # cleared when `extract_attachments=False` meets one that is not extracted yet
     for node_id in datastore.linearize_up(head_node_id):
         payload = datastore.get_payload(node_id)
         message = payload["message"]
@@ -1320,8 +1337,14 @@ def count_branch_tokens(settings: env,
             elif part_type == "text_file":
                 file_url = (part.get("text_file") or {}).get("url", "")
                 if file_url.startswith(sidecarstore.SIDECAR_SCHEME):
-                    attachments.append((textfilestore.sidecar_to_text(datastore, file_url),
-                                        attachment_budget_kind(part)))
+                    if extract_attachments:
+                        text = textfilestore.sidecar_to_text(datastore, file_url)
+                    else:
+                        text = textfilestore.sidecar_text_if_extracted(file_url)
+                        if text is None:  # not extracted yet, and this caller will not wait for it
+                            counted_every_attachment = False
+                            continue
+                    attachments.append((text, attachment_budget_kind(part)))
 
     conversation_characters = sum(len(segment) for segment in text_segments)
     fitted_attachments = fit_attachments_to_context(settings, conversation_characters, attachments)
@@ -1329,6 +1352,8 @@ def count_branch_tokens(settings: env,
     if image_tokens:
         count += image_tokens
         is_exact = False  # per-image token cost is an estimate, so the whole figure is now approximate
+    if not counted_every_attachment:
+        is_exact = False  # content was left out entirely, which is a stronger caveat than the readout's `~` can say
     return count, is_exact
 
 # Canonical refusal for a fetch that cannot fit, in the manner of `CANONICAL_NOT_ON_ALLOWLIST`. Phrased as a
