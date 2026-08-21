@@ -596,9 +596,13 @@ def is_render_thread() -> bool:
 def split_frame(*, operation: str, required: bool = True) -> bool:
     """Wait for the render loop to complete one frame — `dpg.split_frame`, but reporting the cases it cannot.
 
-    This does **not** make waiting possible on the render loop thread; nothing can, since the thread
-    that must render the frame is the one that would be blocked. What it changes is the *failure*: the
-    situation is detected and named instead of hanging the app.
+    Two situations make a wait impossible. This detects and names both; neither becomes possible.
+
+      - **Called from the render loop thread.** The thread that must produce the frame is the one that
+        would block, so a bare `dpg.split_frame` hangs — with no traceback, no log line and nothing to
+        bisect, indistinguishable from a slow model or a wedged GPU.
+      - **No render loop is running**, before one starts or after one exits. DPG raises there, and on a
+        background thread the exception escapes and kills the thread.
 
     `operation`: What the caller is waiting for. Named in the message, so make it specific enough to
                  find the call site from a log line.
@@ -609,11 +613,10 @@ def split_frame(*, operation: str, required: bool = True) -> bool:
 
     Returns whether the wait actually happened, so a `required=False` caller can adapt.
 
-    Prefer this to a bare `dpg.split_frame()` anywhere the calling thread is not obvious from two
-    lines of context. The failure it converts is the worst kind DPG offers: a hang with no traceback,
-    no log line, and nothing to bisect — indistinguishable from a slow model or a wedged GPU. A
-    `RuntimeError` naming the operation is strictly more useful, and `required=False` degrades to a
-    cosmetic imperfection instead.
+    Prefer this to a bare `dpg.split_frame()` anywhere the calling thread is not obvious from two lines of
+    context, and in anything that runs during startup or teardown. A `RuntimeError` naming the operation is
+    strictly more useful than either failure above, and `required=False` degrades to a cosmetic
+    imperfection instead.
     """
     if is_render_thread():
         message = (f"split_frame: {operation}: waiting for a frame from the render loop thread cannot "
@@ -626,7 +629,24 @@ def split_frame(*, operation: str, required: bool = True) -> bool:
             raise RuntimeError(message)
         logger.warning(f"{message} Proceeding without waiting.")
         return False
-    dpg.split_frame()
+    # The other way a wait cannot succeed: there is no render loop at all. DPG raises a bare `Exception`
+    # for it ("split_frame is exiting: there is no active rendering loop"), which on a background thread
+    # escapes and kills that thread — a shutdown or startup condition arriving as a dead worker and a
+    # traceback. Reported the same way as the case above, for the same reason: a named failure beats one
+    # that has to be recognized from a stack trace.
+    #
+    # Asked for rather than checked: `dpg.is_dearpygui_running()` would answer the same question, and
+    # calling it from a background thread after `destroy_context` is itself a segfault — a guard against a
+    # freed library that is a call into it. See the teardown items in `TODO_DEFERRED.md`.
+    try:
+        dpg.split_frame()
+    except Exception as exc:
+        message = (f"split_frame: {operation}: DPG declined to wait ({type(exc)}: {exc}). The usual cause "
+                   "is that no render loop is running — either it has not started yet, or it has exited.")
+        if required:
+            raise RuntimeError(message) from exc
+        logger.warning(f"{message} Proceeding without waiting.")
+        return False
     return True
 
 def wait_for_resize(widget: Union[str, int],

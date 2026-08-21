@@ -2443,7 +2443,7 @@ class FileDialog:
                                                     # are.
                                                     label=f"{self.title} — keyboard",
                                                     handle_own_hotkeys=False,
-                                                    on_show=self._fit_help_card_to_content,
+                                                    on_parked=self._fit_help_card_to_content,
                                                     on_hide=self._on_help_card_hidden)
         return self._help_window
 
@@ -2462,8 +2462,9 @@ class FileDialog:
         Runs on every show and does its work on the first: the content is built once and never changes, so
         every later call spends one frame confirming the height the card already has, and stops.
 
-        `show` calls this while the card is parked out of sight, so the frames spent settling are drawn
-        where nobody is looking and the card appears once, at the size it keeps.
+        Wired as the card's `on_parked` rather than its `on_show`, which is the hook that exists for this:
+        it runs while the card is parked out of sight, so the frames spent settling are drawn where nobody
+        is looking and the card appears once, at the size it keeps.
         """
         card = self._help_window
         for _ in range(_HELP_CARD_FIT_PASSES):

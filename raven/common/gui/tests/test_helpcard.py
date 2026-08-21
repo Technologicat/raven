@@ -13,6 +13,7 @@ dpg = pytest.importorskip("dearpygui.dearpygui", reason="dearpygui not installed
 from unpythonic.env import env  # noqa: E402 -- after importorskip by design
 
 from raven.common.gui import helpcard  # noqa: E402 -- after importorskip by design
+from raven.common.gui import utils as guiutils  # noqa: E402 -- after importorskip by design
 
 
 class FakeCard:
@@ -76,6 +77,63 @@ def test_showing_a_card_before_the_gui_has_settled_reports_that_it_did_not(reque
                                    themes_and_fonts=env(font_size=20))
         assert card.show() is False
         assert not card.is_visible()
+    finally:
+        dpg.destroy_context()
+
+
+def test_the_two_show_hooks_fire_at_the_moments_they_promise(request, monkeypatch):
+    """`on_parked` while the card is parked and unplaced; `on_show` once it is placed and up.
+
+    The order is a contract two callers depend on from opposite ends, and getting it wrong is invisible
+    in a still image. A file dialog measures its card from `on_parked`, which needs the card drawn but
+    not yet placed. `raven.visualizer`'s `enter_modal_mode` runs from `on_show` and asks the GUI what is
+    currently visible — *and spends a frame doing it*, so running it while the card is parked draws a
+    frame ImGui clamps back inside the viewport, and the card appears at the bottom right before jumping
+    to the middle. That is what this pins.
+
+    Needs no rendered frames: what is asserted is where the card *is* at each callback, and the position
+    is set by the code under test rather than by layout. `_render` refuses before frame 10, which is the
+    one thing that has to be faked.
+    """
+    dpg.create_context()
+    dpg.create_viewport(width=100, height=100)  # never shown: tests must not steal focus
+    dpg.setup_dearpygui()
+    try:
+        monkeypatch.setattr(dpg, "get_frame_count", lambda: 100)  # past `_render`'s ten-frame threshold
+        monkeypatch.setattr(guiutils, "split_frame", lambda **kwargs: None)  # this suite renders none
+        # The card's header is its one piece of Markdown, and that renderer measures text by asking DPG
+        # until it gets an answer — a `while 1` that never returns where no frame is drawn. It only renders
+        # inline once its `STARTUP_DONE` is set, and queues the work otherwise, so this suite is safe from
+        # it today. But that flag is a *class* attribute and so lives as long as the process: a run in which
+        # some earlier module rendered frames would set it, and this test would then hang rather than fail.
+        # Stub the header out instead of depending on collection order; what is under test is when the two
+        # hooks fire.
+        monkeypatch.setattr(helpcard.dpg_markdown, "add_text", lambda *args, **kwargs: None)
+        with dpg.window(tag=f"reference_{request.node.name}", width=800, height=600):  # tag
+            pass
+
+        seen = {}
+
+        def note(which):
+            def record():
+                seen[which] = (tuple(dpg.get_item_pos(card._window)),
+                               dpg.get_item_configuration(card._window)["show"])
+            return record
+
+        card = helpcard.HelpWindow(hotkey_info=[env(key_indent=0, key="F1", action_indent=0, action="Help", notes="")],
+                                   width=400, height=200,
+                                   reference_window=f"reference_{request.node.name}",  # tag
+                                   themes_and_fonts=env(font_size=20),
+                                   on_parked=note("parked"),
+                                   on_show=note("shown"))
+        assert card.show() is True
+
+        park = (dpg.get_viewport_client_width(), dpg.get_viewport_client_height())
+        assert seen["parked"] == (park, True), "on_parked must run with the card drawn, and parked"
+        assert seen["shown"][1] is True
+        assert seen["shown"][0] != park, ("on_show must run with the card placed — a handler that spends a "
+                                          "frame here would otherwise have it drawn at the park, which "
+                                          "ImGui clamps back into view")
     finally:
         dpg.destroy_context()
 

@@ -73,6 +73,7 @@ class HelpWindow:
                  dimmed_color: Tuple[int] = (140, 140, 140, 255),
                  gui_font: Optional[int] = None,
                  on_render_extras: Optional[Callable] = None,
+                 on_parked: Optional[Callable] = None,
                  on_show: Optional[Callable] = None,
                  on_hide: Optional[Callable] = None,
                  label: str = "Help",
@@ -144,11 +145,27 @@ class HelpWindow:
 
                             Note that `dpg_markdown` does not support nesting color tags.
 
+        `on_parked`: Triggered once per `show`, while the card is drawn but parked outside the viewport,
+                     before it has been placed. 0-argument callable. Return value is ignored.
+
+                     For a card that has to be *measured* before it is placed — `measure_content_height`
+                     needs it laid out, and parking is how a window is laid out unseen. Resizing here is
+                     free to look at; resizing from `on_show` instead would place the card twice and show
+                     the reader the wrong one.
+
+                     A handler that spends frames must park on each of them (`settle_offscreen` does the
+                     pair), since a park holds for one frame only.
+
         `on_show`: Triggered when the help window opens. 0-argument callable. Return value is ignored.
         `on_hide`: Triggered when the help window closes. 0-argument callable. Return value is ignored.
 
                    These can be useful e.g. if the app needs to enter a modal mode (disable some UI animations etc.)
                    while a modal dialog (such as the help window) is on the screen.
+
+                   `on_show` fires with the card **placed and on screen**, which is what a handler doing
+                   that bookkeeping needs: `raven.visualizer`'s `enter_modal_mode` asks the GUI what is
+                   visible, and spends a frame doing it. `on_parked` is the hook for anything that has to
+                   happen earlier.
 
         `label`: The window title. Worth setting when the card belongs to something other than the app as a
                  whole — a dialog's card appears with that dialog hidden behind it (see `handle_own_hotkeys`),
@@ -186,6 +203,7 @@ class HelpWindow:
 
         self.gui_font = gui_font
         self.on_render_extras = on_render_extras
+        self.on_parked = on_parked
         self.on_show = on_show
         self.on_hide = on_hide
         self.label = label
@@ -338,8 +356,9 @@ class HelpWindow:
 
         This also auto-centers the help window on the reference window.
 
-        The `on_show` handler, if set, will be called — while the card is drawn but parked out of sight, so
-        a handler that resizes it (to fit its content, say) does so before the reader sees anything.
+        The `on_parked` handler, if set, is called while the card is drawn but parked out of sight, so a
+        handler that resizes it (to fit its content, say) does so before the reader sees anything. The
+        `on_show` handler, if set, is called once the card is placed and up.
 
         `False` means the GUI has not run long enough to build the card yet (the first few frames after app
         start), and nothing was done. Callers that hide something *behind* the card need this answer; a
@@ -355,16 +374,23 @@ class HelpWindow:
             logger.info("HelpWindow.show: Window was not built, nothing to show.")
             return False
         # Draw the card before deciding where it goes. A hidden item is not laid out, so a card that has
-        # never been drawn has no geometry — and `on_show` is where a caller measures it. Placing it first
-        # and letting the handler resize it afterwards costs two placements, of which the reader sees the
-        # wrong one: `fdialog`'s card appeared centered at its built height and then jumped to its fitted
-        # one, over four frames.
+        # never been drawn has no geometry — and `on_parked` is where a caller measures it. Placing it
+        # first and letting the handler resize it afterwards costs two placements, of which the reader sees
+        # the wrong one: `fdialog`'s card appeared centered at its built height and then jumped to its
+        # fitted one, over four frames.
         self.settle_offscreen()
-        visible_help_window_instance = self
-        if self.on_show is not None:
-            self.on_show()
+        if self.on_parked is not None:
+            self.on_parked()
         self.reposition(_force=True)
         dpg.show_item(self._window)  # For some reason, we need to do this *after* `set_item_pos` for a modal window, or this works only every other time (1, 3, 5, ...). Maybe a modal must be inside the viewport to successfully show it?
+        visible_help_window_instance = self
+        # Placed and up before `on_show` runs, deliberately. A handler here may ask the GUI what is visible,
+        # and may spend a frame — and a frame spent while the card is still parked draws it back inside the
+        # viewport, ImGui clamping any window whose position did not come through the API that frame.
+        # `raven.visualizer`'s `enter_modal_mode` does both, and showed the card at the bottom right for a
+        # frame or two when this ran earlier.
+        if self.on_show is not None:
+            self.on_show()
         dpg.focus_item(self._window)
         logger.info("HelpWindow.show: Done.")
         return True
