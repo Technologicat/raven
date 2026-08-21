@@ -1365,6 +1365,95 @@ def test_the_compact_panel_is_not_keyboard_navigable(make_dialog):
     assert dialog._caret_home is CaretHome.FIELD
 
 
+def letter_press(dialog, letter, *, shift=False):
+    """Send a bare letter (optionally shifted) to the dialog, as its keycode."""
+    held = {dpg.mvKey_LShift} if shift else set()
+    key = dpg.mvKey_A + (ord(letter.lower()) - ord("a"))
+    with mock.patch.object(dpg, "is_key_down", lambda k: k in held):
+        dialog._handle_key(key)
+
+
+def test_the_first_letter_is_the_first_one_you_can_see():
+    """Punctuation is skipped rather than matched, which is what makes a mount point typeable at all."""
+    assert fdialog._first_letter("Pictures") == "p"
+    assert fdialog._first_letter("/boot/efi") == "b"  # not "e" — this is not basename matching
+    assert fdialog._first_letter("C:\\") == "c"
+    assert fdialog._first_letter("/") is None  # nothing to press; Ctrl+L is what reaches it
+
+
+def test_a_letter_jumps_to_the_place_it_starts(dialog):
+    ctrl_press(dialog, dpg.mvKey_B)
+    labels = [label for label, _path in dialog._place_entries]
+    target = next((i for i, label in enumerate(labels) if label == "Pictures"), None)
+    if target is None:
+        pytest.skip("this user has no Pictures folder")
+    letter_press(dialog, "p")
+    assert dialog._places_cursor.current == target
+
+
+def test_the_same_letter_again_takes_the_next_one_and_wraps(dialog):
+    """Cycling is what replaces a prefix buffer: no state to show, nothing to cancel."""
+    ctrl_press(dialog, dpg.mvKey_B)
+    labels = [label for label, _path in dialog._place_entries]
+    d_rows = [i for i, label in enumerate(labels) if fdialog._first_letter(label) == "d"]
+    if len(d_rows) < 2:
+        pytest.skip("this user has fewer than two places starting with D")
+    seen = []
+    for _ in range(len(d_rows) + 1):  # one more than there are, to catch the wrap
+        letter_press(dialog, "d")
+        seen.append(dialog._places_cursor.current)
+    assert seen[:len(d_rows)] == d_rows, "should visit each D place in order"
+    assert seen[-1] == d_rows[0], "and wrap back to the first"
+
+
+def test_shift_cycles_the_other_way(dialog):
+    ctrl_press(dialog, dpg.mvKey_B)
+    labels = [label for label, _path in dialog._place_entries]
+    d_rows = [i for i, label in enumerate(labels) if fdialog._first_letter(label) == "d"]
+    if len(d_rows) < 2:
+        pytest.skip("this user has fewer than two places starting with D")
+    letter_press(dialog, "d")
+    assert dialog._places_cursor.current == d_rows[0]
+    letter_press(dialog, "d", shift=True)
+    assert dialog._places_cursor.current == d_rows[-1], "backwards from the first wraps to the last"
+
+
+def test_a_letter_matching_nothing_leaves_the_cursor_alone(dialog):
+    ctrl_press(dialog, dpg.mvKey_B)
+    dialog._handle_key(dpg.mvKey_Down)
+    before = dialog._places_cursor.current
+    letter_press(dialog, "q")  # no place starts with Q
+    assert dialog._places_cursor.current == before
+
+
+def test_letters_do_nothing_unless_the_panel_has_the_keys(dialog):
+    """They belong to the find field everywhere else, and it is the field that has the caret there."""
+    before = dialog._places_cursor.current
+    letter_press(dialog, "p")
+    assert dialog._caret_home is CaretHome.FIELD
+    assert dialog._places_cursor.current == before
+
+
+def test_refreshing_re_reads_the_drives(dialog):
+    """A drive plugged in while the dialog is open should appear on F5, not on a restart."""
+    extra = "/definitely-not-a-real-mount-point"
+    real_drives = fdialog._get_all_drives()  # captured before the patch, or the lambda calls itself
+    with mock.patch.object(fdialog, "_get_all_drives", lambda: [*real_drives, extra]):
+        dialog.refresh()
+    assert extra in [path for _label, path in dialog._place_entries]
+    dialog.refresh()  # and it goes away again once the machine stops reporting it
+    assert extra not in [path for _label, path in dialog._place_entries]
+
+
+def test_a_rebuilt_panel_keeps_the_cursor_on_the_same_place(dialog):
+    """`set_listing` re-anchors by path, which is what makes rebuilding the whole panel safe."""
+    ctrl_press(dialog, dpg.mvKey_B)
+    dialog._handle_key(dpg.mvKey_Down)
+    where = dialog._places_cursor.current_key
+    dialog.refresh()
+    assert dialog._places_cursor.current_key == where
+
+
 def test_the_help_card_offers_ctrl_b_only_where_the_panel_is(make_dialog):
     def keys(dialog):
         return [getattr(entry, "key", None) for entry in dialog._help_hotkey_info()]

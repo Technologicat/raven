@@ -42,8 +42,15 @@ _KEY_PAGE_DOWN = 518
 _FIELD_DEACTIVATION_FRAMES = 30
 
 # The help card's size, in pixels. `HelpWindow` builds a fixed-size window with no scrollbar, so content
-# that does not fit is clipped away silently — a row added to the table past this point needs the height
-# raised with it, and a column needs the width.
+# that does not fit is clipped away silently — a row added past what fits needs the height raised with it,
+# and a column needs the width.
+#
+# **There is room for several more rows, measured 2026-08-21** by rendering the tallest configuration the
+# card has (multi-selection, a type filter, files to make tiles of, and a places panel — thirty entries
+# across the two columns): the content ends about 190 px above the bottom edge. An earlier note here said
+# fourteen rows was the limit and that each new one needed the height raised; that was inferred rather than
+# measured, and it is wrong. The margin is there to absorb *wrapping* — several action and note cells run to
+# two lines — so what actually eats it is a long phrase, not another key.
 _HELP_CARD_SIZE = (1250, 640)
 
 
@@ -231,6 +238,24 @@ def _get_all_drives():
 # their render loops, so requiring every host app to call something would be a landmine — the app that
 # forgets is the one whose thumbnails never appear.
 _GRID_TICK_INTERVAL = 1.0 / 60
+
+
+def _first_letter(label: str) -> Optional[str]:
+    """The first letter of `label`, lowercased — or `None` where it has none at all.
+
+    Non-letters are skipped rather than matched, which is what makes a mount point reachable by typing:
+    `/boot/efi` answers to `b` and `C:\\` to `c`. It reads off the label the way the eye does, left to
+    right until something pronounceable turns up.
+    """
+    # Punctuation cannot be a type-ahead key here whatever we might wish, so skipping it is the only
+    # option that reaches these rows at all. DPG reports physical keycodes rather than characters, and on
+    # a Nordic layout `/` is Shift+7 — it arrives as `mvKey_7`, and `mvKey_Slash` never fires. A row whose
+    # label is punctuation all the way down ("/" itself) therefore has no letter and no key; Ctrl+L is
+    # what reaches it, that being the control for a path typed rather than browsed.
+    for character in label:
+        if character.isalpha():
+            return character.lower()
+    return None
 
 
 def _complete_from(text: str, candidates: Iterable[str]) -> Optional[str]:
@@ -599,8 +624,6 @@ class FileDialog:
         # over both, separator and all.
         self._place_entries = []  # (label, path)
         self._place_themes = []  # (cell, base theme, cursor theme)
-        # `(origin, pitch)` for the panel's rows once two have been seen laid out; see `_place_metrics`.
-        self._place_metrics_cache = None
 
         # Where the dialog is taking keys. Assigned directly here, ahead of the widgets: the property
         # behind it repaints the places cursor, which needs the panel to exist. See `CaretHome`.
@@ -680,34 +703,11 @@ class FileDialog:
             with dpg.group(horizontal=True):
                 # shortcut menu
                 if (self.user_style == 0):
-                    with dpg.child_window(tag=f"shortcut_menu_{self.instance_tag}", width=200, resizable_x=True, show=self.show_shortcuts_menu, height=-info_px):
-                        for label, icon in _PLACES:
-                            if label not in self._places:  # this user has no such directory
-                                continue
-                            self._add_place_row(label, self._places[label], getattr(self, icon))
-
-                        dpg.add_separator()
-
-                        # i/e drives list
-                        for drive in _get_all_drives():
-                            self._add_place_row(drive, drive, self.img_hard_disk)
-
-                    self._places_cursor.set_listing([path for _label, path in self._place_entries],
-                                                    listing_key="places")
-
+                    dpg.add_child_window(tag=f"shortcut_menu_{self.instance_tag}", width=200, resizable_x=True, show=self.show_shortcuts_menu, height=-info_px)
                 elif (self.user_style == 1):
-                    with dpg.child_window(tag=f"shortcut_menu_{self.instance_tag}", width=40, show=self.show_shortcuts_menu, height=-info_px):
-                        for label, icon in _PLACES:
-                            if label not in self._places:  # this user has no such directory
-                                continue
-                            dpg.add_image_button(getattr(self, icon), user_data=self._places[label], callback=self.open_place)
-
-                        dpg.add_separator()
-
-                        with dpg.group():
-                            drives = _get_all_drives()
-                            for drive in drives:
-                                dpg.add_image_button(texture_tag=self.img_hard_disk, label=drive, user_data=drive, callback=self.open_place)
+                    dpg.add_child_window(tag=f"shortcut_menu_{self.instance_tag}", width=40, show=self.show_shortcuts_menu, height=-info_px)
+                if self.user_style in (0, 1):
+                    self._build_places_panel()
 
                 with dpg.child_window(height=-info_px):
                     # main explorer header
@@ -1686,26 +1686,89 @@ class FileDialog:
     # The places panel — the side list of folder shortcuts and drives
     # ------------------------------------------------------------------
 
-    def _add_place_row(self, label: str, path: str, icon) -> None:
+    def _build_places_panel(self) -> None:
+        """Fill the places panel with the user's directories and whatever drives are mounted *now*.
+
+        Called at construction and again by `refresh`, so a drive plugged in while the dialog is open
+        appears on F5 rather than on a restart. Both are re-read each time: the panel is a picture of the
+        machine, and the machine changes underneath it.
+        """
+        panel = f"shortcut_menu_{self.instance_tag}"  # tag
+        # Rebuild rather than diff. The panel is a dozen rows, so the cheap thing and the clever thing cost
+        # the same, and the cursor is re-anchored *by path* below — which is what makes a rebuild safe here
+        # where a diff would only be less obviously safe.
+        dpg.delete_item(panel, children_only=True)
+        self._place_entries = []
+        self._place_themes = []
+
+        # Re-resolved, not cached: a directory can appear as well as a drive, and seven `listdir` calls on
+        # an explicit refresh is not a cost worth reasoning about.
+        self._places = {label: path for label, _icon in _PLACES
+                        if (path := self.get_directory_path(label)) is not None}
+
+        if self.user_style == 0:
+            for label, icon in _PLACES:
+                if label not in self._places:  # this user has no such directory
+                    continue
+                self._add_place_row(label, self._places[label], getattr(self, icon), parent=panel)
+
+            dpg.add_separator(parent=panel)
+            for drive in _get_all_drives():
+                self._add_place_row(drive, drive, self.img_hard_disk, parent=panel)
+
+            self._places_cursor.set_listing([path for _label, path in self._place_entries],
+                                            listing_key="places")
+        else:  # compact: an icon strip, with no text to carry a label or a cursor
+            for label, icon in _PLACES:
+                if label not in self._places:  # this user has no such directory
+                    continue
+                dpg.add_image_button(getattr(self, icon), user_data=self._places[label],
+                                     callback=self.open_place, parent=panel)
+            dpg.add_separator(parent=panel)
+            for drive in _get_all_drives():
+                dpg.add_image_button(texture_tag=self.img_hard_disk, label=drive, user_data=drive,
+                                     callback=self.open_place, parent=panel)
+
+    def _add_place_row(self, label: str, path: str, icon, *, parent: Union[str, int]) -> None:
         """Build one row of the places panel: an icon, and a selectable that goes where the row says.
 
         `label`: what the row reads — a directory name for one of the user's places, the mount point for
                  a drive.
         `path`: where it goes.
         `icon`: the texture to show beside it.
+        `parent`: the panel to build into.
         """
         # A selectable rather than a menu item, and for the keyboard rather than for the look: a
         # `menu_item` cannot hold focus and cannot be asked to — `get_item_state` on one has no "focused"
         # key at all — so a panel built from them is reachable by mouse and by nothing else. A selectable
         # is what the listing's rows are made of, which also makes this the listing's cursor rather than a
         # second kind of one.
-        with dpg.group(horizontal=True):
+        with dpg.group(horizontal=True, parent=parent):
             dpg.add_image(icon)
             cell = dpg.add_selectable(label=label, user_data=path, callback=self.open_place,
                                       height=self.selec_height)
         dpg.bind_item_theme(cell, self.selec_alignt)
         self._place_entries.append((label, path))
         self._place_themes.append((cell, self.selec_alignt, self.selec_alignt_cursor))
+
+    def _jump_to_place_by_letter(self, letter: str, *, backwards: bool = False) -> None:
+        """Move the panel's cursor to the next row whose name starts with `letter`, wrapping around.
+
+        `backwards`: search up the panel instead of down. Shift is what asks for it.
+        """
+        # Cycling rather than searching, because the panel is short enough to see whole: pressing the
+        # letter again is how you reach the second `D`, and wrapping is how you get back. Nothing is
+        # remembered between presses, so there is no prefix to display and nothing to cancel.
+        count = len(self._place_entries)
+        if not count:
+            return
+        step = -1 if backwards else 1
+        start = max(0, self._places_cursor.current)
+        for offset in range(1, count + 1):
+            index = (start + step * offset) % count
+            if _first_letter(self._place_entries[index][0]) == letter:
+                self._places_cursor.set_current(index)
+                return
 
     def _places_are_navigable(self) -> bool:
         """Whether the places panel is on screen and has rows for a cursor to move over.
@@ -2305,10 +2368,10 @@ class FileDialog:
             env(key_indent=0, key="Enter", action_indent=0, action="Go as deep as this entry allows", notes="Into a folder, or accept a file"),
             env(key_indent=0, key="Ctrl+Enter", action_indent=0, action="Accept without going deeper", notes="The OK button"),
             # Two homes answer Escape by handing the caret back rather than cancelling, and a bare "Cancel"
-            # promises something else for both. It goes in the notes rather than a row of its own, and it is
-            # kept short enough not to wrap, for the same reason: column one is already the height the card
-            # was measured at, `HelpWindow` gives it no scrollbar, and either a fifteenth row or a second
-            # line here spends the margin the measurement left for the row a multi-selection dialog adds.
+            # promises something else for both. It goes in the notes rather than a row of its own, and is
+            # kept to one line because a wrapped note is the ugly cell rather than because the card is
+            # short of room — see `_HELP_CARD_SIZE`, where the "no space left" claim this used to make is
+            # corrected against a measurement.
             env(key_indent=0, key="Esc", action_indent=0, action="Cancel", notes="Or out of a side control"),
             (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Mark or unmark this entry", notes="Ctrl+click, without the mouse")
              if self.multi_selection else None),
@@ -2326,9 +2389,9 @@ class FileDialog:
             env(key_indent=1, key="Tab", action_indent=1, action="...and back, carrying the name", notes="Of whatever the cursor is on"),
             env(key_indent=0, key="Ctrl+F", action_indent=0, action="Caret back to the field", notes="Keeping what you typed"),
             env(key_indent=0, key="Ctrl+L", action_indent=0, action="Caret to the path field", notes="Paste a folder, Enter to go"),
-            # Column two now matches column one's fourteen rows at its longest, which is the height the
-            # card was measured at — so this is the last row either column has room for.
             (env(key_indent=0, key="Ctrl+B", action_indent=0, action="Caret to the shortcuts panel", notes="Arrow to one, Enter to go")
+             if self._places_are_navigable() else None),
+            (env(key_indent=1, key="A ... Z", action_indent=1, action="...or jump by first letter", notes="Again cycles, Shift reverses")
              if self._places_are_navigable() else None),
             helpcard.hotkey_blank_entry,
             (env(key_indent=0, key="Ctrl+1 ... Ctrl+9", action_indent=0, action="Show the Nth file type", notes="")
@@ -2532,6 +2595,16 @@ class FileDialog:
         # the universal rules rather than anything this panel invents: Enter goes as deep as it can, and
         # from in here the deepest thing there is is the place under the cursor; Escape gives the caret
         # back to the main thing.
+        # A letter jumps to the next place starting with it; Shift goes the other way. Shift is free to
+        # mean a direction *because* the match is letters-only — a letter key reports the same code shifted
+        # or not, on every Latin layout, so Shift is never needed to produce one. It would not have been
+        # free had punctuation been in scope: DPG reports physical keycodes, and on a Nordic layout `/` is
+        # Shift+7, arriving as `mvKey_7` with `mvKey_Slash` never firing at all.
+        if self._caret_home is CaretHome.PLACES and not (ctrl or alt):
+            if dpg.mvKey_A <= key <= dpg.mvKey_Z:
+                self._jump_to_place_by_letter(chr(ord("a") + key - dpg.mvKey_A), backwards=shift)
+                return
+
         if self._caret_home is CaretHome.PLACES and not (ctrl or alt or shift):
             if key == dpg.mvKey_Return:
                 self._open_cursor_place()
@@ -2971,6 +3044,11 @@ class FileDialog:
         cwd = os.getcwd()
         logger.debug(f"refresh: instance '{self.tag}' ({self.instance_tag}), refreshing at cwd = '{cwd}'")
         self.reset_dir()
+        # The panel too, not just the listing. Re-reading the machine is most of what F5 is *for* here: a
+        # drive plugged in while the dialog is open used to need the dialog closed and reopened, or the app
+        # restarted, before it could be browsed to.
+        if self.user_style in (0, 1):
+            self._build_places_panel()
         # Raven: Acknowledge the action in the GUI.
         gui_animation.flash_button(button=self.button_refresh,
                                    duration=1.0)
