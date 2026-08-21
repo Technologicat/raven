@@ -1,7 +1,7 @@
 # FileDialog: navigation history
 
 **Status: designed, not started, unscheduled.** Split out of
-`briefs/researchers-night/filedialog-keyboard-brief.md` on 2026-08-21 (Juha) so that brief can close: the
+`briefs/researchers-night/done/filedialog-keyboard-brief.md` on 2026-08-21 (Juha) so that brief can close: the
 keyboard work has run a week, every key the design named is built, and this is a *new capability* rather
 than a gap in the keyboard. It sits outside the numbered runs for the same reason
 `ligature-repair-brief.md` and `spreadsheet-ingestion-brief.md` do.

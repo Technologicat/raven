@@ -121,7 +121,7 @@ def enter_modal_mode():
     logger.debug("enter_modal_mode: App entering modal mode.")
     dpg.split_frame()
     app_state.update_mouse_hover(force=True, wait=False)  # hide annotation (just in case it's there)
-    info_panel.scroll_position_changed(reset=True)  # force update of current item in `update_current_search_result_status`, so `CurrentItemControlsGlow` disables its highlight
+    info_panel.scroll_position_changed(reset=True)  # force update of current item in `update_current_search_result_status`, so the keyboard mark comes off
 
 def exit_modal_mode():
     """Restore the GUI to main window mode (when a modal is closed): show annotation if relevant, enable current item button glow, ...
@@ -131,7 +131,7 @@ def exit_modal_mode():
     """
     logger.debug("exit_modal_mode: App returning to main window mode.")
     dpg.split_frame()
-    info_panel.scroll_position_changed(reset=True)  # force update of current item in `update_current_search_result_status`, so `CurrentItemControlsGlow` enables its highlight
+    info_panel.scroll_position_changed(reset=True)  # force update of current item in `update_current_search_result_status`, so the keyboard mark goes back on
     app_state.update_mouse_hover(force=True, wait=False)  # show annotation if relevant
 
 # Register the modal-mode helpers on `app_state` so submodules can reach them.
@@ -232,7 +232,6 @@ def reset_app_state(_update_gui=True):
         # Re-add the background animations that should always be present in the animator.
         # These monitor the app state and live-update at every frame.
         gui_animation.animator.add(PlotterPulsatingGlow(cycle_duration=gui_config.glow_cycle_duration))
-        gui_animation.animator.add(CurrentItemControlsGlow(cycle_duration=gui_config.glow_cycle_duration))
 
         # Clear undo history and selection
         selection.reset_undo_history()
@@ -654,74 +653,6 @@ class PlotterPulsatingGlow(gui_animation.Animation):  # this animation is set up
         return gui_animation.action_continue
 
 
-class CurrentItemControlsGlow(gui_animation.Animation):  # this animation is set up by `reset_app_state`
-    def __init__(self, cycle_duration):
-        """Cyclic animation to pulsate the current item controls.
-
-        Very specific; needs support from outside to update `current_item`, and the highlight
-        is hardcoded for the current GUI controls layout (2x2 buttons per info panel item).
-        """
-        super().__init__()
-        self.cycle_duration = cycle_duration
-
-    def render_frame(self, t):
-        """Update the highlight on the current item GUI controls.
-
-        `cycle_pos`: float, [0, 1]. Position in the highlight pulsation animation cycle (to sync this with the plotter glow).
-
-        This runs every frame, so the implementation is as minimal as possible, and exits as early as possible.
-
-        This animation is controlled by `info_panel.current_item_info`; see `info_panel.update_current_item_info`.
-        """
-        if not info_panel.current_item_info_lock.acquire(blocking=False):
-            # If we didn't get the lock, it means `current_item_info` is being updated. Never mind, we can try again next frame.
-            return gui_animation.action_continue
-        try:  # ok, got the lock
-            have_current_item = False
-            if info_panel.current_item_info.item is not None:
-                have_current_item = True
-                x0 = info_panel.current_item_info.x0
-                y0 = info_panel.current_item_info.y0
-                # w = info_panel.current_item_info.w
-                # h = info_panel.current_item_info.h
-        finally:
-            info_panel.current_item_info_lock.release()
-
-        if have_current_item:
-            dt = (t - self.t0) / 10**9  # seconds since t0
-            cycle_pos = dt / self.cycle_duration  # number of cycles since t0
-            if cycle_pos > 1.0:  # prevent loss of accuracy in long sessions
-                self.reset()
-            cycle_pos = cycle_pos - float(int(cycle_pos))  # fractional part; raw position in animation cycle
-
-            animation_pos = math.sin(cycle_pos * math.pi)**2  # 0 ... 1 ... 0, smoothly, with slow start and end, fast middle
-            alpha_min = 16
-            alpha_max = 48
-            alpha = (1.0 - animation_pos) * alpha_min + animation_pos * alpha_max
-            highlight_color = (196, 196, 255, alpha)  # same as `scroll_ends_here_color`, except alpha
-
-            dpg.delete_item("viewport_drawlist", children_only=True)  # tag  # delete old draw items
-
-            # Highlight the button group
-            dpg.draw_rectangle((x0 - 4, y0 - 4),
-                               (x0 + 2 * gui_config.toolbutton_w + 4, y0 + 2 * gui_config.toolbutton_w + 1),  # kluge constants chosen manually to make this look good
-                               color=highlight_color,
-                               fill=highlight_color,
-                               rounding=8,
-                               parent="viewport_drawlist")  # tag
-            # # Variant, where the current item is the title text
-            # dpg.draw_rectangle((x0 - 4, y0),
-            #                    (x0 + gui_config.title_wrap_w + 4, y0 + h + 4),
-            #                    color=highlight_color,
-            #                    fill=highlight_color,
-            #                    rounding=8,
-            #                    parent="viewport_drawlist")  # tag
-        else:
-            dpg.delete_item("viewport_drawlist", children_only=True)  # tag  # delete old draw items
-
-        return gui_animation.action_continue
-
-
 def update_animations():
     # # Resize the search field dynamically. We don't need this with the current layout; keeping for documentation only.
     # # Note that in DPG, text widgets have no `width` (always zero), but they have a rect_size.
@@ -765,7 +696,7 @@ def update_animations():
         else:
             dpg.set_value(search_field_text_color, (255, 128, 128))  # not found, red
 
-    info_panel.update_current_search_result_status()  # The "[x/x]" topmost currently visible search result indicator (also updates `current_item_info` for `CurrentItemControlsGlow`)
+    info_panel.update_current_search_result_status()  # The "[x/x]" topmost currently visible search result indicator (also moves the keyboard mark onto the current item)
 
     # ----------------------------------------
     # Update various other things that need per-frame updates
@@ -787,7 +718,6 @@ def update_animations():
 logger.info("Initial GUI setup...")
 with timer() as tim:
     with dpg.window(tag="main_window", label="Raven-visualizer main window") as main_window:  # DPG "window" inside the app OS window ("viewport"), container for the whole GUI
-        dpg.add_viewport_drawlist(front=True, tag="viewport_drawlist")  # for current item highlight in info panel
         with dpg.group(tag="main_container",
                        horizontal=True):  # Container to make a horizontal top-level layout
 

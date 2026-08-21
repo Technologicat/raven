@@ -1,7 +1,7 @@
 # Which chords survive a text field, and whether modals stack
 
 Measured 2026-08-17, ahead of building `FileDialog`'s keyboard operation
-(`briefs/researchers-night/filedialog-keyboard-brief.md`). That design parks focus in the find field and
+(`briefs/researchers-night/done/filedialog-keyboard-brief.md`). That design parks focus in the find field and
 gives every other key a job, which is only possible if the keys actually arrive — so this asks what a
 global `add_key_press_handler` still receives while a single-line `InputText` holds the caret.
 

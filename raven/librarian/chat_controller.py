@@ -43,8 +43,10 @@ from ..common import numutils
 from ..common import utils as common_utils
 
 from ..common.gui import animation as gui_animation
+from ..common.gui import keyboardmark
 from ..common.gui import tooltip as gui_tooltip
 from ..common.gui import utils as guiutils
+from ..common.gui import widgetfinder
 
 from . import chattree
 from . import chatutil
@@ -299,6 +301,31 @@ def _get_all_greeting_node_ids(datastore: chattree.Forest) -> List[str]:
     return greeting_node_ids
 
 # --------------------------------------------------------------------------------
+# The keyboard mark's slot in a message's button row
+
+# How much room the mark's dot takes at the left of the row, taken off the spacer that right-aligns the
+# buttons so that adding the dot did not move them. Measured on the built row at the font size every app in
+# the constellation uses; a few pixels out here only changes the gap before the first button.
+_MARK_SLOT_W = 24
+
+_unmarked_theme = None  # created on first use by `_get_unmarked_theme`
+
+
+def _get_unmarked_theme() -> Union[str, int]:
+    """The theme every message's mark dot wears while it is *not* the current message.
+
+    One theme shared by every message, and the thing `keyboardmark.Mark` displaces on whichever message is
+    current and gives back when it moves on. Transparent rather than hidden: hiding the dot would take its
+    width out of the row and repack the buttons as the reader scrolls.
+    """
+    global _unmarked_theme
+    if _unmarked_theme is None:
+        with dpg.theme() as _unmarked_theme:
+            with dpg.theme_component(dpg.mvAll):
+                dpg.add_theme_color(dpg.mvThemeCol_Text, (*keyboardmark.COLOR[:3], 0))
+    return _unmarked_theme
+
+# --------------------------------------------------------------------------------
 
 class DPGChatMessage:
     def __init__(self,
@@ -322,6 +349,7 @@ class DPGChatMessage:
         self.rendered_system_injects = None  # system message only: the per-turn injects as last drawn
         self.node_id = None  # populated by `build`
         self.gui_text_group = None  # populated by `build`
+        self.gui_keyboard_mark_widget = None  # populated by `build`; the dot the keyboard mark lights when this message is the current one
         self.gui_button_callbacks = {}  # {name0: callable0, ...} - to trigger button features programmatically
         self.text_indent_w = 0  # how far the text currently being rendered is inset from the message's left edge
         # Item handler registries created by `_make_clickable`. They live in DPG's handler-registry tree, not
@@ -538,8 +566,22 @@ class DPGChatMessage:
                                                         parent=text_vertical_layout_group)
         number_of_message_buttons = 14
         chat_text_w = self.get_chat_text_width()
-        dpg.add_spacer(width=chat_text_w - number_of_message_buttons * (gui_config.toolbutton_w + 8) - 64,  # 8 = DPG outer margin; 64 = some space for sibling counter
+        dpg.add_spacer(width=chat_text_w - number_of_message_buttons * (gui_config.toolbutton_w + 8) - 64 - _MARK_SLOT_W,  # 8 = DPG outer margin; 64 = some space for sibling counter
                        parent=buttons_horizontal_layout_group)
+
+        # Where the keyboard mark goes when this is the message the per-message hotkeys would act on. A dot
+        # rather than a border around the row, because a pulsating outline's claim on the eye scales with
+        # its perimeter: fourteen bordered buttons is far more motion than a combo elsewhere in the
+        # constellation gets for a mark that means the same thing.
+        #
+        # Present on every message and invisible on all but one. Hiding it instead would repack the row as
+        # the reader scrolls, so it wears a theme that colours it transparent, and the mark displaces that
+        # theme on whichever message is current.
+        self.gui_keyboard_mark_widget = dpg.add_text(fa.ICON_CIRCLE,
+                                                     tag=f"chat_keyboard_mark_{self.gui_uuid}",
+                                                     parent=buttons_horizontal_layout_group)
+        dpg.bind_item_font(self.gui_keyboard_mark_widget, self.parent_view.themes_and_fonts.icon_font_solid)
+        dpg.bind_item_theme(self.gui_keyboard_mark_widget, _get_unmarked_theme())
 
         self.build_buttons(gui_parent=buttons_horizontal_layout_group)
 
@@ -3032,6 +3074,11 @@ class DPGChatController:
         self.current_chat_history = []
         self.current_chat_history_lock = threading.RLock()
 
+        # The keyboard mark on the current message's button row, built on first use by
+        # `update_current_message_mark`. One mark that moves, rather than one per message: a chat has as
+        # many messages as the user has written, so a theme apiece would grow with the conversation.
+        self._current_message_mark = None
+
         self.gui_updates_safe = True  # At app shutdown, they aren't.
 
         # Sync the INDEXING indicator to any commit already in progress. The startup rescan
@@ -3214,6 +3261,60 @@ class DPGChatController:
             return None
         dpg_chat_message = self.current_chat_history[-1]
         return dpg_chat_message
+
+    def get_current_message(self) -> Optional[DPGChatMessage]:
+        """Return the `DPGChatMessage` the per-message hotkeys act on, or `None` if the view is empty.
+
+        The **bottommost at least partially visible** message at the current scroll position, which for a
+        chat scrolled to the end is the last one — so this differs from `get_last_message` only once the
+        reader has scrolled back. Which is exactly when the difference matters: a reroll or a sibling step
+        aimed at a message off the bottom of the screen is an edit nobody can see happening.
+        """
+        history = self.current_chat_history
+        if not history:
+            return None
+
+        _, panel_y = guiutils.get_widget_pos(self.view.gui_parent)
+        _, panel_h = guiutils.get_widget_size(self.view.gui_parent)
+        bottom_y = panel_y + panel_h
+
+        # The predicate is *completely below the bottom edge* — the complement of "at least partially
+        # visible" — because a binary search needs its criterion to go false→true down the list, and
+        # visibility goes the other way. The complement has the same threshold, so this is the same
+        # question asked in the direction the search can answer.
+        #
+        # `direction="left"` then returns the last message that is *not* below the fold. With the view
+        # scrolled to the end no message satisfies the criterion at all, and "the last that does not" is
+        # the last message, which is the answer there too.
+        def is_below_the_fold(widget):
+            return widgetfinder.is_completely_below_target_y(widget, target_y=bottom_y)
+
+        widget = widgetfinder.binary_search_widget(widgets=[message.gui_container_group for message in history],
+                                                   accept=is_below_the_fold,
+                                                   consider=None,  # every entry is a message; no confounders to step over
+                                                   skip=None,
+                                                   direction="left")
+        if widget is None:  # every message is below the fold, which a clamped scroll position should prevent
+            return history[-1]
+        for message in history:
+            if message.gui_container_group == widget:
+                return message
+        return history[-1]
+
+    def update_current_message_mark(self) -> None:
+        """Move the keyboard mark onto the current message's button row. Call once per frame.
+
+        Per frame rather than on a scroll event, because the current message changes with the scroll
+        position however that position came about — a wheel, a drag, a keypress, a streamed reply growing
+        the content, or a rebuild — and the mark has to agree with `get_current_message` at the instant a
+        hotkey is pressed rather than shortly afterwards.
+        """
+        if self._current_message_mark is None:
+            self._current_message_mark = keyboardmark.Mark(None, kind=keyboardmark.MarkKind.DOT)
+        message = self.get_current_message()
+        target = message.gui_keyboard_mark_widget if message is not None else None
+        self._current_message_mark.target = target
+        self._current_message_mark.lit = (target is not None)
 
     def get_inline_image_texture(self, filename: str) -> Optional[env]:
         """Return a cached DPG texture for the chat sidecar `filename`, creating it on first use.

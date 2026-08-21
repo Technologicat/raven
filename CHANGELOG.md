@@ -54,9 +54,13 @@
 
 - **the chat log now marks its ends when you reach them with the mouse wheel**, as it already did when you got there with the keyboard. The wheel is scrolled by the GUI toolkit itself, so nothing in Raven was watching it.
 
+- **the per-message hotkeys act on the message you are looking at**, rather than on the last one in the chat. Scroll back and reroll, branch, speak, edit or step between siblings, and it happens to the bottommost message on screen; a blue dot beside its buttons says which one that is. They used to always act on the end of the chat, which is off screen precisely when you have scrolled away from it.
+
 *Raven-visualizer*
 
 - the info panel marks its ends when the wheel *arrives* at one, where previously it only did so once you were already there and turned the wheel again. A single click of the wheel onto the end used to be silent.
+
+- the buttons of the current info panel item now wear the same blue mark every other Raven app uses for *the keyboard is here*, in place of a glow of their own. It is drawn as part of the panel, so whatever covers the panel covers it too.
 
 - the importer's two LLM steps — cluster keyword extraction and abstract summarization — no longer run as a conversation with the assistant character. Both outputs are parsed by the importer rather than read by a person, while the character card asks for Markdown, for a reported train of thought, and for conversational prose — all of which had to be undone before the result could be used. Each of the two prompts already states its own task, so what the character contributed was only the part working against it. Expect cleaner keyword lists, and summaries that start with the summary.
 
@@ -92,6 +96,8 @@
 - **the file dialog offers file types only where an app asked for them.** A dialog whose caller named no types used to list some 170 extensions — `.vhd`, `.qcow2`, `.msi` and the rest — which is a menu of formats the app has nothing to do with, and in a folder picker it filters a listing that holds no files at all. It now offers "all files" and nothing else.
   - **A folder picker offers no file types at all**, the `Show` control and the two keys that reach it being gone there. Choosing among folders is not something a type filter can narrow: it applies to files, and must, or it would hide the folders you navigate through to reach them. This also takes away the blank `Show` box that the pose editor's *Save all emotion templates* used to show. Raven-cherrypick's *Open image folder* loses it too — the pictures it lists are there to tell you it is the right folder, not to be chosen.
 - **the cursor breathes.** The blue mark showing which entry the keyboard is on now pulses slowly, in the file dialog's list and in every thumbnail grid — Raven-cherrypick's included, where it is the same mark on a tile. It costs no frame rate when nothing else is happening: apps that drop to a low frame rate while you read keep doing so, and the pulse simply runs at that rate.
+- **a blue border says which control has the arrow keys.** In the file dialog it marks whichever of the five places the caret can be — the find field, the path field, the file type list, the listing, the shortcuts panel — so a chord that hands the keys elsewhere shows where they went. The same mark appears on the layout engine list in Raven-xdot-viewer and on the browsable lists in both avatar editors, which the toolkit draws nothing on at all: the key that hands them the arrows used to look like a dead key until a value happened to change.
+  - It is the blue the keyboard cursor already pulses in, breathing at the same rate, so several marks on one screen read as one idea rather than as things blinking at each other. Two can be lit at once on purpose: the border says where the keys are, the cursor says what Enter would act on, and in this dialog those are different questions.
 - **the file dialog can show hidden files and folders**, from a Hidden checkbox next to Thumbnails or with **Ctrl+H**. Whether they were shown was fixed when the app built its dialog and had no control at all, so a dotfile — or a config directory in a folder picker — was simply out of reach. The choice holds until you change it back.
 
 - **the file dialog is resizable, and opens larger.** Drag its border when a directory warrants more rows than the default shows; every app that opens a file browser gets this. The new default is chosen so that reaching for the border should be the exception rather than the routine.

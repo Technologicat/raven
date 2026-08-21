@@ -1643,6 +1643,9 @@ def update_animations():
     # chat panel from inside ImGui and raise nothing we could hook, so "the reader has left the end" is only
     # observable by looking. See `DPGLinearizedChatView.update_jump_to_latest_pill`.
     chat_controller.view.update_jump_to_latest_pill()
+    # Which message the per-message hotkeys act on follows the scroll position, and is polled for the same
+    # reason the pill is: nothing raises an event when the reader wheels the panel.
+    chat_controller.update_current_message_mark()
 
 # --------------------------------------------------------------------------------
 # Built-in help window
@@ -1888,7 +1891,10 @@ def librarian_hotkeys_callback(sender, app_data):
     # Helpers for operating on the most recent chat message
 
     def fire_event_if_exists(action: str) -> None:
-        dpg_chat_message = chat_controller.get_last_message()
+        # The message on screen, not the last one in the chat. They are the same until the reader scrolls
+        # back, and from then on a reroll or a sibling step aimed at the last message is an edit happening
+        # somewhere they cannot see. The blue dot beside the button row says which message this is.
+        dpg_chat_message = chat_controller.get_current_message()
         if dpg_chat_message is None:
             return
         if action in dpg_chat_message.gui_button_callbacks:

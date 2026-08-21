@@ -1,12 +1,12 @@
 # FileDialog: keyboard accessibility
 
-**Status: every key the design names is in; one item remains.** The design below was settled on
-2026-08-13 (Juha and Claude), and every key it names is in and live-tested — the listing cursor, Enter's
-rules, Tab and its completion and fill, the sort and filter chords, Alt+Up / Ctrl+Up, the "Will pick"
-line, the F1 help card, Ctrl+Shift+F, Ctrl+L with the path field's colouring, Ctrl+B with the
-places-panel migration and its type-ahead, and the help card's cosmetic pass. Still to build: **7**, the
-caret mark — which closes this brief. The navigation history moved out on 2026-08-21 to
-`briefs/filedialog-navigation-history-brief.md`, unscheduled.
+**Status: done, 2026-08-21.** The design below was settled on 2026-08-13 (Juha and Claude), and every key
+it names is in and live-tested — the listing cursor, Enter's rules, Tab and its completion and fill, the
+sort and filter chords, Alt+Up / Ctrl+Up, the "Will pick" line, the F1 help card, Ctrl+Shift+F, Ctrl+L with
+the path field's colouring, Ctrl+B with the places-panel migration and its type-ahead, the help card's
+cosmetic pass, and finally **7**, the caret mark, which closed this brief. See "Added 2026-08-21
+(evening)" for what item 7 turned out to be, which is not what it was specified as. The navigation history
+moved out the same day to `briefs/filedialog-navigation-history-brief.md`, unscheduled.
 **See "What is built" near the end for the current state** — including the
 several places where the design below was overtaken by what building it taught, each noted there rather
 than edited into the design, so the reasoning stays legible.
@@ -844,6 +844,83 @@ measurements and the note that Raven's other offscreen parks leave a 19 px corne
 Filmed again after: one visible transition, from nothing to the fitted card. So the fallback Juha proposed
 — hand-specified dimensions per call site, updated whenever the card changes — is not needed.
 
+### Added 2026-08-21 (evening): item 7, and why it needed no drawing
+
+**Item 7 is built and live-tested, and the mechanism the entry specifies turned out not to exist.** The
+plan was a drawn frame placed from the widget's own geometry, parented into the window that holds it. A
+DPG drawlist **cannot be positioned at all**: it accepts `pos=` and is then laid out in the normal flow
+anyway, displacing everything after it by its full height, in a window and in a child window alike. What
+makes that a trap rather than a limitation is that `get_item_pos` reports back the position it was asked
+for whatever the item did with it, so asking looks like confirmation; only `get_item_rect_min` says where
+the thing actually drew. Recorded in `dpg-notes.md` under "Drawlists".
+
+**What answers instead is a theme, and it is better on every axis the entry worried about.** A border
+colour plus a border-size style marks a widget's own edge, and three measurements made that the whole
+design:
+
+- **A theme bound to a container reaches its children**, so "mark a group of buttons" — the requirement
+  that was supposed to force a drawn frame, since a group has no edge of its own — is the same one call as
+  marking a combo.
+- **Themes compose down the parent chain**, so marking the *group around* a widget leaves the widget's own
+  theme in place. That is what makes it opt-in rather than invasive, and it is how the find and path fields
+  are marked without losing the three-colour readout they already wear.
+- **Turning a border on moves and resizes nothing**, ImGui drawing it inside the item rect. Measured across
+  a 2×2 group, an eleven-button row and the text under each.
+
+So there is no geometry, no positioning, no drawing, and none of the mouse-capture or z-order trouble a
+floating overlay brings — the mark is ordinary widget state, so it clips, scrolls and stacks exactly as the
+widget it is on. `raven.common.gui.keyboardmark` holds it: `Mark`, three kinds (`FRAME`, `PANEL`, `DOT`),
+and `install_focus_follower` as the one-call opt-in for a combo that DPG draws nothing on.
+
+**Two things cost more than the mark did.** Both are consequences of using a border as the indicator, and
+neither was foreseen:
+
+- **A child window has to be bordered to have an edge, and a bordered child window is a padded one** — 8 px
+  on every side, against exactly 0 for a borderless one. The listing area was borderless, so converting it
+  would have taken 16 px of width and height away from the rows. `Mark` takes a `padding` argument for
+  precisely this, and the listing passes `(0, 0)`.
+- **The type filter's row was two pixels too short for its own combo** and had been all along — a combo is
+  26 px at the font size every app uses, the row was 24 — which nothing showed until a border went there
+  and came out three-sided. The row is 28 px now, taken out of the same reservation.
+
+**And the fleet half shipped marking nothing, for a reason worth carrying forward:**
+`dpg.get_focused_item` answers with a widget's **alias** when it has one and its **ID** when it does not,
+so an identity test against either name alone is right for some widgets and quietly wrong for the rest.
+Never matching is indistinguishable from nothing ever being focused — the feature simply did nothing and
+logged nothing, while the app's own combo browsing worked throughout, which made it read as a drawing
+problem. `guiutils.item_identifiers` returns both names; three apps already normalized this by hand.
+
+**Where the marks are, as built:**
+
+| what | mark | note |
+|---|---|---|
+| find field | `FRAME` on the row | scoped to `mvInputText`; the field keeps its own colour theme |
+| path field | `FRAME` on the row | same, and the row's two image buttons stay unmarked |
+| type filter | `FRAME` on the combo | the combo has no theme of its own |
+| listing (both views) | `PANEL` on `listing_area` | now `border=True`, `padding=(0, 0)` |
+| places panel | `PANEL` on `shortcut_menu` | present in the compact style too, where it can never light |
+| Visualizer's current entry | `FRAME` on the entry's title group | replaces a viewport-drawlist glow; one mark that moves |
+| Librarian's current message | `DOT` beside the button row | a dot, not a border: fourteen buttons is too much perimeter |
+| combos elsewhere | `install_focus_follower` | `raven-xdot-viewer`, both avatar editors |
+
+**Cherrypick is deliberately not in that table**, on evidence rather than scope: its two combos have no
+keyboard routing at all — no focus dispatch anywhere in the app — so they are driven by dedicated hotkeys
+and the mouse. A mark there would claim the arrow keys go somewhere they never go. Librarian's combo
+browsing is likewise commented out, so its only mark is the message dot.
+
+**One open question, raised by driving it.** Librarian's dot hangs on the current message's button row, so
+while you are reading the middle of a long message — its row below the fold — nothing on screen says which
+message the hotkeys would act on. Inherent to marking the row; the mark reappears as soon as a row comes
+into view. Not obviously worth fixing, and the alternatives (a mark on the message body, a floating
+indicator) both cost more than the ambiguity does.
+
+**And one claim that is reasoned rather than observed.** The Visualizer's old highlight was a rectangle on
+the viewport drawlist, which is unconditionally above every window; the replacement is a theme on a widget
+inside the info panel, so window z-order governs it. That the dimmer now covers it follows from where the
+mark lives, but the dimmer was never caught in the act — two attempts at photographing a rebuild were both
+too fast, on 101 items and on a large dataset. The modal case was handled before and still is, by clearing
+the mark outright.
+
 ### Added 2026-08-21
 
 **Item 6 is built and live-tested**: the panel is selectables, Ctrl+B parks the caret on it, the six
@@ -1189,7 +1266,12 @@ Suggested order, with what each actually costs:
    is what made it the one item this brief could close without.
 6. ~~**Ctrl+B and the places-panel migration**~~ — **built 2026-08-21**, and it was its own day as
    predicted rather than a tail end of item 3. See "Added 2026-08-21" below.
-7. **A mark saying which home has the caret** — small, and raised on 2026-08-19 (Juha) once the homes
+7. ~~**A mark saying which home has the caret**~~ — **built 2026-08-21**, and the mechanism below was
+   overtaken: no drawing was needed at all. See "Added 2026-08-21 (evening)". The design notes that follow
+   are kept because the *reasoning* survived intact — the mark on the widget rather than on the cursor, the
+   dot for a long row, the refusal to split it across sessions — and only the drawing half was wrong.
+
+   Raised on 2026-08-19 (Juha) once the homes
    became a set rather than a pair: nothing on the screen says where the arrow keys will land.
 
    **The mark goes on the widget, not on the cursor.** The tempting version is to paint the listing cursor
@@ -1419,24 +1501,25 @@ own unscheduled brief. Left: **7** (the caret mark, fleet-wide). **That one clos
     called `guiutils.bootup` and so drew everything in DPG's built-in font, which is ASCII-only. Raven
     loads OpenSans and the title reads correctly in every app.
 
-**7 grew on 2026-08-21 and is no longer "small".** Two consumers outside this dialog arrived with it — a
-Visualizer overlay that is built wrong, and a Librarian mark that does not exist yet — and between them
-they change the component from *tint a panel's border* to *frame an arbitrary widget*. Still one session,
-but read item 7's own entry before sizing it.
+**7 grew on 2026-08-21 and was no longer "small".** Two consumers outside this dialog arrived with it — a
+Visualizer overlay that was built wrong, and a Librarian mark that did not exist — and between them they
+changed the component from *tint a panel's border* to *mark an arbitrary widget*.
 
-**Every part of the dialog is now reachable from the keyboard.** That was what item 6 was for, and it is
-the line items 1–3 were aiming at: the places panel was the last control a keyboard could not touch. What
-remains is polish and capability rather than reach — 7 is a `raven/common/gui/` component that every
-keyboard-browsable combo in the constellation opts into, which is why it has to land in one session rather
-than starting with the listing's half, and 5 adds something the dialog has never been able to do at all.
+**The estimate held, and the reason it did is not the one anyone would have predicted.** Juha put it at a
+day or less by comparison with the self-sizing tooltip. What made it that was the mechanism collapsing:
+priced as a drawn overlay with its own geometry it would have been more, and four probes established
+within an hour that a theme does the whole job with no geometry at all. The lesson is the standing one —
+measure a DPG claim before building on it — applied at the *design* stage rather than the documentation
+stage, and it is worth noticing that the brief's own specified mechanism was the thing that did not
+survive contact.
 
-**Order settled 2026-08-20 (Juha): 6, then 7, then 5.** 6 landed 2026-08-21. 7 follows. 5 goes last
-because it is a new feature and logically separate from the rest, which is also what makes it the safe one
-to defer.
+**Every part of the dialog is reachable from the keyboard, and every part says when it has it.** That was
+what items 6 and 7 were for, and it is the line items 1–3 were aiming at. What remains in this area is 5,
+which moved out to its own brief and adds something the dialog has never been able to do at all.
 
-**7 is estimated at a day or less** (Juha), by comparison with the self-sizing tooltip built on 2026-08-20
-— a custom widget with its own settle logic, its own placement and its own animation, delivered alongside
-other work in one day. This is about that size: one component, one opt-in call, four or five call sites.
+**Order settled 2026-08-20 (Juha): 6, then 7, then 5.** 6 and 7 both landed 2026-08-21. 5 went last, and
+then out — it is a new feature and logically separate from the rest, which is what made it the safe one to
+defer and then the natural one to re-home.
 
 ## Where the dialog stands
 

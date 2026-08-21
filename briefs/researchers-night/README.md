@@ -19,7 +19,6 @@ Librarian features and 11 is Visualizer, sitting side by side here because of wh
 | `13_corpus-scopes-and-unified-db-brief.md` | Corpus scopes and the unified DB | **A draft, not a design** — it holds the 2026-08-01 session material with its `[D]`/`[N]`/`[P]`/`[X]` provenance markers intact, so a reader can tell settled from proposed. Realistically after Researchers' Night |
 | `11_visualizer-importer-rework-brief.md` | Nomic migration, PCA preprocessing, cosine-to-medoid outlier assignment, Procrustes alignment | Its item 1 carries **a fork that needs deciding** — `nomic-embed-text-v1.5` buys a shared image-text space, `v2-moe` buys multilingual, and no v2-aligned vision encoder appears to exist. That decision reaches brief 12 |
 | `14_chat-search-brief.md` | Search within the chat log | v0.2.9. The match unit is the **message**, which is what keeps v1 cheap — it sidesteps in-text highlighting, whose Visualizer implementation rebuilds the whole panel and so does not transfer to an incrementally-built chat log |
-| `filedialog-keyboard-brief.md` | Operating the file dialog without a pointing device | Researchers' Night. **Designed in full, unbuilt.** An equality consideration first; the bar is bash completion and a file manager's arrow navigation. Three live checks remain, one of them the 517/518 keycode trap this dialog is precisely where it bites |
 
 ## Closed
 
@@ -27,6 +26,12 @@ Librarian features and 11 is Visualizer, sitting side by side here because of wh
 |---|---|---|
 | `done/15_headless-agent-driver-brief.md` | A scripting surface over the scaffold — `raven.librarian.agent`, plus the backend-status work and the per-variety system prompt storage that came out of it | 2026-08-12, v0.2.9 |
 | `done/filedialog-thumbnails-brief.md` | Image previews in the file dialog, as a toggled grid view | 2026-08-14 |
+| `done/filedialog-keyboard-brief.md` | Operating the file dialog without a pointing device, and saying where the keyboard is | 2026-08-21 |
+
+The keyboard brief's last item became a constellation-wide component — `raven.common.gui.keyboardmark`, the
+blue pulse that says *the keyboard is here* — so its closing section is worth reading outside the file
+dialog's context. It also ends with an unbuilt piece re-homed rather than dropped:
+`briefs/filedialog-navigation-history-brief.md`, unscheduled.
 
 It raised one question it did not settle, and the analysis is worth finding: **the character card carries
 character-independent text** (`setup_interaction_style` — deployment facts, conversational manner, and the

@@ -2053,14 +2053,6 @@ clusters, as of 2026-07-27:
   own terms: figure- and equation-heavy literature extracts to prose that omits the argument, in exactly the
   corpus Raven exists to read.
 
-## FileDialog: keyboard accessibility
-
-*Cluster: filedialog · Cost: L · Gate: RN2026 · Filed: 2026-08-13 · **Now a brief***
-
-Moved to `briefs/researchers-night/filedialog-keyboard-brief.md` on 2026-08-13, and being built against it
-since 2026-08-18. The brief is the live artifact — it carries the build order, what has landed, and the
-questions still open — so this entry is a pointer and nothing more.
-
 ## Librarian's help card has no room to describe attachments
 
 *Cluster: discoverability · Cost: ? · Gate: RN2026 · Filed: 2026-08-05 · See also: "Fleet audit: every hotkey discoverable in a tooltip + help card"*

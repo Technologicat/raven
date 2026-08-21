@@ -42,8 +42,6 @@ Public state (guarded by `content_lock`; swapped atomically by the worker):
   - `search_result_widgets`, `search_result_widget_to_display_idx`.
   - `cluster_ids_in_selection`, `cluster_id_to_display_idx`.
   - `report_plaintext`, `report_markdown` (unpythonic `box` objects).
-  - `current_item_info` (+ `current_item_info_lock`) — consumed by the
-    `CurrentItemControlsGlow` animation in `app.py`.
 
 Cross-module state read via `app_state`:
   `{dataset, selection_data_idxs_box, selection_changed,
@@ -64,8 +62,6 @@ __all__ = ["content_lock",
            "report_plaintext",
            "report_markdown",
            "build_number",
-           "current_item_info",
-           "current_item_info_lock",
            "build_window",
            "update",
            "clear_tasks",
@@ -111,13 +107,13 @@ import dearpygui.dearpygui as dpg
 from spacy.lang.en import English
 
 from unpythonic import box, dlet, islice, unbox
-from unpythonic.env import env
 from unpythonic.env import env as envcls
 
 from ..common import bgtask
 from ..common import numutils
 
 from ..common.gui import animation as gui_animation
+from ..common.gui import keyboardmark
 from ..common.gui import utils as guiutils
 from ..common.gui import widgetfinder
 
@@ -155,10 +151,6 @@ cluster_id_to_display_idx = {}  # reverse lookup: cluster ID -> index in `cluste
 report_plaintext = box("")  # Full info panel content in plain text (.txt) format
 report_markdown = box("")  # Full info panel content in Markdown (.md) format
 
-current_item_info = env(item=None, x0=None, y0=None, w=None, h=None)  # `item`: GUI widget DPG tag or ID; `x0`, `y0`: screen space coordinates, in pixels; `w`, `h`: in pixels
-current_item_info_lock = threading.Lock()
-
-
 # --------------------------------------------------------------------------------
 # Module-local state
 
@@ -169,6 +161,8 @@ _task_manager = None  # bgtask.TaskManager, lazily created on first `update` cal
 _scroll_end_flasher = None  # gui_animation.ScrollEndFlasher, created in `build_window`.
 
 _dimmer_overlay = None  # gui_animation.Dimmer, created lazily by `create_dimmer_overlay`.
+
+_current_item_mark = None  # keyboardmark.Mark, created lazily by `_get_current_item_mark`. Moves between entries.
 
 _scroll_animation = None  # reference to the current info panel scroll animation (if any), so we can stop only this animation.
 _scroll_animation_lock = threading.RLock()
@@ -797,43 +791,51 @@ def select_current_cluster():
 
 
 # --------------------------------------------------------------------------------
-# Current-item tracking (drives the `CurrentItemControlsGlow` animation in `app.py`)
+# Current-item tracking (moves the keyboard mark onto whatever the hotkeys would act on)
 
 def update_current_item_info():
-    """Update the on-screen position of the current item.
+    """Move the keyboard mark onto the current item's buttons.
 
     Called per-frame by `update_current_search_result_status` (which already holds
     `content_lock`, avoiding unnecessary release/re-lock).
 
-    When any modal window is visible, the info is cleared, disabling the highlight.
+    When any modal window is visible, the mark is taken off: the hotkeys it speaks for are suppressed
+    while a modal is up, so leaving it on would promise something no key would do.
     """
     with content_lock:
         if app_state.is_any_modal_window_visible():
             current_item = None
         else:
             current_item = _get_current_item()
-        if current_item is not None:
-            current_item_x0, current_item_y0 = dpg.get_item_rect_min(current_item)
-            current_item_w, current_item_h = dpg.get_item_rect_size(current_item)
-        else:
-            current_item_x0, current_item_y0 = None, None
-            current_item_w, current_item_h = None, None
-    with current_item_info_lock:
-        current_item_info.item = current_item
-        current_item_info.x0 = current_item_x0
-        current_item_info.y0 = current_item_y0
-        current_item_info.w = current_item_w
-        current_item_info.h = current_item_h
+    _get_current_item_mark().target = current_item
+    _get_current_item_mark().lit = (current_item is not None)
 
 
 def clear_current_item_info():
-    """Clear the on-screen position of the current item (turns the highlight off)."""
-    with current_item_info_lock:
-        current_item_info.item = None
-        current_item_info.x0 = None
-        current_item_info.y0 = None
-        current_item_info.w = None
-        current_item_info.h = None
+    """Take the keyboard mark off, leaving nothing marked."""
+    _get_current_item_mark().target = None
+
+
+def _get_current_item_mark():
+    """The mark on the current item's buttons, built on first use.
+
+    One mark that moves, rather than one per entry: how many entries the panel holds is the user's
+    selection, with no upper bound short of the dataset, so a theme apiece would be a DPG theme per
+    selected item.
+
+    It replaces a rectangle drawn on the viewport drawlist, which was wrong in a way nothing about it
+    announced: a viewport drawlist is unconditionally on top of every window, so the highlight drew over
+    the dimmer that covers this panel during a rebuild — and needed the modal check above to stay off the
+    modals as well. A theme is part of the widget, so both cases answer themselves.
+
+    The marked widget is the entry's *title container group*, which is what `_get_current_item` returns.
+    Its framed descendants are exactly the two columns of tool buttons beside the title — the title itself
+    is text, which has no frame to border — so marking the group marks the buttons.
+    """
+    global _current_item_mark
+    if _current_item_mark is None:
+        _current_item_mark = keyboardmark.Mark(None)
+    return _current_item_mark
 
 
 # --------------------------------------------------------------------------------
