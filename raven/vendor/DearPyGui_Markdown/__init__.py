@@ -5,6 +5,11 @@ from typing import List, Any, Callable, Union, Tuple
 
 import dearpygui.dearpygui as dpg
 
+# `raven.common.gui.utils` is imported inside the two functions that need it rather than here, because it
+# imports *this* module at module level and a top-level import back would be a cycle. It does so to hand
+# the renderer its fonts: `setup_markdown` calls `set_font_registry`, `set_add_font_function` and
+# `set_font`, which is how a size Raven has not loaded yet gets loaded on demand.
+
 
 def get_text_size(text: str, *, wrap_width: float = -1.0, font: int | str = 0, **kwargs) -> list[float | int] | tuple[float | int, ...]:
     strip_text = text.strip()
@@ -48,7 +53,20 @@ class CallInNextFrame:
                 continue
             next_frame_queue = cls.now_frame_queue.copy()
             cls.now_frame_queue.clear()
-            dpg.split_frame()
+            # A bare `dpg.split_frame()` *raises* where no render loop is running — before one starts, and
+            # after one exits — and on this thread the exception escapes and takes the worker with it.
+            from ...common.gui import utils as guiutils  # local import: see the note beside the imports
+            if not guiutils.split_frame(operation="DearPyGui_Markdown: deferring render work to the next frame",
+                                        required=False):
+                # No render loop, so no next frame will ever come and this queue cannot be served. Stand
+                # down rather than poll: the condition arises at teardown, and every further call into DPG
+                # from here lands in a context that has been destroyed, which *segfaults* rather than
+                # raising. A worker that retries is a worker that eventually crashes the app on exit.
+                #
+                # This is what used to happen by accident — the bare `dpg.split_frame` raised, the
+                # exception escaped, and the thread died with a traceback. Same outcome, on purpose and
+                # quietly, with `split_frame` naming the reason in the log.
+                return
             for func, args, kwargs in next_frame_queue:
                 try:
                     func(*args, **kwargs)
@@ -80,7 +98,14 @@ class CallWhenDPGStarted:
     def _worker(cls):
         while dpg.get_frame_count() <= 1:
             time.sleep(0.01)
-        dpg.split_frame()
+        # Same reasoning as in `CallInNextFrame._worker`: a bare `dpg.split_frame()` raises where no render
+        # loop is running, and the exception would kill this thread rather than delay it. Standing down
+        # leaves `STARTUP_DONE` unset, which is the safe state — callers then queue their work instead of
+        # rendering it, and nothing here touches DPG again.
+        from ...common.gui import utils as guiutils  # local import: see the note beside the imports
+        if not guiutils.split_frame(operation="DearPyGui_Markdown: waiting for the GUI to start",
+                                    required=False):
+            return
         cls.STARTUP_DONE = True
         for func, args, kwargs in cls.functions_queue:
             try:
@@ -95,9 +120,9 @@ from . import line_atributes
 from . import parser
 from . import text_attributes
 from . import text_entities
-from .attribute_types import set_font_registry, set_add_font_function  # noqa: F401: for export
-from .font_attributes import set_font  # noqa: F401: for export
-from .text_attributes import set_url_secondary_action  # noqa: F401: for export
+from .attribute_types import set_font_registry, set_add_font_function  # noqa: F401 -- for export
+from .font_attributes import set_font  # noqa: F401 -- for export
+from .text_attributes import set_url_secondary_action  # noqa: F401 -- for export
 
 
 def wrap_text_entity(text: text_entities.StrEntity | text_entities.TextEntity, width: int | float = -1) -> text_entities.LineEntity:
