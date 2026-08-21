@@ -1033,6 +1033,40 @@ def test_leaving_the_path_field_deliberately_is_not_undone_by_the_deactivation(d
     assert dialog._caret_home is CaretHome.LISTING
 
 
+def test_the_path_field_puts_the_keys_back_where_it_found_them(dialog):
+    """The pair fires without anyone having asked for it, so the second half must not invent a destination.
+
+    ImGui spends Tab on keyboard navigation whenever the find field holds a caret it got from `focus_item`
+    rather than from a click — Ctrl+F, Ctrl+L, or arriving anywhere via `chdir` — and the field it navigates
+    to is the path field. So a Tab meant for the listing arrives here as an activation and a deactivation a
+    frame apart, straddling the home that Tab has just set. Assuming the way out is always the find field
+    wrote `FIELD` over that `LISTING`: the Tab was swallowed, the arrow keys went dead, and a second Tab
+    could not get out either, being undone the same way.
+    """
+    dialog._focus_listing()
+    assert dialog._caret_home is CaretHome.LISTING
+    dialog._on_path_field_activated()  # ImGui navigated in, nobody having asked
+    dialog._on_path_field_deactivated()  # ...and out again, when the parked focus landed
+    assert dialog._caret_home is CaretHome.LISTING
+
+
+def test_leaving_the_path_field_for_good_still_lands_in_the_find_field(dialog):
+    """The ordinary case the remembering must not break: click in, click away."""
+    dialog._focus_field()
+    dialog._on_path_field_activated()
+    dialog._on_path_field_deactivated()
+    assert dialog._caret_home is CaretHome.FIELD
+
+
+def test_ctrl_l_records_the_home_it_displaced_even_though_it_sets_the_new_one_itself(dialog):
+    """`_focus_path_field` sets `PATH` before the widget activates, so the handler sees nothing to record."""
+    dialog._focus_listing()
+    ctrl_press(dialog, dpg.mvKey_L)
+    dialog._on_path_field_activated()  # the widget really takes the caret a frame later
+    dialog._on_path_field_deactivated()
+    assert dialog._caret_home is CaretHome.LISTING
+
+
 def test_clicking_the_path_field_means_what_the_key_means(dialog, tmp_path):
     """Otherwise Enter goes two places at once for a user who never pressed Ctrl+L.
 

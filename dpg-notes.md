@@ -968,6 +968,35 @@ commonly bind Alt chords, and that is a statement about the desktop rather than 
 machines here run Cinnamon, so this one cannot be settled in-house — it is for users on other desktops to
 report. Which is the argument for Ctrl+Up existing as an alias regardless of what Alt does.
 
+## Tab reaches a global handler and still moves ImGui's nav, after a programmatic focus
+
+An `InputText` never inserts a Tab, which makes it easy to conclude that Tab is the app's to define. It is,
+but ImGui is not finished with it: when the field holds a caret it got from `dpg.focus_item` rather than
+from a click, Tab **also** moves keyboard-navigation focus to the next item. That item then reports itself
+**activated**, and **deactivated** again a frame later once whatever the app's own handler focused has
+landed.
+
+So an app that keeps its own "where do the keys go" state, and updates it from `activated` / `deactivated`
+handlers, gets that state written twice by a Tab it thought only its own handler had seen — and the writes
+straddle its own, so its decision is the one that loses. The failure is silent and reads as a dead key: the
+Tab appears to do nothing, the arrow keys stop working, and pressing Tab again fails the same way, because
+each press is undone before the next arrives.
+
+Two things follow, and the second is the general one:
+
+- **A handler for `deactivated` must put the state back where it *was*, not where it assumes.** Restoring a
+  remembered previous value is stable under a spurious activate/deactivate pair; naming a fixed destination
+  is not.
+- **The click and the `focus_item` paths into a text field are not the same state.** A mouse click leaves
+  ImGui with no nav position, so Tab moves nothing; `focus_item` sets one, so Tab moves from it. Anything
+  measured about Tab after clicking into a field says nothing about Tab after Ctrl+F.
+
+Measured 2026-08-21 on DearPyGui 2.3.1, from `FileDialog`: Ctrl+B into the places panel, Enter to go there
+(which focuses the find field via `chdir`), then Tab. Reproduced identically from Ctrl+F, so it is the
+programmatic focus and not the route that caused it. Traced by logging every write to the state together
+with a stack and a thread name — worth reaching for early here, since the two writes come from DPG's own
+handlers and appear nowhere in the app's key path.
+
 ## `is_key_down` is sampled when the callback runs, not when the key was pressed
 
 Modifier state is read *inside* the handler, and handlers are dispatched per frame — so the answer
@@ -1006,6 +1035,15 @@ cancelled itself.)
 
 ## Investigation history
 
+- 2026-08-21: `FileDialog`'s Tab went dead after arriving anywhere from the places panel — the caret left
+  the find field, the arrow keys did nothing, and Tab could not get back. Direct calls to the key handler
+  could not reproduce it, headless or in a live app, which is what said the fault was between the X key and
+  the handler rather than in the handler. Logging every write to the "where do the keys go" state, with a
+  stack and a thread name, showed two writes arriving from DPG's own item handlers on either side of the
+  one Tab made — producing the section above. The 2026-08-17 harness traps both fired again on the way:
+  `xdotool key ctrl+b` lost its modifier and had to be sent as `keydown`/`key`/`keyup`, and the 663
+  pseudo-key filled the log. Both were already written down here, and reading this section first would have
+  saved a run.
 - 2026-08-17: Surveyed which chords survive a single-line `InputText` holding the caret, ahead of building
   `FileDialog`'s keyboard operation. All of them do, Tab included. Confirmed the 517/518 codes from the
   live enum in the same run — Tab=512, Up=515, Down=516, **517**, **518**, Home=519, End=520, so Page

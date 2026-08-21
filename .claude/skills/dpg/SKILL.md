@@ -63,6 +63,7 @@ commentary in a trailing `(…)`. `·` separates targets. That shape is not deco
 | set a widget's value from code | *Raven DPG app structure* → DPG item management (no callback fires; `configure_item` vs `set_value`) |
 | add or change a hotkey | *Keyboard input* → `mvKey_*` constants vs. runtime codes (the 517/518 trap) · *Keyboard input* → Same-frame dispatch is by keycode, not press order |
 | gate a hotkey on a text field having the caret | *Keyboard input* → Focus is not the same as the caret: gate hotkeys on `is_item_active` (mind the commit-chord exception) |
+| define what Tab does, or keep your own "which control has the keys" state | *Keyboard input* → Tab reaches a global handler and still moves ImGui's nav, after a programmatic focus (the activate/deactivate pair nobody asked for) |
 | park focus on a panel or child window | *Keyboard input* → `focus_item` cannot focus a child window — and does harm when asked to |
 | scroll programmatically, or follow a growing log | *Scrolling* → Three input paths move a scroll position, and DPG surfaces them differently · *Scrolling* → `max_y_scroll` moves when content is added |
 | set a window's size, or a tooltip's padding, or fight z-order | *Window sizing* (all of it) |

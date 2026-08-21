@@ -599,6 +599,9 @@ class FileDialog:
         # Where the dialog is taking keys. Assigned directly here, ahead of the widgets: the property
         # behind it repaints the places cursor, which needs the panel to exist. See `CaretHome`.
         self._caret_home_now = CaretHome.FIELD
+        # Which home the path field displaced when it took the caret, so that letting it go puts the keys
+        # back there. See `_on_path_field_deactivated`, where the alternative cost a swallowed Tab.
+        self._home_before_path = CaretHome.FIELD
         # What the parent directory of a half-typed path holds, as `(parent, subdirectory names)`. One slot
         # is enough: a path is typed one component at a time, so every keystroke between two separators asks
         # about the same parent, and crossing a separator is the moment the old answer stops being wanted.
@@ -1067,15 +1070,26 @@ class FileDialog:
         """The path field just took the caret, by click or by Ctrl+L: record where the keys go."""
         # A click has to mean what the key means, or Enter is read twice — see the handler registry this is
         # bound from. `_focus_path_field` sets this too, and arrives here as well, which costs nothing.
+        if self._caret_home is not CaretHome.PATH:
+            self._home_before_path = self._caret_home
         self._caret_home = CaretHome.PATH
 
     def _on_path_field_deactivated(self) -> None:
-        """The path field lost the caret: the keys go back to the find field, unless they went elsewhere."""
-        # Guarded rather than unconditional, because deactivation is also what *leaving deliberately* looks
-        # like. Tab out of here sets the listing as the home and the deactivation follows a frame later, so
-        # an unconditional write would silently undo it.
+        """The path field lost the caret: the keys go back where they were before it took them."""
+        # Back to *whichever* home that was, rather than to the find field, because this pair of handlers
+        # fires without anyone having asked for it. ImGui spends Tab on keyboard navigation whenever the
+        # find field holds the caret and got it from `focus_item` rather than from a click — Ctrl+F, Ctrl+L,
+        # or arriving anywhere via `chdir` — and the item it navigates *to* is this field. So a Tab meant
+        # for the listing produced an activation and a deactivation a frame apart, and a handler that
+        # assumed the way out of here is always the find field wrote `FIELD` over the `LISTING` that Tab had
+        # just set. The arrow keys then did nothing and a second Tab could not get out either, since every
+        # Tab was undone the same way.
+        #
+        # Guarded as well as remembered, because deactivation is also what *leaving deliberately* looks
+        # like: Tab out of here sets the listing as the home and the deactivation follows a frame later, so
+        # an unconditional write would silently undo that instead.
         if self._caret_home is CaretHome.PATH:
-            self._caret_home = CaretHome.FIELD
+            self._caret_home = self._home_before_path
 
     def _relayout(self) -> None:
         """Re-align the bottom rows against the window's *current* width.
@@ -2429,9 +2443,14 @@ class FileDialog:
         shift = dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)
         alt = dpg.is_key_down(dpg.mvKey_LAlt) or dpg.is_key_down(dpg.mvKey_RAlt)
 
-        # Tab swaps the caret's two homes. ImGui does not spend Tab on an `InputText` — it neither
-        # moves focus nor inserts anything — so the key is ours to define, and this is the only way
-        # to reach the state where the find field is inactive.
+        # Tab swaps the caret's two homes. It never inserts anything into an `InputText`, so the key is
+        # ours to define, and this is the only way to reach the state where the find field is inactive.
+        #
+        # It does not follow that ImGui leaves the key alone. Measured 2026-08-21 on DPG 2.3.1: when the
+        # find field holds a caret it got from `focus_item` rather than from a click, ImGui spends Tab on
+        # keyboard navigation as well, and moves to the path field — which then reports itself activated
+        # and, a frame later, deactivated. Both handlers reach `_caret_home`, so what this branch decides
+        # has to survive being straddled by that pair. `_on_path_field_deactivated` is where it is made to.
         if key == dpg.mvKey_Tab:
             if self._caret_home is CaretHome.LISTING:
                 # Written before the caret returns, the field being writable only while it does not have
@@ -2716,6 +2735,10 @@ class FileDialog:
         # This home does get DPG's focus, unlike the type filter: it is a real text field, and the caret has
         # to be in it for anything to be typed or pasted. Safe to focus for the reason the find field is —
         # both live in the listing's child window, which is the side `focus_item` can reach from.
+        #
+        # Recorded here as well as in the activation handler, which will not see the change: that one only
+        # remembers the home it is displacing, and by the time it runs this line has already displaced it.
+        self._home_before_path = self._caret_home
         self._caret_home = CaretHome.PATH
         dpg.focus_item(self.path_field)
 

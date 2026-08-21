@@ -957,6 +957,25 @@ Four things the build settled that the design above did not:
   the grid is not on offer. Nothing in Raven passes `user_style=1`; giving it a keyboard means giving it a
   drawn mark, which is item 7's mechanism rather than this one's, so it waits for that if it is wanted.
 
+**Live-confirmed from a real keyboard the same day (Juha)**: Ctrl+B, the arrows, Enter, and the error case.
+That also closes the check owed on Ctrl+L, confirmed in the same pass.
+
+**And it surfaced a bug that was not the places panel's**, found by pressing Tab after arriving somewhere
+from the panel: the caret left the find field and the arrow keys stayed dead, and a second Tab could not
+get back either. Ctrl+L's activation handlers were the cause, so it had been there since 2026-08-20 and
+reaches every route that focuses the find field programmatically — Ctrl+F included, which is how it was
+confirmed to be general rather than a panel bug. Never released, so no changelog entry.
+
+The mechanism is a DPG finding and lives in `dpg-notes.md` under "Tab reaches a global handler *and* moves
+ImGui's nav": Tab moves ImGui's keyboard navigation onto the path field whenever the find field's caret
+came from `focus_item` rather than from a click, and the resulting activate/deactivate pair straddled the
+home Tab had just set. The repair is that leaving the path field restores the home it *displaced* instead
+of naming one — a fixed destination cannot survive a pair of handlers nobody asked for.
+
+Worth keeping in view for item 7, which adds a fourth thing that reacts to a home change: **a spurious
+activation is a thing that happens here**, so anything keyed to "which home has the caret" wants to be
+written so that an unrequested round trip through another home leaves no trace.
+
 Page Up and Page Down work in the panel too, though the design table named only Up / Down / Home / End.
 They cost nothing — the panel drives the same cursor class the listing does, so picking that cursor is the
 whole of the key handling — and they stop being decorative on a machine with a long mount list, where
@@ -988,10 +1007,12 @@ diverge:** the combo applied every step as it was made, so it has nothing left t
 field is a draft until Enter and a half-typed path standing over a listing of somewhere else is a field
 that lies about where you are.
 
-**What is still worth a human check:** that Ctrl+L is not swallowed before it reaches the app. Synthetic
-input to a DPG window was unreliable on this desktop the day this was built — `xdotool key` chords went
-undelivered while `xdotool type` landed — so the live pass drove the widget from inside the process
-instead, which answers the colours and the help card but not the X-level delivery of that one chord.
+**Live-confirmed from a real keyboard on 2026-08-21 (Juha)**, which is what the build itself could not
+answer: synthetic input to a DPG window was unreliable on this desktop the day it was built — `xdotool key`
+chords went undelivered while `xdotool type` landed — so the live pass drove the widget from inside the
+process, which answers the colours and the help card but not the X-level delivery of the chord. Confirmed
+in full: colour as you type in all three states, Enter returning the caret, the error case, Escape
+cancelling the edit, and a path pasted from a file manager.
 
 **The save-mode arrow-fill is superseded rather than pending.** This brief specified that arrowing fills
 the field in save mode, gated on a flag tracking whether the user had typed since the last programmatic
