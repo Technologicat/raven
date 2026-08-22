@@ -13,6 +13,36 @@ importer first. Recorded here rather than in that item because a trigger nobody 
 the tool for finding things in the backlog cannot be gated on someone remembering to look for it *in* the
 backlog. The recurring moment to ask is the triage step in the release procedure.
 
+## The context-fill meter jumps from far too low to somewhat too high, and settles on an estimate
+
+*Cluster: librarian-responsiveness · Cost: S · Gate: none — **raised for Monday** (Juha, 2026-08-22) · Filed: 2026-08-22 · See also: `investigations/prompt-size-cache-relative/`*
+
+Three fixes on 2026-08-21/22 left the readout honest and still unsatisfying, on a branch with three attached
+PDFs (true size ~56k tokens, 43% of a 128 Ki window):
+
+- **The immediate count reads ~1%**, because it now skips attachments it has not extracted — which is what
+  keeps pypdf off the callback thread, and is right, but 1% for a chat that is 43% full is a big lie for the
+  moment it stands.
+- **The backend's exact figure is refused** as implausible (it reports an order of magnitude short; see the
+  investigation), so what replaces the 1% is the *local estimate*.
+- **That estimate runs ~44% high** — 81158 against a true 56365, i.e. it will show ~62% for a branch that is
+  43% full. Marked `~`, so it is not claiming to be exact, but it is the number the user ends up reading.
+
+**Not yet verified against a build that has the refusal in it.** Juha saw 1% → 7% on 2026-08-22, from an app
+launched before that commit; the predicted post-fix behaviour is 1% → ~62%, both marked `~`. Confirm that
+first — if 7% still appears, the refusal is not firing and this item is about something else.
+
+Three directions, cheapest first:
+
+- **Estimate an un-extracted attachment from its sidecar's byte size** rather than counting it as nothing. A
+  PDF's text layer is a roughly predictable fraction of its bytes, and anything in the right order of
+  magnitude beats 1%. Keeps the extraction off the hot path, which is the constraint that started this.
+- **Extract in the background as soon as a branch becomes current**, so the honest number arrives a moment
+  later without blocking anything. Overlaps with brief 12, which persists extracted text and makes the
+  question go away.
+- **Recalibrate the character ratio.** 44% high is a lot, and the readout has no better source now that the
+  backend's figure is untrustworthy on at least one backend.
+
 ## Ctrl+Left / Ctrl+Right cannot flick between siblings, because each switch re-picks its own target
 
 *Cluster: librarian-keyboard · Cost: S to build, the design is the work · Gate: none — **raised for Monday** (Juha, 2026-08-21) · Filed: 2026-08-21*
