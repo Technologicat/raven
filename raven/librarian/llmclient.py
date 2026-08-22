@@ -24,7 +24,7 @@ __all__ = ["TOOLS", "TOOL_ENTRYPOINTS", "DOCUMENT_TOOL_NAMES", "NETWORK_TOOL_NAM
 
            "count_tokens",
            "image_token_cost",
-           "count_branch_tokens",
+           "count_branch_tokens", "prompt_size_report_looks_whole",
 
            "budget_for_fetched_text",
            "truncate_middle",
@@ -2331,6 +2331,44 @@ def invoke(settings: env,
                usage=usage,
                dt=tim.dt,
                interrupted=interrupted)
+
+# How far below the local estimate a backend's `prompt_tokens` may sit and still be believable as a count of
+# the *whole* prompt. Measured 2026-08-22 (`investigations/prompt-size-cache-relative/`): on a 56365-token
+# prompt the character-ratio estimate read 81158 — 44% high — so a tight bound would reject good data, while
+# the short report for the same prompt was 8745, an order of magnitude down. Anything in between is not a
+# case the measurements have seen; half was chosen as the midpoint of a gap that wide, and the log line in
+# `prompt_size_report_looks_whole` is what would show it being wrong.
+_WHOLE_PROMPT_MIN_FRACTION_OF_ESTIMATE = 0.5
+
+
+def prompt_size_report_looks_whole(reported: int, estimate: int) -> bool:
+    """Whether a backend's reported `prompt_tokens` is plausibly the size of the *whole* prompt.
+
+    **It is not always.** Measured against LM Studio on 2026-08-22: a branch whose true prompt is 56365
+    tokens reported 8745 once the backend had been asked about it before — an order of magnitude short, with
+    nothing in the response saying so (no `prompt_tokens_details.cached_tokens`, just a smaller number). And
+    Raven is what asks twice: `prefill` exists partly to warm the KV cache for the next turn.
+
+    **Why it does that is not established**, which is why this only refuses a figure rather than trying to
+    repair one. The obvious reading — that it counts what it had to process, the rest being cached — is
+    contradicted by a ~600-token nonce appended to the history leaving the figure unchanged. See
+    `investigations/prompt-size-cache-relative/`.
+
+    Believed as-is, that reads to a user as the conversation having shrunk — a chat with three attached
+    papers showing 7% of the window instead of 43%.
+
+    `estimate`: the local character-ratio count for the same branch, from `count_branch_tokens`. Crude, and
+                that is fine here: the two cases are an order of magnitude apart, so this only has to tell
+                *far below* from *near*.
+    """
+    if estimate <= 0:  # nothing to compare against; take the backend at its word
+        return True
+    if reported >= _WHOLE_PROMPT_MIN_FRACTION_OF_ESTIMATE * estimate:
+        return True
+    logger.info(f"prompt_size_report_looks_whole: backend reported {reported} prompt tokens against a local estimate of {estimate}; "
+                f"treating it as a cache-relative count of the part it had to process, and keeping the estimate.")
+    return False
+
 
 def prefill(settings: env,
             history: List[Dict],

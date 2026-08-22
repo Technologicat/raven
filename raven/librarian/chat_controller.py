@@ -3530,8 +3530,17 @@ class DPGChatController:
             return  # backend didn't report usage; keep the estimate
         if self.app_state["HEAD"] != task_env.head_node_id:  # branch switched while we were waiting on the backend
             return
-        logger.info(f"DPGChatController._context_prefill_entrypoint: exact prompt size for HEAD '{task_env.head_node_id}': {out.usage['prompt_tokens']} tokens")
-        self._render_context_fill(out.usage["prompt_tokens"], is_exact=True)
+        # Checked against the local estimate before it is believed, because a backend may be reporting the
+        # tokens it had to *process* rather than the size of the prompt — see `prompt_size_report_looks_whole`.
+        # The estimate is cheap here whatever the attachments: building the prompt above extracted them, so
+        # they are in the cache this reads.
+        reported = out.usage["prompt_tokens"]
+        estimate, _is_exact = llmclient.count_branch_tokens(self.llm_settings, self.datastore, task_env.head_node_id)
+        if not llmclient.prompt_size_report_looks_whole(reported, estimate):
+            self._render_context_fill(estimate, False)  # keep saying `~`, and say it about the bigger number
+            return
+        logger.info(f"DPGChatController._context_prefill_entrypoint: exact prompt size for HEAD '{task_env.head_node_id}': {reported} tokens")
+        self._render_context_fill(reported, is_exact=True)
 
     def chat_exchange(self, user_message_text: str, staged_images: Optional[List[env]] = None,
                       staged_files: Optional[List[env]] = None) -> None:

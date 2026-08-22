@@ -109,6 +109,8 @@
 
 *Raven-librarian*
 
+- **the context-fill readout no longer collapses to a fraction of the truth once the backend has been asked before.** A chat with three papers attached, genuinely filling 43% of the window, could show `7%`: the readout takes its exact figure from the LLM backend, and LM Studio returns a far smaller number the second time it is asked about the same conversation. Raven now disbelieves a figure far below its own estimate, and goes on showing the estimate's `~` rather than a confident wrong number.
+
 - **the app no longer freezes for seconds when you move to a part of the chat that has documents attached.** Switching a message's siblings, or otherwise moving through the chat, refreshes the context-fill readout — and that used to read every attached document to count it, extracting a PDF's text on the spot. Everything you typed during that wait arrived at the end of it, so the app read as hung. The readout now counts documents it has already read, leaves the rest to the check that follows a moment later, and shows `~` while any are outstanding.
 
 - **running `raven-librarian` and `raven-minichat` at once no longer loses one of the two sessions.** Each holds the whole chat datastore in memory and writes it back on exit, so whichever closed last silently discarded everything the other had done — including a chat you were in the middle of. The second app to start now says the datastore is already open, names it, and stops. Two Librarians did the same thing to each other, and are covered too.

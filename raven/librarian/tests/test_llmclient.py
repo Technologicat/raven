@@ -1248,6 +1248,20 @@ class TestSerializeHistoryForWire:
         # persona prefix and the `[Attached file: ...]` framing the fold adds, not a budget disagreement.
         assert counted == pytest.approx(wire_characters * self.settings.tokens_per_character, rel=0.05)
 
+    def test_a_cache_relative_prompt_size_is_not_mistaken_for_the_whole_prompt(self):
+        """A backend may report the tokens it *processed*, not the size of the prompt.
+
+        The numbers are the ones measured against LM Studio on 2026-08-22, in
+        `investigations/prompt-size-cache-relative/`: 56365 for the whole prompt, 8745 for the same prompt
+        with its prefix already cached, against a local estimate of 81158. The estimate runs high, which is
+        why the bound is loose — a tight one would reject the true figure.
+        """
+        assert llmclient.prompt_size_report_looks_whole(56365, 81158) is True  # the real count, estimate 44% high
+        assert llmclient.prompt_size_report_looks_whole(8745, 81158) is False  # the cache-relative one
+        assert llmclient.prompt_size_report_looks_whole(81158, 81158) is True  # estimate dead on
+        assert llmclient.prompt_size_report_looks_whole(200000, 81158) is True  # estimate low; believe the backend
+        assert llmclient.prompt_size_report_looks_whole(0, 0) is True  # nothing to compare against
+
     def test_the_readout_can_decline_to_extract_an_attachment_it_has_not_seen(self, tmp_path, monkeypatch):
         """`extract_attachments=False` must skip an un-extracted document rather than pay for it.
 
