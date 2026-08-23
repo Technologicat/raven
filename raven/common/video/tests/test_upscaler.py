@@ -48,7 +48,8 @@ class TestUpscalerShapeAnime4K:
     """Output shape must match the configured target dimensions (Anime4K path)."""
 
     @pytest.fixture(scope="class")
-    def upscaler(self):
+    @staticmethod
+    def upscaler():
         """Shared upscaler instance (preset C/low is fastest)."""
         return Upscaler("cpu", torch.float32, 64, 48, preset="C", quality="low")
 
@@ -132,7 +133,8 @@ class TestUpscalerAlphaAnime4K:
     """Alpha is upscaled bilinearly (Anime4K is RGB-only)."""
 
     @pytest.fixture(scope="class")
-    def upscaler(self):
+    @staticmethod
+    def upscaler():
         return Upscaler("cpu", torch.float32, 64, 48, preset="C", quality="low")
 
     def test_alpha_preserved_opaque(self, upscaler):
@@ -209,7 +211,8 @@ class TestUpscalerAlphaBypass:
 
 class TestUpscalerValues:
     @pytest.fixture(scope="class")
-    def upscaler(self):
+    @staticmethod
+    def upscaler():
         return Upscaler("cpu", torch.float32, 64, 48, preset="C", quality="low")
 
     def test_output_in_plausible_range(self, upscaler):
