@@ -64,4 +64,4 @@ wosfile==0.7.0
 # entry; these markers reproduce what each entry already installs. Worth keeping rather than
 # collapsing — it means the suite runs against both numpy majors.
 numpy==2.4.6 ; python_version < "3.12"
-numpy==2.5.1 ; python_version >= "3.12"
+numpy==2.5.2 ; python_version >= "3.12"
