@@ -1048,7 +1048,28 @@ has to settle.
 
 ## The `--run-gui` group segfaults if a second module maps a context
 
-*Cluster: testing · Cost: ? · Gate: none — the group is red · Filed: 2026-08-13 · Updated: 2026-08-21*
+*Cluster: testing · Cost: ? · Gate: none — the group is red · Filed: 2026-08-13 · Updated: 2026-08-24*
+
+**Still reproducing on 2026-08-24**, unchanged, on a tree carrying NumPy 2 and a 57-package dependency
+refresh — `dearpygui` itself moved in none of it, and the crash is identical, so nothing about it is
+dependency-related. It dies at 98%, after 2857 tests pass. **The same test passes on its own** (`pytest
+--run-gui <nodeid>`, 2.58 s), which is what "the collection, not any one test" looks like from the other
+side, and is the cheap way to check a `gui` test without fighting the group.
+
+**Reading the core no longer works out of the box, and the reason is a limit rather than the crash.**
+`systemd-coredump` defaults to `ProcessSizeMax=2G` and `ExternalSizeMax=2G`; this process maps 341
+extension modules (torch, cupy, spaCy, DPG), so the core is written *truncated* — 1.2 GB with no
+resolvable stacks, every one of 155 frames `??`. The resolved trace below came from a run that fit. To
+make the recipe below work again, raise both in `/etc/systemd/coredump.conf`:
+
+```
+[Coredump]
+ProcessSizeMax=8G
+ExternalSizeMax=8G
+```
+
+Needs root, and is machine setup rather than a repository change — noted here because this item is where
+somebody will next reach for `coredumpctl` and find it hands back nothing.
 
 **This has happened: `pytest -m "not ml" --run-gui` segfaults, as of 2026-08-21.** It dies in
 `test_fdialog.py::test_the_sort_row_fits_the_minimum_width`, which is the second module to map a viewport
