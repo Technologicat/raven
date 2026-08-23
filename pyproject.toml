@@ -55,43 +55,43 @@ license-files = ["LICENSE.md",
 dynamic = ["version"]
 
 dependencies = [
-    "bibtexparser>=2.0.0b8",
-    "dearpygui>=2.3",  # 2.3 builds font atlas ranges automatically; on 2.0-2.2 non-Latin text needs `add_font_range`, which we no longer call
-    "filelock>=3.12",  # librarian: keeping two frontends off one chat datastore. Already in the tree via torch and huggingface_hub; declared because we import it.
-    "mcpyrate>=4.2.0",  # we only use the colorizer utility for now
-    "mistletoe>=1.4.0",  # vendored dpg-markdown
-    "numpy>=2.0",
-    "openTSNE>=1.0.2",  # BibTeX importer: dimension reduction from high-D to 2D
+    "bibtexparser>=2.0.0b9",
+    "dearpygui>=2.3.1",  # non-Latin text needs `add_font_range` before 2.3, which builds font atlas ranges automatically; we no longer call it
+    "filelock>=3.32.3",  # librarian: keeping two frontends off one chat datastore. Already in the tree via torch and huggingface_hub; declared because we import it.
+    "mcpyrate>=4.3.0",  # we only use the colorizer utility for now
+    "mistletoe>=1.6.0",  # vendored dpg-markdown
+    "numpy>=2.4.6",
+    "openTSNE>=1.0.4",  # BibTeX importer: dimension reduction from high-D to 2D
     "pip==24.3.1",  # spaCy language model auto-install  # TODO: which pip version?
-    "psutil>=5.9.0",  # vendored file_dialog
-    "scikit-learn>=1.5.1",  # BibTeX importer: high-dimensional clustering (HDBSCAN)
-    "scipy>=1.14.0",  # visualizer: KDTree
-    "sentence_transformers>=4.57.1",  # BibTeX importer: vector embeddings for visualization and semantic search. Also many of the server's AI modules use this.
-    "spacy>=3.7.5",  # BibTeX importer: NLP analysis
+    "psutil>=7.2.2",  # vendored file_dialog
+    "scikit-learn>=1.9.0",  # BibTeX importer: high-dimensional clustering (HDBSCAN)
+    "scipy>=1.17.1",  # visualizer: KDTree
+    "sentence_transformers>=6.0.0",  # BibTeX importer: vector embeddings for visualization and semantic search. Also many of the server's AI modules use this.
+    "spacy>=3.8.15",  # BibTeX importer: NLP analysis
     "en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl",  # spaCy
-    "sseclient-py>=1.8.0",  # librarian: streaming transport for receiving data from LLM
+    "sseclient-py>=1.9.0",  # librarian: streaming transport for receiving data from LLM
     # The torch trio is version-pinned (not floored) and sourced from the `pytorch-cu128` index declared under
     # `[[tool.pdm.source]]` below — so a re-lock keeps the validated `+cu128` build set instead of drifting the
     # versions (and, worse, the audio wheel's CUDA runtime) on its own. Bump these three together, deliberately.
     "torch==2.11.0",
     "torchvision==0.26.0",  # raven.common.video
     "torchaudio==2.11.0",  # raven.common.audio.resample (device-agnostic resampler)
-    "unpythonic>=2.3.0",  # 2.3.0: `si_prefix(always_separate=...)`, used by `raven.common.filelisting`
-    "wordcloud>=1.9.3",  # visualizer
-    "wosfile>=0.6",  # wos2bib
-    "chromadb>=1.0.8",  # RAG semantic search
-    "bm25s>=0.2.12",  # RAG keyword search
+    "unpythonic>=2.4.0",  # `si_prefix(always_separate=...)`, used by `raven.common.filelisting`, arrived in 2.3.0
+    "wordcloud>=1.9.6",  # visualizer
+    "wosfile>=0.7.0",  # wos2bib
+    "chromadb>=1.5.9",  # RAG semantic search
+    "bm25s>=0.3.10",  # RAG keyword search
     "watchdog>=6.0.0",  # RAG document directory monitoring
-    "selenium>=4.32.0",  # server.websearch
+    "selenium>=4.47.0",  # server.websearch
     "colorama>=0.4.6",  # server (though we use it also through `mcpyrate` elsewhere)
-    "markdown>=3.8",  # server (for rendering readme/docs)
-    "flask>=3.1.1",  # server
-    "flask-cors>=6.0.0",  # server
-    "flask-compress>=1.17",  # server
-    "huggingface-hub>=0.31.4",  # server (AI models autodownloader)
+    "markdown>=3.10.3",  # server (for rendering readme/docs)
+    "flask>=3.1.3",  # server
+    "flask-cors>=6.0.5",  # server
+    "flask-compress>=1.24",  # server
+    "huggingface-hub>=1.28.0",  # server (AI models autodownloader)
     "waitress>=3.0.2",  # server
     "kokoro>=0.9.4",  # server.tts; you may also need the `espeak-ng` software; on Linux, `sudo apt install espeak-ng`. For Windows, see instructions at https://github.com/hexgrad/kokoro
-    "av>=14.2.0",  # TTS audio encoder (for network transport)
+    "av>=18.1.0",  # TTS audio encoder (for network transport)
     "pygame>=2.6.1",  # TTS audio playback (client side)
     "qoi>=0.7.2",  # server, fast lossless image format for streaming
     # raven.common.image.codec, client.avatar_renderer, server.modules.avatar, librarian.imagestore. Already in
@@ -99,25 +99,29 @@ dependencies = [
     # and the tree resolves, rather than a feature we need — nothing here uses a recent Pillow API.
     "Pillow>=12.3.0",
     "dehyphen>=0.3.4",  # server, `sanitize` module
-    "sentencepiece>=0.2.1",  # server, `translate` module, needed by some transformers models
-    "sacremoses>=0.1.1",  # server, `translate` module, needed by some transformers models
+    "sentencepiece>=0.2.2",  # server, `translate` module, needed by some transformers models
+    "sacremoses>=0.2.0",  # server, `translate` module, needed by some transformers models
     "strip-markdown>=1.3",  # TTS
-    "emoji>=1.7.0",  # TTS, emoji stripping
-    "accelerate>=1.11.0",  # faster loading of `whisper-large-v3-turbo`, according to model card
+    "emoji>=2.15.0",  # TTS, emoji stripping
+    "accelerate>=1.14.0",  # faster loading of `whisper-large-v3-turbo`, according to model card
     "pvrecorder>=1.2.7",
-    "PyTurboJPEG<2",
-    "feedparser>=6.0",  # papers: arXiv search
-    "requests>=2.31",  # client, librarian, papers (arXiv tools)
-    "tqdm>=4.0",  # server.stt, papers (arXiv download)
-    "trafilatura>=2.1.0",  # readability extraction (HTML -> clean text/markdown): server.webfetch for fetched pages, raven.common.docextract for saved ones. 2.1 for `html2txt`, which docextract needs to tell a truncated extraction from a clean one
-    "youtube-transcript-api>=1.0.0",  # server.webfetch; transcript extraction for YouTube URLs
-    "pypdf>=6.14.2",  # raven.common.docextract: PDF text layer
+    # The ceiling is about the *system* library, which pip cannot see: PyTurboJPEG 2.0 moved to the
+    # function-based TurboJPEG 3 API and needs libjpeg-turbo 3.0+, while distributions this decade still
+    # ship 2.x (Mint 21.3: libturbojpeg 2.1.2). Upstream's own advice is to stay on 1.x until the C
+    # library is new enough. What 2.x adds is 12- and 16-bit JPEG, which nothing here wants.
+    "PyTurboJPEG>=1.8.3,<2",
+    "feedparser>=6.0.14",  # papers: arXiv search
+    "requests>=2.34.2",  # client, librarian, papers (arXiv tools)
+    "tqdm>=4.70.0",  # server.stt, papers (arXiv download)
+    "trafilatura>=2.2.0",  # readability extraction (HTML -> clean text/markdown): server.webfetch for fetched pages, raven.common.docextract for saved ones. `html2txt`, which docextract needs to tell a truncated extraction from a clean one, arrived in 2.1
+    "youtube-transcript-api>=1.2.4",  # server.webfetch; transcript extraction for YouTube URLs
+    "pypdf>=6.16.1",  # raven.common.docextract: PDF text layer
     # The rest of `raven.common.docextract`'s backends. Office formats are all zipped XML, but each family needs
-    # its own reader; `odfpy` covers both OpenDocument formats we accept. `python-docx` is floored at 1.1 for
+    # its own reader; `odfpy` covers both OpenDocument formats we accept. `python-docx` needs at least 1.1 for
     # `iter_inner_content`, which walks a body's paragraphs and tables in document order — without it, table
     # text can only be appended after the prose, which scrambles the reading order a chunker depends on.
-    "python-docx>=1.1.0",  # .docx
-    "python-pptx>=1.0.0",  # .pptx
+    "python-docx>=1.2.0",  # .docx
+    "python-pptx>=1.0.2",  # .pptx
     "odfpy>=1.4.1",  # .odt, .odp
 ]
 
@@ -145,7 +149,7 @@ classifiers = [
 # The NVIDIA packages will be installed into `.venv/lib/python3.10/site-packages/nvidia*`.
 [dependency-groups]
 dev = [
-    "pytest>=8.0",
+    "pytest>=9.1.1",
     # Coverage instrumentation, used by .github/workflows/coverage.yml.
     # NOTE: raven's CI workflows deliberately do NOT use `pdm install` —
     # the full dependency tree pulls in torch/torchvision (multi-GB) and
@@ -153,16 +157,18 @@ dev = [
     # test suite needs. Workflows install a hand-picked dep subset via
     # `pip install` directly. `pytest-cov` is declared here anyway so a
     # local `pdm install` for development matches what CI exercises.
-    "pytest-cov>=7.0",
-    "ruff>=0.14.0",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.16.4",
+    # The Emacs integration tools, deliberately unbounded: none of them has any bearing on what Raven
+    # does, so any version anyone happens to have is the right one.
     "flake8",
     "autopep8",
     "importmagic",
     "epc",
-    "jedi>=0.19.2",
+    "jedi>=0.20.0",
     # For local pre-release sanity checks: `python -m build --sdist`
     # exercises the same sdist path that CI runs on tag push.
-    "build",
+    "build>=1.5.0",
     # For validating .github/workflows/*.yml during local dev (not used at runtime).
     "pyyaml>=6.0.3",
     # Sampling profiler that attaches to an already-running process, for the

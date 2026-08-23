@@ -322,6 +322,47 @@ Legacy `flake8rc` also present (used by Emacs flycheck, not by CI or CC).
 
 1. **Lint after every code change**: `ruff check <changed .py files>`. Do this before review, testing, or committing. Catches unused imports and dead names early.
 2. **Run `python scripts/check_ci_imports.py` before pushing anything that adds an import or removes an `importorskip`.** CI installs a hand-picked dependency subset rather than the full tree, so a module-level import of something outside that list passes locally and fails only on push — as `sseclient` did, turning main red on a docs-only commit from a change two commits back. The script answers, in a second, which unguarded test modules would fail to *collect* in CI. A green local `pytest` cannot tell you this.
+3. **Run `python scripts/check_dependency_versions.py` after touching any dependency list.** Same shape as the above, one level up: it asks whether `pyproject.toml`, `pdm.lock` and `requirements-ci.txt` still agree about *versions*. See the next section for the loop it belongs to.
+
+### Dependency versions: CI moves first, the floors follow a green local run
+
+Three lists say what Raven depends on, and each answers a different question:
+
+- **`.github/workflows/requirements-ci.txt`** — exact pins, what CI actually tests.
+- **`pyproject.toml`** — floors, what an installer is permitted to resolve.
+- **`pdm.lock`** — one resolved version per package, what a developer gets. Gitignored here, so it is
+  invisible in `git status` and drifts unnoticed.
+
+**The loop between them, in order:**
+
+1. **Dependabot bumps the CI pins.** That is what it is for, and the PR arriving red is the point: an
+   upstream release that breaks us shows up as its own reviewable failure rather than as a mystery
+   attached to somebody's unrelated commit.
+2. **Merge the ones that pass.** Green on the full matrix is the evidence.
+3. **Re-lock and run the suite locally** — `pdm lock && pdm install`, then `pytest`, with `raven-server`
+   and an LLM backend up so the server-dependent tests are not skipped. The `ml` group runs locally and
+   never in CI, so this covers what CI structurally cannot.
+4. **Only then raise the floors in `pyproject.toml`**, to the versions that run just passed.
+
+**Do not raise a floor to a version nothing has tested.** The floor is a claim about the oldest version
+that works, and the only evidence for it is a run. This is also why step 4 is last rather than bundled
+into step 2: Dependabot's PR proves the *new* version works, not that the *old* floor is wrong.
+
+**A floor is raised to the oldest version we exercise, not the newest.** CI's pin and the lockfile
+routinely differ by a patch — whichever was refreshed most recently — and the floor belongs at the lower
+of the two. Going higher declares a minimum that the other list then falls below, which the checker
+correctly reports as a violation.
+
+**Keep the reason when the number moves.** Several floors record *why* they are where they are —
+`dearpygui>=2.3` for automatic font atlas ranges, `python-docx>=1.1` for `iter_inner_content`. When the
+floor is raised for the unrelated reason above, the fact survives in the comment: `python-docx>=1.2.0,
+# … `iter_inner_content` … arrived in 1.1`. The declared floor answers "what do we test"; the comment
+answers "what do we actually need", and those stop being the same number the first time this loop runs.
+
+**Two dependencies sit outside the loop deliberately.** The torch trio is pinned exactly, from its own
+index, and is bumped by hand as a set. `PyTurboJPEG` is capped `<2` because 2.x needs a *system*
+libjpeg-turbo 3.0+ that current distributions do not ship — a constraint pip cannot see, so the version
+bound is the only place it can live.
 
 ### CHANGELOG layout: group by component
 
