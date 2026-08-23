@@ -1046,6 +1046,45 @@ see. Whether the difference belongs in the skill's instructions, in bundled scri
 trust question above), or in richer building blocks for skills to call, is exactly what the design session
 has to settle.
 
+## Give the assertions that could pass vacuously a negative control
+
+*Cluster: testing · Cost: L · Gate: none — needs a judgement per test, not a pattern match · Filed: 2026-08-24 · See also: `raven/common/gui/tests/test_utils.py::test_a_park_has_to_be_renewed_every_frame_to_hold`*
+
+A test whose expected outcome is also the *default* outcome passes whether or not the mechanism it names
+ever engaged, and looks identical either way. The fleet rule already says to run a new test against the
+old behaviour and confirm it fails — but that is a check performed once, and a fixture can stop
+discriminating afterwards without anything reporting it.
+
+**The pattern to spread** is in `test_a_park_has_to_be_renewed_every_frame_to_hold`: assert that the
+*control* condition produces the opposite outcome, before asserting the treatment produces the expected
+one.
+
+```python
+assert min(parked_once[1:]) < edge, ("nothing was clamped, so this fixture cannot tell a renewed "
+                                     "park from an abandoned one")
+```
+
+It earned itself on 2026-08-24 — the test had inherited a viewport built for tests that never map one,
+nothing was ever clamped, and the guard named its own fixture rather than letting the next assertion pass
+for the wrong reason.
+
+**Scope, measured 2026-08-24:** 2766 test functions across 51 modules. Grep signals about 288 assertions
+of the "unchanged / still / stays / == 0 / is None" shape and about 217 single-element fixtures — the two
+overlap, and both over-report, but the order of magnitude is a few hundred candidates.
+
+**This cannot be swept mechanically**, which is the whole reason it is filed rather than done. A control
+belongs where a passing assertion could be explained by "the mechanism never engaged" — boundary
+comparisons, clamping, ordering, filtering, cache hits, timeouts, retries. It is noise on an assertion
+whose failure mode is a wrong *value*. Adding one everywhere would produce guards that are themselves
+vacuous, which is worse than none: it spends the reader's attention and buys nothing.
+
+**Suggested method**, so this is startable cold: go module by module rather than by grep hit, since the
+question is about what each fixture can distinguish and that is a property of the module's setup. Start
+where fixtures are shared across many tests — `test_fdialog.py`, `test_tablecursor.py`,
+`test_thumbnailgrid.py`, `test_chattree.py` — because one under-sized fixture there silently weakens
+every test using it, which is exactly what happened in `test_utils.py`. The control's message should
+accuse the fixture, not the code.
+
 ## The `--run-gui` group segfaults if a second module maps a context
 
 *Cluster: testing · Cost: ? · Gate: none — the group is red · Filed: 2026-08-13 · Updated: 2026-08-24*
