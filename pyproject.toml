@@ -60,7 +60,7 @@ dependencies = [
     "filelock>=3.12",  # librarian: keeping two frontends off one chat datastore. Already in the tree via torch and huggingface_hub; declared because we import it.
     "mcpyrate>=4.2.0",  # we only use the colorizer utility for now
     "mistletoe>=1.4.0",  # vendored dpg-markdown
-    "numpy>=1.26.4,<2.0",  # NOTE: spaCy doesn't support NumPy 2.0 yet (August 2024), so staying with NumPy 1.26 for now.
+    "numpy>=2.0",
     "openTSNE>=1.0.2",  # BibTeX importer: dimension reduction from high-D to 2D
     "pip==24.3.1",  # spaCy language model auto-install  # TODO: which pip version?
     "psutil>=5.9.0",  # vendored file_dialog
