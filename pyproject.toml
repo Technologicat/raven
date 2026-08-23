@@ -94,6 +94,10 @@ dependencies = [
     "av>=14.2.0",  # TTS audio encoder (for network transport)
     "pygame>=2.6.1",  # TTS audio playback (client side)
     "qoi>=0.7.2",  # server, fast lossless image format for streaming
+    # raven.common.image.codec, client.avatar_renderer, server.modules.avatar, librarian.imagestore. Already in
+    # the tree via torchvision and wordcloud; declared because we import it. The floor is the version CI pins
+    # and the tree resolves, rather than a feature we need — nothing here uses a recent Pillow API.
+    "Pillow>=12.3.0",
     "dehyphen>=0.3.4",  # server, `sanitize` module
     "sentencepiece>=0.2.1",  # server, `translate` module, needed by some transformers models
     "sacremoses>=0.1.1",  # server, `translate` module, needed by some transformers models
