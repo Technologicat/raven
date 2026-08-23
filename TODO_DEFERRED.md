@@ -1056,16 +1056,28 @@ dependency-related. It dies at 98%, after 2857 tests pass. **The same test passe
 --run-gui <nodeid>`, 2.58 s), which is what "the collection, not any one test" looks like from the other
 side, and is the cheap way to check a `gui` test without fighting the group.
 
-**Whether the core is readable depends on which command produced it.** `systemd-coredump` defaults to
-`ProcessSizeMax=2G` and `ExternalSizeMax=2G`, and a run that also executes the `ml` group holds the model
-weights — spaCy, Flair, transformers, sentence-transformers, Kokoro, Whisper — resident on top of 341
-extension modules. That process dumps *truncated*: 1.2 GB in which all 155 frames resolve to `??`. The
-readable trace below came from `pytest -m "not ml" --run-gui`, which never loads any of them. So the
-narrower command is both the documented repro and the one that yields a usable core, and reaching for
-`coredumpctl` after a *full* `--run-gui` gets nothing back.
+**Whether the core is readable depends on which command produced it**, and the margin is not large.
+`systemd-coredump` defaults to `ProcessSizeMax=2G` / `ExternalSizeMax=2G`. Peak RSS, measured 2026-08-24
+with `/usr/bin/time -v`:
 
-Not verified against a controlled pair — the two runs differ in machine as well as in command, and only
-the command was checked. Raising both limits in `/etc/systemd/coredump.conf` removes the question:
+| run | peak RSS |
+|---|---|
+| `pytest -m "not ml"` | 2.43 GiB |
+| `pytest` (the `ml` group included) | 5.63 GiB |
+
+The `ml` tests load their models **in-process** — all four modules import `raven.common.audio.speech.stt`,
+`...tts` or `raven.common.nlptools` directly, none of them goes to Raven-server — so Whisper, Kokoro,
+spaCy, Flair, transformers and sentence-transformers are all resident at once, and that is the ~3.2 GiB
+difference. A full `--run-gui` dumps *truncated*: 1.2 GB in which all 155 frames resolve to `??`. The
+readable trace below came from `pytest -m "not ml" --run-gui`, so the documented repro is also the one
+that yields a usable core.
+
+Note that RSS is not what the cap measures — a core omits file-backed pages, which is most of the 2.43 GiB
+(torch, cupy, spaCy's compiled pipeline, DPG are all shared objects). Weights loaded through `torch.load`
+are anonymous and *are* dumped, which is why the narrower run stays under and the full one does not.
+
+Raising both limits in `/etc/systemd/coredump.conf` removes the question, and the headroom above is thin
+enough to be worth doing rather than relying on:
 
 ```
 [Coredump]
