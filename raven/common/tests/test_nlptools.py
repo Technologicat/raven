@@ -403,3 +403,42 @@ def test_suggest_keywords_with_supplied_corpus(sample_docs):
     for kws in keywords:
         for kw in kws:
             assert kw in corpus
+
+# --------------------------------------------------------------------------------
+# The installed model against the installed spaCy
+
+def test_installed_spacy_model_matches_installed_spacy():
+    """The spaCy model must declare a version range that admits the installed spaCy."""
+    # `pyproject.toml` names the model by URL, because spaCy publishes its models as GitHub release
+    # assets rather than on PyPI. A URL bypasses resolution, so nothing re-examines it: raising the
+    # `spacy` floor cannot move it, and no upgrade will ever propose a newer one. The pin therefore
+    # goes stale silently, and the model keeps loading when it does — spaCy's own W095 is a warning,
+    # which in a suite that already prints a known set of upstream deprecations is indistinguishable
+    # from the noise. What a mismatch actually costs is a model used with a spaCy it was not trained
+    # against, i.e. quietly worse output rather than a failure anyone would trace back to a version.
+    #
+    # Read from the installed package rather than from the network: `spacy validate` fetches an
+    # upstream compatibility table, which answers a question about PyPI instead of about this machine.
+    # It would also make the test slower, unusable offline, and — the one that actually costs time —
+    # flaky, failing on a network hiccup in a way that reads as a real version mismatch.
+    import json
+    import pathlib
+
+    import spacy
+    from packaging.specifiers import SpecifierSet
+    from packaging.version import Version
+
+    model = pytest.importorskip(SPACY_MODEL)
+    root = pathlib.Path(model.__file__).parent
+    metas = sorted(root.rglob("meta.json"))
+    assert metas, f"{SPACY_MODEL} has no meta.json; cannot tell which spaCy it was built for"
+
+    # The package ships two — one at the top level and one inside the versioned data directory — so
+    # every one of them is checked rather than whichever a sort happens to put first.
+    installed = Version(spacy.__version__)
+    for meta in metas:
+        declared = json.loads(meta.read_text(encoding="utf-8"))["spacy_version"]
+        assert installed in SpecifierSet(declared), (
+            f"installed spaCy {installed} is outside the range {declared} declared by "
+            f"{meta.relative_to(root)} in {SPACY_MODEL}; the model URL in pyproject.toml "
+            f"needs to move with it")

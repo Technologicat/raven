@@ -340,8 +340,16 @@ Three lists say what Raven depends on, and each answers a different question:
    attached to somebody's unrelated commit.
 2. **Merge the ones that pass.** Green on the full matrix is the evidence.
 3. **Re-lock and run the suite locally** — `pdm lock && pdm install`, then `pytest`, with `raven-server`
-   and an LLM backend up so the server-dependent tests are not skipped. The `ml` group runs locally and
-   never in CI, so this covers what CI structurally cannot.
+   and an LLM backend up so the server-dependent tests are not skipped. **Then `pytest --run-gui`**, as
+   its own invocation. Both groups exist because CI cannot run them: `ml` needs the multi-gigabyte model
+   stack, `gui` needs a display and a window that takes focus. A local run that skips them covers no
+   more than the matrix already did.
+   - **`--run-gui` takes the keyboard and can crash** (a resource-allocation fault on the deferred list),
+     so warn before starting it and run it *after* the main suite — separately, so a crash cannot cost
+     the results of everything else.
+   - **A `dearpygui` bump is not green without it.** The GUI group is where a toolkit change actually
+     lands: focus semantics, layout geometry, the file dialog's keyboard. The rest of the suite drives
+     DPG with an unmapped viewport and would not notice.
 4. **Only then raise the floors in `pyproject.toml`**, to the versions that run just passed.
 
 **Do not raise a floor to a version nothing has tested.** The floor is a claim about the oldest version
