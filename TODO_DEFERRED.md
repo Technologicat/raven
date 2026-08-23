@@ -13,6 +13,37 @@ importer first. Recorded here rather than in that item because a trigger nobody 
 the tool for finding things in the backlog cannot be gated on someone remembering to look for it *in* the
 backlog. The recurring moment to ask is the triage step in the release procedure.
 
+## CI tests NumPy 2, `pyproject.toml` ships NumPy 1, and the cap's stated reason is stale
+
+*Cluster: dependency-hygiene · Cost: M · Gate: a local `pytest` including the `ml` group under NumPy 2.x — **raised for Juha's return** (2026-08-23) · Filed: 2026-08-23 · See also: `.github/workflows/requirements-ci.txt`; "`pdm.lock` is gitignored, against the fleet policy for applications"*
+
+`pyproject.toml` declares `numpy>=1.26.4,<2.0`, and the dev venv holds 1.26.4. The CI list installs **2.4.6**
+on the 3.11 entry and **2.5.2** on the 3.12 entries, and `pip install -e . --no-deps` (`ci.yml:87`) means the
+cap is never enforced there. So the ~2750 tests CI runs have been passing under NumPy 2 for as long as those
+pins have existed, against a project that declares and installs NumPy 1. Whichever of the two is right, they
+should not disagree silently.
+
+**The reason attached to the cap no longer holds.** Its comment says spaCy did not support NumPy 2.0 as of
+August 2024. Read off the installed metadata on 2026-08-23: `spacy` 3.8.14 requires `numpy>=1.19.0`, `thinc`
+8.3.13 requires `numpy<3.0.0,>=1.21.0`, `sentence-transformers` `numpy>=1.20.0`, `scikit-learn`
+`numpy>=1.24.1`. None of them caps below 2.
+
+**What is not established is Raven's own numeric code under NumPy 2**, and CI does not answer it: the `ml`
+group is skipped there, so nothing that loads spaCy, Flair or torch weights has ever run against 2.x. The
+importer's surface is the one to watch — openTSNE, scikit-learn HDBSCAN, wordcloud — along with `common/
+numutils` and the image/video conversion paths.
+
+Three outcomes, and the current state is the fourth:
+
+- **Lift the cap** to `numpy>=1.26.4` (or floor at 2.x) once the `ml` run is clean, and re-lock so the dev
+  environment moves with it.
+- **Keep the cap** because something genuinely breaks, and pin CI's numpy `<2.0` so CI tests what ships.
+- **Keep both, deliberately**, as a two-major compatibility test — in which case say so in both files,
+  because the current pair reads as an oversight and was found as one.
+
+Discovered while checking whether Dependabot's CI-pin bumps drift from `pyproject.toml` (2026-08-23). They
+do not — `pyproject.toml` uses floors, which those bumps satisfy. This cap is the one real conflict.
+
 ## The context-fill meter jumps from far too low to somewhat too high, and settles on an estimate
 
 *Cluster: librarian-responsiveness · Cost: S · Gate: none — **raised for Monday** (Juha, 2026-08-22) · Filed: 2026-08-22 · See also: `investigations/prompt-size-cache-relative/`*
