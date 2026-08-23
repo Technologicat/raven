@@ -32,6 +32,22 @@ def dpg_context():
     dpg.destroy_context()
 
 
+@pytest.fixture
+def mapped_dpg_context():
+    """A DPG context whose viewport is big enough to be looked at, for the tests that map one."""
+    # The unmapped fixture's 100x100 costs nothing while nobody sees it, and is the wrong shape the moment
+    # someone calls `show_viewport`: the windows these tests build are several times that, so every one of
+    # them is larger than the screen it is drawn on. What that breaks is measurement rather than drawing.
+    # ImGui only pulls an offscreen window back inside the viewport when there is an inside to pull it to,
+    # so at 100 wide a parked window simply stays parked — and a test asking whether a park was clamped
+    # gets the same answer either way, which is no answer.
+    dpg.create_context()
+    dpg.create_viewport(width=1280, height=800)  # DPG's own default; the widest window here is 700
+    dpg.setup_dearpygui()
+    yield
+    dpg.destroy_context()
+
+
 def test_the_test_runner_itself_is_on_the_render_thread():
     """Establishes the premise the rest of the module depends on."""
     assert guiutils.is_render_thread() is True
@@ -111,7 +127,7 @@ def test_an_untagged_widget_is_recognized_by_its_id_alone(dpg_context):
 # Widget position, in viewport coordinates
 
 @pytest.mark.gui
-def test_get_widget_pos_is_viewport_coordinates_however_deeply_nested(dpg_context):
+def test_get_widget_pos_is_viewport_coordinates_however_deeply_nested(mapped_dpg_context):
     """A child window's position must be where it is on screen, not where it is inside its parent.
 
     Windows and child windows have no `rect_min`, so this cannot be read off DPG directly — and
@@ -184,7 +200,7 @@ def test_get_widget_pos_is_viewport_coordinates_however_deeply_nested(dpg_contex
 
 
 @pytest.mark.gui
-def test_a_park_has_to_be_renewed_every_frame_to_hold(dpg_context):
+def test_a_park_has_to_be_renewed_every_frame_to_hold(mapped_dpg_context):
     """ImGui pulls a parked window back inside the viewport on the frame after it was positioned.
 
     Parking a window offscreen is how a caller measures one before placing it, and the pattern is only
