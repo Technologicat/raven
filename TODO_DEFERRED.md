@@ -13,6 +13,43 @@ importer first. Recorded here rather than in that item because a trigger nobody 
 the tool for finding things in the backlog cannot be gated on someone remembering to look for it *in* the
 backlog. The recurring moment to ask is the triage step in the release procedure.
 
+## `fetch_document` inlines up to eleven times what `webfetch` would move out of the log
+
+*Cluster: librarian-context · Cost: M — the design is the work · Gate: none · Filed: 2026-08-25*
+
+`scaffold` moves a long tool result into a content-addressed attachment when the tool declares
+`fetched_document` in its metadata and the text passes `config.tool_result_attachment_threshold` (4000
+characters). The mechanism is generic over tools. `webfetch` declares it. **`fetch_document` does not**, so
+its output is inlined into the branch and stays there — and its own ceiling is
+`docs_fetch_max_fraction_of_context` = 0.10, about 13000 tokens or very roughly 46000 characters on a
+131072-token window. One call can therefore inline eleven times the size at which a fetched *web page*
+would have been moved out.
+
+**The asymmetry is half-deliberate, which is why the fix is not just declaring the key.** A web page has no
+local copy, so content-addressing it is a gain in itself — the stored text survives the page going away. A
+document from the local database *is already a file*; copying it into a sidecar duplicates bytes to buy
+nothing but the budgeting.
+
+So the interesting shape is a `text_file` part *referencing the document that already exists*, which would
+let `fit_attachments_to_context` re-size it at every wire build instead of freezing one fitted excerpt into
+the branch forever. What blocks that today is addressing: `sidecar:` URLs name a copy inside the datastore,
+and there is no scheme for "a document in the local database". That is the design work, and it is the whole
+item.
+
+Note what the current code does buy, so it is not lost in a rewrite: `fetch_document` fits its answer to the
+*remaining* context before returning (`budget_for_fetched_text` / `fit_text_to_token_budget`), so it cannot
+run away. The cost is that the fit happens once, against the conversation as it was at fetch time, and the
+result then competes with everything that comes after it.
+
+**A related question, answered and closed** (Juha, 2026-08-25): should `chatutil.format_docs_matches` return
+content parts rather than one text blob, now that content parts are useful? For search *results*,
+no — the structure parts would carry is already carried by metadata, twice: `document_ids` drives the GUI's
+document chips through `chat_controller._render_document_reference`, and `fetched_document` drives the
+sidecar path above. A third channel for the same information buys nothing, and the model sees identical text
+either way once the wire build joins the parts. What parts would uniquely enable is a *non-text* result — a
+figure from a paper as an `image_url` part on a VLM — which is a feature worth wanting on its own merits
+rather than a tidy-up. The whole-document tool above is where parts would earn their place.
+
 ## The context-fill meter reads ~1% on the first visit to a branch whose attachments are not extracted yet
 
 *Cluster: librarian-responsiveness · Cost: S · Gate: none · Filed: 2026-08-22 · Re-measured 2026-08-24, and narrowed against the running app 2026-08-25 · See also: `investigations/prompt-size-cache-relative/`*
