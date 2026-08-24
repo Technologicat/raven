@@ -65,9 +65,9 @@ llm_backend_flavor = None
 # the backend knows (see the list at `GET {llm_backend_url}/v1/models`).
 llm_model = None
 
-# Optional local HuggingFace tokenizer for *exact* token counting against backends without a token-count
-# endpoint (LM Studio, generic). `None` (default) disables it; counts then fall back to the backend's `usage`
-# stats and a calibrated tokens-per-character estimate.
+# Optional local tokenizer for *exact* token counting against backends without a token-count endpoint
+# (LM Studio, generic). `None` (default) disables it; counts then fall back to the backend's `usage` stats
+# and a calibrated tokens-per-character estimate.
 #
 # Value: any of three, distinguished by what is found at the path.
 #
