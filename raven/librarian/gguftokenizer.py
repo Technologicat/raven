@@ -158,7 +158,11 @@ def load(gguf_path: pathlib.Path) -> Optional[Any]:
     file's tensor metadata on the way past — so call this off any thread that must stay responsive.
     """
     try:
-        import gguf  # noqa: PLC0415 -- heavy, and only this path needs it
+        # Deferred because only this path needs them, not because they are dear: measured together at ~46 ms
+        # against `llmclient`'s own 1282 ms to import. What the deferral does buy is that a broken install
+        # degrades to estimating here, alongside every other reason this function declines, instead of making
+        # `llmclient` unimportable.
+        import gguf  # noqa: PLC0415
         from tokenizers import Tokenizer, models, pre_tokenizers, decoders, Regex  # noqa: PLC0415
     except ImportError as exc:
         logger.warning(f"load: cannot read '{gguf_path}': {type(exc)}: {exc}. Falling back to token estimates.")
