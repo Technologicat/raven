@@ -3437,6 +3437,18 @@ the same chat). Cleanest approach: the turn captures its branch identity at star
 on view/HEAD if HEAD has since been switched to a different branch. Consider also disabling new-chat / nav
 while a turn is in flight as a cheap interim guard.
 
+**That approach is already implemented once, one item down.** `_context_prefill_entrypoint` captures
+`task_env.head_node_id` at start and compares it against `app_state["HEAD"]` at *each* point where it
+resumes after waiting — after the idle delay, after reading the attachments, and after the backend returns —
+bailing without touching the readout if HEAD has moved. Three checks rather than one, because each wait is
+its own chance for the user to navigate away; a turn has at least as many.
+
+So part (b) is not a design question here. It is that guard applied to a path with more to put back: a turn
+also renders, finalizes a message, and moves HEAD, where the prefill only writes one number.
+
+**Paired with the abortable prefill** (below), decided 2026-08-25: both are about what happens to in-flight
+backend work when the user changes HEAD, and the two fixes meet in the same entrypoints.
+
 Discovered during brief 02 LM Studio live validation (2026-06-04).
 
 ## Idle prefill fires even when the HEAD's token count is already exact (redundant, and slows the next turn)
@@ -3487,6 +3499,11 @@ to save work later, so it has no claim on the backend the moment there is real w
 costs only the warming it had not finished doing, while the alternative makes the user wait for a
 speculative request to finish. Mechanically that means holding the `requests` response and closing it from
 outside, which is what `task_env.cancelled` should drive instead of only being read between steps.
+
+**Paired with the turn-sequencing race** (above), decided 2026-08-25. Do them in one session: they are the
+two halves of *what happens to in-flight backend work when the user changes HEAD*, and each has a piece the
+other needs — this item has to learn to abandon a blocking request, which is what cancelling an in-flight
+turn also needs, and that item can copy this one's branch-identity guard.
 
 Discovered during brief 02 PR-B work, reported by Juha from live LM Studio use (2026-06-04).
 

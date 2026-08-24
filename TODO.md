@@ -13,8 +13,10 @@ file and the *selection* would otherwise not survive anywhere. Delete this block
 where the work is — it is an entry point, not a plan.
 
 1. **The prompt viewer** — below under *Librarian → Chat UI*, with its decisions already taken.
-2. **The abortable prefill** — `TODO_DEFERRED.md`, "Idle prefill fires even when the HEAD's token count is
-   already exact". Decision and rationale recorded; what is left is the mechanism.
+2. **The abortable prefill, together with the turn-sequencing race** — `TODO_DEFERRED.md`, "Idle prefill
+   fires even when the HEAD's token count is already exact" and "in-flight AI turn bleeds into a new chat".
+   Paired 2026-08-25 (Juha): both are about in-flight backend work outliving a HEAD change, and each entry
+   says what it takes from the other. Decisions and rationale recorded; what is left is the mechanism.
 3. **The `~1%` extraction window** — `TODO_DEFERRED.md`, "The context-fill meter reads ~1% on the first
    visit…". Now narrowed to a few seconds; the cheap fix is estimating an unread attachment from its
    sidecar's byte size.

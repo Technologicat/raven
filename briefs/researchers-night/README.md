@@ -86,6 +86,25 @@ Cherrypick. Most of what the day cost was found by *using* it rather than by wri
 itself, a rebuild per click, a re-decode per keystroke, and a missing multi-selection path — none of which a
 test suite would have raised on its own.
 
+### Four weeks out, 2026-08-25
+
+Raised by Juha at the end of the 08-24/25 session, and recorded rather than acted on — the scheduling
+itself is the next session's first job, not this note's.
+
+**A prioritization pass is owed before any of it starts.** The concrete list under `TODO.md` → *Autumn 2026*
+is dated 2026-07-28, sixty days out; a month of work has landed against it since, and nobody has asked
+which of its entries are now done, stale, or newly urgent. Re-deciding item by item as each comes up is the
+expensive way to answer that.
+
+What was named as still open, at the point of naming:
+
+- **`crt-display` and `atmospheric-dust`.** Unchanged in scope; both still briefed and unstarted, and the
+  dust-as-slack ranking from 2026-08-05 still stands.
+- **The turn-sequencing race**, "at least" — with **the abortable prefill**, which it was paired with the
+  same evening. Both are in `TODO_DEFERRED.md` and each entry says what it takes from the other. This is the
+  one piece of demo *correctness* that got named by hand tonight, which is not the same as it being the
+  worst one; that is what the pass is for.
+
 ### Two of these are power multipliers, and it is worth naming the category
 
 Drag-and-drop (shipped 2026-08-10) and **15** are not features for end users at all. They are tooling that
