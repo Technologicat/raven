@@ -69,11 +69,23 @@ llm_model = None
 # endpoint (LM Studio, generic). `None` (default) disables it; counts then fall back to the backend's `usage`
 # stats and a calibrated tokens-per-character estimate.
 #
-# Value: a path to a directory containing `tokenizer.json` + `tokenizer_config.json`, or a HuggingFace repo id
-# (e.g. "Qwen/Qwen3.5-4B"). The tokenizer files are tiny (~10-15 MB) and load in milliseconds. It MUST match
-# the served model, or counts will be confidently wrong — `invoke` cross-checks against the backend's reported
-# `usage` and logs a warning on a large mismatch. ooba has its own exact endpoint, so this is mainly for
-# LM Studio / generic when you co-locate the model files with the client.
+# Value: any of three, distinguished by what is found at the path.
+#
+#   - **A directory of model files to search.** The usual choice, and the one that survives switching models:
+#     the `.gguf` matching whatever the backend reports serving is picked out of it, past the quantization
+#     (a `Q8_0` on disk answers for a loaded `Q4_K_XL`) and through symbolic links. Point it at your model
+#     archive rather than at one backend's folder. The backend may be on another machine; the archive has to
+#     be reachable from this one by a file path, mounted or local.
+#   - **A single `.gguf`.** What a llama.cpp-family backend serves; it carries the vocabulary and the merges.
+#   - **A HuggingFace tokenizer directory** (`tokenizer.json` + `tokenizer_config.json`) or repo id, e.g.
+#     "Qwen/Qwen3.5-4B". Tiny (~10-15 MB) and loads in milliseconds.
+#
+# A `.gguf` is slower to read (~7 s, in the GGUF reader rather than in the tokenizer), so it is loaded on a
+# background thread: the readout starts as an estimate and sharpens once it is ready.
+#
+# It MUST match the served model, or counts would be confidently wrong — so a tokenizer is checked against
+# the backend before it is used, by comparing how the two count two short probes. A tokenizer that disagrees
+# is refused and the estimate stays. ooba has its own exact endpoint and needs none of this.
 llm_tokenizer_path = None
 
 # Idle delay (seconds) before the GUI fires a background "context prefill" on the current branch.
