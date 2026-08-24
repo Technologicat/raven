@@ -45,7 +45,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 import json
-from typing import Any, Callable, Dict, List, Optional, Tuple, TYPE_CHECKING, Union
+from typing import Any, Callable, TYPE_CHECKING
 
 from unpythonic import dyn, make_dynvar, timer, uniqify
 from unpythonic.env import env
@@ -227,7 +227,7 @@ def _formatters() -> env:
 
 
 def websearch(query: str,
-              engine: Optional[str] = None) -> List[Dict[str, str]]:
+              engine: str | None = None) -> list[dict[str, str]]:
     """Perform a websearch via Raven-server; return the results as content parts, one text part per result.
 
     `engine`: search backend, "duckduckgo" or "google". `None` (the default) uses the configured
@@ -251,7 +251,7 @@ def websearch(query: str,
                                              librarian_config.web_num_results)  # -> {"results": preformatted_text, "data": structured_results}
     structured_results = websearch_results["data"]
 
-    def format_result_part(result: Dict[str, str]) -> Dict[str, str]:
+    def format_result_part(result: dict[str, str]) -> dict[str, str]:
         text = common_text.normalize(result.get("text", ""))
         title = common_text.normalize(result.get("title", ""))
         link = common_text.normalize(result.get("link", ""))
@@ -304,12 +304,19 @@ def approve_host_for_session(host: str) -> None:
 # `raven.server.modules.websearch`) precisely because the two never touch: the memoized function
 # (websearch) does not read the allowlist, and the allowlist-reading function (this one) is not
 # memoized. Keep it that way.
-def webfetch(url: str) -> str | tuple[str, dict]:
+def webfetch(url: str) -> tuple[str, dict]:
     """Fetch a web page's main content, gated by the client-side domain allowlist.
 
     Tool entrypoint for the LLM's `webfetch` tool. Enforces the allowlist policy (which constrains
     the AI's *initiative*), then delegates the actual fetch to Raven-server, which enforces the
     network-level safety (SSRF / scheme blocking) and does the two-tier extraction.
+
+    Returns `(what the model reads, metadata for the frontends)` on *every* path, refusals included —
+    `perform_tool_calls` unpacks the pair and hands the second half on as `tool_metadata`. One of two
+    keys is present: `fetched_document` when something was fetched, naming the URL the server actually
+    landed on and the page title, which is what lets `scaffold` store a long page as an attachment
+    rather than dumping it into the chat log; or `webfetch_denied_host` when the allowlist refused,
+    which is what the GUI's "approve this host and retry" override reads off the tool node.
 
     Reads `dyn.tool_context.webfetch_allowed_hosts` — the per-turn set of hosts the user auto-allowed
     by typing their URLs this turn (and, with `librarian_config.webfetch_trust_search_results`, this
@@ -368,7 +375,7 @@ CANONICAL_NO_DOCUMENT_DATABASE = ("The document database is not available in thi
 CANONICAL_NO_DOCUMENT_MATCHES = ("The document database contains no matches for that query. A differently "
                                  "worded query may match, since this search is over the documents' own wording.")
 
-def search_documents(query: str) -> Tuple[Union[str, List[Dict]], Dict]:
+def search_documents(query: str) -> tuple[str | list[dict], dict]:
     """Search the local document database (RAG); return the matches formatted for the LLM.
 
     Tool entrypoint for the LLM's `search_documents` tool - the model-driven counterpart to the automatic
@@ -413,7 +420,7 @@ def search_documents(query: str) -> Tuple[Union[str, List[Dict]], Dict]:
 CANONICAL_NOTHING_CONSULTED = ("This conversation has not looked at any documents from the knowledge base yet. "
                                "Search for some with `search_documents`.")
 
-def list_consulted_documents() -> Tuple[str, Dict]:
+def list_consulted_documents() -> tuple[str, dict]:
     """List the knowledge-base documents this conversation has already looked at, by ID.
 
     Tool entrypoint for the LLM's `list_consulted_documents` tool. It answers a question the transcript
@@ -448,8 +455,8 @@ CANONICAL_NO_ROOM_TO_FETCH = ("There is not enough room left in this conversatio
                               "Suggest starting a new chat if the user wants to work through it.")
 
 def fetch_document(document_id: str,
-                   offset: Optional[int] = None,
-                   length: Optional[int] = None) -> Tuple[Union[str, List[Dict]], Dict]:
+                   offset: int | None = None,
+                   length: int | None = None) -> tuple[str | list[dict], dict]:
     """Read a document from the local database by ID; return its text, cut to what the context can hold.
 
     Tool entrypoint for the LLM's `fetch_document` tool — the internal-engine counterpart of `webfetch`,
@@ -501,8 +508,8 @@ def fetch_document(document_id: str,
               f"of {len(text)} total.]")
     return (f"{header}\n\n{fitted}", {"grounding": True, "document_ids": [document_id]})
 
-def document_text(retriever: "Optional[hybridir.HybridIR]",
-                  document_id: str) -> Optional[str]:
+def document_text(retriever: "hybridir.HybridIR | None",
+                  document_id: str) -> str | None:
     """Read one document's full text out of the retriever, or `None` if it has no such document.
 
     The lock is not optional: `documents` is rewritten wholesale when the retriever commits a batch of
@@ -514,8 +521,8 @@ def document_text(retriever: "Optional[hybridir.HybridIR]",
         document = retriever.documents.get(document_id)
         return document["text"] if document is not None else None
 
-def document_path(retriever: "Optional[hybridir.HybridIR]",
-                  document_id: str) -> Optional[str]:
+def document_path(retriever: "hybridir.HybridIR | None",
+                  document_id: str) -> str | None:
     """Read one document's original file path out of the retriever, or `None` if it has no such document.
 
     The sibling of `document_text`, with the same locking discipline and for the same reason: `documents` is
@@ -532,8 +539,8 @@ def document_path(retriever: "Optional[hybridir.HybridIR]",
         document = retriever.documents.get(document_id)
         return document["path"] if document is not None else None
 
-def label_documents(retriever: "Optional[hybridir.HybridIR]",
-                    entries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def label_documents(retriever: "hybridir.HybridIR | None",
+                    entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Fill in each entry's `label` from the document it names (`chatutil.document_label`), and whether it is `present`.
 
     `entries`: one dict per knowledge-base document the conversation has consulted, as
@@ -649,10 +656,10 @@ def maybe_tool_names_for_turn(settings: env,
     return tuple(sorted(set(settings.tool_entrypoints) - withheld))
 
 def perform_tool_calls(settings: env,
-                       message: Dict,
-                       on_call_start: Optional[Callable],
-                       on_call_done: Optional[Callable],
-                       maybe_refusal_text: Optional[str] = None) -> List[env]:
+                       message: dict,
+                       on_call_start: Callable | None,
+                       on_call_done: Callable | None,
+                       maybe_refusal_text: str | None = None) -> list[env]:
     """Perform tool calls as requested in `message["tool_calls"]`.
 
     Returns a list of chat payloads (where each message's `role="tool"`) containing the tool outputs,
@@ -666,7 +673,7 @@ def perform_tool_calls(settings: env,
                           the tools themselves on offer - see `raven.librarian.scaffold.ai_turn`, which
                           uses it when the turn's tool-call budget is spent.
 
-    `on_call_start`: 3-argument callable: `(tool_call_id: str, function_name: str, arguments: Dict[str, Any])`.
+    `on_call_start`: 3-argument callable: `(tool_call_id: str, function_name: str, arguments: dict[str, Any])`.
 
                      The return value of the event is ignored.
 
@@ -728,12 +735,12 @@ def perform_tool_calls(settings: env,
     logger.info(f"perform_tool_calls: The LLM requested {len(tool_calls)} tool call{plural_s}.")
 
     tool_response_records = []
-    def add_tool_response_record(output: Union[str, List[Dict]], *,
+    def add_tool_response_record(output: str | list[dict], *,
                                  status: str,
-                                 tool_call_id: Optional[str],
-                                 function_name: Optional[str] = None,  # unknown when the request was too malformed to name a tool
-                                 dt: Optional[float] = None,  # absent when nothing was called, so nothing was timed
-                                 tool_metadata: Optional[Dict] = None) -> None:
+                                 tool_call_id: str | None,
+                                 function_name: str | None = None,  # unknown when the request was too malformed to name a tool
+                                 dt: float | None = None,  # absent when nothing was called, so nothing was timed
+                                 tool_metadata: dict | None = None) -> None:
         """Add a tool response record to `tool_response_records`.
 
         `output` is the tool result: either a plain string (wrapped as a single text content-part) or an
@@ -746,19 +753,19 @@ def perform_tool_calls(settings: env,
 
             `status`: str: Values "success" or "error" are recommended.
 
-            `tool_call_id`: Optional[str]: ID of this tool call (can be matched against the `id` in the
+            `tool_call_id`: str | None: ID of this tool call (can be matched against the `id` in the
                            `tool_calls` list of the AI chat message that spawned this call).
 
                            The ID should be included whenever it was present in the tool call request record.
 
-            `function_name`: Optional[str]: Which tool was called (or at least attempted),
+            `function_name`: str | None: Which tool was called (or at least attempted),
                              if the call got that far. If it didn't, this is `None`.
 
-            `dt`: Optional[float]: Duration of this tool call, in seconds. Recommended to be included whenever
+            `dt`: float | None: Duration of this tool call, in seconds. Recommended to be included whenever
                                    the request was valid enough to actually proceed to call the function
                                    (so that the call timing can be measured).
 
-            `tool_metadata`: Optional[Dict]: Structured metadata the entrypoint attached to this result
+            `tool_metadata`: dict | None: Structured metadata the entrypoint attached to this result
                              (by returning `(output, metadata)` instead of a bare `output`). The caller
                              (`scaffold`) merges it into the tool node's `generation_metadata`. Used e.g.
                              by `webfetch` to record `webfetch_denied_host` for the GUI override.
