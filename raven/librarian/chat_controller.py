@@ -947,12 +947,34 @@ class DPGChatMessage:
                       the buttons go into a group.
         """
         # NOTE: If you add or remove buttons here, update also `number_of_message_buttons` (search for it in this module).
+        #
+        # The builders below add their buttons to `g` in the order they are called, and DPG lays a horizontal
+        # group out in creation order — so this call order *is* the left-to-right order on screen. Reordering
+        # them rearranges the button row, which is why each builder holds one group of adjacent buttons and
+        # none of them is independent of its neighbours' position.
+        role = self.role
+        g = dpg.add_group(horizontal=True, tag=f"{role}_message_buttons_group_{self.gui_uuid}", parent=gui_parent)
 
+        self._build_copy_button(g)
+
+        # These are needed for enabling/disabling some buttons.
+        system_prompt_node_ids = _get_all_system_prompt_node_ids(datastore=self.parent_view.chat_controller.datastore)
+        greeting_node_ids = _get_all_greeting_node_ids(datastore=self.parent_view.chat_controller.datastore)
+
+        self._build_regeneration_buttons(g, greeting_node_ids)
+        self._build_edit_button(g)
+        self._build_branching_buttons(g, system_prompt_node_ids, greeting_node_ids)
+        self._build_tool_approval_button(g)
+        self._build_navigation_buttons(g)
+
+    def _build_copy_button(self, g) -> None:
+        """Copy this message to the clipboard.
+
+        `g`: the horizontal group the buttons go into.
+        """
         role = self.role
         persona = self.persona
         node_id = self.node_id
-
-        g = dpg.add_group(horizontal=True, tag=f"{role}_message_buttons_group_{self.gui_uuid}", parent=gui_parent)
 
         # dpg.add_spacer(tag=f"ai_message_buttons_spacer_{self.gui_uuid}",
         #                parent=g)
@@ -1006,9 +1028,14 @@ class DPGChatMessage:
         copy_message_tooltip = self._add_tooltip(copy_message_button,
                                                  "Copy message to clipboard\n    no modifier: as-is\n    with Shift: include message node ID")
 
-        # These are needed for enabling/disabling some buttons.
-        system_prompt_node_ids = _get_all_system_prompt_node_ids(datastore=self.parent_view.chat_controller.datastore)
-        greeting_node_ids = _get_all_greeting_node_ids(datastore=self.parent_view.chat_controller.datastore)
+    def _build_regeneration_buttons(self, g, greeting_node_ids) -> None:
+        """Run this AI message again, continue it, or speak it: the three that act on the AI's own output.
+
+        `g`: the horizontal group the buttons go into.
+        `greeting_node_ids`: from `_get_all_greeting_node_ids`; a greeting is not rerolled or continued.
+        """
+        role = self.role
+        node_id = self.node_id
 
         # Rerolling for AI messages
         if role == "assistant":
@@ -1128,6 +1155,11 @@ class DPGChatMessage:
         else:
             dpg.add_spacer(width=gui_config.toolbutton_w, height=1, parent=g)
 
+    def _build_edit_button(self, g) -> None:
+        """Revise this message. Present but not yet implemented.
+
+        `g`: the horizontal group the buttons go into.
+        """
         dpg.add_button(label=fa.ICON_PENCIL,
                        callback=lambda: None,  # TODO
                        enabled=False,
@@ -1138,6 +1170,13 @@ class DPGChatMessage:
         dpg.bind_item_theme(f"chat_edit_button_{self.gui_uuid}", "disablable_widget_theme")  # tag
         edit_tooltip = dpg.add_tooltip(f"chat_edit_button_{self.gui_uuid}")  # tag
         dpg.add_text("Edit (revise)", parent=edit_tooltip)
+
+    def _build_branching_buttons(self, g, system_prompt_node_ids, greeting_node_ids) -> None:
+        """Branch the chat here, or delete this node and everything under it: the two that change the tree.
+
+        `g`: the horizontal group the buttons go into.
+        """
+        node_id = self.node_id
 
         # Branch chat at this node
         #
@@ -1242,6 +1281,19 @@ class DPGChatMessage:
         delete_subtree_tooltip = self._add_tooltip(f"message_delete_branch_button_{self.gui_uuid}",  # tag
                                                    "Delete branch (subtree starting from this node, ALL descendants!)")
 
+        # # TODO: Meh, `raven.common.gui.animation.WidgetFlash` doesn't play together with `dpg_markdown`.
+        # c_red = '<font color="(255, 96, 96)">'
+        # c_end = '</font>'
+        # delete_subtree_tooltip_text = dpg_markdown.add_text(f"Delete branch (this node and {c_red}**all**{c_end} descendants!)", parent=delete_subtree_tooltip)
+
+    def _build_tool_approval_button(self, g) -> None:
+        """Approve a host the allowlist refused, and retry that one fetch. Only on a denied `webfetch` result.
+
+        `g`: the horizontal group the buttons go into.
+        """
+        role = self.role
+        node_id = self.node_id
+
         # "Approve denied host & retry" override. Appears ONLY on a webfetch tool result that the client-side
         # allowlist refused (such a node carries `webfetch_denied_host` in its generation_metadata, set by
         # `llmclient.webfetch_wrapper`). Clicking it approves the host for this session and re-runs that one
@@ -1291,10 +1343,12 @@ class DPGChatMessage:
             approve_retry_tooltip = dpg.add_tooltip(approve_retry_button)
             dpg.add_text(f"Approve host '{maybe_denied_host}' for this session, and retry the fetch (on a new branch)", parent=approve_retry_tooltip)
 
-        # # TODO: Meh, `raven.common.gui.animation.WidgetFlash` doesn't play together with `dpg_markdown`.
-        # c_red = '<font color="(255, 96, 96)">'
-        # c_end = '</font>'
-        # delete_subtree_tooltip_text = dpg_markdown.add_text(f"Delete branch (this node and {c_red}**all**{c_end} descendants!)", parent=delete_subtree_tooltip)
+    def _build_navigation_buttons(self, g) -> None:
+        """Step between this message's siblings, or jump to where its branch continues.
+
+        `g`: the horizontal group the buttons go into.
+        """
+        node_id = self.node_id
 
         datastore = self.parent_view.chat_controller.datastore
         def descend(start_node_id: str) -> str:
