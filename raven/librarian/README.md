@@ -383,11 +383,12 @@ print(record.reply)
 
 The record carries the reply, the reasoning the model emitted but did not send, how many tool rounds the turn took and which tools it called how often, whether the reply had retrieved material to stand on, and the prompts actually put on the wire. That last one is often the point: it is the same prompt the GUI would have sent, available for inspection without a window.
 
-Three things are worth knowing before scripting against it:
+Four things are worth knowing before scripting against it:
 
 - **Nothing overwrites anything.** The chat is a tree, so a retry, a reroll, or a second phrasing of the same question is a new branch off the same parent — the attempt that failed and the one that worked are both there afterwards, as are all four samples of a turn you sampled four times. A batch's whole record of what it did is therefore a chat in *Librarian*'s own format, with no separate run log to keep.
 - **A run against the configured datastore is waiting in the GUI afterwards.** *Librarian* opens the datastore named in [`raven.librarian.config`](config.py) and no other, so a script that points there can be inspected by opening the app; a script that builds its own is readable programmatically and nowhere else.
-- **The network is off by default.** `internet_enabled=False`, so `websearch` and `webfetch` are not offered unless you ask for them. The document tools are on.
+- **The network is off by default.** `internet_enabled=False`, so `websearch` and `webfetch` are not offered unless you ask for them.
+- **The document tools are on by default.** They need a corpus to reach, though: pass a `retriever`, or there is nothing for them to search and no automatic search runs either.
 
 The reference documentation is the module's own docstrings — `agent.turn` carries worked examples, and the executable ones are in [`test_agent.py`](tests/test_agent.py), which drives the real loop against a faked backend. If you use a coding assistant, pointing it at [`agent.py`](agent.py) is enough to get it writing against this surface; the module is written to be read that way.
 
