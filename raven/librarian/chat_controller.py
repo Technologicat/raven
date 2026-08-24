@@ -3575,16 +3575,31 @@ class DPGChatController:
             self.llm_settings,
             documents_available=(self.app_state["docs_enabled"] and self.retriever is not None),
             internet_available=self.app_state["internet_enabled"])
-        out = llmclient.prefill(self.llm_settings,
-                                history,
-                                # All the per-group gating is in `maybe_tool_names` now, so this coarser
-                                # switch has nothing left to decide and stays on. It is not redundant at its
-                                # own layer: `ai_turn` still sets it `False` to withdraw the tools outright
-                                # when the round budget is spent — which cannot happen at prefill time,
-                                # since what is being warmed is the *first* round of the next turn.
-                                tools_enabled=True,
-                                tool_names=maybe_tool_names,
-                                datastore=self.datastore)  # resolve any sidecar: image refs so the exact prompt size counts image tokens
+        # SYSTEM means "the backend is reading a prompt and has emitted nothing yet" — that is what the turn
+        # path uses it for (`on_llm_start` raises it, the first content chunk drops it). A prefill is the same
+        # activity on a different trigger, so it says so too (Juha, 2026-08-25). Only around the request: the
+        # extraction above is local work, and claiming the backend is busy during it would be a lie about
+        # where the time goes.
+        if self.gui_updates_safe:
+            if self.indicator_glow_animation is not None:
+                self.indicator_glow_animation.reset()  # start a new pulsation cycle
+            dpg.show_item(self.llm_indicator_widget)  # tag
+        try:
+            out = llmclient.prefill(self.llm_settings,
+                                    history,
+                                    # All the per-group gating is in `maybe_tool_names` now, so this coarser
+                                    # switch has nothing left to decide and stays on. It is not redundant at
+                                    # its own layer: `ai_turn` still sets it `False` to withdraw the tools
+                                    # outright when the round budget is spent — which cannot happen at prefill
+                                    # time, since what is being warmed is the *first* round of the next turn.
+                                    tools_enabled=True,
+                                    tool_names=maybe_tool_names,
+                                    datastore=self.datastore)  # resolve any sidecar: image refs so the exact prompt size counts image tokens
+        finally:
+            # Not if a turn started while we were waiting: it raised the same indicator for its own prompt,
+            # and dropping it here would report that turn as further along than it is.
+            if self.gui_updates_safe and not self.is_generating():
+                dpg.hide_item(self.llm_indicator_widget)  # tag
 
         if task_env.cancelled or not self.gui_updates_safe:
             return
