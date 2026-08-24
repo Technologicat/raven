@@ -95,6 +95,12 @@ def test_the_model_calls_a_tool_and_the_result_reaches_the_reply(llm_settings):
     and internet are switched off explicitly rather than left to config, so a machine that enables them by
     default does not turn this into a web search.
 
+    **`use_character_card=False` is what makes the call necessary, and is not tidiness.** With the card on,
+    `scaffold.build_turn_prompt` stages the current time as a synthetic `get_current_time` exchange before
+    the user's message — the clock inject is gated on `tools_enabled and use_character_card` — so the model
+    would already have the answer and would be right not to call anything. Turning the card off is what
+    leaves the tool as the only route to the time.
+
     What is asserted stops at *a* call having been made and answered. Which tool a model reaches for is its
     own judgement, and a model that also consults the clock twice is not wrong.
 
