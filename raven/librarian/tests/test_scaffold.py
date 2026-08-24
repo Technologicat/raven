@@ -1635,7 +1635,7 @@ class TestSpentToolsNotice:
 # ---------------------------------------------------------------------------
 
 def make_fetch_response(text, *, url="https://example.com/paper", title="A Paper", tool_call_id="call_0"):
-    """A faked successful `webfetch` record: declares `fetched_document`, as `llmclient.webfetch_wrapper` does."""
+    """A faked successful `webfetch` record: declares `fetched_document`, as `llmclient.webfetch` does."""
     return env(data={"role": "tool",
                      "content": chatutil.normalize_content(text),
                      "tool_calls": None},
@@ -1658,7 +1658,7 @@ class TestDocumentDisplayName:
         assert self._name("https://arxiv.org/abs/1706.03762", "Attention Is All You Need") == "arxiv.org - Attention Is All You Need"
 
     def test_a_titleless_page_is_named_by_its_host(self):
-        # `webfetch_wrapper` falls back to the URL as the title when a page has none; repeating the whole
+        # `webfetch` falls back to the URL as the title when a page has none; repeating the whole
         # URL after the host would be noise.
         url = "https://example.com/some/deep/path"
         assert self._name(url, url) == "example.com"

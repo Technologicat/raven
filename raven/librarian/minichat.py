@@ -681,7 +681,7 @@ def minimal_chat_client(backend_url) -> None:
 
 def main() -> None:
     backend_url = opts.backend_url if opts.backend_url is not None else librarian_config.llm_backend_url
-    # print(llmclient.websearch_wrapper("what is the airspeed velocity of an unladen swallow"))  # DEBUG
+    # print(llmclient.websearch("what is the airspeed velocity of an unladen swallow"))  # DEBUG
     minimal_chat_client(backend_url)
 
 if __name__ == "__main__":

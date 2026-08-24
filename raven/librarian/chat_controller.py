@@ -1302,7 +1302,7 @@ class DPGChatMessage:
 
         # "Approve denied host & retry" override. Appears ONLY on a webfetch tool result that the client-side
         # allowlist refused (such a node carries `webfetch_denied_host` in its generation_metadata, set by
-        # `llmclient.webfetch_wrapper`). Clicking it approves the host for this session and re-runs that one
+        # `llmclient.webfetch`). Clicking it approves the host for this session and re-runs that one
         # fetch on a new branch — see `scaffold.retry_tool_calls`.
         #
         # This is a conditional, rare button, so it is intentionally NOT counted in `number_of_message_buttons`

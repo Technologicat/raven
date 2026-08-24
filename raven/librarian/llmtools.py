@@ -38,8 +38,8 @@ __all__ = ["TOOLS", "TOOL_ENTRYPOINTS", "DOCUMENT_TOOL_NAMES", "NETWORK_TOOL_NAM
 
            # The entrypoints themselves. `TOOL_ENTRYPOINTS` is how the agent loop reaches them, but they are
            # named here too: the tests call them directly, and so does anything driving one tool on purpose.
-           "websearch_wrapper", "webfetch_wrapper", "search_documents_wrapper", "fetch_document_wrapper",
-           "get_current_time_wrapper", "list_consulted_documents_wrapper"]
+           "websearch", "webfetch", "search_documents", "fetch_document",
+           "get_current_time", "list_consulted_documents"]
 
 import logging
 logger = logging.getLogger(__name__)
@@ -73,8 +73,8 @@ def _client_api():
                    raven_api_key_file=client_config.raven_api_key_file)  # let it create a default executor
     return api
 
-def websearch_wrapper(query: str,
-                      engine: Optional[str] = None) -> List[Dict[str, str]]:
+def websearch(query: str,
+              engine: Optional[str] = None) -> List[Dict[str, str]]:
     """Perform a websearch via Raven-server; return the results as content parts, one text part per result.
 
     `engine`: search backend, "duckduckgo" or "google". `None` (the default) uses the configured
@@ -131,7 +131,7 @@ def websearch_wrapper(query: str,
 # The one worth repeating is the security-relevant one:
 #   webfetch_allowed_hosts : frozenset[str]  — hosts auto-allowed for this turn (URLs the user typed,
 #                                              plus, if `webfetch_trust_search_results`, this turn's
-#                                              websearch-result hosts). Read by `webfetch_wrapper`.
+#                                              websearch-result hosts). Read by `webfetch`.
 #                                              Absent -> treated as empty (fail closed: no auto-allow).
 #
 # The process-wide default (an empty env) means a thread that never entered a `dyn.let` — e.g. a
@@ -160,7 +160,7 @@ CANONICAL_NOT_ON_ALLOWLIST = ("The host {host} is not on the configured allowlis
 
 # Hosts the user has explicitly approved during this session (in-memory; NOT persisted). Populated by
 # the GUI "allow this fetch" override when the user approves a host that `webfetch` denied. Consulted
-# by `webfetch_wrapper`'s gate alongside the configured allowlist and the per-turn auto-allow set.
+# by `webfetch`'s gate alongside the configured allowlist and the per-turn auto-allow set.
 # Session-scoped by design: persisting approvals is deferred to a future JSON-config migration — we do
 # NOT programmatically rewrite the `.py` config files (that reads as dangerous and is fragile).
 _session_approved_hosts: set[str] = set()
@@ -169,11 +169,11 @@ def approve_host_for_session(host: str) -> None:
     """Approve `host` for `webfetch` for the rest of this session (in-memory, not persisted).
 
     Used by the GUI override when the user allows a host the allowlist denied. Afterward,
-    `webfetch_wrapper` fetches from `host` even if it is not on `librarian_config.webfetch_allowlist`.
+    `webfetch` fetches from `host` even if it is not on `librarian_config.webfetch_allowlist`.
     """
     _session_approved_hosts.add(host.lower())
 
-# !!! DO NOT memoize `webfetch_wrapper` (or anything that wraps it). !!!
+# !!! DO NOT memoize `webfetch` (or anything that wraps it). !!!
 #
 # It is deliberately IMPURE: its result depends on two pieces of hidden state that are NOT in its
 # argument list — `dyn.tool_context.webfetch_allowed_hosts` (per-turn, set by the harness) and the
@@ -188,7 +188,7 @@ def approve_host_for_session(host: str) -> None:
 # `raven.server.modules.websearch`) precisely because the two never touch: the memoized function
 # (websearch) does not read the allowlist, and the allowlist-reading function (this one) is not
 # memoized. Keep it that way.
-def webfetch_wrapper(url: str) -> str | tuple[str, dict]:
+def webfetch(url: str) -> str | tuple[str, dict]:
     """Fetch a web page's main content, gated by the client-side domain allowlist.
 
     Tool entrypoint for the LLM's `webfetch` tool. Enforces the allowlist policy (which constrains
@@ -209,7 +209,7 @@ def webfetch_wrapper(url: str) -> str | tuple[str, dict]:
     if allowlist is not None:
         auto_allowed_hosts = getattr(dyn.tool_context, "webfetch_allowed_hosts", frozenset())
         if not (netutil.host_matches_allowlist(host, allowlist) or host in auto_allowed_hosts or host in _session_approved_hosts):
-            logger.info(f"webfetch_wrapper: refusing '{url}': host '{host}' not on allowlist, not user-allowed this turn, not session-approved.")
+            logger.info(f"webfetch: refusing '{url}': host '{host}' not on allowlist, not user-allowed this turn, not session-approved.")
             # Structured return: the canonical refusal for the model, plus metadata the GUI override reads
             # (on the resulting tool node) to offer "approve this host" and re-run with the fetch allowed.
             return (CANONICAL_NOT_ON_ALLOWLIST.format(host=(host or "(none)")),
@@ -218,7 +218,7 @@ def webfetch_wrapper(url: str) -> str | tuple[str, dict]:
     api = _client_api()
     result = api.webfetch_fetch(url)  # server enforces SSRF/scheme, fetches, returns {"content", "url", "spaSuspected", "title"}
     if result.get("spaSuspected"):
-        logger.info(f"webfetch_wrapper: '{result.get('url', url)}' flagged spaSuspected (neither fetch tier extracted usable content).")
+        logger.info(f"webfetch: '{result.get('url', url)}' flagged spaSuspected (neither fetch tier extracted usable content).")
     # Declare the result a fetched document, so `scaffold` can store a long one as an attachment sidecar
     # instead of dumping it into the chat log. Declared rather than inferred from the tool's name: the URL
     # the server actually ended up at (after rewriting and redirects) and the page's title are known only
@@ -243,7 +243,7 @@ CANONICAL_NO_DOCUMENT_DATABASE = ("The document database is not available in thi
 CANONICAL_NO_DOCUMENT_MATCHES = ("The document database contains no matches for that query. A differently "
                                  "worded query may match, since this search is over the documents' own wording.")
 
-def search_documents_wrapper(query: str) -> Tuple[Union[str, List[Dict]], Dict]:
+def search_documents(query: str) -> Tuple[Union[str, List[Dict]], Dict]:
     """Search the local document database (RAG); return the matches formatted for the LLM.
 
     Tool entrypoint for the LLM's `search_documents` tool - the model-driven counterpart to the automatic
@@ -269,7 +269,7 @@ def search_documents_wrapper(query: str) -> Tuple[Union[str, List[Dict]], Dict]:
     """
     retriever = getattr(dyn.tool_context, "retriever", None)
     if retriever is None:
-        logger.info("search_documents_wrapper: no retriever in the tool context; document database not in play this turn.")
+        logger.info("search_documents: no retriever in the tool context; document database not in play this turn.")
         return (CANONICAL_NO_DOCUMENT_DATABASE, {"grounding": False})
 
     matches = retriever.query(query,
@@ -277,7 +277,7 @@ def search_documents_wrapper(query: str) -> Tuple[Union[str, List[Dict]], Dict]:
                               max_span_length=librarian_config.docs_max_result_length,
                               return_extra_info=False)
     plural_s = "es" if len(matches) != 1 else ""
-    logger.info(f"search_documents_wrapper: {len(matches)} match{plural_s} for '{query}'.")
+    logger.info(f"search_documents: {len(matches)} match{plural_s} for '{query}'.")
     if not matches:
         return (CANONICAL_NO_DOCUMENT_MATCHES, {"grounding": False, "docs_query": query})
     return (_formatters().docs_matches(matches),
@@ -349,7 +349,7 @@ def label_documents(retriever: "Optional[hybridir.HybridIR]",
 CANONICAL_NOTHING_CONSULTED = ("This conversation has not looked at any documents from the knowledge base yet. "
                                "Search for some with `search_documents`.")
 
-def get_current_time_wrapper() -> str:
+def get_current_time() -> str:
     """Return the current local time.
 
     Tool entrypoint for the LLM's `get_current_time` tool. Returns exactly what the per-turn clock inject
@@ -363,7 +363,7 @@ def get_current_time_wrapper() -> str:
     """
     return _formatters().time_now()
 
-def list_consulted_documents_wrapper() -> Tuple[str, Dict]:
+def list_consulted_documents() -> Tuple[str, Dict]:
     """List the knowledge-base documents this conversation has already looked at, by ID.
 
     Tool entrypoint for the LLM's `list_consulted_documents` tool. It answers a question the transcript
@@ -382,14 +382,14 @@ def list_consulted_documents_wrapper() -> Tuple[str, Dict]:
     """
     entries = getattr(dyn.tool_context, "consulted_documents", None)
     if not entries:
-        logger.info("list_consulted_documents_wrapper: nothing consulted on this branch yet.")
+        logger.info("list_consulted_documents: nothing consulted on this branch yet.")
         return (CANONICAL_NOTHING_CONSULTED, {"grounding": False})
-    logger.info(f"list_consulted_documents_wrapper: {len(entries)} document(s).")
+    logger.info(f"list_consulted_documents: {len(entries)} document(s).")
     return (_formatters().consulted_documents(entries), {"grounding": False})
 
-def fetch_document_wrapper(document_id: str,
-                           offset: Optional[int] = None,
-                           length: Optional[int] = None) -> Tuple[Union[str, List[Dict]], Dict]:
+def fetch_document(document_id: str,
+                   offset: Optional[int] = None,
+                   length: Optional[int] = None) -> Tuple[Union[str, List[Dict]], Dict]:
     """Read a document from the local database by ID; return its text, cut to what the context can hold.
 
     Tool entrypoint for the LLM's `fetch_document` tool — the internal-engine counterpart of `webfetch`,
@@ -413,12 +413,12 @@ def fetch_document_wrapper(document_id: str,
     """
     retriever = getattr(dyn.tool_context, "retriever", None)
     if retriever is None:
-        logger.info("fetch_document_wrapper: no retriever in the tool context; document database not in play this turn.")
+        logger.info("fetch_document: no retriever in the tool context; document database not in play this turn.")
         return (CANONICAL_NO_DOCUMENT_DATABASE, {"grounding": False})
 
     text = document_text(retriever, document_id)
     if text is None:
-        logger.info(f"fetch_document_wrapper: no document with ID '{document_id}'.")
+        logger.info(f"fetch_document: no document with ID '{document_id}'.")
         return (CANONICAL_NO_SUCH_DOCUMENT, {"grounding": False})
 
     start = min(max(offset or 0, 0), len(text))
@@ -433,10 +433,10 @@ def fetch_document_wrapper(document_id: str,
     budget_tokens = llmclient.budget_for_fetched_text(settings, used_tokens=dyn.tool_context.used_tokens)
     fitted = llmclient.fit_text_to_token_budget(settings, span, budget_tokens)
     if not fitted:
-        logger.info(f"fetch_document_wrapper: no room to fetch '{document_id}' (budget {budget_tokens} tokens).")
+        logger.info(f"fetch_document: no room to fetch '{document_id}' (budget {budget_tokens} tokens).")
         return (CANONICAL_NO_ROOM_TO_FETCH, {"grounding": False})
 
-    logger.info(f"fetch_document_wrapper: '{document_id}' [{start}:{end}] -> {len(fitted)} of {len(span)} characters.")
+    logger.info(f"fetch_document: '{document_id}' [{start}:{end}] -> {len(fitted)} of {len(span)} characters.")
     header = (f"[System information: Document '{document_id}', characters {start} to {end} "
               f"of {len(text)} total.]")
     return (f"{header}\n\n{fitted}", {"grounding": True, "document_ids": [document_id]})
@@ -560,12 +560,12 @@ TOOLS = [
                                  "properties": {}}}}
 ]
 
-TOOL_ENTRYPOINTS = {"websearch": websearch_wrapper,
-                    "webfetch": webfetch_wrapper,
-                    "get_current_time": get_current_time_wrapper,
-                    "search_documents": search_documents_wrapper,
-                    "fetch_document": fetch_document_wrapper,
-                    "list_consulted_documents": list_consulted_documents_wrapper}
+TOOL_ENTRYPOINTS = {"websearch": websearch,
+                    "webfetch": webfetch,
+                    "get_current_time": get_current_time,
+                    "search_documents": search_documents,
+                    "fetch_document": fetch_document,
+                    "list_consulted_documents": list_consulted_documents}
 
 # The two gated groups, each answering to one user-facing toggle: "Documents" and "Internet". Callers gate
 # with `invoke`'s `tool_names`; `maybe_tool_names_for_turn` assembles the per-turn list, and
@@ -676,7 +676,7 @@ def perform_tool_calls(settings: env,
         """Add a tool response record to `tool_response_records`.
 
         `output` is the tool result: either a plain string (wrapped as a single text content-part) or an
-        already-built content-parts list — e.g. `websearch_wrapper`'s one-text-part-per-result output.
+        already-built content-parts list — e.g. `websearch`'s one-text-part-per-result output.
         Error reports are passed as plain strings.
 
         The record is an `unpythonic.env.env` with the following attributes:
@@ -700,7 +700,7 @@ def perform_tool_calls(settings: env,
             `tool_metadata`: Optional[Dict]: Structured metadata the entrypoint attached to this result
                              (by returning `(output, metadata)` instead of a bare `output`). The caller
                              (`scaffold`) merges it into the tool node's `generation_metadata`. Used e.g.
-                             by `webfetch_wrapper` to record `webfetch_denied_host` for the GUI override.
+                             by `webfetch` to record `webfetch_denied_host` for the GUI override.
         """
         content = chatutil.normalize_content(output)  # str -> single text part; parts list -> used verbatim
         tool_response_message = chatutil.create_message_from_parts("tool", content)

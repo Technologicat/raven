@@ -229,7 +229,7 @@ def _documents_named_by(payload: Dict) -> List[Tuple[str, Optional[str]]]:
       - An **assistant** node carries the automatic pre-turn search in its `retrieval` payload - the query
         Raven guessed from the user's message, and the matches it found.
       - A **tool** node carries what the model asked for itself, in the metadata its entrypoint declared
-        (`llmclient.search_documents_wrapper`, `llmclient.fetch_document_wrapper`). A fetch has no query,
+        (`llmclient.search_documents`, `llmclient.fetch_document`). A fetch has no query,
         which is why the query half of the pair is optional rather than a placeholder string.
     """
     named = []
@@ -623,7 +623,7 @@ def _document_display_name(document: Dict[str, str]) -> str:
     url = document.get("url") or ""
     title = (document.get("name") or "").strip()
     host = netutil.url_host(url) or ""
-    if title and title != url:  # `webfetch_wrapper` falls back to the URL when a page has no title
+    if title and title != url:  # `webfetch` falls back to the URL when a page has no title
         name = f"{host} - {title}" if host else title
     else:
         name = host or url or "fetched document"
@@ -640,7 +640,7 @@ def _attachmentify_tool_result(datastore: chattree.Forest,
     the store failed.
 
     Eligibility is *declared by the tool*, via a `fetched_document` entry in its returned metadata naming
-    the document's URL and title (`llmclient.webfetch_wrapper` is the one that does). Declaring rather than
+    the document's URL and title (`llmclient.webfetch` is the one that does). Declaring rather than
     matching on the tool's name is what keeps `websearch` inline at any length: its result is a list of
     links, and the links are the thing the user wants to click, so hiding them behind a chip would be a
     regression rather than a tidying. It also means a tool that returns a document opts in by saying so.

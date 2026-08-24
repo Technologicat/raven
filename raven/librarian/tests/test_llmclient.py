@@ -1,6 +1,6 @@
 """Unit tests for raven.librarian.llmclient.
 
-Currently focused on the client-side webfetch allowlist gating in `webfetch_wrapper` —
+Currently focused on the client-side webfetch allowlist gating in `webfetch` —
 the security-critical decision of whether a URL the model wants to fetch is permitted.
 The actual fetch (`api.webfetch_fetch`, HTTP to the server) is monkeypatched.
 """
@@ -103,21 +103,21 @@ class TestToolRegistry:
 class TestWebfetchWrapperGating:
     def test_no_allowlist_fetches_anything(self, monkeypatch, fake_fetch):
         _set_allowlist(monkeypatch, None)
-        text, metadata = llmclient.webfetch_wrapper("https://random-site.com/x")  # success returns (text, metadata)
+        text, metadata = llmclient.webfetch("https://random-site.com/x")  # success returns (text, metadata)
         assert "CONTENT of" in text
         assert fake_fetch == ["https://random-site.com/x"]
 
     def test_allowlisted_host_fetches(self, monkeypatch, fake_fetch):
         _set_allowlist(monkeypatch, ["*.arxiv.org"])
         with dyn.let(tool_context=env(webfetch_allowed_hosts=frozenset())):
-            text, metadata = llmclient.webfetch_wrapper("https://arxiv.org/html/2301.1")
+            text, metadata = llmclient.webfetch("https://arxiv.org/html/2301.1")
         assert "CONTENT of" in text
         assert fake_fetch == ["https://arxiv.org/html/2301.1"]
 
     def test_non_allowlisted_host_refused(self, monkeypatch, fake_fetch):
         _set_allowlist(monkeypatch, ["*.arxiv.org"])
         with dyn.let(tool_context=env(webfetch_allowed_hosts=frozenset())):
-            text, metadata = llmclient.webfetch_wrapper("https://evil.com/x")  # denial returns (text, metadata)
+            text, metadata = llmclient.webfetch("https://evil.com/x")  # denial returns (text, metadata)
         assert "not on the configured allowlist" in text
         assert metadata == {"webfetch_denied_host": "evil.com"}  # structured marker for the GUI override
         assert fake_fetch == []  # the request never reached the server
@@ -126,7 +126,7 @@ class TestWebfetchWrapperGating:
         # Host not on the configured list, but auto-allowed this turn (user typed it).
         _set_allowlist(monkeypatch, ["*.arxiv.org"])
         with dyn.let(tool_context=env(webfetch_allowed_hosts=frozenset({"user-typed.com"}))):
-            text, metadata = llmclient.webfetch_wrapper("https://user-typed.com/x")
+            text, metadata = llmclient.webfetch("https://user-typed.com/x")
         assert "CONTENT of" in text
         assert fake_fetch == ["https://user-typed.com/x"]
 
@@ -134,7 +134,7 @@ class TestWebfetchWrapperGating:
         # No dyn.let binding at all -> the process-wide empty-env default -> no auto-allow.
         # A non-listed host must be refused (fail closed), not fetched.
         _set_allowlist(monkeypatch, ["*.arxiv.org"])
-        text, metadata = llmclient.webfetch_wrapper("https://surprise.com/x")
+        text, metadata = llmclient.webfetch("https://surprise.com/x")
         assert "not on the configured allowlist" in text
         assert metadata == {"webfetch_denied_host": "surprise.com"}
         assert fake_fetch == []
@@ -142,7 +142,7 @@ class TestWebfetchWrapperGating:
     def test_canonical_refusal_names_the_host(self, monkeypatch, fake_fetch):
         _set_allowlist(monkeypatch, ["doi.org"])
         with dyn.let(tool_context=env(webfetch_allowed_hosts=frozenset())):
-            text, metadata = llmclient.webfetch_wrapper("https://blocked.example/path")
+            text, metadata = llmclient.webfetch("https://blocked.example/path")
         assert "blocked.example" in text
         assert metadata["webfetch_denied_host"] == "blocked.example"
 
@@ -159,13 +159,13 @@ class TestSessionApprovedHosts:
     def test_approve_lets_non_allowlisted_host_through(self, monkeypatch, fake_fetch, clean_session_approvals):
         _set_allowlist(monkeypatch, ["*.arxiv.org"])
         with dyn.let(tool_context=env(webfetch_allowed_hosts=frozenset())):
-            denied_text, denied_metadata = llmclient.webfetch_wrapper("https://blog.example/post")
+            denied_text, denied_metadata = llmclient.webfetch("https://blog.example/post")
             assert "not on the configured allowlist" in denied_text
             assert denied_metadata == {"webfetch_denied_host": "blog.example"}
             assert fake_fetch == []  # denied before approval
 
             llmclient.approve_host_for_session("blog.example")
-            allowed_text, _ = llmclient.webfetch_wrapper("https://blog.example/post")
+            allowed_text, _ = llmclient.webfetch("https://blog.example/post")
             assert "CONTENT of" in allowed_text
             assert fake_fetch == ["https://blog.example/post"]  # goes through after approval
 
@@ -173,13 +173,13 @@ class TestSessionApprovedHosts:
         _set_allowlist(monkeypatch, ["doi.org"])
         llmclient.approve_host_for_session("Example.COM")
         with dyn.let(tool_context=env(webfetch_allowed_hosts=frozenset())):
-            text, _ = llmclient.webfetch_wrapper("https://example.com/x")
+            text, _ = llmclient.webfetch("https://example.com/x")
         assert "CONTENT of" in text
 
     def test_approval_does_not_apply_when_allowlist_is_none(self, monkeypatch, fake_fetch, clean_session_approvals):
         # With no allowlist there is no gate anyway; approval is simply irrelevant (everything passes).
         _set_allowlist(monkeypatch, None)
-        text, _ = llmclient.webfetch_wrapper("https://anything.example/x")
+        text, _ = llmclient.webfetch("https://anything.example/x")
         assert "CONTENT of" in text
         assert fake_fetch == ["https://anything.example/x"]
 
@@ -319,7 +319,7 @@ class TestWebsearchWrapper:
             {"title": "First", "link": "https://example.com/1", "text": "snippet one"},
             {"title": "Second", "link": "https://example.com/2", "text": "snippet two"},
         ])
-        parts = llmclient.websearch_wrapper("query")
+        parts = llmclient.websearch("query")
         assert len(parts) == 2
         assert all(p["type"] == "text" for p in parts)
         assert "[First](https://example.com/1)" in parts[0]["text"]
@@ -332,13 +332,13 @@ class TestWebsearchWrapper:
         self._patch_search(monkeypatch, [
             {"title": f"Ti{zwsp}tle", "link": f"https://e.com/{zwsp}x", "text": f"bo{zwsp}dy"},
         ])
-        text = llmclient.websearch_wrapper("q")[0]["text"]
+        text = llmclient.websearch("q")[0]["text"]
         assert zwsp not in text  # removed from title, link, and body
         assert "Title" in text and "body" in text
 
     def test_result_without_title_falls_back_to_bare_url(self, monkeypatch):
         self._patch_search(monkeypatch, [{"link": "https://e.com/x", "text": "body"}])
-        text = llmclient.websearch_wrapper("q")[0]["text"]
+        text = llmclient.websearch("q")[0]["text"]
         assert "<https://e.com/x>" in text
 
     @staticmethod
@@ -355,13 +355,13 @@ class TestWebsearchWrapper:
         # The LLM tool passes only a query; the engine comes from config (host choice, not model choice).
         captured = self._patch_capture_engine(monkeypatch)
         monkeypatch.setattr(llmclient.librarian_config, "websearch_engine", "google")
-        llmclient.websearch_wrapper("q")
+        llmclient.websearch("q")
         assert captured["engine"] == "google"
 
     def test_explicit_engine_overrides_config(self, monkeypatch):
         captured = self._patch_capture_engine(monkeypatch)
         monkeypatch.setattr(llmclient.librarian_config, "websearch_engine", "google")
-        llmclient.websearch_wrapper("q", engine="duckduckgo")
+        llmclient.websearch("q", engine="duckduckgo")
         assert captured["engine"] == "duckduckgo"
 
 
