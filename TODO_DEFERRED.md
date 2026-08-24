@@ -1957,7 +1957,7 @@ Discovered while closing brief 10 and finding a stale item next to an accurate o
 
 ## Make the canned AI greeting optional
 
-*Cluster: ? · Cost: ? · Gate: next · Filed: 2026-07-28 · See also: "System prompt templating: the user should choose where the per-turn facts go", "Modernize the Librarian system prompt / character card"*
+*Cluster: system-prompt-and-greeting · Cost: M · Gate: next — and a `chatutil` cleanup now waits on it too (2026-08-25) · Filed: 2026-07-28 · See also: "System prompt templating: the user should choose where the per-turn facts go", "Modernize the Librarian system prompt / character card"*
 
 A new chat opens with a canned greeting from the AI (`raven.librarian.config`, "Names, AI's greeting"). That is a
 2024-ism: as of mid-2026 the first message after the system prompt can just as well be the user's, and an opening
@@ -1981,7 +1981,10 @@ loudly:
   root stopped being an anomaly on 2026-08-12, which is what the role check and the one-step descent in
   `_descend_to_latest` were for.
 
-**Two helpers are waiting on this item, deliberately** (2026-08-25). `chat_controller`'s
+**Two helpers are waiting on this item, deliberately — which makes it more urgent, not less** (2026-08-25,
+Juha's point). Deferring a cleanup onto an item does not park the cost; it moves it here and adds to it. The
+duplication below goes on being duplicated for as long as this is open, and every reader of either copy has
+to work out which is authoritative. `chat_controller`'s
 `_get_all_greeting_node_ids` and `_get_all_system_prompt_node_ids` encode two conventions — *a root is a
 system prompt node*, and *a greeting is an assistant-role direct child of a root* — and `appstate` re-derives
 the first independently (`get_all_root_nodes()`, then an error message about "system prompt nodes", then a

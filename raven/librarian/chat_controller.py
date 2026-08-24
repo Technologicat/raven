@@ -948,10 +948,14 @@ class DPGChatMessage:
         """
         # NOTE: If you add or remove buttons here, update also `number_of_message_buttons` (search for it in this module).
         #
-        # The builders below add their buttons to `g` in the order they are called, and DPG lays a horizontal
-        # group out in creation order — so this call order *is* the left-to-right order on screen. Reordering
-        # them rearranges the button row, which is why each builder holds one group of adjacent buttons and
-        # none of them is independent of its neighbours' position.
+        # The builders below are phases of this one build, not an API: each runs exactly once, from here.
+        # Being methods does not enforce that the way a nested `def` would — it is a contract, stated because
+        # nothing else states it.
+        #
+        # They add their buttons to `g` in the order they are called, and DPG lays a horizontal group out in
+        # creation order — so this call order *is* the left-to-right order on screen. Reordering them
+        # rearranges the button row, which is why each builder holds one group of *adjacent* buttons and none
+        # of them is independent of its neighbours' position.
         role = self.role
         g = dpg.add_group(horizontal=True, tag=f"{role}_message_buttons_group_{self.gui_uuid}", parent=gui_parent)
 
@@ -968,7 +972,7 @@ class DPGChatMessage:
         self._build_navigation_buttons(g)
 
     def _build_copy_button(self, g) -> None:
-        """Copy this message to the clipboard.
+        """Build the button that copies this message to the clipboard.
 
         `g`: the horizontal group the buttons go into.
         """
@@ -1029,7 +1033,7 @@ class DPGChatMessage:
                                                  "Copy message to clipboard\n    no modifier: as-is\n    with Shift: include message node ID")
 
     def _build_regeneration_buttons(self, g, greeting_node_ids) -> None:
-        """Run this AI message again, continue it, or speak it: the three that act on the AI's own output.
+        """Build the three buttons that act on the AI's own output: run it again, continue it, speak it.
 
         `g`: the horizontal group the buttons go into.
         `greeting_node_ids`: from `_get_all_greeting_node_ids`; a greeting is not rerolled or continued.
@@ -1156,7 +1160,7 @@ class DPGChatMessage:
             dpg.add_spacer(width=gui_config.toolbutton_w, height=1, parent=g)
 
     def _build_edit_button(self, g) -> None:
-        """Revise this message. Present but not yet implemented.
+        """Build the revise button. It is in the row, and disabled: the action is not implemented yet.
 
         `g`: the horizontal group the buttons go into.
         """
@@ -1172,7 +1176,7 @@ class DPGChatMessage:
         dpg.add_text("Edit (revise)", parent=edit_tooltip)
 
     def _build_branching_buttons(self, g, system_prompt_node_ids, greeting_node_ids) -> None:
-        """Branch the chat here, or delete this node and everything under it: the two that change the tree.
+        """Build the two buttons that change the tree: branch the chat here, and delete this node with all below it.
 
         `g`: the horizontal group the buttons go into.
         """
@@ -1287,7 +1291,9 @@ class DPGChatMessage:
         # delete_subtree_tooltip_text = dpg_markdown.add_text(f"Delete branch (this node and {c_red}**all**{c_end} descendants!)", parent=delete_subtree_tooltip)
 
     def _build_tool_approval_button(self, g) -> None:
-        """Approve a host the allowlist refused, and retry that one fetch. Only on a denied `webfetch` result.
+        """Build the button that approves a host the allowlist refused and retries that one fetch.
+
+        Added only on a `webfetch` tool result the client-side allowlist denied; nothing is built otherwise.
 
         `g`: the horizontal group the buttons go into.
         """
@@ -1344,7 +1350,7 @@ class DPGChatMessage:
             dpg.add_text(f"Approve host '{maybe_denied_host}' for this session, and retry the fetch (on a new branch)", parent=approve_retry_tooltip)
 
     def _build_navigation_buttons(self, g) -> None:
-        """Step between this message's siblings, or jump to where its branch continues.
+        """Build the buttons that step between this message's siblings, and jump to where its branch continues.
 
         `g`: the horizontal group the buttons go into.
         """
