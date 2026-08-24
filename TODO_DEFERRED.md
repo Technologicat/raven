@@ -22,19 +22,22 @@ is two-thirds full — `1411 tokens` against a true ~88500. The immediate count 
 not extracted yet, which is what keeps pypdf off the DPG callback thread and is the right trade; but no `~`
 covers a factor of sixty.
 
-**It heals itself within seconds, and that is most of the story** (observed in the running app, 2026-08-25).
-The idle prefill that follows extracts the attachments, and `textfilestore.sidecar_to_text` memoizes on the
-content-addressed filename — so every later immediate count on that branch includes them. Flicking between
-siblings afterwards reads ~67%, not ~1%.
+**It heals itself within seconds, untouched.** Measured 2026-08-25 by screenshotting the readout every two
+seconds for 32 seconds while nobody used the app: `~1%` for the first four frames, `68%` for the remaining
+twelve. The idle prefill submits the real prompt and its `prompt_tokens` replaces the estimate outright, so
+the *automatic* sequence has two states and not three.
 
-**The estimate also calibrates itself, which an earlier revision of this item got wrong.** `invoke` sets
-`settings.tokens_per_character` from each call's real usage, so the ratio learns the corpus:
+**The `~67%` in between is a different path, reached only by changing HEAD.** Switching siblings recomputes
+the immediate estimate — and by then the prefill has extracted the attachments, which
+`textfilestore.sidecar_to_text` memoizes on the content-addressed filename, so this time the count includes
+them. What the estimate *would* say depends on when it is asked, because `invoke` sets
+`settings.tokens_per_character` from each call's real usage and the ratio learns the corpus:
 
-| | ratio | reads |
+| the estimate, recomputed... | ratio | reads |
 |---|---|---|
-| fresh process, nothing sent yet | 0.27 (the default) | ~62% |
+| in a fresh process, nothing sent yet | 0.27 (the default) | ~62% |
 | after one prefill on this branch | 0.29353, learned from `88524 / 301589` | ~67% |
-| the backend's own figure | — | 68% |
+| (the backend's own figure, for comparison) | — | 68% |
 
 So the two-stage design works, and the *only* window where the readout misleads is the few seconds between
 landing on such a branch and the prefill returning. That is worth closing, but it is a much smaller thing
