@@ -13,17 +13,32 @@ importer first. Recorded here rather than in that item because a trigger nobody 
 the tool for finding things in the backlog cannot be gated on someone remembering to look for it *in* the
 backlog. The recurring moment to ask is the triage step in the release procedure.
 
-## The context-fill meter reads ~1% until something extracts the attachments
+## The context-fill meter reads ~1% on the first visit to a branch whose attachments are not extracted yet
 
-*Cluster: librarian-responsiveness · Cost: S · Gate: none · Filed: 2026-08-22 · Re-measured 2026-08-24 · See also: `investigations/prompt-size-cache-relative/`*
+*Cluster: librarian-responsiveness · Cost: S · Gate: none · Filed: 2026-08-22 · Re-measured 2026-08-24, and narrowed against the running app 2026-08-25 · See also: `investigations/prompt-size-cache-relative/`*
 
-On a branch with three attached PDFs, the readout goes **~1% → ~62% → 68%**. The last figure is correct
-(the branch really is 68% of a 131072 window, established two ways in the investigation), and the middle one
-is the local estimate, ~8% low. The defect is the first: **~1% for a chat that is two-thirds full.**
+On a branch with three attached PDFs, the *first* look at it in a fresh session reads **~1%** for a chat that
+is two-thirds full — `1411 tokens` against a true ~88500. The immediate count skips attachments whose text is
+not extracted yet, which is what keeps pypdf off the DPG callback thread and is the right trade; but no `~`
+covers a factor of sixty.
 
-The cause is that the immediate count skips attachments whose text is not extracted yet, which is what keeps
-pypdf off the DPG callback thread and is the right trade — but it makes the readout say `1411 tokens` when
-the true figure is ~88500. It is marked `~`, and no `~` covers a factor of sixty.
+**It heals itself within seconds, and that is most of the story** (observed in the running app, 2026-08-25).
+The idle prefill that follows extracts the attachments, and `textfilestore.sidecar_to_text` memoizes on the
+content-addressed filename — so every later immediate count on that branch includes them. Flicking between
+siblings afterwards reads ~67%, not ~1%.
+
+**The estimate also calibrates itself, which an earlier revision of this item got wrong.** `invoke` sets
+`settings.tokens_per_character` from each call's real usage, so the ratio learns the corpus:
+
+| | ratio | reads |
+|---|---|---|
+| fresh process, nothing sent yet | 0.27 (the default) | ~62% |
+| after one prefill on this branch | 0.29353, learned from `88524 / 301589` | ~67% |
+| the backend's own figure | — | 68% |
+
+So the two-stage design works, and the *only* window where the readout misleads is the few seconds between
+landing on such a branch and the prefill returning. That is worth closing, but it is a much smaller thing
+than "the meter is wrong".
 
 Two directions, cheapest first:
 
@@ -36,9 +51,12 @@ Two directions, cheapest first:
   later without blocking anything. Overlaps with brief 12, which persists extracted text and makes the
   question go away.
 
-**Two things this item used to say are false**, and are recorded here so they are not re-derived: the local
-estimate does *not* run 44% high (it runs ~8% low), and the branch was never "43% full". Both came from
-treating a backend figure as ground truth; see the investigation for how that happened.
+**Three things earlier revisions of this item said are false**, recorded so they are not re-derived. The
+branch was never "43% full", and the estimate does not run 44% high — both came from treating a backend
+figure as ground truth, and the investigation has how that happened. Nor does the estimate run 8% low as a
+standing property: that was the *cold* ratio, measured in a fresh process before anything had been sent, and
+a running app calibrates it away. Each of the three was measured; what was wrong each time was the *scope* —
+one process, one moment, one branch — quietly generalized into a claim about the feature.
 
 ## Ctrl+Left / Ctrl+Right cannot flick between siblings, because each switch re-picks its own target
 
