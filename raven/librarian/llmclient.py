@@ -2003,7 +2003,7 @@ def invoke(settings: env,
     This is mainly meant as a low-level building block.
 
     If you just need to script the LLM (perform a throwaway task without storing the chat history),
-    see `chatutil.oneshot_llm_task`.
+    see `raven.librarian.agent.turn`, which runs the agent loop and hands back a record of what it did.
 
     `settings`: Obtain this by calling `setup()` at app start time.
 
