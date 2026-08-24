@@ -3426,6 +3426,23 @@ reading" is not a HEAD comparison: the same HEAD builds a different prompt from 
 because the injects carry a datetime and the RAG matches move as the corpus does. So it means tracking
 *prompt* identity, and the cheap-looking clause is where the work is. Size that before scheduling this.
 
+**The window is up to a minute wide, measured 2026-08-25.** With LM Studio's KV cache freshly cleared, the
+idle prefill of an 88524-token branch took **51 seconds** end to end (01:38:31 → 01:39:22, `qwen3.5-9b` on
+one 16 GB card). A message sent during that waits behind it. The item said "slows the next turn", which
+reads like a hiccup; on a heavy branch with a cold cache it is closer to a stall, and that is a
+Researchers'-Night risk rather than a nicety — a visitor typing into a demo that has just switched branches
+would hit exactly this.
+
+**It is now visible, which it was not when this was filed.** The SYSTEM indicator lights while a prefill is
+reading the prompt (2026-08-25), so "the backend is busy right now" is on screen rather than inferred from a
+slow reply. That helps whoever fixes this reproduce it, and it means a user who *looks* has warning.
+
+**The entry guard only covers one direction.** `_context_prefill_entrypoint` bails when `is_generating()`, so
+a prefill never starts during a turn — but a turn starting during a prefill runs into it, and the blocking
+`requests` call cannot be interrupted by the cooperative `task_env.cancelled` flag. Any fix has to either
+make the prefill abortable (close the response from the outside) or keep the two from being in flight at
+once, which is where this meets the turn-sequencing question.
+
 Discovered during brief 02 PR-B work, reported by Juha from live LM Studio use (2026-06-04).
 
 ## Render the streaming thinking trace inside a bubble from the start, not just on completion
