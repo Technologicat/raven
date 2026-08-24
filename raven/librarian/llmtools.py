@@ -61,6 +61,114 @@ from . import config as librarian_config
 if TYPE_CHECKING:
     from . import hybridir
 
+
+# ------------------------------------------------------------------------------------------------
+# What the model is offered
+#
+# The schemas the model sees, and which switch each tool answers to. Data only, so it leads: a reader
+# arriving here should meet the catalogue before any of the implementations. `TOOL_ENTRYPOINTS`, the
+# third member of this set, cannot join it — it maps each name to the *function*, so it has to wait
+# until those exist, and sits directly below them.
+# ------------------------------------------------------------------------------------------------
+
+
+TOOLS = [
+    {"type": "function",
+     "function": {"name": "websearch",
+                  "description": "Perform a web search.",
+                  "parameters": {"type": "object",
+                                 "required": ["query"],
+                                 "properties": {"query": {"type": "string",
+                                                          "description": "The search query."}}}}},
+    {"type": "function",
+     "function": {"name": "webfetch",
+                  "description": "Retrieve a web page's main content as clean text.",
+                  "parameters": {"type": "object",
+                                 "additionalProperties": False,
+                                 "required": ["url"],
+                                 "properties": {"url": {"type": "string",
+                                                        "description": "The URL to fetch."}}}}},
+    # The per-turn clock inject presents itself as a call to this tool, so it has to be a real one: a
+    # synthetic call naming a function the model was never offered is a fiction the model can act on.
+    # That is not a guess — it is the situation the document-matches inject was in before
+    # `search_documents` existed, where the model wrote the call out as literal text and the user got
+    # that instead of an answer, roughly one turn in three on Qwen3.6-27B.
+    #
+    # Registering it is correct on those grounds alone, and deliberately *not* claimed to fix the thing
+    # that prompted the look: a 2026-08-07 trace where the model called the clock call "erroneous" on a
+    # turn about arithmetic. Read again, that complaint is about *relevance* — "get_current_time is
+    # useless for math" — not about the function being absent. The inject still arrives on every turn
+    # whether or not the turn is about time, so a model inclined to remark on that will still remark.
+    {"type": "function",
+     "function": {"name": "get_current_time",
+                  "description": "Get the current local time.",
+                  "parameters": {"type": "object",
+                                 "additionalProperties": False,
+                                 "required": [],
+                                 "properties": {}}}},
+    {"type": "function",
+     "function": {"name": "search_documents",
+                  "description": ("Search the user's local document database. Use this to look for material "
+                                  "the conversation does not already contain, or to search again with a "
+                                  "better query once you have seen what a first search returned."),
+                  "parameters": {"type": "object",
+                                 "additionalProperties": False,
+                                 "required": ["query"],
+                                 # No `k`: how many results come back is host configuration, not a model
+                                 # decision. Keeping the surface to one required string also leaves the
+                                 # fewest ways to emit a malformed call.
+                                 "properties": {"query": {"type": "string",
+                                                          "description": "Keywords or a natural-language question."}}}}},
+    {"type": "function",
+     "function": {"name": "fetch_document",
+                  "description": ("Read a document from the user's local document database, by the ID "
+                                  "reported in a search result. Use this when a search match looks "
+                                  "relevant but you need more of the document around it."),
+                  "parameters": {"type": "object",
+                                 "additionalProperties": False,
+                                 "required": ["document_id"],
+                                 "properties": {"document_id": {"type": "string",
+                                                                "description": "The document ID, as given in a search result."},
+                                                # Spans are in characters because that is the unit the search
+                                                # results report; a model left to guess would assume tokens.
+                                                "offset": {"type": "integer",
+                                                           "description": "Character offset to start reading from. Omit to start at the beginning."},
+                                                "length": {"type": "integer",
+                                                           "description": "How many characters to read. Omit to read to the end."}}}}},
+    {"type": "function",
+     "function": {"name": "list_consulted_documents",
+                  "description": ("List the documents from the user's local document database that this "
+                                  "conversation has already looked at. Use this when the discussion "
+                                  "refers back to material that is no longer written out above; the "
+                                  "list gives the IDs to read again with fetch_document."),
+                  # No parameters at all: the list is a property of the conversation, and nothing about
+                  # it is the model's to choose.
+                  "parameters": {"type": "object",
+                                 "additionalProperties": False,
+                                 "properties": {}}}}
+]
+
+# The two gated groups, each answering to one user-facing toggle: "Documents" and "Internet". Callers gate
+# with `invoke`'s `tool_names`; `maybe_tool_names_for_turn` assembles the per-turn list, and
+# `raven.librarian.scaffold.ai_turn` calls it. Named here, next to the specs, so the two cannot drift.
+#
+# A tool in neither group is *ungated* — always offered, because no switch claims to govern it. That is
+# `get_current_time` today, and it has to be: the clock inject is delivered on every turn regardless of
+# either toggle, as a synthetic call to this very function. Withholding the spec while still sending the
+# call would put the model back to reading a call to a function it cannot see, which is the defect
+# registering the tool exists to fix.
+DOCUMENT_TOOL_NAMES = frozenset({"search_documents", "fetch_document", "list_consulted_documents"})
+
+NETWORK_TOOL_NAMES = frozenset({"websearch", "webfetch"})
+
+
+# ------------------------------------------------------------------------------------------------
+# Machinery the tools share
+#
+# Reaching the server, and the per-turn context a tool reads its budget and its formatters from.
+# ------------------------------------------------------------------------------------------------
+
+
 def _client_api():
     """Return `raven.client.api`, imported on first use and initialized.
 
@@ -72,6 +180,51 @@ def _client_api():
     api.initialize(raven_server_url=client_config.raven_server_url,
                    raven_api_key_file=client_config.raven_api_key_file)  # let it create a default executor
     return api
+
+# Per-turn "request context" passed to tool entrypoints, in the manner of Racket's `parameterize`
+# (https://docs.racket-lang.org/reference/parameters.html) or Flask's request-global `g`: state
+# that comes from the harness, not the model, scoped to one agent turn. `raven.librarian.scaffold`
+# binds it (via `dyn.let`) around the agent loop's tool dispatch; an entrypoint that needs
+# harness-supplied (NOT model-supplied) context reads it here. The model never sees or sets it —
+# that separation is the point: a host the user auto-allowed must not be something the LLM can
+# forge through its tool-call arguments.
+#
+# Keep this to a single `dyn.tool_context` env that grows fields over time — one request-context
+# object, never a scatter of dyn vars.
+#
+# What the context carries, and why each field is there, is documented where it is built:
+# `scaffold.make_tool_context`. Listing the fields here as well only produced a list that fell behind it.
+# The one worth repeating is the security-relevant one:
+#   webfetch_allowed_hosts : frozenset[str]  — hosts auto-allowed for this turn (URLs the user typed,
+#                                              plus, if `webfetch_trust_search_results`, this turn's
+#                                              websearch-result hosts). Read by `webfetch`.
+#                                              Absent -> treated as empty (fail closed: no auto-allow).
+#
+# The process-wide default (an empty env) means a thread that never entered a `dyn.let` — e.g. a
+# direct unit-test call of an entrypoint — still reads a valid, empty context instead of erroring.
+make_dynvar(tool_context=env())
+
+def _formatters() -> env:
+    """The turn's model-facing formatters, from `dyn.tool_context`, falling back to the defaults.
+
+    Entrypoints reach `settings` only through the tool context, and that context legitimately carries no
+    settings at all: `scaffold.make_tool_context(llm_settings=None, ...)` is the documented shape for a
+    caller that is not going to run a tool needing them. Two entrypoints here format their result without
+    otherwise wanting settings, and they worked in that shape before formatters became overridable; falling
+    back keeps them working rather than making them the reason a probe needs a full settings object.
+    """
+    settings = getattr(dyn.tool_context, "llm_settings", None)
+    if settings is None or "formatters" not in settings:
+        return chatutil.default_formatters()
+    return settings.formatters
+
+
+# ------------------------------------------------------------------------------------------------
+# The tools that reach the network
+#
+# The two that leave this machine, and the allowlist that decides whether the second one may.
+# ------------------------------------------------------------------------------------------------
+
 
 def websearch(query: str,
               engine: Optional[str] = None) -> List[Dict[str, str]]:
@@ -114,43 +267,6 @@ def websearch(query: str,
         return chatutil.text_content_part(body)
 
     return [format_result_part(result) for result in structured_results]
-
-# Per-turn "request context" passed to tool entrypoints, in the manner of Racket's `parameterize`
-# (https://docs.racket-lang.org/reference/parameters.html) or Flask's request-global `g`: state
-# that comes from the harness, not the model, scoped to one agent turn. `raven.librarian.scaffold`
-# binds it (via `dyn.let`) around the agent loop's tool dispatch; an entrypoint that needs
-# harness-supplied (NOT model-supplied) context reads it here. The model never sees or sets it —
-# that separation is the point: a host the user auto-allowed must not be something the LLM can
-# forge through its tool-call arguments.
-#
-# Keep this to a single `dyn.tool_context` env that grows fields over time — one request-context
-# object, never a scatter of dyn vars.
-#
-# What the context carries, and why each field is there, is documented where it is built:
-# `scaffold.make_tool_context`. Listing the fields here as well only produced a list that fell behind it.
-# The one worth repeating is the security-relevant one:
-#   webfetch_allowed_hosts : frozenset[str]  — hosts auto-allowed for this turn (URLs the user typed,
-#                                              plus, if `webfetch_trust_search_results`, this turn's
-#                                              websearch-result hosts). Read by `webfetch`.
-#                                              Absent -> treated as empty (fail closed: no auto-allow).
-#
-# The process-wide default (an empty env) means a thread that never entered a `dyn.let` — e.g. a
-# direct unit-test call of an entrypoint — still reads a valid, empty context instead of erroring.
-make_dynvar(tool_context=env())
-
-def _formatters() -> env:
-    """The turn's model-facing formatters, from `dyn.tool_context`, falling back to the defaults.
-
-    Entrypoints reach `settings` only through the tool context, and that context legitimately carries no
-    settings at all: `scaffold.make_tool_context(llm_settings=None, ...)` is the documented shape for a
-    caller that is not going to run a tool needing them. Two entrypoints here format their result without
-    otherwise wanting settings, and they worked in that shape before formatters became overridable; falling
-    back keeps them working rather than making them the reason a probe needs a full settings object.
-    """
-    settings = getattr(dyn.tool_context, "llm_settings", None)
-    if settings is None or "formatters" not in settings:
-        return chatutil.default_formatters()
-    return settings.formatters
 
 # Canonical user-facing string for an allowlist refusal — the client-side counterpart to the
 # server-side SSRF / scheme / SPA strings in `raven.server.modules.webfetch`. Pre-templated so the
@@ -232,6 +348,15 @@ def webfetch(url: str) -> str | tuple[str, dict]:
             {"fetched_document": {"url": effective_url,
                                   "name": result.get("title") or effective_url}})
 
+
+# ------------------------------------------------------------------------------------------------
+# The tools that read the document database
+#
+# Kept together so the canned replies they share sit above all of them, and the ones belonging to a
+# single tool sit directly above it.
+# ------------------------------------------------------------------------------------------------
+
+
 # Canonical user-facing strings for the two ways a document search can come back empty-handed. Pre-templated
 # so the model reports the situation in consistent words instead of improvising an explanation of Raven's
 # internals - and deliberately phrased as *statements of fact*, never as prohibitions. A tool result that
@@ -285,8 +410,96 @@ def search_documents(query: str) -> Tuple[Union[str, List[Dict]], Dict]:
              "docs_query": query,
              "document_ids": list(uniqify(match["document_id"] for match in matches))})
 
+CANONICAL_NOTHING_CONSULTED = ("This conversation has not looked at any documents from the knowledge base yet. "
+                               "Search for some with `search_documents`.")
+
+def list_consulted_documents() -> Tuple[str, Dict]:
+    """List the knowledge-base documents this conversation has already looked at, by ID.
+
+    Tool entrypoint for the LLM's `list_consulted_documents` tool. It answers a question the transcript
+    cannot: the automatic search injects its matches for one turn and then drops them, so a follow-up
+    question arrives with the model's own earlier reply visible and the material it was based on gone. The
+    IDs survive, and `fetch_document` turns one back into text. (A document the model *fetched* is a stored
+    node and is still written out where the window reaches; the list covers both, because from here they
+    are indistinguishable, and a pointer to something already in view costs one line.)
+
+    Pointers, not text, and that is the point - re-injecting the material would grow without bound.
+    Consequently this grounds *nothing*: a list of what one has read is not a thing one has read. The model
+    that wants the material has to go and fetch it, which is exactly the step the badge is measuring.
+
+    The list is assembled per turn by `scaffold` (which is where the branch is) and arrives through
+    `dyn.tool_context`, in the same manner as the retriever.
+    """
+    entries = getattr(dyn.tool_context, "consulted_documents", None)
+    if not entries:
+        logger.info("list_consulted_documents: nothing consulted on this branch yet.")
+        return (CANONICAL_NOTHING_CONSULTED, {"grounding": False})
+    logger.info(f"list_consulted_documents: {len(entries)} document(s).")
+    return (_formatters().consulted_documents(entries), {"grounding": False})
+
 CANONICAL_NO_SUCH_DOCUMENT = ("There is no document with that ID in the database. Document IDs come from "
                               "search results; search first, then fetch by the ID a result reports.")
+
+# Canonical refusal for a fetch that cannot fit, in the manner of `CANONICAL_NOT_ON_ALLOWLIST`. Phrased as a
+# statement of the situation with the remedy attached, never as a prohibition: a tool result that tells the
+# model what it may not do is the shape that measured 29000 characters of deliberation without producing a
+# reply. See `investigations/context-injects/context-inject-shape-measurements.md`.
+CANONICAL_NO_ROOM_TO_FETCH = ("There is not enough room left in this conversation to read that document. "
+                              "Suggest starting a new chat if the user wants to work through it.")
+
+def fetch_document(document_id: str,
+                   offset: Optional[int] = None,
+                   length: Optional[int] = None) -> Tuple[Union[str, List[Dict]], Dict]:
+    """Read a document from the local database by ID; return its text, cut to what the context can hold.
+
+    Tool entrypoint for the LLM's `fetch_document` tool — the internal-engine counterpart of `webfetch`,
+    and the follow-up to `search_documents`. A search match is a window onto a larger document and reports
+    where that window sits, so the model can come back for the surrounding text, or for the whole thing.
+
+    `document_id` must come from a search result: the model has no other way to learn one, which makes this
+    search-then-fetch by construction, exactly as websearch precedes webfetch.
+
+    `offset`, `length`: character span to read, both optional. Omit both for the document from the start.
+    Out-of-range values are clamped rather than refused — an off-by-a-bit span is an ordinary mistake to
+    make about a document you have only seen one window of, and clamping answers the question that was
+    meant instead of starting a correction round-trip.
+
+    The text is fitted to what the conversation can still afford (`budget_for_fetched_text`), and truncated
+    in the middle if it does not fit, so a long paper keeps its abstract and its conclusions. A fetch that
+    cannot fit at all is refused with a canonical string rather than served as a sliver.
+
+    Returns `(output, metadata)`, declaring grounding as `search_documents` does — including the refusals,
+    which are non-empty strings that ground nothing.
+    """
+    retriever = getattr(dyn.tool_context, "retriever", None)
+    if retriever is None:
+        logger.info("fetch_document: no retriever in the tool context; document database not in play this turn.")
+        return (CANONICAL_NO_DOCUMENT_DATABASE, {"grounding": False})
+
+    text = document_text(retriever, document_id)
+    if text is None:
+        logger.info(f"fetch_document: no document with ID '{document_id}'.")
+        return (CANONICAL_NO_SUCH_DOCUMENT, {"grounding": False})
+
+    start = min(max(offset or 0, 0), len(text))
+    end = min(start + length, len(text)) if length is not None and length > 0 else len(text)
+    span = text[start:end]
+
+    settings = dyn.tool_context.llm_settings
+    # Deferred, and the only reach back into `llmclient`: it imports this module, so a
+    # module-level import here would close the loop. How much room is left in the context is
+    # its business — this tool just happens to be the one that has to fit inside the answer.
+    from . import llmclient  # noqa: PLC0415 -- see above
+    budget_tokens = llmclient.budget_for_fetched_text(settings, used_tokens=dyn.tool_context.used_tokens)
+    fitted = llmclient.fit_text_to_token_budget(settings, span, budget_tokens)
+    if not fitted:
+        logger.info(f"fetch_document: no room to fetch '{document_id}' (budget {budget_tokens} tokens).")
+        return (CANONICAL_NO_ROOM_TO_FETCH, {"grounding": False})
+
+    logger.info(f"fetch_document: '{document_id}' [{start}:{end}] -> {len(fitted)} of {len(span)} characters.")
+    header = (f"[System information: Document '{document_id}', characters {start} to {end} "
+              f"of {len(text)} total.]")
+    return (f"{header}\n\n{fitted}", {"grounding": True, "document_ids": [document_id]})
 
 def document_text(retriever: "Optional[hybridir.HybridIR]",
                   document_id: str) -> Optional[str]:
@@ -346,8 +559,14 @@ def label_documents(retriever: "Optional[hybridir.HybridIR]",
         labelled.append({**entry, "label": chatutil.document_label(text) if text else "", "present": text is not None})
     return labelled
 
-CANONICAL_NOTHING_CONSULTED = ("This conversation has not looked at any documents from the knowledge base yet. "
-                               "Search for some with `search_documents`.")
+
+# ------------------------------------------------------------------------------------------------
+# The tool that reads the clock
+#
+# Answers to neither switch: the current date is injected into every turn regardless, so withholding
+# the tool would leave the model reading a call it could not resolve.
+# ------------------------------------------------------------------------------------------------
+
 
 def get_current_time() -> str:
     """Return the current local time.
@@ -363,83 +582,28 @@ def get_current_time() -> str:
     """
     return _formatters().time_now()
 
-def list_consulted_documents() -> Tuple[str, Dict]:
-    """List the knowledge-base documents this conversation has already looked at, by ID.
 
-    Tool entrypoint for the LLM's `list_consulted_documents` tool. It answers a question the transcript
-    cannot: the automatic search injects its matches for one turn and then drops them, so a follow-up
-    question arrives with the model's own earlier reply visible and the material it was based on gone. The
-    IDs survive, and `fetch_document` turns one back into text. (A document the model *fetched* is a stored
-    node and is still written out where the window reaches; the list covers both, because from here they
-    are indistinguishable, and a pointer to something already in view costs one line.)
+# ------------------------------------------------------------------------------------------------
+# The registry, completed
+#
+# Now that the functions exist, the third table can name them.
+# ------------------------------------------------------------------------------------------------
 
-    Pointers, not text, and that is the point - re-injecting the material would grow without bound.
-    Consequently this grounds *nothing*: a list of what one has read is not a thing one has read. The model
-    that wants the material has to go and fetch it, which is exactly the step the badge is measuring.
 
-    The list is assembled per turn by `scaffold` (which is where the branch is) and arrives through
-    `dyn.tool_context`, in the same manner as the retriever.
-    """
-    entries = getattr(dyn.tool_context, "consulted_documents", None)
-    if not entries:
-        logger.info("list_consulted_documents: nothing consulted on this branch yet.")
-        return (CANONICAL_NOTHING_CONSULTED, {"grounding": False})
-    logger.info(f"list_consulted_documents: {len(entries)} document(s).")
-    return (_formatters().consulted_documents(entries), {"grounding": False})
+TOOL_ENTRYPOINTS = {"websearch": websearch,
+                    "webfetch": webfetch,
+                    "get_current_time": get_current_time,
+                    "search_documents": search_documents,
+                    "fetch_document": fetch_document,
+                    "list_consulted_documents": list_consulted_documents}
 
-def fetch_document(document_id: str,
-                   offset: Optional[int] = None,
-                   length: Optional[int] = None) -> Tuple[Union[str, List[Dict]], Dict]:
-    """Read a document from the local database by ID; return its text, cut to what the context can hold.
 
-    Tool entrypoint for the LLM's `fetch_document` tool — the internal-engine counterpart of `webfetch`,
-    and the follow-up to `search_documents`. A search match is a window onto a larger document and reports
-    where that window sits, so the model can come back for the surrounding text, or for the whole thing.
+# ------------------------------------------------------------------------------------------------
+# Offering them, and running what was asked for
+#
+# Which tools this turn gets, and the dispatch that turns a model's request into `role="tool"` messages.
+# ------------------------------------------------------------------------------------------------
 
-    `document_id` must come from a search result: the model has no other way to learn one, which makes this
-    search-then-fetch by construction, exactly as websearch precedes webfetch.
-
-    `offset`, `length`: character span to read, both optional. Omit both for the document from the start.
-    Out-of-range values are clamped rather than refused — an off-by-a-bit span is an ordinary mistake to
-    make about a document you have only seen one window of, and clamping answers the question that was
-    meant instead of starting a correction round-trip.
-
-    The text is fitted to what the conversation can still afford (`budget_for_fetched_text`), and truncated
-    in the middle if it does not fit, so a long paper keeps its abstract and its conclusions. A fetch that
-    cannot fit at all is refused with a canonical string rather than served as a sliver.
-
-    Returns `(output, metadata)`, declaring grounding as `search_documents` does — including the refusals,
-    which are non-empty strings that ground nothing.
-    """
-    retriever = getattr(dyn.tool_context, "retriever", None)
-    if retriever is None:
-        logger.info("fetch_document: no retriever in the tool context; document database not in play this turn.")
-        return (CANONICAL_NO_DOCUMENT_DATABASE, {"grounding": False})
-
-    text = document_text(retriever, document_id)
-    if text is None:
-        logger.info(f"fetch_document: no document with ID '{document_id}'.")
-        return (CANONICAL_NO_SUCH_DOCUMENT, {"grounding": False})
-
-    start = min(max(offset or 0, 0), len(text))
-    end = min(start + length, len(text)) if length is not None and length > 0 else len(text)
-    span = text[start:end]
-
-    settings = dyn.tool_context.llm_settings
-    # Deferred, and the only reach back into `llmclient`: it imports this module, so a
-    # module-level import here would close the loop. How much room is left in the context is
-    # its business — this tool just happens to be the one that has to fit inside the answer.
-    from . import llmclient  # noqa: PLC0415 -- see above
-    budget_tokens = llmclient.budget_for_fetched_text(settings, used_tokens=dyn.tool_context.used_tokens)
-    fitted = llmclient.fit_text_to_token_budget(settings, span, budget_tokens)
-    if not fitted:
-        logger.info(f"fetch_document: no room to fetch '{document_id}' (budget {budget_tokens} tokens).")
-        return (CANONICAL_NO_ROOM_TO_FETCH, {"grounding": False})
-
-    logger.info(f"fetch_document: '{document_id}' [{start}:{end}] -> {len(fitted)} of {len(span)} characters.")
-    header = (f"[System information: Document '{document_id}', characters {start} to {end} "
-              f"of {len(text)} total.]")
-    return (f"{header}\n\n{fitted}", {"grounding": True, "document_ids": [document_id]})
 
 def maybe_tool_names_for_turn(settings: env,
                               documents_available: bool,
@@ -483,109 +647,6 @@ def maybe_tool_names_for_turn(settings: env,
     if not internet_available:
         withheld |= set(settings.network_tool_names)
     return tuple(sorted(set(settings.tool_entrypoints) - withheld))
-
-TOOLS = [
-    {"type": "function",
-     "function": {"name": "websearch",
-                  "description": "Perform a web search.",
-                  "parameters": {"type": "object",
-                                 "required": ["query"],
-                                 "properties": {"query": {"type": "string",
-                                                          "description": "The search query."}}}}},
-    {"type": "function",
-     "function": {"name": "webfetch",
-                  "description": "Retrieve a web page's main content as clean text.",
-                  "parameters": {"type": "object",
-                                 "additionalProperties": False,
-                                 "required": ["url"],
-                                 "properties": {"url": {"type": "string",
-                                                        "description": "The URL to fetch."}}}}},
-    # The per-turn clock inject presents itself as a call to this tool, so it has to be a real one: a
-    # synthetic call naming a function the model was never offered is a fiction the model can act on.
-    # That is not a guess — it is the situation the document-matches inject was in before
-    # `search_documents` existed, where the model wrote the call out as literal text and the user got
-    # that instead of an answer, roughly one turn in three on Qwen3.6-27B.
-    #
-    # Registering it is correct on those grounds alone, and deliberately *not* claimed to fix the thing
-    # that prompted the look: a 2026-08-07 trace where the model called the clock call "erroneous" on a
-    # turn about arithmetic. Read again, that complaint is about *relevance* — "get_current_time is
-    # useless for math" — not about the function being absent. The inject still arrives on every turn
-    # whether or not the turn is about time, so a model inclined to remark on that will still remark.
-    {"type": "function",
-     "function": {"name": "get_current_time",
-                  "description": "Get the current local time.",
-                  "parameters": {"type": "object",
-                                 "additionalProperties": False,
-                                 "required": [],
-                                 "properties": {}}}},
-    {"type": "function",
-     "function": {"name": "search_documents",
-                  "description": ("Search the user's local document database. Use this to look for material "
-                                  "the conversation does not already contain, or to search again with a "
-                                  "better query once you have seen what a first search returned."),
-                  "parameters": {"type": "object",
-                                 "additionalProperties": False,
-                                 "required": ["query"],
-                                 # No `k`: how many results come back is host configuration, not a model
-                                 # decision. Keeping the surface to one required string also leaves the
-                                 # fewest ways to emit a malformed call.
-                                 "properties": {"query": {"type": "string",
-                                                          "description": "Keywords or a natural-language question."}}}}},
-    {"type": "function",
-     "function": {"name": "fetch_document",
-                  "description": ("Read a document from the user's local document database, by the ID "
-                                  "reported in a search result. Use this when a search match looks "
-                                  "relevant but you need more of the document around it."),
-                  "parameters": {"type": "object",
-                                 "additionalProperties": False,
-                                 "required": ["document_id"],
-                                 "properties": {"document_id": {"type": "string",
-                                                                "description": "The document ID, as given in a search result."},
-                                                # Spans are in characters because that is the unit the search
-                                                # results report; a model left to guess would assume tokens.
-                                                "offset": {"type": "integer",
-                                                           "description": "Character offset to start reading from. Omit to start at the beginning."},
-                                                "length": {"type": "integer",
-                                                           "description": "How many characters to read. Omit to read to the end."}}}}},
-    {"type": "function",
-     "function": {"name": "list_consulted_documents",
-                  "description": ("List the documents from the user's local document database that this "
-                                  "conversation has already looked at. Use this when the discussion "
-                                  "refers back to material that is no longer written out above; the "
-                                  "list gives the IDs to read again with fetch_document."),
-                  # No parameters at all: the list is a property of the conversation, and nothing about
-                  # it is the model's to choose.
-                  "parameters": {"type": "object",
-                                 "additionalProperties": False,
-                                 "properties": {}}}}
-]
-
-TOOL_ENTRYPOINTS = {"websearch": websearch,
-                    "webfetch": webfetch,
-                    "get_current_time": get_current_time,
-                    "search_documents": search_documents,
-                    "fetch_document": fetch_document,
-                    "list_consulted_documents": list_consulted_documents}
-
-# The two gated groups, each answering to one user-facing toggle: "Documents" and "Internet". Callers gate
-# with `invoke`'s `tool_names`; `maybe_tool_names_for_turn` assembles the per-turn list, and
-# `raven.librarian.scaffold.ai_turn` calls it. Named here, next to the specs, so the two cannot drift.
-#
-# A tool in neither group is *ungated* — always offered, because no switch claims to govern it. That is
-# `get_current_time` today, and it has to be: the clock inject is delivered on every turn regardless of
-# either toggle, as a synthetic call to this very function. Withholding the spec while still sending the
-# call would put the model back to reading a call to a function it cannot see, which is the defect
-# registering the tool exists to fix.
-DOCUMENT_TOOL_NAMES = frozenset({"search_documents", "fetch_document", "list_consulted_documents"})
-
-NETWORK_TOOL_NAMES = frozenset({"websearch", "webfetch"})
-
-# Canonical refusal for a fetch that cannot fit, in the manner of `CANONICAL_NOT_ON_ALLOWLIST`. Phrased as a
-# statement of the situation with the remedy attached, never as a prohibition: a tool result that tells the
-# model what it may not do is the shape that measured 29000 characters of deliberation without producing a
-# reply. See `investigations/context-injects/context-inject-shape-measurements.md`.
-CANONICAL_NO_ROOM_TO_FETCH = ("There is not enough room left in this conversation to read that document. "
-                              "Suggest starting a new chat if the user wants to work through it.")
 
 def perform_tool_calls(settings: env,
                        message: Dict,
