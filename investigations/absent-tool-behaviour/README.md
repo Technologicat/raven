@@ -44,9 +44,22 @@ Buckets are assigned by regex and the order is documented in `classify`. `answer
 
 ## Result
 
-**With the tool on offer, it is called every time — 24/24 in both cells, whether or not the prompt says to.**
-That is the first thing to read, because it says every failure below belongs to the absent-tool condition
-rather than to tool use.
+|  | tool absent | tool offered |
+|---|---|---|
+| **plain** | 20 refused, 2 invented, 1 truncated, 1 other | **24/24 called** |
+| **tool-mention** | 11 refused, 8 truncated, 4 invented, 1 tool-prose | **24/24 called** |
+
+**Only one cell is a trap: telling the model to use a tool that is not there.** Everywhere else it behaves
+well — offered a clock it calls it every time, unprompted included, and asked plainly with no clock it
+mostly says it cannot know. The damage is confined to the contradiction.
+
+And the instruction genuinely is contradictory: *use the tool* and *there is no tool*, with no way to
+satisfy both and nothing saying which to drop. That is a bad thing to hand anyone, and the reasoning traces
+below read exactly like someone stuck on it — reaching a decision, doubting it, reaching it again. The
+useful reading is not that the model is fragile but that this is a prompt worth not writing, and the
+practical form of that is: **a prompt that mentions tools should be sent with the tools attached.**
+
+The rest of this section is the same data broken out by bucket.
 
 | bucket | `plain`, absent | `tool-mention`, absent | `plain`, offered | `tool-mention`, offered |
 |---|---|---|---|---|
@@ -95,11 +108,8 @@ tokens reasoning and returned an empty reply. The traces show a loop rather than
 
 `finish_reason` is `length` with `reasoning_tokens` equal to the whole budget in every one of the eight. The
 same prompt also drew the `tool-prose` sample and three of the four confabulations, so the instruction to use
-an absent tool degrades every bucket at once.
-
-The practical reading: **an instruction referring to a capability the request does not grant is worth
-avoiding**, and a prompt that mentions tools should be sent with the tools attached. A small model takes it
-literally and has nowhere to put the contradiction.
+an absent tool degrades every bucket at once — which is what makes it a hazard in its own right rather than a
+footnote to the refusal numbers.
 
 ## What this settles for the test
 
