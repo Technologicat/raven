@@ -1,19 +1,22 @@
 # Visualizer — CLAUDE.md
 
-~6631 lines across 11 modules. The `app.py` split has landed.
+~6.7k lines across 11 modules. The `app.py` split has landed.
+
+Sizes are rounded to two significant figures, measured **2026-08-24** — they are here for the shape of the
+package, not as a figure to quote. Re-measure before quoting one.
 
 ```
-app.py            (1912 lines) — GUI app: window layout, event wiring, search, the main render loop
-info_panel.py     (1518 lines) — the info panel: content build, scrolling, navigation, anchors
-importer.py       (1260 lines) — BibTeX import pipeline: parse, embed, cluster, reduce, keywords, LLM summarize
-annotation.py      (439 lines) — datapoint annotations and their tooltips
-config.py          (422 lines) — Configuration-as-code (devices, import settings, stopwords, GUI settings)
-plotter.py         (283 lines) — the scatter plot itself
-selection.py       (261 lines) — selection state and the lasso/wand tools
-word_cloud.py      (257 lines) — word cloud rendering
-entry_renderer.py  (153 lines) — per-entry rendering shared by panel and tooltip
-importer_cli.py     (75 lines) — `raven-importer` entry point
-app_state.py        (51 lines) — top-level app state containers
+app.py            (~1.9k) — GUI app: window layout, event wiring, search, the main render loop
+info_panel.py     (~1.5k) — the info panel: content build, scrolling, navigation, anchors
+importer.py       (~1.3k) — BibTeX import pipeline: parse, embed, cluster, reduce, keywords, LLM summarize
+annotation.py     (~450)  — datapoint annotations and their tooltips
+config.py         (~420)  — Configuration-as-code (devices, import settings, stopwords, GUI settings)
+plotter.py        (~280)  — the scatter plot itself
+selection.py      (~260)  — selection state and the lasso/wand tools
+word_cloud.py     (~250)  — word cloud rendering
+entry_renderer.py (~150)  — per-entry rendering shared by panel and tooltip
+importer_cli.py    (~80)  — `raven-importer` entry point
+app_state.py       (~58)  — top-level app state containers
 ```
 
 No tests, and still the priority. The original rationale was to catch regressions *during* the refactor; that refactor has since landed without them, so what remains is the other half — pinning down the API boundaries the split created, before feature work starts leaning on them. The extracted modules are the tractable targets, being smaller and having real seams; `app.py` was never the place to start. `importer.py` also serves as a standalone CLI app (`raven-importer`).

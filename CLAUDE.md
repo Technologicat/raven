@@ -594,15 +594,15 @@ This coupling limits TTS engine choices (most don't expose timestamped phoneme d
 ## Current State
 
 ### Well-structured (target style)
-- `raven/librarian/` - Clean module separation (~14,600 lines across 15 modules, measured 2026-08-03). Note it has outgrown the per-module guideline below in several places — `chat_controller.py` is 2769 lines and `llmclient.py` 2181 — without losing the layering, which is the property that made it the target style. Size is a smell here, not a verdict. See `raven/librarian/CLAUDE.md` for the layer map.
+- `raven/librarian/` - Clean module separation (~20k lines across 18 modules, measured 2026-08-24). Note it has outgrown the per-module guideline below in several places — `chat_controller.py` is ~4.0k lines and `llmclient.py` ~2.8k — without losing the layering, which is the property that made it the target style. Size is a smell here, not a verdict. See `raven/librarian/CLAUDE.md` for the layer map.
 
 ### Needs refactoring
 
 Target ~700 lines per module as a guideline, not a hard limit — some modules can be longer when appropriate (e.g. lots of simple related code).
 
-- `raven/visualizer/app.py` - 1912 lines. The split into `info_panel`, `selection`, `plotter`, `annotation`, `word_cloud`, `entry_renderer` and `app_state` has landed; what remains is ordinary size rather than a god object. See `raven/visualizer/CLAUDE.md` for the module map.
-- `raven/visualizer/info_panel.py` - 1518 lines, the largest of the extracted modules; a candidate for further splitting, but not urgent.
-- `raven/visualizer/importer.py` - 1260 lines, pipeline architecture, lower priority but could benefit from stage separation
+- `raven/visualizer/app.py` - ~1.9k lines. The split into `info_panel`, `selection`, `plotter`, `annotation`, `word_cloud`, `entry_renderer` and `app_state` has landed; what remains is ordinary size rather than a god object. See `raven/visualizer/CLAUDE.md` for the module map.
+- `raven/visualizer/info_panel.py` - ~1.5k lines, the largest of the extracted modules; a candidate for further splitting, but not urgent.
+- `raven/visualizer/importer.py` - ~1.3k lines, pipeline architecture, lower priority but could benefit from stage separation
 
 ### Test coverage
 
@@ -668,7 +668,7 @@ so a current Qwen3.5/3.6 release covers both text and vision, and the separate `
 Size follows VRAM in the usual way — a ~30B MoE wants 24 GB or more, a ~4B fits in 8 GB.
 
 ## Known Issues / TODOs
-- Visualizer: the `app.py` split has landed (see `raven/visualizer/CLAUDE.md` for the module map). What remains is ordinary tidying — `info_panel.py` at 1518 lines is the next split candidate, and `importer.py` could use stage separation — not a god-object rescue
+- Visualizer: the `app.py` split has landed (see `raven/visualizer/CLAUDE.md` for the module map). What remains is ordinary tidying — `info_panel.py` at ~1.5k lines is the next split candidate, and `importer.py` could use stage separation — not a god-object rescue
 - Visualizer has zero tests (the librarian gaps this used to list — `scaffold`, `appstate`, `llmclient` — are all covered now)
 - DearPyGui_Markdown URL highlight bug (threading-related, untracked). Possibly the same fault as the
   dropped-character item in `TODO_DEFERRED.md`: that highlight sat one character off from where it belonged

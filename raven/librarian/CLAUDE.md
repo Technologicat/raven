@@ -1,6 +1,13 @@
 # Librarian — CLAUDE.md
 
-~14,600 lines across 15 modules. Clean layered design, target style for the project.
+~20k lines across 18 modules.
+
+**The layering is the part worth copying, and it is the only part.** Each layer imports downward and no
+further, and that has held while the package grew — which is the property that made this the reference for
+the rest of Raven. The module *sizes* are no longer exemplary and should not be read as endorsed: against
+the project's ~700-line guideline, `chat_controller.py` is ~4.0k, `llmclient.py` ~2.8k and `app.py` ~2.4k.
+The growth is recent rather than gradual — `chat_controller.py` gained 44% in the three weeks to
+2026-08-24, and the layer map below had been recording sizes 30–45% low for that whole period.
 
 ## Terminology: turn, round, exchange
 
@@ -19,19 +26,23 @@ scaffold, so the same word named two different scopes one layer apart.
 
 ## Dependency Layers (bottom → top)
 
-Line counts are as of **2026-08-03** — they drift, and a stale exact number reads more authoritative
-than it is. Take them as magnitudes; re-measure before quoting one.
+Sizes are rounded to two significant figures, measured **2026-08-24**. Rounded because the figure is here
+for the *shape* — where the mass sits, which is what makes the refactoring calls legible — and an exact
+number claims a precision that the next commit removes. The previous exact figures were 30–45% low by the
+time anyone noticed. Re-measure before quoting one.
 
 ```
-Layer 5 - Applications:     app.py (1762 lines), minichat.py (677 lines, minimal reference client)
-Layer 4 - Controller/GUI:   chat_controller.py (2769 lines), cleanup_dialog.py (412 lines)
-Layer 4 - Scripting:        agent.py (311 lines), the headless sibling of the controller
-Layer 3 - Orchestration:    scaffold.py (1135 lines)
-Layer 2 - Backends:         llmclient.py (2181 lines), hybridir.py (1416 lines)
-Layer 1 - Utilities:        chatutil.py (1337 lines), appstate.py (358 lines), cleanup.py (303 lines),
-                            imagestore.py (270 lines), textfilestore.py (140 lines)
-Layer 0 - Foundation:       config.py (633 lines), chattree.py (1070 lines), sidecarstore.py (150 lines),
-                            gguftokenizer.py (343 lines)
+Layer 5 - Applications:     app.py (~2.4k), minichat.py (~690, minimal reference client),
+                            indexer.py (~170, the `raven-indexer` CLI; also where the frontends get their
+                            shared `open_document_store`)
+Layer 4 - Controller/GUI:   chat_controller.py (~4.0k), cleanup_dialog.py (~410)
+Layer 4 - Scripting:        agent.py (~500), the headless sibling of the controller
+Layer 3 - Orchestration:    scaffold.py (~1.4k)
+Layer 2 - Backends:         llmclient.py (~2.8k), hybridir.py (~1.9k)
+Layer 1 - Utilities:        chatutil.py (~1.6k), appstate.py (~480), cleanup.py (~300),
+                            imagestore.py (~270), textfilestore.py (~190)
+Layer 0 - Foundation:       config.py (~870), chattree.py (~1.3k), sidecarstore.py (~150),
+                            gguftokenizer.py (~350)
 ```
 
 Each layer only imports from layers below it. No circular dependencies.
@@ -58,7 +69,7 @@ Each layer only imports from layers below it. No circular dependencies.
 
 - **`llmclient.py`** — Low-level LLM communication. `setup()` queries backend, builds `env` namespace with personas, tools, sampler params; detects vision capability (`model_is_vlm` tri-state — True/False/None). `invoke()` streams via SSE through a single `StreamParser` emitting typed events (content / reasoning / tool-call), detects tool calls, supports stopping strings; serializes history for the wire and resolves `sidecar:` image URLs to `data:` just before send. `perform_tool_calls()` parses tool_calls JSON, validates, dispatches to registered entrypoints. `count_tokens` + `image_token_cost` for the context-fill estimate. Progress via callbacks. Built-in tools: websearch, webfetch.
 
-- **`gguftokenizer.py`** — The exact-token-count tier, for backends that have no token-count endpoint. A llama.cpp-family backend serves a `.gguf`, which carries the model's vocabulary and merges, so any machine holding a copy of the model can count its tokens offline. `find_for_model` picks the file matching what the backend says it is serving (following symlinks, since a model archive shared between backends is usually a tree of them); `load` builds a `tokenizers.Tokenizer` from it. Two constructions, dispatched on the class GGUF names in `tokenizer.ggml.model`: the byte-level BPE most current families share (`gpt2`, e.g. the Qwens), and Gemma's SentencePiece-derived one (`gemma4`), where a space is a word mark rather than a byte, nothing pre-splits the text, and anything outside the vocabulary falls back to its 256 single-byte pieces. They share no part, which is why the dispatch is on the class rather than on a regex. **Nothing is trusted until something checks it**, because a wrong count here is wrong *and* unmarked — the readout drops its `~` when it believes a count is exact, so a bad tokenizer is worse than the estimate it replaces. `load` builds optimistically and then asks the backend to confirm: two short probes, compared by the *difference* between them so the chat template's framing cancels (comparing totals would need that framing to be known, which is the thing `prompt_size_report_looks_whole` exists because we don't). The backend arrives as a `text -> count` callable, so this module makes no network calls and its tests need none. That check subsumes the offline `_PRE_TOKENIZER_REGEXES` list — it is about the model actually being served — and catches what careful name matching cannot: a file whose *name* matched while its vocabulary belongs to another model, which builds and round-trips perfectly. When the backend cannot be asked, the offline list decides. A name that only *partly* matches is never a match either way, a publisher prefix saying who packaged the file rather than whose vocabulary is in it. `gguf` and `tokenizers` are declared dependencies, imported inside `load` rather than at module scope; that is worth ~46 ms of import time against `llmclient`'s own 1282 ms, so treat it as a convenience (a broken install declines like any other unreadable file) rather than as a constraint to preserve.
+- **`gguftokenizer.py`** — The exact-token-count tier, for backends that have no token-count endpoint. A llama.cpp-family backend serves a `.gguf`, which carries the model's vocabulary and merges, so any machine holding a copy of the model can count its tokens offline. `find_for_model` picks the file matching what the backend says it is serving (following symlinks, since a model archive shared between backends is usually a tree of them); `load` builds a `tokenizers.Tokenizer` from it. Two constructions, dispatched on the class GGUF names in `tokenizer.ggml.model`: the byte-level BPE most current families share (`gpt2`, e.g. the Qwens), and Gemma's SentencePiece-derived one (`gemma4`), where a space is a word mark rather than a byte, nothing pre-splits the text, and anything outside the vocabulary falls back to its 256 single-byte pieces. They share no part, which is why the dispatch is on the class rather than on a regex. **Nothing is trusted until something checks it**, because a wrong count here is wrong *and* unmarked — the readout drops its `~` when it believes a count is exact, so a bad tokenizer is worse than the estimate it replaces. `load` builds optimistically and then asks the backend to confirm: two short probes, compared by the *difference* between them so the chat template's framing cancels (comparing totals would need that framing to be known, which is the thing `prompt_size_report_looks_whole` exists because we don't). The backend arrives as a `text -> count` callable, so this module makes no network calls and its tests need none. That check subsumes the offline `_VERIFIED_CONSTRUCTIONS` list — it is about the model actually being served — and catches what careful name matching cannot: a file whose *name* matched while its vocabulary belongs to another model, which builds and round-trips perfectly. When the backend cannot be asked, the offline list decides. A name that only *partly* matches is never a match either way, a publisher prefix saying who packaged the file rather than whose vocabulary is in it. `gguf` and `tokenizers` are declared dependencies, imported inside `load` rather than at module scope; that is worth ~46 ms of import time against `llmclient`'s own 1282 ms, so treat it as a convenience (a broken install declines like any other unreadable file) rather than as a constraint to preserve.
 
 - **`hybridir.py`** — `HybridIR` class: sliding-window chunking with overlap, BM25 keyword search (`bm25s`), ChromaDB vector search, reciprocal rank fusion, contiguous chunk merging. Pending-edit pattern (queue adds/updates/deletes, then `commit()`). `HybridIRFileSystemEventHandler` watches directory via watchdog, auto-commits changes. Background processing via `bgtask.TaskManager`. Tokenization: lowercase + lemmatize + stopword removal via spaCy (through raven-server).
 
@@ -69,6 +80,8 @@ Each layer only imports from layers below it. No circular dependencies.
 - **`chat_controller.py`** — GUI controller, the bridge between scaffold and DearPyGui. Classes: `DPGChatMessage` (base, thread-safe MD rendering), `DPGCompleteChatMessage` (stored nodes, with copy/reroll/continue/speak/edit/branch/delete/navigate buttons), `DPGStreamingChatMessage` (live-updating during generation), `DPGLinearizedChatView` (message container). `DPGChatController` wires everything: `chat_exchange()` → `user_turn()` + `ai_turn()` in background thread. Handles avatar emotion updates; delegates TTS with lipsync and subtitles to `raven.client.avatar_controller.DPGAvatarController`. Closures for button callbacks.
 
 - **`app.py`** — Main GUI entry point. Two-column layout: left = chat panel + input controls, right = avatar panel + mode toggles. Bottom toolbar for global actions. Help card (F1). Startup sequence: DPG init → server/LLM connection → state load → RAG load → GUI build → event loop. Hotkeys (Enter, Ctrl+N/G/S/R/U, F1/F8/F11). Animations: pulsating indicators, button flashes. Dynamic resize handler.
+
+- **`indexer.py`** — `raven-indexer`: build or refresh the RAG index over a documents directory, with no GUI. The indexing itself is `hybridir`'s — `setup` already reconciles the index against the directory on construction, and `commit` already reports progress — so what this adds is the part a library used only by long-lived apps never needed: a way to *wait* for the work and then exit. Two things follow from that. Indexing stops being coupled to a runnable desktop frontend, so a GUI-side breakage cannot block a batch run; and `-d/--db-dir` makes swapping corpora a command rather than a ritual, which is what makes measuring against a second corpus thinkable. `open_document_store` is the reusable half and is public for exactly that reason: the frontends each carried their own copy of the same six-argument `hybridir.setup` call, and a third copy is how three call sites drift. Note "refresh" reconciles rather than rebuilds — a corrupt index is fixed by deleting the index directory, not by running this again.
 
 - **`minichat.py`** — Minimal CLI REPL. Same backend as GUI (reuses scaffold, llmclient). GNU readline, special commands (`!clear`, `!docs`, `!reroll`, etc.). Serves as a reference client for the backend API layers and works over bare SSH terminals.
 
