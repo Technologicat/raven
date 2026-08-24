@@ -17,7 +17,7 @@
   - **Where the backend runs does not matter, only whether you keep the model.** A model served from another machine counts exactly here as long as a copy of it is reachable by a file path from this one — local disk or a mount.
   - It reads *past* the quantization: the file may be a different one from the backend's (`Q8_0` on disk, `Q4_K_XL` loaded) and still be the right vocabulary. Symbolic links are followed, so a folder of links into a central archive works.
   - **Loading takes a few seconds and happens in the background**, so the readout starts out as an estimate and sharpens once it is ready. Nothing waits for it.
-  - **It declines rather than guessing.** A file whose name only partly matches the model is not used — a publisher's prefix says who packaged the file, not whose vocabulary is inside — and a tokenizer whose construction has not been checked against a running model is not built (currently the Qwen-family byte-level BPE is). Either way the estimate stays, and the startup log says which of the two is counting for you.
+  - **It declines rather than guessing.** A file whose name only partly matches the model is not used — a publisher's prefix says who packaged the file, not whose vocabulary is inside — and a tokenizer whose construction has not been checked against a running model is not built. Checked so far: the byte-level BPE shared by Qwen 3.5, 3.6 and 3.8. Any other model declines, keeps the estimate, and says so in the log — which also names which of the two is counting for you.
 
 *Constellation-wide*
 
