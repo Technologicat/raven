@@ -257,7 +257,7 @@ class TestTurn:
         assert len(second.messages) == 1
         # ...and they are one conversation, not two: system, greeting, Q, A, Q, A.
         assert [message["role"] for message in chatutil.linearize_chat(datastore=datastore,
-                                                                      node_id=second.head_node_id)] == \
+                                                                       node_id=second.head_node_id)] == \
             ["system", "assistant", "user", "assistant", "user", "assistant"]
 
     def test_a_backend_failure_is_a_reply_the_model_did_not_write(self, monkeypatch, llm_settings):

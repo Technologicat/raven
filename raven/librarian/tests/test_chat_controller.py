@@ -63,7 +63,6 @@ class TestGreetingNodeIds:
         assert greeting1 in greeting_node_ids
         assert greeting2 not in greeting_node_ids
 
-
     def test_a_message_the_user_sent_is_not_a_greeting_however_it_sits(self, two_card_forest):
         # HEAD can rest on a system prompt node — deleting another card lands there — and a message sent
         # from there attaches beside the greetings. Going by position alone would call it one, and a

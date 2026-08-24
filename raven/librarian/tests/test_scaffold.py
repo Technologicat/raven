@@ -108,7 +108,6 @@ class FakeRetriever:
         return list(self.results)
 
 
-
 def grounding_context(grounded=False):
     """A tool context for direct `build_turn_prompt` tests. `grounded` is what a tool or the auto-search
     would have declared during the turn; see `scaffold._record_grounding`."""

@@ -215,4 +215,4 @@ def test_a_focused_button_ignores_the_keys_that_would_press_it(widgets, keysym):
     render()
 
     assert pressed == [], (f"a focused button acted on {keysym}: ImGui keyboard navigation appears to be "
-                          f"enabled, and parking focus on a button is no longer safe")
+                           f"enabled, and parking focus on a button is no longer safe")

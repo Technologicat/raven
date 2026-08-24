@@ -72,4 +72,3 @@ def psi(x: Union[float, np.array], m: float = 1.0) -> Union[float, np.array]:  #
             return np.exp(-1.0 / x**m) * (x > 0.0)
         except (ZeroDivisionError, OverflowError):  # for scalar x
             return 0.0
-

@@ -343,7 +343,6 @@ try:
     from pygments.formatters.html import HtmlFormatter
     from pygments.lexers import get_lexer_by_name as get_lexer, guess_lexer
 
-
     class _PygmentsRenderer(mistletoe.HTMLRenderer):
         formatter = HtmlFormatter(style='monokai')
         formatter.noclasses = True

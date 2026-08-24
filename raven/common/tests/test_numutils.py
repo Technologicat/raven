@@ -119,5 +119,3 @@ class TestNonanalyticSmoothTransition:
         val_m1 = nonanalytic_smooth_transition(0.25, m=1.0)
         val_m3 = nonanalytic_smooth_transition(0.25, m=3.0)
         assert val_m3 < val_m1
-
-

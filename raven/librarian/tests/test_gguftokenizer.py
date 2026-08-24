@@ -71,7 +71,7 @@ def test_two_blends_from_one_publisher_do_not_match_each_other(tmp_path):
     root = tmp_path / "archive"
     make_model(root, "blends", "Nous-Hermes-Llama3-8B-Q4_K_M.gguf")
     assert find_for_model(root, ["Nous-Hermes-Qwen3.5-9B"]) is None, ("a shared prefix must not be a match; it would "
-                                                                     "count with another family's vocabulary")
+                                                                      "count with another family's vocabulary")
 
 
 def test_a_publisher_prefix_does_not_prevent_a_match(tmp_path):

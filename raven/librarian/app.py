@@ -247,7 +247,7 @@ with timer() as tim:
         with dpg.theme_component(dpg.mvAll):
             pulsating_caution_backend_color = dpg.add_theme_color(dpg.mvThemeCol_Text, _CAUTION_COLOR)
         pulsating_caution_backend_glow = gui_animation.PulsatingColor(cycle_duration=2.0,
-                                                                     theme_color_widget=pulsating_caution_backend_color)
+                                                                      theme_color_widget=pulsating_caution_backend_color)
         gui_animation.animator.add(pulsating_caution_backend_glow)
     with dpg.theme(tag="my_steady_caution_backend_theme"):
         with dpg.theme_component(dpg.mvAll):

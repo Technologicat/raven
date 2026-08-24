@@ -790,7 +790,7 @@ class TestCreateInitialSystemMessage:
 
         # Withheld together: a description of who is asking means nothing with nobody answering.
         bare = chatutil.content_to_text(chatutil.create_initial_system_message(settings,
-                                                                              use_character_card=False)["content"])
+                                                                               use_character_card=False)["content"])
         assert "Answer in metric units." in bare
         assert "Name: Bot" not in bare and "materials scientist" not in bare
 

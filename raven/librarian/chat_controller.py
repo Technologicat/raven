@@ -1124,9 +1124,9 @@ class DPGChatMessage:
 
                     # Acknowledge the action in the GUI.
                     gui_animation.flash_button(button=speak_message_button,
-                                              message="Sent to avatar!",
-                                              duration=gui_config.acknowledgment_duration,
-                                              tooltip=speak_message_tooltip)
+                                               message="Sent to avatar!",
+                                               duration=gui_config.acknowledgment_duration,
+                                               tooltip=speak_message_tooltip)
             speak_enabled = (role == "assistant")
             if speak_enabled:
                 self.gui_button_callbacks["speak"] = speak_message_callback
@@ -1905,8 +1905,6 @@ class DPGCompleteChatMessage(DPGChatMessage):
                 if meta.get("fetched_at"):
                     dpg.add_text(f"saved {meta['fetched_at']}", color=(180, 180, 180))
             self._make_clickable([name_id], action=open_saved_copy)
-
-
 
     def _render_document_reference(self, document_id: str) -> None:
         """Render a handle on one knowledge-base document the AI fetched: a chip plus its two actions.
