@@ -26,7 +26,7 @@ __all__ = ["format_message_number",
            "create_chat_message",
            "create_initial_system_message",
            "create_payload",
-           "linearize_chat",
+           "linearize_chat", "descend_to_latest",
            "compute_auto_allowed_hosts",
            "upgrade_datastore",
            "remove_persona_from_start_of_line",
@@ -1028,6 +1028,27 @@ def linearize_chat(datastore: chattree.Forest, node_id: str) -> List[Dict]:
     payload_history = [datastore.get_payload(node_id=node_id) for node_id in node_id_history]  # this auto-selects the active revision of the payload of each node
     message_history = [payload["message"] for payload in payload_history]
     return message_history
+
+def descend_to_latest(datastore: chattree.Forest, start_node_id: str, recursive: bool = True) -> str:
+    """Follow the most recently written child down from `start_node_id`, and return where that lands.
+
+    "Most recent" is by the child's own timestamp, so this follows the branch the user was last working on.
+    A node with no children is its own answer, which is what makes callers need no special case for a chat
+    that has not been continued.
+
+    `recursive`: `True` (default) walks all the way down to a leaf. `False` takes exactly one step, landing
+                 on the most recent child of `start_node_id` and going no further.
+    """
+    # Here rather than in `chattree`, because the ordering is by a timestamp in the *message* payload, and
+    # the forest is deliberately ignorant of what a payload contains (hence its injected `sidecar_extractor`).
+    node_ids = datastore.get_children(start_node_id)
+    if not node_ids:
+        return start_node_id
+    latest_node_id = max(node_ids,
+                         key=lambda node_id: datastore.get_payload(node_id)["general_metadata"]["timestamp"])
+    if not recursive:
+        return latest_node_id
+    return descend_to_latest(datastore, latest_node_id)
 
 def compute_auto_allowed_hosts(datastore: chattree.Forest,
                                node_id: str,

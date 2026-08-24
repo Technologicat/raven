@@ -25,8 +25,6 @@ import urllib.parse
 import uuid
 import webbrowser
 
-import numpy as np
-
 import dearpygui.dearpygui as dpg
 
 from unpythonic import box, memoize, sym, unbox
@@ -261,33 +259,6 @@ def _get_all_system_prompt_node_ids(datastore: chattree.Forest) -> List[str]:
     See also `_get_all_greeting_node_ids`.
     """
     return [node_id for node_id in _scan_for_root_nodes(datastore) if node_id in datastore.nodes]
-
-def _descend_to_latest(datastore: chattree.Forest, start_node_id: str, recursive: bool = True) -> str:
-    """Follow the most recently written child down from `start_node_id`, and return where that lands.
-
-    "Most recent" is by the child's own timestamp, so this follows the branch the user was last working on.
-    A node with no children is its own answer, which is what makes the two callers below need no special
-    case for a chat that has not been continued.
-
-    `recursive`: `True` (default) walks all the way to a leaf — the whole conversation, as the "show chat
-                 continuation" button and the sibling arrows mean it. `False` takes exactly one step, which
-                 is what "put me where a new chat under this node would begin" wants; going further would
-                 instead land inside a conversation already held there.
-
-                 What that one step lands on is whatever a chat under this node opens with, and the caller
-                 should not assume more than that. Under a system prompt node it is the AI's greeting today
-                 — but a greeting is on its way to being optional, after which the same step may land on
-                 the user's own opening message, or stay put on a card that has nothing under it yet.
-    """
-    node_ids = datastore.get_children(start_node_id)
-    if not node_ids:
-        return start_node_id
-    payloads = [datastore.get_payload(node_id) for node_id in node_ids]
-    timestamps = [payload["general_metadata"]["timestamp"] for payload in payloads]
-    latest_node_id = node_ids[np.argmax(timestamps)]
-    if not recursive:
-        return latest_node_id
-    return _descend_to_latest(datastore, latest_node_id)
 
 def _get_all_greeting_node_ids(datastore: chattree.Forest) -> List[str]:
     """As it says on the tin.
@@ -1245,9 +1216,9 @@ class DPGChatMessage:
                 # not the whole way, which would instead drop the user into the middle of some conversation
                 # already held under that card, which is not what deleting a different one asked for.
                 if self.parent_view.chat_controller.datastore.get_parent(new_HEAD) is None:
-                    new_HEAD = _descend_to_latest(self.parent_view.chat_controller.datastore,
-                                                  new_HEAD,
-                                                  recursive=False)
+                    new_HEAD = chatutil.descend_to_latest(self.parent_view.chat_controller.datastore,
+                                                          new_HEAD,
+                                                          recursive=False)
 
                 # Refresh view
                 self.parent_view.chat_controller.app_state["HEAD"] = new_HEAD
@@ -1327,7 +1298,7 @@ class DPGChatMessage:
 
         datastore = self.parent_view.chat_controller.datastore
         def descend(start_node_id: str) -> str:
-            return _descend_to_latest(datastore, start_node_id)
+            return chatutil.descend_to_latest(datastore, start_node_id)
         def make_navigate_to_sibling(message_node_id: str, direction: str, step: Optional[int]) -> Callable:
             # Pick the most recent subtree, greedily
             def navigate_to_sibling_callback():

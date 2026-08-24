@@ -4,7 +4,37 @@ import pytest
 
 from unpythonic.env import env
 
-from raven.librarian import llmclient
+from raven.librarian import chattree, llmclient
+
+
+def chat_node_payload(role, text, timestamp=0):
+    """A chat node payload carrying the two fields the tree-shape tests read: the role, and the timestamp."""
+    return {"message": {"role": role, "content": [{"type": "text", "text": text}], "tool_calls": []},
+            "general_metadata": {"persona": None, "timestamp": timestamp}}
+
+
+@pytest.fixture
+def chat_payload():
+    """`chat_node_payload`, for a test that adds nodes of its own to a fixture forest."""
+    return chat_node_payload
+
+
+@pytest.fixture
+def two_card_forest():
+    """Two system prompts, each with its own greeting, and one message under the first.
+
+    The shape `appstate` produces once the datastore has seen more than one system prompt: every root is a
+    system prompt node, and its children are the greetings recorded under it. Shared, because two modules
+    ask questions of it — `chatutil.descend_to_latest` about where a descent lands, and `chat_controller`
+    about which nodes are greetings.
+    """
+    f = chattree.Forest()
+    card1 = f.create_node(chat_node_payload("system", "system prompt 1"), parent_id=None)
+    card2 = f.create_node(chat_node_payload("system", "system prompt 2"), parent_id=None)
+    greeting1 = f.create_node(chat_node_payload("assistant", "greeting under card 1", 1), parent_id=card1)
+    greeting2 = f.create_node(chat_node_payload("assistant", "greeting under card 2", 1), parent_id=card2)
+    message = f.create_node(chat_node_payload("user", "a user message", 2), parent_id=greeting1)
+    return f, card1, card2, greeting1, greeting2, message
 
 
 @pytest.fixture

@@ -1981,6 +1981,15 @@ loudly:
   root stopped being an anomaly on 2026-08-12, which is what the role check and the one-step descent in
   `_descend_to_latest` were for.
 
+**Two helpers are waiting on this item, deliberately** (2026-08-25). `chat_controller`'s
+`_get_all_greeting_node_ids` and `_get_all_system_prompt_node_ids` encode two conventions — *a root is a
+system prompt node*, and *a greeting is an assistant-role direct child of a root* — and `appstate` re-derives
+the first independently (`get_all_root_nodes()`, then an error message about "system prompt nodes", then a
+loop variable named `system_prompt_node_id`). That duplication is the usual argument for lifting them into
+`chatutil`, and it was considered and declined: the second convention expires when this lands, so promoting
+it into the shared layer would only mean un-promoting it. `descend_to_latest` went to `chatutil` the same day
+because it is mechanical and outlives the change; these two follow once the answer here is known.
+
 **Keep a greeting for the exhibit.** A visitor facing a blank chat has nothing telling them what this is or
 that it is ready — so the night runs with either the current "How can I help you today?" or an explanatory
 line. The philosophically correct version lands after.

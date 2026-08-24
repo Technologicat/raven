@@ -1244,3 +1244,27 @@ class TestTextFileContentPart:
         content = [chatutil.text_content_part("my question"),
                    chatutil.text_file_content_part("sidecar:abc.txt", "notes.txt", "user_attachment")]
         assert chatutil.content_to_text(content) == "my question"
+
+
+class TestDescendToLatest:
+    def test_recursive_walks_to_the_tip(self, two_card_forest):
+        # What the sibling arrows and the "show chat continuation" button mean by descending.
+        f, card1, _card2, _greeting1, _greeting2, message = two_card_forest
+        assert chatutil.descend_to_latest(f, card1) == message
+
+    def test_one_step_stops_at_the_greeting(self, two_card_forest):
+        # What deleting a system prompt wants: the start of the chat under the card we landed on, not the
+        # middle of whatever conversation was last held there.
+        f, card1, _card2, greeting1, _greeting2, _message = two_card_forest
+        assert chatutil.descend_to_latest(f, card1, recursive=False) == greeting1
+
+    def test_the_newest_child_is_the_one_taken(self, two_card_forest, chat_payload):
+        f, card1, _card2, _greeting1, _greeting2, _message = two_card_forest
+        newer_greeting = f.create_node(chat_payload("assistant", "a later greeting", 99), parent_id=card1)
+        assert chatutil.descend_to_latest(f, card1, recursive=False) == newer_greeting
+
+    def test_a_node_with_no_children_is_its_own_answer(self, two_card_forest):
+        # Which is why neither caller needs a special case for a card whose chat has not started.
+        f, _card1, _card2, _greeting1, greeting2, _message = two_card_forest
+        assert chatutil.descend_to_latest(f, greeting2) == greeting2
+        assert chatutil.descend_to_latest(f, greeting2, recursive=False) == greeting2
