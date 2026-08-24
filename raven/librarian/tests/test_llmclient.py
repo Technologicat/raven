@@ -15,11 +15,12 @@ from unpythonic.env import env
 
 from raven.librarian import chatutil
 from raven.librarian import llmclient
+from raven.librarian import llmtools
 
 # This module used to open with an `importorskip` on `llmclient`, because importing it reached
 # `raven.client.api` and so required `spacy` and `av`, neither of which CI installs. That import is now
 # deferred to the two network tool wrappers — which is also why the tests below patch
-# `llmclient._client_api` rather than `llmclient.api`. Patching through the seam is what lets this file
+# `llmtools._client_api` rather than `llmclient.api`. Patching through the seam is what lets this file
 # exercise the wrappers without the real client module being importable at all.
 
 
@@ -31,7 +32,7 @@ def _history(text):
 class _StubClientAPI:
     """Stands in for `raven.client.api` in the network-tool tests.
 
-    Patched over `llmclient._client_api`, which is the seam the tool wrappers reach the real module through.
+    Patched over `llmtools._client_api`, which is the seam the tool wrappers reach the real module through.
     Going through the seam rather than through the real module is what keeps this test file importable
     without `spacy` and `av` — the two the client stack pulls in and CI does not install.
     """
@@ -50,7 +51,7 @@ def fake_fetch(monkeypatch):
         fetched_urls.append(url)
         return {"content": f"CONTENT of {url}", "url": url, "spaSuspected": False, "title": f"TITLE of {url}"}
 
-    monkeypatch.setattr(llmclient, "_client_api", lambda: _StubClientAPI(webfetch_fetch=_fake))
+    monkeypatch.setattr(llmtools, "_client_api", lambda: _StubClientAPI(webfetch_fetch=_fake))
     return fetched_urls
 
 
@@ -149,9 +150,9 @@ class TestWebfetchWrapperGating:
 @pytest.fixture
 def clean_session_approvals():
     """Isolate the module-level session-approved-hosts set across tests."""
-    llmclient._session_approved_hosts.clear()
+    llmtools._session_approved_hosts.clear()
     yield
-    llmclient._session_approved_hosts.clear()
+    llmtools._session_approved_hosts.clear()
 
 
 class TestSessionApprovedHosts:
@@ -310,7 +311,7 @@ class TestWebsearchWrapper:
 
     @staticmethod
     def _patch_search(monkeypatch, data):
-        monkeypatch.setattr(llmclient, "_client_api",
+        monkeypatch.setattr(llmtools, "_client_api",
                             lambda: _StubClientAPI(websearch_search=lambda *a, **k: {"data": data}))
 
     def test_one_text_part_per_result_with_markdown_links(self, monkeypatch):
@@ -347,7 +348,7 @@ class TestWebsearchWrapper:
         def fake_search(query, engine, num):
             captured["engine"] = engine
             return {"data": []}
-        monkeypatch.setattr(llmclient, "_client_api", lambda: _StubClientAPI(websearch_search=fake_search))
+        monkeypatch.setattr(llmtools, "_client_api", lambda: _StubClientAPI(websearch_search=fake_search))
         return captured
 
     def test_uses_configured_engine_by_default(self, monkeypatch):
