@@ -145,14 +145,8 @@ def dialog(dpg_context, tmp_path, request):
     os.chdir(old_cwd)
 
 
-@pytest.fixture
-def make_dialog(dpg_context, tmp_path, request):
-    """Build a `FileDialog` over an empty temporary directory, with arbitrary keyword arguments.
-
-    For the tests that are about what the *constructor* decides rather than about what gets listed. Same
-    per-test tag and working-directory care as `dialog`; the counter distinguishes several dialogs built
-    within one test.
-    """
+def _dialog_builder(tmp_path, request):
+    """The body behind `make_dialog` and `mapped_make_dialog`, which differ only in which context they use."""
     old_cwd = os.getcwd()
     dialogs = []
 
@@ -166,6 +160,34 @@ def make_dialog(dpg_context, tmp_path, request):
         dialog.destroy()
     _release_animations()
     os.chdir(old_cwd)
+
+
+@pytest.fixture
+def make_dialog(dpg_context, tmp_path, request):
+    """Build a `FileDialog` over an empty temporary directory, with arbitrary keyword arguments.
+
+    For the tests that are about what the *constructor* decides rather than about what gets listed. Same
+    per-test tag and working-directory care as `dialog`; the counter distinguishes several dialogs built
+    within one test.
+
+    Builds in this module's own unmapped context, so nothing here can render a frame. `mapped_make_dialog`
+    is the same builder in the session's mapped one, for the tests that can.
+    """
+    yield from _dialog_builder(tmp_path, request)
+
+
+@pytest.fixture
+def mapped_make_dialog(mapped_gui_context, tmp_path, request):
+    """`make_dialog` in the session's mapped viewport, for the `gui` tests that render real frames.
+
+    Identical to `make_dialog` in everything it does; the two differ only in which context they are built
+    in, which is the fixture each declares.
+    """
+    # The shared context rather than this module's, which is never shown. Mapping one here as well would put
+    # a second mapped context in the process, and destroying either of them leaves GLFW delivering focus
+    # events to a freed backend — which is the fault this module's `gui` tests used to die of, at the end of
+    # an otherwise green group.
+    yield from _dialog_builder(tmp_path, request)
 
 
 def shown(dialog):
@@ -2483,7 +2505,7 @@ def test_a_card_that_cannot_be_built_leaves_the_dialog_where_it_was(dialog, no_f
 
 
 @pytest.mark.gui
-def test_the_sort_row_fits_the_minimum_width(make_dialog):
+def test_the_sort_row_fits_the_minimum_width(mapped_make_dialog):
     """The floor in `min_size` is a measurement, and this is what re-takes it when the row grows.
 
     The sort buttons are fixed-width and the row does not reflow, so a control added to its right end
@@ -2497,8 +2519,7 @@ def test_the_sort_row_fits_the_minimum_width(make_dialog):
     comes out 33 px narrower and the floor this justifies would be 33 px too low.
     """
     guiutils.setup_default_font(20)
-    dialog = make_dialog()
-    dpg.show_viewport()
+    dialog = mapped_make_dialog()
     try:
         dialog.show_file_dialog()
         dpg.set_item_width(dialog.tag, dialog.min_size[0])  # tag
@@ -2531,7 +2552,7 @@ def _clear_the_popup_stack():
 
 
 @pytest.mark.gui
-def test_the_help_card_is_as_tall_as_the_keys_this_dialog_has(make_dialog, no_frame_wait):
+def test_the_help_card_is_as_tall_as_the_keys_this_dialog_has(mapped_make_dialog, no_frame_wait):
     """A dialog offering fewer keys gets a shorter card, and no card is left shorter than its content.
 
     `_HELP_CARD_SIZE` is one constant while the rows are per instance, so without the fit every card is
@@ -2544,9 +2565,8 @@ def test_the_help_card_is_as_tall_as_the_keys_this_dialog_has(make_dialog, no_fr
     what is checked is the height the fit arrives at, not the placement, which needs a real render loop.
     """
     guiutils.setup_default_font(20)
-    fullest = make_dialog(multi_selection=True, filter_list=[".*"], file_filter=".*")
-    leanest = make_dialog(pick="dir-with-contents")
-    dpg.show_viewport()
+    fullest = mapped_make_dialog(multi_selection=True, filter_list=[".*"], file_filter=".*")
+    leanest = mapped_make_dialog(pick="dir-with-contents")
     try:
         for _ in range(12):  # `HelpWindow` declines to build during a context's first ten frames
             dpg.render_dearpygui_frame()

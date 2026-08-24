@@ -1085,15 +1085,9 @@ where fixtures are shared across many tests — `test_fdialog.py`, `test_tablecu
 every test using it, which is exactly what happened in `test_utils.py`. The control's message should
 accuse the fixture, not the code.
 
-## The `--run-gui` group segfaults if a second module maps a context
+## `systemd-coredump` truncates a core from the heavier test runs
 
-*Cluster: testing · Cost: ? · Gate: none — the group is red · Filed: 2026-08-13 · Updated: 2026-08-24*
-
-**Still reproducing on 2026-08-24**, unchanged, on a tree carrying NumPy 2 and a 57-package dependency
-refresh — `dearpygui` itself moved in none of it, and the crash is identical, so nothing about it is
-dependency-related. It dies at 98%, after 2857 tests pass. **The same test passes on its own** (`pytest
---run-gui <nodeid>`, 2.58 s), which is what "the collection, not any one test" looks like from the other
-side, and is the cheap way to check a `gui` test without fighting the group.
+*Cluster: testing · Cost: S · Gate: needs root, and is machine setup rather than a repository change · Filed: 2026-08-13 · Updated: 2026-08-24*
 
 **Whether the core is readable depends on which command produced it**, and the margin is not large.
 `systemd-coredump` defaults to `ProcessSizeMax=2G` / `ExternalSizeMax=2G`. Peak RSS, measured 2026-08-24
@@ -1127,72 +1121,13 @@ ExternalSizeMax=8G
 Needs root, and is machine setup rather than a repository change — noted here because this item is where
 somebody will next reach for `coredumpctl` and find it hands back nothing.
 
-**This has happened: `pytest -m "not ml" --run-gui` segfaults, as of 2026-08-21.** It dies in
-`test_fdialog.py::test_the_sort_row_fits_the_minimum_width`, which is the second module to map a viewport
-and render frames, exactly as predicted below. The core puts the fault in
-`ImGui_ImplGlfw_WindowFocusCallback` reached from GLFW's `processEvent` — a focus event delivered to a
-backend belonging to a context that `test_focus_semantics` has since destroyed. Reproduced with a
-same-day unrelated change both applied and stashed, so it is the collection, not any one test.
-
-The crashing thread, which is the whole of what the core says:
-
-```
-Thread 1 (the main thread; Python side: test_fdialog.py, test_the_sort_row_fits_the_minimum_width,
-          inside dpg.render_dearpygui_frame)
-#4  <signal handler called>
-#5  ImGui_ImplGlfw_WindowFocusCallback(GLFWwindow*, int)   from dearpygui/_dearpygui.so
-#6  _glfwInputWindowFocus                                  from dearpygui/_dearpygui.so
-#7  processEvent                                           from dearpygui/_dearpygui.so
-```
-
-Every other thread is idle in a futex or a driver wait, so the 2600-line full trace adds nothing; it is
-kept out of the repo for its size, under `00_stuff/segfault-run-gui/` on the machine that produced it.
 **The cores themselves outlive a weekend**: `systemd-coredump` writes them to `/var/lib/systemd/coredump/`
 on disk, and the tmpfiles rule keeps that directory for two weeks — so re-reading one with
 `coredumpctl --debugger-arguments=... gdb <PID>` is available for a while, not only on the day.
 
-The default `pytest -m "not ml"` is unaffected and green; only the opt-in `gui` group is red. **The
-practical consequence is that `--run-gui` currently cannot verify a `gui` test in the same run as the
-others** — a new one has to be checked with `-m gui` or by module, which is how the help-card fit test was
-checked on 2026-08-21.
-
-The prediction below stands as written, and its detail is still the best account of the mechanism.
-
-`pytest --run-gui` passed until 2026-08-21, and stops passing the moment anyone adds a second `gui`-marked
-module that maps a viewport and renders frames. Not a hypothetical even then: writing one to pin DPG's
-row-visibility semantics segfaulted the group 3/3, and the test was dropped rather than shipped. What
-survives of it is `investigations/filedialog-performance/probe_row_visibility.py`, which answers the same
-question outside pytest, and the finding itself in `dpg-notes.md` under "To find which rows are on screen".
-
-**What was measured (2026-08-13).**
-
-- `test_focus_semantics.py` runs first by alphabetical collection order, and its `mapped_viewport` fixture
-  creates, shows, renders and destroys a context **once per test**, five times.
-- A module added after it crashes the run: **3/3** when it builds a table, **1/3** when it builds 400 plain
-  buttons instead. So a table makes it near-certain rather than causing it.
-- Order is what decides: new module *before* `test_focus_semantics` passes (11 tests), after it dies. Same
-  files, same count.
-- Reducing the new module from six contexts to one module-scoped context did **not** help.
-- `test_filedrop`'s `gui` test was the only other one, and it is safe on two counts — it sorts first, and
-  it renders no frames. `test_fdialog.py` has since acquired `gui` tests that do both, which is what tipped
-  it.
-
-**What was ruled out**, all clean at 3/3 in a bare script outside pytest: five focus-like cycles then a
-table cycle; six table cycles; twelve plain cycles; both orders of focus-like and table. So the crash needs
-the pytest process and does not reproduce from the widget recipe alone — which is where the investigation
-stopped.
-
-**Why it mattered while the suite was still green.** The green depended on a filename sorting before
-another filename. Nobody writing the next `gui` test would know that, and what they would get is a
-segfault with no traceback, in a group that passed yesterday. That is what happened.
-
-**Routes worth weighing**, none investigated: run each `gui` module in its own process (`pytest-forked`, or a
-subprocess helper the test asserts against, which also sidesteps the focus-stealing problem); or make
-`test_focus_semantics` share one context across its five tests, since it is the module doing the repeated
-cycling.
-
-Related: `dpg-notes.md`, "Context recreation is not reliably safe once real widgets have rendered", which is
-the same fault seen from outside pytest.
+The segfault these measurements were taken during is fixed (2026-08-24, one session-scoped mapped context;
+see `dpg-notes.md`, "Context recreation is not reliably safe once real widgets have rendered"). What
+remains is the limit itself, which applies to any core a full run produces.
 
 ## Attachment state is carried by colour and hover alone
 

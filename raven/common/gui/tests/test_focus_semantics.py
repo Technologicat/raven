@@ -21,7 +21,8 @@ the signal to go simplify the handlers rather than a defect to work around.
 These tests map a real window, because focus is only meaningful once frames are rendering, and
 `dpg.render_dearpygui_frame()` aborts the process when there is nothing to render into. Mapping a window
 takes keyboard focus from whatever the developer is typing into, so they are marked `gui` and skipped unless
-`--run-gui` is passed. The window is on screen for well under a second.
+`--run-gui` is passed. The window is the session-wide one from `mapped_gui_context`, so it stays up for as
+long as the whole `gui` group runs; each test builds its own widgets in it and takes them down again.
 
 Most of these only read focus state back. Two synthesize key presses, and say so in their names: that a
 focused button ignores Space and Enter — DPG leaves ImGui's keyboard-nav activation off — is what makes a
@@ -41,6 +42,8 @@ import time
 
 import pytest
 
+from unpythonic.env import env
+
 dpg = pytest.importorskip("dearpygui.dearpygui", reason="dearpygui not installed (GUI toolkit absent in CI)")
 
 pytestmark = pytest.mark.gui
@@ -51,25 +54,37 @@ _SETTLE_FRAMES = 10
 
 
 @pytest.fixture
-def mapped_viewport():
-    """A DPG context whose viewport is actually shown, so frames can be rendered.
+def widgets(mapped_gui_context, request):
+    """The window these tests read focus from: a child window, a text field and a button.
 
-    Contrast `dpg_context` in the sibling test modules, which deliberately never shows its viewport. Here
-    the mapping is the point: an unmapped viewport cannot render, and focus does not exist until it does.
+    Yields an `env` carrying this test's tag for each of `main`, `panel`, `field` and `button`, plus the
+    `title` of the window to aim synthetic key presses at.
     """
-    dpg.create_context()
-    dpg.create_viewport(title="raven focus semantics test", width=320, height=240)
-    dpg.setup_dearpygui()
+    # The tags are per-test and the window is deleted on the way out, because the session's context outlives
+    # each test and a duplicate DPG widget ID takes the process down rather than raising. Same care, for the
+    # same reason, as `test_fdialog`'s `dialog` fixture.
+    #
+    # The context itself is shared rather than built here: a context created and destroyed per test is the
+    # cycle that segfaulted this whole group, and it is the *cycle* that breaks rather than the mapping.
+    name = request.node.name
+    tags = env(main=f"focus_main_{name}",
+               panel=f"focus_panel_{name}",
+               field=f"focus_field_{name}",
+               button=f"focus_button_{name}",
+               title=mapped_gui_context)
 
-    with dpg.window(tag="main"):
-        dpg.add_child_window(tag="panel", width=300, height=90)
-        dpg.add_input_text(tag="field", multiline=True, width=300, height=60)
-        dpg.add_button(tag="button", label="a button")
-    dpg.set_primary_window("main", True)
+    with dpg.window(tag=tags.main):
+        dpg.add_child_window(tag=tags.panel, width=300, height=90)
+        dpg.add_input_text(tag=tags.field, multiline=True, width=300, height=60)
+        dpg.add_button(tag=tags.button, label="a button")
+    dpg.set_primary_window(tags.main, True)
 
-    dpg.show_viewport()
-    yield
-    dpg.destroy_context()
+    yield tags
+
+    # Released before the window goes: "primary" is context-wide state, and leaving it pointing at an item
+    # about to be deleted outlives this test in a way a per-test context used to hide.
+    dpg.set_primary_window(tags.main, False)
+    dpg.delete_item(tags.main)
 
 
 def render(n_frames: int = _SETTLE_FRAMES) -> None:
@@ -78,32 +93,32 @@ def render(n_frames: int = _SETTLE_FRAMES) -> None:
         dpg.render_dearpygui_frame()
 
 
-def test_a_text_field_reports_focused_without_anyone_touching_it(mapped_viewport):
+def test_a_text_field_reports_focused_without_anyone_touching_it(widgets):
     """ImGui's auto-focus, and the reason `is_item_focused` is the wrong thing to gate a hotkey on."""
     render()
-    assert dpg.is_item_focused("field") is True  # tag  # nobody has clicked or typed
+    assert dpg.is_item_focused(widgets.field) is True  # nobody has clicked or typed
 
 
-def test_an_untouched_text_field_is_not_active(mapped_viewport):
+def test_an_untouched_text_field_is_not_active(widgets):
     """The other half: *active* distinguishes the auto-focused field from one holding the caret.
 
     Without this, the previous test would merely say focus is unreliable. Together they say which of the
     two predicates a hotkey handler should ask.
     """
     render()
-    assert dpg.is_item_active("field") is False  # tag
+    assert dpg.is_item_active(widgets.field) is False
 
 
-def test_focus_item_moves_focus_between_ordinary_items(mapped_viewport):
+def test_focus_item_moves_focus_between_ordinary_items(widgets):
     """The baseline: `focus_item` does work, so the child-window result below is about child windows."""
     render()
-    dpg.focus_item("button")  # tag
+    dpg.focus_item(widgets.button)
     render()
-    assert dpg.is_item_focused("button") is True  # tag
-    assert dpg.is_item_focused("field") is False  # tag
+    assert dpg.is_item_focused(widgets.button) is True
+    assert dpg.is_item_focused(widgets.field) is False
 
 
-def test_focus_item_does_not_focus_a_child_window(mapped_viewport):
+def test_focus_item_does_not_focus_a_child_window(widgets):
     """`focus_item` cannot give a child window keyboard focus, however plainly one asks.
 
     Scoped to the API on purpose: a child window is not unfocusable in general. Clicking one — including
@@ -111,14 +126,14 @@ def test_focus_item_does_not_focus_a_child_window(mapped_viewport):
     `investigations/dpg-focus/` rather than here. What has no working spelling is *asking*.
     """
     render()
-    dpg.focus_item("button")  # tag  # somewhere definite first, so the result cannot be the initial state
+    dpg.focus_item(widgets.button)  # somewhere definite first, so the result cannot be the initial state
     render()
-    dpg.focus_item("panel")  # tag
+    dpg.focus_item(widgets.panel)
     render()
-    assert dpg.is_item_focused("panel") is False  # tag
+    assert dpg.is_item_focused(widgets.panel) is False
 
 
-def test_focus_item_on_a_child_window_activates_a_text_field_instead(mapped_viewport):
+def test_focus_item_on_a_child_window_activates_a_text_field_instead(widgets):
     """And the request does not fail quietly — it hands the caret to the field it was meant to leave.
 
     This is the one that makes the child-window case a hazard rather than a no-op, so it is asserted
@@ -126,14 +141,14 @@ def test_focus_item_on_a_child_window_activates_a_text_field_instead(mapped_view
     which case the handlers that work around it can be simplified.
     """
     render()
-    dpg.focus_item("button")  # tag
+    dpg.focus_item(widgets.button)
     render()
-    assert dpg.is_item_active("field") is False, "precondition: the field starts without the caret"  # tag
+    assert dpg.is_item_active(widgets.field) is False, "precondition: the field starts without the caret"
 
-    dpg.focus_item("panel")  # tag
+    dpg.focus_item(widgets.panel)
     render()
-    assert dpg.is_item_focused("field") is True  # tag
-    assert dpg.is_item_active("field") is True  # tag
+    assert dpg.is_item_focused(widgets.field) is True
+    assert dpg.is_item_active(widgets.field) is True
 
 
 def _press(keysym: str, window_title: str) -> bool:
@@ -157,27 +172,27 @@ def _press(keysym: str, window_title: str) -> bool:
     return True
 
 
-def test_synthesized_keys_reach_the_app_at_all(mapped_viewport):
+def test_synthesized_keys_reach_the_app_at_all(widgets):
     """The control for the test below, and the reason its silence can be read as an answer.
 
     A test asserting that a key did *nothing* passes just as well when the key never arrived — so one
     keystroke has to be shown landing somewhere before the absence of another means anything. A text field
     holding the caret is the cheapest witness: type into it and its value changes.
     """
-    dpg.set_value("field", "")  # tag
+    dpg.set_value(widgets.field, "")
     render()
-    dpg.focus_item("field")  # tag
+    dpg.focus_item(widgets.field)
     render()
 
-    if not _press("x", "raven focus semantics test"):
+    if not _press("x", widgets.title):
         pytest.skip("xdotool/wmctrl not available, cannot synthesize a key press")
     render()
 
-    assert dpg.get_value("field") == "x", "synthesized keys are not reaching the app"  # tag
+    assert dpg.get_value(widgets.field) == "x", "synthesized keys are not reaching the app"
 
 
 @pytest.mark.parametrize("keysym", ["Return", "space"])
-def test_a_focused_button_ignores_the_keys_that_would_press_it(mapped_viewport, keysym):
+def test_a_focused_button_ignores_the_keys_that_would_press_it(widgets, keysym):
     """The property that makes a button a safe place to park focus.
 
     Parking focus somewhere is how a panel says "the keyboard is mine now" — `FileDialog` does it on every
@@ -189,13 +204,13 @@ def test_a_focused_button_ignores_the_keys_that_would_press_it(mapped_viewport, 
     where `xdotool` is absent, which is every CI runner.
     """
     pressed = []
-    dpg.configure_item("button", callback=lambda: pressed.append(keysym))  # tag
+    dpg.configure_item(widgets.button, callback=lambda: pressed.append(keysym))
     render()
-    dpg.focus_item("button")  # tag
+    dpg.focus_item(widgets.button)
     render()
-    assert dpg.is_item_focused("button") is True, "precondition: the button holds focus"  # tag
+    assert dpg.is_item_focused(widgets.button) is True, "precondition: the button holds focus"
 
-    if not _press(keysym, "raven focus semantics test"):
+    if not _press(keysym, widgets.title):
         pytest.skip("xdotool/wmctrl not available, cannot synthesize a key press")
     render()
 

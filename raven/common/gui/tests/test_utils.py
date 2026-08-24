@@ -33,19 +33,31 @@ def dpg_context():
 
 
 @pytest.fixture
-def mapped_dpg_context():
-    """A DPG context whose viewport is big enough to be looked at, for the tests that map one."""
-    # The unmapped fixture's 100x100 costs nothing while nobody sees it, and is the wrong shape the moment
-    # someone calls `show_viewport`: the windows these tests build are several times that, so every one of
-    # them is larger than the screen it is drawn on. What that breaks is measurement rather than drawing.
-    # ImGui only pulls an offscreen window back inside the viewport when there is an inside to pull it to,
-    # so at 100 wide a parked window simply stays parked — and a test asking whether a park was clamped
-    # gets the same answer either way, which is no answer.
-    dpg.create_context()
-    dpg.create_viewport(width=1280, height=800)  # DPG's own default; the widest window here is 700
-    dpg.setup_dearpygui()
+def mapped_dpg_context(mapped_gui_context):
+    """The session's mapped viewport, with whatever this test builds in it taken down afterwards.
+
+    For the tests that need frames rendered into a window somebody could look at, as opposed to the
+    unmapped `dpg_context` above.
+    """
+    # The viewport is the session-wide one rather than a context of this fixture's own, because creating and
+    # destroying a context per test is what segfaulted the whole `gui` group: DPG keeps its context in
+    # process-global state, and a focus event arriving after `destroy_context` reaches a freed backend.
+    #
+    # Its 1280x800 is load-bearing, and the reason this fixture cannot simply borrow the unmapped one's
+    # 100x100: the windows these tests build are several times that, so every one of them would be larger
+    # than the screen it is drawn on. What that breaks is measurement rather than drawing. ImGui only pulls
+    # an offscreen window back inside the viewport when there is an inside to pull it to, so at 100 wide a
+    # parked window simply stays parked — and a test asking whether a park was clamped gets the same answer
+    # either way, which is no answer.
+    #
+    # Nothing here needs per-test tags, the two tests using this fixture building disjoint trees that are
+    # each created once in a session. Cleaning up regardless is what keeps that true: a leftover window goes
+    # on rendering into the shared viewport, where the next test's measurements have to live.
+    before = set(dpg.get_all_items())
     yield
-    dpg.destroy_context()
+    for item in dpg.get_all_items():
+        if item not in before and dpg.does_item_exist(item):  # a deleted container takes its children
+            dpg.delete_item(item)
 
 
 def test_the_test_runner_itself_is_on_the_render_thread():
