@@ -13,35 +13,56 @@ importer first. Recorded here rather than in that item because a trigger nobody 
 the tool for finding things in the backlog cannot be gated on someone remembering to look for it *in* the
 backlog. The recurring moment to ask is the triage step in the release procedure.
 
-## The context-fill meter jumps from far too low to somewhat too high, and settles on an estimate
+## The context-fill meter reads ~1% until something extracts the attachments
 
-*Cluster: librarian-responsiveness · Cost: S · Gate: none — **raised for Monday** (Juha, 2026-08-22) · Filed: 2026-08-22 · See also: `investigations/prompt-size-cache-relative/`*
+*Cluster: librarian-responsiveness · Cost: S · Gate: none · Filed: 2026-08-22 · Re-measured 2026-08-24 · See also: `investigations/prompt-size-cache-relative/`*
 
-Three fixes on 2026-08-21/22 left the readout honest and still unsatisfying, on a branch with three attached
-PDFs (true size ~56k tokens, 43% of a 128 Ki window):
+On a branch with three attached PDFs, the readout goes **~1% → ~62% → 68%**. The last figure is correct
+(the branch really is 68% of a 131072 window, established two ways in the investigation), and the middle one
+is the local estimate, ~8% low. The defect is the first: **~1% for a chat that is two-thirds full.**
 
-- **The immediate count reads ~1%**, because it now skips attachments it has not extracted — which is what
-  keeps pypdf off the callback thread, and is right, but 1% for a chat that is 43% full is a big lie for the
-  moment it stands.
-- **The backend's exact figure is refused** as implausible (it reports an order of magnitude short; see the
-  investigation), so what replaces the 1% is the *local estimate*.
-- **That estimate runs ~44% high** — 81158 against a true 56365, i.e. it will show ~62% for a branch that is
-  43% full. Marked `~`, so it is not claiming to be exact, but it is the number the user ends up reading.
+The cause is that the immediate count skips attachments whose text is not extracted yet, which is what keeps
+pypdf off the DPG callback thread and is the right trade — but it makes the readout say `1411 tokens` when
+the true figure is ~88500. It is marked `~`, and no `~` covers a factor of sixty.
 
-**Not yet verified against a build that has the refusal in it.** Juha saw 1% → 7% on 2026-08-22, from an app
-launched before that commit; the predicted post-fix behaviour is 1% → ~62%, both marked `~`. Confirm that
-first — if 7% still appears, the refusal is not firing and this item is about something else.
+Two directions, cheapest first:
 
-Three directions, cheapest first:
-
-- **Estimate an un-extracted attachment from its sidecar's byte size** rather than counting it as nothing. A
-  PDF's text layer is a roughly predictable fraction of its bytes, and anything in the right order of
-  magnitude beats 1%. Keeps the extraction off the hot path, which is the constraint that started this.
+- **Estimate an un-extracted attachment from its sidecar's byte size** rather than counting it as nothing.
+  Anything in the right order of magnitude beats 1%, and it keeps extraction off the hot path, which is the
+  constraint that started this. Note the ratio is content-dependent — measured across slices of one corpus it
+  ran 4.28 down to 3.45 characters per token as prose gave way to reference lists — so this is an order of
+  magnitude, not a number to dress up as exact.
 - **Extract in the background as soon as a branch becomes current**, so the honest number arrives a moment
   later without blocking anything. Overlaps with brief 12, which persists extracted text and makes the
   question go away.
-- **Recalibrate the character ratio.** 44% high is a lot, and the readout has no better source now that the
-  backend's figure is untrustworthy on at least one backend.
+
+**Two things this item used to say are false**, and are recorded here so they are not re-derived: the local
+estimate does *not* run 44% high (it runs ~8% low), and the branch was never "43% full". Both came from
+treating a backend figure as ground truth; see the investigation for how that happened.
+
+## Raven can count tokens exactly and offline on any backend, and doesn't
+
+*Cluster: librarian-responsiveness · Cost: S · Gate: none · Filed: 2026-08-24 · See also: `investigations/prompt-size-cache-relative/`*
+
+`llmclient.count_tokens` has three tiers, and prefers tier 1: a local tokenizer at
+`config.llm_tokenizer_path`, exact and offline on every backend. **It is `None`, so the tier that would have
+prevented the whole `prompt_size_report_looks_whole` saga is present and unused.** Configuring it makes both
+the immediate count and the branch total exact, and removes the need to believe `usage["prompt_tokens"]` at
+all where it applies.
+
+The one piece of work: `_load_local_tokenizer` calls `AutoTokenizer.from_pretrained(path)`, which wants a
+directory of Hugging Face tokenizer files — and a llama.cpp-family user has a `.gguf`, which carries the
+vocabulary, the merges and the chat template. Measured 2026-08-24 on the served `qwen3.5-9b`: 248320 tokens,
+247587 merges, and a count agreeing with the backend's own to **0.05%**. `transformers` reads this directly
+via `from_pretrained(dir, gguf_file=...)`; `gguf` is in the dev group for the measurement already.
+
+Two things to get right, both Juha's (2026-08-24):
+
+- **The backend is not necessarily local.** No GGUF on this machine means no tier 1, so the estimate and
+  `prompt_size_report_looks_whole` stay load-bearing and neither becomes redundant.
+- **Say which tier is in use, at startup, at INFO.** Whether a readout is exact or estimated is currently
+  invisible except as the `~` on a percentage, and the difference between "exact, offline" and "trusting a
+  figure we have twice caught being wrong" is worth one line in the log.
 
 ## Ctrl+Left / Ctrl+Right cannot flick between siblings, because each switch re-picks its own target
 

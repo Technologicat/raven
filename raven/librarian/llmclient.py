@@ -2333,29 +2333,34 @@ def invoke(settings: env,
                interrupted=interrupted)
 
 # How far below the local estimate a backend's `prompt_tokens` may sit and still be believable as a count of
-# the *whole* prompt. Measured 2026-08-22 (`investigations/prompt-size-cache-relative/`): on a 56365-token
-# prompt the character-ratio estimate read 81158 — 44% high — so a tight bound would reject good data, while
-# the short report for the same prompt was 8745, an order of magnitude down. Anything in between is not a
-# case the measurements have seen; half was chosen as the midpoint of a gap that wide, and the log line in
-# `prompt_size_report_looks_whole` is what would show it being wrong.
+# the *whole* prompt. Measured 2026-08-24 (`investigations/prompt-size-cache-relative/`): on a prompt whose
+# true size is ~88500 tokens — established offline from the served model's own tokenizer — the same backend
+# reported 88524 on one day and 8745 on another, while the character-ratio estimate read 81158, about 8%
+# low. So the believable and the absurd are an order of magnitude apart, and the estimate sits near the
+# truth; half is the midpoint of that gap, and the log line in `prompt_size_report_looks_whole` is what
+# would show it being wrong.
 _WHOLE_PROMPT_MIN_FRACTION_OF_ESTIMATE = 0.5
 
 
 def prompt_size_report_looks_whole(reported: int, estimate: int) -> bool:
     """Whether a backend's reported `prompt_tokens` is plausibly the size of the *whole* prompt.
 
-    **It is not always.** Measured against LM Studio on 2026-08-22: a branch whose true prompt is 56365
-    tokens reported 8745 once the backend had been asked about it before — an order of magnitude short, with
-    nothing in the response saying so (no `prompt_tokens_details.cached_tokens`, just a smaller number). And
-    Raven is what asks twice: `prefill` exists partly to warm the KV cache for the next turn.
+    **It is not always.** Measured against LM Studio: a branch whose true prompt is ~88500 tokens reported
+    8745 on one day and 88524 on another, for byte-identical content — an order of magnitude short in the
+    first case, with nothing in the response saying so (no `prompt_tokens_details.cached_tokens`, just a
+    smaller number).
 
     **Why it does that is not established**, which is why this only refuses a figure rather than trying to
     repair one. The obvious reading — that it counts what it had to process, the rest being cached — is
-    contradicted by a ~600-token nonce appended to the history leaving the figure unchanged. See
+    contradicted twice over: a byte-identical prompt sent again reports the same figure, not a smaller one,
+    and appending to a prompt moves the figure as a straight count would. See
     `investigations/prompt-size-cache-relative/`.
 
-    Believed as-is, that reads to a user as the conversation having shrunk — a chat with three attached
-    papers showing 7% of the window instead of 43%.
+    Believed as-is, a short figure reads to a user as the conversation having shrunk — a chat with three
+    attached papers showing 7% of the window instead of 68%.
+
+    Where a local tokenizer is configured (`count_tokens` tier 1) none of this arises, since the backend is
+    never asked; that is unavailable when the backend is on another machine, which is why this stays.
 
     `estimate`: the local character-ratio count for the same branch, from `count_branch_tokens`. Crude, and
                 that is fine here: the two cases are an order of magnitude apart, so this only has to tell
@@ -2366,7 +2371,7 @@ def prompt_size_report_looks_whole(reported: int, estimate: int) -> bool:
     if reported >= _WHOLE_PROMPT_MIN_FRACTION_OF_ESTIMATE * estimate:
         return True
     logger.info(f"prompt_size_report_looks_whole: backend reported {reported} prompt tokens against a local estimate of {estimate}; "
-                f"treating it as a cache-relative count of the part it had to process, and keeping the estimate.")
+                f"too far below to be a count of the whole prompt, so keeping the estimate.")
     return False
 
 
@@ -2379,10 +2384,11 @@ def prefill(settings: env,
 
     Two purposes, both side effects of submitting the real prompt:
 
-      1. **Exact prompt size.** The returned env's `usage["prompt_tokens"]` is the backend's own count of the whole
-         templated prompt (system prompt + character card + history + tool definitions) — exact on every backend,
-         including LM Studio / generic, which have no offline token-count endpoint. This upgrades the GUI context-fill
-         indicator from a calibrated estimate (`~X%`) to the real figure (`X%`).
+      1. **Prompt size.** The returned env's `usage["prompt_tokens"]` is the backend's own count of the whole
+         templated prompt (system prompt + character card + history + tool definitions), which is the only figure
+         available on backends with no offline token-count endpoint (LM Studio / generic). It upgrades the GUI
+         context-fill indicator from a calibrated estimate (`~X%`) to the reported figure (`X%`) — after
+         `prompt_size_report_looks_whole` has checked it, since it is not always about the whole prompt.
 
       2. **KV-cache warm-up.** The backend processes (prefills) the prompt, so when the user's next turn sends the
          same prefix, the expensive prompt-processing pass is already cached and generation starts sooner.
