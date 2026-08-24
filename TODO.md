@@ -12,6 +12,11 @@ Six things chosen together at the end of the 2026-08-24/25 session, listed becau
 file and the *selection* would otherwise not survive anywhere. Delete this block once it stops describing
 where the work is — it is an entry point, not a plan.
 
+**Start with the Researchers' Night triage, not with item 1** (Juha, 2026-08-25). Four weeks to the
+deadline, and the concrete Autumn 2026 list below is dated 2026-07-28 with a month of work landed against
+it — so what these six are worth is exactly what the triage is for deciding. See
+`briefs/researchers-night/README.md`, "Four weeks out, 2026-08-25".
+
 1. **The prompt viewer** — below under *Librarian → Chat UI*, with its decisions already taken.
 2. **The abortable prefill, together with the turn-sequencing race** — `TODO_DEFERRED.md`, "Idle prefill
    fires even when the HEAD's token count is already exact" and "in-flight AI turn bleeds into a new chat".
