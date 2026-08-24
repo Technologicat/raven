@@ -69,6 +69,12 @@ if TYPE_CHECKING:
 # arriving here should meet the catalogue before any of the implementations. `TOOL_ENTRYPOINTS`, the
 # third member of this set, cannot join it — it maps each name to the *function*, so it has to wait
 # until those exist, and sits directly below them.
+#
+# It could be built by name instead — resolved from this module's namespace, or accumulated by a
+# decorator on each tool — which would let the whole catalogue lead, and would close the gap this
+# module's docstring warns about, since registering and declaring would become one act. Considered
+# 2026-08-25 and not done: it trades a dependency you can see for one you cannot, and the mismatch it
+# would prevent has not actually happened. Worth revisiting if it ever does.
 # ------------------------------------------------------------------------------------------------
 
 
@@ -375,7 +381,7 @@ CANONICAL_NO_DOCUMENT_DATABASE = ("The document database is not available in thi
 CANONICAL_NO_DOCUMENT_MATCHES = ("The document database contains no matches for that query. A differently "
                                  "worded query may match, since this search is over the documents' own wording.")
 
-def search_documents(query: str) -> tuple[str | list[dict], dict]:
+def search_documents(query: str) -> tuple[str, dict]:
     """Search the local document database (RAG); return the matches formatted for the LLM.
 
     Tool entrypoint for the LLM's `search_documents` tool - the model-driven counterpart to the automatic
@@ -393,7 +399,9 @@ def search_documents(query: str) -> tuple[str | list[dict], dict]:
     Results are formatted by `chatutil.format_docs_matches`, the same formatter the automatic search uses,
     so a match reads identically whoever asked for it.
 
-    Returns `(output, metadata)`: the metadata declares whether the result is grounding material, which
+    Returns `(output, metadata)`. The output is text for the model to read: either the matches as
+    `chatutil.format_docs_matches` renders them, or one of the two canonical sentences saying why there are
+    none. The metadata declares whether the result is grounding material, which
     `scaffold._record_grounding` folds into the turn's state. Declaring it matters here because "no
     matches" is a perfectly non-empty string that grounds nothing at all. It also names which documents
     were reached and by what query, which is what lets a later turn list them once their text has scrolled
@@ -456,7 +464,7 @@ CANONICAL_NO_ROOM_TO_FETCH = ("There is not enough room left in this conversatio
 
 def fetch_document(document_id: str,
                    offset: int | None = None,
-                   length: int | None = None) -> tuple[str | list[dict], dict]:
+                   length: int | None = None) -> tuple[str, dict]:
     """Read a document from the local database by ID; return its text, cut to what the context can hold.
 
     Tool entrypoint for the LLM's `fetch_document` tool — the internal-engine counterpart of `webfetch`,

@@ -6,6 +6,24 @@ Priority tiers: **[High]** | **[Medium]** | **[Low]** | **[Parked]**
 
 Items marked **[Verify]** should be checked against the current codebase in a CC session before implementing.
 
+## Picked up next (as of 2026-08-25)
+
+Six things chosen together at the end of the 2026-08-24/25 session, listed because each lives in a different
+file and the *selection* would otherwise not survive anywhere. Delete this block once it stops describing
+where the work is — it is an entry point, not a plan.
+
+1. **The prompt viewer** — below under *Librarian → Chat UI*, with its decisions already taken.
+2. **The abortable prefill** — `TODO_DEFERRED.md`, "Idle prefill fires even when the HEAD's token count is
+   already exact". Decision and rationale recorded; what is left is the mechanism.
+3. **The `~1%` extraction window** — `TODO_DEFERRED.md`, "The context-fill meter reads ~1% on the first
+   visit…". Now narrowed to a few seconds; the cheap fix is estimating an unread attachment from its
+   sidecar's byte size.
+4. **`fetch_document`'s addressing** — `TODO_DEFERRED.md`, "…inlines up to eleven times what `webfetch`
+   would move out of the log". The design *is* the work.
+5. **Sibling flicking** — `TODO_DEFERRED.md`, "Ctrl+Left / Ctrl+Right cannot flick between siblings…".
+6. **The fleet lint policy** — `~/.claude/TODO_DEFERRED.md`, "Whitespace checking fell out of the fleet when
+   it moved to ruff". Not this repo's file, and not this repo's decision alone.
+
 
 ---
 
