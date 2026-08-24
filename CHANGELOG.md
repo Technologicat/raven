@@ -13,6 +13,12 @@
   - A batch can tell a real reply from a failed one. A turn does not crash when the backend goes away — it writes the failure into the chat as a message, which is what you want when you are watching and a trap when you are not: overnight, a backend that stopped answering at question 12 leaves 188 replies that read like replies. The record says which ones the model actually wrote, so a second pass can re-run just those, and a retry branches beside the failed attempt rather than erasing it.
   - `agent.describe_turn(...)` builds the same record from a stored conversation, so a batch that saved its chats can be analyzed afterwards without hand-rolling a tree walk.
 
+- **exact context-fill counts, computed on your own machine**, by pointing `config.llm_tokenizer_path` at the folder where you keep your models. Raven finds the `.gguf` for the model the backend says it is serving and counts with that model's own vocabulary, so the readout shows `62%` instead of `~62%` — no longer an estimate, and no longer dependent on what the backend reports about its own prompts. A `.gguf` file or a HuggingFace tokenizer folder works too, if you would rather name one exactly.
+  - **Where the backend runs does not matter, only whether you keep the model.** A model served from another machine counts exactly here as long as a copy of it is reachable by a file path from this one — local disk or a mount.
+  - It reads *past* the quantization: the file may be a different one from the backend's (`Q8_0` on disk, `Q4_K_XL` loaded) and still be the right vocabulary. Symbolic links are followed, so a folder of links into a central archive works.
+  - **Loading takes a few seconds and happens in the background**, so the readout starts out as an estimate and sharpens once it is ready. Nothing waits for it.
+  - **It declines rather than guessing.** A file whose name only partly matches the model is not used — a publisher's prefix says who packaged the file, not whose vocabulary is inside — and a tokenizer whose construction has not been checked against a running model is not built (currently the Qwen-family byte-level BPE is). Either way the estimate stays, and the startup log says which of the two is counting for you.
+
 *Constellation-wide*
 
 - **drag files straight in from the file manager.** Every GUI app now accepts a drop where it previously wanted the in-app file browser. What a drop means is whatever that app's open button already meant:
@@ -109,7 +115,7 @@
 
 *Raven-librarian*
 
-- **the context-fill readout no longer collapses to a fraction of the truth once the backend has been asked before.** A chat with three papers attached, genuinely filling 43% of the window, could show `7%`: the readout takes its exact figure from the LLM backend, and LM Studio returns a far smaller number the second time it is asked about the same conversation. Raven now disbelieves a figure far below its own estimate, and goes on showing the estimate's `~` rather than a confident wrong number.
+- **the context-fill readout no longer collapses to a fraction of the truth.** A chat with three papers attached, genuinely filling 68% of the window, could show `7%`: the readout takes its exact figure from the LLM backend, and LM Studio's can come back an order of magnitude short for a conversation it has already been asked about. Raven now disbelieves a figure far below its own estimate, and goes on showing the estimate's `~` rather than a confident wrong number.
 
 - **the app no longer freezes for seconds when you move to a part of the chat that has documents attached.** Switching a message's siblings, or otherwise moving through the chat, refreshes the context-fill readout — and that used to read every attached document to count it, extracting a PDF's text on the spot. Everything you typed during that wait arrived at the end of it, so the app read as hung. The readout now counts documents it has already read, leaves the rest to the check that follows a moment later, and shows `~` while any are outstanding.
 

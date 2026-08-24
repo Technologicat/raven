@@ -30,7 +30,8 @@ Layer 3 - Orchestration:    scaffold.py (1135 lines)
 Layer 2 - Backends:         llmclient.py (2181 lines), hybridir.py (1416 lines)
 Layer 1 - Utilities:        chatutil.py (1337 lines), appstate.py (358 lines), cleanup.py (303 lines),
                             imagestore.py (270 lines), textfilestore.py (140 lines)
-Layer 0 - Foundation:       config.py (633 lines), chattree.py (1070 lines), sidecarstore.py (150 lines)
+Layer 0 - Foundation:       config.py (633 lines), chattree.py (1070 lines), sidecarstore.py (150 lines),
+                            gguftokenizer.py (204 lines)
 ```
 
 Each layer only imports from layers below it. No circular dependencies.
@@ -56,6 +57,8 @@ Each layer only imports from layers below it. No circular dependencies.
 - **`appstate.py`** — Loads/saves app state (JSON dict) + datastore (`PersistentForest`). On load: refreshes system prompt (overwrites stored version), refreshes greeting node, validates HEAD pointers, fills missing settings with defaults, migrates old formats. Recovers gracefully from partial corruption (dangling HEAD, missing keys); factory reset only if datastore is genuinely empty. State dict tracks: HEAD, toggle states (internet/docs/speech/subtitles), node IDs for system prompt and greeting. Two migration mappings sit next to the defaults: `_RETIRED_FLAGS` drops a flag that went away, `_RENAMED_FLAGS` carries a renamed one's *value* across.
 
 - **`llmclient.py`** — Low-level LLM communication. `setup()` queries backend, builds `env` namespace with personas, tools, sampler params; detects vision capability (`model_is_vlm` tri-state — True/False/None). `invoke()` streams via SSE through a single `StreamParser` emitting typed events (content / reasoning / tool-call), detects tool calls, supports stopping strings; serializes history for the wire and resolves `sidecar:` image URLs to `data:` just before send. `perform_tool_calls()` parses tool_calls JSON, validates, dispatches to registered entrypoints. `count_tokens` + `image_token_cost` for the context-fill estimate. Progress via callbacks. Built-in tools: websearch, webfetch.
+
+- **`gguftokenizer.py`** — The exact-token-count tier, for backends that have no token-count endpoint. A llama.cpp-family backend serves a `.gguf`, which carries the model's vocabulary and merges, so any machine holding a copy of the model can count its tokens offline. `find_for_model` picks the file matching what the backend says it is serving (following symlinks, since a model archive shared between backends is usually a tree of them); `load` builds a `tokenizers.Tokenizer` from it. Two refusals are the design: a name that only *partly* matches is not a match (a publisher prefix says who packaged the file, not whose vocabulary is in it), and a tokenizer construction that has not been checked against a live backend is not built. Both would otherwise produce counts that are wrong *and* unmarked — the readout drops its `~` when it believes a count is exact, so a bad tokenizer is worse than the estimate it replaces. Stdlib-only at import time; `gguf` and `tokenizers` are pulled in on demand, so a machine without them degrades to estimating.
 
 - **`hybridir.py`** — `HybridIR` class: sliding-window chunking with overlap, BM25 keyword search (`bm25s`), ChromaDB vector search, reciprocal rank fusion, contiguous chunk merging. Pending-edit pattern (queue adds/updates/deletes, then `commit()`). `HybridIRFileSystemEventHandler` watches directory via watchdog, auto-commits changes. Background processing via `bgtask.TaskManager`. Tokenization: lowercase + lemmatize + stopword removal via spaCy (through raven-server).
 

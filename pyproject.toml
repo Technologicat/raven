@@ -58,6 +58,12 @@ dependencies = [
     "bibtexparser>=2.0.0b9",
     "dearpygui>=2.3.1",  # non-Latin text needs `add_font_range` before 2.3, which builds font atlas ranges automatically; we no longer call it
     "filelock>=3.32.3",  # librarian: keeping two frontends off one chat datastore. Already in the tree via torch and huggingface_hub; declared because we import it.
+    # librarian: counting the served model's tokens exactly, offline. A llama.cpp-family backend serves a
+    # `.gguf`, which carries the vocabulary and merges; `gguf` reads them and `tokenizers` assembles them.
+    # Both are small, and the alternative is trusting a backend's `prompt_tokens`, which we have measured
+    # being wrong in both directions (`investigations/prompt-size-cache-relative/`).
+    "gguf>=0.19.0",
+    "tokenizers>=0.22.2",  # already in the tree via sentence_transformers; declared because we import it.
     "mcpyrate>=4.3.0",  # we only use the colorizer utility for now
     "mistletoe>=1.6.0",  # vendored dpg-markdown
     "numpy>=2.4.6",
@@ -179,12 +185,6 @@ dev = [
     # NOTE: `pdm add` rewrites this table and drops every comment in it. Add
     # dependencies here by hand, or restore the comments afterwards.
     "py-spy>=0.4.2",
-    # Reads the tokenizer out of a GGUF file, which is what a llama.cpp-family backend
-    # serves and therefore the only copy of it on the machine. Lets a measurement count
-    # the served model's own tokens offline, instead of asking the backend — whose
-    # `usage["prompt_tokens"]` is not always about the whole prompt (see
-    # `investigations/prompt-size-cache-relative/`).
-    "gguf>=0.19.0",
 ]
 
 [project.optional-dependencies]
