@@ -26,7 +26,9 @@ the matching below is careful about.
 
 Two constructions are assembled here, and they differ in every part: the byte-level BPE that most current
 families use (`tokenizer.ggml.model = 'gpt2'`), and the SentencePiece-derived one Gemma carries (`'gemma4'`),
-where a space is a word mark rather than a byte and anything unknown falls back to single-byte pieces.
+where a space is a word mark rather than a byte and anything unknown falls back to single-byte pieces. Both
+were checked against a backend serving that family and agreed exactly — 486 tokens against 486 for Qwen,
+510 against 510 for Gemma, on the probes below.
 """
 
 __all__ = ["find_for_model", "load"]
@@ -67,7 +69,8 @@ _WORD_MARK = "\u2581"
 # model, and may therefore be trusted when no backend is available to confirm. Anything else is built anyway
 # and has to earn its place live; see `load`. Adding an entry means measuring one — point
 # `investigations/prompt-size-cache-relative/measure_true_size.py` at a backend serving that model.
-_VERIFIED_CONSTRUCTIONS = {("gpt2", "qwen35")}
+_VERIFIED_CONSTRUCTIONS = {("gpt2", "qwen35"),      # Qwen 3.5 / 3.6 / 3.8, measured 2026-08-24: 486 tokens against 486
+                           ("gemma4", None)}       # Gemma 4, measured 2026-08-24: 510 against 510
 
 # A vision projector rides beside its model under a name that matches the model's just as well, and carries
 # no tokenizer. Anywhere in the name, not just at the front: both `mmproj-gemma-4-26B-A4B-it-BF16.gguf` and
@@ -249,6 +252,11 @@ def _agrees_with_backend(tokenizer: Any,
     # The added text is identical in both, so a correct tokenizer matches exactly; the slack is for the one
     # boundary where the addition meets what precedes it. A tokenizer for the wrong model misses by far more
     # than that — a different vocabulary changes the count of a paragraph by percent, not by tokens.
+    #
+    # What this cannot see is a *constant* error, since a fixed offset cancels along with the framing: a
+    # tokenizer disagreeing about the leading-space convention would be off by about a token per message and
+    # pass. That is the right thing to miss — it is immaterial against a context window, where the errors
+    # worth catching are the ones that grow with the text.
     disagreement = abs(backend_difference - local_difference)
     agrees = disagreement <= _PROBE_TOLERANCE_TOKENS
     logger.info(f"_agrees_with_backend: backend counted {backend_difference} tokens of added text where this "

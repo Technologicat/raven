@@ -263,12 +263,10 @@ def test_a_word_mark_vocabulary_needs_no_unknown_token(tmp_path, monkeypatch):
     assert load(write_gemma_gguf(tmp_path / "gemma.gguf", with_unk=False)) is not None
 
 
-def test_gemma_is_not_trusted_without_a_backend_to_confirm_it(tmp_path):
-    """It builds, but nobody has measured it against a served Gemma, so it has to be confirmed live."""
-    assert load(write_gemma_gguf(tmp_path / "gemma.gguf")) is None
-    assert ("gemma4", None) not in gguftokenizer._VERIFIED_CONSTRUCTIONS, ("Gemma has been measured since; this test "
-                                                                          "now asserts the opposite of the policy and "
-                                                                          "should be deleted")
+def test_both_measured_constructions_are_trusted_without_a_backend(tmp_path):
+    """Measured against a served model of each family, so they need no confirmation to be used."""
+    assert load(write_gemma_gguf(tmp_path / "gemma.gguf")) is not None
+    assert load(write_gguf(tmp_path / "qwen.gguf", tokenizer_class="gpt2", pre="qwen35")) is not None
 
 
 def test_a_file_that_is_not_a_gguf_is_declined(tmp_path):
