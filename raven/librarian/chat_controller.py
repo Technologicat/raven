@@ -20,7 +20,7 @@ import pathlib
 import os
 import threading
 import time
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional, TYPE_CHECKING, Union
 import urllib.parse
 import uuid
 import webbrowser
@@ -35,8 +35,23 @@ from unpythonic.env import env
 from ..vendor.IconsFontAwesome6 import IconsFontAwesome6 as fa  # https://github.com/juliettef/IconFontCppHeaders
 from ..vendor import DearPyGui_Markdown as dpg_markdown  # https://github.com/IvanNazaruk/DearPyGui-Markdown
 
-from ..client import api  # Raven-server support
-from ..client.avatar_controller import DPGAvatarController
+# `raven.client.api` imports torch and spaCy at module scope, and `avatar_controller` reaches it, so a
+# module-level import of either drags the whole ML stack in — and with it, the reason this module's tests
+# skip themselves in the minimal-dependency CI job. Both are deferred instead: the avatar controller is only
+# a type here, and the API is reached through the seam below. Same arrangement as `llmclient`.
+if TYPE_CHECKING:
+    from ..client.avatar_controller import DPGAvatarController
+
+
+def _client_api():
+    """Return `raven.client.api`, imported on first use.
+
+    Not initialized here, unlike `llmclient`'s namesake: the only caller of this module is
+    `raven.librarian.app`, which initializes the API at startup with its own executor, long before any
+    avatar speech can start. Initializing again would be harmless but would log on every call.
+    """
+    from ..client import api  # noqa: PLC0415 -- deferred on purpose; see the note above
+    return api
 
 from ..common import bgtask
 from ..common import numutils
@@ -2956,7 +2971,7 @@ class DPGChatController:
                  datastore: chattree.Forest,
                  retriever: Optional[hybridir.HybridIR],
                  app_state: env,
-                 avatar_controller: DPGAvatarController,
+                 avatar_controller: "DPGAvatarController",
                  avatar_record: env,
                  avatar_image_path: Optional[Union[str, pathlib.Path]],
                  themes_and_fonts: env,
@@ -3768,7 +3783,7 @@ class DPGChatController:
                         task_env.seen_content = True
                         logger.info("ai_turn.ai_turn_task.on_llm_progress: AI started writing the visible answer.")
                         if not speech_enabled:  # If TTS is NOT enabled, show the generic talking animation while the LLM is writing
-                            api.avatar_start_talking(self.avatar_record.avatar_instance_id)
+                            _client_api().avatar_start_talking(self.avatar_record.avatar_instance_id)
 
                     # If the channel changed mid-paragraph (thought <-> answer), commit the in-progress paragraph
                     # and start a fresh one in the new channel — the renderer colors per paragraph, so a thought
@@ -3818,7 +3833,7 @@ class DPGChatController:
                     task_env.text = io.StringIO()  # for next AI message (in case of tool calls)
                     if self.gui_updates_safe:
                         if not speech_enabled:  # If TTS is NOT enabled, stop the generic talking animation now that the LLM is done
-                            api.avatar_stop_talking(self.avatar_record.avatar_instance_id)
+                            _client_api().avatar_stop_talking(self.avatar_record.avatar_instance_id)
 
                         unused_role, persona, text = chatutil.get_node_message_text_without_persona(self.datastore, node_id)
 
@@ -3960,7 +3975,7 @@ class DPGChatController:
                     dpg.disable_item(self.chat_stop_generation_button_widget)
                     self.avatar_controller.stop_data_eyes(config=self.avatar_record)  # make sure the data eyes effect ends (unless app shutting down, in which case we shouldn't start new GUI animations)
                     if not speech_enabled:  # make sure the generic talking animation ends (if we invoked it)
-                        api.avatar_stop_talking(self.avatar_record.avatar_instance_id)
+                        _client_api().avatar_stop_talking(self.avatar_record.avatar_instance_id)
                     # Also make sure that the AI-turn-scoped processing indicators hide. The INDEXING
                     # indicator is intentionally *not* touched here — it has its own polling-driven
                     # lifecycle (background commits run independent of any AI turn).

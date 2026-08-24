@@ -3,15 +3,18 @@
 Only the datastore-side helpers so far — the ones that decide which of a message's buttons are live, and the
 descent that picks where a rebuilt view lands. Those are pure functions over a `Forest` and need no GUI.
 
-The module they live in needs rather more, though: importing it reaches DearPyGui *and*, through the avatar
-client, the full ML stack down to spaCy. So the skip names the module under test rather than any one of its
-dependencies — the same thing `test_scaffold.py` did until `api.initialize` was made lazy, and the reason
-these tests do not run in the minimal-dependency CI job even though they would pass there.
+The module they live in needs rather more, though, so the skip names the module under test rather than any
+one of its dependencies. Two of the paths that used to force this are gone — the avatar controller is a
+`TYPE_CHECKING` import now, and `raven.client.api` is reached through `chat_controller._client_api()` — but
+several remain, and `python scripts/check_ci_imports.py` names them: `hybridir` (bm25s, chromadb, watchdog),
+`scaffold`'s own route to `raven.client.api` (spaCy), the audio player (pygame), the codec (av). Clearing
+those is a dependency-hygiene sweep across several modules rather than a change to this one, and until it
+happens these tests do not run in the minimal-dependency CI job even though they would pass there.
 """
 
 import pytest
 
-pytest.importorskip("raven.librarian.chat_controller")  # noqa: E402 -- reaches DearPyGui and the ML stack
+pytest.importorskip("raven.librarian.chat_controller")  # noqa: E402 -- still reaches the ML stack; see above
 
 from raven.librarian import chat_controller, chattree  # noqa: E402
 
