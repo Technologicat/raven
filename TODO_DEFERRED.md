@@ -40,30 +40,6 @@ Two directions, cheapest first:
 estimate does *not* run 44% high (it runs ~8% low), and the branch was never "43% full". Both came from
 treating a backend figure as ground truth; see the investigation for how that happened.
 
-## Raven can count tokens exactly and offline on any backend, and doesn't
-
-*Cluster: librarian-responsiveness · Cost: S · Gate: none · Filed: 2026-08-24 · See also: `investigations/prompt-size-cache-relative/`*
-
-`llmclient.count_tokens` has three tiers, and prefers tier 1: a local tokenizer at
-`config.llm_tokenizer_path`, exact and offline on every backend. **It is `None`, so the tier that would have
-prevented the whole `prompt_size_report_looks_whole` saga is present and unused.** Configuring it makes both
-the immediate count and the branch total exact, and removes the need to believe `usage["prompt_tokens"]` at
-all where it applies.
-
-The one piece of work: `_load_local_tokenizer` calls `AutoTokenizer.from_pretrained(path)`, which wants a
-directory of Hugging Face tokenizer files — and a llama.cpp-family user has a `.gguf`, which carries the
-vocabulary, the merges and the chat template. Measured 2026-08-24 on the served `qwen3.5-9b`: 248320 tokens,
-247587 merges, and a count agreeing with the backend's own to **0.05%**. `transformers` reads this directly
-via `from_pretrained(dir, gguf_file=...)`; `gguf` is in the dev group for the measurement already.
-
-Two things to get right, both Juha's (2026-08-24):
-
-- **The backend is not necessarily local.** No GGUF on this machine means no tier 1, so the estimate and
-  `prompt_size_report_looks_whole` stay load-bearing and neither becomes redundant.
-- **Say which tier is in use, at startup, at INFO.** Whether a readout is exact or estimated is currently
-  invisible except as the `~` on a percentage, and the difference between "exact, offline" and "trusting a
-  figure we have twice caught being wrong" is worth one line in the log.
-
 ## Ctrl+Left / Ctrl+Right cannot flick between siblings, because each switch re-picks its own target
 
 *Cluster: librarian-keyboard · Cost: S to build, the design is the work · Gate: none — **raised for Monday** (Juha, 2026-08-21) · Filed: 2026-08-21*
