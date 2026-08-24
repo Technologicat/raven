@@ -33,4 +33,14 @@ ignore =
     W504,
     # `global x` as intent marker (reading, not assigning)
     F824
-exclude = .git,__pycache__,docs/source/conf.py,old,build,dist,node_modules,instance,00_stuff,00_old
+# Kept in step with `[tool.ruff].exclude` in `pyproject.toml`, which carries the reasoning: the three
+# vendored trees below are as upstream shipped them, so linting them reports on somebody else's style, and
+# `IconsFontAwesome6.py` is a generated table. `DearPyGui_Markdown` and `file_dialog` are deliberately absent
+# from this list — those are our forks and are linted like the rest of the tree.
+#
+# The two configs are separate files for separate audiences (this one drives Emacs flycheck; ruff is what CI
+# runs), and nothing keeps them in step, so a path added there wants adding here too. Without it the editor
+# reports 29 findings in code the project has decided not to lint.
+exclude = .git,__pycache__,docs/source/conf.py,old,build,dist,node_modules,instance,00_stuff,00_old,
+    raven/vendor/tha3,raven/vendor/kokoro_fastapi,raven/vendor/anime4k,raven/vendor/IconsFontAwesome6.py,
+    briefs
