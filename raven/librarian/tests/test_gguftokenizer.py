@@ -5,6 +5,7 @@ import pathlib
 
 import pytest
 
+from .. import gguftokenizer
 from ..gguftokenizer import find_for_model, load, _PROBE_TOLERANCE_TOKENS
 
 
@@ -210,8 +211,64 @@ def test_a_backend_that_raises_is_not_itself_a_failure(tmp_path, reference):
 
 
 def test_a_tokenizer_class_we_cannot_build_is_declined(tmp_path):
-    """Gemma's GGUFs carry no pre-tokenizer field at all."""
-    assert load(write_gguf(tmp_path / "model.gguf", tokenizer_class="gemma4", pre=None)) is None
+    """The pieces of an unknown construction fit together in more than one way; only some of them count right."""
+    assert load(write_gguf(tmp_path / "model.gguf", tokenizer_class="rwkv", pre=None)) is None
+
+
+def write_gemma_gguf(path: pathlib.Path, *, with_unk: bool = True) -> pathlib.Path:
+    """Write a minimal GGUF shaped like Gemma's: word-mark pieces, byte fallback, no pre-tokenizer."""
+    word_mark = "\u2581"  # U+2581 LOWER ONE EIGHTH BLOCK, spelled out: it reads as an underscore on the page
+    specials = ["<pad>", "<eos>", "<bos>"] + (["<unk>"] if with_unk else [])
+    byte_tokens = [f"<0x{value:02X}>" for value in range(256)]        # what byte fallback falls back to
+    characters = [chr(code) for code in range(32, 127)] + [word_mark, "\n", "\t"]
+    merges = [f"{word_mark} t"]
+    writer = gguf.GGUFWriter(str(path), "test-arch")
+    writer.add_tokenizer_model("gemma4")
+    writer.add_token_list(specials + byte_tokens + characters + [m.replace(" ", "") for m in merges])
+    writer.add_token_merges(merges)
+    writer.write_header_to_file()
+    writer.write_kv_data_to_file()
+    writer.close()
+    return path
+
+
+def test_a_word_mark_tokenizer_builds_and_round_trips(tmp_path, monkeypatch):
+    """Gemma's construction: a space becomes a word mark, and anything outside the vocabulary becomes bytes.
+
+    Whether this construction is *trusted* with no backend to confirm it is a separate question, decided by
+    `_VERIFIED_CONSTRUCTIONS` and tested below; patched here so this test is about the assembly alone.
+    """
+    monkeypatch.setattr(gguftokenizer, "_VERIFIED_CONSTRUCTIONS", {("gemma4", None)})
+    tokenizer = load(write_gemma_gguf(tmp_path / "gemma.gguf"))
+    assert tokenizer is not None
+    # The vocabulary has no non-ASCII characters, so "ä" can only be represented through byte fallback —
+    # which is what makes this a test of that, and not just of the merges.
+    assert tokenizer.decode(tokenizer.encode("hä", add_special_tokens=False).ids) == "hä"
+    assert tokenizer.decode(tokenizer.encode("a b", add_special_tokens=False).ids) == "a b", "the word mark did not decode back to a space"
+
+
+def test_a_vocabulary_the_construction_cannot_use_is_declined(tmp_path, monkeypatch):
+    """A file claiming Gemma's class while carrying a byte-level vocabulary: no `<unk>`, no byte-fallback pieces.
+
+    `models.BPE` accepts that without complaint and raises only when something is encoded, so the decline has
+    to come from the check that encodes rather than from the assembly.
+    """
+    monkeypatch.setattr(gguftokenizer, "_VERIFIED_CONSTRUCTIONS", {("gemma4", None)})
+    assert load(write_gguf(tmp_path / "mismatched.gguf", tokenizer_class="gemma4", pre=None)) is None
+
+
+def test_a_word_mark_vocabulary_needs_no_unknown_token(tmp_path, monkeypatch):
+    """Its 256 byte-fallback pieces can spell anything, so `<unk>` is never reached."""
+    monkeypatch.setattr(gguftokenizer, "_VERIFIED_CONSTRUCTIONS", {("gemma4", None)})
+    assert load(write_gemma_gguf(tmp_path / "gemma.gguf", with_unk=False)) is not None
+
+
+def test_gemma_is_not_trusted_without_a_backend_to_confirm_it(tmp_path):
+    """It builds, but nobody has measured it against a served Gemma, so it has to be confirmed live."""
+    assert load(write_gemma_gguf(tmp_path / "gemma.gguf")) is None
+    assert ("gemma4", None) not in gguftokenizer._VERIFIED_CONSTRUCTIONS, ("Gemma has been measured since; this test "
+                                                                          "now asserts the opposite of the policy and "
+                                                                          "should be deleted")
 
 
 def test_a_file_that_is_not_a_gguf_is_declined(tmp_path):

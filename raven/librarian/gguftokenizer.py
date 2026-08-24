@@ -17,12 +17,16 @@ by the *difference* between them so the chat template's framing cancels. That ch
 actually being served, which is the only authority that matters, and it also catches a wrong file — one
 whose name matched while its vocabulary belongs to another model, which would build and round-trip perfectly.
 
-When the backend cannot be asked, `_PRE_TOKENIZER_REGEXES` is the fallback: constructions measured in
-advance, on the grounds that a guess nothing can check should not be made. Measured 2026-08-24 on
+When the backend cannot be asked, `_VERIFIED_CONSTRUCTIONS` is the fallback: `(class, pre-tokenizer)` pairs
+measured in advance, on the grounds that a guess nothing can check should not be made. Measured 2026-08-24 on
 `qwen3.5-9b`, whose offline count came within 0.05% of the backend's own, the gap being framing the
 measurement added. The same day: Qwen 3.5, 3.6 and 3.8 — dense and MoE — ship a byte-identical tokenizer,
 so a near-miss inside that family costs nothing. Across families it would be silently wrong, which is what
 the matching below is careful about.
+
+Two constructions are assembled here, and they differ in every part: the byte-level BPE that most current
+families use (`tokenizer.ggml.model = 'gpt2'`), and the SentencePiece-derived one Gemma carries (`'gemma4'`),
+where a space is a word mark rather than a byte and anything unknown falls back to single-byte pieces.
 """
 
 __all__ = ["find_for_model", "load"]
@@ -43,15 +47,27 @@ logger = logging.getLogger(__name__)
 _QUANTIZATION_NOISE = re.compile(r"(?<![a-z0-9])(?:i?q\d+(?:_[a-z0-9]+)*|ud|bf16|f16|f32|gguf|mtp)(?![a-z0-9])",
                                  re.IGNORECASE)
 
-# GGUF names the tokenizer's *class* in `tokenizer.ggml.model` and its pre-tokenizer variant in
-# `tokenizer.ggml.pre`. The class says how the pieces fit together; the pre says where the text is cut
-# before they do, and getting that wrong shifts counts by a few percent — silently, since the result still
-# tokenizes. Keyed on the pre, therefore, not on the model architecture: architectures come and go while
-# a family keeps its pre-tokenizer, and `transformers`' own GGUF reader gates on architecture and so
-# refuses a model it could otherwise handle ("architecture qwen35 is not supported yet", measured).
+# GGUF names the tokenizer's *class* in `tokenizer.ggml.model` and, for the byte-level ones, its
+# pre-tokenizer variant in `tokenizer.ggml.pre`. The class says how the pieces fit together; the pre says
+# where the text is cut before they do, and getting either wrong shifts counts silently, since the result
+# still tokenizes. Keyed on those two rather than on the model architecture: architectures come and go while
+# a family keeps its tokenizer, and `transformers`' own GGUF reader gates on architecture and so refuses a
+# model it could otherwise handle ("architecture qwen35 is not supported yet", measured).
 _GPT2_FAMILY_REGEX = (r"(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\r\n\p{L}\p{N}]?\p{L}+|\p{N}"
                       r"| ?[^\s\p{L}\p{N}]+[\r\n]*|\s*[\r\n]+|\s+(?!\S)|\s+")
 _PRE_TOKENIZER_REGEXES = {"qwen35": _GPT2_FAMILY_REGEX}
+
+# The word mark a SentencePiece-derived vocabulary writes instead of a space: U+2581 LOWER ONE EIGHTH BLOCK.
+# It is a visible character, so it needs no escape on those grounds — but at most sizes it is indistinguishable
+# from an underscore, and it is load-bearing in both the normalizer and the decoder below. Written as an escape
+# so that what it is can be read off the page rather than guessed at from its shape.
+_WORD_MARK = "\u2581"
+
+# `(tokenizer class, pre-tokenizer)` pairs whose construction has been checked against a backend serving that
+# model, and may therefore be trusted when no backend is available to confirm. Anything else is built anyway
+# and has to earn its place live; see `load`. Adding an entry means measuring one — point
+# `investigations/prompt-size-cache-relative/measure_true_size.py` at a backend serving that model.
+_VERIFIED_CONSTRUCTIONS = {("gpt2", "qwen35")}
 
 # A vision projector rides beside its model under a name that matches the model's just as well, and carries
 # no tokenizer. Anywhere in the name, not just at the front: both `mmproj-gemma-4-26B-A4B-it-BF16.gguf` and
@@ -73,10 +89,45 @@ _PROBE_TEXT = ("The 2026-08-24 run cost $1,234.56 and took 7.5 hours; it wasn't 
 _PROBE_REPEATS = 6                # ~900 characters of added text: enough that a wrong vocabulary misses by tens of tokens
 _PROBE_TOLERANCE_TOKENS = 2       # the one boundary where the added text meets what precedes it
 
-# Tokenizer classes this module knows how to assemble. GGUF names the class in `tokenizer.ggml.model`;
-# `gpt2` is the byte-level BPE shared by most current model families. Gemma's `gemma4` is a different
-# construction (word-mark pieces with scores, no pre-tokenizer field) and is not built here.
-_BUILDABLE_TOKENIZER_CLASSES = {"gpt2"}
+def _build_byte_level_bpe(vocabulary, merges, pre: Optional[str]) -> Any:
+    """Assemble the byte-level BPE that `tokenizer.ggml.model = 'gpt2'` names. Used by the Qwen families."""
+    from tokenizers import Tokenizer, models, pre_tokenizers, decoders, Regex  # noqa: PLC0415
+
+    # An unrecognized pre-tokenizer gets the family's regex as a guess, which the backend is then asked to
+    # confirm. Guessing is only safe because something checks; see the policy in `load`.
+    regex = _PRE_TOKENIZER_REGEXES.get(pre, _GPT2_FAMILY_REGEX)
+    tokenizer = Tokenizer(models.BPE(vocab=vocabulary, merges=merges, fuse_unk=False, byte_fallback=False))
+    tokenizer.pre_tokenizer = pre_tokenizers.Sequence([
+        pre_tokenizers.Split(Regex(regex), behavior="isolated"),
+        pre_tokenizers.ByteLevel(add_prefix_space=False, use_regex=False)])
+    tokenizer.decoder = decoders.ByteLevel()
+    return tokenizer
+
+
+def _build_word_mark_bpe(vocabulary, merges, pre: Optional[str]) -> Any:
+    """Assemble the SentencePiece-derived BPE that Gemma's GGUFs carry (`tokenizer.ggml.model = 'gemma4'`).
+
+    Three things differ from the byte-level construction, and all three change the count if got wrong: a
+    space is written as a word mark rather than encoded as a byte, there is no pre-tokenizer splitting the
+    text first, and anything outside the vocabulary falls back to the 256 single-byte tokens the vocabulary
+    carries for the purpose (`<0x00>`…`<0xFF>`) rather than being unrepresentable.
+    """
+    from tokenizers import Tokenizer, models, normalizers, decoders  # noqa: PLC0415
+
+    tokenizer = Tokenizer(models.BPE(vocab=vocabulary, merges=merges,
+                                     unk_token="<unk>", fuse_unk=True, byte_fallback=True))
+    tokenizer.normalizer = normalizers.Replace(" ", _WORD_MARK)
+    tokenizer.decoder = decoders.Sequence([decoders.Replace(_WORD_MARK, " "),
+                                           decoders.ByteFallback(),
+                                           decoders.Fuse()])
+    return tokenizer
+
+
+# What to do with each tokenizer class GGUF names in `tokenizer.ggml.model`. A class absent from here is one
+# this module has no assembly for, which is a decline rather than a guess — the pieces of an unknown
+# construction fit together in more than one way, and only some of them count correctly.
+_TOKENIZER_BUILDERS = {"gpt2": _build_byte_level_bpe,
+                       "gemma4": _build_word_mark_bpe}
 
 
 def _normalize(name: str) -> str:
@@ -228,7 +279,7 @@ def load(gguf_path: pathlib.Path, backend_counter: Optional[Callable[[str], Opti
         # degrades to estimating here, alongside every other reason this function declines, instead of making
         # `llmclient` unimportable.
         import gguf  # noqa: PLC0415
-        from tokenizers import Tokenizer, models, pre_tokenizers, decoders, Regex  # noqa: PLC0415
+        import tokenizers  # noqa: PLC0415, F401 -- the builders import what they need; named here so a missing install reports itself as that, rather than as a failure to assemble
     except ImportError as exc:
         logger.warning(f"load: cannot read '{gguf_path}': {type(exc)}: {exc}. Falling back to token estimates.")
         return None
@@ -240,24 +291,16 @@ def load(gguf_path: pathlib.Path, backend_counter: Optional[Callable[[str], Opti
             return reader.fields[key].contents()
 
         tokenizer_class = field("tokenizer.ggml.model")
-        if tokenizer_class not in _BUILDABLE_TOKENIZER_CLASSES:
+        build = _TOKENIZER_BUILDERS.get(tokenizer_class)
+        if build is None:
             logger.info(f"load: '{gguf_path.name}' has tokenizer class {tokenizer_class!r}, which this module cannot "
-                        f"assemble; keeping the token estimate. Buildable: {sorted(_BUILDABLE_TOKENIZER_CLASSES)}.")
+                        f"assemble; keeping the token estimate. Buildable: {sorted(_TOKENIZER_BUILDERS)}.")
             return None
 
         pre = field("tokenizer.ggml.pre") if "tokenizer.ggml.pre" in reader.fields else None
-        # An unrecognized pre-tokenizer gets the family's regex as a guess, which is what `backend_counter`
-        # is then asked to confirm. Guessing is only safe because something checks; see the policy below.
-        regex = _PRE_TOKENIZER_REGEXES.get(pre, _GPT2_FAMILY_REGEX)
-
         vocabulary = {token: index for index, token in enumerate(field("tokenizer.ggml.tokens"))}
         merges = [tuple(merge.split(" ", 1)) for merge in field("tokenizer.ggml.merges")]
-
-        tokenizer = Tokenizer(models.BPE(vocab=vocabulary, merges=merges, fuse_unk=False, byte_fallback=False))
-        tokenizer.pre_tokenizer = pre_tokenizers.Sequence([
-            pre_tokenizers.Split(Regex(regex), behavior="isolated"),
-            pre_tokenizers.ByteLevel(add_prefix_space=False, use_regex=False)])
-        tokenizer.decoder = decoders.ByteLevel()
+        tokenizer = build(vocabulary, merges, pre)
     except Exception as exc:  # noqa: BLE001 -- any failure here just means "no local tokenizer"
         logger.warning(f"load: could not build a tokenizer from '{gguf_path}': {type(exc)}: {exc}. Falling back to token estimates.")
         return None
@@ -265,7 +308,15 @@ def load(gguf_path: pathlib.Path, backend_counter: Optional[Callable[[str], Opti
     # Ask the thing we just assembled whether it is reversible before anyone counts with it. A tokenizer
     # built from mismatched parts still returns a number, and that number would be shown without the `~`
     # that marks an estimate — so an unchecked build trades a known approximation for an unknown error.
-    round_tripped = tokenizer.decode(tokenizer.encode(_SELF_CHECK_SAMPLE, add_special_tokens=False).ids)
+    # In a try of its own because the assembly above is lazy: `models.BPE` accepts a vocabulary missing the
+    # pieces it was told to rely on, and only says so when something is encoded. A build that fails the first
+    # time it is used has to decline like any other, not raise into the caller.
+    try:
+        round_tripped = tokenizer.decode(tokenizer.encode(_SELF_CHECK_SAMPLE, add_special_tokens=False).ids)
+    except Exception as exc:  # noqa: BLE001 -- an unusable tokenizer is a decline, whenever it announces itself
+        logger.warning(f"load: the tokenizer built from '{gguf_path}' could not encode its own check sample: "
+                       f"{type(exc)}: {exc}. Falling back to token estimates.")
+        return None
     if round_tripped != _SELF_CHECK_SAMPLE:
         logger.warning(f"load: the tokenizer built from '{gguf_path}' failed its round-trip check "
                        f"({round_tripped!r} != {_SELF_CHECK_SAMPLE!r}); falling back to token estimates.")
@@ -280,10 +331,10 @@ def load(gguf_path: pathlib.Path, backend_counter: Optional[Callable[[str], Opti
         logger.warning(f"load: the tokenizer built from '{gguf_path.name}' does not count the way the backend does; "
                        f"falling back to token estimates. Is this the model the backend is serving?")
         return None
-    if agrees is None and pre not in _PRE_TOKENIZER_REGEXES:
-        logger.info(f"load: '{gguf_path.name}' declares pre-tokenizer {pre!r}, which has not been measured, and the "
-                    f"backend could not be asked to confirm it; keeping the token estimate. "
-                    f"Measured offline: {sorted(_PRE_TOKENIZER_REGEXES)}.")
+    if agrees is None and (tokenizer_class, pre) not in _VERIFIED_CONSTRUCTIONS:
+        logger.info(f"load: '{gguf_path.name}' is tokenizer class {tokenizer_class!r} with pre-tokenizer {pre!r}, a "
+                    f"combination that has not been measured, and the backend could not be asked to confirm it; "
+                    f"keeping the token estimate. Measured offline: {sorted(_VERIFIED_CONSTRUCTIONS)}.")
         return None
 
     confirmation = "confirmed against the backend" if agrees else "matching a pre-tokenizer measured offline"
