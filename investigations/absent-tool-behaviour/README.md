@@ -17,15 +17,22 @@ It is not the typical failure, and the answer turned out to be more interesting 
 
 ## Setup
 
-`probe_absent_tool.py`, which samples one model over one prompt and classifies each reply. **No tools are
-ever sent** — that is the experiment. Two prompts:
+`probe_absent_tool.py`, which samples one model over one condition and classifies each reply. Two prompts:
 
 - **`plain`** — *"What is the current date and time?"*
 - **`tool-mention`** — *"What is the current time? Use your tool to check, then say it."*, naming a tool that
   is not offered. This is the wording the test used, so it is what produced the reply above.
 
+Crossed with `--offer-tool`, which declares a `get_current_time` the model may actually call — the control,
+and the cell that says whether any of the failures below are about tool use at all. The call is counted,
+never executed; what is measured is whether the model reaches for it.
+
+So: **2×2**, prompt × whether the tool exists. The absent column was run first and the offered column added
+afterwards, when writing this up made it obvious that three cells cannot say which variable is doing the
+work.
+
 Model: qwen3.5-9b (LM Studio, `CUDA llama.cpp` runtime v2.29.1) on the 16 GB internal GPU. Sampling
-`T=1, min_p=0.02, max_tokens=2048`, seeds 1000–1023, 24 samples per prompt, 2026-08-24.
+`T=1, min_p=0.02, max_tokens=2048`, seeds 1000–1023, 24 samples per cell, 2026-08-24.
 
 It talks to the backend directly rather than through `raven.librarian`, for the sampler — temperature,
 `min_p` and seed vary per request here, where `agent.turn` reads them from `llm_settings`. **Not** because
@@ -37,13 +44,18 @@ Buckets are assigned by regex and the order is documented in `classify`. `answer
 
 ## Result
 
-| bucket | `plain` | `tool-mention` |
-|---|---|---|
-| refused — "I don't have access to real-time data" | **20** | 11 |
-| truncated — spent the whole budget reasoning, returned nothing | 1 | **8** |
-| answered — stated a date or time, i.e. invented one | 2 | 4 |
-| tool-prose — wrote tool-call syntax into the reply text | 0 | 1 |
-| other | 1 | 0 |
+**With the tool on offer, it is called every time — 24/24 in both cells, whether or not the prompt says to.**
+That is the first thing to read, because it says every failure below belongs to the absent-tool condition
+rather than to tool use.
+
+| bucket | `plain`, absent | `tool-mention`, absent | `plain`, offered | `tool-mention`, offered |
+|---|---|---|---|---|
+| called the tool | — | — | **24** | **24** |
+| refused — "I don't have access to real-time data" | **20** | 11 | 0 | 0 |
+| truncated — spent the whole budget reasoning, returned nothing | 1 | **8** | 0 | 0 |
+| answered — stated a date or time, i.e. invented one | 2 | 4 | 0 | 0 |
+| tool-prose — wrote tool-call syntax into the reply text | 0 | 1 | 0 | 0 |
+| other | 1 | 0 | 0 | 0 |
 
 **Refusal is the dominant behaviour, and confabulation is the exception.** On the plain question the model
 declined 20 times in 24 — encouraging for a 9B, and the reason the headline reading of the negative control
@@ -96,13 +108,32 @@ call, never on the reply text. That is the right choice for a stronger reason th
 tools off, the reply is a refusal 46% of the time, nothing at all 33%, an invented time 17%, and tool syntax
 as prose 4%. A text assertion would be four different tests depending on the sample.
 
+## What it says about injecting the clock
+
+Librarian does not make the model fetch the time: `scaffold.build_turn_prompt` stages it as a synthetic
+`get_current_time` exchange, so a turn has the date whether or not anything asks for it.
+
+**These numbers do not support that choice on reliability grounds, and it would be easy to read them as if
+they did.** Every cell where the tool exists is 24/24, unprompted included. For a question *about the time*,
+leaving it to the model would have worked perfectly here.
+
+What the study does not reach is the case the inject is for. Every prompt above asks the time directly, which
+makes reaching for a clock the obvious move. The turn that needs today's date is usually the one where nobody
+mentions it — "is this paper recent?", "what should we do this week?" — and whether a model calls the clock
+when the date is merely *relevant* is a different question, not asked here. Asking it needs prompts where the
+date is load-bearing but unmentioned, and a way to tell "did not need it" from "needed it and did not think
+to look".
+
 ## Running it against other models
 
-Both prompts, any model the backend lists:
+All four cells, for any model the backend lists:
 
 ```bash
-python probe_absent_tool.py --model qwen3.6-27b --prompt plain        -n 24 --out samples-qwen3.6-27b-plain-YYYY-MM-DD.json
-python probe_absent_tool.py --model qwen3.6-27b --prompt tool-mention -n 24 --out samples-qwen3.6-27b-tool-mention-YYYY-MM-DD.json
+M=qwen3.6-27b; D=$(date +%F)
+python probe_absent_tool.py --model $M --prompt plain                      -n 24 --out samples-$M-plain-$D.json
+python probe_absent_tool.py --model $M --prompt tool-mention               -n 24 --out samples-$M-tool-mention-$D.json
+python probe_absent_tool.py --model $M --prompt plain        --offer-tool  -n 24 --out samples-$M-plain-tool-offered-$D.json
+python probe_absent_tool.py --model $M --prompt tool-mention --offer-tool  -n 24 --out samples-$M-tool-offered-$D.json
 ```
 
 The open question is whether refusal-rate climbs with size and vintage — qwen3.5-9b is a small variant of a
@@ -117,6 +148,8 @@ something to sit and watch.
 
 | File | What it is |
 |---|---|
-| `probe_absent_tool.py` | The probe. `--model`, `--prompt {plain,tool-mention}`, `-n`, `--temperature`, `--min-p`, `--max-tokens`, `--seed0`, `--backend-url`, `--out`. Prints a bucket summary and the invented dates; writes full records, reasoning tails included, with `--out` |
-| `samples-qwen3.5-9b-plain-2026-08-24.json` | 24 samples, plain question |
-| `samples-qwen3.5-9b-tool-mention-2026-08-24.json` | 24 samples, absent tool named — the eight truncations and their reasoning tails are here |
+| `probe_absent_tool.py` | The probe. `--model`, `--prompt {plain,tool-mention}`, `--offer-tool`, `-n`, `--temperature`, `--min-p`, `--max-tokens`, `--seed0`, `--backend-url`, `--out`. Prints a bucket summary and the invented dates; writes full records, reasoning tails included, with `--out` |
+| `samples-qwen3.5-9b-plain-2026-08-24.json` | plain question, no tool |
+| `samples-qwen3.5-9b-tool-mention-2026-08-24.json` | absent tool named — the eight truncations and their reasoning tails are here |
+| `samples-qwen3.5-9b-plain-tool-offered-2026-08-24.json` | plain question, tool available: 24/24 called it unprompted |
+| `samples-qwen3.5-9b-tool-offered-2026-08-24.json` | tool named and available: 24/24 called it |

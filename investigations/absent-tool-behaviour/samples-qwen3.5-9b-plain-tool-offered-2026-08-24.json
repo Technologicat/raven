@@ -1,0 +1,347 @@
+{
+ "model": "qwen3.5-9b",
+ "prompt_key": "plain",
+ "prompt": "What is the current date and time?",
+ "offer_tool": true,
+ "temperature": 1.0,
+ "min_p": 0.02,
+ "max_tokens": 2048,
+ "samples": [
+  {
+   "bucket": "called",
+   "tool_calls": [
+    "get_current_time"
+   ],
+   "date": null,
+   "time": null,
+   "finish_reason": "tool_calls",
+   "completion_tokens": 60,
+   "reasoning_tokens": 43,
+   "content": "",
+   "reasoning_tail": "The user is asking for the current date and time. I have a function available called get_current_time that can provide this information. I should call this function to get the current date and time for the user.",
+   "seed": 1000
+  },
+  {
+   "bucket": "called",
+   "tool_calls": [
+    "get_current_time"
+   ],
+   "date": null,
+   "time": null,
+   "finish_reason": "tool_calls",
+   "completion_tokens": 62,
+   "reasoning_tokens": 45,
+   "content": "",
+   "reasoning_tail": "The user is asking for the current date and time. I have a function available called \"get_current_time\" that can provide this information. I should call this function to get the current date and time for the user.",
+   "seed": 1001
+  },
+  {
+   "bucket": "called",
+   "tool_calls": [
+    "get_current_time"
+   ],
+   "date": null,
+   "time": null,
+   "finish_reason": "tool_calls",
+   "completion_tokens": 62,
+   "reasoning_tokens": 45,
+   "content": "",
+   "reasoning_tail": "The user is asking for the current date and time. I have a tool available called \"get_current_time\" that can provide this information. I should call this function to get the current date and time for the user.",
+   "seed": 1002
+  },
+  {
+   "bucket": "called",
+   "tool_calls": [
+    "get_current_time"
+   ],
+   "date": null,
+   "time": null,
+   "finish_reason": "tool_calls",
+   "completion_tokens": 62,
+   "reasoning_tokens": 45,
+   "content": "",
+   "reasoning_tail": "The user is asking for the current date and time. I have a tool available called \"get_current_time\" that can provide this information. I should call this function to get the current date and time for the user.",
+   "seed": 1003
+  },
+  {
+   "bucket": "called",
+   "tool_calls": [
+    "get_current_time"
+   ],
+   "date": null,
+   "time": null,
+   "finish_reason": "tool_calls",
+   "completion_tokens": 63,
+   "reasoning_tokens": 46,
+   "content": "",
+   "reasoning_tail": "The user is asking for the current date and time. I have access to a function called \"get_current_time\" that can provide this information. I should call this function to get the current date and time for the user.",
+   "seed": 1004
+  },
+  {
+   "bucket": "called",
+   "tool_calls": [
+    "get_current_time"
+   ],
+   "date": null,
+   "time": null,
+   "finish_reason": "tool_calls",
+   "completion_tokens": 59,
+   "reasoning_tokens": 42,
+   "content": "",
+   "reasoning_tail": "The user is asking for the current date and time. I have a function available called \"get_current_time\" that can provide this information. Let me call this function to get the current date and time.",
+   "seed": 1005
+  },
+  {
+   "bucket": "called",
+   "tool_calls": [
+    "get_current_time"
+   ],
+   "date": null,
+   "time": null,
+   "finish_reason": "tool_calls",
+   "completion_tokens": 58,
+   "reasoning_tokens": 41,
+   "content": "",
+   "reasoning_tail": "The user is asking for the current date and time. I have a tool called \"get_current_time\" that can provide this information. I should call this function to get the current date and time.",
+   "seed": 1006
+  },
+  {
+   "bucket": "called",
+   "tool_calls": [
+    "get_current_time"
+   ],
+   "date": null,
+   "time": null,
+   "finish_reason": "tool_calls",
+   "completion_tokens": 62,
+   "reasoning_tokens": 45,
+   "content": "",
+   "reasoning_tail": "The user is asking for the current date and time. I have a tool available called \"get_current_time\" that can provide this information. I should call this function to get the current date and time for the user.",
+   "seed": 1007
+  },
+  {
+   "bucket": "called",
+   "tool_calls": [
+    "get_current_time"
+   ],
+   "date": null,
+   "time": null,
+   "finish_reason": "tool_calls",
+   "completion_tokens": 56,
+   "reasoning_tokens": 39,
+   "content": "",
+   "reasoning_tail": "The user is asking for the current date and time. I have a tool called get_current_time that can provide this information. I should call this function to get the current date and time.",
+   "seed": 1008
+  },
+  {
+   "bucket": "called",
+   "tool_calls": [
+    "get_current_time"
+   ],
+   "date": null,
+   "time": null,
+   "finish_reason": "tool_calls",
+   "completion_tokens": 63,
+   "reasoning_tokens": 46,
+   "content": "",
+   "reasoning_tail": "The user is asking for the current date and time. I have access to a function called \"get_current_time\" that can provide this information. I should call this function to get the current date and time for the user.",
+   "seed": 1009
+  },
+  {
+   "bucket": "called",
+   "tool_calls": [
+    "get_current_time"
+   ],
+   "date": null,
+   "time": null,
+   "finish_reason": "tool_calls",
+   "completion_tokens": 59,
+   "reasoning_tokens": 42,
+   "content": "",
+   "reasoning_tail": "The user is asking for the current date and time. I have a function called get_current_time that can provide this information. I should call this function to get the current date and time for the user.",
+   "seed": 1010
+  },
+  {
+   "bucket": "called",
+   "tool_calls": [
+    "get_current_time"
+   ],
+   "date": null,
+   "time": null,
+   "finish_reason": "tool_calls",
+   "completion_tokens": 61,
+   "reasoning_tokens": 44,
+   "content": "",
+   "reasoning_tail": "The user is asking for the current date and time. I have a tool called \"get_current_time\" that can provide this information. I should call this function to get the current date and time for the user.",
+   "seed": 1011
+  },
+  {
+   "bucket": "called",
+   "tool_calls": [
+    "get_current_time"
+   ],
+   "date": null,
+   "time": null,
+   "finish_reason": "tool_calls",
+   "completion_tokens": 63,
+   "reasoning_tokens": 46,
+   "content": "",
+   "reasoning_tail": "The user is asking for the current date and time. I have access to a function called \"get_current_time\" that can provide this information. I should call this function to get the current date and time for the user.",
+   "seed": 1012
+  },
+  {
+   "bucket": "called",
+   "tool_calls": [
+    "get_current_time"
+   ],
+   "date": null,
+   "time": null,
+   "finish_reason": "tool_calls",
+   "completion_tokens": 56,
+   "reasoning_tokens": 39,
+   "content": "",
+   "reasoning_tail": "The user is asking for the current date and time. I have a tool called get_current_time that can provide this information. I should call this function to get the current date and time.",
+   "seed": 1013
+  },
+  {
+   "bucket": "called",
+   "tool_calls": [
+    "get_current_time"
+   ],
+   "date": null,
+   "time": null,
+   "finish_reason": "tool_calls",
+   "completion_tokens": 57,
+   "reasoning_tokens": 40,
+   "content": "",
+   "reasoning_tail": "The user is asking for the current date and time. I have a function available called get_current_time that can provide this information. I should call this function to get the current date and time.",
+   "seed": 1014
+  },
+  {
+   "bucket": "called",
+   "tool_calls": [
+    "get_current_time"
+   ],
+   "date": null,
+   "time": null,
+   "finish_reason": "tool_calls",
+   "completion_tokens": 63,
+   "reasoning_tokens": 46,
+   "content": "",
+   "reasoning_tail": "The user is asking for the current date and time. I have access to a function called \"get_current_time\" that can provide this information. I should call this function to get the current date and time for the user.",
+   "seed": 1015
+  },
+  {
+   "bucket": "called",
+   "tool_calls": [
+    "get_current_time"
+   ],
+   "date": null,
+   "time": null,
+   "finish_reason": "tool_calls",
+   "completion_tokens": 62,
+   "reasoning_tokens": 45,
+   "content": "",
+   "reasoning_tail": "The user is asking for the current date and time. I have a function called \"get_current_time\" that can provide this information. I don't need any parameters for this function, so I can call it directly.",
+   "seed": 1016
+  },
+  {
+   "bucket": "called",
+   "tool_calls": [
+    "get_current_time"
+   ],
+   "date": null,
+   "time": null,
+   "finish_reason": "tool_calls",
+   "completion_tokens": 56,
+   "reasoning_tokens": 39,
+   "content": "",
+   "reasoning_tail": "The user is asking for the current date and time. I have a function called get_current_time that can provide this information. I should call this function to get the current date and time.",
+   "seed": 1017
+  },
+  {
+   "bucket": "called",
+   "tool_calls": [
+    "get_current_time"
+   ],
+   "date": null,
+   "time": null,
+   "finish_reason": "tool_calls",
+   "completion_tokens": 60,
+   "reasoning_tokens": 43,
+   "content": "",
+   "reasoning_tail": "The user is asking for the current date and time. I have a tool available called get_current_time that can provide this information. I should call this function to get the current date and time for the user.",
+   "seed": 1018
+  },
+  {
+   "bucket": "called",
+   "tool_calls": [
+    "get_current_time"
+   ],
+   "date": null,
+   "time": null,
+   "finish_reason": "tool_calls",
+   "completion_tokens": 59,
+   "reasoning_tokens": 42,
+   "content": "",
+   "reasoning_tail": "The user is asking for the current date and time. I have a tool available called \"get_current_time\" that can provide this information. Let me call this function to get the current date and time.",
+   "seed": 1019
+  },
+  {
+   "bucket": "called",
+   "tool_calls": [
+    "get_current_time"
+   ],
+   "date": null,
+   "time": null,
+   "finish_reason": "tool_calls",
+   "completion_tokens": 60,
+   "reasoning_tokens": 43,
+   "content": "",
+   "reasoning_tail": "The user is asking for the current date and time. I have access to a function called \"get_current_time\" that can provide this information. I should call this function to get the current date and time.",
+   "seed": 1020
+  },
+  {
+   "bucket": "called",
+   "tool_calls": [
+    "get_current_time"
+   ],
+   "date": null,
+   "time": null,
+   "finish_reason": "tool_calls",
+   "completion_tokens": 62,
+   "reasoning_tokens": 45,
+   "content": "",
+   "reasoning_tail": "The user is asking for the current date and time. I have a tool available called \"get_current_time\" that can provide this information. I should call this function to get the current date and time for the user.",
+   "seed": 1021
+  },
+  {
+   "bucket": "called",
+   "tool_calls": [
+    "get_current_time"
+   ],
+   "date": null,
+   "time": null,
+   "finish_reason": "tool_calls",
+   "completion_tokens": 60,
+   "reasoning_tokens": 43,
+   "content": "",
+   "reasoning_tail": "The user is asking for the current date and time. I have access to a function called \"get_current_time\" that can provide this information. Let me call this function to get the current date and time.",
+   "seed": 1022
+  },
+  {
+   "bucket": "called",
+   "tool_calls": [
+    "get_current_time"
+   ],
+   "date": null,
+   "time": null,
+   "finish_reason": "tool_calls",
+   "completion_tokens": 49,
+   "reasoning_tokens": 32,
+   "content": "",
+   "reasoning_tail": "The user is asking for the current date and time. I have a function called get_current_time that can provide this information. Let me call this function.",
+   "seed": 1023
+  }
+ ]
+}

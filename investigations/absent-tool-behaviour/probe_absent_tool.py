@@ -16,7 +16,10 @@ question about a model.
 `--prompt tool-mention` asks the model to use a tool that is not offered; `--prompt plain` just asks the
 question. The difference between the two is the point of the study, so run both against any model you add.
 
-No tools are ever sent. That is the experiment.
+`--offer-tool` declares a `get_current_time` the model may actually call, which is the control: the same
+question with a route to the answer. The call is counted, never executed — what is being measured is
+whether the model reaches for the tool, not what comes back. Run it with `--prompt tool-mention`, so that
+the only thing differing from the absent-tool condition is whether the tool is there.
 """
 
 import argparse
@@ -44,14 +47,27 @@ REFUSAL_RE = re.compile(r"don't have access|do not have access|can't access|cann
                         r"|can't provide|cannot provide|don't know the current|real-time", re.I)
 
 
-def sample(backend_url, model, prompt, temperature, min_p, max_tokens, seed):
-    """One completion. Returns the raw response body."""
+CLOCK_TOOL = [{"type": "function",
+               "function": {"name": "get_current_time",
+                            "description": "Get the current date and time.",
+                            "parameters": {"type": "object", "properties": {}}}}]
+
+
+def sample(backend_url, model, prompt, temperature, min_p, max_tokens, seed, offer_tool=False):
+    """One completion. Returns the raw response body.
+
+    `offer_tool`: declare a clock tool in the request. This is the control condition — the same question
+                  with a route to the answer — and the call is never executed, only counted.
+    """
     payload = {"model": model,
                "messages": [{"role": "user", "content": prompt}],
                "temperature": temperature,
                "min_p": min_p,
                "max_tokens": max_tokens,
                "seed": seed}
+    if offer_tool:
+        payload["tools"] = CLOCK_TOOL
+        payload["tool_choice"] = "auto"
     request = urllib.request.Request(f"{backend_url}/v1/chat/completions",
                                      data=json.dumps(payload).encode(),
                                      headers={"Content-Type": "application/json"})
@@ -64,6 +80,7 @@ def classify(body):
 
     Buckets, in the order they are tested — the order matters, since a reply can satisfy more than one:
 
+    `called`:    asked for the clock tool. Only reachable with `--offer-tool`, and the whole point of it.
     `truncated`: the budget ran out before any reply was emitted. On a reasoning model this is the loop
                  case, and the reasoning trace is where it is visible.
     `answered`:  stated a date or a time, which without a tool means it invented one.
@@ -76,8 +93,11 @@ def classify(body):
     content = message.get("content") or ""
     dates = DATE_RE.findall(content)
     times = TIME_RE.findall(content)
+    tool_calls = message.get("tool_calls") or []
 
-    if choice["finish_reason"] == "length" and not content.strip():
+    if tool_calls:
+        bucket = "called"
+    elif choice["finish_reason"] == "length" and not content.strip():
         bucket = "truncated"
     elif dates or times:
         bucket = "answered"
@@ -90,6 +110,7 @@ def classify(body):
 
     usage = body.get("usage", {})
     return {"bucket": bucket,
+            "tool_calls": [c["function"]["name"] for c in tool_calls],
             "date": dates[0].strip() if dates else None,
             "time": times[0].strip() if times else None,
             "finish_reason": choice["finish_reason"],
@@ -106,6 +127,8 @@ def main():
                         help="OpenAI-compatible backend (default: %(default)s)")
     parser.add_argument("--model", required=True, help="model id, as the backend lists it")
     parser.add_argument("--prompt", choices=sorted(PROMPTS), default="plain")
+    parser.add_argument("--offer-tool", action="store_true",
+                        help="declare a get_current_time tool -- the control condition")
     parser.add_argument("-n", "--samples", type=int, default=24)
     parser.add_argument("--temperature", type=float, default=1.0)
     parser.add_argument("--min-p", type=float, default=0.02)
@@ -116,20 +139,23 @@ def main():
 
     prompt = PROMPTS[args.prompt]
     print(f"# model={args.model} prompt={args.prompt!r} n={args.samples} "
-          f"T={args.temperature} min_p={args.min_p} max_tokens={args.max_tokens}", flush=True)
+          f"T={args.temperature} min_p={args.min_p} max_tokens={args.max_tokens} "
+          f"tool={'offered' if args.offer_tool else 'absent'}", flush=True)
     print(f"# {prompt!r}\n", flush=True)
 
     records, buckets = [], collections.Counter()
     for i in range(args.samples):
         record = classify(sample(args.backend_url, args.model, prompt,
-                                 args.temperature, args.min_p, args.max_tokens, args.seed0 + i))
+                                 args.temperature, args.min_p, args.max_tokens, args.seed0 + i,
+                                 offer_tool=args.offer_tool))
         record["seed"] = args.seed0 + i
         records.append(record)
         buckets[record["bucket"]] += 1
         shown = " ".join(record["content"].split())[:96] or "(empty)"
         print(f"[{i:2d}] {record['bucket']:<10} {shown}", flush=True)
 
-    print(f"\n=== {args.samples} samples: {args.model}, prompt={args.prompt} ===")
+    print(f"\n=== {args.samples} samples: {args.model}, prompt={args.prompt}, "
+          f"tool={'offered' if args.offer_tool else 'absent'} ===")
     for bucket, n in buckets.most_common():
         print(f"{n:3d}  {bucket}")
     stated = [(r["date"], r["time"]) for r in records if r["bucket"] == "answered"]
@@ -143,6 +169,7 @@ def main():
     if args.out:
         with open(args.out, "w") as f:
             json.dump({"model": args.model, "prompt_key": args.prompt, "prompt": prompt,
+                       "offer_tool": args.offer_tool,
                        "temperature": args.temperature, "min_p": args.min_p,
                        "max_tokens": args.max_tokens, "samples": records}, f, indent=1)
         print(f"\nwrote {args.out}")

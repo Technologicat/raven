@@ -479,6 +479,22 @@ def build_turn_prompt(llm_settings: env,
 
     # Data-like injects -> synthetic tool calls, placed just before the user's latest message.
     #
+    # The time is *injected* rather than left for the model to fetch, because a conversation needs the date
+    # without ever asking for it — "is this paper recent", "what shall we do this week" — and a tool call
+    # happens only if the model decides to make one. Handing it over unasked costs one synthetic exchange
+    # and removes the decision.
+    #
+    # What that is not evidence for: the tool path being unreliable. Asked the time with a clock tool
+    # actually on offer, qwen3.5-9b called it 24 times out of 24 — with and without being told to, so it
+    # reaches for it unprompted (`investigations/absent-tool-behaviour/`, the 2x2). Every measured failure
+    # there — refusal, invention, a reasoning loop returning nothing — comes from the cells where the tool
+    # is *absent*, which is not this situation.
+    #
+    # What stays untested is the case this inject is actually for. Those samples all ask *about the time*,
+    # so reaching for a clock is the obvious move. The turn that needs today's date is usually the one where
+    # nobody mentions it — "is this paper recent" — and whether a model calls the clock when the date is
+    # merely relevant is a different question, unasked.
+    #
     # The clock goes in only when tools are on offer, and the two are tied both ways. Normally
     # `get_current_time` is offered whatever the group switches say, *because* the time is injected as a
     # call to it and a history calling an undeclared tool is a shape models handle badly. Withdraw every
