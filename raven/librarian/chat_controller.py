@@ -3010,6 +3010,7 @@ class DPGChatController:
                  chat_stop_generation_button_widget: Union[str, int],
                  indicator_glow_animation: Optional[gui_animation.PulsatingColor],
                  docs_indexing_glow_animation: Optional[gui_animation.PulsatingColor],
+                 attachment_read_indicator_widget: Union[str, int],
                  llm_indicator_widget: Union[str, int],
                  docs_indexing_indicator_widget: Union[str, int],
                  docs_indexing_progress_text_widget: Union[str, int],
@@ -3060,6 +3061,12 @@ class DPGChatController:
                                         into the indexing state, so the glow always starts at the first
                                         animation frame when the indicator appears.
 
+        `attachment_read_indicator_widget`: DPG tag or ID of the widget to show while an attached document's
+                                            text is being extracted. That is local work — pypdf, a couple of
+                                            seconds on a branch of unread papers — and it happens *before*
+                                            the backend sees anything, so it gets its own row rather than
+                                            borrowing the one that means "the backend is busy".
+
         `llm_indicator_widget`: DPG tag or ID of the widget to show while the prompt is being processed by
                                 the LLM backend. Typically, a DPG group with items bound to the theme whose
                                 color `indicator_glow_animation` pulsates.
@@ -3109,6 +3116,7 @@ class DPGChatController:
         self.chat_stop_generation_button_widget = chat_stop_generation_button_widget
         self.indicator_glow_animation = indicator_glow_animation
         self.docs_indexing_glow_animation = docs_indexing_glow_animation
+        self.attachment_read_indicator_widget = attachment_read_indicator_widget
         self.llm_indicator_widget = llm_indicator_widget
         self.docs_indexing_indicator_widget = docs_indexing_indicator_widget
         self.docs_indexing_progress_text_widget = docs_indexing_progress_text_widget
@@ -3561,7 +3569,16 @@ class DPGChatController:
         #
         # It also stands in for the exact figure when the backend never answers, which is the case that used
         # to leave the readout stuck at the immediate count until HEAD moved.
-        estimate, estimate_is_exact = llmclient.count_branch_tokens(self.llm_settings, self.datastore, task_env.head_node_id)
+        if self.gui_updates_safe:
+            if self.indicator_glow_animation is not None:
+                self.indicator_glow_animation.reset()  # start a new pulsation cycle
+            dpg.show_item(self.attachment_read_indicator_widget)  # tag
+        try:
+            estimate, estimate_is_exact = llmclient.count_branch_tokens(self.llm_settings, self.datastore, task_env.head_node_id)
+        finally:
+            if self.gui_updates_safe:
+                dpg.hide_item(self.attachment_read_indicator_widget)  # tag
+
         if task_env.cancelled or not self.gui_updates_safe:
             return
         if self.app_state["HEAD"] != task_env.head_node_id:  # HEAD moved while we were reading the attachments

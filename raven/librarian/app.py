@@ -1274,9 +1274,11 @@ with timer() as tim:
                     dpg_avatar_renderer.configure_live_texture(_initial_image_size, _initial_image_size)
 
                     # Status indicators stack top-down via a vertical parent group anchored at (16, 16).
-                    # Order — INDEXING, DOCS, SYSTEM, WEB — mirrors the typical processing order of a
-                    # query and places the longest-lived indicator (INDEXING) at the top so it stays in
-                    # place when shorter-lived siblings appear below it. DPG's vertical group naturally
+                    # Order — INDEXING, DOCS, READING, SYSTEM, WEB — mirrors the typical processing order
+                    # of a query and places the longest-lived indicator (INDEXING) at the top so it stays
+                    # in place when shorter-lived siblings appear below it. READING sits where it does
+                    # because extracting an attachment's text is what happens between finding documents
+                    # and handing the prompt to the backend. DPG's vertical group naturally
                     # hides any child whose `show=False`, so the visible siblings just repack with no
                     # overlap. Indexing and search have separate widgets — they can run concurrently
                     # (since the lock granularity work), so they're independent indicators rather than
@@ -1301,6 +1303,13 @@ with timer() as tim:
                             dpg.bind_item_theme("docs_search_text", "my_pulsating_gray_text_theme")  # tag
                             dpg.add_text("", tag="docs_search_progress_text")
                             dpg.bind_item_theme("docs_search_progress_text", "my_steady_gray_docs_theme")  # tag
+
+                        with dpg.group(show=False, horizontal=True) as attachment_read_indicator_group:
+                            dpg.add_text(fa.ICON_BOOK_OPEN_READER, tag="attachment_read_symbol")
+                            dpg.bind_item_font("attachment_read_symbol", themes_and_fonts.icon_font_solid)  # tag
+                            dpg.bind_item_theme("attachment_read_symbol", "my_pulsating_gray_text_theme")  # tag
+                            dpg.add_text("READING", tag="attachment_read_text")
+                            dpg.bind_item_theme("attachment_read_text", "my_pulsating_gray_text_theme")  # tag
 
                         with dpg.group(show=False, horizontal=True) as llm_indicator_group:
                             dpg.add_text(fa.ICON_MICROCHIP, tag="llm_prompt_process_symbol")
@@ -2117,6 +2126,7 @@ chat_controller = DPGChatController(llm_settings=llm_settings,
                                     chat_stop_generation_button_widget=stop_generation_button,
                                     indicator_glow_animation=pulsating_gray_text_glow,
                                     docs_indexing_glow_animation=pulsating_red_docs_glow,
+                                    attachment_read_indicator_widget=attachment_read_indicator_group,
                                     llm_indicator_widget=llm_indicator_group,
                                     docs_indexing_indicator_widget=docs_indexing_indicator_group,
                                     docs_indexing_progress_text_widget="docs_indexing_progress_text",
