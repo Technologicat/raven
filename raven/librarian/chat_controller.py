@@ -3550,6 +3550,24 @@ class DPGChatController:
 
         history = chatutil.linearize_chat(datastore=self.datastore,
                                           node_id=task_env.head_node_id)
+
+        # Read the attachments and re-estimate *before* asking the backend anything, and show that. Until
+        # this point the readout is whatever the immediate count could say without waiting for pypdf, which
+        # on a branch of unread PDFs is a small fraction of the truth — measured at ~1% for a branch that is
+        # two-thirds full. Extraction has to happen for the prompt below in any case and `sidecar_to_text`
+        # memoizes it, so doing it here costs nothing and buys the honest figure a whole round-trip earlier:
+        # against an 88500-token prompt that round-trip was ~5 s, and the extraction ahead of it is the only
+        # part the user now spends looking at a wrong number.
+        #
+        # It also stands in for the exact figure when the backend never answers, which is the case that used
+        # to leave the readout stuck at the immediate count until HEAD moved.
+        estimate, estimate_is_exact = llmclient.count_branch_tokens(self.llm_settings, self.datastore, task_env.head_node_id)
+        if task_env.cancelled or not self.gui_updates_safe:
+            return
+        if self.app_state["HEAD"] != task_env.head_node_id:  # HEAD moved while we were reading the attachments
+            return
+        self._render_context_fill(estimate, estimate_is_exact)
+
         # The tool settings must match what the next turn will send, so the tool definitions are counted and
         # cached identically. They sit in the system block at the very front of the prompt, so warming a
         # different list warms a prefix that turn never sends — the whole prompt gets reprocessed anyway.
@@ -3576,13 +3594,11 @@ class DPGChatController:
             return
         # Checked against the local estimate before it is believed, because a backend may be reporting the
         # tokens it had to *process* rather than the size of the prompt — see `prompt_size_report_looks_whole`.
-        # The estimate is cheap here whatever the attachments: building the prompt above extracted them, so
-        # they are in the cache this reads.
+        # The estimate is the one already computed and shown above, so a refused figure simply leaves that
+        # standing rather than replacing it with an identical recount.
         reported = out.usage["prompt_tokens"]
-        estimate, _is_exact = llmclient.count_branch_tokens(self.llm_settings, self.datastore, task_env.head_node_id)
         if not llmclient.prompt_size_report_looks_whole(reported, estimate):
-            self._render_context_fill(estimate, False)  # keep saying `~`, and say it about the bigger number
-            return
+            return  # `prompt_size_report_looks_whole` logs why; the estimate is already on screen, so leave it there
         logger.info(f"DPGChatController._context_prefill_entrypoint: exact prompt size for HEAD '{task_env.head_node_id}': {reported} tokens")
         self._render_context_fill(reported, is_exact=True)
 
