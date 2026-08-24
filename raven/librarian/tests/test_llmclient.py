@@ -1818,3 +1818,37 @@ class TestFormatConsultedDocuments:
         # even though nothing of ours went wrong. No label is the honest answer there.
         record = "@article{k,\n\tAuthor = {Nobody, A.},\n\tAbstract = {unbalanced {\n}\n"
         assert chatutil.document_label(record) == ""
+
+
+class TestTokenizerProbe:
+    """The probes that check a local tokenizer against the backend must not disturb what they measure."""
+
+    def test_the_probe_asks_for_no_recalibration(self, monkeypatch):
+        # `invoke` refines `settings.tokens_per_character` from each call's usage, and
+        # `fit_attachments_to_context` turns a token budget back into characters with that ratio. A probe is
+        # short and mostly chat-template framing, so the ratio it implies is far too high — and calibrating on
+        # it silently truncates the attachments of the branch being measured. Observed as a branch total
+        # dropping from 86655 tokens to 51956 with nothing else changed.
+        seen = {}
+
+        def fake_prefill(settings, history, **kwargs):
+            seen.update(kwargs)
+            return None
+
+        monkeypatch.setattr(llmclient, "prefill", fake_prefill)
+        settings = env(backend_flavor="lmstudio", backend_url="http://localhost:1", tokens_per_character=0.27)
+        llmclient._make_backend_token_counter(settings)("a probe")
+        assert seen.get("calibrate") is False, "a probe that recalibrates changes the number it was sent to check"
+
+    def test_an_ordinary_prefill_still_calibrates(self, monkeypatch):
+        # The context prefill sends a real conversation, which is exactly what the ratio should learn from.
+        seen = {}
+
+        def fake_invoke(settings, history, **kwargs):
+            seen.update(kwargs)
+            return None
+
+        monkeypatch.setattr(llmclient, "invoke", fake_invoke)
+        llmclient.prefill(env(), _history("a real conversation"))
+        assert seen.get("calibrate") is True, ("the default changed, so the probe's `calibrate=False` no longer "
+                                               "distinguishes it from an ordinary call")

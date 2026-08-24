@@ -5,7 +5,7 @@ import pathlib
 
 import pytest
 
-from ..gguftokenizer import find_for_model, load
+from ..gguftokenizer import find_for_model, load, _PROBE_TOLERANCE_TOKENS
 
 
 # --------------------------------------------------------------------------------
@@ -146,8 +146,67 @@ def test_a_vocabulary_with_no_merges_is_declined(tmp_path):
 
 
 def test_an_unverified_pre_tokenizer_is_declined(tmp_path):
-    """Building it anyway would produce counts that are wrong without being marked as estimates."""
+    """With no backend to ask, a construction nothing has measured is a guess nothing can check."""
     assert load(write_gguf(tmp_path / "model.gguf", tokenizer_class="gpt2", pre="something-we-have-not-measured")) is None
+
+
+# --------------------------------------------------------------------------------
+# Checking the built tokenizer against the backend
+
+def counter_agreeing_with(tokenizer, framing: int = 0, ratio: float = 1.0):
+    """A stand-in backend: counts `text` with `tokenizer`, scaled by `ratio`, plus `framing` for its template.
+
+    `ratio` away from 1.0 is a backend serving a model whose vocabulary is not this one.
+    """
+    def count(text: str) -> int:
+        return int(len(tokenizer.encode(text, add_special_tokens=False).ids) * ratio) + framing
+    return count
+
+
+@pytest.fixture
+def reference(tmp_path):
+    """A built tokenizer to speak for the backend, and the path of a file declaring an unmeasured pre."""
+    measured = load(write_gguf(tmp_path / "measured.gguf", tokenizer_class="gpt2", pre="qwen35"))
+    unmeasured = write_gguf(tmp_path / "unmeasured.gguf", tokenizer_class="gpt2", pre="not-measured-anywhere")
+    return measured, unmeasured
+
+
+def test_an_unmeasured_pre_tokenizer_is_accepted_when_the_backend_confirms_it(reference):
+    """The whole point: the model being served is a better authority than a list compiled elsewhere."""
+    tokenizer, unmeasured = reference
+    assert load(unmeasured, counter_agreeing_with(tokenizer)) is not None
+
+
+def test_the_backends_own_framing_does_not_matter(reference):
+    """Comparing two probes' difference cancels the chat template, which a comparison of totals could not."""
+    tokenizer, unmeasured = reference
+    framing = 1000
+    assert load(unmeasured, counter_agreeing_with(tokenizer, framing=framing)) is not None
+    assert framing > _PROBE_TOLERANCE_TOKENS, ("the framing fits inside the tolerance, so this fixture would pass "
+                                               "even if the check compared totals rather than the difference")
+
+
+def test_a_measured_pre_tokenizer_is_declined_when_the_backend_disagrees(tmp_path, reference):
+    """A file whose name matched but whose vocabulary belongs to another model builds and round-trips fine."""
+    tokenizer, _ = reference
+    measured = write_gguf(tmp_path / "measured-again.gguf", tokenizer_class="gpt2", pre="qwen35")
+    assert load(measured, counter_agreeing_with(tokenizer, ratio=0.5)) is None
+    assert load(measured) is not None, ("this file is declined even with a backend that agrees, so the disagreement "
+                                        "above proves nothing")
+
+
+def test_a_backend_that_cannot_answer_leaves_the_measured_list_deciding(reference):
+    tokenizer, unmeasured = reference
+    assert load(unmeasured, lambda text: None) is None
+
+
+def test_a_backend_that_raises_is_not_itself_a_failure(tmp_path, reference):
+    """An unreachable backend means "cannot say", so the offline list decides — it does not veto."""
+    def unreachable(text: str) -> int:
+        raise OSError("connection refused")
+
+    measured = write_gguf(tmp_path / "measured-again.gguf", tokenizer_class="gpt2", pre="qwen35")
+    assert load(measured, unreachable) is not None
 
 
 def test_a_tokenizer_class_we_cannot_build_is_declined(tmp_path):

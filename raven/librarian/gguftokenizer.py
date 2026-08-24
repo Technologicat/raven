@@ -10,17 +10,19 @@ Two jobs, because a machine that keeps several models has to answer "which file"
   - `find_for_model` picks the file whose name matches what the backend says it is serving.
   - `load` builds a `tokenizers.Tokenizer` from that file.
 
-**Only constructions that have been checked against a live backend are built.** A tokenizer assembled from
-plausible-looking parts produces confidently wrong numbers, which is worse than the estimate it would
-replace, because the readout stops saying `~`. `load` therefore declines anything outside `_PRE_TOKENIZER_REGEXES`
-and lets the caller fall back. Adding an entry means measuring one: point
-`investigations/prompt-size-cache-relative/measure_true_size.py` at a backend serving that model and check
-its offline count against the backend's count of the same unique text.
+**Nothing is trusted until something checks it.** A tokenizer assembled from plausible-looking parts
+produces confidently wrong numbers, which is worse than the estimate it replaces, because the readout stops
+saying `~`. So `load` builds optimistically and then asks the backend to confirm: two short probes, compared
+by the *difference* between them so the chat template's framing cancels. That check is about the model
+actually being served, which is the only authority that matters, and it also catches a wrong file — one
+whose name matched while its vocabulary belongs to another model, which would build and round-trip perfectly.
 
-Measured 2026-08-24 on `qwen3.5-9b`: 0.05% apart, the gap being the framing the backend request added.
-Measured the same day: Qwen 3.5, 3.6 and 3.8 — dense and MoE — ship a byte-identical tokenizer, so a
-near-miss inside that family costs nothing. Across families it would be silently wrong, which is what the
-matching below is careful about.
+When the backend cannot be asked, `_PRE_TOKENIZER_REGEXES` is the fallback: constructions measured in
+advance, on the grounds that a guess nothing can check should not be made. Measured 2026-08-24 on
+`qwen3.5-9b`, whose offline count came within 0.05% of the backend's own, the gap being framing the
+measurement added. The same day: Qwen 3.5, 3.6 and 3.8 — dense and MoE — ship a byte-identical tokenizer,
+so a near-miss inside that family costs nothing. Across families it would be silently wrong, which is what
+the matching below is careful about.
 """
 
 __all__ = ["find_for_model", "load"]
@@ -29,7 +31,8 @@ import logging
 import os
 import pathlib
 import re
-from typing import Any, Collection, Optional
+import uuid
+from typing import Any, Callable, Collection, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +62,21 @@ _NOT_A_MODEL = re.compile(r"mmproj", re.IGNORECASE)
 # Round-trip probe. Digits, punctuation runs, non-ASCII letters and newlines are where a mis-assembled
 # byte-level BPE stops being reversible, so they are all in here.
 _SELF_CHECK_SAMPLE = "Hello, world! 3.14159 — ei se mitään.\n\tKuinka monta? 42 tokens…  ✓"
+
+# Text for the backend comparison. Ordinary prose with the things vocabularies disagree about mixed in —
+# digits, contractions, hyphenation, punctuation runs, a non-English sentence — since two tokenizers differ
+# least on plain lowercase words. Repeated to make the longer probe, which keeps both probes one kind of
+# text: a difference in *content* between them would be a difference in tokenization the comparison would
+# then have to allow for.
+_PROBE_TEXT = ("The 2026-08-24 run cost $1,234.56 and took 7.5 hours; it wasn't re-runnable. "
+               "Kokeillaanpa myös ääkkösiä — ja pitkää ajatusviivaa. Values: 3.14159, 1e-9, 0xFF.\n")
+_PROBE_REPEATS = 6                # ~900 characters of added text: enough that a wrong vocabulary misses by tens of tokens
+_PROBE_TOLERANCE_TOKENS = 2       # the one boundary where the added text meets what precedes it
+
+# Tokenizer classes this module knows how to assemble. GGUF names the class in `tokenizer.ggml.model`;
+# `gpt2` is the byte-level BPE shared by most current model families. Gemma's `gemma4` is a different
+# construction (word-mark pieces with scores, no pre-tokenizer field) and is not built here.
+_BUILDABLE_TOKENIZER_CLASSES = {"gpt2"}
 
 
 def _normalize(name: str) -> str:
@@ -147,12 +165,59 @@ def find_for_model(search_root: pathlib.Path, model_names: Collection[str]) -> O
     return best
 
 
-def load(gguf_path: pathlib.Path) -> Optional[Any]:
+def _agrees_with_backend(tokenizer: Any,
+                         backend_counter: Optional[Callable[[str], Optional[int]]]) -> Optional[bool]:
+    """Does `tokenizer` count the way the backend does? `True`, `False`, or `None` if it could not be asked."""
+    if backend_counter is None:
+        return None
+
+    # Two probes, and what is compared is the *difference* between them. A backend counts a whole templated
+    # prompt, so its figure includes framing this tokenizer never sees — a fixed overhead that cancels when
+    # the same template wraps both probes. Comparing absolute counts would need that overhead to be known,
+    # and would fail for exactly the reason this module exists.
+    #
+    # Short probes on purpose: they stay in the regime where the backend's reported size is dependable, which
+    # a long conversation is measurably not (`investigations/prompt-size-cache-relative/`). Each probe is
+    # unique per call, so nothing that happens to be cached can answer for it.
+    tag = uuid.uuid4()
+    short_probe = f"[{tag}]\n{_PROBE_TEXT}"
+    long_probe = f"{short_probe}\n{_PROBE_TEXT * _PROBE_REPEATS}"
+
+    try:
+        backend_short = backend_counter(short_probe)
+        backend_long = backend_counter(long_probe)
+    except Exception as exc:  # noqa: BLE001 -- an unreachable backend is a "cannot say", not a failure here
+        logger.info(f"_agrees_with_backend: could not ask the backend to count: {type(exc)}: {exc}.")
+        return None
+    if backend_short is None or backend_long is None:
+        return None
+
+    backend_difference = backend_long - backend_short
+    local_difference = (len(tokenizer.encode(long_probe, add_special_tokens=False).ids)
+                        - len(tokenizer.encode(short_probe, add_special_tokens=False).ids))
+    # The added text is identical in both, so a correct tokenizer matches exactly; the slack is for the one
+    # boundary where the addition meets what precedes it. A tokenizer for the wrong model misses by far more
+    # than that — a different vocabulary changes the count of a paragraph by percent, not by tokens.
+    disagreement = abs(backend_difference - local_difference)
+    agrees = disagreement <= _PROBE_TOLERANCE_TOKENS
+    logger.info(f"_agrees_with_backend: backend counted {backend_difference} tokens of added text where this "
+                f"tokenizer counts {local_difference} ({'agreed' if agrees else 'DISAGREED'}, "
+                f"tolerance {_PROBE_TOLERANCE_TOKENS}).")
+    return agrees
+
+
+def load(gguf_path: pathlib.Path, backend_counter: Optional[Callable[[str], Optional[int]]] = None) -> Optional[Any]:
     """Build the tokenizer stored in `gguf_path`. Returns a `tokenizers.Tokenizer`, or `None`.
 
-    `None` means the file's tokenizer is not one this module has been verified to reproduce, or the file
-    could not be read, or the result failed its own round-trip check. Every one of those is logged, and every
-    one leaves the caller to fall back to estimating.
+    `None` means the file could not be read, its tokenizer is of a class this module cannot assemble, the
+    result failed its own round-trip check, or it disagreed with the backend about how many tokens a piece of
+    text is. Every one of those is logged, and every one leaves the caller to fall back to estimating.
+
+    `backend_counter`: how to ask the backend to count a piece of text — `text -> token count`, or `None`
+                       when it cannot answer. Given one, the tokenizer is checked against the model that is
+                       actually being served, and any pre-tokenizer is then allowed. Without one, only
+                       constructions measured in advance (`_PRE_TOKENIZER_REGEXES`) are trusted, since
+                       nothing else could catch a wrong guess.
 
     Reading is slow enough to matter — measured at ~7 s, nearly all of it in the GGUF reader indexing the
     file's tensor metadata on the way past — so call this off any thread that must stay responsive.
@@ -175,13 +240,15 @@ def load(gguf_path: pathlib.Path) -> Optional[Any]:
             return reader.fields[key].contents()
 
         tokenizer_class = field("tokenizer.ggml.model")
-        pre = field("tokenizer.ggml.pre") if "tokenizer.ggml.pre" in reader.fields else None
-        regex = _PRE_TOKENIZER_REGEXES.get(pre)
-        if regex is None:
-            logger.info(f"load: '{gguf_path.name}' has tokenizer class {tokenizer_class!r}, pre-tokenizer {pre!r}, "
-                        f"which this module has not been verified against; keeping the token estimate. "
-                        f"Verified: {sorted(_PRE_TOKENIZER_REGEXES)}.")
+        if tokenizer_class not in _BUILDABLE_TOKENIZER_CLASSES:
+            logger.info(f"load: '{gguf_path.name}' has tokenizer class {tokenizer_class!r}, which this module cannot "
+                        f"assemble; keeping the token estimate. Buildable: {sorted(_BUILDABLE_TOKENIZER_CLASSES)}.")
             return None
+
+        pre = field("tokenizer.ggml.pre") if "tokenizer.ggml.pre" in reader.fields else None
+        # An unrecognized pre-tokenizer gets the family's regex as a guess, which is what `backend_counter`
+        # is then asked to confirm. Guessing is only safe because something checks; see the policy below.
+        regex = _PRE_TOKENIZER_REGEXES.get(pre, _GPT2_FAMILY_REGEX)
 
         vocabulary = {token: index for index, token in enumerate(field("tokenizer.ggml.tokens"))}
         merges = [tuple(merge.split(" ", 1)) for merge in field("tokenizer.ggml.merges")]
@@ -204,5 +271,22 @@ def load(gguf_path: pathlib.Path) -> Optional[Any]:
                        f"({round_tripped!r} != {_SELF_CHECK_SAMPLE!r}); falling back to token estimates.")
         return None
 
-    logger.info(f"load: tokenizer ready from '{gguf_path.name}': {len(vocabulary)} tokens, class {tokenizer_class!r}, pre-tokenizer {pre!r}.")
+    # Then ask the backend whether this tokenizer counts the way it does. That check subsumes the offline
+    # list — it is about the model being served rather than about what someone measured once — and it also
+    # catches the thing no amount of care in `find_for_model` can: a file whose *name* matched while its
+    # vocabulary belongs to another model. Such a tokenizer builds and round-trips perfectly.
+    agrees = _agrees_with_backend(tokenizer, backend_counter)
+    if agrees is False:
+        logger.warning(f"load: the tokenizer built from '{gguf_path.name}' does not count the way the backend does; "
+                       f"falling back to token estimates. Is this the model the backend is serving?")
+        return None
+    if agrees is None and pre not in _PRE_TOKENIZER_REGEXES:
+        logger.info(f"load: '{gguf_path.name}' declares pre-tokenizer {pre!r}, which has not been measured, and the "
+                    f"backend could not be asked to confirm it; keeping the token estimate. "
+                    f"Measured offline: {sorted(_PRE_TOKENIZER_REGEXES)}.")
+        return None
+
+    confirmation = "confirmed against the backend" if agrees else "matching a pre-tokenizer measured offline"
+    logger.info(f"load: tokenizer ready from '{gguf_path.name}' ({confirmation}): {len(vocabulary)} tokens, "
+                f"class {tokenizer_class!r}, pre-tokenizer {pre!r}.")
     return tokenizer

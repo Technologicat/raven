@@ -1197,7 +1197,9 @@ def _start_tokenizer_load(settings: env, tokenizer_source: Optional[str]) -> Non
     logger.info(f"_start_tokenizer_load: token counts will be exact and offline, from '{tokenizer_source}' (loading in the background).")
 
     def load_it() -> None:
-        settings.tokenizer = _load_local_tokenizer(tokenizer_source)
+        # The backend is asked to confirm the tokenizer, which is two small requests — one more reason this
+        # belongs on a thread of its own rather than in the startup path.
+        settings.tokenizer = _load_local_tokenizer(tokenizer_source, _make_backend_token_counter(settings))
 
     threading.Thread(target=load_it, name="llmclient tokenizer load", daemon=True).start()
 
@@ -1273,7 +1275,26 @@ def _resolve_tokenizer_source(path: str, model_names: Collection[str]) -> Option
     return str(source)
 
 
-def _load_local_tokenizer(path: str):
+def _make_backend_token_counter(settings: env) -> Callable[[str], Optional[int]]:
+    """Return `text -> the backend's token count for it`, for checking a local tokenizer against the model in use.
+
+    The count includes whatever framing the backend's chat template adds, and is not required to be free of
+    it: `gguftokenizer` compares two probes and takes the difference, where a fixed overhead cancels.
+    """
+    def count(text: str) -> Optional[int]:
+        if settings.backend_flavor == "oobabooga":
+            return _ooba_token_count(settings.backend_url, text)  # counts the raw text, no template around it
+        probe = [{"role": "user", "content": [chatutil.text_content_part(text)]}]
+        # `calibrate=False` is load-bearing: these probes are short and mostly chat-template framing, so the
+        # tokens-per-character ratio they imply is far above what ordinary text costs. Letting them calibrate
+        # shrinks the character budget `fit_attachments_to_context` computes from that ratio, and the
+        # attachments of the branch being measured are then truncated harder than they will be when sent.
+        out = prefill(settings, probe, tools_enabled=False, calibrate=False)
+        return (out.usage or {}).get("prompt_tokens") if out is not None else None
+    return count
+
+
+def _load_local_tokenizer(path: str, backend_counter: Optional[Callable[[str], Optional[int]]] = None):
     """Load (and cache) a local tokenizer for exact token counting, or return `None` on failure.
 
     `path` is a `.gguf` file, a directory with `tokenizer.json` + `tokenizer_config.json`, or a HF repo id.
@@ -1286,7 +1307,7 @@ def _load_local_tokenizer(path: str):
     if path in _tokenizer_cache:
         return _tokenizer_cache[path]
     if path.lower().endswith(".gguf"):
-        tokenizer = gguftokenizer.load(pathlib.Path(path))
+        tokenizer = gguftokenizer.load(pathlib.Path(path), backend_counter)
     else:
         try:
             from transformers import AutoTokenizer  # noqa: PLC0415 -- heavy import, deferred to first use
@@ -2058,7 +2079,8 @@ def invoke(settings: env,
            tool_names: Optional[Collection[str]] = None,
            continue_: bool = False,
            max_tokens: Optional[int] = None,
-           datastore: Optional[chattree.PersistentForest] = None) -> env:
+           datastore: Optional[chattree.PersistentForest] = None,
+           calibrate: bool = True) -> env:
     """Invoke the LLM with the given chat history.
 
     This is typically done after adding the user's message to the chat history, to ask the LLM to generate a reply.
@@ -2376,7 +2398,8 @@ def invoke(settings: env,
     if usage is not None and usage.get("prompt_tokens"):
         prompt_content = "".join(chatutil.content_to_text(message.get("content")) for message in history)
         if prompt_content:
-            settings.tokens_per_character = usage["prompt_tokens"] / len(prompt_content)
+            if calibrate:
+                settings.tokens_per_character = usage["prompt_tokens"] / len(prompt_content)
             if settings.tokenizer is not None:
                 tokenizer_count = len(settings.tokenizer.encode(prompt_content))
                 if tokenizer_count > usage["prompt_tokens"] * 1.1:
@@ -2442,7 +2465,8 @@ def prefill(settings: env,
             history: List[Dict],
             tools_enabled: bool = True,
             tool_names: Optional[Collection[str]] = None,
-            datastore: Optional[chattree.PersistentForest] = None) -> Optional[env]:
+            datastore: Optional[chattree.PersistentForest] = None,
+            calibrate: bool = True) -> Optional[env]:
     """Send `history` to the backend generating essentially no output. Returns the `invoke` env, or `None` on failure.
 
     Two purposes, both side effects of submitting the real prompt:
@@ -2463,6 +2487,10 @@ def prefill(settings: env,
     `datastore`: passed through to `invoke` so image attachments in `history` are resolved and counted in the
                  prompt size (see `invoke`). `None` for text-only chats.
 
+    `calibrate`: passed through to `invoke`. Pass `False` when `history` is a probe rather than a real
+                 conversation: a short prompt's `prompt_tokens` is mostly chat-template framing, so the ratio
+                 it would imply is far too high for ordinary text.
+
     We cap generation at one token rather than zero: a single token is negligible compute, while `max_tokens == 0` is
     below the OpenAI-documented minimum and some backends reject it. The prompt-processing pass — the part that matters
     for both the count and the cache — happens regardless of the cap.
@@ -2477,7 +2505,8 @@ def prefill(settings: env,
                       tools_enabled=tools_enabled,
                       tool_names=tool_names,
                       max_tokens=1,
-                      datastore=datastore)
+                      datastore=datastore,
+                      calibrate=calibrate)
     except Exception as exc:  # noqa: BLE001 -- best-effort; any failure just leaves the estimate in place
         logger.warning(f"prefill: backend prefill failed; keeping the token estimate. Reason {type(exc)}: {exc}")
         return None
