@@ -26,6 +26,9 @@ scaffold, so the same word named two different scopes one layer apart.
 
 ## Dependency Layers (bottom → top)
 
+`python scripts/check_module_maps.py` checks this table against the package — sizes and, more usefully, whether
+every module is here at all.
+
 Sizes are rounded to two significant figures, measured **2026-08-24**. Rounded because the figure is here
 for the *shape* — where the mass sits, which is what makes the refactoring calls legible — and an exact
 number claims a precision that the next commit removes. The previous exact figures were 30–45% low by the

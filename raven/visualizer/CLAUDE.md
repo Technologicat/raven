@@ -3,7 +3,8 @@
 ~6.7k lines across 11 modules. The `app.py` split has landed.
 
 Sizes are rounded to two significant figures, measured **2026-08-24** — they are here for the shape of the
-package, not as a figure to quote. Re-measure before quoting one.
+package, not as a figure to quote. Re-measure before quoting one. `python scripts/check_module_maps.py`
+checks this table against the package, including whether every module is in it.
 
 ```
 app.py            (~1.9k) — GUI app: window layout, event wiring, search, the main render loop
