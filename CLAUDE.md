@@ -228,12 +228,14 @@ backend takes `--backend-url`** — same spelling everywhere, no exceptions to l
 ### Running Tests
 
 ```bash
-pytest                   # everything except the GUI group
+pytest                   # everything except the GUI and live-backend groups
 pytest --run-gui         # ...including the GUI group. Takes keyboard focus — warn the user first
+pytest --run-llm         # ...including the live-backend group, against the configured backend
+pytest --backend-url URL # ...the same, against a backend elsewhere (implies --run-llm)
 pytest -m "not ml"       # what CI runs; the ML stack isn't installed there
 ```
 
-Two markers divide the suite, and both defaults are chosen so that the command a person types by
+Three markers divide the suite, and every default is chosen so that the command a person types by
 reflex is the safe one:
 
 - **`gui`** — maps a real window. Focus is a single-holder resource on a shared desktop, so these
@@ -245,8 +247,19 @@ reflex is the safe one:
 - **`ml`** — needs the real ML stack (spaCy, Flair, torch model weights). Runs locally by default and
   is skipped in CI, which installs a hand-picked dependency subset rather than the multi-gigabyte
   tree (see the `ci-setup` skill).
+- **`llm`** — talks to a live OpenAI-compatible LLM backend, and so **opens a connection to it**. Skipped
+  unless `--run-llm` (the configured `llm_backend_url`) or `--backend-url URL` (anywhere else) is passed.
+  Opt-in for the connection rather than the cost: on by default, a CI runner would open a socket to
+  whatever the committed URL names, on a machine nobody here controls — which a test suite has no business
+  doing unasked, whatever is or is not listening. Having opted in, they still skip when nothing answers,
+  and **every skip names the URL it tried**, a silent skip being indistinguishable from a pass.
+  - These are the assertions a mock cannot make. Everything else in the suite mocks the backend, so a
+    tool-calling regression in the inference engine — a changed chat template, a reworked tool parser —
+    breaks Librarian at runtime with nothing going red. `raven/librarian/tests/test_live_backend.py` is
+    the group; `get_current_time` is the one tool needing nothing outside the process, which is what lets
+    it exercise the whole tool loop hermetically.
 
-A test that needs neither takes no marker, which is the overwhelmingly common case.
+A test that needs none of the three takes no marker, which is the overwhelmingly common case.
 
 ### A test that fakes a home directory must set `USERPROFILE` as well as `HOME`
 

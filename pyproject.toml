@@ -291,6 +291,7 @@ addopts = "--import-mode=importlib"
 markers = [
     "ml: tests that require the full ML stack (spaCy, Flair, torch models). Skipped on CI; run locally by default.",
     "gui: tests that map a real GUI window, and so take keyboard focus while they run. Skipped unless --run-gui is passed; see conftest.py.",
+    "llm: tests that talk to a live OpenAI-compatible LLM backend, and so open a connection to it. Skipped unless --run-llm or --backend-url URL is passed; see conftest.py.",
 ]
 
 [tool.coverage.run]

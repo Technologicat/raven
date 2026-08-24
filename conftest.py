@@ -23,9 +23,35 @@ def pytest_addoption(parser) -> None:
                      action="store_true",
                      default=False,
                      help="Run tests that map a real GUI window. These take keyboard focus while they run.")
+    parser.addoption("--run-llm",
+                     action="store_true",
+                     default=False,
+                     help="Run tests that talk to the configured live LLM backend. They connect to it.")
+    # Spelled as `raven-librarian`, `raven-minichat` and `raven-pdf2bib` spell it. The configured value is
+    # already per-machine, so the `llm` tests need this only when the two disagree — pointing at a backend on
+    # another host for an afternoon. Passing it also opts in, there being no reason to name one otherwise.
+    parser.addoption("--backend-url",
+                     action="store",
+                     default=None,
+                     metavar="URL",
+                     help="OpenAI-compatible LLM backend for the `llm` tests. "
+                          "Default: raven.librarian.config.llm_backend_url.")
 
 
 def pytest_collection_modifyitems(config, items) -> None:
+    # The `llm` tests are opt-in for a different reason than the `gui` ones: not focus, but the outbound
+    # connection. Left to run by default they would have a CI runner open a socket to whatever the committed
+    # `llm_backend_url` names — `localhost:1234` — on a machine we do not control. That a refused connection
+    # is the near-certain outcome is beside the point: a test suite has no business connecting anywhere its
+    # operator did not ask it to, and "we checked and it is probably nothing" is not a property anyone can
+    # verify from the outside. Naming a backend counts as asking, so `--backend-url` opts in on its own.
+    if not (config.getoption("--run-llm") or config.getoption("--backend-url")):
+        skip_llm = pytest.mark.skip(reason="talks to a live LLM backend; pass --run-llm to use the configured "
+                                           "one, or --backend-url URL to name another")
+        for item in items:
+            if item.get_closest_marker("llm") is not None:
+                item.add_marker(skip_llm)
+
     if config.getoption("--run-gui"):
         # The shared context has to be the last one alive in the process. Almost every other DPG test builds
         # a context of its own and destroys it, and doing that while `mapped_gui_context` is up segfaults
