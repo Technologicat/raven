@@ -95,9 +95,9 @@ It is possible to permanently forget a subtree by **deleting** it. This will als
 
 The chat tree is stored (by default) in `~/.config/raven/llmclient/chat.json`, with any attachments beside it in `chat.sidecars/`. Upgrading from an older Raven, which called these `data.json` and `data.images/`, renames them on first start.
 
-The **SYS** node is updated each time *Librarian* starts, using the currently configured system prompt from [`raven.librarian.config`](../librarian/config.py). The node is updated in-place, via the node versioning mechanism: a new revision of the content is created, and the old one is deleted.
+The **SYS** node is updated each time *Librarian* starts, using the currently configured system prompt from [`raven.librarian.config`](config.py). The node is updated in-place, via the node versioning mechanism: a new revision of the content is created, and the old one is deleted.
 
-When *Librarian* starts, it sets the **NEW** pointer to the appropriate node. First, the **SYS** node's existing child nodes are scanned for a match, by comparing the text content to the currently configured AI greeting from [`raven.librarian.config`](../librarian/config.py). If a match is found, that node is set as the **NEW** node for the session; otherwise, a new node is created with the new greeting text, and that node is set as the **NEW** node for the session.
+When *Librarian* starts, it sets the **NEW** pointer to the appropriate node. First, the **SYS** node's existing child nodes are scanned for a match, by comparing the text content to the currently configured AI greeting from [`raven.librarian.config`](config.py). If a match is found, that node is set as the **NEW** node for the session; otherwise, a new node is created with the new greeting text, and that node is set as the **NEW** node for the session.
 
 Note that *Librarian* only supports one-on-one chats (one user, one AI), but the AI character as well as the user's persona name can be changed between sessions (when *Librarian* is not running).
 
@@ -151,7 +151,7 @@ As of 12/2025, many LLM frontends still operate in the paradigm of a traditional
 
 The document database gives the LLM fact grounding via retrieval-augmented generation (RAG). The context is engineered from two directions. An automatic search runs before the AI replies, using your latest message as the search query, and its results are injected into the LLM's context. The LLM can then search the database again itself, as a tool call, once it has seen what that first search returned — which is what lets it recover when your phrasing and the documents' phrasing do not line up.
 
-The number of search results to return can be configured in [`raven.librarian.config`](../librarian/config.py). This allows trading off speed vs. [recall](https://en.wikipedia.org/wiki/Precision_and_recall). Note that a higher number of search results will also take up more space in the LLM's context.
+The number of search results to return can be configured in [`raven.librarian.config`](config.py). This allows trading off speed vs. [recall](https://en.wikipedia.org/wiki/Precision_and_recall). Note that a higher number of search results will also take up more space in the LLM's context.
 
 In the search index, the documents are **chunked**. The chunk (not a full document!) is the basic unit of search. To avoid context loss at the chunk seams, *Librarian* uses a sliding window chunker with overlap, thus trading off storage space and retrieval speed for improved recall. If the search results include adjacent chunks from the same document, these are automatically merged into one contiguous search result, with smart removal of the overlap. The merged result is scored with the highest score of any of its component chunks.
 
@@ -174,7 +174,7 @@ The document database accepts **plain text** documents, **PDFs**, and **office d
 - **Office documents.** Word (`.docx`), PowerPoint (`.pptx`), and their LibreOffice/OpenDocument counterparts (`.odt`, `.odp`). Tables are read in place, so a value stays next to its label; text inside grouped shapes on a slide is read too, and so are presenter notes - on a lecture deck, the notes are often where the actual argument lives. The legacy binary formats (`.doc`, `.ppt`) are *not* supported, as reading those would mean calling out to a separate converter program.
 - **Web pages** (`.html`, `.htm`) saved to disk. Navigation, sidebars and footers are stripped, leaving the article - the same readability extraction the AI's `webfetch` tool uses on live pages, so a saved page reads like a fetched one. The page's `<title>` is kept as a heading, since a filename downloaded off the web often names nothing.
 
-The same list applies to files you **attach to a chat message**, and it is the same code doing the reading in both cases - so anything you can drop into the document database, you can also attach to a message, and vice versa. The full list of recognized file extensions is configured in [`raven.librarian.config`](../librarian/config.py) as `llm_docs_exts`.
+The same list applies to files you **attach to a chat message**, and it is the same code doing the reading in both cases - so anything you can drop into the document database, you can also attach to a message, and vice versa. The full list of recognized file extensions is configured in [`raven.librarian.config`](config.py) as `llm_docs_exts`.
 
 **Source code is deliberately not on that list**, `.py` included, even though it is plain text and the AI reads code perfectly well. The obstacle is the *search*, not the reading: the keyword half of the document database lowercases, lemmatizes and drops English stopwords, which is right for prose and wrong for code in a way that does not announce itself. Identifiers disappear entirely - a token containing an underscore or a digit is not a word, so `compute_flux_residual`, `mesh_nodes` and `jacobian_matrix` are indexed as nothing at all, and a whole `def` line reduces to the word `def`. So do `if`, `for`, `in`, `not`, `while` and `from`, which are English stopwords that happen to be Python keywords. What is left to search is the docstrings, and only the docstrings. That would look like it worked - ask about "the flux residual" and the file comes back - right up until you searched for a function by name and got nothing. Code search needs its own tokenizer, and until it has one, saying no is the honest answer.
 
@@ -186,7 +186,7 @@ Everything above is read for its **text layer only**. Whatever a document says t
 - A **slide deck that is mostly diagrams** imports only its titles and whatever prose it has. Its notes, if it has any, are often the more useful half in this situation.
 - A **web page that builds its content with JavaScript** has nothing to read in its markup, so it imports as empty. This covers both the saved shell of a dynamic site (whose content was never in the file - fetch the URL with the AI's `webfetch` tool instead) and a self-contained single-file app that carries its data inline as a script (whose content *is* in the file, but in a form we do not currently read). Nothing here runs a page's scripts: putting a file in the documents folder must never be enough to make it execute.
 
-**To manage the content of the document database**, use a file manager: just put your document files in the document database directory. By default, *Librarian* looks for documents in `~/.config/raven/llmclient/documents`. The path can be configured in [`raven.librarian.config`](../librarian/config.py).
+**To manage the content of the document database**, use a file manager: just put your document files in the document database directory. By default, *Librarian* looks for documents in `~/.config/raven/llmclient/documents`. The path can be configured in [`raven.librarian.config`](config.py).
 
 The document database directory can have subdirectories - so feel free to create them to organize your document collection. This is useful for splitting the DB into broad umbrella topics (AI research, engineering sciences, ...). As of v0.2.4, all documents still live in the same search namespace. We plan to add scoping support later, to allow limiting the search to a given topic.
 
@@ -322,7 +322,7 @@ How tool use works:
 - Once the LLM is satisfied with the information it has, it proceeds to write its reply without making more tool calls.
 - Control returns to the user.
 
-There is a configurable ceiling on how many rounds of tool calls one reply may take (`max_tool_call_rounds` in [`raven.librarian.config`](../librarian/config.py)). It is a backstop, not a normal limit — an LLM that finds what it needs stops well below it. When the ceiling is reached, the requested calls still run, and only the round after them is told that the budget is spent.
+There is a configurable ceiling on how many rounds of tool calls one reply may take (`max_tool_call_rounds` in [`raven.librarian.config`](config.py)). It is a backstop, not a normal limit — an LLM that finds what it needs stops well below it. When the ceiling is reached, the requested calls still run, and only the round after them is told that the budget is spent.
 
 Past that point the tools stay on offer and any further call is answered with an error saying so, rather than being quietly taken away. Two reasons. Changing the set of tools mid-reply invalidates the backend's KV cache from that point on, so the rest of the conversation has to be reprocessed; and a conversation whose earlier messages call a tool the current request no longer declares is a shape models have seen little of in training, whereas a tool that answers "not now" is one they have seen plenty of. A refusal cannot *guarantee* the reply ends, though, so after `max_tool_call_refusal_rounds` of them the tools are withdrawn outright, which does.
 
@@ -330,7 +330,7 @@ Past that point the tools stay on offer and any further call is answered with an
 
 On the web side, `websearch` returns a list of results, and `webfetch` reads one page — search first, then follow a link, which is the same gesture you would make yourself. A page is fetched by *Raven-server*, which strips navigation, sidebars and footers and hands back the article; if the page builds its content by running scripts, there is nothing in the markup to read and the tool says so rather than returning an empty page as though it were the truth.
 
-Which hosts the AI may fetch from is up to you, via `webfetch_allowlist` in [`raven.librarian.config`](../librarian/config.py). The default is unrestricted, subject to the network-level checks *Raven-server* enforces regardless (it refuses private-network addresses and non-HTTP(S) schemes, so the AI cannot be talked into fetching your router's admin page). Set the allowlist to a list of hosts and the AI is confined to them — a curated scientific baseline is provided in the same file as `webfetch_default_allowlist`, ready to assign. Whatever the setting, a URL **you** type in your message is fetchable for that turn: the constraint is on the AI's initiative, not on your instructions. A host that merely turned up in a websearch result is *not* auto-allowed by default (`webfetch_trust_search_results`), because a search result is nobody's instruction — a page crafted to rank for a likely query could otherwise talk the AI into fetching it, and whatever it says next arrives inside the AI's context. There is also a per-session approval: when a fetch is refused, the chat log offers a button to allow that host for the rest of the session. See the security warning below before loosening any of this.
+Which hosts the AI may fetch from is up to you, via `webfetch_allowlist` in [`raven.librarian.config`](config.py). The default is unrestricted, subject to the network-level checks *Raven-server* enforces regardless (it refuses private-network addresses and non-HTTP(S) schemes, so the AI cannot be talked into fetching your router's admin page). Set the allowlist to a list of hosts and the AI is confined to them — a curated scientific baseline is provided in the same file as `webfetch_default_allowlist`, ready to assign. Whatever the setting, a URL **you** type in your message is fetchable for that turn: the constraint is on the AI's initiative, not on your instructions. A host that merely turned up in a websearch result is *not* auto-allowed by default (`webfetch_trust_search_results`), because a search result is nobody's instruction — a page crafted to rank for a likely query could otherwise talk the AI into fetching it, and whatever it says next arrives inside the AI's context. There is also a per-session approval: when a fetch is refused, the chat log offers a button to allow that host for the rest of the session. See the security warning below before loosening any of this.
 
 On the document side, the database is available to the LLM as a tool (`search_documents`) whenever the **Documents** mode toggle is on, in addition to the automatic search. The two do different jobs: the automatic search costs no extra LLM round trip but has to guess a query from your message, while the tool lets the LLM write a better query *after* reading what the first search returned. This matters most when what you are after is mentioned only in passing — a specific instrument by name, say. The automatic search has your whole message to work with and nothing to tell it which part was the question; the LLM, having read what came back, can go again with just the term that mattered.
 
@@ -369,7 +369,29 @@ Currently, *Librarian* only provides a set of hardcoded tools, and does **not** 
 
 As of v0.2.8, *Librarian* provides web search, web fetch, and document database search. We intend to expand this later.
 
-If interested in the details, see `tools` in the `setup` function in [`raven.librarian.llmclient`](../librarian/llmclient.py), the related mechanisms in the `invoke` function in the same module, and the agent loop in [`raven.librarian.scaffold`](scaffold.py).
+If interested in the details, see `tools` in the `setup` function in [`raven.librarian.llmclient`](llmclient.py), the related mechanisms in the `invoke` function in the same module, and the agent loop in [`raven.librarian.scaffold`](scaffold.py).
+
+## Scripting
+
+The engine behind the GUI is importable. [`raven.librarian.agent`](agent.py) runs one assistant turn — the full agent loop, with your document database and the tools in play — and hands back a record of what it did:
+
+```python
+from raven.librarian import agent
+record = agent.turn(llm_settings, "What does the corpus say about melt-pool instability?")
+print(record.reply)
+```
+
+The record carries the reply, the reasoning the model emitted but did not send, how many tool rounds the turn took and which tools it called how often, whether the reply had retrieved material to stand on, and the prompts actually put on the wire. That last one is often the point: it is the same prompt the GUI would have sent, available for inspection without a window.
+
+Three things are worth knowing before scripting against it:
+
+- **Nothing overwrites anything.** The chat is a tree, so a retry, a reroll, or a second phrasing of the same question is a new branch off the same parent — the attempt that failed and the one that worked are both there afterwards, as are all four samples of a turn you sampled four times. A batch's whole record of what it did is therefore a chat in *Librarian*'s own format, with no separate run log to keep.
+- **A run against the configured datastore is waiting in the GUI afterwards.** *Librarian* opens the datastore named in [`raven.librarian.config`](config.py) and no other, so a script that points there can be inspected by opening the app; a script that builds its own is readable programmatically and nowhere else.
+- **The network is off by default.** `internet_enabled=False`, so `websearch` and `webfetch` are not offered unless you ask for them. The document tools are on.
+
+The reference documentation is the module's own docstrings — `agent.turn` carries worked examples, and the executable ones are in [`test_agent.py`](tests/test_agent.py), which drives the real loop against a faked backend. If you use a coding assistant, pointing it at [`agent.py`](agent.py) is enough to get it writing against this surface; the module is written to be read that way.
+
+This is a programming library rather than a product: what it offers is programmatic access to Raven's own corpus, chat tree and provenance machinery, and it is deliberately not a generic agent harness. Note also that it drives the *LLM* over your document database. Building and refreshing the index itself is a separate job, and belongs to [`raven-indexer`](#indexing-from-the-command-line-raven-indexer) above.
 
 # AI avatar and voice mode
 
@@ -493,7 +515,7 @@ In the linearized chat view on the left, there are buttons below each chat messa
   - Last message of linearized view only; and only if it is an AI message.
 - Speak (AI messages only) (Ctrl+S)
   - Only works when **Speech** is enabled in the mode toggles. Upon clicking this, the avatar speaks the message through the TTS subsystem.
-  - If additionally **Subtitles** is enabled in the mode toggles, the avatar's speech is subtitled (or closed-captioned) in the language set in [`raven.librarian.config`](../librarian/config.py).
+  - If additionally **Subtitles** is enabled in the mode toggles, the avatar's speech is subtitled (or closed-captioned) in the language set in [`raven.librarian.config`](config.py).
   - See [AI avatar and voice mode](#ai-avatar-and-voice-mode).
 - Edit *(placeholder button; feature to be added later)*
 - Branch
@@ -596,7 +618,7 @@ As explained in the main README, configuration is currently fed in as several Py
 
 ## Server connections
 
-- LLM backend URL and API key: [`raven.librarian.config`](../librarian/config.py)
+- LLM backend URL and API key: [`raven.librarian.config`](config.py)
   - Whether you need an API key depends on your LLM.
   - By default, a local installation of [oobabooga/text-generation-webui](https://github.com/oobabooga/text-generation-webui) does **not** use an API key.
 
@@ -610,27 +632,27 @@ As explained in the main README, configuration is currently fed in as several Py
 
 The AI's voice is configured in the AI avatar configuration.
 
-- TTS is part of avatar config in [`raven.librarian.config`](../librarian/config.py)
+- TTS is part of avatar config in [`raven.librarian.config`](config.py)
 - STT model is configured in [`raven.server.config`](../server/config.py)
 - for subtitles:
-  - subtitle language is selected in [`raven.librarian.config`](../librarian/config.py)
+  - subtitle language is selected in [`raven.librarian.config`](config.py)
   - machine translation model from English to each possible subtitle language is selected in [`raven.server.config`](../server/config.py)
     - CAUTION: Server will load all of them into VRAM! So only set up what you actually need.
 - audio devices (both input and output) are selected in [`raven.client.config`](../client/config.py); see also `raven-check-audio-devices` command-line tool to list audio devices present on your system
 
 ## System prompt, AI character personality, communication style
 
-- [`raven.librarian.config`](../librarian/config.py)
+- [`raven.librarian.config`](config.py)
 - technically, just a system prompt - this goes to the beginning of every chat
 - but in practice, useful to think of it as *system prompt + AI character card* (the default out-of-the-box configuration does this)
 
 ## AI avatar
 
-- character choice in [`raven.librarian.config`](../librarian/config.py)
+- character choice in [`raven.librarian.config`](config.py)
   - the AI avatar and the AI character name/personality are set up separately
   - to avoid surprises, make sure these match
-- AI voice (TTS) is also configured in [`raven.librarian.config`](../librarian/config.py)
-- avatar video inactivity timeout is also enabled/disabled/configured in [`raven.librarian.config`](../librarian/config.py)
+- AI voice (TTS) is also configured in [`raven.librarian.config`](config.py)
+- avatar video inactivity timeout is also enabled/disabled/configured in [`raven.librarian.config`](config.py)
 - Use the GUI app `raven-avatar-settings-editor` to create or edit the `animator.json` configuration file (avatar video postprocessor settings)
 
 # Future vision
@@ -661,7 +683,7 @@ Areas to improve:
       - Other types of memory, especially those requiring internalization of knowledge, may require model training
   - [Executive function](https://en.wikipedia.org/wiki/Executive_functions) (in the neuropsychology sense of the word)?
     - See [Seth Herd (2025): System 2 Alignment: Deliberation, Review, and Thought Management](https://www.lesswrong.com/posts/cus5CGmLrjBRgcPSF/system-2-alignment-deliberation-review-and-thought)
-    - If implemented in the scaffold (see [`raven.librarian.scaffold`](../librarian/scaffold.py)), could be used to automatically break out of situations where the LLM becomes stuck (retracing the same thoughts over and over, without actually finishing).
+    - If implemented in the scaffold (see [`raven.librarian.scaffold`](scaffold.py)), could be used to automatically break out of situations where the LLM becomes stuck (retracing the same thoughts over and over, without actually finishing).
   - [Continual learning](https://www.ibm.com/think/topics/continual-learning)?
     - Need to mitigate catastropic forgetting
     - Need to be runnable on a single workstation, at most 24GB VRAM per GPU, usually just one GPU

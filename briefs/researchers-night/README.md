@@ -107,7 +107,12 @@ What was named as still open, at the point of naming:
 
 ### Two of these are power multipliers, and it is worth naming the category
 
-Drag-and-drop (shipped 2026-08-10) and **15** are not features for end users at all. They are tooling that
+**All of it has landed** — drag-and-drop 2026-08-10, brief 15 on 08-12, the `FileDialog` keyboard brief on
+08-21 — so this section is now the *argument* rather than a queue. It is kept because the category outlives
+its first three members: the next time something is proposed that no visitor will ever see, this is the case
+for ranking it against feature work rather than beneath it.
+
+Drag-and-drop and **15** are not features for end users at all. They are tooling that
 multiplies the *builders'* throughput, and they are ranked accordingly rather than by user-visible value. Since review is
 the binding constraint on this project (see the root `CLAUDE.md`, "Who develops Raven"), anything that
 raises how much can be built and checked per session competes directly with feature work rather than
@@ -116,10 +121,11 @@ sitting beneath it.
 They multiply different people, which is why both are wanted:
 
 - **Drag-and-drop is for the human**: feeding corpora in, attaching a file to check a render — dozens of
-  times a day, through a `FileDialog` that is currently the sole entry path. **The deferred `FileDialog`
-  improvements belong to this same category** and are wanted for the same reason: smart-case find,
-  thumbnail previews, the multi-extension filter, the per-use-site boilerplate. They are not user-facing
-  polish so much as throughput for whoever is driving the apps all day.
+  times a day, through what was then the sole entry path, the `FileDialog`. **The `FileDialog` improvements
+  belong to this same category** and were wanted for the same reason: smart-case find, thumbnail previews,
+  the multi-extension filter, the per-use-site boilerplate, and keyboard access. They are not user-facing
+  polish so much as throughput for whoever is driving the apps all day. Whatever remains of that list is in
+  `TODO_DEFERRED.md` and in the re-homed `../filedialog-navigation-history-brief.md`.
 - **15 is for Claude, and specifically for writing probes**, not for GUI testing — that is a separate
   problem which a scripting surface does nothing about, and which still needs a live session.
 
@@ -127,8 +133,9 @@ They multiply different people, which is why both are wanted:
   `rag_live_corpus.py`, `rag_tool_rescue.py`, `webfetch_live_extractors.py`,
   `webfetch_tier2_escalation.py`, `gemma4_reasoning_roundtrip.py`, `vision_check.py` — each of which
   reaches into Librarian's agent machinery to exercise one feature, and each of which had to arrange that
-  access for itself because the library does not offer it. That is a supported feature being asked for
-  repeatedly and answered ad-hoc every time.
+  access for itself because the library did not offer it. That was a supported feature being asked for
+  repeatedly and answered ad-hoc every time; `raven.librarian.agent` is the answer, and the surface is
+  documented for outside users under *Scripting* in `raven/librarian/README.md`.
 
   So 15 is less "new capability" than "stop making every probe re-invent the entry point". Its part 0, lazy
   `api.initialize`, also removes `test_scaffold.py`'s `importorskip`, widening what CI can run.
