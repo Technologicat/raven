@@ -1468,7 +1468,9 @@ for slot in range(4):
 the same reason.
 
 **The full mapping is upstream's**, at
-[Container Slots](https://dearpygui.readthedocs.io/en/latest/documentation/container-slots.html):
+[Container Slots](https://dearpygui.readthedocs.io/en/latest/documentation/container-slots.html) — read
+2026-08-25 against DPG 2.3.1. That URL is the `latest` build and therefore a moving target: if the table
+below ever disagrees with the page, the page wins and this one wants re-reading.
 
 | slot | holds |
 |---|---|
