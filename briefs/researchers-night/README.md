@@ -127,11 +127,11 @@ known before band 3 begins.
 
 **Band 1 — quick wins.** Hours each, and every one of them removes a line from this list.
 
-1. **Block-level Markdown, step 1** — `markdown-block-rendering-brief.md`, and **the single highest value
-   per hour on the list**. Qwen emits ATX headings and fenced code blocks constantly and neither renders;
-   the brief found both barriers to be in Raven's own code, and threading a colour through
-   `MarkdownText.__init__` instead of wrapping every paragraph in `<font>` fixes headings outright,
-   streaming included. The remaining steps are band 2.
+1. ~~**Block-level Markdown, step 1**~~ — **done 2026-08-25.** Headings render, streaming included, and
+   the `TODO_DEFERRED.md` item for them is retired. Step 6 (the `line_attributes` rename) landed with it.
+   The remaining steps are band 2. Two things the brief had not foreseen are recorded there: the attribute
+   rebuild that `LineEntity.append` performs had to carry the colour explicitly, and the colour parsing is
+   now shared with the `<font>` attribute so the two cannot drift.
 2. **Brief 16's step zero** — half an hour, and it is what de-risks band 3. `XDotWidget.set_graph` has no
    callers and no tests; hand-build a small `Graph`, render it. It either confirms the estimate or changes
    the plan while there is still time to change it.

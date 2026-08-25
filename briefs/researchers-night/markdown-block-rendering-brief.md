@@ -41,7 +41,23 @@ is the one block construct with no `case`** — the only genuine gap of the thre
 
 Independent enough to land separately, and step 1 alone is visible.
 
-### 1. A colour parameter on the vendored renderer
+### 1. A colour parameter on the vendored renderer — **done 2026-08-25**
+
+Landed as designed, and headings render. Two things the design below did not anticipate, both now in the
+code:
+
+- **`recreate_attributes` had to carry the colour explicitly.** `LineEntity.append` calls it on every line
+  it takes, rebuilding the `AttributeController` from scratch, so without the carry the colour survived an
+  unwrapped render and was lost by a wrapped one — every chat message, while the help card looked fine.
+- **The colour parsing moved to `font_attributes.parse_color`**, shared with `Font.__init__`, so the
+  argument and the `<font color=...>` attribute accept the same spellings by construction.
+
+Threaded through `MarkdownText.__init__` rather than set as a module-level default (question 1 below, now
+settled): Raven renders messages concurrently on background threads and colours them per role, so a global
+would race a user message against a thought bubble.
+
+Tests in `raven/vendor/DearPyGui_Markdown/tests/test_document_color.py`, including the negative control that
+pins what the wrapper used to do. Step 6 landed alongside.
 
 `dpg_markdown.add_text` (`__init__.py:308`) takes only `markdown_text, wrap, parent, pos, tag`, which is why
 the wrapper exists. But colour is already carried internally — `font_attributes.Font(self.entity.color, ...)`

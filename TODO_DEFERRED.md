@@ -2302,13 +2302,14 @@ clusters, as of 2026-07-27:
   (`investigations/filedialog-performance/`); "OS drag-and-drop of files into DPG apps" shipped 2026-08-10 as
   `raven.common.gui.filedrop`, which also retired the "the picker is the only entry path" argument that used
   to motivate the rest.
-- **Markdown renderer** (the vendored `DearPyGui_Markdown`) — "Markdown ATX headings don't render", "Fenced
-  code block support", "Reasoning traces with indented bullets mis-render", "inline-code background boxes are
-  stranded on dynamic reflow", "Emoji support in the Markdown renderer". Adjacent: "Super/subscript font
+- **Markdown renderer** (the vendored `DearPyGui_Markdown`) — "Fenced code block support", "Reasoning traces
+  with indented bullets mis-render", "inline-code background boxes are stranded on dynamic reflow", "Emoji
+  support in the Markdown renderer". Adjacent: "Super/subscript font
   coverage in the GUI" is an *atlas* problem rather than a renderer one (`fontsetup` serves both plain DPG
   text and `dpg_markdown`), but it shares the font-survey work with the emoji item's monochrome-font route.
-  **Four of these now point at `briefs/researchers-night/markdown-block-rendering-brief.md`**, which found
-  the shared cause and turned out to be much smaller than the items assumed.
+  **These point at `briefs/researchers-night/markdown-block-rendering-brief.md`**, which found
+  the shared cause and turned out to be much smaller than the items assumed. Its step 1 landed 2026-08-25
+  and closed "Markdown ATX headings don't render", which is why that one is no longer in the list.
 - **Document ingestion** — "Same file formats in the docs DB and in chat attachments", "Spreadsheets",
   "Text out of images (OCR, and SVG `<text>`)", "Vector figures (`.svg`)", "Read documents as page images".
   **Brief this once rather than five times**: they are five faces of one question — what an ingestible
@@ -2976,18 +2977,6 @@ and makes "the AI-turn callback set" a named thing. Do it as a focused refactor 
 mechanical (one bundle type, update each producer/consumer), not entangled with feature work.
 
 Discovered during the brief-01 GUI override session (2026-06-04).
-
-## Markdown ATX headings (`### ...`) don't render in the chat view
-
-*Cluster: markdown-renderer · Cost: ? · Gate: superseded · Filed: 2026-06-03*
-
-**Superseded by `briefs/researchers-night/markdown-block-rendering-brief.md`, which is the live tracker.**
-The brief's step 1 fixes this on its own, and it corrects the diagnosis this item and its two siblings
-shared: the renderer *does* map `<h1>`–`<h6>`, and what stops a heading is `chat_controller._render_text`
-wrapping every paragraph in a `<font>` tag on the same line as the content, which makes the whole thing a
-CommonMark paragraph — and a heading is a block construct, which cannot occur inside one.
-
-Discovered while smoke-testing the webfetch send-to-AI affordance (2026-06-03).
 
 ## Fenced code block (```` ``` ````) support in the Markdown renderer
 

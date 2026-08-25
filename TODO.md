@@ -60,13 +60,16 @@ already decided.
   one turn in three (Q11 in `investigations/context-injects/context-inject-shape-measurements.md`). Carries two attached
   decisions — the no-match bypass moves to the end of the agent loop, and telling the model its retrieval
   was weak is gated on this landing.
-- **Markdown renderer: ATX headings don't render; fenced code blocks don't render; indented bullets
+- **Markdown renderer: ~~ATX headings don't render~~; fenced code blocks don't render; indented bullets
   mis-render.** All three are content defects rather than cosmetic, and Qwen emits headings and code
   fences constantly. The indented-bullet one is *not* fixed — the bullets fix that landed was a different
   bug (stacking at origin in hidden containers), and the render path still has no dedent.
-  - **Now briefed as one job**, `briefs/researchers-night/markdown-block-rendering-brief.md`, and much
-    smaller than these three read: the barriers are in Raven's own code rather than the vendored renderer,
-    and one change to the colour wrapper fixes headings outright. That brief is the tracker.
+  - **Headings render as of 2026-08-25**, the brief's step 1: the colour goes to the renderer as an
+    argument, so nothing wraps a paragraph in `<font>` any more and a block construct can form. The other
+    two are behind the second barrier, the single-newline split, and are the brief's step 3.
+  - **Briefed as one job**, `briefs/researchers-night/markdown-block-rendering-brief.md`, and much
+    smaller than these three read: the barriers are in Raven's own code rather than the vendored renderer.
+    That brief is the tracker.
 - **Markdown renderer: text goes missing** — a character, or most of a section. **Moved onto the demo path
   2026-08-19** (Juha), on a sighting that finally shows the shape: one `raven-xdot-viewer` run drew both of
   its help cards with most of the unstyled prose absent and every bold, italic and coloured run intact, and
