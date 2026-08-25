@@ -3586,11 +3586,16 @@ class DPGChatController:
             if self.indicator_glow_animation is not None:
                 self.indicator_glow_animation.reset()  # start a new pulsation cycle
             dpg.show_item(self.attachment_read_indicator_widget)  # tag
+            # Reading an attached document is the system consulting an external source, the same as a web
+            # fetch or a document search - so the avatar shows it the same way. The effect nests, which
+            # matters here specifically: this runs on a background task and can overlap a turn's tool call.
+            self.avatar_controller.start_data_eyes(config=self.avatar_record)
         try:
             estimate, estimate_is_exact = llmclient.count_branch_tokens(self.llm_settings, self.datastore, task_env.head_node_id)
         finally:
             if self.gui_updates_safe:
                 dpg.hide_item(self.attachment_read_indicator_widget)  # tag
+                self.avatar_controller.stop_data_eyes(config=self.avatar_record)
 
         if task_env.cancelled or not self.gui_updates_safe:
             return
@@ -3789,9 +3794,31 @@ class DPGChatController:
                         streaming_chat_message.demolish()
                         streaming_chat_message = None
 
+                # The turn's own data-eyes uses, counted so that teardown can release exactly those.
+                #
+                # The effect is reference-counted across the app, so a bare "make sure it is off" at the end
+                # of a turn would decrement whatever else is holding it - an attachment being read on a
+                # background task, most likely - and switch the eyes off under it. `scaffold` calls the
+                # `..._done` callbacks outside a `finally`, so a turn that raises really can leak a use, and
+                # this is what lets teardown clean up after itself without reaching into anyone else's.
+                #
+                # A plain int: every one of these callbacks runs on the turn's own thread.
+                turn_data_eyes_uses = 0
+
+                def start_turn_data_eyes() -> None:
+                    nonlocal turn_data_eyes_uses
+                    turn_data_eyes_uses += 1
+                    self.avatar_controller.start_data_eyes(config=self.avatar_record)
+
+                def stop_turn_data_eyes() -> None:
+                    nonlocal turn_data_eyes_uses
+                    if turn_data_eyes_uses > 0:
+                        turn_data_eyes_uses -= 1
+                        self.avatar_controller.stop_data_eyes(config=self.avatar_record)
+
                 def on_docs_start() -> None:
                     if self.gui_updates_safe:
-                        self.avatar_controller.start_data_eyes(config=self.avatar_record)
+                        start_turn_data_eyes()
                         if self.indicator_glow_animation is not None:
                             self.indicator_glow_animation.reset()  # crisp phase on appear
                         dpg.show_item(self.docs_search_indicator_widget)
@@ -3799,7 +3826,7 @@ class DPGChatController:
                 def on_docs_done(matches: List[Dict]) -> None:
                     if self.gui_updates_safe:
                         dpg.hide_item(self.docs_search_indicator_widget)
-                        self.avatar_controller.stop_data_eyes(config=self.avatar_record)
+                        stop_turn_data_eyes()
 
                 def on_llm_start() -> None:
                     if self.gui_updates_safe:
@@ -3974,7 +4001,7 @@ class DPGChatController:
 
                 def on_tools_start(tool_calls: List[Dict]) -> None:
                     if self.gui_updates_safe:
-                        self.avatar_controller.start_data_eyes(config=self.avatar_record)
+                        start_turn_data_eyes()
 
                         # # HACK: If websearch is present *anywhere* among the tool calls in this message,
                         # #       light up the web access indicator for the whole tool call processing step.
@@ -4011,7 +4038,7 @@ class DPGChatController:
                 def on_tools_done() -> None:
                     if self.gui_updates_safe:
                         # dpg.hide_item(self.web_indicator_widget)
-                        self.avatar_controller.stop_data_eyes(config=self.avatar_record)
+                        stop_turn_data_eyes()
 
                 def on_prompt_ready(history) -> None:
                     # logger.info("DPGChatController.ai_turn.on_prompt_ready: full prompt (message history) that will be sent to the LLM:")
@@ -4065,7 +4092,8 @@ class DPGChatController:
             finally:
                 if self.gui_updates_safe:
                     dpg.disable_item(self.chat_stop_generation_button_widget)
-                    self.avatar_controller.stop_data_eyes(config=self.avatar_record)  # make sure the data eyes effect ends (unless app shutting down, in which case we shouldn't start new GUI animations)
+                    while turn_data_eyes_uses:  # release anything this turn started and did not finish
+                        stop_turn_data_eyes()
                     if not speech_enabled:  # make sure the generic talking animation ends (if we invoked it)
                         _client_api().avatar_stop_talking(self.avatar_record.avatar_instance_id)
                     # Also make sure that the AI-turn-scoped processing indicators hide. The INDEXING

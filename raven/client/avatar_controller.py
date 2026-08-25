@@ -295,6 +295,12 @@ class DPGAvatarController:
         config._idle_detector_lock = threading.RLock()
         config._idle_detector_overrides = 0
         config._idle_detector_t0 = time.monotonic_ns()
+        # Counted rather than a flag, because more than one thing can be consulting an external source at
+        # once: a turn's tool call runs on the turn's thread while an attachment is being read on a
+        # background one, and whichever finished first would otherwise switch the effect off under the
+        # other. See `start_data_eyes`.
+        config._data_eyes_lock = threading.RLock()
+        config._data_eyes_users = 0
         config._avatar_speaking = False  # per-avatar-instance flag, set/reset by start/stop events in `speak_task`
 
         # Reset emotion after a few seconds of idle time (when the TTS is not speaking).
@@ -425,30 +431,46 @@ class DPGAvatarController:
             config._emotion_autoreset_t0 = time.monotonic_ns()
 
     def start_data_eyes(self, config: env) -> None:
-        """Start the scifi "data eyes" cel effect (LLM tool access indicator).
+        """Start the scifi "data eyes" cel effect, which says the system is consulting an external source.
 
-        Semantics: the effect switches on instantly.
+        Semantics: the effect switches on instantly, and **calls nest**. Every `start_data_eyes` must be
+        matched by a `stop_data_eyes`; the effect ends when the last one is stopped, not the first.
 
         `config`: Configuration for controlling a specific avatar instance and its GUI elements.
                   See `register_avatar_instance`.
 
         This only has any effect, if the character currently loaded to the avatar instance that `config`
-        points to, supports the data eyes effect (per-character cels). All state is on the server.
+        points to, supports the data eyes effect (per-character cels).
         """
+        # Nesting is the whole point of the counter, and the reason it lives here rather than at the call
+        # sites: the sources that light this run concurrently and know nothing about each other - a tool
+        # call on the turn's thread, an attachment being read on a background one - so a caller cannot tell
+        # whether it is the only one, and the naive pairing has the first `stop` cancel everyone's effect.
+        with config._data_eyes_lock:
+            config._data_eyes_users += 1
+            if config._data_eyes_users > 1:  # already on
+                return
         api.avatar_start_data_eyes(config.avatar_instance_id)
         self.ping(config)
 
     def stop_data_eyes(self, config: env) -> None:
-        """Stop the scifi "data eyes" cel effect (LLM tool access indicator).
+        """Stop the scifi "data eyes" cel effect. See `start_data_eyes` for the nesting contract.
 
-        Semantics: the effect fades out. Fade duration is the animator setting `data_eyes_fadeout_duration`.
+        Semantics: the effect fades out once every `start_data_eyes` has been matched. Fade duration is the
+        animator setting `data_eyes_fadeout_duration`.
 
         `config`: Configuration for controlling a specific avatar instance and its GUI elements.
                   See `register_avatar_instance`.
 
         This only has any effect, if the character currently loaded to the avatar instance that `config`
-        points to, supports the data eyes effect (per-character cels). All state is on the server.
+        points to, supports the data eyes effect (per-character cels).
         """
+        with config._data_eyes_lock:
+            # Clamped at zero so an unmatched stop is harmless: teardown calls one unconditionally to be
+            # sure the effect ends, and a negative count would then swallow the next real start.
+            config._data_eyes_users = max(0, config._data_eyes_users - 1)
+            if config._data_eyes_users > 0:  # someone else still needs it
+                return
         api.avatar_stop_data_eyes(config.avatar_instance_id)
         self.ping(config)
 

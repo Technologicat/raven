@@ -114,7 +114,7 @@ For my stance on AI contributions, see the [collaboration guidelines](https://gi
     - Speech recognition. Use your mic to talk to the LLM.
       - Voice mode is 100% privacy-first; audio is never recorded to disk, and never sent anywhere except your local *Raven-server* for transcription.
 - Uses any OpenAI-compatible LLM backend. We develop against [LM Studio](https://lmstudio.ai/); [oobabooga/text-generation-webui](https://github.com/oobabooga/text-generation-webui) is also supported.
-  - We test our LLM functionality with the Qwen series, with Gemma as the multilingual alternative. Links below are to the [Unsloth](https://huggingface.co/unsloth) GGUF quants, which is how we run them.
+  - We test our LLM functionality with the Qwen series, with Gemma as the multilingual alternative. Links below are to the [Unsloth](https://huggingface.co/unsloth) GGUF quants, which is how we run them: their [dynamic quantization](https://unsloth.ai/docs/basics/dynamic-3.0-ggufs) measures which layers tolerate compression and which do not, and quantizes each accordingly, so you get less quantization error for the same file size than from a uniform quant.
   - Recommended, by how much VRAM you have for the LLM:
     - 24 GB — [Qwen3.6-35B-A3B](https://huggingface.co/unsloth/Qwen3.6-35B-A3B-GGUF). A mixture-of-experts model, and about 2.75x faster to generate than the dense [Qwen3.6-27B](https://huggingface.co/unsloth/Qwen3.6-27B-GGUF) beside it, which is worth reaching for when the MoE gets something wrong. [Qwen3.8-27B](https://huggingface.co/unsloth/Qwen3.8-27B-GGUF) is the newer generation at that size.
     - 16 GB — [Qwen3.5-9B](https://huggingface.co/unsloth/Qwen3.5-9B-GGUF).
@@ -692,7 +692,7 @@ Raven builds upon several AI, NLP, statistical, numerical and software engineeri
 - High-dimensional clustering: [HDBSCAN](https://hdbscan.readthedocs.io/en/latest/index.html).
 - Dimension reduction: [OpenTSNE](https://opentsne.readthedocs.io/en/stable/).
 - AI-powered PDF import
-  - A large language model (LLM). Links are to the [Unsloth](https://huggingface.co/unsloth) GGUF quants; sizes are what the LLM itself needs, so leave room for the avatar and any server modules you run beside it.
+  - A large language model (LLM). Links are to the [Unsloth](https://huggingface.co/unsloth) GGUF quants, for their [dynamic quantization](https://unsloth.ai/docs/basics/dynamic-3.0-ggufs); sizes are what the LLM itself needs, so leave room for the avatar and any server modules you run beside it.
     - At least 24 GB VRAM: [Qwen3.6-35B-A3B](https://huggingface.co/unsloth/Qwen3.6-35B-A3B-GGUF) (**recommended**; mixture-of-experts, and much the faster of the two), [Qwen3.6-27B](https://huggingface.co/unsloth/Qwen3.6-27B-GGUF) (dense, for what the MoE gets wrong), or [Qwen3.8-27B](https://huggingface.co/unsloth/Qwen3.8-27B-GGUF).
     - 16 GB VRAM: [Qwen3.5-9B](https://huggingface.co/unsloth/Qwen3.5-9B-GGUF).
     - 8 GB VRAM (e.g. a laptop with an internal NVIDIA GPU): [Qwen3.5-4B](https://huggingface.co/unsloth/Qwen3.5-4B-GGUF) (punches well above its size class).
