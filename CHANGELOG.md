@@ -21,6 +21,8 @@
   - **Supported models: Qwen 3.5, 3.6 and 3.8, and Gemma 4.** Those are the two tokenizer constructions Raven assembles — the byte-level one most current families share, and Gemma's, which is built differently throughout. Other models using either construction are likely to work as well, since the check above is what decides, not a list.
   - **It declines rather than guessing.** A file whose name only partly matches the model is not used — a publisher's prefix says who packaged the file, not whose vocabulary is inside. And if the backend cannot be asked to confirm the tokenizer at all, only constructions measured in advance are trusted; anything else keeps the estimate. Every refusal says why in the log, which also names which of the two is counting for you.
 
+- **a READING indicator**, lit while an attached document's text is being extracted. Arriving at a branch whose PDFs have not been read yet spends a second or two reading them before anything else can start, and nothing on screen said so. It gets its own row between DOCS and SYSTEM rather than sharing one of theirs: extraction is local work that happens before the backend sees anything, and what these indicators are for is saying *where* the time is going.
+
 *Constellation-wide*
 
 - **drag files straight in from the file manager.** Every GUI app now accepts a drop where it previously wanted the in-app file browser. What a drop means is whatever that app's open button already meant:
@@ -64,6 +66,8 @@
 
 - **the per-message hotkeys act on the message you are looking at**, rather than on the last one in the chat. Scroll back and reroll, branch, speak, edit or step between siblings, and it happens to the bottommost message whose buttons are on screen — a blue dot beside them says which one that is. They used to always act on the end of the chat, which is off screen precisely when you have scrolled away from it.
   - Reading a message taller than the window is the one case with no dot to show: its buttons are below the edge and no other message's are visible either, so the keys act on the message filling the view, and the dot returns as soon as a button row does.
+
+- **the SYSTEM indicator now lights while the idle prefill is being read**, as it already did for a turn. SYSTEM means the backend has a prompt and has emitted nothing yet, which is exactly what a prefill is — but only a turn raised it, so the app looked idle throughout. Against a cold cache that is the better part of a minute with the GPU at its busiest and nothing on screen saying so.
 
 *Raven-visualizer*
 
