@@ -42,6 +42,7 @@ mistletoe==1.6.0
 # Also needed because of the GUI tests: `raven.common.gui.qroverlay` imports it to build the exhibit
 # overlay's QR matrix, and `test_qroverlay.py` exercises that without a window.
 segno==1.6.6
+simpleeval==1.0.7  # librarian.llmtools, the `calculate` tool; `test_llmtools.py` exercises it
 filelock==3.32.3  # common.datastorelock; keeps two frontends off one chat datastore
 # `librarian.gguftokenizer` builds a tokenizer out of a GGUF. Its tests write a small one and read it back,
 # so they need the pair — and that is the point of having them: it turns a construction verified by hand

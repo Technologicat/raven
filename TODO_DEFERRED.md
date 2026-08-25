@@ -3553,30 +3553,6 @@ anchored on the capture. If ooba delivers the call structured instead, close thi
 
 Discovered during the brief-02 Gemma 4 reasoning-channel work (2026-06-05).
 
-## Add built-in calculator and weather LLM tools (parked in brief 01 §6)
-
-*Cluster: ? · Cost: ? · Gate: calculator RN2026; weather declined · Filed: 2026-06-05*
-
-Two small built-in tools were scoped out of brief 01 (webfetch) v0 and parked for "after the retrieval
-workstream wraps." Recording here so they survive brief archival:
-
-- **Sandboxed expression calculator** via `simpleeval` — AST-walks the expression and restricts the allowed
-  function set (math, abs, min/max, round, …) plus size limits; "sandboxing" reduces to picking the allowed
-  set. Scope is *expressions*, not statements: `2+2`, `sqrt(...)`, arithmetic, comparisons — not "run a Python
-  script with imports." ~a page of code, not its own brief.
-- **Weather** via OpenMeteo — no API key, no cloud account; mirrors the `webfetch` tool shape. Small.
-
-Both register as built-in tools alongside `websearch` / `webfetch` (tool registry in
-`raven.librarian.llmclient`). Under content-parts (brief 03) their string output wraps as a single text part —
-no special handling. Worked-out design and rationale: brief 01 §6 ("Out of scope for v0").
-
-**Split, 2026-08-12.** The **weather** half is dropped: the openmeteo MCP server already exists in the
-dotclaude setup, and building a second one in-tree while MCP support is landing anyway is duplicated effort.
-The **calculator** is worth more than its size suggests at an exhibit — a model doing arithmetic badly in
-front of an audience is a visible failure, and this is the one built-in that removes it.
-
-Flagged by Juha while wrapping brief 02 (2026-06-05).
-
 ## Reconsider the webfetch allowlist default: ship deny-by-default?
 
 *Cluster: ? · Cost: ? · Gate: RN2026 for the demo config, 0.2.9 for the shipped default · Filed: 2026-06-05*

@@ -109,6 +109,9 @@ dependencies = [
     # and if an actual image is ever wanted (a poster, a README), segno writes PNG and SVG without Pillow
     # either, so the choice does not foreclose it.
     "segno>=1.6.6",
+    # The `calculate` tool. Pure Python, no dependencies; it walks the AST and evaluates only the node
+    # types it knows, so what is not on the allowed-names list is unreachable rather than discouraged.
+    "simpleeval>=1.0.7",
     "dehyphen>=0.3.4",  # server, `sanitize` module
     "sentencepiece>=0.2.2",  # server, `translate` module, needed by some transformers models
     "sacremoses>=0.2.0",  # server, `translate` module, needed by some transformers models

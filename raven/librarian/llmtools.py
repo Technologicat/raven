@@ -31,7 +31,7 @@ __all__ = ["TOOLS", "TOOL_ENTRYPOINTS", "DOCUMENT_TOOL_NAMES", "NETWORK_TOOL_NAM
            "CANONICAL_NOT_ON_ALLOWLIST",
            "CANONICAL_NO_DOCUMENT_DATABASE", "CANONICAL_NO_DOCUMENT_MATCHES",
            "CANONICAL_NO_SUCH_DOCUMENT", "CANONICAL_NOTHING_CONSULTED",
-           "CANONICAL_NO_ROOM_TO_FETCH",
+           "CANONICAL_NO_ROOM_TO_FETCH", "CANONICAL_BAD_EXPRESSION",
 
            # The document helpers, which read the retriever directly rather than through a tool call.
            "document_text", "document_path", "label_documents",
@@ -39,13 +39,17 @@ __all__ = ["TOOLS", "TOOL_ENTRYPOINTS", "DOCUMENT_TOOL_NAMES", "NETWORK_TOOL_NAM
            # The entrypoints themselves. `TOOL_ENTRYPOINTS` is how the agent loop reaches them, but they are
            # named here too: the tests call them directly, and so does anything driving one tool on purpose.
            "websearch", "webfetch", "search_documents", "fetch_document",
-           "get_current_time", "list_consulted_documents"]
+           "get_current_time", "calculate", "list_consulted_documents"]
 
 import logging
 logger = logging.getLogger(__name__)
 
+import ast
 import json
+import math
 from typing import Any, Callable, TYPE_CHECKING
+
+import simpleeval
 
 from unpythonic import dyn, make_dynvar, timer, uniqify
 from unpythonic.env import env
@@ -112,6 +116,21 @@ TOOLS = [
                                  "additionalProperties": False,
                                  "required": [],
                                  "properties": {}}}},
+    {"type": "function",
+     "function": {"name": "calculate",
+                  "description": ("Evaluate an arithmetic expression exactly. Use this whenever the answer "
+                                  "depends on a calculation being right, rather than working it out in your "
+                                  "head."),
+                  "parameters": {"type": "object",
+                                 "additionalProperties": False,
+                                 "required": ["expression"],
+                                 "properties": {"expression": {"type": "string",
+                                                               "description": ("The expression, in Python "
+                                                                               "syntax; e.g. '2 + 2', "
+                                                                               "'sqrt(2)', '(1 + 5) / 7'. "
+                                                                               "Functions from the math "
+                                                                               "module are available, as are "
+                                                                               "pi and e.")}}}}},
     {"type": "function",
      "function": {"name": "search_documents",
                   "description": ("Search the user's local document database. Use this to look for material "
@@ -598,6 +617,69 @@ def get_current_time() -> str:
     return _formatters().time_now()
 
 
+CANONICAL_BAD_EXPRESSION = ("That is not an expression this calculator can evaluate: {reason}. It takes "
+                            "arithmetic in Python syntax - numbers, the usual operators, and functions from "
+                            "the math module - and nothing else. Statements, assignments, variables and "
+                            "attribute access are not available. Rewrite it as a single expression, or work "
+                            "it out yourself and say so.")
+
+# What the calculator may call. `simpleeval`'s own defaults are dropped rather than extended: they include
+# `rand` and `randint`, and a tool named `calculate` that can silently return a different answer to the same
+# question is a trap - the model has no way to tell that it happened, and neither has the user reading the
+# reply.
+#
+# Everything here is a pure function of its arguments. `math` supplies the rest, by name, below.
+_CALCULATOR_FUNCTIONS = {"abs": abs,
+                         "min": min, "max": max,
+                         "round": round,
+                         "int": int, "float": float,
+                         **{name: getattr(math, name) for name in
+                            ("acos", "acosh", "asin", "asinh", "atan", "atan2", "atanh",
+                             "cbrt", "ceil", "comb", "copysign", "cos", "cosh", "degrees",
+                             "dist", "erf", "erfc", "exp", "expm1", "fabs", "factorial",
+                             "floor", "fmod", "gamma", "gcd", "hypot", "isqrt", "lcm",
+                             "lgamma", "log", "log10", "log1p", "log2", "perm", "pow",
+                             "radians", "remainder", "sin", "sinh", "sqrt", "tan", "tanh",
+                             "trunc")}}
+
+_CALCULATOR_NAMES = {"pi": math.pi, "e": math.e, "tau": math.tau, "inf": math.inf, "nan": math.nan}
+
+
+def calculate(expression: str) -> str:
+    """Evaluate an arithmetic expression, and return the result as text.
+
+    Tool entrypoint for the LLM's `calculate` tool.
+
+    `expression`: arithmetic in Python syntax. Expressions only - no statements, no assignments.
+
+    Never raises: a malformed or rejected expression comes back as `CANONICAL_BAD_EXPRESSION`, which tells
+    the model what this accepts and what to do instead. A tool that raises here would abort the turn over a
+    typo the model could have corrected.
+    """
+    # `simpleeval` walks the AST and evaluates only the node types it knows, so what is *not* listed above
+    # is not reachable rather than merely discouraged - measured 2026-08-25 on 1.0.7: attribute access
+    # (`(1).__class__`, the usual way out of a sandbox) and comprehensions raise `FeatureNotAvailable`, an
+    # undefined name raises `NameNotDefined`, and the resource bombs `9**9**9` and `'a'*10**10` raise
+    # `NumberTooHigh` and `IterableTooLong` from its own limits. So "sandboxing" here is the choice of
+    # allowed names, which is what the two tables above are.
+    evaluator = simpleeval.SimpleEval(functions=_CALCULATOR_FUNCTIONS, names=_CALCULATOR_NAMES)
+    try:
+        # Parsed in `eval` mode first, which is what rejects statements. `simpleeval` does not: measured
+        # 2026-08-25 on 1.0.7, `x = 1` raises nothing, *warns* that the assignment was ignored, and returns
+        # a value - so the model would read back `x = 1 = 1` and take it for a result. A refusal it can act
+        # on is worth more than a number it cannot trust.
+        ast.parse(expression, mode="eval")
+        result = evaluator.eval(expression)
+    except Exception as exc:
+        # Broad on purpose: `simpleeval` raises a family of its own exceptions plus whatever the arithmetic
+        # itself raises (`ZeroDivisionError`, `ValueError` from `sqrt(-1)`, `OverflowError`), and every one
+        # of them is the same thing as far as the model is concerned - this expression did not work, here is
+        # why, try another.
+        logger.info(f"calculate: rejected '{expression}': {type(exc)}: {exc}")
+        return CANONICAL_BAD_EXPRESSION.format(reason=f"{type(exc).__name__}: {exc}")
+    return f"{expression} = {result}"
+
+
 # ------------------------------------------------------------------------------------------------
 # The registry, completed
 #
@@ -608,6 +690,7 @@ def get_current_time() -> str:
 TOOL_ENTRYPOINTS = {"websearch": websearch,
                     "webfetch": webfetch,
                     "get_current_time": get_current_time,
+                    "calculate": calculate,
                     "search_documents": search_documents,
                     "fetch_document": fetch_document,
                     "list_consulted_documents": list_consulted_documents}
