@@ -2309,7 +2309,10 @@ def _load_initial_animator_settings() -> None:
     if _shutting_down:
         return
 
-    api.avatar_load_animator_settings(avatar_instance_id, animator_settings)  # send settings to server
+    # Through the controller rather than straight at the API, so that it knows what the avatar's settings
+    # are. Anything that changes them *temporarily* - the branch-switch glitch - has to put them back, and
+    # the server offers no getter to read them from.
+    avatar_controller.load_animator_settings(avatar_record, animator_settings)  # send settings to server
     api.avatar_start(avatar_instance_id)
     dpg_avatar_renderer.start(avatar_instance_id)
     dpg_avatar_renderer.load_backdrop_image(animator_settings["backdrop_path"])

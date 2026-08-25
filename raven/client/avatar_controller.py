@@ -30,6 +30,7 @@ logger = logging.getLogger(__name__)
 
 import concurrent.futures
 import contextlib
+import copy
 import functools
 import queue
 import threading
@@ -93,6 +94,22 @@ def _natlang_analyze(text: str) -> List[List["spacy.tokens.token.Token"]]:  # no
 
 # --------------------------------------------------------------------------------
 # API
+
+# Starting point for the branch-switch glitch, tuned from `raven/avatar/assets/settings/glitchyholo.json`,
+# which runs this same filter as a continuous ambient effect. A switch wants it more prominent than that,
+# and briefly - so the glitches are larger and much more frequent, and the whole thing lasts under a second.
+#
+# `unboost` is the probability profile and it runs *backwards*: higher makes glitches rarer and fewer
+# (`postprocessor.digital_glitches` computes `rand()**unboost`). `glitchyholo` sits at 10.0 and the filter's
+# own default is 4.0, so a prominent flourish wants a number below both.
+_GLITCH_DEFAULTS = {"strength": 0.02,
+                    "unboost": 1.5,
+                    "max_glitches": 8,
+                    "min_glitch_height": 12,
+                    "max_glitch_height": 40,
+                    "hold_min": 1,
+                    "hold_max": 2}
+
 
 class DPGAvatarController:
     def __init__(self,
@@ -301,6 +318,13 @@ class DPGAvatarController:
         # other. See `start_data_eyes`.
         config._data_eyes_lock = threading.RLock()
         config._data_eyes_users = 0
+        # The animator settings currently in force, and the transient glitch overlaid on them. The settings
+        # are remembered here because the server offers no getter for them, and restoring the chain after a
+        # temporary filter means knowing what it was.
+        config._animator_settings_lock = threading.RLock()
+        config._animator_settings = None
+        config._glitch_timer = None
+        config._glitch_started_at = None
         config._avatar_speaking = False  # per-avatar-instance flag, set/reset by start/stop events in `speak_task`
 
         # Reset emotion after a few seconds of idle time (when the TTS is not speaking).
@@ -429,6 +453,73 @@ class DPGAvatarController:
         finally:
             # Reset the timer last. If running on CPU, the emotion analysis may be slow.
             config._emotion_autoreset_t0 = time.monotonic_ns()
+
+    def load_animator_settings(self, config: env, animator_settings: Dict) -> None:
+        """Send animator settings to the server, and remember them as this instance's baseline.
+
+        `animator_settings`: as `raven.client.api.avatar_load_animator_settings` takes them.
+
+        Prefer this to calling the API directly. The server offers no getter for these, so anything that
+        wants to change the avatar *temporarily* - `glitch`, below - has nothing to restore from unless
+        somebody remembered what was in force. That somebody is here.
+        """
+        with config._animator_settings_lock:
+            config._animator_settings = copy.deepcopy(animator_settings)
+        api.avatar_load_animator_settings(config.avatar_instance_id, animator_settings)
+        self.ping(config)
+
+    def glitch(self,
+               config: env,
+               floor: float = 0.4,
+               ceiling: float = 1.5,
+               **filter_parameters) -> None:
+        """Run the digital-glitch effect over the avatar for a moment. Returns immediately.
+
+        `floor`: seconds. Minimum time the effect stays up, so that a switch too fast to see still reads as
+                 something having happened.
+        `ceiling`: seconds from the *first* call in a run. Glitching for longer than a moment stops looking
+                   deliberate and starts looking broken, and holding a key down should not be able to
+                   exceed this.
+        `filter_parameters`: override any parameter of `postprocessor.digital_glitches`. Mind that
+                             `unboost` runs backwards: **higher makes glitches rarer and fewer.**
+
+        Repeated calls extend the effect rather than restarting it, up to `ceiling` - which is what flicking
+        through siblings does, and it should read as one continuous glitch rather than a stutter of them.
+
+        Does nothing if no animator settings have been loaded through `load_animator_settings`, there being
+        no chain to overlay and nothing to restore afterwards.
+        """
+        with config._animator_settings_lock:
+            if config._animator_settings is None:
+                logger.warning("glitch: no animator settings loaded for this instance; skipping.")
+                return
+
+            now = time.monotonic()
+            if config._glitch_timer is not None:  # already glitching: extend, do not restart
+                config._glitch_timer.cancel()
+            else:
+                config._glitch_started_at = now
+                settings = copy.deepcopy(config._animator_settings)
+                # Appended rather than inserted at a chosen index: the chain is the user's, and where their
+                # own filters sit relative to each other is their business. Last means the glitch is applied
+                # to the finished frame, which is what "the transmission broke up" looks like.
+                settings.setdefault("postprocessor_chain", []).append(["digital_glitches",
+                                                                       {**_GLITCH_DEFAULTS, **filter_parameters}])
+                api.avatar_load_animator_settings(config.avatar_instance_id, settings)
+
+            remaining = min(floor, max(0.0, config._glitch_started_at + ceiling - now))
+            config._glitch_timer = threading.Timer(remaining, self._end_glitch, args=(config,))
+            config._glitch_timer.daemon = True  # a pending restore must not hold the app open at exit
+            config._glitch_timer.start()
+
+    def _end_glitch(self, config: env) -> None:
+        """Put the avatar's own settings back. Called from the glitch timer; not part of the public API."""
+        with config._animator_settings_lock:
+            config._glitch_timer = None
+            config._glitch_started_at = None
+            settings = copy.deepcopy(config._animator_settings) if config._animator_settings is not None else None
+        if settings is not None:
+            api.avatar_load_animator_settings(config.avatar_instance_id, settings)
 
     def start_data_eyes(self, config: env) -> None:
         """Start the scifi "data eyes" cel effect, which says the system is consulting an external source.
