@@ -3573,7 +3573,7 @@ they compute (Juha raised the first, 2026-08-25):
   then `y = 4`, then `sqrt(x**2 + y**2)`.
 
 **The deciding question is which syntax a language model writes without being argued into it**, and it does
-not obviously favour the more interesting route. No model writes `do[local[x << 3], ...]` unprompted, so the
+not obviously favour the more interesting route. No model writes `do[local[x := 3], ...]` unprompted, so the
 tool description would have to teach it, and a tool whose schema needs a syntax tutorial is one the model
 gets wrong under pressure. Plain assignment is syntax every model already writes. Against that, `do[]` keeps
 the "one expression" contract literally true, where assignments mean re-admitting statements and re-deciding
