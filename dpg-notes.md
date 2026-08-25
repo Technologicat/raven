@@ -1467,9 +1467,19 @@ for slot in range(4):
 `raven/common/gui/xdotwidget/tests/test_widget.py` names the constant rather than passing a literal, for
 the same reason.
 
-**The full slot mapping is in DPG's own documentation** (Juha's recollection; the page is not identified
-here). Only slot 2 was measured, so take the rest from upstream rather than from this note — and if you go
-looking, record the page here.
+**The full mapping is upstream's**, at
+[Container Slots](https://dearpygui.readthedocs.io/en/latest/documentation/container-slots.html):
+
+| slot | holds |
+|---|---|
+| 0 | `mvFileExtension`, `mvFontRangeHint`, `mvNodeLink`, `mvAnnotation`, `mvDragLine`, `mvDragRect`, `mvDragPoint`, `mvLegend`, `mvTableColumn` |
+| 1 | most items |
+| 2 | draw items |
+| 3 | `mvDragPayload` |
+
+So slot 1 is the right guess for almost everything, which is exactly why the drawlist case is worth
+knowing: it is one of the few places the reflex is wrong, and being wrong there is silent. Slot 0 is a
+collection of special cases rather than a category — table columns and font range hints share it.
 
 ## A drawlist ignores `pos`, and reports back the position it was asked for
 
