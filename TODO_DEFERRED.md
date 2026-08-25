@@ -1149,6 +1149,30 @@ The segfault these measurements were taken during is fixed (2026-08-24, one sess
 see `dpg-notes.md`, "Context recreation is not reliably safe once real widgets have rendered"). What
 remains is the limit itself, which applies to any core a full run produces.
 
+## Two loose ends on what the data eyes mean
+
+*Cluster: ? · Cost: S each · Gate: none · Filed: 2026-08-25*
+
+The effect says *the system is consulting an external source*. Attachment extraction was added on
+2026-08-25, joining the automatic RAG search and every tool call. Two questions were raised while doing it
+and deliberately not answered, because both are about what the signal should *mean* rather than about
+plumbing:
+
+- **Should RAG indexing light them?** It is literally the system reading external documents, and it has its
+  own INDEXING indicator already. Against: indexing runs in the background at startup and whenever files are
+  dropped in, unattached to any turn — so the eyes would be on for minutes at a stretch with nobody having
+  asked anything, which likely reads as broken rather than as consulting. The question is whether the effect
+  means "reaching outside on your behalf" (indexing does not qualify) or "reaching outside at all" (it does).
+
+- **`get_current_time` lights them today, and consults nothing.** It goes through `on_tools_start` like any
+  tool, so a clock read gets the same signal as a web fetch. Harmless, and it dilutes the signal a little.
+  Fixing it means the trigger stops being "a tool ran" and becomes a property of *which* tool, which is a
+  small table to maintain — probably a set beside `DOCUMENT_TOOL_NAMES` and `NETWORK_TOOL_NAMES` in
+  `llmtools`, since that is already where "which tools are what" lives.
+
+Both are cheap. Neither is worth guessing at, since the answer is a judgement about what the audience should
+read the effect as meaning.
+
 ## Attachment state is carried by colour and hover alone
 
 *Cluster: librarian-attachments · Cost: ? · Gate: ? · Filed: 2026-08-13*
