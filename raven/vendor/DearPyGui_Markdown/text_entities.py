@@ -184,14 +184,22 @@ class StrEntity(str):
 
     def __add__(self, __object: SelfStrEntity | SelfTextEntity) -> SelfStrEntity | SelfTextEntity:
         if isinstance(__object, StrEntity):
+            # An empty operand contributes nothing, and that has to include its attributes - so these two
+            # come before the merge below rather than after it. The merge compares attribute *lists*, and
+            # `AttributeController` is a list subclass, so two controllers differing only in
+            # `default_text_color` compare equal; the merge would then hand the result whichever one is on
+            # the left. `wrap_text_entity` seeds every paragraph with an empty `StrEntity`, whose controller
+            # has the class-default colour, so with the old order a plain-text paragraph came out in the
+            # default while anything carrying an attribute kept the document's colour.
+            if len(self) == 0:
+                return __object
+            if len(__object) == 0:
+                return self
+
             if self.attributes == __object.attributes:
                 str_entity = StrEntity(''.join([self, __object]))
                 str_entity.attributes = self.attributes
                 return str_entity
-            elif isinstance(__object, StrEntity) and len(__object) == 0:
-                return self
-            elif len(self) == 0:
-                return __object
             else:
                 return TextEntity([self, __object])
         elif isinstance(__object, TextEntity) or issubclass(__object, TextEntity):

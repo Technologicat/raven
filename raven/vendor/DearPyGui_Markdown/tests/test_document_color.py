@@ -94,6 +94,26 @@ def test_omitting_the_color_leaves_the_renderer_default_alone(dpg_context):
     assert all(color == DEFAULT_WHITE for color in colors), colors
 
 
+def test_an_empty_prefix_does_not_impose_its_own_default_on_the_run_it_joins(dpg_context):
+    """`wrap_text_entity` seeds every paragraph with an empty `StrEntity` and adds words onto it, so this
+    merge is on the path of every wrapped render — which is every chat message.
+
+    The seed is built outside any document and carries the class-default colour. Attribute *lists* are
+    what the merge compares, and two controllers differing only in their default compare equal, so the
+    result used to take the seed's colour whenever the word carried no attributes of its own. Plain
+    paragraphs came out in the default while headings and list items kept the document's, which is what
+    it looked like on screen.
+    """
+    built = dpg_markdown.MarkdownText("plain text here", color="#ff8800")
+    run = runs(built.text_entity)[0]
+    assert run.attributes.get_color() == ORANGE, "the run itself should carry the document colour"
+
+    seed = text_entities.StrEntity("")
+    assert seed.attributes.get_color() == DEFAULT_WHITE, ("the seed should carry the class default, or this "
+                                                          "fixture cannot tell the two colours apart")
+    assert (seed + run).attributes.get_color() == ORANGE
+
+
 def test_a_font_span_still_beats_the_document_color(dpg_context):
     """Out-of-band colour is a default, not an override: markup in the source still wins."""
     built = dpg_markdown.MarkdownText("plain <font color='(0, 255, 0)'>green</font>", color="#ff8800")
