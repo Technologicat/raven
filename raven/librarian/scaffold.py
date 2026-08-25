@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 import json
 
-from typing import Any, Callable, Collection, Dict, List, Optional, Tuple, TYPE_CHECKING
+from typing import Any, Callable, Collection, TYPE_CHECKING
 
 from unpythonic import dyn
 from unpythonic.env import env
@@ -42,8 +42,8 @@ def user_turn(llm_settings: env,
               datastore: chattree.Forest,
               head_node_id: str,
               user_message_text: str,
-              staged_images: Optional[List[env]] = None,
-              staged_files: Optional[List[env]] = None) -> str:
+              staged_images: list[env] | None = None,
+              staged_files: list[env] | None = None) -> str:
     """Add the user's message with content `user_message_text` to `datastore`.
 
     `llm_settings`: Obtain this by calling `raven.librarian.llmclient.setup` at app start time.
@@ -144,7 +144,7 @@ def _create_synthetic_assistant_node(llm_settings: env,
 
 def _search_docs(retriever: "hybridir.HybridIR",
                  query: str,
-                 k: Optional[int] = None) -> List[Dict]:
+                 k: int | None = None) -> list[dict]:
     """Helper for `ai_turn`. Search the document database (`retriever`) for `query`, returning `k` best matches.
 
     `retriever`: A `raven.librarian.hybridir.HybridIR` retriever connected to the document database.
@@ -173,8 +173,8 @@ def _search_docs(retriever: "hybridir.HybridIR",
                            max_span_length=librarian_config.docs_max_result_length,
                            return_extra_info=False)
 
-def _grounding_was_declared(content: List[Dict],
-                            maybe_metadata: Optional[Dict]) -> bool:
+def _grounding_was_declared(content: list[dict],
+                            maybe_metadata: dict | None) -> bool:
     """Whether one tool result counts as material to answer from, per what produced it.
 
     Declared results say so themselves, by returning `(output, {"grounding": ...})` from the entrypoint.
@@ -220,7 +220,7 @@ def _branch_grounding_is_present(datastore: chattree.Forest,
         node_id = datastore.get_parent(node_id)
     return False
 
-def _documents_named_by(payload: Dict) -> List[Tuple[str, Optional[str]]]:
+def _documents_named_by(payload: dict) -> list[tuple[str, str | None]]:
     """The knowledge-base documents one stored node reached, as `(document_id, query)` pairs.
 
     Two producers write into a node, and both are read here, because "consulted" is deliberately silent
@@ -245,7 +245,7 @@ def _documents_named_by(payload: Dict) -> List[Tuple[str, Optional[str]]]:
 
 def _collect_consulted_documents(datastore: chattree.Forest,
                                  head_node_id: str,
-                                 exclude_document_ids: Collection[str]) -> List[Dict[str, Any]]:
+                                 exclude_document_ids: Collection[str]) -> list[dict[str, Any]]:
     """The knowledge-base documents this branch has already looked at, newest first, deduplicated.
 
     Closes a hole the automatic search leaves open. Its matches are injected for one turn and then dropped,
@@ -280,7 +280,7 @@ def _collect_consulted_documents(datastore: chattree.Forest,
         entries = entries[:cap]
     return entries
 
-def _attachment_is_present(history: List[Dict]) -> bool:
+def _attachment_is_present(history: list[dict]) -> bool:
     """Return whether the user has attached an image or a document anywhere on this branch.
 
     The other half of the same rule `_branch_grounding_is_present` applies to tool results: an attachment is
@@ -297,8 +297,8 @@ def _attachment_is_present(history: List[Dict]) -> bool:
     return False
 
 def _add_to_system_message(llm_settings: env,
-                           history: List[Dict],  # mutated!
-                           texts: List[str]) -> None:
+                           history: list[dict],  # mutated!
+                           texts: list[str]) -> None:
     """Append `texts` to the text content of the leading system message of `history`.
 
     Injects that are *instruction-like* go here rather than into a message of their own. Measured across
@@ -331,8 +331,8 @@ def _add_to_system_message(llm_settings: env,
 def _synthetic_tool_exchange(llm_settings: env,
                              call_id: str,
                              function_name: str,
-                             arguments: Dict,
-                             result_text: str) -> List[Dict]:
+                             arguments: dict,
+                             result_text: str) -> list[dict]:
     """Return `[assistant message requesting a tool call, tool message answering it]`, for injected data.
 
     "Synthetic" = neither message is real. The AI never asked for this call; Raven made the call on its
@@ -364,7 +364,7 @@ def _synthetic_tool_exchange(llm_settings: env,
 
 def build_system_injects(llm_settings: env,
                          grounding_material_exists: bool,
-                         tools_are_spent: bool = False) -> List[str]:
+                         tools_are_spent: bool = False) -> list[str]:
     """The instruction-like texts this turn appends to the leading system message.
 
     Split out of `build_turn_prompt` so that the chat view can show them. The log's promise is that it shows
@@ -397,13 +397,13 @@ def build_system_injects(llm_settings: env,
     return injects
 
 def build_turn_prompt(llm_settings: env,
-                      history: List[Dict],
-                      docs_query: Optional[str],
-                      docs_matches: List[Dict],
+                      history: list[dict],
+                      docs_query: str | None,
+                      docs_matches: list[dict],
                       tool_context: env,
                       tools_are_spent: bool = False,
                       tools_enabled: bool = True,
-                      use_character_card: bool = True) -> List[Dict]:
+                      use_character_card: bool = True) -> list[dict]:
     """Return the message history for the AI's turn: `history` with the temporary injects added.
 
     These are not meant to be persistent, so we don't even add them to the datastore,
@@ -544,8 +544,8 @@ def build_turn_prompt(llm_settings: env,
     return history
 
 
-def make_tool_context(llm_settings: Optional[env],
-                      retriever: "Optional[hybridir.HybridIR]") -> env:
+def make_tool_context(llm_settings: env | None,
+                      retriever: "hybridir.HybridIR | None") -> env:
     """Create the per-turn tool-call request context (the `dyn.tool_context` payload).
 
     `build_turn_prompt` requires one of these, so a script asking "what would Raven send?" needs this too;
@@ -606,7 +606,7 @@ def _record_grounding(tool_context: env,
 # the rescued copy out under it, and a page title is arbitrary text from the open web.
 _UNSAFE_IN_FILENAME = str.maketrans({c: "-" for c in '/\\:*?"<>|\n\r\t'})
 
-def _document_display_name(document: Dict[str, str]) -> str:
+def _document_display_name(document: dict[str, str]) -> str:
     """A human-readable, filesystem-safe name for a fetched document: `"<host> - <title>"`.
 
     Leads with the host because that is the discriminator that survives leaving the conversation — in a
@@ -630,7 +630,7 @@ def _document_display_name(document: Dict[str, str]) -> str:
     return name.translate(_UNSAFE_IN_FILENAME).strip()
 
 def _attachmentify_tool_result(datastore: chattree.Forest,
-                               tool_response_record: env) -> Dict[str, Dict]:
+                               tool_response_record: env) -> dict[str, dict]:
     """Store an over-long fetched document as a sidecar, rewriting the tool result to an excerpt plus a chip.
 
     Modifies `tool_response_record.data["content"]` in place, and removes the `fetched_document` key from
@@ -697,15 +697,15 @@ def _attachmentify_tool_result(datastore: chattree.Forest,
 
 def _perform_and_store_tool_calls(llm_settings: env,
                                   datastore: chattree.Forest,
-                                  assistant_message: Dict,
+                                  assistant_message: dict,
                                   parent_node_id: str,
                                   tool_context: env,
-                                  maybe_refusal_text: Optional[str] = None,
-                                  on_tools_start: Optional[Callable] = None,
-                                  on_call_lowlevel_start: Optional[Callable] = None,
-                                  on_call_lowlevel_done: Optional[Callable] = None,
-                                  on_tool_done: Optional[Callable] = None,
-                                  on_tools_done: Optional[Callable] = None) -> str:
+                                  maybe_refusal_text: str | None = None,
+                                  on_tools_start: Callable | None = None,
+                                  on_call_lowlevel_start: Callable | None = None,
+                                  on_call_lowlevel_done: Callable | None = None,
+                                  on_tool_done: Callable | None = None,
+                                  on_tools_done: Callable | None = None) -> str:
     """Execute the tool calls in `assistant_message`, storing each result as a `role="tool"` chat node.
 
     The result nodes are chained under `parent_node_id` (normally the assistant message that requested
@@ -756,7 +756,7 @@ def _perform_and_store_tool_calls(llm_settings: env,
     for tool_response_record in tool_response_records:
         _record_grounding(tool_context, tool_response_record)
 
-        def create_tool_payload() -> Dict:
+        def create_tool_payload() -> dict:
             # OAI spec puts the tool-call linkage on the tool-response *message* as `tool_call_id` (matching the
             # `id` of the assistant's `tool_calls[i]` entry). The tool *execution* metadata (status, function
             # name, timing) stays in `generation_metadata`.
@@ -798,26 +798,26 @@ def _perform_and_store_tool_calls(llm_settings: env,
 
 def ai_turn(llm_settings: env,
             datastore: chattree.Forest,
-            retriever: "Optional[hybridir.HybridIR]",
+            retriever: "hybridir.HybridIR | None",
             head_node_id: str,
             internet_enabled: bool,
             continue_: bool,
             docs_enabled: bool,
-            docs_query: Optional[str],
-            docs_num_results: Optional[int],
-            markup: Optional[str],
-            on_docs_start: Optional[Callable],
-            on_docs_done: Optional[Callable],
-            on_prompt_ready: Optional[Callable],
-            on_llm_start: Optional[Callable],
-            on_llm_progress: Optional[Callable],
-            on_llm_done: Optional[Callable],
-            on_tools_start: Optional[Callable],
-            on_call_lowlevel_start: Optional[Callable],
-            on_call_lowlevel_done: Optional[Callable],
-            on_tool_done: Optional[Callable],
-            on_tools_done: Optional[Callable],
-            tool_context: Optional[env] = None,
+            docs_query: str | None,
+            docs_num_results: int | None,
+            markup: str | None,
+            on_docs_start: Callable | None,
+            on_docs_done: Callable | None,
+            on_prompt_ready: Callable | None,
+            on_llm_start: Callable | None,
+            on_llm_progress: Callable | None,
+            on_llm_done: Callable | None,
+            on_tools_start: Callable | None,
+            on_call_lowlevel_start: Callable | None,
+            on_call_lowlevel_done: Callable | None,
+            on_tool_done: Callable | None,
+            on_tools_done: Callable | None,
+            tool_context: env | None = None,
             tools_enabled: bool = True,
             use_character_card: bool = True) -> str:
     """AI's turn: LLM generation interleaved with tool responses, until there are no tool calls in the LLM's latest reply.
@@ -889,7 +889,7 @@ def ai_turn(llm_settings: env,
 
                      Only called if `docs_query is not None`.
 
-    `on_docs_done`: 1-argument callable, with argument `matches: List[Dict]`. For the exact format,
+    `on_docs_done`: 1-argument callable, with argument `matches: list[dict]`. For the exact format,
                     see `raven.librarian.hybridir.HybridIR.query`; this is the return value from that.
                     Note that `matches` may be empty.
 
@@ -907,7 +907,7 @@ def ai_turn(llm_settings: env,
                     The LLM will start once at the beginning of the AI's turn, and then once after each set
                     of tool calls.
 
-    `on_prompt_ready`: 1-argument callable, with argument `history: List[Dict]`. Debug/info hook.
+    `on_prompt_ready`: 1-argument callable, with argument `history: list[dict]`. Debug/info hook.
                        The return value is ignored.
 
                        Called after the LLM context has been completely prepared, before sending it to the LLM.
@@ -918,7 +918,7 @@ def ai_turn(llm_settings: env,
                        Each element of the list is a chat message in the format accepted by the LLM backend,
                        with "role" and "content" fields.
 
-    `on_llm_progress`: 1-argument callable taking a typed stream event `event: Dict`; forwarded verbatim to
+    `on_llm_progress`: 1-argument callable taking a typed stream event `event: dict`; forwarded verbatim to
                        `llmclient.invoke`'s `on_progress` (which see for the event shapes — `content`,
                        `reasoning`, `tool_call`). Called while streaming the response, typically once per
                        generated token. `invoke` is the single parser; this callback just dispatches on
@@ -938,7 +938,7 @@ def ai_turn(llm_settings: env,
 
                    The argument is the node ID of this new chat node.
 
-    `on_tools_start`: 1-argument callable, with argument `tool_calls: List[Dict]`, containing the raw tool call requests
+    `on_tools_start`: 1-argument callable, with argument `tool_calls: list[dict]`, containing the raw tool call requests
                       in the OpenAI format.
 
                       Called just before processing the tool calls.
@@ -984,7 +984,7 @@ def ai_turn(llm_settings: env,
                     If you need an event that triggers when a tool is about to start or has just finished,
                     use `on_call_lowlevel_start` and `on_call_lowlevel_done` instead.
 
-    `on_tools_done`: 1-argument callable, with argument `tool_calls: List[Dict]` - the same list
+    `on_tools_done`: 1-argument callable, with argument `tool_calls: list[dict]` - the same list
                      `on_tools_start` received, so that a handler which acted on *which* tools were
                      called can undo exactly that without stashing it itself.
                      The return value is ignored.
@@ -1177,7 +1177,7 @@ def ai_turn(llm_settings: env,
         # Note the token count of the message actually saved into the chat log may be different from `out.n_tokens`, e.g. if the AI is interrupted.
         # However, to correctly compute the generation speed (which is done by the GUI, based on the data we store here), we need to use the original count
         # before any editing, since `out.dt` was measured for that.
-        def create_ai_payload() -> Dict:
+        def create_ai_payload() -> dict:
             payload = chatutil.create_payload(llm_settings=llm_settings,
                                               message=out.data)
             payload["generation_metadata"] = {"model": out.model,
@@ -1244,7 +1244,7 @@ def ai_turn(llm_settings: env,
     return head_node_id
 
 
-def _next_tool_node_on_branch(datastore: chattree.Forest, node_id: str) -> Optional[str]:
+def _next_tool_node_on_branch(datastore: chattree.Forest, node_id: str) -> str | None:
     """Return the (single) `role="tool"` child of `node_id`, or `None`.
 
     A tool-result node created by the agent loop has at most one tool-role child (the next tool result
@@ -1259,23 +1259,23 @@ def _next_tool_node_on_branch(datastore: chattree.Forest, node_id: str) -> Optio
 
 def retry_tool_calls(llm_settings: env,
                      datastore: chattree.Forest,
-                     retriever: "Optional[hybridir.HybridIR]",
+                     retriever: "hybridir.HybridIR | None",
                      tool_node_id: str,
                      internet_enabled: bool,
                      docs_enabled: bool,
-                     markup: Optional[str],
-                     docs_num_results: Optional[int],
-                     on_docs_start: Optional[Callable] = None,
-                     on_docs_done: Optional[Callable] = None,
-                     on_prompt_ready: Optional[Callable] = None,
-                     on_llm_start: Optional[Callable] = None,
-                     on_llm_progress: Optional[Callable] = None,
-                     on_llm_done: Optional[Callable] = None,
-                     on_tools_start: Optional[Callable] = None,
-                     on_call_lowlevel_start: Optional[Callable] = None,
-                     on_call_lowlevel_done: Optional[Callable] = None,
-                     on_tool_done: Optional[Callable] = None,
-                     on_tools_done: Optional[Callable] = None) -> str:
+                     markup: str | None,
+                     docs_num_results: int | None,
+                     on_docs_start: Callable | None = None,
+                     on_docs_done: Callable | None = None,
+                     on_prompt_ready: Callable | None = None,
+                     on_llm_start: Callable | None = None,
+                     on_llm_progress: Callable | None = None,
+                     on_llm_done: Callable | None = None,
+                     on_tools_start: Callable | None = None,
+                     on_call_lowlevel_start: Callable | None = None,
+                     on_call_lowlevel_done: Callable | None = None,
+                     on_tool_done: Callable | None = None,
+                     on_tools_done: Callable | None = None) -> str:
     """Re-run a single previously-denied tool call on a NEW branch, then continue the AI's turn.
 
     This is the backend of the GUI "approve this denied host & retry" override. The user has just approved
@@ -1330,7 +1330,7 @@ def retry_tool_calls(llm_settings: env,
         raise ValueError(f"retry_tool_calls: could not match denied tool node '{tool_node_id}' to a call on assistant '{assistant_node_id}'.")
 
     # 3 (collect, before mutating). The suffix tool nodes after the denied one on this branch.
-    suffix_node_ids: List[str] = []
+    suffix_node_ids: list[str] = []
     node_id = _next_tool_node_on_branch(datastore, tool_node_id)
     while node_id is not None:
         suffix_node_ids.append(node_id)
