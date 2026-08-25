@@ -67,9 +67,25 @@ from . import config as librarian_config
 # The tool subsystem lives in its own module; re-exported here because `llmclient.TOOLS` and
 # `llmclient.perform_tool_calls` are what `scaffold`, `agent`, `chat_controller` and the tests have
 # always called, and where the tools live is not their business.
-from .llmtools import *  # noqa: F401,F403 -- re-export; see above
-from .llmtools import TOOLS, TOOL_ENTRYPOINTS, DOCUMENT_TOOL_NAMES, NETWORK_TOOL_NAMES  # noqa: F401 -- named so a reader can see what `setup` puts in the settings
-from .llmtools import perform_tool_calls, approve_host_for_session  # noqa: F401 -- named because this module's `__all__` advertises them
+#
+# Listed rather than star-imported: this is an ordinary module, not a package `__init__`, so a `*` here
+# buys nothing that a list does not and costs every IDE and static checker the ability to resolve these
+# names. The cost of the list is that a new public name in `llmtools` has to be added here too, which is
+# the same discipline `__all__` already asks for.
+from .llmtools import (TOOLS, TOOL_ENTRYPOINTS,  # noqa: F401 -- re-export
+                       DOCUMENT_TOOL_NAMES, NETWORK_TOOL_NAMES, EXTERNAL_SOURCE_TOOL_NAMES,
+                       maybe_tool_names_for_turn,
+                       perform_tool_calls, approve_host_for_session,
+
+                       CANONICAL_NOT_ON_ALLOWLIST,
+                       CANONICAL_NO_DOCUMENT_DATABASE, CANONICAL_NO_DOCUMENT_MATCHES,
+                       CANONICAL_NO_SUCH_DOCUMENT, CANONICAL_NOTHING_CONSULTED,
+                       CANONICAL_NO_ROOM_TO_FETCH, CANONICAL_BAD_EXPRESSION,
+
+                       document_text, document_path, label_documents,
+
+                       websearch, webfetch, search_documents, fetch_document,
+                       get_current_time, calculate, list_consulted_documents)
 from . import gguftokenizer
 from . import textfilestore
 from . import imagestore
