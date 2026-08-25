@@ -126,7 +126,24 @@ that corruption visible, since fenced blocks in traces do not currently render a
 One thing the item notes that is *not* in scope here: the vendored renderer's `Pre`-box position handling.
 That is the stranded-box bug, settle-item 4, and it has its own entry.
 
-### 5. Colour the list markers
+### 5. Colour the list markers — **done 2026-08-25**
+
+Taken immediately after step 1 rather than in its planned slot, because the prediction below came true the
+moment step 1 shipped: green system-prompt text with white bullets down the left, reported from the running
+app. The general version was built as argued, and step 1 had already supplied its fallback, so the two cases
+really are one mechanism.
+
+Three things worth carrying forward:
+
+- **The colour is resolved on the raw entity spans, before flattening**, and handed to
+  `_ConvertedMessageEntity.marker_color`. It cannot be set on the attribute object: `object` is a *property*
+  that mints a fresh `List` on every access, one per segment the list spans.
+- **`color` has to be set on every bullet case, not just the filled ones.** The hollow circle and hollow
+  quad take their colour from the outline rather than the fill, so leaving those alone would have left every
+  second nesting depth white.
+- **`Blockquote` does not have this defect**, contrary to the note at the end of this step. It carries a
+  deliberate `color = [50, 55, 65, 255]` — a dark bar meant to sit *behind* text rather than match it. Left
+  alone; do not re-open it.
 
 **In scope** (Juha, 2026-08-10). Bullets and numbers currently keep DPG's default text colour even when the
 list renders correctly, which step 1 makes more visible rather than less, since more lists will render.

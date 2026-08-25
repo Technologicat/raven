@@ -13,6 +13,7 @@ import pytest
 dpg = pytest.importorskip("dearpygui.dearpygui", reason="dearpygui not installed")
 
 from raven.vendor import DearPyGui_Markdown as dpg_markdown  # noqa: E402 -- after importorskip by design
+from raven.vendor.DearPyGui_Markdown import line_attributes  # noqa: E402 -- after importorskip by design
 from raven.vendor.DearPyGui_Markdown import parser  # noqa: E402 -- after importorskip by design
 from raven.vendor.DearPyGui_Markdown import text_entities  # noqa: E402 -- after importorskip by design
 
@@ -120,3 +121,60 @@ def test_a_font_span_still_beats_the_document_color(dpg_context):
     colors = [run.attributes.get_color() for run in runs(built.text_entity)]
     assert ORANGE in colors, f"the unstyled run should take the document colour: {colors}"
     assert [0, 255, 0, 255] in colors, f"the `<font>` span should keep its own: {colors}"
+
+
+# --------------------------------------------------------------------------------
+# List markers
+#
+# A marker is drawn separately from the text it belongs to — a bullet into a drawlist, an ordinal through
+# its own `add_text` — so it takes no colour from the run beside it and has to be told.
+
+def marker_colors(built) -> list:
+    """The colour of every list marker in a built document, in document order."""
+    found = []
+
+    def walk(entity):
+        if isinstance(entity, text_entities.StrEntity):
+            found.extend(attribute.color for attribute in entity.attributes
+                         if isinstance(attribute, line_attributes.List))
+            return
+        for item in entity:
+            walk(item)
+    walk(built.text_entity)
+    return found
+
+
+def test_list_markers_take_the_document_color(dpg_context):
+    colors = marker_colors(dpg_markdown.MarkdownText("- one\n- two", color="#ff8800"))
+    assert colors, "no list markers found at all, so this asserts nothing about their colour"
+    assert all(color == ORANGE for color in colors), colors
+
+
+def test_ordered_list_markers_take_it_too(dpg_context):
+    """The ordinal goes through `add_text` and the bullet through a drawlist, so they are two code paths."""
+    colors = marker_colors(dpg_markdown.MarkdownText("1. one\n2. two", color="#ff8800"))
+    assert colors, "no list markers found at all, so this asserts nothing about their colour"
+    assert all(color == ORANGE for color in colors), colors
+
+
+def test_a_list_inside_a_font_span_takes_that_span_s_color(dpg_context):
+    """The marker follows the context the list sits in, which a `<font>` around the whole list establishes."""
+    built = dpg_markdown.MarkdownText("<font color='(0, 255, 0)'>\n\n- one\n- two\n\n</font>", color="#ff8800")
+    colors = marker_colors(built)
+    assert colors, "no list markers found at all, so this asserts nothing about their colour"
+    assert all(color == [0, 255, 0, 255] for color in colors), colors
+
+
+def test_a_font_opening_inside_an_item_does_not_tint_the_marker(dpg_context):
+    """The case that makes containment the right question rather than co-occurrence.
+
+    A span *inside* an item shares a segment with the list, so resolving the colour from the attributes a
+    segment happens to carry would let an item's own markup colour the bullet. It encloses nothing, so the
+    marker stays on the document colour — and this fixture would read the green if that rule were dropped.
+    """
+    built = dpg_markdown.MarkdownText("- one <font color='(0, 255, 0)'>green</font>\n- two", color="#ff8800")
+    colors = marker_colors(built)
+    assert colors, "no list markers found at all, so this asserts nothing about their colour"
+    assert all(color == ORANGE for color in colors), colors
+    assert [0, 255, 0, 255] in [run.attributes.get_color() for run in runs(built.text_entity)], (
+        "the span itself should still be green, or this fixture is not exercising the case at all")

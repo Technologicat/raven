@@ -135,6 +135,11 @@ class List(LineAttribute):
     check_box_theme: int = None
     max_index_symbols_length = 4
 
+    # A marker is structural, so its colour comes from the context the list sits in - never from anything
+    # inside an item, which would let a coloured first word tint the bullet. `MarkdownText` resolves it and
+    # passes it in; this is the fallback for a list built with no document behind it.
+    color: list[int, int, int, int] = [255, 255, 255, 255]
+
     depth: int
     ordered: bool
     index: int
@@ -163,7 +168,8 @@ class List(LineAttribute):
                  ordered: bool = False,
                  index: int = 1,
                  task: bool = False,
-                 task_done: bool = False):
+                 task_done: bool = False,
+                 color: list[int, int, int, int] | None = None):
         self.depth = depth
         self.attribute_connector = attribute_connector
         self.attribute_connector.first_line_objects = None
@@ -171,6 +177,8 @@ class List(LineAttribute):
         self.index = index
         self.task = task
         self.task_done = task_done
+        if color is not None:
+            self.color = color
 
     def __repr__(self):
         if self.ordered:
@@ -228,7 +236,7 @@ class List(LineAttribute):
                 y += (self.text_height - render_text_height) / 2
                 x += (self.get_width() - self.get_task_width()) - render_text_width
 
-                dpg_text = dpg.add_text(text, pos=(x, y), parent=attributes_group)
+                dpg_text = dpg.add_text(text, pos=(x, y), parent=attributes_group, color=self.color)
                 dpg.bind_item_font(dpg_text, font=Default.get_font())
         _run_when_laid_out(self.spacer_group, _draw)
 
@@ -249,29 +257,36 @@ class List(LineAttribute):
                 drawlist = dpg.add_drawlist(width=width, height=height, parent=drawlist_group)
 
                 depth = self.depth - self.depth // 4 * 4
+                # The hollow variants take their colour from the outline rather than the fill, so `color`
+                # has to be set on every case while `fill` alternates - a hollow marker left at DPG's
+                # default would be the only white thing in a coloured list.
                 match depth:
                     case 1:
                         dpg.draw_circle([height / 2, width / 2],
                                         width / 2 - thickness / 2,
                                         parent=drawlist,
                                         thickness=thickness,
-                                        fill=(255, 255, 255, 255))
+                                        color=self.color,
+                                        fill=self.color)
                     case 2:
                         dpg.draw_circle([height / 2, width / 2],
                                         width / 2 - thickness / 2,
                                         parent=drawlist,
                                         thickness=thickness,
+                                        color=self.color,
                                         fill=(0, 0, 0, 0))
                     case 3:
                         dpg.draw_quad([thickness, thickness], [width - thickness, thickness],
                                       [width - thickness, height - thickness], [thickness, height - thickness],
                                       parent=drawlist,
                                       thickness=thickness,
-                                      fill=(255, 255, 255, 255))
+                                      color=self.color,
+                                      fill=self.color)
                     case _:
                         dpg.draw_quad([thickness, thickness], [width - thickness, thickness],
                                       [width - thickness, height - thickness], [thickness, height - thickness],
                                       parent=drawlist,
                                       thickness=thickness,
+                                      color=self.color,
                                       fill=(0, 0, 0, 0))
         _run_when_laid_out(self.spacer_group, _draw)

@@ -200,6 +200,11 @@ def wrap_text_entity(text: text_entities.StrEntity | text_entities.TextEntity, w
 
 
 class _ConvertedMessageEntity:
+    # Colour for a list marker, resolved once by `MarkdownText` and handed to every `List` this entity
+    # mints. It has to live here rather than on the object, because `object` below is a property that
+    # constructs a *new* attribute instance on every access - one per segment the list spans.
+    marker_color: list[int, int, int, int] | None = None
+
     def __init__(self, entity: parser.MessageEntity):
         self.entity = entity
         self.offset = entity.offset
@@ -237,14 +242,16 @@ class _ConvertedMessageEntity:
                 return line_attributes.List(self.entity.depth,
                                            attribute_connector=self.entity.attribute_connector,
                                            task=self.entity.task,
-                                           task_done=self.entity.task_done)
+                                           task_done=self.entity.task_done,
+                                           color=self.marker_color)
             case parser.MessageEntityOrderedList:
                 return line_attributes.List(self.entity.depth,
                                            attribute_connector=self.entity.attribute_connector,
                                            ordered=True,
                                            index=self.entity.index,
                                            task=self.entity.task,
-                                           task_done=self.entity.task_done)
+                                           task_done=self.entity.task_done,
+                                           color=self.marker_color)
             case parser.MessageEntitySeparator:
                 return line_attributes.Separator
             case parser.MessageEntityH1:
@@ -283,6 +290,27 @@ class MarkdownText:
         clear_text, attributes = parser.parse(markdown_text)
         for i in range(len(attributes)):
             attributes[i] = _ConvertedMessageEntity(attributes[i])
+
+        # Give each list marker the colour of the text it sits beside. Resolved here, on the raw entity
+        # spans, rather than from the attributes that end up sharing a segment with the list: a segment
+        # carries whatever markup happens to be inside the item, so taking the colour from there would let
+        # an item beginning with a coloured span tint the bullet. Containment is the question a *marker*
+        # asks - what encloses this list - and the innermost enclosing `<font>` is the answer.
+        #
+        # A `<font>` opening mid-list encloses nothing and so is correctly ignored, leaving that list on the
+        # document colour.
+        default_marker_color = font_attributes.parse_color(color) if color is not None else None
+        for entity in attributes:
+            if not isinstance(entity.entity, parser.MessageEntityList):
+                continue
+            enclosing = [other for other in attributes
+                         if isinstance(other.entity, parser.MessageEntityFont)
+                         and other.offset <= entity.offset and entity.end <= other.end]
+            if enclosing:
+                innermost = min(enclosing, key=lambda other: other.end - other.offset)
+                entity.marker_color = font_attributes.parse_color(innermost.entity.color)
+            else:
+                entity.marker_color = default_marker_color
 
         attribute_points = []
         for entity in attributes:

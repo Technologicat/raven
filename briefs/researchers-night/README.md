@@ -151,7 +151,9 @@ known before band 3 begins.
 9. **The turn-sequencing race with the abortable prefill.**
 10. **The STT silence level / autostop GUI** — see below for why it is on the path.
 11. **Block-level Markdown, the remaining steps** — the single-newline split, which is the barrier fenced
-    code and multi-line lists are behind.
+    code and multi-line lists are behind. **Step 5 came out of this band and landed on 08-25** with step 1:
+    the white bullets were visible the moment headings started rendering, and step 1 had already built the
+    fallback the marker colours needed.
 
 **Band 3 — the large ones.**
 
