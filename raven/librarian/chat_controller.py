@@ -659,12 +659,23 @@ class DPGChatMessage:
                 text = paragraph["text"].strip()
                 if text:  # don't bother if text is blank
                     # Replace known XML tokens with something that doesn't look like HTML to avoid confusing the Markdown renderer (which silently drops unknown tags).
+                    #
+                    # Both pairs are fallbacks for output that arrived broken, which is why neither is dead
+                    # code despite normal traffic never reaching them. A well-formed tool call is parsed out
+                    # by the backend and never lands in the text; what lands here is a confabulated or
+                    # malformed one its parser did not recognize. Likewise reasoning is separated into
+                    # `reasoning_content` before render, so inline `<think>` means a backend that did not
+                    # separate it. In both cases this is the only thing standing between the reader and a
+                    # silently dropped tag.
                     text = text.replace("<tool_call>", "**>>>Tool call>>>**")
                     text = text.replace("</tool_call>", "**<<<Tool call<<<**")
                     text = text.replace("<think>", "**>>>Thinking>>>**")
                     text = text.replace("</think>", "**<<<Thinking<<<**")
+                    # Passed to the renderer rather than wrapped around the text as a `<font>` tag. An open
+                    # tag on the same line as the content makes the whole paragraph inline raw HTML as far
+                    # as CommonMark is concerned, and a heading is a block construct that cannot occur
+                    # inside a paragraph - so `### Heading` came through with its markers intact.
                     color = think_color if paragraph["is_thought"] else role_color
-                    colorized_text = f"<font color='{color}'>{text}</font>"
 
                     chat_text_w = self.get_chat_text_width()
 
@@ -691,14 +702,16 @@ class DPGChatMessage:
                         # dpg.bind_item_theme(f"message_think_toggle_button_{self.gui_uuid}", "disablable_blue_widget_theme")  # tag
                         message_think_toggle_tooltip = dpg.add_tooltip(f"message_think_toggle_button_{self.gui_uuid}")  # tag
                         dpg.add_text("Show/hide thinking trace [Ctrl+T]", parent=message_think_toggle_tooltip)
-                        text_content = dpg_markdown.add_text(colorized_text,
+                        text_content = dpg_markdown.add_text(text,
                                                              wrap=chat_text_w,
-                                                             parent=widget)
+                                                             parent=widget,
+                                                             color=color)
                         dpg.hide_item(text_content)
                     else:
-                        widget = dpg_markdown.add_text(colorized_text,
+                        widget = dpg_markdown.add_text(text,
                                                        wrap=chat_text_w,
-                                                       parent=self.gui_text_group)
+                                                       parent=self.gui_text_group,
+                                                       color=color)
                     paragraph["widget"] = widget
                     dpg.set_item_alias(widget, f"chat_message_text_{role}_paragraph_{idx}_{self.gui_uuid}")  # tag
                 paragraph["rendered"] = True

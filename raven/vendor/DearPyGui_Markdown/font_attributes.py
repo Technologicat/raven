@@ -5,6 +5,24 @@ import traceback
 from .attribute_types import Attribute, FontAttribute
 
 
+def parse_color(color: str | list | tuple) -> list[int, int, int, int]:
+    '''Normalize a colour into RGBA, accepting every spelling a `<font color=...>` attribute may carry.
+
+    A `'#rrggbb'` hex string, a `'(r, g, b)'` literal, or a list/tuple. Short forms are padded to
+    opaque RGBA, and anything beyond four components is dropped.
+    '''
+    if not isinstance(color, list) and not isinstance(color, tuple):
+        try:
+            color = ast.literal_eval(color)
+        except Exception:
+            color = color.removeprefix('#')
+            color = tuple(int(color[i:i + 2], 16) for i in [*range(0, len(color), 2)])  # HEX to RGB
+    color = list(color)[:4:]
+    for i in range(4 - len(color)):
+        color.append(255)
+    return color
+
+
 class Font(Attribute):
     color: list[int, int, int, int]
     size: int | None
@@ -18,16 +36,7 @@ class Font(Attribute):
                 size = None
         self.size = size
 
-        if not isinstance(color, list) and not isinstance(color, tuple):
-            try:
-                color = ast.literal_eval(color)
-            except Exception:
-                color = color.removeprefix('#')
-                color = tuple(int(color[i:i + 2], 16) for i in [*range(0, len(color), 2)])  # HEX to RGB
-        color = list(color)[:4:]
-        for i in range(4 - len(color)):
-            color.append(255)
-        self.color = color
+        self.color = parse_color(color)
 
 
 class Default(FontAttribute):

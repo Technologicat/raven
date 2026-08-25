@@ -121,6 +121,8 @@
 
 *Raven-librarian*
 
+- **Markdown headings now render as headings in the chat log**, instead of arriving with their `#` markers intact. A heading is a block-level construct, and the chat view used to wrap every paragraph in a colour tag before handing it to the renderer — which makes the whole thing one paragraph, and a heading cannot occur inside one. The colour is passed alongside the text now. Models that organize a long answer under headings are the ones this was costing.
+
 - **the context-fill readout no longer collapses to a fraction of the truth.** A chat with three papers attached, genuinely filling 68% of the window, could show `7%`: the readout takes its exact figure from the LLM backend, and LM Studio's can come back an order of magnitude short for a conversation it has already been asked about. Raven now disbelieves a figure far below its own estimate, and goes on showing the estimate's `~` rather than a confident wrong number.
 
 - **the app no longer freezes for seconds when you move to a part of the chat that has documents attached.** Switching a message's siblings, or otherwise moving through the chat, refreshes the context-fill readout — and that used to read every attached document to count it, extracting a PDF's text on the spot. Everything you typed during that wait arrived at the end of it, so the app read as hung. The readout now counts documents it has already read, leaves the rest to the check that follows a moment later, and shows `~` while any are outstanding.

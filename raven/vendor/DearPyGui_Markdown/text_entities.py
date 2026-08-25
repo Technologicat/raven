@@ -17,6 +17,11 @@ class AttributeController(list[Attribute]):
     text_color: list[int, int, int, int]
     font: None | int
 
+    # The colour a run of text takes when nothing in the Markdown says otherwise. Per instance, set from
+    # `MarkdownText`'s `color` argument; the class attribute is the fallback for text that arrives with no
+    # document behind it.
+    default_text_color: list[int, int, int, int] = [255, 255, 255, 255]
+
     def __new__(cls, *args, **kwargs):
         if cls.dpg_group_theme is None:
             cls.dpg_group_theme = dpg.add_theme()
@@ -70,7 +75,7 @@ class AttributeController(list[Attribute]):
         return self.font
 
     def get_color(self) -> list[int, int, int, int]:
-        self.text_color = [255, 255, 255, 255]
+        self.text_color = list(self.default_text_color)
         if Font in self:
             _Font: Font = self[self.index(Font)]  # noqa
             self.text_color = _Font.color
@@ -207,8 +212,13 @@ class StrEntity(str):
 
     def recreate_attributes(self):
         list_of_attributes = self.attributes.copy()
+        # Carried explicitly, because the controller below is a new object and `list.copy` above returns a
+        # plain list. Without this the document colour survives an unwrapped render and is lost by a wrapped
+        # one, `LineEntity.append` calling this on every line it takes.
+        default_text_color = self.attributes.default_text_color
         del self.attributes
         self.attributes = AttributeController([])
+        self.attributes.default_text_color = default_text_color
         for i, attribute in enumerate(list_of_attributes):
             if not isinstance(attribute, type):
                 attribute_connector = attribute.attribute_connector
@@ -430,3 +440,20 @@ class LineEntity(TextEntity):
 
         if Separator in attributes:
             Separator.render(before=parent, attributes_group=attributes_group)
+
+
+def set_default_text_color(entity: StrEntity | TextEntity, color: list[int, int, int, int]) -> None:
+    '''Give every run in `entity` a colour to fall back on when the Markdown declares none.
+
+    A `<font>` span still wins wherever one applies; this only replaces the white that unstyled text
+    would otherwise take.
+
+    Applied to a whole tree rather than at construction because a run acquires its controller by
+    several routes - built with attributes, built without, and split off another run - and only one
+    of those passes through `set_attributes`.
+    '''
+    if isinstance(entity, StrEntity):
+        entity.attributes.default_text_color = color
+        return
+    for item in entity:
+        set_default_text_color(item, color)

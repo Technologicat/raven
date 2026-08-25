@@ -262,7 +262,12 @@ class _ConvertedMessageEntity:
 class MarkdownText:
     text_entity: text_entities.TextEntity | text_entities.StrEntity
 
-    def __init__(self, markdown_text: str):
+    def __init__(self, markdown_text: str, color: str | list | tuple | None = None):
+        '''
+        :param markdown_text: The Markdown source to render.
+        :param color: Colour for text the source does not colour itself, in any spelling a `<font
+                      color=...>` attribute accepts. `None` keeps the renderer's white.
+        '''
         clear_text, attributes = parser.parse(markdown_text)
         for i in range(len(attributes)):
             attributes[i] = _ConvertedMessageEntity(attributes[i])
@@ -308,6 +313,10 @@ class MarkdownText:
                 str_entity.set_attributes(str_attributes)
                 self.text_entity.append(str_entity)
 
+        if color is not None:
+            text_entities.set_default_text_color(self.text_entity,
+                                                 font_attributes.parse_color(color))
+
     def add(self, wrap: int | float = -1, parent: int | str = 0, tag: int | str = 0):
         '''
         :param wrap: Number of pixels from the start of the item until wrapping starts.
@@ -334,15 +343,21 @@ def add_text(markdown_text: str,
              wrap: float | int = -1,
              parent: int | str = 0,
              pos: list[int | float, int | float] | tuple[int | float, int | float] | None = None,
-             tag: int | str = 0) -> int:
+             tag: int | str = 0,
+             color: str | list | tuple | None = None) -> int:
     ''' Adds Markdown text.
     :param wrap: Number of pixels from the start of the item until wrapping starts.
     :param parent: Parent to add this item to. (runtime adding)
     :pos: Places the item relative to window coordinates, [0,0] is top left.
     :param tag: DPG tag/alias for the top-level group of the rendered Markdown.
+    :param color: Colour for text the Markdown does not colour itself, in any spelling a `<font
+                  color=...>` attribute accepts. `None` keeps the renderer's white. Prefer this to
+                  wrapping the source in a `<font>` tag: an open tag on the same line as the content
+                  makes the whole thing one paragraph as far as CommonMark is concerned, and a heading
+                  cannot occur inside a paragraph.
     :return: group with rendered Markdown text
     '''
-    rendered_group = MarkdownText(markdown_text=markdown_text).add(wrap=wrap, parent=parent, tag=tag)
+    rendered_group = MarkdownText(markdown_text=markdown_text, color=color).add(wrap=wrap, parent=parent, tag=tag)
     if pos is not None:
         dpg.set_item_pos(rendered_group, pos)
     return rendered_group
