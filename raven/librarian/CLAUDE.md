@@ -41,7 +41,7 @@ Layer 5 - Applications:     app.py (~2.4k), minichat.py (~690, minimal reference
 Layer 4 - Controller/GUI:   chat_controller.py (~4.0k), cleanup_dialog.py (~410)
 Layer 4 - Scripting:        agent.py (~500), the headless sibling of the controller
 Layer 3 - Orchestration:    scaffold.py (~1.4k)
-Layer 2 - Backends:         llmclient.py (~2.0k), llmtools.py (~810), hybridir.py (~1.9k)
+Layer 2 - Backends:         llmclient.py (~2.0k), llmtools.py (~880), hybridir.py (~1.9k)
 Layer 1 - Utilities:        chatutil.py (~1.6k), appstate.py (~480), cleanup.py (~300),
                             imagestore.py (~270), textfilestore.py (~190)
 Layer 0 - Foundation:       config.py (~870), chattree.py (~1.3k), sidecarstore.py (~150),
