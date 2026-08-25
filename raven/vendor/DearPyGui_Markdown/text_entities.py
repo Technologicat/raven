@@ -6,7 +6,7 @@ import dearpygui.dearpygui as dpg  # noqa
 from . import CallInNextFrame
 from . import get_text_size
 from .font_attributes import Attribute, Bold, BoldItalic, Default, Font, Italic, H1, H2, H3, H4, H5, H6
-from .line_atributes import Blockquote, List, Separator
+from .line_attributes import Blockquote, List, Separator
 from .text_attributes import Code, Pre, Strike, Underline, Url, render_url_secondary_action_icon
 
 from ...common.gui import utils as guiutils

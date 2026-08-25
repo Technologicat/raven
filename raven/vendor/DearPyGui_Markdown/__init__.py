@@ -116,7 +116,7 @@ class CallWhenDPGStarted:
 
 
 from . import font_attributes
-from . import line_atributes
+from . import line_attributes
 from . import parser
 from . import text_attributes
 from . import text_entities
@@ -219,22 +219,22 @@ class _ConvertedMessageEntity:
                 return font_attributes.Font(self.entity.color,
                                             self.entity.size)
             case parser.MessageEntityBlockquote:
-                return line_atributes.Blockquote(self.entity.depth,
+                return line_attributes.Blockquote(self.entity.depth,
                                                  attribute_connector=self.entity.attribute_connector)
             case parser.MessageEntityUnorderedList:
-                return line_atributes.List(self.entity.depth,
+                return line_attributes.List(self.entity.depth,
                                            attribute_connector=self.entity.attribute_connector,
                                            task=self.entity.task,
                                            task_done=self.entity.task_done)
             case parser.MessageEntityOrderedList:
-                return line_atributes.List(self.entity.depth,
+                return line_attributes.List(self.entity.depth,
                                            attribute_connector=self.entity.attribute_connector,
                                            ordered=True,
                                            index=self.entity.index,
                                            task=self.entity.task,
                                            task_done=self.entity.task_done)
             case parser.MessageEntitySeparator:
-                return line_atributes.Separator
+                return line_attributes.Separator
             case parser.MessageEntityH1:
                 return font_attributes.H1
             case parser.MessageEntityH2:
@@ -295,8 +295,8 @@ class MarkdownText:
             past_point = attribute_points[i - 1] if i != 0 else 0
 
             str_entity = text_entities.StrEntity(clear_text[past_point:point:])
-            if line_atributes.Separator in str_attributes:
-                del str_attributes[str_attributes.index(line_atributes.Separator)]
+            if line_attributes.Separator in str_attributes:
+                del str_attributes[str_attributes.index(line_attributes.Separator)]
                 if len(str(str_entity)) > 0:
                     str_entity = text_entities.StrEntity(str(str_entity).removesuffix('\n'))
                     str_entity.set_attributes(str_attributes)
@@ -307,7 +307,7 @@ class MarkdownText:
                         text_entities.StrEntity('\n')
                     )
                 str_entity = text_entities.StrEntity(' ')
-                str_entity.set_attributes([line_atributes.Separator])  # noqa
+                str_entity.set_attributes([line_attributes.Separator])  # noqa
                 self.text_entity.append(str_entity)
             else:
                 str_entity.set_attributes(str_attributes)

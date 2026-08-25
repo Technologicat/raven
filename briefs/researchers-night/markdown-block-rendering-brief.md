@@ -152,7 +152,11 @@ Plus a `color` field on `List`, plus the two draw calls. Perhaps fifteen to twen
 **Check `Blockquote` for the same defect while in there**, since it is the other `line_atributes` entry that
 draws its own marker and would have the same blindness to `Font`.
 
-### 6. Rename `line_atributes.py`
+### 6. Rename `line_atributes.py` — **done 2026-08-25**
+
+Landed ahead of step 5 rather than riding along with it, at Juha's request. Nine references, not the ten
+measured below (`__init__.py` eight, `text_entities.py` one); zero inside the module, as predicted. Renamed
+through the edit tools rather than `sed`, the diff being small enough to read.
 
 Typo in the vendored filename, inherited. `git mv` to `line_attributes.py`, then
 `sed -i 's/line_atributes/line_attributes/g'` on the two files that reference it. No behaviour change, and

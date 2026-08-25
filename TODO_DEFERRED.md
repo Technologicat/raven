@@ -785,9 +785,10 @@ quietly drifting.
 - Keep it minimal: one violation per rule whose loss would matter, not coverage of the rule set.
 
 The same shape recurred three times on 2026-08-10 — two sweep verdicts reached by grepping Markdown
-vocabulary against a module that switches on HTML tag names, a `line_atributes` typo that makes a grep for
-`attributes` skip one of three sibling modules, and this. **An absence is only evidence if the check could
-have found the thing.** The canary is that rule applied to tooling.
+vocabulary against a module that switches on HTML tag names, a `line_atributes` typo that made a grep for
+`attributes` skip one of three sibling modules (fixed 2026-08-25; the module is `line_attributes.py` now),
+and this. **An absence is only evidence if the check could have found the thing.** The canary is that rule
+applied to tooling.
 
 ## Replace `torchaudio.functional.resample`, and drop torchaudio
 
