@@ -11,6 +11,7 @@ __all__ = ["XDotWidget"]
 import logging
 import threading
 import time
+import uuid
 from typing import Callable, List, Optional, Sequence, Set, Tuple, Union
 
 logger = logging.getLogger(__name__)
@@ -97,6 +98,7 @@ class XDotWidget(gui_animation.Animation):
         `dark_bg_color`: Background color in dark mode (DPG format, [0,255]).
         `light_bg_color`: Background color in light mode (DPG format, [0,255]).
         """
+        self.gui_uuid = str(uuid.uuid4())  # used in GUI widget tags
         self._width = width
         self._height = height
         self._on_hover = on_hover
@@ -138,8 +140,12 @@ class XDotWidget(gui_animation.Animation):
         # Tooltip window for node annotations (e.g. pyan3 tooltips).
         # Created here (before the render loop) so it gets correct z-order
         # (DPG renders windows in creation order; primary window is background).
+        #
+        # The tags are per-instance. They were fixed strings until 2026-08-25, which made a second widget
+        # in one DPG context die on "Alias already exists" - an app holding one never met it, and the first
+        # test to build two did so immediately.
         self._tooltip_window = dpg.add_window(
-            tag="xdot_tooltip_window",
+            tag=f"xdot_tooltip_window_{self.gui_uuid}",
             show=False, modal=False, no_title_bar=True,
             autosize=True, no_move=True, no_resize=True,
             no_scrollbar=True, no_collapse=True,
@@ -150,7 +156,7 @@ class XDotWidget(gui_animation.Animation):
             with dpg.theme_component(dpg.mvAll):
                 dpg.add_theme_style(dpg.mvStyleVar_WindowPadding, 6, 0, category=dpg.mvThemeCat_Core)
         dpg.bind_item_theme(self._tooltip_window, tooltip_theme)
-        self._tooltip_group = dpg.add_group(tag="xdot_tooltip_group",
+        self._tooltip_group = dpg.add_group(tag=f"xdot_tooltip_group_{self.gui_uuid}",
                                             parent=self._tooltip_window)
         self._tooltip_node: Optional[Node] = None  # which node the tooltip is currently showing for
         self._tooltip_hover_start: int = 0  # monotonic_ns when hover on current node began

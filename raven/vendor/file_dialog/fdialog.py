@@ -12,6 +12,7 @@ import psutil
 import textwrap
 import threading
 import time
+import uuid
 from typing import Iterable, Optional, Union
 
 import dearpygui.dearpygui as dpg
@@ -610,7 +611,11 @@ class FileDialog:
         self._ticker = None
         self._ticker_stop = threading.Event()
 
-        self.instance_tag = f"0x{id(self):x}"  # for making unique DPG tags
+        # A UUID rather than `id(self)`: CPython reuses an address once the object it belonged to is
+        # collected, and DPG frees deleted items lazily - so a dialog created after another was dropped
+        # could draw the same number while the old aliases were still registered, which crashes the
+        # process rather than raising. Matches `gui_uuid` in Raven's own widgets.
+        self.instance_tag = str(uuid.uuid4())  # for making unique DPG tags
         self.last_path = default_path  # for returning to last used directory when the dialog is closed and later re-opened
 
         self.PAYLOAD_TYPE = 'ws_' + self.tag
