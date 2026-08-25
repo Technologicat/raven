@@ -1700,44 +1700,44 @@ def render_help_extras(self: helpcard.HelpWindow,
     Called by `HelpWindow` when the help card is first rendered.
     """
     # Chat history
-    dpg_markdown.add_text(f"{self.c_hed}**Chat history**{self.c_end}", parent=gui_parent)
+    dpg_markdown.add_text(f"{self.c_hed}**Chat history**{self.c_end}", parent=gui_parent, wrap=self.content_width)
     g = dpg.add_group(horizontal=True, parent=gui_parent)
     g1 = dpg.add_group(horizontal=False, parent=g)
     dpg_markdown.add_text(f"{self.c_txt}The chat history is **natively nonlinear**. Messages are stored as nodes in a tree. The current chat is the HEAD, plus its ancestor chain up to the system prompt. Continuing the chat adds a new child node below the latest message displayed.{self.c_end}",
-                          parent=g1)
+                          parent=g1, wrap=self.content_width)
     dpg_markdown.add_text(f"{self.c_txt}Rerolling creates a new sibling and sets the HEAD pointer to that. Previous siblings remain stored in the tree. Starting a new chat, or branching the chat, only resets the HEAD pointer.{self.c_end}",
-                          parent=g1)
+                          parent=g1, wrap=self.content_width)
     dpg_markdown.add_text(f"{self.c_txt}Nothing is ever discarded. Where a message has siblings, its arrow buttons step between them, so a rerolled reply can be compared against the one it replaced. Reaching a *different* old chat still needs a graph view of the tree, which is not built yet.{self.c_end}",
-                          parent=g1)
+                          parent=g1, wrap=self.content_width)
     dpg.add_spacer(width=1, height=themes_and_fonts.font_size, parent=g)
 
     # Docs database
-    dpg_markdown.add_text(f"{self.c_hed}**Document database**{self.c_end} (retrieval-augmented generation, RAG)", parent=gui_parent)
+    dpg_markdown.add_text(f"{self.c_hed}**Document database**{self.c_end} (retrieval-augmented generation, RAG)", parent=gui_parent, wrap=self.content_width)
     g = dpg.add_group(horizontal=True, parent=gui_parent)
     g1 = dpg.add_group(horizontal=False, parent=g)
     dpg_markdown.add_text(f'{self.c_txt}You can put documents for the AI to access in {self.c_end}{self.c_hig}{librarian_config.llm_docs_dir}{self.c_end}{self.c_txt}. The path and the accepted file types are configured in **raven/librarian/config.py**.{self.c_end}',
-                          parent=g1)
+                          parent=g1, wrap=self.content_width)
     dpg_markdown.add_text(f'{self.c_txt}Plain text, Markdown, BibTeX, LaTeX, PDF, Word, PowerPoint, OpenDocument and saved web pages are read - the text layer only, so a scanned PDF needs OCR (e.g. **ocrmypdf**) before it can be indexed.{self.c_end}',
-                          parent=g1)
+                          parent=g1, wrap=self.content_width)
     dpg_markdown.add_text(f'{self.c_txt}The documents are search-indexed automatically, and the index is kept up to date. It is stored in {self.c_end}{self.c_hig}{librarian_config.llm_database_dir}{self.c_end}{self.c_txt}. If you ever need to clear it manually, just delete that directory.{self.c_end}',
-                          parent=g1)
+                          parent=g1, wrap=self.content_width)
     dpg_markdown.add_text(f'{self.c_txt}When the {self.c_end}{self.c_hig}**Documents**{self.c_end}{self.c_txt} checkbox in the app is **ON**, the document database is automatically searched, using your latest message to the AI as the search query. The AI can also search it again itself, with a better query, once it has read those results.{self.c_end}',
-                          parent=g1)
+                          parent=g1, wrap=self.content_width)
     dpg_markdown.add_text(f'{self.c_txt}If {self.c_end}{self.c_hig}**Speculation**{self.c_end}{self.c_txt} is **OFF**, any reply for which nothing was retrieved - no document matches, no attachments, no tool results - is marked {self.c_end}{self.c_hig}**[no sources retrieved]**{self.c_end}{self.c_txt}. The AI still answers; the marker reports what was **retrieved**, not whether it was used.{self.c_end}',
-                          parent=g1)
+                          parent=g1, wrap=self.content_width)
     dpg_markdown.add_text(f'{self.c_txt}To improve search result quality, Raven-librarian uses a hybrid method: Okapi BM25 for keywords, and vector embeddings for semantic search. Results are combined with RRF (reciprocal rank fusion).{self.c_end}',
-                          parent=g1)
+                          parent=g1, wrap=self.content_width)
 
     # Tool use (tool-calling)
-    dpg_markdown.add_text(f"{self.c_hed}**Tool use** (tool-calling){self.c_end}", parent=gui_parent)
+    dpg_markdown.add_text(f"{self.c_hed}**Tool use** (tool-calling){self.c_end}", parent=gui_parent, wrap=self.content_width)
     g = dpg.add_group(horizontal=True, parent=gui_parent)
     g1 = dpg.add_group(horizontal=False, parent=g)
     dpg_markdown.add_text(f'{self.c_txt}The AI can search the web (**websearch**), read a page it found (**webfetch**), search your document database (**search_documents**), read one of those in full (**fetch_document**), list what this chat has consulted (**list_consulted_documents**), and ask what time it is (**get_current_time**).{self.c_end}',
-                          parent=g1)
+                          parent=g1, wrap=self.content_width)
     dpg_markdown.add_text(f'{self.c_txt}It decides for itself which to use, if any. The first two need {self.c_end}{self.c_hig}**Internet**{self.c_end}{self.c_txt}, the next three need {self.c_end}{self.c_hig}**Documents**{self.c_end}{self.c_txt}, and the clock is always available. Each checkbox governs its own group, so switching one off never takes the other away.{self.c_end}',
-                          parent=g1)
+                          parent=g1, wrap=self.content_width)
     dpg_markdown.add_text(f'{self.c_txt}One reply may take several rounds of tool calls, up to a configurable ceiling. A long page the AI fetches is filed as an attachment, so reading it does not bury the conversation.{self.c_end}',
-                          parent=g1)
+                          parent=g1, wrap=self.content_width)
 help_window = helpcard.HelpWindow(hotkey_info=hotkey_info,
                                   width=gui_config.help_window_w,
                                   height=gui_config.help_window_h,

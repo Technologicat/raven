@@ -25,6 +25,11 @@ from . import utils as guiutils
 hotkey_new_column = sym("next_column")
 hotkey_blank_entry = env(key_indent=0, key="", action_indent=0, action="", notes="")
 
+# ImGui's default `WindowPadding`, one side. A stand-in: DPG offers no getter for a style var, so the only
+# way to have this by construction rather than by agreement would be to set the padding ourselves. Erring
+# large costs a few pixels of margin; erring small clips text against a card that cannot scroll.
+_WINDOW_PADDING = 8
+
 # Hotkey support
 visible_help_window_instance = None  # fdialog is modal so There Can Be Only One (TM). If needed, could use a list, and check which one has keyboard focus, but that might not always work.
 def helpcard_hotkeys_callback(sender, app_data):
@@ -245,6 +250,14 @@ class HelpWindow:
     height = property(fget=_get_height, fset=_set_height,
                       doc="Height of the help window, in pixels. Read/write. Setting it while the card is up "
                           "leaves the card where it is; call `reposition` to re-center it.")
+
+    def _get_content_width(self) -> int:
+        return self._width - 2 * _WINDOW_PADDING
+    content_width = property(fget=_get_content_width,
+                             doc="How wide text may be before it runs off the card, in pixels. Read-only.\n\n"
+                                 "Pass this as `wrap` when rendering into the card - `dpg_markdown.add_text` "
+                                 "and `dpg.add_text` both leave text unwrapped unless told a width, and the "
+                                 "card has no scrollbar, so an unwrapped line is simply cut off at the edge.")
 
     def _render(self) -> None:
         """Construct the GUI. Called automatically when the window is shown for the first time."""

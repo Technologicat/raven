@@ -2319,7 +2319,19 @@ clusters, as of 2026-07-27:
 
 ## Librarian's help card has no room to describe attachments
 
-*Cluster: discoverability · Cost: ? · Gate: RN2026 · Filed: 2026-08-05 · See also: "Fleet audit: every hotkey discoverable in a tooltip + help card"*
+*Cluster: discoverability · Cost: ? · Gate: RN2026 · Filed: 2026-08-05 · Updated: 2026-08-25 · See also: "Fleet audit: every hotkey discoverable in a tooltip + help card"*
+
+**The horizontal clipping is fixed (2026-08-25); the shape decision below is what remains.** Every
+`dpg_markdown.add_text` in Librarian's `render_help_extras` now passes `wrap=self.content_width`, a new
+read-only property on `HelpWindow` that answers "how wide may text be before it runs off the card". It
+exists on the component rather than in the app because the answer is the card's to give: `_width` is
+private, and every extras renderer would otherwise reach for it and guess the padding separately.
+
+**The same gap is open in the other two apps that render extras** — `raven/xdot_viewer/app.py` (11 calls)
+and `raven/visualizer/app.py` (13), none of them passing `wrap`. Mechanical now that `content_width` exists,
+and worth doing as one sweep rather than three: the calls are a mix of one- and two-line forms, so it is a
+per-site edit rather than a find-replace. Neither has been *reported* clipping, unlike Librarian's — which
+is why they were left rather than swept in the same commit, not because they are correct.
 
 The prose was brought up to date 2026-08-04 — five tools instead of one, the real ingested file types, and
 the two "this is a tech demo" claims gone. **Attachments are still not mentioned at all**, though they are
