@@ -1471,6 +1471,10 @@ with timer() as tim:
                     def start_new_chat_callback() -> None:
                         new_chat_head_node_id = app_state["new_chat_HEAD"]
                         app_state["HEAD"] = new_chat_head_node_id
+                        # The same discontinuity a branch switch is, and a larger one: a sibling switch
+                        # swaps one reply for its alternative, while this drops the whole conversation the
+                        # avatar was in. Started before the rebuild, so the effect covers the wait.
+                        avatar_controller.glitch(config=avatar_record)
                         chat_controller.view.build()
                         dpg.focus_item("chat_field")  # tag  # Focus the chat field for convenience, since the whole point of a new chat is to immediately start a new conversation.
                         # Acknowledge the action in the GUI.
