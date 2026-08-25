@@ -624,7 +624,7 @@ class TestAITurnToolCalls:
         final_head = run_ai_turn(forest, llm_settings, user_head,
                                  on_tools_start=lambda tcs: counters.update(tools_start=counters["tools_start"] + 1),
                                  on_tool_done=lambda nid: counters.update(tool_done=counters["tool_done"] + 1),
-                                 on_tools_done=lambda: counters.update(tools_done=counters["tools_done"] + 1),
+                                 on_tools_done=lambda tcs: counters.update(tools_done=counters["tools_done"] + 1),
                                  on_llm_done=lambda nid: counters.update(llm_done=counters["llm_done"] + 1))
 
         # Walk back from final_head: final assistant -> tool -> first assistant -> user.

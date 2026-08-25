@@ -792,7 +792,7 @@ def _perform_and_store_tool_calls(llm_settings: env,
             on_tool_done(head_node_id)
 
     if on_tools_done is not None:
-        on_tools_done()
+        on_tools_done(assistant_message["tool_calls"])
     return head_node_id
 
 
@@ -984,7 +984,9 @@ def ai_turn(llm_settings: env,
                     If you need an event that triggers when a tool is about to start or has just finished,
                     use `on_call_lowlevel_start` and `on_call_lowlevel_done` instead.
 
-    `on_tools_done`: 0-argument callable.
+    `on_tools_done`: 1-argument callable, with argument `tool_calls: List[Dict]` - the same list
+                     `on_tools_start` received, so that a handler which acted on *which* tools were
+                     called can undo exactly that without stashing it itself.
                      The return value is ignored.
 
                      Called just after the last tool call has completed.
@@ -1366,7 +1368,7 @@ def retry_tool_calls(llm_settings: env,
         if on_tool_done is not None:
             on_tool_done(head_node_id)
     if on_tools_done is not None:
-        on_tools_done()
+        on_tools_done(assistant_message["tool_calls"])
 
     # 4. Continue the AI turn from the rebuilt tool head.
     return ai_turn(llm_settings=llm_settings,

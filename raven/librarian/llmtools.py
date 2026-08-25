@@ -22,6 +22,7 @@ the token budget `fetch_document` has to fit its answer into.
 """
 
 __all__ = ["TOOLS", "TOOL_ENTRYPOINTS", "DOCUMENT_TOOL_NAMES", "NETWORK_TOOL_NAMES",
+           "EXTERNAL_SOURCE_TOOL_NAMES",
            "maybe_tool_names_for_turn",
            "perform_tool_calls",
            "approve_host_for_session",
@@ -185,6 +186,18 @@ TOOLS = [
 DOCUMENT_TOOL_NAMES = frozenset({"search_documents", "fetch_document", "list_consulted_documents"})
 
 NETWORK_TOOL_NAMES = frozenset({"websearch", "webfetch"})
+
+# The tools that reach outside this conversation for material. A frontend can use this to say so - Librarian
+# lights the avatar's "data eyes" while one runs.
+#
+# **The test for membership is "would a scifi AI system show this effect when doing this?"** (Juha,
+# 2026-08-25), which is the right register for a signal whose job is to look like something is happening.
+# It settles the cases quickly: consulting a database or the net, yes; adding two numbers or reading a
+# clock, no - nobody's eyes flicker over 2+2, and a signal that fires for that stops meaning anything.
+#
+# So this is a list to extend deliberately, one tool at a time, rather than a rule to derive from what a
+# tool technically touches.
+EXTERNAL_SOURCE_TOOL_NAMES = NETWORK_TOOL_NAMES | DOCUMENT_TOOL_NAMES
 
 
 # ------------------------------------------------------------------------------------------------

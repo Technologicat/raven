@@ -1381,6 +1381,12 @@ class DPGChatMessage:
                 if node_id is not None:
                     head_node_id = descend(node_id)
                     self.parent_view.chat_controller.app_state["HEAD"] = head_node_id
+                    # Switching branch means the conversation you are looking at was replaced by a different
+                    # one, and the avatar reports that the way this app reports everything else - visually.
+                    # Started before the rebuild rather than after: the rebuild is what takes the time, so
+                    # the effect wants to be up while it happens rather than after it has finished.
+                    self.parent_view.chat_controller.avatar_controller.glitch(
+                        config=self.parent_view.chat_controller.avatar_record)
                     self.parent_view.build(scroll_target_node_id=node_id)
             return navigate_to_sibling_callback
         def make_show_chat_continuation(message_node_id: str) -> Callable:
@@ -3999,9 +4005,18 @@ class DPGChatController:
                 #                 function_name = function_record["name"]
                 #     return tool_call_id, function_name
 
+                def _reaches_outside(tool_calls: List[Dict]) -> bool:
+                    """Whether any of these tools consults something beyond this conversation."""
+                    names = {call.get("function", {}).get("name") for call in tool_calls}
+                    return bool(names & llmclient.EXTERNAL_SOURCE_TOOL_NAMES)
+
                 def on_tools_start(tool_calls: List[Dict]) -> None:
                     if self.gui_updates_safe:
-                        start_turn_data_eyes()
+                        # Only for tools that actually reach outside the conversation. A clock read or an
+                        # arithmetic evaluation answers from nothing, and lighting the avatar for those
+                        # spends a signal whose whole value is that it means something.
+                        if _reaches_outside(tool_calls):
+                            start_turn_data_eyes()
 
                         # # HACK: If websearch is present *anywhere* among the tool calls in this message,
                         # #       light up the web access indicator for the whole tool call processing step.
@@ -4035,8 +4050,8 @@ class DPGChatController:
                         self.view.restore_scroll_after_swap(follow_sample)
                         self.update_context_fill_indicator()  # tool result added -> context grew
 
-                def on_tools_done() -> None:
-                    if self.gui_updates_safe:
+                def on_tools_done(tool_calls: List[Dict]) -> None:
+                    if self.gui_updates_safe and _reaches_outside(tool_calls):
                         # dpg.hide_item(self.web_indicator_widget)
                         stop_turn_data_eyes()
 

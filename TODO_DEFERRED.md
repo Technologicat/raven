@@ -1158,11 +1158,11 @@ The effect says *the system is consulting an external source*. Attachment extrac
 and deliberately not answered, because both are about what the signal should *mean* rather than about
 plumbing:
 
-- **Should RAG indexing light them?** It is literally the system reading external documents, and it has its
-  own INDEXING indicator already. Against: indexing runs in the background at startup and whenever files are
-  dropped in, unattached to any turn — so the eyes would be on for minutes at a stretch with nobody having
-  asked anything, which likely reads as broken rather than as consulting. The question is whether the effect
-  means "reaching outside on your behalf" (indexing does not qualify) or "reaching outside at all" (it does).
+- ~~**Should RAG indexing light them?**~~ **No** (Juha, 2026-08-25). Indexing is the system reading external
+  documents and has its own INDEXING indicator, but it **can run for an hour** on a corpus of long
+  documents — so the eyes would be on, unexplained, for the whole of it, which reads as broken rather than
+  as consulting. That settles the general question too: the effect means *reaching outside on your behalf*,
+  within a turn, not *reaching outside at all*.
 
 - **`get_current_time` lights them today, and consults nothing.** It goes through `on_tools_start` like any
   tool, so a clock read gets the same signal as a web fetch. Harmless, and it dilutes the signal a little.
