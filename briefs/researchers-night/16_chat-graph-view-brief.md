@@ -42,6 +42,28 @@ production client of the widget. `raven-xdot-viewer` is the bonus, not the targe
 
 ## Step zero — `set_graph` has no callers and no tests
 
+> **Done 2026-08-25, and the answer is yes: the door opens.** A chat-shaped `Graph` built in memory — a root,
+> two children, two more under the second — went into `set_graph` and came out rendered, with no GraphViz and
+> no xdot text anywhere. After `zoom_to_fit` the drawlist held exactly the expected fifteen items: five nodes
+> of two shapes each, four edge lines, one background. **So the rest of this brief can be costed on the
+> assumption that "the hard part is already done" is true of this door and not only of the renderer.**
+>
+> Three things came out of the half hour beyond the yes/no:
+>
+> - **Every hook the brief relies on works against a hand-built graph**, not just against a parsed one:
+>   `pan_to_node`, `set_highlighted_nodes`, and `search` (the index is built in `Graph.__init__`, so it needs
+>   no parser). Hit-testing too.
+> - **One defect found and fixed.** `XDotWidget` could not be instantiated twice in one DPG context — its
+>   tooltip window and group took fixed tags, so the second died on "Alias already exists". An app holding one
+>   widget never meets this; the first test to build two met it immediately. Now per-instance, via `gui_uuid`
+>   as Raven's own widgets do.
+> - **The tests are written** — `raven/common/gui/xdotwidget/tests/test_widget.py`, seven of them — which is
+>   the debt item 1 below says is owed regardless of this brief. They are the fixture a chat-shaped graph
+>   needs, so the feature work starts from a graph that is known to render.
+>
+> One measurement worth carrying: **culling is by viewport**, so a freshly-set graph is only partly drawn
+> until something establishes the view. `zoom_to_fit` is what the chat view will want on load.
+
 Checked 2026-08-04. Every production path goes through `set_xdotcode`; `set_graph` has never run outside the
 widget, and has no direct test. (The `set_graph` calls in `tests/test_search.py` are `SearchState`'s method
 of the same name, not the widget's.)
