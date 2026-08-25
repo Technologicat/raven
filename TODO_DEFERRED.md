@@ -3553,6 +3553,43 @@ anchored on the capture. If ooba delivers the call structured instead, close thi
 
 Discovered during the brief-02 Gemma 4 reasoning-channel work (2026-06-05).
 
+## The `calculate` tool takes one expression, and some arithmetic does not fit in one
+
+*Cluster: ? · Cost: M · Gate: none · Filed: 2026-08-25*
+
+`calculate` evaluates a single expression, which is the whole of its safety story — statements are rejected
+by parsing in `eval` mode. That is the right v1, and it has a ceiling: a calculation with intermediate
+quantities has to be folded into one expression, repeating subexpressions, until it is unreadable to the
+model writing it and to the user reading the transcript.
+
+Two routes to multi-step arithmetic, and they differ in what the model has to be taught rather than in what
+they compute (Juha raised the first, 2026-08-25):
+
+- **`unpythonic.syntax.do[]`, with `local[]` and `delete[]`.** Exactly the construct for imperative steps in
+  expression position, and it is reachable: `mcpyrate`'s expander runs on an AST, and `simpleeval.eval`
+  takes `previously_parsed`, so the call site in `llmtools.calculate` is already the one line where an
+  expansion pass would go. See the comment there.
+- **A sequence of plain assignments**, evaluated in order against an accumulating names dict — `x = 3`,
+  then `y = 4`, then `sqrt(x**2 + y**2)`.
+
+**The deciding question is which syntax a language model writes without being argued into it**, and it does
+not obviously favour the more interesting route. No model writes `do[local[x << 3], ...]` unprompted, so the
+tool description would have to teach it, and a tool whose schema needs a syntax tutorial is one the model
+gets wrong under pressure. Plain assignment is syntax every model already writes. Against that, `do[]` keeps
+the "one expression" contract literally true, where assignments mean re-admitting statements and re-deciding
+what that lets in.
+
+**Both widen the sandbox, and by more than they look.** The allowed-names tables are the whole of what
+`calculate` can reach; expanded `do[]` is no longer arithmetic but calls into unpythonic's runtime, so those
+helpers would have to be admitted, and assignment needs `simpleeval`'s assignment support switched on.
+Whichever is chosen, the "what is not on the list is unreachable" property has to be re-established rather
+than assumed — it is the reason the tool is safe to offer at all.
+
+Worth knowing where the idea came from, since it is a pattern rather than a one-off: **a project shipping
+macros as its *plugin authors'* interface while its own code stays macro-free** — Salvador E. Tropea's
+[KiBot](https://github.com/INTI-CMNB/KiBot), which is `mcpyrate`'s one known downstream user. Raven has no
+plugin surface today, so this tool is the only concrete case in sight.
+
 ## Reconsider the webfetch allowlist default: ship deny-by-default?
 
 *Cluster: ? · Cost: ? · Gate: RN2026 for the demo config, 0.2.9 for the shipped default · Filed: 2026-06-05*
