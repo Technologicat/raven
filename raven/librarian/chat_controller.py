@@ -1394,6 +1394,10 @@ class DPGChatMessage:
                 head_node_id = descend(message_node_id)
                 if head_node_id is not None:
                     self.parent_view.chat_controller.app_state["HEAD"] = head_node_id
+                    # Same rationale as a branch switch and a new chat: the conversation on screen is
+                    # replaced by a different one, and the avatar reports the discontinuity.
+                    self.parent_view.chat_controller.avatar_controller.glitch(
+                        config=self.parent_view.chat_controller.avatar_record)
                     self.parent_view.build()  # let it scroll to end
             return show_chat_continuation_callback
 
@@ -3588,7 +3592,19 @@ class DPGChatController:
         #
         # It also stands in for the exact figure when the backend never answers, which is the case that used
         # to leave the readout stuck at the immediate count until HEAD moved.
-        if self.gui_updates_safe:
+        # Only *say* we are reading if there is something to read. This runs on the idle prefill after every
+        # reply, and the counting below happens either way - so signalling it unconditionally lit READING and
+        # the avatar's data eyes for a moment on every turn, including in chats with no attachments at all.
+        # Reported from the running app 2026-08-25: "a stray data eyes light-up after the model replied".
+        #
+        # `sidecar_text_if_extracted` is the question asked without paying for the answer, which is what
+        # makes this affordable here: `None` means not extracted yet.
+        reading_something = any(textfilestore.sidecar_text_if_extracted(part["text_file"]["url"]) is None
+                                for message in history
+                                for part in message.get("content", [])
+                                if isinstance(part, dict) and part.get("type") == "text_file")
+
+        if reading_something and self.gui_updates_safe:
             if self.indicator_glow_animation is not None:
                 self.indicator_glow_animation.reset()  # start a new pulsation cycle
             dpg.show_item(self.attachment_read_indicator_widget)  # tag
@@ -3599,7 +3615,7 @@ class DPGChatController:
         try:
             estimate, estimate_is_exact = llmclient.count_branch_tokens(self.llm_settings, self.datastore, task_env.head_node_id)
         finally:
-            if self.gui_updates_safe:
+            if reading_something and self.gui_updates_safe:
                 dpg.hide_item(self.attachment_read_indicator_widget)  # tag
                 self.avatar_controller.stop_data_eyes(config=self.avatar_record)
 
