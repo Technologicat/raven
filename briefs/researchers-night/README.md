@@ -105,6 +105,156 @@ What was named as still open, at the point of naming:
   one piece of demo *correctness* that got named by hand tonight, which is not the same as it being the
   worst one; that is what the pass is for.
 
+#### The pass, run 2026-08-25
+
+Decided with Juha the following morning, over the `Gate: RN2026` items in `TODO_DEFERRED.md`, the briefs in
+this folder, and the 2026-07-28 list in `TODO.md`. **This subsection supersedes that list where they
+disagree**; the July one is left in place because its *reasoning* is still the reasoning.
+
+**What changed underneath it.** Phase 1 was framed around "RAG access via tool-call", called there the
+largest item and the only new construction — it shipped on **2026-07-29** (`TODO.md:704`). Reranking was
+measured and rejected on 08-06. So phase 1 is now repair work throughout, and it is smaller than the July
+framing reads.
+
+**The build order: cheapest first, in three bands** (Juha, 2026-08-25). The reasoning is not that the small
+items matter more — it is that finishing them *shortens the list*, and a shorter list is one whose remainder
+can actually be seen. It also maximizes what is done if the four weeks run out early, since the yield
+question at an exhibit is "what at least landed", not "what was started".
+
+**One constraint on it, and it is the only one:** the graph view must not fall behind `crt`. It is the
+largest item and the second-most demo-visible, and its own step zero sits in band 1 precisely so the risk is
+known before band 3 begins.
+
+**Band 1 — quick wins.** Hours each, and every one of them removes a line from this list.
+
+1. **Block-level Markdown, step 1** — `markdown-block-rendering-brief.md`, and **the single highest value
+   per hour on the list**. Qwen emits ATX headings and fenced code blocks constantly and neither renders;
+   the brief found both barriers to be in Raven's own code, and threading a colour through
+   `MarkdownText.__init__` instead of wrapping every paragraph in `<font>` fixes headings outright,
+   streaming included. The remaining steps are band 2.
+2. **Brief 16's step zero** — half an hour, and it is what de-risks band 3. `XDotWidget.set_graph` has no
+   callers and no tests; hand-build a small `Graph`, render it. It either confirms the estimate or changes
+   the plan while there is still time to change it.
+3. **Make `chattree`'s `save` atomic** — temp file, `fsync`, `os.replace`.
+4. **The help card's missing `wrap=`** — the horizontal clipping, nothing else.
+5. **`--qr`**, the "Get Raven" overlay.
+6. **The calculator tool**, if it is as small as its item claims (~a page with `simpleeval`).
+7. **The simulated glitch on branch switch** — see below; no new construction, and it is the cheapest of
+   the three impressiveness items.
+
+**Band 2 — a session each.**
+
+8. **The thinking trace: collapsed by default, with the cloud pulsating while the model thinks** —
+   `TODO.md:598`. Demo *correctness* by the argument already recorded there, and Juha's reason for keeping
+   it in: hidden thinking is what people now expect from an LLM system. The token/time readout in the same
+   item is the optional third.
+9. **The turn-sequencing race with the abortable prefill.**
+10. **The STT silence level / autostop GUI** — see below for why it is on the path.
+11. **Block-level Markdown, the remaining steps** — the single-newline split, which is the barrier fenced
+    code and multi-line lists are behind.
+
+**Band 3 — the large ones.**
+
+12. **The graph view** (brief 16).
+13. **`crt-display`.**
+14. **`atmospheric-dust`.**
+
+And the two whose detail belongs with the ordering rather than in it:
+
+- **The simulated glitch on branch switch** (`TODO.md:737`, band 1) — in band 1 because none of it is new
+  construction. The filter exists (`postprocessor.digital_glitches`) and the chain is reconfigurable on the
+  fly, so the job is: read the chain Librarian loads at startup, insert one extra filter, and put the chain
+  back. That is also the whole of what `TODO.md:737` means by "think through interaction with the user's
+  postprocessor config".
+  - **How long it runs is a call to make by looking at it** (Juha, 2026-08-25). "For the duration of the
+    switch" is the starting point, not the spec, and it wants clamping at both ends: a **floor** somewhere
+    in the 300–500 ms range, because a fast switch would otherwise flash something nobody can see, and a
+    **ceiling**, because glitching for too long stops reading as artistic and starts reading as broken.
+    - Which makes the effect's duration its own, merely *triggered* by the switch: the restore runs off a
+      timer rather than off the switch completing.
+  - **Tune from `raven/avatar/assets/settings/glitchyholo.json`**, which runs this filter as a continuous
+    ambient effect. A branch switch wants it *more* prominent than that — and the knob runs backwards:
+    `unboost` is the probability profile, and **higher makes glitches rarer and fewer**
+    (`postprocessor.py:1666`, and the `rand()**unboost` at `:1683`). `glitchyholo` sits at `10.0` against
+    the filter's own default of `4.0`, so the flourish wants a number *below* both, not above.
+- **`atmospheric-dust`** (band 3, last) — still the slack in the schedule, but **wanted rather than merely
+  tolerated** (Juha): a significant wow factor, and self-contained enough to be a safe last item. The 08-05
+  ordering behind 16 stands.
+
+Notes on four of the band-1 entries, each of which is smaller than the thing it is a piece of:
+
+- **The calculator tool** (`Gate: calculator RN2026`) — in *if it is as small as the item says* (~a page
+  with `simpleeval`). A model doing arithmetic badly in front of an audience is a visible failure and this
+  is the one built-in that removes it. If it turns out not to be a page, it drops out rather than moving
+  bands.
+- **`--qr`**, the "Get Raven" overlay. Cost S, and the only item on the list whose whole purpose is the
+  event.
+- **Atomic `save`** is deliberately *half* of the autosave item. The **cadence** is not being opened here —
+  it couples to datastore scaling, and that is a design question, not a four-week one. Writing to a temp
+  file, `fsync`, then `os.replace` is independent of whatever cadence is chosen later, and it reduces the
+  blast radius of the current once-per-session write on its own.
+- **The help card's missing `wrap=`** is likewise half of its item: the horizontal clipping and nothing
+  else. The card's *shape* decision stays off the path.
+
+**Accepted risk, with a workaround rather than a fix: the renderer dropping text.** The `Gate: RN2026` item
+stays open and is *not* scheduled — there is no repro, the diagnosis points at the font atlas, and Juha's
+reading is that it is a pharaoh's curse on the session rather than on the run: a session that renders
+correctly goes on rendering correctly. **So the operational answer on the night is to restart Librarian
+until it comes up clean**, which is cheap and needs nobody to have fixed anything. Look at it if the atlas
+work happens for another reason.
+
+**Cut, each for a stated reason** — this is the half that would otherwise be re-decided from scratch:
+
+- **Wake-word input** (`TODO.md:625`) — pushed past the event. Wanted in the lab, and later this year is
+  fine. It needs continuous capture fanned out to three consumers plus two interaction styles tested against
+  real strangers, which is not a four-week item alongside the rest.
+- **The STT input-language selector** (`TODO.md:617`) — off the path. Raven is English-only for now and
+  language selection is future expansion. Note the mixed-audience argument in that item is *true*, and is
+  answered on the night by the operator asking visitors who want to speak to the system to ask in English —
+  by instruction rather than by a control, which is why cutting the control costs nothing this year.
+- **A file-type icon set of our own** (Cost M) — deferred. The file dialog barely appears on stage.
+- **Advertising drag-and-drop**, and **the help card's shape decision** — deferred. Both are discoverability,
+  and an open house has an operator standing next to the machine.
+
+**The prompt viewer sits after band 3, and only if time remains** (Juha, 2026-08-25 — asked and answered
+during the pass). The transparency argument for it is real, but **the graph view answers the same question
+better**: asked to talk about LLMs with an audience, that is what Juha reaches for first. And its other
+half is that it is a debugging feature for the maintainers — which is a good reason to build it and a poor
+reason to build it *now*, two weeks after a run of power-multiplier work. Time to switch gears.
+
+It is pointed at here rather than merely left in place because the risk to it is real but misidentified: it
+lives in `TODO.md` → *Librarian → Chat UI* ("Show the raw prompt"), `[High]`, with its decisions taken —
+**not in `TODO_DEFERRED.md`**, so what threatens it is not the hydra but the other failure mode, that
+nothing in the workflow makes anyone open `TODO.md`. This pointer is the fix. It does not need a brief; the
+sizing that kept it out of one was re-checked on 2026-08-25 and holds.
+
+**Two premises from the July list that no longer bind:**
+
+- **VRAM is not a constraint** (Juha). The system ran last year on 24 + 8 GB; this year it is 24 + 16 GB.
+  The instruction to re-run `investigations/vram/avatar_footprint.py` after `crt` and `dust` land is
+  therefore a curiosity, not a gate.
+- **Phase 3 does not need a week.** This is an open house rather than a demo presentation, so **one day of
+  checking that everything works is enough, and even that is generous.** The July note that phase 3 "always
+  gets eaten" was written for a schedule that no longer has that shape.
+
+**The STT silence level / autostop GUI is on the path** (`TODO.md:614`; raised as unsettled during the pass,
+decided by Juha the same day). **Speech input is new this year** — last year the operator typed the
+visitors' questions in — so a visitor talking to Aria directly is a first outing in a room whose noise floor
+nobody can predict, and that is exactly the case the item was filed for: the threshold has to be tunable
+*in the room, on the day*, from a control rather than from a config file.
+
+**And this is what settles the language question rather than the selector doing it.** The operator asks
+visitors who want to speak to the system directly to ask in English. That covers the mixed-audience case
+the cut selector was for, costs nothing, and is available on the night whatever else does or does not
+land.
+
+**And one item was misread during the pass, worth recording so it is not misread again.** The "avatar
+branch-switch glitch" in `TODO.md:45` is not a defect awaiting a filing — it is `TODO.md:737`, a *wanted*
+digital-glitch effect on branch switch, scoped there as a scripting task over postprocessor filters that
+already exist, and treated in `briefs/design/product-identity-sketch.md:241` as the first concrete claim of
+the aesthetic direction. It belongs beside `crt` and `dust` as impressiveness work, and is plausibly the
+cheapest of the three.
+
 ### Two of these are power multipliers, and it is worth naming the category
 
 **All of it has landed** — drag-and-drop 2026-08-10, brief 15 on 08-12, the `FileDialog` keyboard brief on
