@@ -501,7 +501,12 @@ llm_line_wrap_width = 160  # Raven-minichat: text wrapping in live update.
 gui_config = env(  # ----------------------------------------
                  # GUI element sizes, in pixels.
                  main_window_w=1920, main_window_h=1040,  # The default size just fits onto a 1080p screen in Linux Mint.
-                 help_window_w=1700, help_window_h=1000,  # The help content is static, these values have been chosen to fit it.
+                 # The help content is static, so these are chosen to fit it. The height went 1000 -> 1030 when
+                 # the prose started wrapping instead of being clipped at the right edge: a long line that used
+                 # to occupy one row now occupies two or three. There is not much left to give - `main_window_h`
+                 # is 1040, and the card has to fit inside the viewport - so the next addition of any size needs
+                 # the shape decision rather than another thirty pixels.
+                 help_window_w=1700, help_window_h=1030,
                  # The AI-disclosure label below the chat. Two lines' worth of height, because the
                  # disclosure states two separate things (that the interlocutor is an AI, and that its
                  # output needs checking) and does not fit on one line at the default window width.
