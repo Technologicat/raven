@@ -544,8 +544,10 @@ index forever, and anyone who installed it keeps a package that is no longer the
 this must land before the first upload, and it is cheap only while that is still true.
 
 Raised in priority by Juha, 2026-08-14, on noticing the name had begun leaking into runtime code: the
-planned `--qr` overlay reads `importlib.metadata.metadata("raven-visualizer")`, and every such call is
-another site that has to be found later.
+`--qr` overlay reads `importlib.metadata.metadata("raven-visualizer")`, and every such call is another site
+that has to be found later. **That one is no longer hypothetical** — it shipped 2026-08-25 as
+`raven.common.gui.qroverlay._DISTRIBUTION`, which is at least a single named constant rather than a literal
+at the call site.
 
 **The trap: `raven-visualizer` is also the console script, and that must not change.** The app is *called*
 Raven-visualizer, and the name appears throughout `README.md`, `raven/common/logsetup.py`,
@@ -636,44 +638,6 @@ A cheap partial fix exists and was **not** taken: mapping `note` to the large `d
 would remove the commonest blurry case, at the cost of a text file and a PDF becoming indistinguishable.
 That is trading one visible wrongness for another, in a feature whose whole point is telling files apart by
 looking, and the real set is close enough that it is not worth spending the distinction.
-
-## `--qr`: a "Get Raven" QR code overlay for demoing at an exhibit
-
-*Cluster: ? · Cost: S · Gate: RN2026 · Filed: 2026-08-14*
-
-A CLI flag for the GUI apps that puts a short line of text — "Get Raven", or something better — and a QR
-code for `https://github.com/Technologicat/raven` in a corner of the window. A visitor watching a demo can
-point a phone at it and read about the project later, which is the whole point: at an exhibit the app is
-seen for a minute by someone who will not be writing down a URL. **Missing at Researchers' Night 2025**,
-which is how the gap was noticed. Raised by Juha, 2026-08-14.
-
-Off by default and demo-only, so it costs a flag and nothing else in normal use.
-
-Three things worth settling before building it:
-
-- **One overlay, six apps.** This wants the shape `raven.common.gui.filedrop` already has — a shared
-  component each app opts into with one call — rather than a per-app implementation. That is also what
-  keeps the text and placement identical across the constellation, which matters when several apps are
-  running side by side at a stand.
-- **Generate it at runtime from the project's own metadata**, decided 2026-08-14, rather than shipping a
-  pre-generated PNG. The URL already has a single source of truth — `[project.urls] Repository` in
-  `pyproject.toml`, currently `https://github.com/Technologicat/raven` — and it is readable from the
-  installed package without adding a constant anywhere:
-
-  ```python
-  # -> "Repository, https://github.com/Technologicat/raven"; split on ", "
-  importlib.metadata.metadata("raven-visualizer")["Project-URL"]
-  ```
-
-  (Note the distribution name is `raven-visualizer`, not `raven`.) A baked-in PNG would be a second copy of
-  the URL that nothing keeps honest, and asset regeneration is a step someone will forget. The encoder is
-  then a real dependency: neither `qrcode` nor `segno` is installed (checked 2026-08-14) — `segno` is pure
-  Python with no dependencies, `qrcode` leans on Pillow, which we already ship. Remember the CI install
-  list is hand-maintained, so a runtime dependency goes in `pyproject.toml` *and* in
-  `.github/workflows/requirements-ci.txt` if any test reaches it.
-- **Where it goes without colliding.** The corners are not free — the scroll-end flasher uses the top and
-  bottom of scrollable panels, and Librarian has the avatar, the jump-to-latest pill and the backend-status
-  row. Pick per app, or pick a corner nothing else claims in any of them.
 
 ## The semantic map's mouse interaction deserves a UX pass
 

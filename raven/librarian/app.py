@@ -20,6 +20,8 @@ parser.add_argument('--backend-url', metavar='URL', default=None,
 parser.add_argument('--server-url', metavar='URL', default=None,
                     help='Raven server to talk to, overriding the configured one; e.g. http://localhost:5100. '
                          'The other endpoint this app depends on, and the other one worth pointing elsewhere.')
+parser.add_argument('--qr', action='store_true',
+                    help='show a "Get Raven" QR code in a corner of the window, for demoing at an exhibit')
 opts = parser.parse_args()
 
 import logging
@@ -77,6 +79,7 @@ with timer() as tim:
     from ..common.gui import helpcard
     from ..common.gui import messagebox
     from ..common.gui import filedrop
+    from ..common.gui import qroverlay
     from ..common.gui import tooltip as gui_tooltip
     from ..common.gui import utils as guiutils
     from ..common.gui.vumeter import DPGVUMeter
@@ -2258,6 +2261,9 @@ dpg.show_viewport()
 # Attach files dragged in from the file manager, exactly as the attach button does. Installed right after
 # `show_viewport` because that call is what makes DPG's window reachable through GLFW on this thread.
 #
+if opts.qr:
+    qroverlay.install()
+
 # One rule rather than one per kind, because a drop mixing an image and a document is a *supported* attach
 # and the router rejects drops that straddle two rules. Routing between the two kinds is `_attach_callback`'s
 # job anyway — it already does it for the file browser, including the text-only-model gate on images.

@@ -38,6 +38,8 @@ parser.add_argument('--log', metavar='PATH', default=None,
 parser.add_argument('--log-level', default='INFO',
                     choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
                     help='root logger level (default: INFO)')
+parser.add_argument('--qr', action='store_true',
+                    help='show a "Get Raven" QR code in a corner of the window, for demoing at an exhibit')
 args = parser.parse_args()
 
 import logging
@@ -63,6 +65,7 @@ from ..common.gui import utils as guiutils
 from ..common.gui import helpcard
 from ..common.gui import messagebox
 from ..common.gui import filedrop
+from ..common.gui import qroverlay
 from ..common.gui import animation as gui_animation
 from ..common import utils as common_utils
 from ..vendor.file_dialog.fdialog import FileDialog
@@ -1794,6 +1797,9 @@ def main() -> int:
     dpg.set_exit_callback(_gui_cancel_tasks)
     dpg.set_viewport_vsync(True)
     dpg.show_viewport()
+
+    if args.qr:
+        qroverlay.install()
 
     # Accept an image folder dragged in from the file manager, same effect as the open dialog. Installed
     # right after `show_viewport` because that call is what makes DPG's window reachable through GLFW on

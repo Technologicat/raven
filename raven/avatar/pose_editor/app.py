@@ -60,6 +60,8 @@ parser.add_argument('--log', metavar='PATH', default=None,
 parser.add_argument('--log-level', default='INFO',
                     choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
                     help='root logger level (default: INFO)')
+parser.add_argument('--qr', action='store_true',
+                    help='show a "Get Raven" QR code in a corner of the window, for demoing at an exhibit')
 args = parser.parse_args()
 
 import logging
@@ -104,6 +106,7 @@ with timer() as tim:
     from ...common.gui import keyboardmark
     from ...common.gui import messagebox
     from ...common.gui import filedrop
+    from ...common.gui import qroverlay
     from ...common.gui import utils as guiutils
     from ...common.image import codec
     from ...vendor import DearPyGui_Markdown as dpg_markdown  # https://github.com/IvanNazaruk/DearPyGui-Markdown
@@ -1527,6 +1530,9 @@ dpg.show_viewport()
 # dialogs. Installed right after `show_viewport` because that call is what makes DPG's window reachable
 # through GLFW on this thread.
 #
+if args.qr:
+    qroverlay.install()
+
 # The character rule tests for an alpha channel rather than for an image extension, because that is what the
 # loader requires — `avatarutil.torch_load_rgba_image` rejects an image without one. So a photo dropped here
 # lands in the rejection dialog naming what this app takes, instead of in a traceback from the loader.

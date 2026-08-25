@@ -26,6 +26,8 @@ parser.add_argument('--server-url', metavar='URL', default=None,
 parser.add_argument('--log-level', default='INFO',
                     choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
                     help='root logger level (default: INFO)')
+parser.add_argument('--qr', action='store_true',
+                    help='show a "Get Raven" QR code in a corner of the window, for demoing at an exhibit')
 opts = parser.parse_args()
 
 import logging
@@ -75,6 +77,7 @@ with timer() as tim:
     from ...common.gui import keyboardmark
     from ...common.gui import messagebox
     from ...common.gui import filedrop
+    from ...common.gui import qroverlay
     from ...common.gui import utils as guiutils
     from ...common.image import codec
     from ...common import bgtask
@@ -1777,6 +1780,9 @@ dpg.show_viewport()
 # This app has two image slots and GLFW gives no way to tell them apart by gesture: its drop callback fires
 # only on release, with no drag-enter/over event, so nothing can light up a drop zone while a drag is in
 # flight and there is no zone to aim at. The image itself settles it instead, and the rule order is the
+if opts.qr:
+    qroverlay.install()
+
 # mechanism — first match wins, so *transparency*, not merely an alpha channel, is what routes to the
 # character slot. A character is a cutout; a backdrop is a full frame, and one exported as RGBA has an alpha
 # channel with nothing transparent in it, so testing for the channel would swallow every such backdrop.

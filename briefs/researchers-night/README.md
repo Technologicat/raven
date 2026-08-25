@@ -137,7 +137,7 @@ known before band 3 begins.
    the plan while there is still time to change it.
 3. **Make `chattree`'s `save` atomic** — temp file, `fsync`, `os.replace`.
 4. **The help card's missing `wrap=`** — the horizontal clipping, nothing else.
-5. **`--qr`**, the "Get Raven" overlay.
+5. ~~**`--qr`**, the "Get Raven" overlay.~~ **Done 2026-08-25**, in all six GUI apps.
 6. **The calculator tool**, if it is as small as its item claims (~a page with `simpleeval`).
 7. **The simulated glitch on branch switch** — see below; no new construction, and it is the cheapest of
    the three impressiveness items.

@@ -26,6 +26,8 @@ parser.add_argument('--log', metavar='PATH', default=None,
 parser.add_argument('--log-level', default='INFO',
                     choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
                     help='root logger level (default: INFO)')
+parser.add_argument('--qr', action='store_true',
+                    help='show a "Get Raven" QR code in a corner of the window, for demoing at an exhibit')
 args = parser.parse_args()
 
 import logging
@@ -62,6 +64,7 @@ with timer() as tim:
     from ..common.gui import keyboardmark
     from ..common.gui import messagebox
     from ..common.gui import filedrop
+    from ..common.gui import qroverlay
     from ..vendor import DearPyGui_Markdown as dpg_markdown
     from ..vendor.file_dialog.fdialog import FileDialog
 
@@ -844,6 +847,9 @@ def main() -> int:
     dpg.set_viewport_resize_callback(_resize_gui)
     dpg.set_exit_callback(_gui_shutdown)
     dpg.show_viewport()
+
+    if args.qr:
+        qroverlay.install()
 
     # Accept graph files dragged in from the file manager, same effect as the open dialog. This goes right
     # after `show_viewport` because that call is what makes DPG's window reachable through GLFW on this

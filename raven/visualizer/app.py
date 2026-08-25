@@ -29,6 +29,8 @@ parser.add_argument('--server-url', metavar='URL', default=None,
                     help='Raven server to talk to, overriding the configured one; e.g. http://localhost:5100. '
                          'Optional here — the importer loads NLP and embedding models locally when no server '
                          'answers — so pointing this at nothing is how to exercise that fallback.')
+parser.add_argument('--qr', action='store_true',
+                    help='show a "Get Raven" QR code in a corner of the window, for demoing at an exhibit')
 opts = parser.parse_args()
 
 import logging
@@ -89,6 +91,7 @@ with timer() as tim:
     from ..common.gui import helpcard
     from ..common.gui import messagebox
     from ..common.gui import filedrop
+    from ..common.gui import qroverlay
     from ..common.gui import tooltip as gui_tooltip
     from ..common.gui import utils as guiutils
 
@@ -1850,6 +1853,9 @@ dpg.show_viewport()
 # The two kinds land in different places by their nature: a dataset is something to *open*, and only one can
 # be open, so several at once is an error rather than a choice. BibTeX is input to the importer, which takes
 # any number, so a dropped set opens the importer window with them already filled in.
+if opts.qr:
+    qroverlay.install()
+
 filedrop.install(filedrop.make_router([filedrop.DropRule(matches=filedrop.by_extension(".pickle"),
                                                          handler=lambda paths: open_file(paths[0]),
                                                          label="a dataset (.pickle)",
