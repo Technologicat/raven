@@ -6,6 +6,12 @@ from ...common.gui import utils as guiutils
 
 from . import CallInNextFrame
 
+__all__ = ["set_font_registry", "set_add_font_function",
+           "math_round",
+
+           "AttributeConnector",
+           "Attribute", "LineAttribute", "FontAttribute", "HoverAttribute"]
+
 font_registry = 0
 add_font = dpg.add_font
 

@@ -14,6 +14,21 @@ import mistletoe
 
 from .attribute_types import AttributeConnector
 
+__all__ = ["MessageEntity",
+
+           "MessageEntityFont",
+           "MessageEntityBold", "MessageEntityItalic", "MessageEntityStrike", "MessageEntityUnderline",
+           "MessageEntitySpoiler",
+           "MessageEntityBlockquote",
+           "MessageEntityCode", "MessageEntityPre",
+           "MessageEntityTextUrl", "MessageEntityUrl", "MessageEntityEmail",
+           "MessageEntityList", "MessageEntityUnorderedList", "MessageEntityOrderedList",
+           "MessageEntitySeparator",
+           "MessageEntityH1", "MessageEntityH2", "MessageEntityH3",
+           "MessageEntityH4", "MessageEntityH5", "MessageEntityH6",
+
+           "parse"]
+
 
 @dataclass(kw_only=True)
 class MessageEntity:

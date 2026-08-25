@@ -4,6 +4,14 @@ import traceback
 
 from .attribute_types import Attribute, FontAttribute
 
+__all__ = ["parse_color",
+
+           "Font",
+           "Default", "Bold", "Italic", "BoldItalic",
+           "H1", "H2", "H3", "H4", "H5", "H6",
+
+           "set_font"]
+
 
 def parse_color(color: str | list | tuple) -> list[int, int, int, int]:
     '''Normalize a colour into RGBA, accepting every spelling a `<font color=...>` attribute may carry.

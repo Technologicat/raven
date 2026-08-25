@@ -10,6 +10,18 @@ import dearpygui.dearpygui as dpg
 # the renderer its fonts: `setup_markdown` calls `set_font_registry`, `set_add_font_function` and
 # `set_font`, which is how a size Raven has not loaded yet gets loaded on demand.
 
+# The setup functions are re-exported from the submodules further down, so that a caller configures the
+# renderer through the package it imported rather than having to know which module owns which setter.
+__all__ = ["get_text_size",
+           "CallInNextFrame", "CallWhenDPGStarted",
+
+           "set_font_registry", "set_add_font_function", "set_font", "set_url_secondary_action",
+
+           "wrap_text_entity", "MarkdownText",
+
+           "add_text",
+           "add_text_italic", "add_text_bold", "add_text_bold_italic"]
+
 
 def get_text_size(text: str, *, wrap_width: float = -1.0, font: int | str = 0, **kwargs) -> list[float | int] | tuple[float | int, ...]:
     strip_text = text.strip()
@@ -120,9 +132,9 @@ from . import line_attributes
 from . import parser
 from . import text_attributes
 from . import text_entities
-from .attribute_types import set_font_registry, set_add_font_function  # noqa: F401 -- for export
-from .font_attributes import set_font  # noqa: F401 -- for export
-from .text_attributes import set_url_secondary_action  # noqa: F401 -- for export
+from .attribute_types import set_font_registry, set_add_font_function
+from .font_attributes import set_font
+from .text_attributes import set_url_secondary_action
 
 
 def wrap_text_entity(text: text_entities.StrEntity | text_entities.TextEntity, width: int | float = -1) -> text_entities.LineEntity:

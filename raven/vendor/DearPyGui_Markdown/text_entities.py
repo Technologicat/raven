@@ -11,6 +11,12 @@ from .text_attributes import Code, Pre, Strike, Underline, Url, render_url_secon
 
 from ...common.gui import utils as guiutils
 
+__all__ = ["AttributeController",
+
+           "StrEntity", "TextEntity", "LineEntity",
+
+           "set_default_text_color"]
+
 
 class AttributeController(list[Attribute]):
     dpg_group_theme: int = None

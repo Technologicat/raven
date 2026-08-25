@@ -7,6 +7,10 @@ import dearpygui.dearpygui as dpg
 
 from ...common.gui import utils as guiutils
 
+__all__ = ["set_url_secondary_action", "render_url_secondary_action_icon",
+
+           "Underline", "Strike", "Code", "Pre", "Url"]
+
 
 # --------------------------------------------------------------------------------
 # Raven extension: optional per-URL "secondary action".
