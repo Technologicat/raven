@@ -1446,6 +1446,31 @@ The two are separate style vars rather than one because the distinction is load-
 
 # Drawlists
 
+## A drawlist's children are in slot 2, and slot 1 answers "nothing was drawn"
+
+Measured 2026-08-25, checking whether `XDotWidget.set_graph` renders a hand-built graph.
+`dpg.get_item_children(drawlist, 1)` returns an empty list for a drawlist holding fifteen draw items;
+`slot=2` returns all fifteen. Slots 0 and 3 are empty too.
+
+**The trap is that the wrong slot is indistinguishable from a correct negative.** An empty list reads as
+"the renderer emitted nothing", which is a plausible finding rather than an obvious error — and one worth
+acting on, since it would say a public entry point does not work. It cost a round of diagnosis here, aimed
+at viewport culling and font availability, before the slots were simply enumerated.
+
+So when a count of drawn items comes back zero, **enumerate the slots before believing it**:
+
+```python
+for slot in range(4):
+    print(slot, len(dpg.get_item_children(item, slot) or []))
+```
+
+`raven/common/gui/xdotwidget/tests/test_widget.py` names the constant rather than passing a literal, for
+the same reason.
+
+**The full slot mapping is in DPG's own documentation** (Juha's recollection; the page is not identified
+here). Only slot 2 was measured, so take the rest from upstream rather than from this note — and if you go
+looking, record the page here.
+
 ## A drawlist ignores `pos`, and reports back the position it was asked for
 
 Measured 2026-08-21, while looking for a way to draw a mark around an arbitrary widget. `dpg.add_drawlist`

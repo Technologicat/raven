@@ -73,6 +73,7 @@ commentary in a trailing `(…)`. `·` separates targets. That shape is not deco
 | touch fonts, icons, super/subscripts or `dpg_markdown` | *Font atlas limits* (all of it) |
 | size a drawlist, or build anything that scrolls over a lot of content | *Drawlists* → Never size a drawlist to a scroll extent — it will take the X session down |
 | place a drawn shape at a particular spot inside a window | *Drawlists* → A drawlist ignores `pos`, and reports back the position it was asked for (there is no floating drawlist; reach for a theme or an overlay window) |
+| ask what a drawlist actually drew — counting draw items in a test or a probe | *Drawlists* → A drawlist's children are in slot 2, and slot 1 answers "nothing was drawn" |
 | highlight a widget, or give one an indicator it can be shown and hidden | *Themes* → A theme bound to a container reaches its children, and a child's own theme still applies · *Themes* → A border is drawn inside the item rect, so turning one on moves nothing (`raven.common.gui.keyboardmark`) |
 | build a table, or wonder why a long listing costs frame time | *Tables* → Rows are submitted every frame unless the table clips |
 | fill rows lazily — thumbnails, previews, anything per-row and expensive | *Tables* → To find which rows are on screen, ask a cell — never the row |
