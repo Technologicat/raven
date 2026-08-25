@@ -2327,11 +2327,9 @@ read-only property on `HelpWindow` that answers "how wide may text be before it 
 exists on the component rather than in the app because the answer is the card's to give: `_width` is
 private, and every extras renderer would otherwise reach for it and guess the padding separately.
 
-**The same gap is open in the other two apps that render extras** — `raven/xdot_viewer/app.py` (11 calls)
-and `raven/visualizer/app.py` (13), none of them passing `wrap`. Mechanical now that `content_width` exists,
-and worth doing as one sweep rather than three: the calls are a mix of one- and two-line forms, so it is a
-per-site edit rather than a find-replace. Neither has been *reported* clipping, unlike Librarian's — which
-is why they were left rather than swept in the same commit, not because they are correct.
+**All three apps that render extras are wrapped now** (2026-08-25): Librarian's fifteen calls, and
+`xdot_viewer`'s and `visualizer`'s eleven each. Visualizer's terminology section is two columns side by
+side, so those wrap at half the card rather than all of it.
 
 The prose was brought up to date 2026-08-04 — five tools instead of one, the real ingested file types, and
 the two "this is a tech demo" claims gone. **Attachments are still not mentioned at all**, though they are
