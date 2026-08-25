@@ -664,12 +664,16 @@ def calculate(expression: str) -> str:
     # allowed names, which is what the two tables above are.
     evaluator = simpleeval.SimpleEval(functions=_CALCULATOR_FUNCTIONS, names=_CALCULATOR_NAMES)
     try:
-        # Parsed in `eval` mode first, which is what rejects statements. `simpleeval` does not: measured
-        # 2026-08-25 on 1.0.7, `x = 1` raises nothing, *warns* that the assignment was ignored, and returns
-        # a value - so the model would read back `x = 1 = 1` and take it for a result. A refusal it can act
-        # on is worth more than a number it cannot trust.
-        ast.parse(expression, mode="eval")
-        result = evaluator.eval(expression)
+        # Parsed here rather than left to `simpleeval`, for two reasons. `eval` mode is what rejects
+        # statements - `simpleeval` does not: measured 2026-08-25 on 1.0.7, `x = 1` raises nothing, *warns*
+        # that the assignment was ignored, and returns a value, so the model would read back `x = 1 = 1` and
+        # take it for a result. And handing the tree over as `previously_parsed` saves parsing it twice.
+        #
+        # It is also where an expander would go, should the expression language ever want to be richer than
+        # Python's: `mcpyrate` can expand macros in a tree before `simpleeval` walks it. Not done, and the
+        # reason is neither taste nor feasibility - models are not trained to write macro syntax, so the
+        # feature would go unused by the only caller there is.
+        result = evaluator.eval(expression, previously_parsed=ast.parse(expression, mode="eval").body)
     except Exception as exc:
         # Broad on purpose: `simpleeval` raises a family of its own exceptions plus whatever the arithmetic
         # itself raises (`ZeroDivisionError`, `ValueError` from `sqrt(-1)`, `OverflowError`), and every one
