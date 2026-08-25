@@ -104,6 +104,11 @@ dependencies = [
     # the tree via torchvision and wordcloud; declared because we import it. The floor is the version CI pins
     # and the tree resolves, rather than a feature we need — nothing here uses a recent Pillow API.
     "Pillow>=12.3.0",
+    # `raven.common.gui.qroverlay`, for the `--qr` exhibit overlay. Pure Python with no dependencies of its
+    # own, where `qrcode` pulls in Pillow to rasterize. The overlay wants the module grid, which both offer -
+    # and if an actual image is ever wanted (a poster, a README), segno writes PNG and SVG without Pillow
+    # either, so the choice does not foreclose it.
+    "segno>=1.6.6",
     "dehyphen>=0.3.4",  # server, `sanitize` module
     "sentencepiece>=0.2.2",  # server, `translate` module, needed by some transformers models
     "sacremoses>=0.2.0",  # server, `translate` module, needed by some transformers models
