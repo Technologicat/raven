@@ -704,7 +704,7 @@ Raven builds upon several AI, NLP, statistical, numerical and software engineeri
 - Avatar AI animator: THA3 [[code](https://github.com/pkhungurn/talking-head-anime-3-demo)], [[models](https://huggingface.co/OktayAlpk/talking-head-anime-3/tree/main)], [[tech report](https://web.archive.org/web/20220606125507/https://pkhungurn.github.io/talking-head-anime-3/full.html)].
 - Many more open-weight small, specialized AI models for tasks such as sentiment classification, dehyphenation, and natural language translation; see [`raven.server.config`](raven/server/config.py) for details.
 - Graphical user interface: [DearPyGUI](https://github.com/hoffstadt/DearPyGui/).
-  - "Open"/"Save as" dialog: [file_dialog](https://github.com/totallynotdrait/file_dialog), but customized for Raven, bugs fixed, and some features added (sortable view, overwrite confirmation with animated OK button, ...).
+  - "Open"/"Save as" dialog: [file_dialog](https://github.com/totallynotdrait/file_dialog), but customized for Raven, bugs fixed, and much added on top — full keyboard operation, a thumbnail grid view, find-as-you-type, sortable view, overwrite confirmation with animated OK button, and more. By now most of that tree is ours.
   - Markdown renderer: [DearPyGui-Markdown](https://github.com/IvanNazaruk/DearPyGui-Markdown), but robustified for multithreaded dynamic use (programmatic creation/deletion of MD text widgets, possibly concurrently).
   - Toolbutton icons: [Font Awesome](https://github.com/FortAwesome/Font-Awesome) v6.6.0.
   - Word cloud renderer: [word_cloud](https://github.com/amueller/word_cloud).
