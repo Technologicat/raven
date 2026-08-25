@@ -1345,33 +1345,37 @@ def render_help_extras(self: helpcard.HelpWindow,
     c_selection = f'<font color="{gui_config.plotter_selection_highlight_color}">'
 
     # Legend for table
-    dpg_markdown.add_text(f"{self.c_hed}**Terminology**{self.c_end}", parent=gui_parent)
+    dpg_markdown.add_text(f"{self.c_hed}**Terminology**{self.c_end}", parent=gui_parent, wrap=self.content_width)
+    # The terminology section is two columns side by side, so its text wraps at half the card rather than
+    # at all of it. Halved before the spacer between them is subtracted, which errs narrow - and narrow is
+    # the safe direction here, wrapping a word early where the other way runs text under the next column.
+    column_width = self.content_width // 2
     g = dpg.add_group(horizontal=True, parent=gui_parent)
     g1 = dpg.add_group(horizontal=False, parent=g)
     dpg_markdown.add_text(f"- {self.c_txt}**Current item**: The topmost item **fully** visible in the info panel. The controls of the current item glow slightly.{self.c_end}",
-                          parent=g1)
+                          parent=g1, wrap=column_width)
     dpg_markdown.add_text(f"- {self.c_txt}**Current cluster**: The cluster the current item belongs to. Clusters are auto-detected by a linguistic analysis.{self.c_end}",
-                          parent=g1)
+                          parent=g1, wrap=column_width)
     g2 = dpg.add_group(horizontal=False, parent=g)
     dpg_markdown.add_text(f"- {self.c_txt}**Selection set**: The selected items, {self.c_end}{c_selection}**glowing**{self.c_end}{self.c_txt} in the plotter. As many are loaded into the info panel as reasonably fit.{self.c_end}",
-                          parent=g2)
+                          parent=g2, wrap=column_width)
     dpg_markdown.add_text(f"- {self.c_txt}**Search result set**: The items matching the current search, {self.c_end}{c_search}**glowing**{self.c_end}{self.c_txt} in the plotter.{self.c_end}",
-                          parent=g2)
+                          parent=g2, wrap=column_width)
     dpg.add_spacer(width=1, height=app_state.themes_and_fonts.font_size, parent=g)
 
     # Additional general help
     dpg_markdown.add_text(f"{self.c_hed}**How search works**{self.c_end}",
-                          parent=gui_parent)
+                          parent=gui_parent, wrap=self.content_width)
     dpg_markdown.add_text(f"{self.c_txt}Each space-separated search term is a **fragment**. For a data point to match, **all** fragments must match. Ordering of fragments does **not** matter. The {self.c_end}{c_search}search result{self.c_end}{self.c_txt} and {self.c_end}{c_selection}selection{self.c_end}{self.c_txt} sets are **independent**. {self.c_end}{c_search}Search results{self.c_end}{self.c_txt} live-update as you type.{self.c_end}",
-                          parent=gui_parent)
+                          parent=gui_parent, wrap=self.content_width)
     dpg_markdown.add_text(f'- {self.c_txt}A **lowercase** fragment matches **that fragment {self.c_end}{self.c_hig}case-insensitively{self.c_end}{self.c_txt}**. E.g. *"hydrogen"* matches also *"Hydrogen"*.{self.c_end}',
-                          parent=gui_parent)
+                          parent=gui_parent, wrap=self.content_width)
     dpg_markdown.add_text(f'- {self.c_txt}A fragment with **at least one uppercase** letter matches **that fragment {self.c_end}{self.c_hig}case-sensitively{self.c_end}{self.c_txt}**. E.g. *"TiO"* matches only titanium oxide, not *"bastion"*.{self.c_end}',
-                          parent=gui_parent)
+                          parent=gui_parent, wrap=self.content_width)
     dpg_markdown.add_text(f'- {self.c_txt}You can use regular numbers in place of subscript/superscript numbers. E.g. *"h2so4"* matches also *"H₂SO₄"*, and *"x2"* matches also *"x²"*. {self.c_end}',
-                          parent=gui_parent)
+                          parent=gui_parent, wrap=self.content_width)
     dpg_markdown.add_text(f"{self.c_txt}When the search field is focused, the usual text editing keys are available (*Enter, Esc, Home, End, Shift-select, Ctrl+Left, Ctrl+Right, Ctrl+A, Ctrl+Z, Ctrl+Y*).{self.c_end}",
-                          parent=gui_parent)
+                          parent=gui_parent, wrap=self.content_width)
 help_window = helpcard.HelpWindow(hotkey_info=hotkey_info,
                                   width=gui_config.help_window_w,
                                   height=gui_config.help_window_h,
