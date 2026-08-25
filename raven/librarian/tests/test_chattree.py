@@ -691,6 +691,31 @@ class TestPersistentForestRoundtrip:
         pf = PersistentForest(datastore_file=pathlib.Path(filepath))
         assert len(pf.nodes) == 0
 
+    def test_a_save_that_dies_partway_leaves_the_previous_datastore_intact(self, tmp_path, monkeypatch):
+        """The whole reason the write goes through a temp file.
+
+        Serializing straight into the destination truncates it first, so a process dying anywhere in the
+        dump replaces the entire chat history with a fragment — and the crash that killed it is exactly
+        when that history is most wanted.
+        """
+        filepath = tmp_path / "forest.json"
+        pf = PersistentForest(datastore_file=pathlib.Path(filepath))
+        root = pf.create_node({"role": "system", "content": "hello"}, parent_id=None)
+        pf.save()
+        survivor = filepath.read_text(encoding="utf-8")
+        assert root in survivor, "nothing was saved, so this fixture cannot tell a kept file from a lost one"
+
+        def die_partway(*args, **kwargs):
+            raise RuntimeError("interrupted mid-dump")
+        monkeypatch.setattr(chattree.json, "dump", die_partway)
+
+        pf.create_node({"role": "user", "content": "never persisted"}, parent_id=root)
+        with pytest.raises(RuntimeError):
+            pf.save()
+
+        assert filepath.read_text(encoding="utf-8") == survivor
+        assert list(tmp_path.iterdir()) == [filepath], f"a temp file was left behind: {list(tmp_path.iterdir())}"
+
 
 # ---------------------------------------------------------------------------
 # PersistentForest: image sidecar storage + mark-and-sweep GC

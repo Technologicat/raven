@@ -19,7 +19,9 @@ import copy
 import hashlib
 import io  # we occasionally need one of Jupiter's moons
 import json
+import os
 import pathlib
+import tempfile
 import threading
 import time
 from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Tuple, Union
@@ -1139,9 +1141,19 @@ class PersistentForest(Forest):
     def save(self) -> None:
         """Save the forest to its `datastore_file`, as JSON.
 
+        The write is atomic: readers see either the previous datastore or the new one, never a partial
+        file. An interrupted save therefore costs the session's changes rather than the whole history.
+
         With `autosave=True` (the default), this is called automatically at interpreter exit via `atexit`.
         With `autosave=False`, the caller must invoke this explicitly if persistence is wanted.
         """
+        # Written to a sibling temp file and moved into place, because the obvious form - open the real
+        # file for writing and serialize into it - truncates it as its first act. A process that dies
+        # anywhere in the dump then leaves a fragment where the entire chat history used to be, and the
+        # crash that killed it is exactly when the history is most wanted.
+        #
+        # `os.replace` is atomic only within a filesystem, so the temp file is created in the destination's
+        # own directory rather than in the system temp area, which may be a different mount.
         with self.lock:
             absolute_path = self.datastore_file.expanduser().resolve()
             logger.info(f"PersistentForest.save: Saving datastore to '{str(self.datastore_file)}' (resolved to '{str(absolute_path)}').")
@@ -1149,8 +1161,25 @@ class PersistentForest(Forest):
             directory = self.datastore_file.parent
             common_utils.create_directory(directory)
 
-            with open(absolute_path, "w", encoding="utf-8") as json_file:
-                json.dump(self.nodes, json_file, indent=2)
+            temporary_file = tempfile.NamedTemporaryFile(mode="w",  # noqa: SIM115 -- it *is* entered as a context manager below; the name has to outlive that block so the failure path can find the file to unlink
+                                                         encoding="utf-8",
+                                                         dir=absolute_path.parent,
+                                                         prefix=f"{absolute_path.name}.",
+                                                         suffix=".tmp",
+                                                         delete=False)
+            try:
+                with temporary_file as json_file:
+                    json.dump(self.nodes, json_file, indent=2)
+                    json_file.flush()
+                    os.fsync(json_file.fileno())  # the bytes must be on disk before the name points at them
+                os.replace(temporary_file.name, absolute_path)
+            except BaseException:
+                # Includes KeyboardInterrupt and SystemExit: this runs at interpreter exit, where those are
+                # live possibilities and leaving a stray `chat.json.*.tmp` behind on every one of them would
+                # accumulate in the user's data directory.
+                with contextlib.suppress(OSError):
+                    os.unlink(temporary_file.name)
+                raise
 
             logger.info("PersistentForest.save: All done.")
 

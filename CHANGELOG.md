@@ -121,6 +121,8 @@
 
 *Raven-librarian*
 
+- **a crash while the chat datastore is being written can no longer destroy it.** The save serialized straight into `chat.json`, which truncates the file as its first act — so a process that died anywhere in the write left a fragment where the whole history had been, and a crash is exactly when you want that history. The new file is now written beside the old one and moved into place once it is complete and on disk, so what survives is either the previous save or the new one. Worst case you lose the current session rather than everything.
+
 - **Markdown headings now render as headings in the chat log**, instead of arriving with their `#` markers intact. A heading is a block-level construct, and the chat view used to wrap every paragraph in a colour tag before handing it to the renderer — which makes the whole thing one paragraph, and a heading cannot occur inside one. The colour is passed alongside the text now. Models that organize a long answer under headings are the ones this was costing.
 
 - **the context-fill readout no longer collapses to a fraction of the truth.** A chat with three papers attached, genuinely filling 68% of the window, could show `7%`: the readout takes its exact figure from the LLM backend, and LM Studio's can come back an order of magnitude short for a conversation it has already been asked about. Raven now disbelieves a figure far below its own estimate, and goes on showing the estimate's `~` rather than a confident wrong number.
