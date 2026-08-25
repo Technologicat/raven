@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 # stdlib imports
 import collections
 import threading
-from typing import Callable, Dict, List, Optional
+from typing import Any, Callable
 
 # third-party imports
 import numpy as np
