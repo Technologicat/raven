@@ -551,9 +551,9 @@ prerequisite that has to happen before CC starts. CC runs the verification scrip
 reports findings, then proceeds with implementation based on the actual measured behavior. This
 collapses the verify-then-implement cycle into a single agentic session.
 
-**Backend coordination — CC must ask Juha to start the appropriate server.** VRAM constraint:
-Juha cannot host Qwen on both ooba and LM Studio simultaneously. The test sequence is therefore
-*serial*:
+**Backend coordination — CC must ask the user to start the appropriate server.** VRAM constraint:
+the dev machine cannot host Qwen on both ooba and LM Studio simultaneously. The test sequence is
+therefore *serial*:
 
 1. CC asks Juha to start **ooba** with `--verbose` → run V1 → CC reports findings.
 2. CC asks Juha to **stop ooba and start LM Studio** with `lms log stream` running → run V2 and

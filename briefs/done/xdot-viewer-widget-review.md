@@ -106,8 +106,8 @@ but not from the animation update thread.
 ### Property-style accessors
 Several classes use explicit getter/setter methods where `@property` would be
 more Pythonic. Low priority — consistency within the subsystem matters more
-than matching the broader codebase. If changed, Juha prefers the
-`thing = property(fget=get_thing, ...)` pattern over decorator stacking.
+than matching the broader codebase. If changed, the project's convention is the
+`thing = property(fget=get_thing, ...)` pattern rather than decorator stacking.
 
 ### Parser token types as enum
 Considered, decided against. The string constants are self-documenting, the

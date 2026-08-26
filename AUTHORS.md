@@ -1,6 +1,6 @@
 # Authors
 
-*Last updated for v0.2.5.*
+*Last updated for v0.2.9.*
 
 *Both human as well as AI authors are listed here.*
 
@@ -53,11 +53,32 @@ Anime4K contributors:
 
 - Anime4K-PyTorch. Used under the MIT License.
 
-Claude Opus, 4.5 & 4.6:
+Claude Opus, 4.5 through 5:
+
+Raven has been built as a human-AI collaboration since February 2026, so most of what is
+listed here was co-created rather than written by either party alone; the human review that
+goes with it is credited above. The model versions, in the order they worked on the tree:
+4.5 and 4.6 (February to April 2026), 4.7 (April to May), 4.8 (June to July), 5 (from July).
 
 - `raven.common.gui.xdotwidget`, `raven-xdot-viewer`.
-- Unit tests.
-- Refactoring.
+- Unit tests. The suite grew from a handful of modules to 96, covering the library and
+  utility layers, the shared GUI vocabulary, and the vendored file dialog.
+- Refactoring, including the split of the Visualizer's `app.py` into `annotation`,
+  `app_state`, `entry_renderer`, `info_panel`, `plotter`, `selection` and `word_cloud`.
+- Two new apps: `raven-cherrypick` (image triage) and `raven-conference-timer`.
+- `raven.papers`: arXiv search, identifier parsing, rate-limited metadata and PDF
+  download, and the bibliography converters.
+- Raven-librarian: the scripting surface (`agent`), the tool registry (`llmtools`), the
+  attachment sidecar stores (`sidecarstore`, `imagestore`, `textfilestore`), datastore
+  cleanup (`cleanup`, `cleanup_dialog`), exact token counting (`gguftokenizer`), and the
+  `raven-indexer` CLI.
+- Raven-server: the `webfetch` module.
+- `raven.common`: the audio and speech layer (resampling, STT, TTS datatypes, lipsync,
+  playback), document text extraction (`docextract`), the image layer, and the shared GUI
+  vocabulary — `filedrop`, `filegrid`, `gridnav`, `keyboardmark`, `layout_math`,
+  `qroverlay`, `tablecursor`, `thumbnailgrid`, `tileicons`, `tooltip`.
+- Project documentation: the design briefs, the investigation write-ups, `dpg-notes.md`,
+  and the style guide.
 
 Qwen3-30B-A3B, 2507 and VL:
 

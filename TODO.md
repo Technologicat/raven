@@ -683,7 +683,7 @@ every tier, chosen on measurements rather than reputation.
   - **Reach.** A significant fraction of scientific users are on Claude, and today Raven cannot talk to them at all.
   - **Brand neutrality, as a stated position.** *Bring your own backend* — the same stance Raven takes on NVIDIA versus AMD, where development happens on NVIDIA but nothing in the stack is supposed to *require* it. A local-first research tool that works with exactly one vendor's API shape has made a choice it did not mean to make, and the longer only one shape is supported the more the code quietly assumes it.
 
-  **Testable locally, which is what makes this tractable now**: LM Studio serves an Anthropic-compatible endpoint, so the whole thing can be developed and tested against a local model with no API account. (Juha is on a Max plan — Claude access there is through Claude Code, not the API.)
+  **Testable locally, which is what makes this tractable now**: LM Studio serves an Anthropic-compatible endpoint, so the whole thing can be developed and tested against a local model with no API account. (This project has no Anthropic API account to test against — its Claude access is through Claude Code.)
 
   Where it lands in the code: `llmclient.detect_backend_flavor` already probes by *payload shape* and returns `"lmstudio"` / `"oobabooga"` / `"generic"`, and `backend_flavor` already gates request details at a handful of sites (`_resolve_model_info`, the continue flag, the sampler block). So the seam exists. What is genuinely different about the Anthropic shape, and needs designing rather than switching on:
 

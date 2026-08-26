@@ -783,7 +783,8 @@ adaptive-`k` bracket.
 
 *Access is a governance question, not a technical one.* The abstracts are public by design, but public does
 not imply scrapable, and the hosting site's stance is unknown. The 2024 set came **from the organizers**
-directly, and Juha has a coworker on the ECCOMAS managing board — so the route to ask is short, and the
+directly, and as of 2026 the maintainer has a coworker on the ECCOMAS managing board — so the route to ask
+was short at the time of writing, and the
 answer may well be a bulk export, which is politer than scraping and yields cleaner data than rendering
 pages would. Ask before fetching; do not infer permission from a `robots.txt`.
 

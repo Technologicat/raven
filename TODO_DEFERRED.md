@@ -684,7 +684,7 @@ cause without checking.
 
 What would settle it: `py-spy top --pid <visualizer>` while hovering over a dense region, to see where the
 render thread is actually waiting. Note that needs `kernel.yama.ptrace_scope=0`, which needs a password,
-so Juha has to run the sysctl. If it is GIL contention, the lever is making the tooltip build cheaper
+so the user has to run the sysctl. If it is GIL contention, the lever is making the tooltip build cheaper
 rather than moving it — the existing item *Annotation tooltip help section rebuilt every time (could be
 static with show/hide)* is the obvious first cut, since the help section is identical on every rebuild.
 
