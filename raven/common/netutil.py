@@ -68,6 +68,15 @@ class Abort:
     One handle serves one request. Aborting is permanent, so a handle that has been used is spent.
     """
 
+    # A caller that hands this to a background task writes the handle and the hook that fires it side by
+    # side -- `maybe_abort=Abort(), on_cancel=lambda task_env: task_env.maybe_abort.abort()`. That pair
+    # always travels together, so it is a candidate for factoring, and the tidy version is to make `Abort`
+    # callable so `on_cancel=handle` works with no lambda at all.
+    #
+    # Deliberately not done yet (2026-08-26): only one of the two call sites wants that trivial form, the
+    # other needing a conditional hook, so factoring now would serve one site while giving the class a
+    # second role. **The trigger to revisit is a second site whose hook is the bare `abort`.**
+
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._aborted = False
