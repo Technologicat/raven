@@ -2220,7 +2220,8 @@ def prefill(settings: env,
             tools_enabled: bool = True,
             tool_names: Collection[str] | None = None,
             datastore: chattree.PersistentForest | None = None,
-            calibrate: bool = True) -> env | None:
+            calibrate: bool = True,
+            maybe_abort: netutil.Abort | None = None) -> env | None:
     """Send `history` to the backend generating essentially no output. Returns the `invoke` env, or `None` on failure.
 
     Two purposes, both side effects of submitting the real prompt:
@@ -2241,6 +2242,10 @@ def prefill(settings: env,
     `datastore`: passed through to `invoke` so image attachments in `history` are resolved and counted in the
                  prompt size (see `invoke`). `None` for text-only chats.
 
+    `maybe_abort`: passed through to `invoke`. A prefill is speculative work, so it has no claim on the
+                   backend the moment there is real work to do — pass a handle whenever something might
+                   need it to get out of the way. Abandoning costs only the warming it had not finished.
+
     `calibrate`: passed through to `invoke`. Pass `False` when `history` is a probe rather than a real
                  conversation: a short prompt's `prompt_tokens` is mostly chat-template framing, so the ratio
                  it would imply is far too high for ordinary text.
@@ -2260,7 +2265,13 @@ def prefill(settings: env,
                       tool_names=tool_names,
                       max_tokens=1,
                       datastore=datastore,
-                      calibrate=calibrate)
+                      calibrate=calibrate,
+                      maybe_abort=maybe_abort)
+    except netutil.Aborted:
+        # Not a failure: something with a better claim on the backend asked for this speculative work to
+        # stop. Logged at info, because it is a normal outcome and the estimate stands either way.
+        logger.info("prefill: abandoned; keeping the token estimate")
+        return None
     except Exception as exc:  # noqa: BLE001 -- best-effort; any failure just leaves the estimate in place
         logger.warning(f"prefill: backend prefill failed; keeping the token estimate. Reason {type(exc)}: {exc}")
         return None

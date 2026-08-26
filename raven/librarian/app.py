@@ -860,6 +860,11 @@ def _describe_send_gate() -> str | None:
     A multi-select attaches several documents at once, so every count here can be more than one — and the
     failed case is reported before the pending one, because it is the one the user has to act on.
     """
+    # A turn in flight blocks sending, and is reported first because it is the one condition the user can
+    # do nothing about except wait. Two turns on one branch would interleave their writes to HEAD, and both
+    # would stream into the same view.
+    if "chat_controller" in globals() and chat_controller.is_generating():
+        return "The AI is still writing. Cancel with Ctrl+G, or wait for it to finish."
     n_failed = _count_staged_files(ATTACHMENT_FAILED)
     if n_failed:
         if n_failed == 1:
@@ -873,8 +878,13 @@ def _describe_send_gate() -> str | None:
     return None
 
 
+# What the gate last said, so that polling it every frame costs a comparison rather than a DPG round-trip.
+# `None` means "sending is allowed"; a string is the reason it is not. Starts at a value no reason can
+# equal, so the first refresh always applies.
+_send_gate_reason: str | None | object = object()
+
 def _refresh_send_gate() -> None:
-    """Enable or disable sending, according to the staged documents' states.
+    """Enable or disable sending, according to the staged documents' states and whether a turn is in flight.
 
     A failed attachment blocks rather than being silently dropped: the user chose that document, and sending
     the message without it would answer a question they did not ask. One still being read blocks too, for the
@@ -884,7 +894,11 @@ def _refresh_send_gate() -> None:
     hotkey fires the text field's own callback and never touches the button — so the button is the
     affordance and the callback's own check is the rule.
     """
+    global _send_gate_reason
     reason = _describe_send_gate()
+    if reason == _send_gate_reason:  # nothing to say that is not already on screen
+        return
+    _send_gate_reason = reason
     with guiutils.nonexistent_ok():
         dpg.configure_item("chat_send_button", enabled=(reason is None))  # tag
     chat_send_tooltip.text = reason if reason is not None else f"Send to AI [{_send_key_label()}]"
@@ -1713,6 +1727,10 @@ def update_animations():
     # Which message the per-message hotkeys act on follows the scroll position, and is polled for the same
     # reason the pill is: nothing raises an event when the reader wheels the panel.
     chat_controller.update_current_message_mark()
+    # Whether a turn is in flight gates sending, and is polled for the same reason: the turn starts and
+    # finishes on a background task, which raises nothing this module hooks. The call is a comparison
+    # unless the answer actually changed.
+    _refresh_send_gate()
 
 # --------------------------------------------------------------------------------
 # Built-in help window

@@ -237,6 +237,20 @@ known before band 3 begins.
    is *not* part of this item. It needs its own cancellation, a way to amend a queued message in place
    before it goes, and invalidation whenever the context it was written against changes — reroll, new chat
    or a branch switch.
+
+   **Landed 2026-08-26.** A turn and a prefill are cancelled on opposite policies, and the reason is what
+   each leaves behind: a turn's product is a reply, which keeps its value on the branch it was written for,
+   so a branch switch lets it finish. A prefill's product is a warm cache *for one branch* and is worth
+   nothing off it, so a branch switch abandons it — flick through branches, stop to read one, and the
+   prefill that starts is dropped the moment you move again, leaving the backend free for the question you
+   then type (Juha, 2026-08-26).
+
+   What the deferred item called the abortable prefill turned out to be the smaller half of the fix: the
+   same handle is what finally makes **Cancel work during prompt processing**, which is where most of the
+   wait is on a long chat and where the button had always been inert. The mechanism sits in
+   `raven.common.netutil` rather than in Librarian, because abandoning a blocked streaming read is a
+   networking problem; `bgtask` grew an `on_cancel` hook so that a task blocked in a library call can be
+   cancelled at all, which its co-operative flag could never reach.
 10. **The STT silence level / autostop GUI** — see below for why it is on the path.
 11. **The avatar's expression follows the spoken words rather than the streaming ones** — ranked in on
     2026-08-26, out of the three items raised that day. It is the one of them the exhibit's own hardware

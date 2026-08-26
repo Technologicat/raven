@@ -3447,94 +3447,31 @@ first (confirmed identical bug). Dovetails with the existing "extract `raven.com
 Discovered during brief 02 §7 live testing (2026-06-04), when an accidental mid-boot Alt+F4 exposed the
 librarian shutdown races.
 
-## Librarian: in-flight AI turn bleeds into a new chat (turn-sequencing race)
+## Idle prefill fires even when the HEAD's token count is already exact
 
-*Cluster: ? · Cost: ? · Gate: RN2026 · Filed: 2026-06-04*
+*Cluster: ? · Cost: ? · Gate: sizing the prompt-identity half below · Filed: 2026-06-04*
 
-Pressing "new chat" (or otherwise switching HEAD) while an `ai_turn` is still streaming doesn't cancel that
-turn. `start_new_chat_callback` (`app.py`) just sets `app_state["HEAD"] = new_chat_HEAD` and rebuilds the
-view; `ai_turn_task_manager` is `mode="concurrent"`, so the old turn keeps running and its `on_done`
-unconditionally `add_complete_message(node_id)` + sets `app_state["HEAD"]` — so the previous chat's reply
-appears in the fresh chat and clobbers the new HEAD. Observed live on a slow LM Studio generation: "new chat
-→ AI starts writing immediately before I type → my message gets injected mid-stream." Same family as the
-shutdown races (GUI state concurrency) — fold into that AoE session.
+`DPGChatController._context_prefill_entrypoint` schedules an idle prefill after a HEAD change to get an exact
+`usage.prompt_tokens` count and warm the backend KV cache. It doesn't check whether the current count is
+*already exact* — after a normal chat turn, the just-completed `invoke` already returned real `usage` for this
+HEAD's prompt, so the indicator is already `X%` and the cache is already warm. The idle prefill fires anyway,
+which is a second full prompt-processing pass for nothing.
 
-The fix is NOT just "cancel on new-chat": a cancelled turn still finalizes its partial message in `on_done`
-(the cancellation path returns `action_stop`, then finalization runs), so it would still bleed. It needs (a)
-HEAD-switching user actions (new-chat, branch nav, reroll) to cancel the in-flight turn, AND (b) the turn's
-completion (`on_done`/`on_tool_done`/streaming render) to NOT touch the view or `app_state["HEAD"]` once the
-user has navigated away — while still preserving the *stop-button* case (cancel but keep the partial reply in
-the same chat). Cleanest approach: the turn captures its branch identity at start and its completion is a no-op
-on view/HEAD if HEAD has since been switched to a different branch. Consider also disabling new-chat / nav
-while a turn is in flight as a cheap interim guard.
+Fix: no-op when the current HEAD's count is already known-exact — track whether the last count for this HEAD
+came from real `usage` or from the calibrated estimate, and prefill only in the second case (or when the
+HEAD's prompt has changed since the last exact reading). The exact/estimate bit already drives the `X%` vs
+`~X%` typography, so that half of the signal is in hand.
 
-**That approach is already implemented once, one item down.** `_context_prefill_entrypoint` captures
-`task_env.head_node_id` at start and compares it against `app_state["HEAD"]` at *each* point where it
-resumes after waiting — after the idle delay, after reading the attachments, and after the backend returns —
-bailing without touching the readout if HEAD has moved. Three checks rather than one, because each wait is
-its own chance for the user to navigate away; a turn has at least as many.
+**The parenthesis is the expensive half.** "The HEAD's prompt has changed since the last exact reading" is not
+a HEAD comparison: the same HEAD builds a different prompt from one minute to the next, because the injects
+carry a datetime and the RAG matches move as the corpus does. So it means tracking *prompt* identity, and the
+cheap-looking clause is where the work is. Size that before scheduling this.
 
-So part (b) is not a design question here. It is that guard applied to a path with more to put back: a turn
-also renders, finalizes a message, and moves HEAD, where the prefill only writes one number.
-
-**Paired with the abortable prefill** (below), decided 2026-08-25: both are about what happens to in-flight
-backend work when the user changes HEAD, and the two fixes meet in the same entrypoints.
-
-Discovered during brief 02 LM Studio live validation (2026-06-04).
-
-## Idle prefill fires even when the HEAD's token count is already exact (redundant, and slows the next turn)
-
-*Cluster: ? · Cost: ? · Gate: RN2026 if the gate is as cheap as this item says, else 0.2.9 · Filed: 2026-06-04*
-
-`DPGChatController._context_prefill_entrypoint` schedules an idle prefill (5 s after a HEAD change) to get an
-exact `usage.prompt_tokens` count and warm the backend KV cache. But it doesn't check whether the current
-count is *already exact* — after a normal chat turn, the just-completed `invoke` already returned real `usage`
-for this HEAD's prompt, so the indicator is already `X%` (exact) and the KV cache is already warm. The idle
-prefill then fires anyway 5 s later, which is pure cost: a second full prompt-processing pass with no benefit.
-Worse, if the user sends the next message while that redundant prefill is mid-flight, the two prefills (the
-idle one and the real turn's) compete for backend compute and *slow down* the next turn. Observed live with
-LM Studio: two expensive prefills running simultaneously.
-
-Fix: the prefill entrypoint should cancel itself (no-op) when the current HEAD's count is already known-exact —
-i.e. track whether the last count for this HEAD came from real `usage` (exact) vs. the calibrated estimate, and
-only prefill when it's an estimate (or when the HEAD's prompt has changed since the last exact reading). The
-exact/estimate bit already drives the `X%` vs `~X%` typography, so the signal is in hand; it just needs to gate
-the prefill too.
-
-**The parenthesis in that fix is the expensive half.** "The HEAD's prompt has changed since the last exact
-reading" is not a HEAD comparison: the same HEAD builds a different prompt from one minute to the next,
-because the injects carry a datetime and the RAG matches move as the corpus does. So it means tracking
-*prompt* identity, and the cheap-looking clause is where the work is. Size that before scheduling this.
-
-**The window is up to a minute wide, measured 2026-08-25.** With LM Studio's KV cache freshly cleared, the
-idle prefill of an 88524-token branch took **51 seconds** end to end (01:38:31 → 01:39:22, `qwen3.5-9b` on
-one 16 GB card). A message sent during that waits behind it. The item said "slows the next turn", which
-reads like a hiccup; on a heavy branch with a cold cache it is closer to a stall.
-
-**Who actually hits it: Juha, demonstrating** (his correction, 2026-08-25). Researchers' Night visitors each
-start a *new* chat — no attachments, a short prompt, nothing to prefill for a minute — so the exhibit is not
-exposed. It bites when the branching is being *shown*: switch to a heavy branch to demonstrate the
-multiversal chat, then type. That makes it a demo-path risk rather than an exhibit one, and it wants fixing
-on that basis rather than on a deadline.
-
-**It is now visible, which it was not when this was filed.** The SYSTEM indicator lights while a prefill is
-reading the prompt (2026-08-25), so "the backend is busy right now" is on screen rather than inferred from a
-slow reply. That helps whoever fixes this reproduce it, and it means a user who *looks* has warning.
-
-**The entry guard only covers one direction.** `_context_prefill_entrypoint` bails when `is_generating()`, so
-a prefill never starts during a turn — but a turn starting during a prefill runs into it, and the blocking
-`requests` call cannot be interrupted by the cooperative `task_env.cancelled` flag.
-
-**Decided 2026-08-25: make the prefill abortable** (Juha), rather than serializing the two. A prefill exists
-to save work later, so it has no claim on the backend the moment there is real work — and abandoning it
-costs only the warming it had not finished doing, while the alternative makes the user wait for a
-speculative request to finish. Mechanically that means holding the `requests` response and closing it from
-outside, which is what `task_env.cancelled` should drive instead of only being read between steps.
-
-**Paired with the turn-sequencing race** (above), decided 2026-08-25. Do them in one session: they are the
-two halves of *what happens to in-flight backend work when the user changes HEAD*, and each has a piece the
-other needs — this item has to learn to abandon a blocking request, which is what cancelling an in-flight
-turn also needs, and that item can copy this one's branch-identity guard.
+**The contention half is fixed (2026-08-26) and was the urgent one.** A superseded or redundant prefill no
+longer holds the backend against the user's next turn: it is abandoned outright, `raven.common.netutil.Abort`
+shutting the socket down so the read returns at once (`investigations/abort-inflight-request/`). What is left
+here is the waste itself — a prefill that need never have run still runs, and still spends the backend's time
+— rather than anything the user waits on.
 
 Discovered during brief 02 PR-B work, reported by Juha from live LM Studio use (2026-06-04).
 

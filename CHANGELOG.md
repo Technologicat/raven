@@ -155,6 +155,30 @@
 
 *Raven-librarian*
 
+- **an AI reply in progress no longer follows you into a different chat.** Starting a new chat, switching a
+  message's siblings, or jumping to where a branch continues while the AI was writing left that reply
+  running, and it then delivered itself into whatever conversation you had moved to — appearing as a reply
+  to a question asked on a different branch, and taking the chat position with it, so a message typed next
+  attached itself somewhere unexpected.
+  - The reply is not thrown away. It finishes on the branch it was generated for and is waiting there when
+    you come back to it, which is what a branching chat ought to do; what stops is its claim on the view.
+
+- **Cancel (Ctrl+G) now works while the model is still reading the conversation**, which on a long chat is
+  where most of the wait is. Cancelling asked the reply to stop at its next word, and before the first word
+  there is no next word — so through the whole prompt-reading phase, which can run to tens of seconds on a
+  branch with documents attached, the button did nothing. It now abandons the request outright, and the
+  backend stops working on it. Once text is arriving, cancelling behaves as it always did and keeps what has
+  been written so far.
+
+- **the speculative prompt-reading Raven does while you are idle no longer holds up your next message.**
+  After a reply, Raven quietly asks the backend to read the current conversation, so the next turn starts
+  warm. Moving to a different branch made that work useless, but it went on running — up to a minute on a
+  large chat — and a message sent meanwhile waited behind it. It is now abandoned as soon as you move.
+
+- **Send and Reroll now refuse while a reply is in progress**, rather than starting a second one alongside
+  it. Two replies writing the same conversation interleaved their results. The Send button says why in its
+  tooltip, and points at Cancel.
+
 - **thinking that arrives with no opening tag is now moved into its bubble the moment the model stops thinking**, instead of staying in the answer until the whole reply finishes. Affects LLM backends that pass the model's raw stream through rather than separating the reasoning themselves — where a thinking model's chat template opens the block, so the stream carries only the close, and nothing before it says the text is a thought. In the chat log the reasoning moves into the trace and the answer starts fresh; in `raven-minichat`, which cannot unprint, the closing marker says retroactively what it covers.
   - Not yet visible from the start of the thinking, which is the part that needs a signal the stream does not carry. Until the close arrives the reasoning is still shown as the answer.
 

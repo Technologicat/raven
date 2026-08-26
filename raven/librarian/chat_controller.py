@@ -52,6 +52,7 @@ def _client_api():
     return api
 
 from ..common import bgtask
+from ..common import netutil
 from ..common import numutils
 from ..common import utils as common_utils
 
@@ -1321,6 +1322,14 @@ class DPGChatMessage:
         # Rerolling for AI messages
         if role == "assistant":
             def reroll_message_callback():
+                # A reroll rewinds the branch and starts a new turn on it, so running one *during* a turn
+                # would leave two turns writing the same branch. Refusing is the whole handling: the reply
+                # in flight is a moment away, and the alternative — cancelling it for a reroll the user may
+                # not want once they have read it — decides that for them.
+                if self.parent_view.chat_controller.is_generating():
+                    logger.info("DPGCompleteChatMessage.reroll_message_callback: a turn is already in flight; refusing.")
+                    return
+
                 # Find this AI message in the chat history
                 for k, dpg_chat_message in enumerate(reversed(self.parent_view.chat_controller.current_chat_history)):
                     if dpg_chat_message.node_id == node_id:
@@ -3915,8 +3924,17 @@ class DPGChatController:
             return
         if self.context_prefill_task is None:  # feature disabled (config.context_prefill_idle_delay is None)
             return
+        # The abort handle is what makes a superseded prefill actually stop. The `TaskManager` already
+        # cancels the previous one whenever a new HEAD supersedes it, but that cancellation is a flag, and
+        # a prefill blocked in the backend read cannot look at a flag until the read returns — up to a
+        # minute on a heavy branch, during which the user's next turn queues behind work whose only product
+        # was a warm cache for a branch they have left. `on_cancel` fires the handle, which ends the read.
+        maybe_abort = netutil.Abort()
         self.context_prefill_task_manager.submit(self.context_prefill_task,
-                                                 env(wait=True, head_node_id=self.app_state["HEAD"]))
+                                                 env(wait=True,
+                                                     head_node_id=self.app_state["HEAD"],
+                                                     maybe_abort=maybe_abort,
+                                                     on_cancel=lambda task_env: task_env.maybe_abort.abort()))
 
     def _context_prefill_entrypoint(self, task_env: env) -> None:
         """`ManagedTask` entrypoint: after the idle debounce, ask the backend for the exact prompt size of the captured branch.
@@ -3930,6 +3948,10 @@ class DPGChatController:
         flight (that turn warms the cache and reports its own exact count), or if HEAD has moved off the branch this
         task captured — including a final re-check after the round-trip, so a late reply can't overwrite a newer
         branch's readout.
+
+        Those checks happen between steps, so they cannot end a round-trip already under way. `task_env.maybe_abort`
+        is what does that: cancelling this task fires it, the backend read returns at once, and `prefill` answers
+        `None` like any other unanswered prefill.
         """
         if task_env.cancelled or not self.gui_updates_safe or self.is_generating():
             return
@@ -4008,7 +4030,8 @@ class DPGChatController:
                                     # time, since what is being warmed is the *first* round of the next turn.
                                     tools_enabled=True,
                                     tool_names=maybe_tool_names,
-                                    datastore=self.datastore)  # resolve any sidecar: image refs so the exact prompt size counts image tokens
+                                    datastore=self.datastore,  # resolve any sidecar: image refs so the exact prompt size counts image tokens
+                                    maybe_abort=task_env.maybe_abort)
         finally:
             # Not if a turn started while we were waiting: it raised the same indicator for its own prompt,
             # and dropping it here would report that turn as further along than it is.
@@ -4155,6 +4178,11 @@ class DPGChatController:
             if task_env.cancelled:  # while the task was in the queue
                 return
 
+            # The branch this turn is answering on. Captured here rather than at submit time because the
+            # task may have waited in the queue, and it is the branch we are about to *read* that this turn
+            # belongs to. Every later comparison is against this, updated as the turn writes (`advance_head`).
+            task_env.expected_head = self.app_state["HEAD"]
+
             # A live turn supersedes any pending idle-prefill: it warms the KV cache itself and reports its own
             # exact `prompt_tokens`, so a concurrent prefill round-trip would be wasted (and would contend with
             # the real request on a single-model backend).
@@ -4172,6 +4200,25 @@ class DPGChatController:
                     if streaming_chat_message is not None:
                         streaming_chat_message.demolish()
                         streaming_chat_message = None
+
+                def turn_owns_the_view() -> bool:
+                    """Whether the chat on screen is still the one this turn is writing into.
+
+                    A turn is allowed to keep running when the user navigates away — it finishes on its own
+                    branch, and the reply is there when they come back — but everything it does to the
+                    *view* has to stop at that moment. `DPGLinearizedChatView.build` clears the message
+                    container, so a rebuild takes the streaming widget's DPG items with it, and rendering
+                    the next chunk into them is a lookup on a deleted item rather than a cosmetic mistake.
+
+                    "HEAD has not moved" would be the wrong question, because this turn is itself the thing
+                    that moves HEAD. The comparison is against where *this turn* last left it.
+                    """
+                    return self.app_state["HEAD"] == task_env.expected_head
+
+                def advance_head(node_id: str) -> None:
+                    """Move HEAD to a node this turn has just written, and keep the guard in step with it."""
+                    self.app_state["HEAD"] = node_id
+                    task_env.expected_head = node_id
 
                 # The turn's own data-eyes uses, counted so that teardown can release exactly those.
                 #
@@ -4208,6 +4255,14 @@ class DPGChatController:
                         stop_turn_data_eyes()
 
                 def on_llm_start() -> None:
+                    # Per round, not per turn: what this arms is "the backend is reading the prompt and has
+                    # sent nothing back yet", which is true again at the start of every round of the agent
+                    # loop. See `abort_if_nothing_to_lose`.
+                    task_env.round_has_streamed = False
+
+                    if not turn_owns_the_view():  # nothing to put a new streaming widget into
+                        return
+
                     if self.gui_updates_safe:
                         nonlocal streaming_chat_message
 
@@ -4251,6 +4306,13 @@ class DPGChatController:
                 def on_llm_progress(event: dict[str, Any]) -> sym | None:
                     # `invoke` is the single parser; this handler is a pure renderer dispatching on the typed
                     # event. No regex-sniffing of the text stream; the event type *is* the state.
+
+                    task_env.round_has_streamed = True  # the backend is answering, so co-operative stop can reach it
+
+                    # Keep generating — an abandoned reader is not an abandoned turn — but stop drawing. The
+                    # widgets this would render into were deleted by the view rebuild that moved HEAD.
+                    if not turn_owns_the_view():
+                        return llmclient.action_ack
 
                     # If the task is cancelled (`stop_ai_turn` was called), interrupt the LLM, keeping the content received so far.
                     # The scaffold will automatically send the content to `on_llm_done`.
@@ -4370,8 +4432,14 @@ class DPGChatController:
                     return llmclient.action_ack
 
                 def on_done(node_id: str) -> None:
-                    self.app_state["HEAD"] = node_id  # update just in case of Ctrl+C or crash during tool calls
                     task_env.text = io.StringIO()  # for next AI message (in case of tool calls)
+                    if not turn_owns_the_view():
+                        # The user has navigated away. The reply is written and stays where it belongs, on
+                        # the branch it was generated for; what must not happen is this turn dragging the
+                        # user back to it, or drawing into the chat they are now looking at.
+                        logger.info(f"ai_turn.ai_turn_task.on_done: HEAD has moved off this turn's branch; leaving node '{node_id}' where it is.")
+                        return
+                    advance_head(node_id)  # update just in case of Ctrl+C or crash during tool calls
                     if self.gui_updates_safe:
                         if not speech_enabled:  # If TTS is NOT enabled, stop the generic talking animation now that the LLM is done
                             _client_api().avatar_stop_talking(self.avatar_record.avatar_instance_id)
@@ -4462,8 +4530,10 @@ class DPGChatController:
                             dpg.hide_item(self.web_indicator_widget)
 
                 def on_tool_done(node_id: str) -> None:
-                    self.app_state["HEAD"] = node_id  # update just in case of Ctrl+C or crash during tool calls
                     task_env.text = io.StringIO()  # for next AI message (in case of tool calls)
+                    if not turn_owns_the_view():  # same as `on_done`: keep the node, leave the view alone
+                        return
+                    advance_head(node_id)  # update just in case of Ctrl+C or crash during tool calls
                     if self.gui_updates_safe:
                         follow_sample = self.view.sample_tail_follow()  # a tool result also arrives on its own
                         delete_streaming_chat_message()  # it shouldn't exist when this triggers, but robustness.
@@ -4513,6 +4583,7 @@ class DPGChatController:
                                                             docs_query=docs_query,
                                                             docs_num_results=librarian_config.docs_num_results,
                                                             thinking_enabled=self.app_state["thinking_enabled"],
+                                                            maybe_abort=task_env.maybe_abort,
                                                             markup="markdown",  # TODO: check if we actually use the `markup` argument for anything but thought blocks - those are in any case emitted as-is (and formatted at render time).
                                                             **common_callbacks)
                     else:
@@ -4525,8 +4596,19 @@ class DPGChatController:
                                                                      markup="markdown",
                                                                      docs_num_results=librarian_config.docs_num_results,
                                                                      thinking_enabled=self.app_state["thinking_enabled"],
+                                                                     maybe_abort=task_env.maybe_abort,
                                                                      **common_callbacks)
-                self.app_state["HEAD"] = new_head_node_id
+                if turn_owns_the_view():
+                    advance_head(new_head_node_id)
+            except netutil.Aborted:
+                # The user cancelled before the backend had sent anything, so there is no reply to keep and
+                # nothing to finalize. HEAD stays wherever the turn's own callbacks last legitimately left
+                # it — which for a turn abandoned during its first round is where it started.
+                logger.info("ai_turn.ai_turn_task: turn abandoned before the backend answered.")
+                # `on_llm_start` has already put an empty streaming message in the view, and the callback
+                # that would normally take it away is `on_done`, which is not going to run.
+                if self.gui_updates_safe:
+                    delete_streaming_chat_message()
             finally:
                 if self.gui_updates_safe:
                     dpg.disable_item(self.chat_stop_generation_button_widget)
@@ -4540,7 +4622,29 @@ class DPGChatController:
                     dpg.hide_item(self.docs_search_indicator_widget)
                     dpg.hide_item(self.web_indicator_widget)
                     dpg.hide_item(self.llm_indicator_widget)
-        self.ai_turn_task_manager.submit(ai_turn_task, env())
+        def abort_if_nothing_to_lose(task_env: env) -> None:
+            """`on_cancel` hook: end a backend read that co-operative cancellation cannot reach.
+
+            Fires only while the current round has streamed nothing. That distinction is what keeps Stop's
+            promise intact: once text is arriving, `on_llm_progress` runs per chunk and answers `action_stop`,
+            which finishes the turn tidily and *keeps the partial reply* — the behaviour the Stop button has
+            always had. Aborting there would throw that text away to save a moment.
+
+            Before the first chunk there is no such handler to run and nothing to keep: the backend is
+            processing the prompt, which on a heavy branch is tens of seconds of a Stop button that appears
+            to do nothing. That is the case this exists for.
+            """
+            if not task_env.round_has_streamed:
+                logger.info("ai_turn.abort_if_nothing_to_lose: cancelled with nothing streamed yet; abandoning the backend request.")
+                task_env.maybe_abort.abort()
+
+        self.ai_turn_task_manager.submit(ai_turn_task,
+                                         env(maybe_abort=netutil.Abort(),
+                                             # True until `on_llm_start` arms it for the first round, so a
+                                             # cancellation landing before the backend is even called takes
+                                             # the co-operative path — which the queued-task check handles.
+                                             round_has_streamed=True,
+                                             on_cancel=abort_if_nothing_to_lose))
 
     def stop_ai_turn(self) -> None:
         """Interrupt the AI, i.e. stop ongoing text generation.

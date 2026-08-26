@@ -820,6 +820,7 @@ def ai_turn(llm_settings: env,
             tool_context: env | None = None,
             tools_enabled: bool = True,
             thinking_enabled: bool = True,
+            maybe_abort: netutil.Abort | None = None,
             use_character_card: bool = True) -> str:
     """AI's turn: LLM generation interleaved with tool responses, until there are no tool calls in the LLM's latest reply.
 
@@ -1030,6 +1031,15 @@ def ai_turn(llm_settings: env,
                         Applies to every round of the agent loop, so the reasoning a model would otherwise
                         do between tool calls is switched off along with the rest.
 
+    `maybe_abort`: A `raven.common.netutil.Abort` handle, if this turn should be abandonable from another
+                   thread. Firing it raises `netutil.Aborted` out of this call, from wherever the turn had
+                   got to — including a backend read, which a cancellation flag cannot reach.
+
+                   The nodes already written stay written: an abandoned turn leaves the branch holding
+                   whatever it had finished, which is what lets the caller keep a partial reply.
+
+                   `None` (default) means the turn runs to completion once started.
+
     Returns the new HEAD node ID (i.e. the last chat node that was just added).
     """
     # Sanity check
@@ -1146,7 +1156,14 @@ def ai_turn(llm_settings: env,
                                    tool_names=maybe_tool_names,
                                    thinking_enabled=thinking_enabled,
                                    continue_=continue_this_message,
-                                   datastore=datastore)  # resolve any sidecar: image refs to data: URLs on the wire
+                                   datastore=datastore,  # resolve any sidecar: image refs to data: URLs on the wire
+                                   maybe_abort=maybe_abort)
+        except netutil.Aborted:
+            # Not a backend failure: the user asked for this turn to stop. Re-raised ahead of the catch
+            # below, which would otherwise write "the backend failed" into the chat as a rerollable message
+            # — reporting the user's own Cancel back to them as an error.
+            logger.info("ai_turn: abandoned")
+            raise
         except Exception as exc:  # noqa: BLE001 -- any backend failure becomes a visible, rerollable message rather than a silent crash
             # Materialize the failure as a synthetic assistant message (rerollable — reroll re-runs the turn).
             # We fire `on_llm_done` because `on_llm_start` already created a streaming message in the GUI,
@@ -1281,6 +1298,7 @@ def retry_tool_calls(llm_settings: env,
                      markup: str | None,
                      docs_num_results: int | None,
                      thinking_enabled: bool = True,
+                     maybe_abort: netutil.Abort | None = None,
                      on_docs_start: Callable | None = None,
                      on_docs_done: Callable | None = None,
                      on_prompt_ready: Callable | None = None,
@@ -1398,6 +1416,7 @@ def retry_tool_calls(llm_settings: env,
                    docs_num_results=docs_num_results,
                    markup=markup,
                    thinking_enabled=thinking_enabled,
+                   maybe_abort=maybe_abort,
                    on_docs_start=on_docs_start,
                    on_docs_done=on_docs_done,
                    on_prompt_ready=on_prompt_ready,
