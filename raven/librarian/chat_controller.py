@@ -646,30 +646,42 @@ class DPGChatMessage:
                                             color=(120, 120, 120),
                                             parent=text_vertical_layout_group)
                 ended_in_tool_call = bool(ai_message_node_payload["message"].get("tool_calls"))
-                if (breakdown_rows := _phase_breakdown_rows(generation_metadata,
-                                                            ended_in_tool_call=ended_in_tool_call)) is not None:
+                breakdown_rows = _phase_breakdown_rows(generation_metadata,
+                                                       ended_in_tool_call=ended_in_tool_call)
+                # Absent on a node written before the model was recorded, which is why this is asked for
+                # rather than indexed.
+                maybe_model = generation_metadata.get("model")
+                if maybe_model is not None or breakdown_rows is not None:
                     with dpg.tooltip(stats_widget):
-                        dpg.add_text("Where this reply's time went.")
-                        dpg.add_spacer(height=gui_config.margin)
-                        # A table, because the labels differ in length and the font is proportional: padded
-                        # spaces put the figures at four different x positions, which reads as four
-                        # unrelated lines rather than as a column to compare down.
-                        with dpg.table(header_row=True, policy=dpg.mvTable_SizingFixedFit,
-                                       borders_innerH=False, borders_outerH=False,
-                                       borders_innerV=False, borders_outerV=False):
-                            dpg.add_table_column(label="")
-                            dpg.add_table_column(label="time [s]")
-                            dpg.add_table_column(label="tokens")
-                            dpg.add_table_column(label="speed [t/s]")
-                            for cells in breakdown_rows:
-                                with dpg.table_row():
-                                    for cell in cells:
-                                        dpg.add_text(cell)
-                        dpg.add_spacer(height=gui_config.margin)
-                        dpg_markdown.add_text(_PHASE_BREAKDOWN_FOOTNOTE, wrap=_PHASE_TOOLTIP_WRAP_W)
-                        if ended_in_tool_call:
+                        # Which model produced *this* message, said per message rather than once for the
+                        # app. In a branching chat the siblings of one node can come from different models,
+                        # and a chat reloaded from disk predates whatever happens to be loaded now.
+                        if maybe_model is not None:
+                            dpg.add_text(maybe_model)
+                            if breakdown_rows is not None:
+                                dpg.add_spacer(height=gui_config.margin)
+                        if breakdown_rows is not None:
+                            dpg.add_text("Where this reply's time went.")
                             dpg.add_spacer(height=gui_config.margin)
-                            dpg_markdown.add_text(_PHASE_BREAKDOWN_TOOL_CALL_NOTE, wrap=_PHASE_TOOLTIP_WRAP_W)
+                            # A table, because the labels differ in length and the font is proportional:
+                            # padded spaces put the figures at four different x positions, which reads as
+                            # four unrelated lines rather than as a column to compare down.
+                            with dpg.table(header_row=True, policy=dpg.mvTable_SizingFixedFit,
+                                           borders_innerH=False, borders_outerH=False,
+                                           borders_innerV=False, borders_outerV=False):
+                                dpg.add_table_column(label="")
+                                dpg.add_table_column(label="time [s]")
+                                dpg.add_table_column(label="tokens")
+                                dpg.add_table_column(label="speed [t/s]")
+                                for cells in breakdown_rows:
+                                    with dpg.table_row():
+                                        for cell in cells:
+                                            dpg.add_text(cell)
+                            dpg.add_spacer(height=gui_config.margin)
+                            dpg_markdown.add_text(_PHASE_BREAKDOWN_FOOTNOTE, wrap=_PHASE_TOOLTIP_WRAP_W)
+                            if ended_in_tool_call:
+                                dpg.add_spacer(height=gui_config.margin)
+                                dpg_markdown.add_text(_PHASE_BREAKDOWN_TOOL_CALL_NOTE, wrap=_PHASE_TOOLTIP_WRAP_W)
 
                 # Say when nothing was retrieved for this reply. Present only when the user asked to be told
                 # (speculation off); absent means there is nothing to say, which is why this tests `is False`
