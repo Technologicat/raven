@@ -6,6 +6,8 @@
 
 *Raven-librarian*
 
+- **the thinking trace now lives in its bubble from the first word, and the cloud pulsates while the model is thinking.** Previously a thinking model's reasoning streamed inline in the chat, tinted, and snapped into a collapsible bubble only once the reply finished — so the wall of text you were about to collapse scrolled past in full first. It now grows inside the bubble it will stay in, collapsed, with the cloud beside it breathing for as long as the reasoning lasts and settling when the answer begins. Same vocabulary as the INDEXING / DOCS / READING / SYSTEM / WEB indicators: pulsating means still working.
+
 - **`raven.librarian.agent`, a scripting surface over the agent loop** — for driving Librarian's engine from your own Python, with your document corpus, the branching chat tree and the tool-calling all in play. `agent.turn(...)` runs one assistant turn and hands back a `TurnRecord` saying what it did: the reply, the reasoning the model emitted but did not send, how many tool rounds it took and which tools it called how often, whether the reply had retrieved material to stand on, and the prompts actually put on the wire. The one-liner form needs nothing but settings and a question; pass a `chattree.PersistentForest` and the whole conversation is kept on disk in Raven's own format.
   - Two defaults differ from the app on purpose. The network tools are **off** unless asked for, because a script's tool calls are real ones and nobody is watching. The automatic document search runs only when you supply a retriever.
   - No callbacks: what the GUI receives as fifteen events, a script gets as the returned record.

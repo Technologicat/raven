@@ -343,6 +343,11 @@ class DPGChatMessage:
         self.rendered_system_injects = None  # system message only: the per-turn injects as last drawn
         self.node_id = None  # populated by `build`
         self.gui_text_group = None  # populated by `build`
+        # The thought bubble, built on demand by `_thought_bubble` when a thinking paragraph first arrives:
+        # the cloud button, and the column of trace paragraphs it shows and hides. Both stay `None` on a
+        # message from a model that did not think, which is what "is there a trace here" is read from.
+        self.gui_thought_button = None
+        self.gui_thought_group = None
         self.gui_keyboard_mark_widget = None  # populated by `build`; the dot the keyboard mark lights when this message is the current one
         self.gui_buttons_group = None  # populated by `build`; whether this is on screen decides which message the hotkeys act on
         self.gui_button_callbacks = {}  # {name0: callable0, ...} - to trigger button features programmatically
@@ -457,6 +462,10 @@ class DPGChatMessage:
 
         # clear old GUI content (needed if rebuilding)
         dpg.delete_item(self.gui_container_group, children_only=True)
+        # ...which takes the thought bubble with it, so forget the widgets or the next thinking paragraph
+        # would be rendered into a container that no longer exists.
+        self.gui_thought_button = None
+        self.gui_thought_group = None
 
         # --------------------------------------------------------------------------------
         # lay out the role icon and the text content areas horizontally
@@ -643,6 +652,59 @@ class DPGChatMessage:
 
         dpg.split_frame()  # ...and anything after this point runs in another frame.
 
+    def _thought_bubble(self) -> Union[str, int]:
+        """The container the thinking trace renders into, built on first use. Returns its DPG ID.
+
+        The trace starts collapsed and the cloud button beside it toggles it, so a reply whose reasoning is
+        a wall of text does not stand between the reader and the answer. The button is a gutter to the left
+        of a column, the same shape the document-body toggle uses, so the trace wraps beside it rather than
+        under it.
+
+        The same bubble serves a message being streamed and a message read back from the datastore, which is
+        what keeps the two looking alike: a live trace grows inside the bubble it will still be in once the
+        message is stored.
+
+        **Up to and including 0.2.8 only stored messages had one**, and a live trace was drawn inline in the
+        chat flow, tinted, then snapped into a bubble the moment the message finalized. Worth knowing here
+        because it is what a user of an earlier release remembers seeing, and because the two shapes are why
+        `is_thought` has to survive from the stream all the way to the renderer rather than being decided
+        once at the end.
+        """
+        # A caller reaching this is inside `paragraphs_lock` (only `_render_text` calls it), which is what
+        # makes "built on first use" safe against two threads rendering paragraphs at once.
+        if self.gui_thought_group is not None:
+            return self.gui_thought_group
+
+        row = dpg.add_group(horizontal=True, parent=self.gui_text_group)
+        def toggle_message_think_callback():
+            with guiutils.nonexistent_ok() as nok:
+                if dpg.is_item_visible(self.gui_thought_group):
+                    logger.info(f"DPGChatMessage._thought_bubble.toggle_message_think_callback: hiding thinking trace for chat node '{self.node_id}'")
+                    dpg.hide_item(self.gui_thought_group)
+                else:
+                    logger.info(f"DPGChatMessage._thought_bubble.toggle_message_think_callback: showing thinking trace for chat node '{self.node_id}'")
+                    dpg.show_item(self.gui_thought_group)
+            if nok.errored:
+                logger.info(f"DPGChatMessage._thought_bubble.toggle_message_think_callback: GUI widget for chat node '{self.node_id}' does not exist, ignoring.")
+        self.gui_button_callbacks["toggle_thinking_trace"] = toggle_message_think_callback  # stash it so we can call it from the hotkey handler
+
+        # No string tag on any of these. They are held in Python attributes instead, which sidesteps the
+        # tag-reuse hazard entirely for a widget that a rebuild recreates: `gui_uuid` identifies the message
+        # instance, not the build, so a tag built from it would collide with the copy DPG has not collected
+        # yet.
+        self.gui_thought_button = dpg.add_button(label=fa.ICON_CLOUD,
+                                                 callback=toggle_message_think_callback,
+                                                 width=gui_config.toolbutton_w,
+                                                 parent=row)
+        dpg.bind_item_font(self.gui_thought_button, self.parent_view.themes_and_fonts.icon_font_solid)
+        dpg.bind_item_theme(self.gui_thought_button, "my_steady_think_theme")  # tag
+        think_toggle_tooltip = dpg.add_tooltip(self.gui_thought_button)
+        dpg.add_text("Show/hide thinking trace [Ctrl+T]", parent=think_toggle_tooltip)
+
+        self.gui_thought_group = dpg.add_group(parent=row)
+        dpg.hide_item(self.gui_thought_group)
+        return self.gui_thought_group
+
     def _render_text(self) -> None:
         """Internal method. Render any pending new paragraphs. We assume new paragraphs are added only to the end."""
         with self.paragraphs_lock:
@@ -679,34 +741,11 @@ class DPGChatMessage:
 
                     chat_text_w = self.get_chat_text_width()
 
-                    if isinstance(self, DPGCompleteChatMessage) and paragraph["is_thought"]:  # make think blocks in complete messages collapsible (they are populated as a single paragraph)
-                        widget = dpg.add_group(horizontal=True, parent=self.gui_text_group)
-                        def toggle_message_think_callback():
-                            with guiutils.nonexistent_ok() as nok:
-                                v = dpg.is_item_visible(text_content)
-                                if v:
-                                    logger.info(f"DPGCompleteChatMessage._render_text.toggle_message_think_callback: hiding thinking trace for chat node '{self.node_id}'")
-                                    dpg.hide_item(text_content)
-                                else:
-                                    logger.info(f"DPGCompleteChatMessage._render_text.toggle_message_think_callback: showing thinking trace for chat node '{self.node_id}'")
-                                    dpg.show_item(text_content)
-                            if nok.errored:
-                                logger.info(f"DPGCompleteChatMessage._render_text.toggle_message_think_callback: GUI widget for chat node '{self.node_id}' does not exist, ignoring.")
-                        self.gui_button_callbacks["toggle_thinking_trace"] = toggle_message_think_callback  # stash it so we can call it from the hotkey handler
-                        dpg.add_button(label=fa.ICON_CLOUD,
-                                       callback=toggle_message_think_callback,
-                                       width=gui_config.toolbutton_w,
-                                       tag=f"message_think_toggle_button_{self.gui_uuid}",
-                                       parent=widget)
-                        dpg.bind_item_font(f"message_think_toggle_button_{self.gui_uuid}", self.parent_view.themes_and_fonts.icon_font_solid)  # tag
-                        # dpg.bind_item_theme(f"message_think_toggle_button_{self.gui_uuid}", "disablable_blue_widget_theme")  # tag
-                        message_think_toggle_tooltip = dpg.add_tooltip(f"message_think_toggle_button_{self.gui_uuid}")  # tag
-                        dpg.add_text("Show/hide thinking trace [Ctrl+T]", parent=message_think_toggle_tooltip)
-                        text_content = dpg_markdown.add_text(text,
-                                                             wrap=chat_text_w,
-                                                             parent=widget,
-                                                             color=color)
-                        dpg.hide_item(text_content)
+                    if paragraph["is_thought"]:
+                        widget = dpg_markdown.add_text(text,
+                                                       wrap=chat_text_w - gui_config.toolbutton_w,
+                                                       parent=self._thought_bubble(),
+                                                       color=color)
                     else:
                         widget = dpg_markdown.add_text(text,
                                                        wrap=chat_text_w,
@@ -2046,12 +2085,48 @@ class DPGStreamingChatMessage(DPGChatMessage):
         """
         super().__init__(gui_parent=gui_parent,
                          parent_view=parent_view)
+        # What the cloud is currently saying, or `None` while nothing has been said yet. See `set_thinking`.
+        self._thinking_shown = None
         self.build()
 
     def build(self):
         super().build(role="assistant",  # TODO: parameterize this?
                       persona=self.parent_view.chat_controller.llm_settings.personas.get("assistant", None),
                       node_id=None)
+
+    def set_thinking(self, is_thinking: bool) -> None:
+        """Say whether the model is reasoning right now, by pulsating this message's cloud or settling it.
+
+        Does nothing until a thinking paragraph has arrived, since until then there is no cloud to pulsate.
+
+        With the trace collapsed, this is the only thing on screen saying the model is working — so it is
+        not decoration: an app that showed nothing would look frozen for exactly as long as the reasoning
+        takes, which on a thinking model is most of the turn. Pulsating carries that meaning already,
+        from the INDEXING / DOCS / READING / SYSTEM / WEB indicators.
+        """
+        if self.gui_thought_button is None:  # nothing has been thought yet, so there is no cloud to mark
+            return
+        # Acts on the transition only. The caller says this per streamed event rather than per change —
+        # it has to, since the bubble does not exist until the first thinking paragraph is rendered, which
+        # is already past the transition that would have started the pulsation. Re-binding the theme every
+        # event would be harmless; re-resetting the animation every event would not, since a cycle restarted
+        # every few milliseconds never leaves its first frame, and a pulsation stuck at full alpha is
+        # indistinguishable from a static color.
+        if is_thinking == self._thinking_shown:
+            return
+        self._thinking_shown = is_thinking
+        with guiutils.nonexistent_ok() as nok:
+            if is_thinking:
+                # Start every stint at full alpha, the way an appearing indicator does, rather than wherever
+                # in the cycle a continuously-running animation happens to be.
+                think_glow = self.parent_view.chat_controller.think_glow_animation
+                if think_glow is not None:
+                    think_glow.reset()
+                dpg.bind_item_theme(self.gui_thought_button, "my_pulsating_think_theme")  # tag
+            else:
+                dpg.bind_item_theme(self.gui_thought_button, "my_steady_think_theme")  # tag
+        if nok.errored:
+            logger.info("DPGStreamingChatMessage.set_thinking: GUI widget does not exist, ignoring.")
 
 
 @dataclasses.dataclass(frozen=True)
@@ -3035,6 +3110,7 @@ class DPGChatController:
                  chat_stop_generation_button_widget: Union[str, int],
                  indicator_glow_animation: Optional[gui_animation.PulsatingColor],
                  docs_indexing_glow_animation: Optional[gui_animation.PulsatingColor],
+                 think_glow_animation: Optional[gui_animation.PulsatingColor],
                  attachment_read_indicator_widget: Union[str, int],
                  llm_indicator_widget: Union[str, int],
                  docs_indexing_indicator_widget: Union[str, int],
@@ -3085,6 +3161,12 @@ class DPGChatController:
         `docs_indexing_glow_animation`: Pulsator for the INDEXING indicator. Phase-reset on transition
                                         into the indexing state, so the glow always starts at the first
                                         animation frame when the indicator appears.
+
+        `think_glow_animation`: Pulsator for the thought bubble's cloud while the model is reasoning.
+                                Phase-reset when the reasoning starts, for the same reason as the two above.
+
+                                Its own pulsator rather than a shared one, so that another owner resetting
+                                theirs cannot make this one jump mid-thought.
 
         `attachment_read_indicator_widget`: DPG tag or ID of the widget to show while an attached document's
                                             text is being extracted. That is local work — pypdf, a couple of
@@ -3140,6 +3222,7 @@ class DPGChatController:
         self.avatar_record = avatar_record
         self.chat_stop_generation_button_widget = chat_stop_generation_button_widget
         self.indicator_glow_animation = indicator_glow_animation
+        self.think_glow_animation = think_glow_animation
         self.docs_indexing_glow_animation = docs_indexing_glow_animation
         self.attachment_read_indicator_widget = attachment_read_indicator_widget
         self.llm_indicator_widget = llm_indicator_widget
@@ -3957,6 +4040,11 @@ class DPGChatController:
                         task_env.n_chunks0 = n_chunks
                         self.view.follow_tail(follow_sample)
                     task_env.current_is_thought = is_thought
+                    # The cloud pulsates while the reasoning is arriving and settles when the answer starts.
+                    # Set on every event rather than only on the transition: the bubble does not exist until
+                    # the first thinking paragraph has been rendered, which is after the transition that
+                    # would have started it.
+                    streaming_chat_message.set_thinking(is_thought)
 
                     # Accumulate the chunk, then render. Write *before* reading the paragraph so the chunk is
                     # never lost when it carries the paragraph-break newline (the trailing newline is stripped at render time).

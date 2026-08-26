@@ -261,6 +261,27 @@ with timer() as tim:
         with dpg.theme_component(dpg.mvAll):
             dpg.add_theme_color(dpg.mvThemeCol_Text, (96, 224, 96))
 
+    # The thought bubble's cloud, in the same color the thinking trace is written in — so the cloud and what
+    # it hides are visibly the same thing, whether or not the trace is open.
+    #
+    # It pulsates only on the reply being generated, and only while the model is actually reasoning; every
+    # stored message's cloud is steady. That is the whole point of it: with the trace collapsed, an app that
+    # showed nothing would look frozen for exactly as long as the model thinks, which on a thinking model is
+    # most of the turn. Pulsating means "still going", in the same vocabulary as the INDEXING / DOCS /
+    # READING / SYSTEM / WEB indicators, so it needs no explaining to anyone who has seen those.
+    #
+    # One shared pair of themes rather than one per message, which the pulsating half makes possible: at most
+    # one reply is being generated at a time, so at most one cloud is ever pulsating.
+    with dpg.theme(tag="my_pulsating_think_theme"):
+        with dpg.theme_component(dpg.mvAll):
+            pulsating_think_color = dpg.add_theme_color(dpg.mvThemeCol_Text, gui_config.chat_color_think_front)
+        pulsating_think_glow = gui_animation.PulsatingColor(cycle_duration=2.0,
+                                                            theme_color_widget=pulsating_think_color)
+        gui_animation.animator.add(pulsating_think_glow)
+    with dpg.theme(tag="my_steady_think_theme"):
+        with dpg.theme_component(dpg.mvAll):
+            dpg.add_theme_color(dpg.mvThemeCol_Text, gui_config.chat_color_think_front)
+
     if platform.system().upper() == "WINDOWS":
         icon_ext = "ico"
     else:
@@ -2132,6 +2153,7 @@ chat_controller = DPGChatController(llm_settings=llm_settings,
                                     chat_panel_widget=chat_panel_widget,
                                     chat_stop_generation_button_widget=stop_generation_button,
                                     indicator_glow_animation=pulsating_gray_text_glow,
+                                    think_glow_animation=pulsating_think_glow,
                                     docs_indexing_glow_animation=pulsating_red_docs_glow,
                                     attachment_read_indicator_widget=attachment_read_indicator_group,
                                     llm_indicator_widget=llm_indicator_group,
