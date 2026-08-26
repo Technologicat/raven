@@ -355,11 +355,13 @@ CPU, so there is no first-sentence latency worth overlapping generation to hide.
     item is *for* is the one nobody develops in (Juha, 2026-08-26). So it is untried rather than
     unimportant, and whoever builds it has to manufacture the condition to see it at all, by hiding
     the eGPU from the process and letting the avatar and the LLM land on one card.
-  - **The occasion it is actually for is the unplanned demo** — *"I have my laptop with me, want to see
-    it?"* — rather than a planned deployment (Juha). That is the likeliest way this configuration is ever
-    run, and the least forgiving: the audience is standing there, the attention lasts about a minute, and
-    a sluggish avatar spends it. Which is also the argument for building it before the road trip rather
-    than during one.
+  - **The road configuration is supported, not exceptional** (Juha, 2026-08-26): the laptop away from the
+    desk, wherever there is a power outlet. It is an ordinary way to run Raven and is expected to work
+    well, which is why this is an option worth having rather than an accommodation for a rare case.
+  - **Within it, the occasion to design for is the unplanned demo** — *"I have my laptop with me, want to
+    see it?"* It is the least forgiving use of the mode: the audience is standing there, the attention
+    lasts about a minute, and a sluggish avatar spends it. It is also unplanned by definition, so the item
+    cannot be built when it is needed — the moment it is wanted is already too late.
 - **Item 3 would come back only on a machine that runs TTS on the CPU**, which this one does not. Its
   measurement stands either way: the first sentence is the whole latency, and everything after it renders
   faster than it can be spoken.

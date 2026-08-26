@@ -87,6 +87,16 @@ failure a report from a real user's environment rather than a curiosity to be wa
 covers all three for that reason. (A Windows-only crash on 2026-08-11 turned out to be a latent mistake
 that Linux and macOS had simply tolerated, which is the usual shape of these.)
 
+**A single GPU with modest VRAM is a supported configuration, not a degraded one.** The maintainer's
+development machine has an external GPU attached at the desk, so the LLM gets a card to itself and
+everything else — avatar, TTS, and the rest of the server's models — gets another. Away from the desk there
+is one card for all of it, and that is an ordinary way to run Raven rather than an edge case.
+
+Worth knowing because **the desk setup hides a whole class of problem**: anything where two subsystems
+contend for the same GPU simply does not happen where the work is done. So a contention issue will not
+surface on its own, will not reproduce when reported, and has to be sought deliberately by hiding the
+external GPU from the process. Treat "it is fine here" as saying nothing about the one-card case.
+
 Uses PDM with `pdm-backend`. **Python 3.11–3.12** (see `pyproject.toml`: `requires-python = "<3.13,>=3.11"`). Optional CUDA extras via `pdm install -G cuda`.
 
 ### Why the 3.12 upper cap
