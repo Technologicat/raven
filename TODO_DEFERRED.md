@@ -132,6 +132,15 @@ does the right thing ~99.9% of the time, and it has already answered the hard ha
 survive a rebuild, and `_find_next_or_prev_item` for choosing one. Borrow the shape rather than inventing a
 second one; a chat message and an info panel entry are the same problem wearing different clothes.
 
+**A third consumer, and the one that shows the anchor is not only about hotkeys: the *Show thinking*
+preference** (2026-08-26). It ships applying to the *next* reply rather than to the conversation on screen,
+purely because flipping it would otherwise open every trace at once and move every message below the first
+— the reader's place is simply lost. That is a workaround for the missing anchor and is marked as such in
+`chat_controller._thought_bubble`; with anchoring, immediate application is the better behaviour and the one
+to switch to. **Toggling a GUI option should never cost the reader their place when the corresponding new
+position can be computed** (Juha) — which is the general form of what the Visualizer's info panel already
+does, and the reason to borrow its mechanism rather than invent a second one.
+
 **Ctrl+T has the same fault, and wants the same anchor** (Juha, 2026-08-26). Toggling a message's thinking
 trace changes its height, which changes which message is bottommost-with-a-visible-button-row, which is what
 the rule picks — so the mark can move off the message that was just toggled, and the second press acts on a

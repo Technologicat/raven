@@ -6,7 +6,7 @@
 
 *Raven-librarian*
 
-- **a *Show thinking* toggle**, for when the reasoning is the part you want to read. Off by default, so a thinking model's trace starts collapsed behind its cloud; turn it on and traces arrive open. It takes effect from the next reply onward rather than rearranging the conversation you are looking at — opening every trace at once would move every message below the first one and lose your place. The cloud, or Ctrl+T, still opens any single reply's trace on the spot.
+- **a *Show thinking* toggle**, for when the reasoning is the part you want to read. Off by default, so a thinking model's trace starts collapsed behind its cloud; turn it on and traces arrive open. It takes effect from the next reply onward; the cloud, or Ctrl+T, opens the trace of a reply already on screen.
   - It says what is **shown**, not what the AI does: the model reasons either way. The toggles are now grouped by that distinction — what the AI may reach for, how the chat log is shown, what the avatar does.
 
 - **the thinking trace now lives in its bubble from the first word, and the cloud pulsates while the model is thinking.** Previously a thinking model's reasoning streamed inline in the chat, tinted, and snapped into a collapsible bubble only once the reply finished — so the wall of text you were about to collapse scrolled past in full first. It now grows inside the bubble it will stay in, collapsed, with the cloud beside it breathing for as long as the reasoning lasts and settling when the answer begins. Same vocabulary as the INDEXING / DOCS / READING / SYSTEM / WEB indicators: pulsating means still working.
