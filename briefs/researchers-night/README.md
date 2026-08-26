@@ -159,7 +159,7 @@ known before band 3 begins.
    item is in, not optional (Juha, 2026-08-26).
 
    **In progress, 2026-08-26.** Built as a sequence, data first so most of it is verifiable without a
-   window. Five of eight steps are done and committed; what remains is below.
+   window. Six of eight steps are done and committed; what remains is below.
 
    1. ~~The local-tokenizer fallback counted only the answer, never the reasoning.~~ Done.
    2. ~~`invoke` records where the turn's wall time went — `generation_metadata["phases"]`, holding
@@ -167,22 +167,20 @@ known before band 3 begins.
    3. ~~`StreamParser` recognizes reasoning that arrives with no opening tag (`reasoning_retcon`).~~ Done.
    4. ~~The trace grows in its bubble from the first word, cloud pulsating while it fills.~~ Done.
    5. ~~The `show_thinking` preference, applying to what arrives next.~~ Done.
-   6. **The readouts — next, and presentation only: the data is already stored.** Three places, decided
-      2026-08-26:
-      - **On the cloud row, visible**: `[~900t, 22.0s, 40.9t/s]`, in the format the message line already
-        uses. The `~` appears only when the thinking token count was apportioned rather than counted —
-        on LM Studio it is counted, since that backend reports `reasoning_tokens`.
-      - **Live while streaming**: the cloud row counts up (`thinking… 12.4 s`), so the wait is legible
-        rather than merely pulsing. This is the half that matters on a projector.
-      - **In a tooltip on the message's own stats line**: the four-row breakdown — prompt processing,
-        thinking, answer, total. The message line itself stays exactly as it is, since an old node cannot
-        be recomputed and one readout must not mean two things depending on age.
+   6. ~~**The readouts.**~~ Done. `[Thought for 759t, 8.79s, 86.36t/s]` on the cloud row, `Thinking…
+      4.8s, ~428t` counting up while streaming, and a four-column breakdown in a tooltip on the message's
+      own line (label / time / tokens / speed, units in the header, blanks where a quantity does not
+      apply). The message line's meaning is unchanged, since an old node cannot be recomputed.
    7. **`Enable thinking`** — `TODO.md`'s "Thinking toggle", pulled into this sprint and much smaller than
       its July design: `reasoning_effort: "none"`, measured working across Qwen 3.6, 3.8 and Gemma 4. No
       prefill, no per-family marker table.
    8. **Then the parser can start in `_PS_THINK`** when step 7 says thinking is on and the backend is
       single-channel — which closes `TODO_DEFERRED.md`'s "Streaming thinking shows as gray" live half.
       Headless-testable; end-to-end only against a single-channel backend, i.e. not before ooba.
+      - **It gained a second consumer on 2026-08-26, so do not cost it as a one-line parser tweak.**
+        Resuming a reply that was interrupted *mid-thought* needs the same signal — something has to say
+        "you are starting inside a think block". See `TODO.md`'s thinking-toggle item for the mechanism,
+        what is already measured, and the catch: it is a Qwen trick, and Gemma has no mirror for it.
 
    Two renderer bugs were found and fixed while verifying step 4, both of which had been stranding
    decorations on any reflow: list markers and blockquote bars. What is left of that is one queued item —
