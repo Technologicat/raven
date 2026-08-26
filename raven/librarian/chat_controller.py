@@ -706,13 +706,9 @@ class DPGChatMessage:
         # what *arrives* rather than rearranging what is already on screen. Ctrl+T, or the cloud, is how a
         # reply already on screen gets opened.
         #
-        # **That is a limitation, not the design.** Applying it immediately is the better behaviour and the
-        # one to build; what stands in the way is that this view cannot yet keep a reader's place across a
-        # layout change of that size, and opening every trace at once moves every message below the first.
-        # The Visualizer's info panel already solves precisely this — `info_panel._update_info_panel`'s
-        # scroll anchoring — and the chat view wants the same mechanism for several reasons besides this
-        # one. Revisit when it has it; toggling an option should never cost the reader their place when the
-        # corresponding new position can be computed.
+        # That is the design and not a limitation. A switch saying how the *next* reply should look has no
+        # business rewriting the conversation behind it — and doing so would also flatten whatever the
+        # reader had opened or closed by hand, which is the state they actually chose.
         if not self.parent_view.chat_controller.app_state.get("show_thinking", False):
             dpg.hide_item(self.gui_thought_group)
         return self.gui_thought_group

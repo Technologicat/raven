@@ -593,6 +593,30 @@ There is no shared keymap — bindings live in the hotkey handler, and these sur
 
 **Positional hotkeys** (keys chosen for physical location, e.g. WASD as an arrow-key alias for one-handed use) are keyboard-layout-dependent — WASD lands at ZQSD on AZERTY, and Z/Y swap on QWERTZ. Until the fleet grows layout-aware remapping, keep positional bindings as *aliases* alongside the layout-independent originals (the arrow keys), never as replacements.
 
+### Never lose the reader's scroll position
+
+**No action in the GUI may cost the user their place, so long as the corresponding new position is
+computable.** Not "rarely", and not "except after a rebuild": if it can be worked out where the thing the
+reader was looking at has gone, the view goes there. That covers every action, including the ones the app
+takes on its own — a message finalizing, a background rebuild, a panel repopulating — and not only the ones
+the user asked for.
+
+It is a standard rather than a nicety because the alternative silently punishes reading. A scroll position
+is the reader's own state, built by hand, and an app that discards it teaches them not to scroll away —
+which in a chat log or a document panel is most of what the thing is for.
+
+**Visualizer's info panel is the worked implementation, and it goes to considerable lengths to keep the
+promise** — which is the measure of how seriously the standard is meant, rather than a sign that it was
+overbuilt there. `_update_info_panel`'s `scroll_anchor_data`, tags with the build number stripped so an
+anchor survives a rebuild, and `_find_next_or_prev_item` to choose a new anchor when the old one no longer
+exists. Borrow that shape rather than inventing a second one — a chat message and an info-panel entry are
+the same problem in different clothes.
+
+**What it does not license is making a preference retroactive.** A switch that says how the *next* thing
+should look has no business rewriting what is already on screen; there the right answer is to change
+nothing, and no anchor is needed because nothing moved. Librarian's *Show thinking* is deliberately of that
+kind. The standard governs layout changes that *do* happen.
+
 ## Layered architecture
 
 ### Dependency direction
