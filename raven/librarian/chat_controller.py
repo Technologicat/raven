@@ -235,6 +235,88 @@ def format_chat_message_for_clipboard(message_number: Optional[int],
     return f"{message_heading}{message_text}"
 
 @memoize
+def format_generation_stats(*, n_tokens: int, dt: float, exact: bool = True) -> str:
+    """Format a token count, a wall time and the speed between them, as the chat log shows them.
+
+    `exact`: whether `n_tokens` is a count rather than an estimate. An estimate is marked with a `~`, the
+             same way the context-fill readout marks one — a number that only claims to be about right
+             should say so, or it will be quoted back as though it were measured.
+
+    One function because the message's own line and its thinking trace's line have to look alike: they are
+    the same three quantities over different spans, and a reader compares them at a glance.
+    """
+    tilde = "" if exact else "~"
+    # No speed where there is no time to divide by. A phase can genuinely have none — a turn that thought
+    # and then asked for a tool has no answer phase, and its leftover tokens are the tool call, generated
+    # inside a span this split cannot see into. Printing `0.00t/s` for them states a measurement that was
+    # never made; showing two figures instead says exactly what is known.
+    if dt < 0.005:
+        return f"[{tilde}{n_tokens}t, {dt:0.2f}s]"
+    return f"[{tilde}{n_tokens}t, {dt:0.2f}s, {tilde}{n_tokens / dt:0.2f}t/s]"
+
+# What the phase breakdown says under its table. Held here rather than inline so the two halves of the
+# tooltip are written in one place.
+_PHASE_BREAKDOWN_FOOTNOTE = ("Prompt processing is the wait before the model generates\n"
+                             "anything: how much of the prompt the backend's cache did\n"
+                             "not already hold. Its speed is not shown, because a warm\n"
+                             "KV cache still reports the whole prompt as its size.")
+
+def _phase_breakdown_rows(generation_metadata: dict, *,
+                          ended_in_tool_call: bool = False) -> list[tuple[str, str, str, str]] | None:
+    """Where a reply's wall time went, as `(label, time, tokens, speed)` rows. `None` when none was recorded.
+
+    The cells carry bare numbers; their units belong in the table's header, where they are stated once.
+
+    Up to four rows: prompt processing, thinking, answer, total. Only the first two phases are *stored* —
+    the answer is whatever is left of the total once they are taken off, which is why nothing here can
+    disagree with the line it explains.
+
+    **A cell is `""` where the quantity does not apply**, and that is the point of the shape. Prompt
+    processing has no token count of its own worth showing and no honest speed (a warm KV cache still
+    reports the whole prompt as its size). A turn that thought and then asked for a tool has no answer
+    *duration*, so no speed either, though its leftover tokens — the tool call — are real and shown.
+
+    One cell per quantity, rather than a bracketed triple per row, because the columns are what a reader
+    compares: which phase took the time, and which produced the tokens.
+
+    `ended_in_tool_call`: whether this message asked for a tool instead of replying. Then there is no answer
+                          at all — its tokens are the call itself, and they were generated inside a span
+                          this split cannot see into, since tool-call deltas arrive through the structured
+                          accumulator and never raise a content event. The row says so by name, and leaves
+                          the time blank rather than claiming the zero that subtraction produces.
+    """
+    phases = generation_metadata.get("phases")
+    if not phases:  # absent on a node stored before this was recorded, and on a reply that generated no text
+        return None
+    total_tokens = generation_metadata["n_tokens"]
+    total_dt = generation_metadata["dt"]
+    prefill_dt = (phases.get("prefill") or {}).get("dt", 0.0)
+    thinking = phases.get("thinking")
+
+    def row(label: str, dt: Optional[float], n_tokens: Optional[int] = None, exact: bool = True):
+        tilde = "" if exact else "~"
+        time_cell = "" if dt is None else f"{dt:0.2f}"
+        tokens_cell = "" if n_tokens is None else f"{tilde}{n_tokens}"
+        # No speed without a time to divide by, and none for a phase whose tokens we do not count.
+        speed_cell = "" if (n_tokens is None or dt is None or dt < 0.005) else f"{tilde}{n_tokens / dt:0.2f}"
+        return (label, time_cell, tokens_cell, speed_cell)
+
+    rows = [row("Prompt processing", prefill_dt)]
+    if thinking is not None:
+        exact = thinking.get("tokens_exact", False)
+        rows.append(row("Thinking", thinking["dt"], thinking["n_tokens"], exact))
+        answer_dt = total_dt - prefill_dt - thinking["dt"]
+        if ended_in_tool_call:
+            rows.append(row("Tool call", None, total_tokens - thinking["n_tokens"], exact))
+        else:
+            rows.append(row("Answer", answer_dt, total_tokens - thinking["n_tokens"], exact))
+    elif ended_in_tool_call:
+        rows.append(row("Tool call", total_dt - prefill_dt, total_tokens))
+    else:
+        rows.append(row("Answer", total_dt - prefill_dt, total_tokens))
+    rows.append(row("Total", total_dt, total_tokens))
+    return rows
+
 def _scan_for_root_nodes(datastore: chattree.Forest) -> List[str]:
     """The O(n) scan behind `_get_all_system_prompt_node_ids`, memoized on its own so the result can be filtered.
 
@@ -348,6 +430,11 @@ class DPGChatMessage:
         # message from a model that did not think, which is what "is there a trace here" is read from.
         self.gui_thought_button = None
         self.gui_thought_group = None
+        self.gui_thought_stats = None
+        # Whether this message's thinking trace opens as it is built. View state belonging to this
+        # *rendering*, like `show_full_text` below — see `_thought_bubble` for why the `show_thinking`
+        # preference is not read there directly.
+        self.start_thinking_open = False
         self.gui_keyboard_mark_widget = None  # populated by `build`; the dot the keyboard mark lights when this message is the current one
         self.gui_buttons_group = None  # populated by `build`; whether this is on screen decides which message the hotkeys act on
         self.gui_button_callbacks = {}  # {name0: callable0, ...} - to trigger button features programmatically
@@ -466,6 +553,7 @@ class DPGChatMessage:
         # would be rendered into a container that no longer exists.
         self.gui_thought_button = None
         self.gui_thought_group = None
+        self.gui_thought_stats = None
 
         # --------------------------------------------------------------------------------
         # lay out the role icon and the text content areas horizontally
@@ -526,10 +614,34 @@ class DPGChatMessage:
             if (generation_metadata := ai_message_node_payload.get("generation_metadata", None)) is not None:
                 n_tokens = generation_metadata["n_tokens"]
                 dt = generation_metadata["dt"]
-                speed = n_tokens / dt
-                dpg.add_text(f"[{n_tokens}t, {dt:0.2f}s, {speed:0.2f}t/s]",
-                             color=(120, 120, 120),
-                             parent=text_vertical_layout_group)
+                # Unchanged in meaning: the whole reply, thinking included. An old node cannot be
+                # recomputed, so this line must not come to mean two things depending on the node's age.
+                # The breakdown goes in a tooltip, where it costs no space in the log.
+                stats_widget = dpg.add_text(format_generation_stats(n_tokens=n_tokens, dt=dt),
+                                            color=(120, 120, 120),
+                                            parent=text_vertical_layout_group)
+                ended_in_tool_call = bool(ai_message_node_payload["message"].get("tool_calls"))
+                if (breakdown_rows := _phase_breakdown_rows(generation_metadata,
+                                                            ended_in_tool_call=ended_in_tool_call)) is not None:
+                    with dpg.tooltip(stats_widget):
+                        dpg.add_text("Where this reply's time went.")
+                        dpg.add_spacer(height=gui_config.margin)
+                        # A table, because the labels differ in length and the font is proportional: padded
+                        # spaces put the figures at four different x positions, which reads as four
+                        # unrelated lines rather than as a column to compare down.
+                        with dpg.table(header_row=True, policy=dpg.mvTable_SizingFixedFit,
+                                       borders_innerH=False, borders_outerH=False,
+                                       borders_innerV=False, borders_outerV=False):
+                            dpg.add_table_column(label="")
+                            dpg.add_table_column(label="time [s]")
+                            dpg.add_table_column(label="tokens")
+                            dpg.add_table_column(label="speed [t/s]")
+                            for cells in breakdown_rows:
+                                with dpg.table_row():
+                                    for cell in cells:
+                                        dpg.add_text(cell)
+                        dpg.add_spacer(height=gui_config.margin)
+                        dpg.add_text(_PHASE_BREAKDOWN_FOOTNOTE)
 
                 # Say when nothing was retrieved for this reply. Present only when the user asked to be told
                 # (speculation off); absent means there is nothing to say, which is why this tests `is False`
@@ -652,6 +764,23 @@ class DPGChatMessage:
 
         dpg.split_frame()  # ...and anything after this point runs in another frame.
 
+    def _thinking_stats_text(self) -> str:
+        """The `[900t, 22.0s, 40.9t/s]` line for this message's thinking, or `""` when there is none.
+
+        Empty for a message being streamed, which has no stored numbers yet and shows a live count instead,
+        and for one stored before the phase breakdown was recorded — an old node simply says nothing rather
+        than guessing.
+        """
+        if self.node_id is None:  # a reply still streaming; `set_thinking_progress` writes this line instead
+            return ""
+        payload = self.parent_view.chat_controller.datastore.get_payload(self.node_id)
+        thinking = ((payload.get("generation_metadata") or {}).get("phases") or {}).get("thinking")
+        if thinking is None:
+            return ""
+        return format_generation_stats(n_tokens=thinking["n_tokens"],
+                                       dt=thinking["dt"],
+                                       exact=thinking.get("tokens_exact", False))
+
     def _thought_bubble(self) -> Union[str, int]:
         """The container the thinking trace renders into, built on first use. Returns its DPG ID.
 
@@ -701,15 +830,23 @@ class DPGChatMessage:
         think_toggle_tooltip = dpg.add_tooltip(self.gui_thought_button)
         dpg.add_text("Show/hide thinking trace [Ctrl+T]", parent=think_toggle_tooltip)
 
-        self.gui_thought_group = dpg.add_group(parent=row)
-        # The preference is read here, when the bubble is built, and nowhere else — so flipping it decides
-        # what *arrives* rather than rearranging what is already on screen. Ctrl+T, or the cloud, is how a
-        # reply already on screen gets opened.
+        # A column beside the cloud, holding the numbers above the trace. The numbers stay put when the
+        # trace is collapsed — only `gui_thought_group` below them is hidden — so they do not move when it
+        # opens, and a collapsed bubble still says what the thinking cost.
+        column = dpg.add_group(parent=row)
+        self.gui_thought_stats = dpg.add_text(self._thinking_stats_text(), color=(120, 120, 120), parent=column)
+
+        self.gui_thought_group = dpg.add_group(parent=column)
+        # Whether this opens is decided per message, by whoever built it — *not* by reading the
+        # `show_thinking` preference here. The preference says how a reply being generated should arrive,
+        # and only the streaming message and the complete message that replaces it at the end of that turn
+        # count as that. Everything else — the history restored at startup, a branch switch, any rebuild —
+        # starts collapsed however the preference is set.
         #
-        # That is the design and not a limitation. A switch saying how the *next* reply should look has no
-        # business rewriting the conversation behind it — and doing so would also flatten whatever the
-        # reader had opened or closed by hand, which is the state they actually chose.
-        if not self.parent_view.chat_controller.app_state.get("show_thinking", False):
+        # Reading the preference here instead would make it retroactive by the back door: every rebuild
+        # would re-apply it to the whole conversation, which is exactly what the toggle is designed not to
+        # do, and what opened every stored trace on startup before this was a per-message decision.
+        if not self.start_thinking_open:
             dpg.hide_item(self.gui_thought_group)
         return self.gui_thought_group
 
@@ -1565,15 +1702,21 @@ class DPGCompleteChatMessage(DPGChatMessage):
     def __init__(self,
                  node_id: str,
                  gui_parent: Union[str, int],
-                 parent_view: "DPGLinearizedChatView"):
+                 parent_view: "DPGLinearizedChatView",
+                 start_thinking_open: bool = False):
         """A complete chat message displayed in the linearized chat view, linked to a node ID in the datastore.
 
         `node_id`: The ID of the chat node, in the datastore, from which to extract the data to show.
         `gui_parent`: DPG tag or ID of the GUI widget (typically child window or group) to add the chat message to.
         `parent_view`: The linearized chat view widget this chat message is rendered in (and is owned by).
+        `start_thinking_open`: Whether to show this message's thinking trace, if it has one, rather than
+                               collapsing it behind its cloud. `True` only for the reply that has just
+                               finished generating, and only when the user asked for open traces — every
+                               other complete message, restored or rebuilt, starts collapsed.
         """
         super().__init__(gui_parent=gui_parent,
                          parent_view=parent_view)
+        self.start_thinking_open = start_thinking_open
         self.node_id = node_id  # reference to the chat node (to ORIGINAL node data, not a copy)
         # Whether a long document result is showing in full. View state, not chat data: it belongs to this
         # rendering of the node, not to the node, so it resets whenever the view is rebuilt. That is the
@@ -2093,6 +2236,8 @@ class DPGStreamingChatMessage(DPGChatMessage):
         """
         super().__init__(gui_parent=gui_parent,
                          parent_view=parent_view)
+        # A reply being generated is exactly the case the preference speaks to.
+        self.start_thinking_open = parent_view.chat_controller.app_state.get("show_thinking", False)
         # What the cloud is currently saying, or `None` while nothing has been said yet. See `set_thinking`.
         self._thinking_shown = None
         self.build()
@@ -2101,6 +2246,22 @@ class DPGStreamingChatMessage(DPGChatMessage):
         super().build(role="assistant",  # TODO: parameterize this?
                       persona=self.parent_view.chat_controller.llm_settings.personas.get("assistant", None),
                       node_id=None)
+
+    def set_thinking_progress(self, dt: float, n_chunks: int) -> None:
+        """Show how long the model has been reasoning, and roughly how much of it there is so far.
+
+        `dt`: seconds since the first reasoning arrived.
+        `n_chunks`: text-bearing deltas so far. During the thinking phase every one of them is reasoning,
+                    and a streaming backend emits one per token — so it is the same estimate the stored
+                    figure falls back to, and it is marked with a `~` for the same reason.
+
+        With the trace collapsed there is otherwise nothing on screen but a pulsating cloud, which says
+        *something is happening* and not *how long you have been waiting*.
+        """
+        if self.gui_thought_stats is None:
+            return
+        with guiutils.nonexistent_ok():
+            dpg.set_value(self.gui_thought_stats, f"Thinking… {dt:0.1f}s, ~{n_chunks}t")
 
     def set_thinking(self, is_thinking: bool) -> None:
         """Say whether the model is reasoning right now, by pulsating this message's cloud or settling it.
@@ -2970,7 +3131,8 @@ class DPGLinearizedChatView:
 
     def add_complete_message(self,
                              node_id: str,
-                             scroll_view: bool = True) -> DPGCompleteChatMessage:
+                             scroll_view: bool = True,
+                             start_thinking_open: bool = False) -> DPGCompleteChatMessage:
         """Append the chat node with `node_id` to the end of the linearized chat view in the GUI.
 
         `scroll_view`: If `True`, then once the message has been added, wait for it to render and scroll the
@@ -2981,11 +3143,16 @@ class DPGLinearizedChatView:
                        own — an AI reply finalizing, a tool result arriving — pass `False`, and instead
                        sample `should_follow_tail` before the call and hand it to `follow_tail` after, so
                        a reader who has scrolled up is left where they put themselves.
+
+        `start_thinking_open`: See `DPGCompleteChatMessage`. Pass `True` only for the reply that has just
+                               finished generating, so that a trace the user was watching does not shut
+                               itself the moment the message finalizes.
         """
         with self.chat_controller.current_chat_history_lock:
             dpg_chat_message = DPGCompleteChatMessage(gui_parent=self.chat_messages_container_group_widget,
                                                       parent_view=self,
-                                                      node_id=node_id)
+                                                      node_id=node_id,
+                                                      start_thinking_open=start_thinking_open)
             self.chat_controller.current_chat_history.append(dpg_chat_message)
 
             # Disable the "continue generation" and "show chat continuation" buttons on the old messages.
@@ -3985,6 +4152,7 @@ class DPGChatController:
 
                 task_env.current_is_thought = False  # which channel the in-progress paragraph belongs to (thought bubble vs visible answer)
                 task_env.seen_content = False  # whether any visible-answer content has arrived yet (to fire the talking animation once)
+                task_env.thinking_t0 = None  # when reasoning first arrived, for the live count on the thought bubble
 
                 task_env.emotion_update_interval = 5  # how many lines of text to wait between emotion updates (NOTE: Qwen3 uses a double newline as its paragraph separator, so that eats an extra line)
                 task_env.emotion_recent_paragraphs = collections.deque([""] * (4 * task_env.emotion_update_interval))  # buffer with 75% overlap between updates, to stabilize the detection
@@ -4030,6 +4198,9 @@ class DPGChatController:
 
                     # Fire the generic talking animation once, when the model transitions from thinking to the
                     # visible answer (replaces the old "</think> seen" trigger).
+                    if is_thought and task_env.thinking_t0 is None:
+                        task_env.thinking_t0 = time.monotonic()
+
                     if not is_thought and not task_env.seen_content:
                         task_env.seen_content = True
                         logger.info("ai_turn.ai_turn_task.on_llm_progress: AI started writing the visible answer.")
@@ -4061,6 +4232,12 @@ class DPGChatController:
                     time_now = time.monotonic()
                     dt = time_now - task_env.t0  # seconds since last GUI update
                     dchunks = n_chunks - task_env.n_chunks0  # chunks since last GUI update
+                    if is_thought:
+                        # Rate-limited on the same cadence as the text below, since it is the same wait
+                        # being reported and a counter running faster than the words is its own noise.
+                        if dt >= 0.5 or (dt >= 0.25 and dchunks >= 10):
+                            streaming_chat_message.set_thinking_progress(time_now - task_env.thinking_t0,
+                                                                         n_chunks)
                     if "\n" in chunk_text:  # start new paragraph?
                         task_env.t0 = time_now
                         task_env.n_chunks0 = n_chunks
@@ -4119,7 +4296,12 @@ class DPGChatController:
                         # This one replaces rather than appends, so the offset is restored too, not just the pin.
                         follow_sample = self.view.sample_tail_follow()
                         delete_streaming_chat_message()  # no-ops when there is no in-progress message in the GUI
-                        self.view.add_complete_message(node_id, scroll_view=False)
+                        # The reply that has just finished is the one case the `show_thinking` preference
+                        # speaks to, so it survives the swap from streaming widget to stored one. Without
+                        # this the trace would shut itself at the exact moment the reader reached the end
+                        # of it.
+                        self.view.add_complete_message(node_id, scroll_view=False,
+                                                       start_thinking_open=self.app_state.get("show_thinking", False))
                         self.view.restore_scroll_after_swap(follow_sample)
                         self.update_context_fill_indicator()  # AI message completed -> context grew
 
