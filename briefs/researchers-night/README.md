@@ -153,13 +153,14 @@ known before band 3 begins.
 
 **Band 2 — a session each.**
 
-8. **The thinking trace: collapsed by default, with the cloud pulsating while the model thinks** —
+8. ~~**The thinking trace: collapsed by default, with the cloud pulsating while the model thinks.**~~ —
    `TODO.md:598`. Demo *correctness* by the argument already recorded there, and Juha's reason for keeping
    it in: hidden thinking is what people now expect from an LLM system. The token/time readout in the same
    item is in, not optional (Juha, 2026-08-26).
 
-   **In progress, 2026-08-26.** Built as a sequence, data first so most of it is verifiable without a
-   window. Seven of eight steps are done and committed; what remains is below.
+   **Done 2026-08-26**, all eight sub-steps. Built as a sequence, data first so most of it is verifiable
+   without a window. Sub-step 8's entry says what was deliberately left out of the sprint rather than
+   built.
 
    1. ~~The local-tokenizer fallback counted only the answer, never the reasoning.~~ Done.
    2. ~~`invoke` records where the turn's wall time went — `generation_metadata["phases"]`, holding
@@ -182,13 +183,27 @@ known before band 3 begins.
         asked for 1234 × 5678 rather than answering from its head (Juha, 2026-08-26). So on this model
         tool use does not ride on the thinking channel, and switching thinking off buys speed without
         costing the tools. Recorded here rather than in `TODO.md`, whose items are deleted when done.
-   8. **Then the parser can start in `_PS_THINK`** when step 7 says thinking is on and the backend is
-      single-channel — which closes `TODO_DEFERRED.md`'s "Streaming thinking shows as gray" live half.
-      Headless-testable; end-to-end only against a single-channel backend, i.e. not before ooba.
-      - **It gained a second consumer on 2026-08-26, so do not cost it as a one-line parser tweak.**
-        Resuming a reply that was interrupted *mid-thought* needs the same signal — something has to say
-        "you are starting inside a think block". See `TODO.md`'s thinking-toggle item for the mechanism,
-        what is already measured, and the catch: it is a Qwen trick, and Gemma has no mirror for it.
+   8. ~~**The live display when the opening tag never arrives.**~~ Done 2026-08-26, though **not the way
+      this step was written**, and the difference is worth reading before anyone reopens it.
+
+      The plan was to start the parser in `_PS_THINK` when step 7 says thinking is on. That does not work:
+      it needs three facts and the toggle supplies one — thinking is on, the backend does not split
+      reasoning into its own channel, and *this model's template pre-fills the open tag*. Without the
+      third, a thinking-enabled model that simply does not reason this turn puts its whole answer in the
+      thought bubble with no close to end it, which is worse than the defect being fixed.
+
+      What landed instead is the correction, forwarded live: `invoke` already computed it and declined to
+      pass it on, and the renderer's half had become a re-render rather than surgery — step 4 gave every
+      paragraph its own `is_thought`, and `_render_text` reads it per paragraph. So it needs no signal, no
+      flavor gate, and cannot swallow an answer. `TODO_DEFERRED.md` carries what is left: the interval
+      *before* the close tag, and the fact that none of it has been watched running, because the only
+      backend on hand cannot produce the event.
+
+      **Out of the sprint, deliberately:** the `_PS_THINK` start itself, whose only honest caller is the
+      mid-thought resume; and that resume, which is behind an unmeasured probe (what a backend's own
+      reasoning parser does with a prompt that ends inside a block) and is a Qwen mechanism with no Gemma
+      mirror. Neither is four-weeks work, and neither is exhibit-visible — the exhibit runs LM Studio,
+      which never reaches this path at all.
 
    Two renderer bugs were found and fixed while verifying step 4, both of which had been stranding
    decorations on any reflow: list markers and blockquote bars. What is left of that is one queued item —
