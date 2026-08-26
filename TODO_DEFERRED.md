@@ -5108,6 +5108,34 @@ Two halves, separable:
 
 Raised by Juha (2026-08-13), for discussion before building — the in-app cue is the open question.
 
+## A transient postprocessor effect cannot ease in or out
+
+*Cluster: avatar-effects · Cost: ? · Gate: a design decision about where the envelope lives · Filed: 2026-08-26*
+
+`DPGAvatarController.mark_discontinuity` overlays a chain fragment on the avatar's postprocessor chain, waits,
+and takes it off again. The parameters hold the same values throughout, so the effect appears at full strength
+and vanishes at full strength. A filter can animate *itself* off the frame counter — `digital_glitches` does,
+via `hold_min`/`hold_max` — but nothing can ramp a filter's parameters over the lifetime of the overlay, so a
+fade-in or fade-out is not expressible. Noticed by Juha (2026-08-26) reading a changelog entry that offered
+"a soft fade" as an alternative look, which is exactly what this cannot do.
+
+**What makes it a design question rather than an afternoon.** The obvious implementation — tick the parameters
+from the client and re-send the settings each step — is an HTTP round trip per frame for a cosmetic effect,
+against a server that reloads animator settings on each one. That is the wrong place for it. The two candidates
+that are not:
+
+- **An envelope in the postprocessor engine.** The chain grows a per-entry notion of "ramp this parameter from
+  A to B over N frames", alongside the `enabled` switch that landed 2026-08-26. Everything animates off
+  `frame_no`, which the engine already maintains, so nothing has to be sent per frame. The cost is a real
+  addition to the chain format, which is a published thing that the settings editor round-trips.
+- **A `strength` convention on the filters themselves.** Several already have one. A generic "scale this
+  filter's effect by *s*" would let the caller ramp one number rather than the engine ramping arbitrary
+  parameters — smaller, but it only works for filters where a single scalar means the right thing, and it is
+  not obvious that it does for e.g. `analog_vhstracking`.
+
+Worth settling before more effects are built on `mark_discontinuity`, since both candidates change what an
+effect *is*, and the second one would want the filters audited for whether they have an honest `strength`.
+
 ## Declined
 
 Items closed without doing. A reason is recorded so the decision stays made — an undocumented discard gets

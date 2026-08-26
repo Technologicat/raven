@@ -639,6 +639,11 @@ avatar_config = env(source_image_size=512,  # THA3 engine hardcoded input image 
 #
 # - To turn the whole thing off, use "avatar_discontinuity_effect_enabled" below.
 #
+# - The fragment is applied once and removed once, so its parameters hold the same values for as long as the
+#   effect is up. There is no envelope here: an effect cannot be told to ease in or fade out over its
+#   duration. What you can have is a filter that animates *itself* off the frame counter, which is what
+#   `digital_glitches` does - its "hold_min" and "hold_max" are counted in frames.
+#
 # For the available filters and what their parameters do, see `raven-avatar-settings-editor`, which lets you
 # try them live, and `raven.common.video.postprocessor`, which implements them.
 #
