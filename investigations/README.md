@@ -36,6 +36,7 @@ that stops the link decaying again, and it is worth keeping up even when the con
 | `thinking-toggle-cache/` | What flipping the thinking toggle mid-conversation costs. Nothing on Qwen, the whole KV cache on Gemma — decided by where each template puts its thinking marker, which the two models together prove and either alone would not |
 | `chat-template-think-prefill/` | Whether a thinking model's chat template already opens the `<think>` block before generation starts, leaving only the close on the wire. Every Qwen we run does — so a backend that parses reasoning server-side is the only thing standing between Raven and that path |
 | `todo-sweep-2026-08-10/` | Which `TODO_DEFERRED.md` items still hold against the code. Report only, and **complete** — all 130 carry a verdict (112 confirmed, 9 stale, 6 moved, 2 superseded, 1 left unchecked on purpose). Part C of `briefs/todo-sweep-2026-08-10/` |
+| `abort-inflight-request/` | How to abandon a backend request from another thread. `Response.close()` — the obvious route — neither wakes the blocked reader nor returns to its caller, blocking it for the whole read timeout; only `socket.shutdown` does both. The expensive prompt-processing wait falls after the headers, so there is a socket to reach, and the backend does drop the abandoned work |
 
 ## Shared instruments are pointed at, not copied
 
