@@ -255,11 +255,25 @@ def format_generation_stats(*, n_tokens: int, dt: float, exact: bool = True) -> 
     return f"[{tilde}{n_tokens}t, {dt:0.2f}s, {tilde}{n_tokens / dt:0.2f}t/s]"
 
 # What the phase breakdown says under its table. Held here rather than inline so the two halves of the
-# tooltip are written in one place.
-_PHASE_BREAKDOWN_FOOTNOTE = ("Prompt processing is the wait before the model generates\n"
-                             "anything: how much of the prompt the backend's cache did\n"
-                             "not already hold. Its speed is not shown, because a warm\n"
-                             "KV cache still reports the whole prompt as its size.")
+# tooltip are written in one place. Rendered as Markdown, so no hand-wrapping — `wrap` sets the width, and
+# a single newline would come out as a space anyway.
+#
+# Markdown is safe here despite the "at most one `dpg_markdown.add_text` before the first frame" rule: a
+# message's tooltip is built with the message, long after the render loop is up, and the message body
+# itself already renders this way. Prose only, though — a list or a code span inside a *hidden* container
+# is a different matter (see `raven/vendor/DearPyGui_Markdown/text_attributes.py`, which still positions
+# those from a laid-out read).
+_PHASE_TOOLTIP_WRAP_W = 430  # pixels; about the width the table above it comes out at
+
+_PHASE_BREAKDOWN_FOOTNOTE = ("*Prompt processing* is the wait before the model generates anything: how much of "
+                             "the prompt the backend's cache did not already hold. Its speed is not shown, "
+                             "because a warm KV cache still reports the whole prompt as its size.")
+
+# Added only when the turn ended in a tool call, since it explains a row that is otherwise not there.
+_PHASE_BREAKDOWN_TOOL_CALL_NOTE = ("The tool call's *time* is counted under *Thinking*. A call does not arrive "
+                                   "as generated text, so there is no way to see where the reasoning stopped "
+                                   "and the call began; only its tokens can be told apart, and those are what "
+                                   "its row shows.")
 
 def _phase_breakdown_rows(generation_metadata: dict, *,
                           ended_in_tool_call: bool = False) -> list[tuple[str, str, str, str]] | None:
@@ -641,7 +655,10 @@ class DPGChatMessage:
                                     for cell in cells:
                                         dpg.add_text(cell)
                         dpg.add_spacer(height=gui_config.margin)
-                        dpg.add_text(_PHASE_BREAKDOWN_FOOTNOTE)
+                        dpg_markdown.add_text(_PHASE_BREAKDOWN_FOOTNOTE, wrap=_PHASE_TOOLTIP_WRAP_W)
+                        if ended_in_tool_call:
+                            dpg.add_spacer(height=gui_config.margin)
+                            dpg_markdown.add_text(_PHASE_BREAKDOWN_TOOL_CALL_NOTE, wrap=_PHASE_TOOLTIP_WRAP_W)
 
                 # Say when nothing was retrieved for this reply. Present only when the user asked to be told
                 # (speculation off); absent means there is nothing to say, which is why this tests `is False`
