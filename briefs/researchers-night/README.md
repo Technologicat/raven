@@ -208,7 +208,35 @@ known before band 3 begins.
    Two renderer bugs were found and fixed while verifying step 4, both of which had been stranding
    decorations on any reflow: list markers and blockquote bars. What is left of that is one queued item —
    block constructs need a block container, which is also what gives a quote a single full-height bar.
-9. **The turn-sequencing race with the abortable prefill.**
+9. **The turn-sequencing race with the abortable prefill.** The mechanism the two share is measured in
+   `investigations/abort-inflight-request/` — and it is not the one the deferred items assumed. Closing the
+   `requests` response from outside neither wakes the blocked reader nor returns to its caller, so a Cancel
+   button wired to it would freeze the GUI for the length of the read timeout; `socket.shutdown` is what
+   works. That an abort frees the *backend*, not merely the client thread, is measured there too.
+
+   **What each control does while a reply is in flight** — decided 2026-08-26, and the four answers are not
+   the same because the four actions do not mean the same thing:
+
+   - **Switching branches lets the turn finish**, quietly, on the branch it started from. This is the
+     Librarian-shaped answer: the tree keeps growing while you browse it, and the reply is waiting when you
+     come back. It needs no cancellation, only a guard stopping a finished turn from writing into a view
+     the user has since navigated away from. **New chat is a branch switch in disguise** — the docs already
+     say so — so it behaves the same way.
+   - **Cancel (Ctrl+G) is the stop-what-you-are-doing control**, and the only one that abandons work. It
+     exists already; what this item adds is that it starts working *during prompt processing*, where today
+     the cooperative flag cannot be read until tokens flow.
+   - **Send and Reroll refuse** until the reply is complete. Both are ungated today — `app.py` still
+     carries the `# TODO: disable this button while AI is writing` — and both currently start a second
+     concurrent generation against the same backend, with two turns writing HEAD.
+
+   The alternative considered and rejected for branch switching was cancelling the turn, which is what the
+   deferred item originally proposed. Once the guard exists the bleed is gone either way, so cancelling
+   would buy only a freed backend, at the cost of discarding a reply the user may well come back for.
+
+   **Queueing a message sent during a reply** was raised as a possible replacement for Send's refusal, and
+   is *not* part of this item. It needs its own cancellation, a way to amend a queued message in place
+   before it goes, and invalidation whenever the context it was written against changes — reroll, new chat
+   or a branch switch.
 10. **The STT silence level / autostop GUI** — see below for why it is on the path.
 11. **The avatar's expression follows the spoken words rather than the streaming ones** — ranked in on
     2026-08-26, out of the three items raised that day. It is the one of them the exhibit's own hardware
