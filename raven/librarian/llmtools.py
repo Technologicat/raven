@@ -129,9 +129,13 @@ TOOLS = [
                                                                "description": ("The expression, in Python "
                                                                                "syntax; e.g. '2 + 2', "
                                                                                "'sqrt(2)', '(1 + 5) / 7'. "
-                                                                               "Functions from the math "
-                                                                               "module are available, as are "
-                                                                               "pi and e.")}}}}},
+                                                                               "The math module's functions "
+                                                                               "are available under their "
+                                                                               "bare names - write "
+                                                                               "'sqrt(2)', not "
+                                                                               "'math.sqrt(2)' - and so are "
+                                                                               "the constants pi, e and "
+                                                                               "tau.")}}}}},
     {"type": "function",
      "function": {"name": "search_documents",
                   "description": ("Search the user's local document database. Use this to look for material "
@@ -631,10 +635,11 @@ def get_current_time() -> str:
 
 
 CANONICAL_BAD_EXPRESSION = ("That is not an expression this calculator can evaluate: {reason}. It takes "
-                            "arithmetic in Python syntax - numbers, the usual operators, and functions from "
-                            "the math module - and nothing else. Statements, assignments, variables and "
-                            "attribute access are not available. Rewrite it as a single expression, or work "
-                            "it out yourself and say so.")
+                            "arithmetic in Python syntax - numbers, the usual operators, the math module's "
+                            "functions under their bare names ('sqrt(2)', not 'math.sqrt(2)'), and the "
+                            "constants pi, e and tau - and nothing else. Statements, assignments, variables "
+                            "and attribute access are not available. Rewrite it as a single expression, or "
+                            "work it out yourself and say so.")
 
 # What the calculator may call. `simpleeval`'s own defaults are dropped rather than extended: they include
 # `rand` and `randint`, and a tool named `calculate` that can silently return a different answer to the same

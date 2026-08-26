@@ -21,6 +21,10 @@
   - **Supported models: Qwen 3.5, 3.6 and 3.8, and Gemma 4.** Those are the two tokenizer constructions Raven assembles — the byte-level one most current families share, and Gemma's, which is built differently throughout. Other models using either construction are likely to work as well, since the check above is what decides, not a list.
   - **It declines rather than guessing.** A file whose name only partly matches the model is not used — a publisher's prefix says who packaged the file, not whose vocabulary is inside. And if the backend cannot be asked to confirm the tokenizer at all, only constructions measured in advance are trusted; anything else keeps the estimate. Every refusal says why in the log, which also names which of the two is counting for you.
 
+- **a calculator the AI can reach for**, so arithmetic stops being guessed. Ask for a total, a square root or a percentage and the model works it out with a real evaluator instead of predicting the digits — which it does badly, and confidently. Nothing to switch on: it needs neither the documents nor the network, so it keeps working with both toggles off.
+  - Expressions are Python's, with the `math` module's functions available under their bare names — `sqrt(2)`, `pi`, `log(1000, 10)`. Nothing else is reachable: no variables, no attribute access, no statements, and no random numbers, a calculator that can answer the same question twice differently being worse than none.
+  - An expression it cannot evaluate comes back as an explanation of what it does take, so the model can correct itself and answer rather than failing the turn.
+
 - **a READING indicator**, lit while an attached document's text is being extracted. Arriving at a branch whose PDFs have not been read yet spends a second or two reading them before anything else can start, and nothing on screen said so. It gets its own row between DOCS and SYSTEM rather than sharing one of theirs: extraction is local work that happens before the backend sees anything, and what these indicators are for is saying *where* the time is going.
 
 *Constellation-wide*

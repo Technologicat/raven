@@ -128,3 +128,45 @@ def test_the_model_calls_a_tool_and_the_result_reaches_the_reply(llm_settings):
                                                      f"{dict(record.tool_calls)}")
     assert record.reply.strip(), ("the tool was called but the turn ended without a reply, so the result "
                                   "never came back to the user")
+
+
+# Every character a model might put between the thousands. The spaces are given as code points rather than
+# pasted: four of them are indistinguishable on screen, and a reformat or a whitespace trim would silently
+# turn one into another while the diff still looked clean.
+_THOUSANDS_SEPARATORS = (",", ".", "_") + tuple(chr(cp) for cp in (0x0020,   # SPACE
+                                                                   0x00A0,   # NO-BREAK SPACE
+                                                                   0x202F,   # NARROW NO-BREAK SPACE, the SI-style separator
+                                                                   0x2009))  # THIN SPACE
+
+
+def test_the_model_calls_the_calculator_and_the_arithmetic_comes_back_right(llm_settings):
+    """The one tool whose result can be checked without checking the model.
+
+    `calculate` is the second tool needing nothing outside the process, and it differs from
+    `get_current_time` in the way that matters here: the right answer is knowable from this side. So this
+    asserts on the reply's *content*, where the tests above deliberately do not — on a number a model
+    working it out in its head reliably gets wrong and the tool reliably gets right. Five digits times four
+    is past what any current model does dependably unaided, which is the whole reason the tool exists.
+
+    That is still an assertion about the tool loop rather than about the model: a reply carrying the right
+    nine digits got them from the tool, the alternative being a model that multiplied correctly in its head
+    and therefore had no need of any of this.
+
+    Separators are stripped first. Whether a model writes `443339232` or `443,339,232` is presentation, and
+    a European writer's `443.339.232` is the same choice made with a different character.
+    """
+    record = agent.turn(llm_settings,
+                        user_message_text="What is 48273 times 9184? Use your calculator tool, then say "
+                                          "the result.",
+                        tools_enabled=True,
+                        internet_enabled=False,
+                        docs_enabled=False,
+                        use_character_card=False)
+
+    assert "calculate" in record.tool_calls, (f"expected a `calculate` call, got {dict(record.tool_calls)}; "
+                                              f"reply was {record.reply!r}")
+    plain = record.reply
+    for separator in _THOUSANDS_SEPARATORS:
+        plain = plain.replace(separator, "")
+    assert str(48273 * 9184) in plain, (f"the tool was called but its answer did not reach the reply: "
+                                        f"{record.reply!r}")

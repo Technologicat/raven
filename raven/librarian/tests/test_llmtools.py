@@ -59,6 +59,8 @@ def test_big_integers_stay_exact():
     "'a' * 10 ** 10",                    # ...and by repetition
     "1 / 0",                             # ordinary arithmetic failure
     "sqrt(-1)",                          # ...and a domain error
+    "math.sqrt(2)",                      # the module prefix; `math` is not a name here, so it never
+                                         # reaches the attribute access above
     "",                                  # nothing at all
 ])
 def test_it_declines(expression):
@@ -72,6 +74,24 @@ def test_a_refusal_says_what_to_do_instead():
     result = llmtools.calculate("x = 1")
     assert "single expression" in result
     assert "yourself" in result, "the model should be told it may simply answer without the tool"
+
+
+def test_the_guidance_names_the_bare_spelling_of_the_math_functions():
+    """Both places the model reads about the expression language have to rule out the `math.` prefix.
+
+    Measured against qwen3.6-35b-a3b on 2026-08-26, asking for a circle's area minus its circumference:
+    with the earlier wording ("functions from the math module are available") 4 of 8 samples wrote
+    `math.pi`, took the refusal, and spent a second round recovering — twice by substituting a truncated
+    decimal literal for `pi`. Saying instead that the names are bare took it to 0 of 8.
+
+    So this asserts the contrast is spelled out, not merely that the tool refuses the prefix. The refusal
+    is what the model reads *after* wasting a round; the spec is what stops the round being spent.
+    """
+    for guidance in (llmtools.CANONICAL_BAD_EXPRESSION,
+                     next(spec["function"]["parameters"]["properties"]["expression"]["description"]
+                          for spec in llmtools.TOOLS if spec["function"]["name"] == "calculate")):
+        assert "math.sqrt(2)" in guidance, f"the wrong spelling is not shown: {guidance}"
+        assert "'sqrt(2)'" in guidance, f"the right spelling is not shown: {guidance}"
 
 
 def test_the_random_functions_are_not_available():
