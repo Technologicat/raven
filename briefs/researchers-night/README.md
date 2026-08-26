@@ -210,16 +210,21 @@ known before band 3 begins.
    block constructs need a block container, which is also what gives a quote a single full-height bar.
 9. **The turn-sequencing race with the abortable prefill.**
 10. **The STT silence level / autostop GUI** — see below for why it is on the path.
-11. **Block-level Markdown, the remaining steps** — the single-newline split, which is the barrier fenced
+11. **The avatar's expression follows the spoken words rather than the streaming ones** — ranked in on
+    2026-08-26, out of the three items raised that day. It is the one of them the exhibit's own hardware
+    does not excuse: TTS is on every time the avatar speaks, so a face reacting to a sentence the voice has
+    not reached is live all evening. The section below carries the design and says why the other two stayed
+    out.
+12. **Block-level Markdown, the remaining steps** — the single-newline split, which is the barrier fenced
     code and multi-line lists are behind. **Step 5 came out of this band and landed on 08-25** with step 1:
     the white bullets were visible the moment headings started rendering, and step 1 had already built the
     fallback the marker colours needed.
 
 **Band 3 — the large ones.**
 
-12. **The graph view** (brief 16).
-13. **`crt-display`.**
-14. **`atmospheric-dust`.**
+13. **The graph view** (brief 16).
+14. **`crt-display`.**
+15. **`atmospheric-dust`.**
 
 And the two whose detail belongs with the ordering rather than in it:
 
@@ -327,14 +332,31 @@ cheapest of the three.
 
 ### Raised 2026-08-26 — what the avatar does while a reply is being generated
 
-Three items from Juha, arriving after the 08-25 pass and therefore **unranked**: they are not in a band,
-and putting them in one is a scheduling decision of its own. They are written up together because they are
-one subject — what the avatar, the emotion detector and the TTS each do *during* a reply rather than after
-it — and because two of them want the same piece of machinery, the sentence split that already exists
-inside `DPGAvatarController.preprocess_task`.
+Three items from Juha, arriving after the 08-25 pass. They are written up together because they are one
+subject — what the avatar, the emotion detector and the TTS each do *during* a reply rather than after it —
+and because two of them want the same piece of machinery, the sentence split that already exists inside
+`DPGAvatarController.preprocess_task`.
+
+**Ranked 2026-08-26, and the exhibit's hardware decides two of the three.** The exhibit runs the full rig
+with the eGPU attached, so items 1 and 3 below — both filed for the single-GPU, low-VRAM, CPU-TTS
+configuration — buy little there and **stay out of the sprint**. Item 2 went into band 2 as its item 11:
+speech is on whenever the avatar talks, so it is live all evening regardless of what the machine can spare.
+
+- **Item 1 remains wanted for the road**, where it was aimed in the first place; it is simply not
+  exhibit work.
+- **Item 3's value returns if TTS ends up on the CPU anyway** — which is a question about how the rig is
+  finally budgeted rather than about the rig's size, since the LLM, the avatar and the TTS all want the
+  same cards. Worth asking once when the exhibit machine is configured, and re-ranking then if the answer
+  is CPU.
 
 Their common shape is that each currently acts on the wrong unit of work: the whole turn where it wants the
 sentence, or the streamed text where it wants the spoken text.
+
+**The band-2 order after this ranking is 9, 10, 11, 12, then band 3.** Correctness first, then the item
+that can only be tuned in the room, then the avatar's face, then the Markdown polish. The pass's one
+constraint still holds: the graph view stays ahead of `crt`. If the four weeks tighten, the two to give up
+are the Markdown remainder and the dust — the dust was declared slack from the start, and the Markdown
+remainder is the only band-2 item nobody in the room will notice missing.
 
 1. **An option to hold the avatar's video off until the answer is complete** — GPU anti-congestion.
 
