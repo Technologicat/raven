@@ -5114,9 +5114,9 @@ Raised by Juha (2026-08-13), for discussion before building — the in-app cue i
 
 `DPGAvatarController.mark_discontinuity` overlays a chain fragment on the avatar's postprocessor chain, waits,
 and takes it off again. The parameters hold the same values throughout, so the effect appears at full strength
-and vanishes at full strength. A filter can animate *itself* off the frame counter — `digital_glitches` does,
-via `hold_min`/`hold_max` — but nothing can ramp a filter's parameters over the lifetime of the overlay, so a
-fade-in or fade-out is not expressible. Noticed by Juha (2026-08-26) reading a changelog entry that offered
+and vanishes at full strength. A filter can animate *itself* — `digital_glitches` does, via `hold_min`/
+`hold_max` — but nothing can ramp a filter's parameters over the lifetime of the overlay, so a fade-in or
+fade-out is not expressible. Noticed by Juha (2026-08-26) reading a changelog entry that offered
 "a soft fade" as an alternative look, which is exactly what this cannot do.
 
 **What makes it a design question rather than an afternoon.** The obvious implementation — tick the parameters
@@ -5125,9 +5125,11 @@ against a server that reloads animator settings on each one. That is the wrong p
 that are not:
 
 - **An envelope in the postprocessor engine.** The chain grows a per-entry notion of "ramp this parameter from
-  A to B over N frames", alongside the `enabled` switch that landed 2026-08-26. Everything animates off
-  `frame_no`, which the engine already maintains, so nothing has to be sent per frame. The cost is a real
-  addition to the chain format, which is a published thing that the settings editor round-trips.
+  A to B over N frames", alongside the `enabled` switch that landed 2026-08-26. The engine already maintains
+  `frame_no` for exactly this — a float off the monotonic clock, normalized to a 25 FPS reference
+  (`CALIBRATION_FPS`), so anything driven from it is framerate-independent for free and nothing has to be
+  sent per frame. The cost is a real addition to the chain format, which is published and round-tripped by
+  the settings editor.
 - **A `strength` convention on the filters themselves.** Several already have one. A generic "scale this
   filter's effect by *s*" would let the caller ramp one number rather than the engine ramping arbitrary
   parameters — smaller, but it only works for filters where a single scalar means the right thing, and it is

@@ -641,8 +641,12 @@ avatar_config = env(source_image_size=512,  # THA3 engine hardcoded input image 
 #
 # - The fragment is applied once and removed once, so its parameters hold the same values for as long as the
 #   effect is up. There is no envelope here: an effect cannot be told to ease in or fade out over its
-#   duration. What you can have is a filter that animates *itself* off the frame counter, which is what
-#   `digital_glitches` does - its "hold_min" and "hold_max" are counted in frames.
+#   duration. What you can have is a filter that animates *itself*, which is what `digital_glitches` does -
+#   "hold_min" and "hold_max" are how long it keeps one glitch pattern before randomizing the next.
+#
+#   Those are given "in frames", which is a video-world way of writing a duration rather than a count of
+#   rendered frames: the postprocessor drives its animations from a clock, normalized to a reference of
+#   25 FPS. So a filter's timing is the same whatever framerate the avatar is actually rendering at.
 #
 # For the available filters and what their parameters do, see `raven-avatar-settings-editor`, which lets you
 # try them live, and `raven.common.video.postprocessor`, which implements them.
