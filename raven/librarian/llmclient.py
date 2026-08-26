@@ -1635,8 +1635,11 @@ def thinking_token_count(*,
     if not reasoning_content:
         return None, False
 
-    # The backend's own split, where it reports one — OpenAI's o-series spelling. Tried rather than relied
-    # on: a local backend may leave it out, and no local one is known to fill it in.
+    # The backend's own split, where it reports one — OpenAI's o-series spelling. LM Studio does report it,
+    # on the streamed usage chunk as well as the whole-response one (measured 2026-08-26 against
+    # qwen3.6-35b-a3b), so on that backend this tier answers exactly with no local tokenizer configured at
+    # all. Still asked for rather than assumed: it is optional in the protocol, and a backend that omits it
+    # falls through to the tiers below.
     details = (usage or {}).get("completion_tokens_details") or {}
     if details.get("reasoning_tokens") is not None:
         return details["reasoning_tokens"], True
