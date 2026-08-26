@@ -52,7 +52,7 @@ import requests
 import sys
 import threading
 import time
-from typing import Any, Callable, Collection, Dict, List, Optional, Tuple
+from typing import Any, Callable, Collection
 
 import sseclient  # pip install sseclient-py
 
@@ -146,7 +146,7 @@ if os.path.exists(librarian_config.llm_api_key_file):  # TODO: test this (implem
 # --------------------------------------------------------------------------------
 # Utilities
 
-def list_models(backend_url: str) -> List[str]:
+def list_models(backend_url: str) -> list[str]:
     """List the model ids available at `backend_url`, via the standard OpenAI `/v1/models` endpoint.
 
     Used for a model picker and the connection probe (order irrelevant). For the *loaded* model's identity,
@@ -210,7 +210,7 @@ def detect_backend_flavor(backend_url: str) -> str:
         pass
     return "generic"
 
-def _format_lmstudio_model_label(model_record: Dict) -> str:
+def _format_lmstudio_model_label(model_record: dict) -> str:
     """Assemble a rich identity line from an LM Studio `/api/v0/models` record.
 
     E.g. `qwen3.5-4b, Q4_K_XL, 128 Ki context` — accurate, structured, better than a bare GGUF filename.
@@ -326,7 +326,7 @@ def setup(backend_url: str,
                       LM Studio (id, quant, context), the GGUF filename on ooba, or "No model information is
                       available" when a generic backend can't disambiguate (never a guess). See `_resolve_model_info`.
 
-        `model_id: Optional[str]`: The model id sent in each request's `model` field (LM Studio JIT loads it on
+        `model_id: str | None`: The model id sent in each request's `model` field (LM Studio JIT loads it on
                                    demand), or `None`. Distinct from `model`, which is the display identity.
 
         `backend_flavor: str`: Which OpenAI-compatible backend this is — "oobabooga", "lmstudio", or "generic".
@@ -335,13 +335,13 @@ def setup(backend_url: str,
         `context_length: int`: The loaded context window in tokens — backend-reported where available, else a
                                conservative 64k default (a warning is logged when defaulted).
 
-        `model_is_vlm: Optional[bool]`: Whether the loaded model accepts image input, as a tri-state — `True` /
+        `model_is_vlm: bool | None`: Whether the loaded model accepts image input, as a tri-state — `True` /
                                         `False` when the backend reports it (LM Studio, via the model record's
                                         `type == "vlm"`), or `None` when it can't be determined (ooba / generic).
                                         The image-attach UI gates on this: a definite `False` refuses attachment
                                         with a clear message; `None` allows it and lets the backend reject.
 
-        `model_is_loaded: Optional[bool]`: Whether the backend has a model resident and ready to answer, as the
+        `model_is_loaded: bool | None`: Whether the backend has a model resident and ready to answer, as the
                                            same tri-state — `True` / `False` on LM Studio and ooba, `None` on a
                                            generic backend, whose model list says what it has rather than what
                                            is running. The frontends show a definite `False`; `None` is not a
@@ -368,33 +368,33 @@ def setup(backend_url: str,
                           ends of a conversation, so a call made without the character is made without this
                           too; see `chatutil.create_initial_system_message`.
 
-        `stopping_strings: List[str]`: List of strings that automatically interrupt the AI in `invoke`.
+        `stopping_strings: list[str]`: List of strings that automatically interrupt the AI in `invoke`.
                                        The default is `[f"\n{user}:"]`, which prevents old models' habit of speaking on the user's behalf.
 
                                        NOTE: Tool calls will not be processed if a stopping string is hit.
 
         `greeting: str`: The AI's first message, used for starting a new chat.
 
-        `tools: List[Dict[str, Any]]`: JSON specifications of available tools (for LLMs capable of tool-calling).
+        `tools: list[dict[str, Any]]`: JSON specifications of available tools (for LLMs capable of tool-calling).
 
-        `tool_entrypoints: Dict[str, Callable]`: The Python functions that implement the tools.
+        `tool_entrypoints: dict[str, Callable]`: The Python functions that implement the tools.
 
-        `document_tool_names: FrozenSet[str]`: Those tool names that search or read the document database, and so
+        `document_tool_names: frozenset[str]`: Those tool names that search or read the document database, and so
                                                should only be offered on turns where it is in play. Callers pass a
                                                filtered name set to `invoke`'s `tool_names`;
                                                `maybe_tool_names_for_turn` builds it. Every tool is *registered*
                                                regardless — availability is a per-turn question, not a
                                                per-session one.
 
-        `network_tool_names: FrozenSet[str]`: The same, for the tools that reach the network, gated on the
+        `network_tool_names: frozenset[str]`: The same, for the tools that reach the network, gated on the
                                               user's "Internet" switch. A tool in neither set answers to no
                                               switch and is always offered.
 
         `backend_url: str`: The `backend_url` argument, as-is.
 
-        `request_data: Dict[str, Any]`: Generation settings for the LLM backend.
+        `request_data: dict[str, Any]`: Generation settings for the LLM backend.
 
-        `personas: Dict[str, Optional[str]]`: Persona (character name) for each of the roles (dict keys) "user", "assistant", "system", and "tool".
+        `personas: dict[str, str | None]`: Persona (character name) for each of the roles (dict keys) "user", "assistant", "system", and "tool".
                                               Used for constructing chat messages (see `raven.librarian.chatutil.create_chat_message`).
 
                                               The "system" and "tool" roles typically have no persona; for them, the persona is stored as `None`.
@@ -466,7 +466,7 @@ def connect(backend_url: str, quiet: bool = False) -> env:
             print(colorizer.colorize(headline, colorizer.Style.BRIGHT, colorizer.Fore.GREEN))
     return settings
 
-def describe_backend_status(status: sym, backend_url: str) -> Tuple[str, str]:
+def describe_backend_status(status: sym, backend_url: str) -> tuple[str, str]:
     """Return `(headline, advice)` for `status` — what is true, and what the user can do about it.
 
     One source for the wording every frontend needs: the console verdict `connect` prints, the message a
@@ -682,7 +682,7 @@ def configure(model_info: env,
     return settings
 
 
-def _start_tokenizer_load(settings: env, tokenizer_source: Optional[str]) -> None:
+def _start_tokenizer_load(settings: env, tokenizer_source: str | None) -> None:
     """Report which tier `count_tokens` will use, and start loading a local tokenizer if there is one.
 
     Loading happens on a daemon thread and assigns `settings.tokenizer` when it finishes: reading a GGUF
@@ -756,7 +756,7 @@ def _start_tokenizer_load(settings: env, tokenizer_source: Optional[str]) -> Non
 _DEFAULT_TOKENS_PER_CHARACTER = 0.27  # tokens per character; rough English/markup default, refined from real usage
 _tokenizer_cache = {}  # path -> loaded tokenizer (or None if loading failed); avoids reloading the same tokenizer
 
-def _resolve_tokenizer_source(path: str, model_names: Collection[str]) -> Optional[str]:
+def _resolve_tokenizer_source(path: str, model_names: Collection[str]) -> str | None:
     """Decide what `path` is pointing at, and return the thing to load from. `None` if there is nothing.
 
     Three shapes are accepted, because a user has whichever one their setup produced:
@@ -780,13 +780,13 @@ def _resolve_tokenizer_source(path: str, model_names: Collection[str]) -> Option
     return str(source)
 
 
-def _make_backend_token_counter(settings: env) -> Callable[[str], Optional[int]]:
+def _make_backend_token_counter(settings: env) -> Callable[[str], int | None]:
     """Return `text -> the backend's token count for it`, for checking a local tokenizer against the model in use.
 
     The count includes whatever framing the backend's chat template adds, and is not required to be free of
     it: `gguftokenizer` compares two probes and takes the difference, where a fixed overhead cancels.
     """
-    def count(text: str) -> Optional[int]:
+    def count(text: str) -> int | None:
         if settings.backend_flavor == "oobabooga":
             return _ooba_token_count(settings.backend_url, text)  # counts the raw text, no template around it
         probe = [{"role": "user", "content": [chatutil.text_content_part(text)]}]
@@ -799,7 +799,7 @@ def _make_backend_token_counter(settings: env) -> Callable[[str], Optional[int]]
     return count
 
 
-def _load_local_tokenizer(path: str, backend_counter: Optional[Callable[[str], Optional[int]]] = None):
+def _load_local_tokenizer(path: str, backend_counter: Callable[[str], int | None] | None = None):
     """Load (and cache) a local tokenizer for exact token counting, or return `None` on failure.
 
     `path` is a `.gguf` file, a directory with `tokenizer.json` + `tokenizer_config.json`, or a HF repo id.
@@ -829,7 +829,7 @@ def _ooba_token_count(backend_url: str, text: str) -> int:
     response = requests.post(f"{backend_url}/v1/internal/token-count", headers=headers, json={"text": text}, timeout=librarian_config.llm_network_timeout)
     return response.json()["length"]
 
-def count_tokens(settings: env, text: str) -> Tuple[int, bool]:
+def count_tokens(settings: env, text: str) -> tuple[int, bool]:
     """Count tokens in `text` for the loaded model. Returns `(count, is_exact)`.
 
     Useful for checking prompt length after injecting RAG context etc. Tiers, in order of preference:
@@ -871,7 +871,7 @@ def image_token_cost(settings: env, height: int, width: int) -> int:
 def count_branch_tokens(settings: env,
                         datastore: chattree.Forest,
                         head_node_id: str,
-                        extract_attachments: bool = True) -> Tuple[int, bool]:
+                        extract_attachments: bool = True) -> tuple[int, bool]:
     """Estimate the token size of the conversation ending at `head_node_id`. Returns `(count, is_exact)`.
 
     Counts the *visible conversation content* — every message from the root down to `head_node_id`. It
@@ -1045,8 +1045,8 @@ CANONICAL_ATTACHMENT_OMITTED = "[Attached file: {name} - not shown, because ther
 # ratio). Purely a stability measure; see `fit_attachments_to_context`.
 _ATTACHMENT_BUDGET_QUANTUM = 8192
 
-def _share_characters(wanted: List[int],
-                      budget: int) -> List[int]:
+def _share_characters(wanted: list[int],
+                      budget: int) -> list[int]:
     """Split `budget` characters over items wanting `wanted` characters each. Returns the allowances.
 
     Max-min fair (the classic water-filling allocation): raise a common level until the budget runs out,
@@ -1085,7 +1085,7 @@ def _share_characters(wanted: List[int],
 ATTACHMENT_REQUESTED = "requested"  # the user handed it over: read this
 ATTACHMENT_SPECULATIVE = "speculative"  # the model reached for it, having seen a search result
 
-def attachment_budget_kind(part: Dict[str, Any]) -> str:
+def attachment_budget_kind(part: dict[str, Any]) -> str:
     """Classify one `text_file` content-part as `ATTACHMENT_REQUESTED` or `ATTACHMENT_SPECULATIVE`.
 
     The single place that maps a provenance `source` onto a budget policy, so that the two readers of the
@@ -1116,7 +1116,7 @@ def attachment_budget_kind(part: Dict[str, Any]) -> str:
 
 def fit_attachments_to_context(settings: env,
                                conversation_characters: int,
-                               attachments: List[Tuple[str, str]]) -> List[str]:
+                               attachments: list[tuple[str, str]]) -> list[str]:
     """Cut attached-document texts down to what the context window can carry. Returns them in the same order.
 
     `attachments`: `(text, kind)` pairs, `kind` being one of `ATTACHMENT_REQUESTED` / `ATTACHMENT_SPECULATIVE`
@@ -1177,8 +1177,8 @@ def fit_attachments_to_context(settings: env,
 # --------------------------------------------------------------------------------
 # Streaming tool-call accumulation (shared by `invoke`)
 
-def _accumulate_tool_call_delta(accumulator: Dict[int, Dict[str, str]],
-                                tool_call_fragments: List[Dict]) -> None:
+def _accumulate_tool_call_delta(accumulator: dict[int, dict[str, str]],
+                                tool_call_fragments: list[dict]) -> None:
     """Fold one streamed delta's `tool_calls` fragments into `accumulator` (keyed by `index`), in place.
 
     Unifies the two backend behaviours behind one accumulator:
@@ -1201,7 +1201,7 @@ def _accumulate_tool_call_delta(accumulator: Dict[int, Dict[str, str]],
         if function_fragment.get("arguments"):
             slot["arguments"] += function_fragment["arguments"]
 
-def _materialize_tool_calls(accumulator: Dict[int, Dict[str, str]]) -> Optional[List[Dict]]:
+def _materialize_tool_calls(accumulator: dict[int, dict[str, str]]) -> list[dict] | None:
     """Turn the streaming accumulator into a `tool_calls` list in index order, or `None` if empty.
 
     Output shape matches what `perform_tool_calls` consumes: `{type, function: {name, arguments}, id, index}`.
@@ -1254,7 +1254,7 @@ _PS_TEXT = "text"          # outside any special block
 _PS_THINK = "think"        # inside an inline reasoning block (<think>...</think> or Gemma's channel form)
 _PS_TOOLCALL = "toolcall"  # inside an inline <tool_call>...</tool_call> block
 
-def _longest_partial_tag_suffix(buf: str, tags: Tuple[str, ...]) -> int:
+def _longest_partial_tag_suffix(buf: str, tags: tuple[str, ...]) -> int:
     """Length of the longest suffix of `buf` that is a *proper* prefix of some tag in `tags`.
 
     This is the look-ahead the streaming parser holds back at a chunk boundary: a tag may arrive split
@@ -1270,7 +1270,7 @@ def _longest_partial_tag_suffix(buf: str, tags: Tuple[str, ...]) -> int:
                 break
     return best
 
-def _scan_for_tags(buf: str, tags: Tuple[str, ...]) -> Tuple[str, Optional[str], str]:
+def _scan_for_tags(buf: str, tags: tuple[str, ...]) -> tuple[str, str | None, str]:
     """Scan `buf` for the earliest complete tag from `tags`.
 
     Returns `(emit, tag, rest)`:
@@ -1293,7 +1293,7 @@ def _scan_for_tags(buf: str, tags: Tuple[str, ...]) -> Tuple[str, Optional[str],
         return buf[:-hold], None, buf[-hold:]
     return buf, None, ""
 
-def _tool_call_dedup_key(name: str, arguments: str) -> Tuple[str, str]:
+def _tool_call_dedup_key(name: str, arguments: str) -> tuple[str, str]:
     """Stable identity for dedup: `(name, normalized-JSON arguments)`.
 
     Used to suppress double-emitted tool calls — some backends emit a call both as an inline `<tool_call>`
@@ -1342,9 +1342,9 @@ class StreamParser:
         self._inline_call_keys = set()   # (name, normalized args) of inline-emitted calls, for native dedup
         self._synthetic_id_counter = 0   # inline tool calls carry no id; assign a synthetic one
 
-    def feed(self, content: str, reasoning: str) -> List[Dict]:
+    def feed(self, content: str, reasoning: str) -> list[dict]:
         """Feed one delta's content and reasoning_content (either may be empty). Returns the typed events produced."""
-        events: List[Dict] = []
+        events: list[dict] = []
         if reasoning:  # native reasoning channel: never contains inline tags
             events.append({"type": "reasoning", "text": reasoning})
         if content:
@@ -1352,8 +1352,8 @@ class StreamParser:
             events.extend(self._drain())
         return events
 
-    def _drain(self) -> List[Dict]:
-        events: List[Dict] = []
+    def _drain(self) -> list[dict]:
+        events: list[dict] = []
         progressing = True
         while progressing and self._buf:
             progressing = False
@@ -1396,7 +1396,7 @@ class StreamParser:
                     self._buf = self._buf[cut:]
         return events
 
-    def _inline_tool_call_event(self, raw_json: str) -> Optional[Dict]:
+    def _inline_tool_call_event(self, raw_json: str) -> dict | None:
         raw = raw_json.strip()
         try:
             parsed = json.loads(raw)
@@ -1411,9 +1411,9 @@ class StreamParser:
         self._inline_call_keys.add(_tool_call_dedup_key(name, arguments))
         return {"type": "tool_call", "id": f"inline_{self._synthetic_id_counter}", "name": name, "arguments": arguments}
 
-    def finalize(self, native_tool_calls: Optional[List[Dict]]) -> List[Dict]:
+    def finalize(self, native_tool_calls: list[dict] | None) -> list[dict]:
         """Flush buffered text and emit native tool calls not already seen inline. Returns the trailing events."""
-        events: List[Dict] = []
+        events: list[dict] = []
         if self._buf:  # an unterminated block at stream end — emit what we have so nothing is silently lost
             if self._state == _PS_THINK:
                 events.append({"type": "reasoning", "text": self._buf})
@@ -1435,10 +1435,10 @@ class StreamParser:
 # The most important function - call LLM, parse result
 
 def serialize_history_for_wire(settings: env,
-                               history: List[Dict],
+                               history: list[dict],
                                *,
                                continue_: bool,
-                               datastore: Optional[chattree.PersistentForest] = None) -> List[Dict]:
+                               datastore: chattree.PersistentForest | None = None) -> list[dict]:
     """Return a wire-ready deep copy of `history`: text scrubbed, image parts preserved and sidecar-resolved.
 
     Per-message transform, applied to every message (or all but the last when `continue_`):
@@ -1529,7 +1529,7 @@ def serialize_history_for_wire(settings: env,
         message["content"] = new_content
     return history
 
-def _describe_strict_template_violations(history: List[Dict]) -> List[str]:
+def _describe_strict_template_violations(history: list[dict]) -> list[str]:
     """Describe any message shapes in `history` that strict chat templates reject. Empty list if none.
 
     Some chat templates enforce their message-ordering contract with a hard `raise_exception` rather
@@ -1656,14 +1656,14 @@ def phase_report(*,
     return phases
 
 def invoke(settings: env,
-           history: List[Dict],
-           on_progress: Optional[Callable] = None,
-           on_prompt_ready: Optional[Callable] = None,
+           history: list[dict],
+           on_progress: Callable | None = None,
+           on_prompt_ready: Callable | None = None,
            tools_enabled: bool = True,
-           tool_names: Optional[Collection[str]] = None,
+           tool_names: Collection[str] | None = None,
            continue_: bool = False,
-           max_tokens: Optional[int] = None,
-           datastore: Optional[chattree.PersistentForest] = None,
+           max_tokens: int | None = None,
+           datastore: chattree.PersistentForest | None = None,
            calibrate: bool = True) -> env:
     """Invoke the LLM with the given chat history.
 
@@ -1679,7 +1679,7 @@ def invoke(settings: env,
     `history`: List of chat messages, where each message is in OpenAI format (with "role" and "content" fields,
                and an optional "tool_calls" field). See `raven.librarian.chatutil.create_chat_message`.
 
-    `on_prompt_ready`: 1-argument callable, with argument `history: List[Dict]`. Debug/info hook.
+    `on_prompt_ready`: 1-argument callable, with argument `history: list[dict]`. Debug/info hook.
                        The return value is ignored.
 
                        Called after the LLM context has been completely prepared, before sending it to the LLM.
@@ -1689,7 +1689,7 @@ def invoke(settings: env,
                        Each element of the list is a chat message in the format accepted by the LLM backend,
                        with "role" and "content" fields.
 
-    `on_progress`: 1-argument callable with argument `event: Dict`, a typed event from the parsed response
+    `on_progress`: 1-argument callable with argument `event: dict`, a typed event from the parsed response
                    stream (`invoke` is the single parser; consumers dispatch on `event["type"]`
                    and never sniff raw text). Called while streaming, typically once per generated token. The
                    event is one of:
@@ -1758,12 +1758,12 @@ def invoke(settings: env,
                       If the text content begins with the assistant character's name (e.g. "AI: ..."), this is automatically stripped.
         `n_tokens: int`: Number of tokens emitted by the LLM (from the backend's `usage` when available,
                          else estimated from the streamed chunk count).
-        `usage: Optional[dict]`: The backend's token `usage` stats for this call (`prompt_tokens`,
+        `usage: dict | None`: The backend's token `usage` stats for this call (`prompt_tokens`,
                                  `completion_tokens`, `total_tokens`), or `None` if the backend didn't report
                                  them (e.g. interrupted before the final chunk). `prompt_tokens` is the exact
                                  size of the whole prompt this turn — useful for the context-fill indicator.
         `dt: float`: Wall time elapsed for this invocation, in seconds.
-        `phases: Optional[dict]`: Where that wall time went — see `phase_report`, whose return value this is.
+        `phases: dict | None`: Where that wall time went — see `phase_report`, whose return value this is.
                                   `None` when the model generated no text at all (a round that only asked
                                   for a tool).
         `interrupted: bool`: Whether the invocation was interrupted by the `on_progress` callback.
@@ -1844,7 +1844,7 @@ def invoke(settings: env,
     parser = StreamParser()
     llm_output_text = io.StringIO()       # accumulates `content` events -> message["content"]
     reasoning_output_text = io.StringIO()  # accumulates `reasoning` events -> message["reasoning_content"]
-    collected_tool_calls: List[Dict] = []  # `tool_call` events in arrival order -> message["tool_calls"]
+    collected_tool_calls: list[dict] = []  # `tool_call` events in arrival order -> message["tool_calls"]
     last_few_chunks = collections.deque([""] * 10)  # ring buffer over recent *content* for stopping-string checks; prepopulate with empties since `popleft` needs an element
     n_chunks = 0
     stopped = False  # whether one of the stop strings triggered
@@ -1860,9 +1860,9 @@ def invoke(settings: env,
 
     # Streaming tool-call accumulator, keyed by `tool_calls[i].index`. Unifies ooba's whole-object-in-one-delta
     # with LM Studio's / OpenAI's incremental fragments (see `_accumulate_tool_call_delta`).
-    tool_call_acc: Dict[int, Dict[str, str]] = {}
+    tool_call_acc: dict[int, dict[str, str]] = {}
 
-    def handle_event(parsed_event: Dict) -> sym:
+    def handle_event(parsed_event: dict) -> sym:
         """Accumulate one typed event into the response, notify `on_progress`, return its action (default ack)."""
         nonlocal t_first_token, t_first_content, n_chunks_at_first_content
         etype = parsed_event["type"]
@@ -2082,11 +2082,11 @@ def prompt_size_report_looks_whole(reported: int, estimate: int) -> bool:
 
 
 def prefill(settings: env,
-            history: List[Dict],
+            history: list[dict],
             tools_enabled: bool = True,
-            tool_names: Optional[Collection[str]] = None,
-            datastore: Optional[chattree.PersistentForest] = None,
-            calibrate: bool = True) -> Optional[env]:
+            tool_names: Collection[str] | None = None,
+            datastore: chattree.PersistentForest | None = None,
+            calibrate: bool = True) -> env | None:
     """Send `history` to the backend generating essentially no output. Returns the `invoke` env, or `None` on failure.
 
     Two purposes, both side effects of submitting the real prompt:
@@ -2147,7 +2147,7 @@ def make_console_progress_handler(progress_symbol: str) -> Callable:
     This progress function will never cancel the generation; it always returns `action_ack`.
     If you need something more customized, you'll need to supply a custom `on_progress` handler.
     """
-    def console_progress(event: Dict) -> sym:
+    def console_progress(event: dict) -> sym:
         """Progress indicator while the LLM is processing. Callback for `llmclient.invoke`."""
         n_chunks = event.get("n_chunks", 0)  # tool-call events carry no chunk count
         if (n_chunks == 1 or n_chunks % 10 == 0):  # in any message being written by the AI, print a progress symbol for the first chunk, and then again every 10 chunks.

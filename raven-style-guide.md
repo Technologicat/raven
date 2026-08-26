@@ -228,6 +228,20 @@ def create_node(self,
 
 The codebase is mid-migration from the old `typing`-alias spelling. Write new and modified code in the modern spelling; existing old-style hints can be left as-is unless you're already editing that code (same rule as for adding hints to untyped code).
 
+**Where a docstring names a type, use the same spelling** — `dict | None`, never `Optional[dict]`. One dialect, not two.
+
+Which is a narrower rule than it looks, because a docstring should mostly *not* name a type. The split is by whether a signature already carries it:
+
+- **Parameters: no type in the docstring.** It is two lines up in the signature, and a second copy is a second thing to keep current. Write `` `reasoning_content`: the accumulated thinking trace. `` and stop.
+- **Things with no signature: the type belongs in the docstring**, because there is nowhere else it can go. The attributes of a returned `unpythonic.env.env`, the keys of a returned dict, the arguments a callback parameter will be called with — all of these are contracts a reader cannot get from the code above.
+
+```python
+    Returns an `env` with the following attributes:
+
+        `n_tokens: int`: Number of tokens emitted by the LLM.
+        `phases: dict | None`: Where the wall time went; `None` when the model generated no text.
+```
+
 ### Keyword-only arguments
 
 Arguments without a standard ordering, or flags, use keyword-only syntax:
