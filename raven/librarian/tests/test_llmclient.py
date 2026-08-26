@@ -5,14 +5,18 @@ the security-critical decision of whether a URL the model wants to fetch is perm
 The actual fetch (`api.webfetch_fetch`, HTTP to the server) is monkeypatched.
 """
 
+import http.server
 import json
 import logging
+import threading
+import time
 
 import pytest  # noqa: F401 -- fixtures and marks below
 
 from unpythonic import dyn
 from unpythonic.env import env
 
+from raven.common import netutil
 from raven.librarian import chatutil
 from raven.librarian import llmclient
 from raven.librarian import llmtools
@@ -2128,3 +2132,126 @@ class TestTokenizerProbe:
         llmclient.prefill(env(), _history("a real conversation"))
         assert seen.get("calibrate") is True, ("the default changed, so the probe's `calibrate=False` no longer "
                                                "distinguishes it from an ordinary call")
+
+
+class TestAbortingAnInFlightRequest:
+    """Abandoning a request from another thread, which is what Cancel and a superseded prefill both need.
+
+    The mechanism is measured in `investigations/abort-inflight-request/`, and the finding that shapes these
+    tests is that the obvious route does not work: closing the response leaves the reader blocked *and*
+    blocks the thread that asked. So the assertion that matters is not "an exception was raised" but "the
+    blocked call came back promptly" — which is worth a real socket, because a mocked stream cannot be
+    blocked and so cannot show that unblocking happened.
+    """
+
+    WATCH = 2.0  # an abort that works lands in milliseconds; slower than this is the mechanism not working
+    CEILING = 30.0  # so that neither the server nor a client timeout can be what ends a wait
+
+    @classmethod
+    def _stall_server(cls):
+        """Serve 200 plus SSE headers, then never send a body. Returns `(url, shutdown)`."""
+        class Handler(http.server.BaseHTTPRequestHandler):
+            protocol_version = "HTTP/1.1"
+
+            def do_POST(self):
+                self.rfile.read(int(self.headers.get("Content-Length", 0)))
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream")
+                self.send_header("Transfer-Encoding", "chunked")
+                self.end_headers()
+                self.wfile.flush()
+                time.sleep(cls.CEILING)
+
+            def log_message(self, *args):
+                pass
+
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        return f"http://127.0.0.1:{server.server_address[1]}", server.shutdown
+
+    def _blocked_invoke(self, invoke_settings, maybe_abort):
+        """Start `invoke` against a stall server on its own thread. Returns `(thread, outcome, shutdown)`."""
+        url, shutdown = self._stall_server()
+        invoke_settings.backend_url = url
+        outcome = {}
+
+        def run():
+            try:
+                llmclient.invoke(invoke_settings, _history("hi"), tools_enabled=False, maybe_abort=maybe_abort)
+                outcome["result"] = "returned"
+            except BaseException as exc:  # noqa: BLE001 -- which exception arrived *is* the measurement
+                outcome["result"] = type(exc)
+
+        thread = threading.Thread(target=run, daemon=True)
+        thread.start()
+        return thread, outcome, shutdown
+
+    def test_a_blocked_read_is_abandoned_promptly(self, invoke_settings):
+        abort = netutil.Abort()
+        thread, outcome, shutdown = self._blocked_invoke(invoke_settings, abort)
+        try:
+            time.sleep(0.5)  # let it reach the blocking read
+            assert thread.is_alive(), ("the request finished on its own, so this fixture cannot tell an "
+                                       "abandoned read from a completed one")  # <- the negative control
+            abort.abort()
+            thread.join(timeout=self.WATCH)
+            assert not thread.is_alive(), "the blocked read was not abandoned"
+            assert outcome["result"] is netutil.Aborted
+        finally:
+            shutdown()
+
+    def test_aborting_returns_at_once_to_its_own_caller(self, invoke_settings):
+        """The caller is usually a GUI callback, and the `close()` route would block it for the read timeout.
+
+        The abort runs on its own thread rather than this one, so that a closer which blocks fails this
+        assertion instead of wedging the test run — which is what the `close()` variants actually do, and a
+        hung suite says far less than a red one.
+        """
+        abort = netutil.Abort()
+        thread, unused_outcome, shutdown = self._blocked_invoke(invoke_settings, abort)
+        returned = threading.Event()
+        try:
+            time.sleep(0.5)
+            threading.Thread(target=lambda: (abort.abort(), returned.set()), daemon=True).start()
+            assert returned.wait(timeout=self.WATCH), "abort() did not return to its caller"
+        finally:
+            thread.join(timeout=self.WATCH)
+            shutdown()
+
+    def test_aborting_before_the_call_stops_the_request_being_sent(self, monkeypatch, invoke_settings):
+        """A turn cancelled while still queued in the executor should never reach the backend."""
+        posted = []
+
+        def fake_post(*args, **kwargs):
+            posted.append(True)
+            return _FakeResponse()
+
+        monkeypatch.setattr(llmclient.requests, "post", fake_post)
+        abort = netutil.Abort()
+        abort.abort()
+        with pytest.raises(netutil.Aborted):
+            llmclient.invoke(invoke_settings, _history("hi"), tools_enabled=False, maybe_abort=abort)
+        assert not posted
+
+    def test_a_connection_failure_we_did_not_ask_for_is_not_an_abort(self, monkeypatch, invoke_settings):
+        """The discriminating case: the same broken connection, with nobody having aborted.
+
+        Both arrive at the same `except`, and only the handle can say which is which — so a branch that
+        reported every dropped connection as an abort would pass every other test in this class.
+        """
+        _fake_stream(monkeypatch, [])
+
+        def die(self_):
+            raise llmclient.requests.exceptions.ChunkedEncodingError("the backend went away")
+
+        monkeypatch.setattr(_FakeSSEClient, "events", die)
+        with pytest.raises(llmclient.requests.exceptions.ChunkedEncodingError):
+            llmclient.invoke(invoke_settings, _history("hi"), tools_enabled=False, maybe_abort=netutil.Abort())
+
+    def test_the_handle_is_disarmed_once_the_call_is_over(self, monkeypatch, invoke_settings):
+        """Aborting a spent handle must not reach into whatever owns that socket now."""
+        abort = netutil.Abort()
+        _fake_stream(monkeypatch, [{"choices": [{"delta": {"content": "ok"}}]}, "[DONE]"])
+        llmclient.invoke(invoke_settings, _history("hi"), tools_enabled=False, maybe_abort=abort)
+        abort.abort()  # a no-op, not an AttributeError on a dead response
+        assert abort.aborted

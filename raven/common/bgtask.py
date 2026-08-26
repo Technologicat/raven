@@ -113,6 +113,26 @@ class TaskManager:
                                 added later to the queue (waiting for a free thread in the pool)
                                 may have their `cancelled` flags set to `True`.
 
+               If `env` contains an attribute `on_cancel` when the task is cancelled, that function
+               is called with `env` as its only argument, immediately after `cancelled` is set.
+
+                   This is for work that *cannot* poll the flag, because it is blocked inside a
+                   library call: a socket read, a subprocess wait. The flag alone can only be
+                   noticed between steps, so a task blocked in one of those stays blocked until it
+                   returns on its own — which for a network read means the read timeout. `on_cancel`
+                   is where such a task supplies the one operation that ends the wait from outside
+                   (for a streaming `requests` call, `raven.common.netutil.Abort`).
+
+                   Co-operative cancellation remains the mechanism: `on_cancel` unblocks the task,
+                   and the task then observes `cancelled` and unwinds through its own `try`/`finally`
+                   as it always did. Nothing here kills a thread, and releasing resources is still
+                   the task body's job.
+
+                   `on_cancel` runs on **the cancelling thread**, which is typically a GUI callback,
+                   and under the task manager's lock. So it must return promptly, and it **must not**
+                   call into the task manager; doing so will deadlock. An exception it raises is
+                   logged and swallowed — cancellation proceeds regardless.
+
                When `function` exits or the task is cancelled (i.e. when the future becomes done),
                if `env` contains an attribute `done_callback` at that time, that function
                will be called with `env` as its only argument. This mechanism has two primary uses:
@@ -241,6 +261,14 @@ class TaskManager:
             else:
                 future, e = self.tasks[task_name]
             e.cancelled = True  # In case it's running (pythonic co-operative cancellation). Do this first, so the custom `done_callback` (if any) sees the `cancelled` flag when we cancel the future.
+            # A task blocked inside a library call cannot see that flag until the call returns, so give it
+            # the chance to end the wait from outside. Set the flag first: `on_cancel` only unblocks the
+            # task, and what the task finds when it wakes must already say it was cancelled.
+            if "on_cancel" in e and e.on_cancel is not None:
+                try:
+                    e.on_cancel(e)
+                except Exception:  # noqa: BLE001 -- a task's own cleanup hook must not be able to break cancellation
+                    logger.exception(f"TaskManager.cancel: instance '{self.name}': '{task_name}': `on_cancel` raised")
             future.cancel()  # In case it's still queued in the executor, don't start it.
 
     def clear(self, wait: bool = False) -> None:

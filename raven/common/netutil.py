@@ -5,15 +5,112 @@ This module is licensed under the 2-clause BSD license.
 
 __all__ = ["multipart_x_mixed_replace_payload_extractor",
            "pack_parameters_into_json_file_attachment", "unpack_parameters_from_json_file_attachment",
-           "extract_urls", "url_host", "host_matches_allowlist"]
+           "extract_urls", "url_host", "host_matches_allowlist",
+
+           "Abort", "Aborted"]
 
 import io
 import json
+import logging
 import re
+import socket
+import threading
 from typing import Any, Dict, Generator, Iterator, List, Optional, Tuple
 import urllib.parse
 
+import requests
+
 from unpythonic.net.util import ReceiveBuffer
+
+logger = logging.getLogger(__name__)
+
+class Aborted(Exception):
+    """Raised in the thread reading a stream that an `Abort` handle abandoned.
+
+    Distinct from a connection failure, which the same underlying error would otherwise look like: this one
+    means we asked, so it is not a fault and callers should not report it as one.
+    """
+
+def _maybe_socket_of(response: requests.Response) -> socket.socket | None:
+    """Return the socket underneath a streaming `requests` response, or `None` if it can't be reached.
+
+    `None` means only that this response's internals are not the shape we know; it is never an error.
+    """
+    # Four layers of private attribute, across `requests`, `urllib3` and `http.client`. There is no public
+    # spelling: `Response.close()` is the API for this and it does not do the job (see `Abort.abort`).
+    # Guarded rather than trusted, because a version bump on any of the three can change the shape, and an
+    # abandoned request that cannot be abandoned is a missed optimization where an AttributeError raised
+    # mid-stream would be a crash.
+    try:
+        return response.raw._fp.fp.raw._sock
+    except AttributeError:
+        logger.warning("_maybe_socket_of: cannot reach the socket under this response; abort will be a no-op")
+        return None
+
+class Abort:
+    """A handle for abandoning an in-flight streaming `requests` call from another thread.
+
+    A thread blocked reading a response cannot see a cancellation flag: it is inside a socket read, and
+    will not look at anything until that read returns — which, for a backend that has gone quiet, means the
+    read timeout. This handle is what ends the wait from outside.
+
+    Hand one to whatever issues the request, have it call `arm` once the response exists and `disarm` when
+    the stream is done, and call `abort` from anywhere to give up. The blocked reader then raises some
+    connection error, which the issuing code turns into `Aborted` by asking `aborted` whose doing it was.
+
+    `abort` is idempotent, safe from any thread, never raises, and returns immediately — so it is safe to
+    call from a GUI callback. Aborting before the request is even sent is fine: the abort is remembered and
+    applied as soon as there is something to apply it to.
+
+    One handle serves one request. Aborting is permanent, so a handle that has been used is spent.
+    """
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._aborted = False
+        self._maybe_response = None
+
+    def _get_aborted(self) -> bool:
+        """Whether `abort` has been called on this handle."""
+        with self._lock:
+            return self._aborted
+
+    aborted = property(fget=_get_aborted,
+                       doc="Whether this handle has been aborted. Once `True`, it stays `True`.")
+
+    def arm(self, response: requests.Response) -> None:
+        """Register the response to abandon. Call this as soon as the request has one."""
+        with self._lock:
+            self._maybe_response = response
+            already_aborted = self._aborted
+        if already_aborted:  # the abort arrived while we were still waiting for the response headers
+            self.abort()
+
+    def disarm(self) -> None:
+        """Forget the response. Call this when the stream is finished, however it ended."""
+        with self._lock:
+            self._maybe_response = None
+
+    def abort(self) -> None:
+        """Abandon the request this handle was armed with. Safe from any thread; never raises."""
+        with self._lock:
+            self._aborted = True
+            maybe_response = self._maybe_response
+        if maybe_response is None:  # nothing in flight yet, or it already finished
+            return
+        maybe_sock = _maybe_socket_of(maybe_response)
+        if maybe_sock is None:
+            return
+        # Shutting the socket down, rather than closing the response, and the difference is not cosmetic.
+        # Measured 2026-08-26 (`investigations/abort-inflight-request/`): `Response.close()`, `raw.close()`
+        # and `raw._fp.fp.close()` all leave the reader blocked in `recv` *and* block the thread that called
+        # them until the read timeout expires — 59.86 s against a 60 s timeout, which from a GUI callback is
+        # a minute of frozen app. `socket.close()` returns but does not wake the reader. Only `shutdown` does
+        # both, and it does them at once.
+        try:
+            maybe_sock.shutdown(socket.SHUT_RDWR)
+        except OSError:  # already closed, or the peer got there first: either way there is nothing to abandon
+            pass
 
 def multipart_x_mixed_replace_payload_extractor(source: Iterator[bytes],
                                                 boundary_prefix: str,

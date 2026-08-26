@@ -62,6 +62,8 @@ from unpythonic import si_prefix, sym, timer
 from unpythonic.env import env
 
 
+from ..common import netutil
+
 from . import chattree
 from . import chatutil
 from . import config as librarian_config
@@ -1729,7 +1731,8 @@ def invoke(settings: env,
            continue_: bool = False,
            max_tokens: int | None = None,
            datastore: chattree.PersistentForest | None = None,
-           calibrate: bool = True) -> env:
+           calibrate: bool = True,
+           maybe_abort: netutil.Abort | None = None) -> env:
     """Invoke the LLM with the given chat history.
 
     This is typically done after adding the user's message to the chat history, to ask the LLM to generate a reply.
@@ -1832,6 +1835,13 @@ def invoke(settings: env,
                  travels verbatim, so the model receives the literal text `sidecar:<filename>` in place of
                  the attachment, and nothing reports that it happened.
 
+    `maybe_abort`: A `raven.common.netutil.Abort` handle, if this call should be abandonable from another
+                   thread. Calling `abort` on it makes this call raise `netutil.Aborted` promptly — during
+                   prompt processing as well as during generation, which is the part `on_progress` cannot
+                   reach, since it is not called until the backend emits something.
+
+                   `None` (default) means the call runs to completion once started.
+
     Returns an `unpythonic.env.env` WITHOUT adding the LLM's reply to `history`.
 
     The returned `env` has the following attributes:
@@ -1907,7 +1917,17 @@ def invoke(settings: env,
         if not data["tools"]:  # an empty `tools` list is not the same thing as no tools; some backends reject it
             data.pop("tools")
 
+    # Asked to give up before we even sent anything: don't bother the backend at all. Costs one check and
+    # covers the case where the user cancels while the turn is still queued behind another task.
+    if maybe_abort is not None and maybe_abort.aborted:
+        raise netutil.Aborted("invoke: aborted before the request was sent")
+
     stream_response = requests.post(f"{settings.backend_url}/v1/chat/completions", headers=headers, json=data, verify=False, stream=True, timeout=librarian_config.llm_network_timeout_streaming)
+    if maybe_abort is not None:
+        # From here to `_disarm` below, an abort from another thread lands on this response's socket. The
+        # window before this line is the ~0.1 s the backend takes to send its headers, and an abort raised
+        # during it is remembered rather than lost: `_arm` applies it immediately.
+        maybe_abort.arm(stream_response)
 
     if stream_response.status_code != 200:  # not "200 OK"?
         logger.error(f"LLM server returned error: {stream_response.status_code} {stream_response.reason}. Content of error response follows.")
@@ -2046,9 +2066,24 @@ def invoke(settings: env,
     except KeyboardInterrupt:  # on Ctrl+C, stop generating, and let the exception propagate
         stop_generating()
         raise
-    except requests.exceptions.ChunkedEncodingError:
-        logger.exception(f"invoke: Connection lost. Please check if your LLM backend is still alive (was at {settings.backend_url}). Original error message follows.")
+    except requests.exceptions.RequestException as exc:
+        # An abort we asked for arrives as a broken connection, because that is what it is — the socket was
+        # shut down under this read. Measured as `ChunkedEncodingError`, but which one it surfaces as
+        # depends on where in the read it landed, so ask the handle rather than the exception type: only
+        # the handle knows whose doing it was.
+        if maybe_abort is not None and maybe_abort.aborted:
+            raise netutil.Aborted("invoke: aborted while reading the response") from exc
+        # Everything else keeps the behaviour it had. The message is about a lost connection specifically,
+        # so it stays on the error that means that, rather than being broadened along with the `except`.
+        if isinstance(exc, requests.exceptions.ChunkedEncodingError):
+            logger.exception(f"invoke: Connection lost. Please check if your LLM backend is still alive (was at {settings.backend_url}). Original error message follows.")
         raise
+    finally:
+        if maybe_abort is not None:
+            # The response has been read to the end (or died trying), so there is nothing left to abandon.
+            # Disarming here rather than at the end of `invoke` keeps the armed window to exactly the part
+            # that blocks.
+            maybe_abort.disarm()
 
     # Flush the parser's buffers (any unterminated trailing block) and emit native `tool_calls`-field calls not
     # already seen inline. Materialize the native accumulator only on a clean finish, matching the prior behaviour
