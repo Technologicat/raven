@@ -354,8 +354,15 @@ sentence, or the streamed text where it wants the spoken text.
 
 3. **Start synthesizing speech while the reply is still streaming**, to cut time-to-first-spoken-word.
 
-   This matters most when **TTS runs on the CPU**, where synthesis is slow enough that the wait after the
-   answer finishes is the whole latency.
+   This matters most when **TTS runs on the CPU**, and there it is specifically the **first sentence** that
+   is the whole latency. Kokoro on CPU is slightly faster than realtime (Juha, 2026-08-26), so once speech
+   has started, every later sentence renders comfortably within the time the previous ones take to speak.
+   The pipeline only ever stalls at its head.
+
+   **That bounds the work.** Getting the first sentence submitted the moment it completes captures nearly
+   all of the win; the rest of the reply can continue to go over as one batch. Which is a smaller change
+   than "submit each sentence as it arrives", and it reduces the concern below to a single extra batch
+   boundary per reply rather than one per sentence — though it does not remove it.
 
    The preprocessor already precomputes audio per sentence as early as it can — its docstring says
    `on_audio_ready` "may trigger long before the sentence is actually spoken out loud" — so the machinery
