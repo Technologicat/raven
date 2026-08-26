@@ -359,10 +359,12 @@ sentence, or the streamed text where it wants the spoken text.
    has started, every later sentence renders comfortably within the time the previous ones take to speak.
    The pipeline only ever stalls at its head.
 
-   **That bounds the work.** Getting the first sentence submitted the moment it completes captures nearly
-   all of the win; the rest of the reply can continue to go over as one batch. Which is a smaller change
-   than "submit each sentence as it arrives", and it reduces the concern below to a single extra batch
-   boundary per reply rather than one per sentence — though it does not remove it.
+   **That bounds the work**, and suggests a variant worth weighing rather than a decided design: getting
+   the first sentence submitted the moment it completes captures nearly all of the win, so the rest of the
+   reply could still go over as one batch. That would be a smaller change than "submit each sentence as it
+   arrives", and would leave one extra batch boundary per reply rather than one per sentence — but it buys
+   that by making the reply's first sentence a special case, which per-sentence submission does not. Which
+   of the two is cleaner is for whoever builds it.
 
    The preprocessor already precomputes audio per sentence as early as it can — its docstring says
    `on_audio_ready` "may trigger long before the sentence is actually spoken out loud" — so the machinery
