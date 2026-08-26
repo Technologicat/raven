@@ -156,7 +156,37 @@ known before band 3 begins.
 8. **The thinking trace: collapsed by default, with the cloud pulsating while the model thinks** —
    `TODO.md:598`. Demo *correctness* by the argument already recorded there, and Juha's reason for keeping
    it in: hidden thinking is what people now expect from an LLM system. The token/time readout in the same
-   item is the optional third.
+   item is in, not optional (Juha, 2026-08-26).
+
+   **In progress, 2026-08-26.** Built as a sequence, data first so most of it is verifiable without a
+   window. Five of eight steps are done and committed; what remains is below.
+
+   1. ~~The local-tokenizer fallback counted only the answer, never the reasoning.~~ Done.
+   2. ~~`invoke` records where the turn's wall time went — `generation_metadata["phases"]`, holding
+      `prefill` and `thinking`; the answer is the remainder, so no third number can disagree.~~ Done.
+   3. ~~`StreamParser` recognizes reasoning that arrives with no opening tag (`reasoning_retcon`).~~ Done.
+   4. ~~The trace grows in its bubble from the first word, cloud pulsating while it fills.~~ Done.
+   5. ~~The `show_thinking` preference, applying to what arrives next.~~ Done.
+   6. **The readouts — next, and presentation only: the data is already stored.** Three places, decided
+      2026-08-26:
+      - **On the cloud row, visible**: `[~900t, 22.0s, 40.9t/s]`, in the format the message line already
+        uses. The `~` appears only when the thinking token count was apportioned rather than counted —
+        on LM Studio it is counted, since that backend reports `reasoning_tokens`.
+      - **Live while streaming**: the cloud row counts up (`thinking… 12.4 s`), so the wait is legible
+        rather than merely pulsing. This is the half that matters on a projector.
+      - **In a tooltip on the message's own stats line**: the four-row breakdown — prompt processing,
+        thinking, answer, total. The message line itself stays exactly as it is, since an old node cannot
+        be recomputed and one readout must not mean two things depending on age.
+   7. **`Enable thinking`** — `TODO.md`'s "Thinking toggle", pulled into this sprint and much smaller than
+      its July design: `reasoning_effort: "none"`, measured working across Qwen 3.6, 3.8 and Gemma 4. No
+      prefill, no per-family marker table.
+   8. **Then the parser can start in `_PS_THINK`** when step 7 says thinking is on and the backend is
+      single-channel — which closes `TODO_DEFERRED.md`'s "Streaming thinking shows as gray" live half.
+      Headless-testable; end-to-end only against a single-channel backend, i.e. not before ooba.
+
+   Two renderer bugs were found and fixed while verifying step 4, both of which had been stranding
+   decorations on any reflow: list markers and blockquote bars. What is left of that is one queued item —
+   block constructs need a block container, which is also what gives a quote a single full-height bar.
 9. **The turn-sequencing race with the abortable prefill.**
 10. **The STT silence level / autostop GUI** — see below for why it is on the path.
 11. **Block-level Markdown, the remaining steps** — the single-newline split, which is the barrier fenced
