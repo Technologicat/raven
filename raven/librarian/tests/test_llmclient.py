@@ -560,6 +560,24 @@ class TestInvokeStreamRobustness:
         assert out.usage is None
         assert out.n_tokens == 2  # two text-bearing deltas
 
+    def test_local_tokenizer_fallback_counts_reasoning_too(self, monkeypatch, invoke_settings):
+        # No usage (an interrupt closed the stream early), but a local tokenizer is configured, so the count
+        # comes from encoding the generated text. Reasoning is generated text: `dt` covers the time spent on
+        # it, so a count that skips it makes the speed readout understate a thinking model's turn by however
+        # much of it was thinking.
+        invoke_settings.tokenizer = _FakeTokenizer()  # one 'token' per character
+        _fake_stream(monkeypatch, [
+            {"choices": [{"delta": {"role": "assistant", "content": None}}]},
+            {"choices": [{"delta": {"reasoning_content": "hmm"}}]},      # 3
+            {"choices": [{"delta": {"reasoning_content": " well"}}]},    # 5
+            {"choices": [{"delta": {"content": "yes"}}]},                # 3
+        ])
+        out = llmclient.invoke(invoke_settings, _history("hi"), tools_enabled=False)
+        assert out.usage is None
+        assert out.data["reasoning_content"], ("this fixture produced no reasoning, so it cannot tell "
+                                               "counting both channels from counting content alone")
+        assert out.n_tokens == 11  # "hmm" + " well" + "yes"
+
 
 # ---------------------------------------------------------------------------
 # Backend detection + model identity (brief 02 §0/§3/§4/§5)

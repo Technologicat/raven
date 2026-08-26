@@ -1882,10 +1882,15 @@ def invoke(settings: env,
     # before the final usage chunk, or a generic backend ignores the opt-in. Then: count the generated text with
     # a local tokenizer if one is configured (exact), else use the streamed delta count — `n_chunks` already
     # counts only text-bearing deltas (one ≈ one token), so the empty role-priming delta is excluded for free.
+    #
+    # Reasoning counts as generated text: the model spent tokens on it and `dt` covers the time it took, so
+    # leaving it out understates the speed by however much of the turn was spent thinking — which on a
+    # thinking model is most of it. The two channels are encoded separately rather than as one string: they
+    # arrive as separate generations, and no token spans the boundary between them.
     if usage is not None and usage.get("completion_tokens") is not None:
         n_tokens = usage["completion_tokens"]
     elif settings.tokenizer is not None:
-        n_tokens = len(settings.tokenizer.encode(llm_output_text))
+        n_tokens = len(settings.tokenizer.encode(llm_output_text)) + len(settings.tokenizer.encode(reasoning_content))
     else:
         n_tokens = n_chunks
 

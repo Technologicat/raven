@@ -156,6 +156,8 @@
 
 - two tooltips still described the attachment store as holding images, which stopped being the whole story in 0.2.8 when documents became attachable. The two buttons that open that folder — one on an attached image, one on an attached document — also gave it two different names, though it is one folder.
 
+- **a stopped reply from a thinking model no longer reports a fraction of the tokens it generated.** When the count has to be worked out locally — `config.llm_tokenizer_path` is set and the backend reported none, which is what happens when you stop a reply part-way through — only the visible answer was counted, while the elapsed time beside it covered the thinking as well. On a model that spends most of a turn reasoning, that left the `[Nt, Xs, Yt/s]` line under the message understating both figures by most of the turn.
+
 *Raven-cherrypick*
 
 - **compare mode no longer skips an image, and no longer leaves the wrong picture cached behind it.** The cycle would advance — the overlay number changed, the grid badge lit up — while one of the images never appeared, its slot showing one of the others instead. A three-image comparison would show you two, the same two every loop.
