@@ -15,7 +15,8 @@ import logging
 import re
 import socket
 import threading
-from typing import Any, Dict, Generator, Iterator, List, Optional, Tuple
+from collections.abc import Generator, Iterator
+from typing import Any
 import urllib.parse
 
 import requests
@@ -114,7 +115,7 @@ class Abort:
 
 def multipart_x_mixed_replace_payload_extractor(source: Iterator[bytes],
                                                 boundary_prefix: str,
-                                                expected_mimetype: Optional[str]) -> Generator[Tuple[Optional[str], Dict[str, str], bytes], None, None]:
+                                                expected_mimetype: str | None) -> Generator[tuple[str | None, dict[str, str], bytes], None, None]:
     """Instantiate a generator that yields payloads from `source`, which is reading from a "multipart/x-mixed-replace" stream.
 
     The yielded value is the tuple `(received_mimetype, extra_headers, payload)`:
@@ -159,7 +160,7 @@ def multipart_x_mixed_replace_payload_extractor(source: Iterator[bytes],
             payload_buffer.set(b"")
             read_more_input()
 
-    def read_headers() -> Tuple[Optional[str], Dict[str, str], int]:
+    def read_headers() -> tuple[str | None, dict[str, str], int]:
         """Read and validate headers for one payload.
 
         Return `(received_mimetype, extra_headers, body_length_bytes)`.
@@ -175,7 +176,7 @@ def multipart_x_mixed_replace_payload_extractor(source: Iterator[bytes],
             assert False
         received_mimetype = None
         body_length_bytes = None
-        extra_headers: Dict[str, str] = {}
+        extra_headers: dict[str, str] = {}
         for field in headers[1:]:
             field = field.decode("utf-8")
             # Split on the first colon only: header values (e.g. a JSON-encoded dict) may contain colons.
@@ -217,7 +218,7 @@ def multipart_x_mixed_replace_payload_extractor(source: Iterator[bytes],
         payload = read_body(body_length_bytes)
         yield received_mimetype, extra_headers, payload
 
-def pack_parameters_into_json_file_attachment(parameters: Dict[str, Any]) -> str:
+def pack_parameters_into_json_file_attachment(parameters: dict[str, Any]) -> str:
     """Pack API call parameters from a `dict`, for sending in the request as a JSON file attachment.
 
     The return value can be used as a value in the `files` argument of a `requests.post` call::
@@ -232,7 +233,7 @@ def pack_parameters_into_json_file_attachment(parameters: Dict[str, Any]) -> str
     """
     return ("parameters.json", json.dumps(parameters, indent=2), "application/json")
 
-def unpack_parameters_from_json_file_attachment(stream) -> Dict[str, Any]:
+def unpack_parameters_from_json_file_attachment(stream) -> dict[str, Any]:
     """Return API call parameters as `dict`, that came in the request as a JSON file.
 
     `stream`: the `request.files["my_param_file"].stream`.
@@ -274,7 +275,7 @@ _URL_RE = re.compile(r"""https?://[^\s<>"'`)\]}]+""", re.IGNORECASE)
 # ends a real URL but routinely follows one in prose.
 _URL_TRAILING_TRIM = ".,;:!?"
 
-def extract_urls(text: str) -> List[str]:
+def extract_urls(text: str) -> list[str]:
     """Return the http(s) URLs found in `text`, in order of appearance (duplicates kept).
 
     Trailing sentence punctuation (`.`, `,`, `;`, `:`, `!`, `?`) is trimmed from each match.
@@ -287,7 +288,7 @@ def url_host(url: str) -> str:
     """Return the lowercased host of `url`, or "" if it has none (e.g. a relative or malformed URL)."""
     return (urllib.parse.urlsplit(url).hostname or "").lower()
 
-def host_matches_allowlist(host: str, allowlist: List[str]) -> bool:
+def host_matches_allowlist(host: str, allowlist: list[str]) -> bool:
     """Return whether `host` is permitted by `allowlist`.
 
     An allowlist entry matches case-insensitively, in one of two ways:
