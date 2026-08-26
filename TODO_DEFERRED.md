@@ -3097,10 +3097,17 @@ reflow, so any layout change above the span leaves the box behind. (The thought-
 easy repro now that §9/§10 made thinking traces prominent, but window-resize reflow and message edits would
 trigger it too.)
 
-Same class as the list-item bullet-point position bug fixed earlier — a decoration positioned from a captured
-absolute pos rather than following the live layout. Fix directions: draw the background relative to the text in
-normal flow instead of an absolute-pos group, or recompute/redraw the Code (and Pre) backgrounds when the
-containing layout changes (the renderer's `post_render` / `CallInNextFrame` machinery already exists for `Pre`).
+Same class as the list markers, which had the identical fault and **is now fixed** (2026-08-26) — so there is
+a worked example to copy rather than two directions to choose between. `line_attributes.List` used to reserve
+the marker's width with a spacer and then draw the marker itself into `attributes_group` at coordinates read
+from `dpg.get_item_pos`; it now puts a *slot* in the flow and fills it in place (`List._fill_marker_slot`),
+which needs no position read, needs no layout to have happened, and reflows for free — window resize and
+message edits as well as the thought-bubble toggle. `Code` wants the same move: the background box becomes a
+sibling of the text in normal flow rather than an absolutely-positioned group.
+
+One thing the list fix had to get right, which `Code` will meet too: the slot must fill the *whole* width it
+reserved. Sizing the bullet's drawlist to the glyph rather than to a digit's cell shortened every unordered
+row, so ordered and unordered lists stopped lining up with each other.
 
 Discovered during brief 02 §9/§10 live validation (2026-06-04).
 
@@ -3737,6 +3744,12 @@ Librarian stores *every* chat — all nodes, all payload revisions, across the w
   and a corrupted write risks the whole history at once. (Note that "autosave" today means a single `atexit`
   write per session, not a periodic one — so the rewrite cost is currently paid once at exit. Adding a real
   autosave would multiply it by the save frequency, which is why that item and this one are coupled.)
+  - **The other half of "once at exit" is that anything which skips the exit loses the session entire.**
+    Demonstrated by accident on 2026-08-26: a driven test closed the app with `xdotool windowclose`, which
+    destroys the window without telling the client, so no `atexit` ran — and the datastore's last write was
+    from *startup*, taking every message of that session with it. No crash, no core dump, nothing in the log.
+    A real crash mid-session costs exactly the same, and today nothing bounds that loss by anything shorter
+    than the session. That is the case for a cadence, and it is independent of the rewrite cost above.
 - **The sidecar dir**: a single flat directory of content-addressed images degrades on some filesystems once it
   holds many thousands of entries (directory-scan and lookup costs); `list_sidecar_files` (used by GC) reads the
   whole directory each time.

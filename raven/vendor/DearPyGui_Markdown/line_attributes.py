@@ -203,12 +203,38 @@ class List(LineAttribute):
 
     def render(self, text_height: int | float, parent=0, attributes_group=0):
         spacer_group = dpg.add_group(parent=parent, horizontal=True)
-        dpg.add_spacer(width=self.get_width() - self.get_task_width(), parent=spacer_group)
+        # The marker's slot in the text flow, a group rather than a bare spacer so that `post_render` can
+        # fill it in place. That is what keeps the marker's position a matter of layout rather than of
+        # coordinates: it sits in the same row as its text, and moves when the row does.
+        #
+        # It starts out holding a spacer the full width of the marker, which is what a *continuation* line
+        # of a wrapped item keeps — only the first line of an item is given a marker.
+        self.marker_slot = dpg.add_group(parent=spacer_group, horizontal=True)
+        dpg.add_spacer(width=self.get_width() - self.get_task_width(), parent=self.marker_slot)
         if self.task:
             self.task_spacer = dpg.add_spacer(width=self.get_task_width(), parent=spacer_group)
         self.text_height = text_height
         self.spacer_group = spacer_group
         self.attribute_connector.append(self)
+
+    def _fill_marker_slot(self, marker_width: int | float, top_padding: int | float):
+        """Clear the slot and open a column in it for the marker, right-aligned and vertically centred.
+
+        Returns the DPG ID of that column, for the caller to draw its own kind of marker into.
+
+        `marker_width`: how wide the marker's own cell is. The slot's remaining width goes in front of it as
+                        a spacer, which is what right-aligns the marker against the text that follows.
+        `top_padding`: how far down the marker sits within the line. A line can be taller than the marker —
+                       a larger font in the item, or a wrapped line — and the marker is centred against it.
+        """
+        dpg.delete_item(self.marker_slot, children_only=True)
+        leading = (self.get_width() - self.get_task_width()) - marker_width
+        if leading > 0:
+            dpg.add_spacer(width=leading, parent=self.marker_slot)
+        column = dpg.add_group(parent=self.marker_slot)
+        if top_padding > 0:
+            dpg.add_spacer(height=top_padding, parent=column)
+        return column
 
     @CallInNextFrame
     def post_render(self, attributes_group=0):
@@ -227,66 +253,61 @@ class List(LineAttribute):
             dpg.add_spacer(width=get_text_size(' ' * 2, font=Default.get_font())[0], parent=self.spacer_group)
 
     def ordered_render(self, attributes_group=0):
-        def _draw():
-            with guiutils.nonexistent_ok():
-                text = f'{str(self.index)[-4::]}.  '
-                render_text_width, render_text_height = get_text_size(text, font=Default.get_font())
-                x, y = dpg.get_item_pos(self.spacer_group)
-
-                y += (self.text_height - render_text_height) / 2
-                x += (self.get_width() - self.get_task_width()) - render_text_width
-
-                dpg_text = dpg.add_text(text, pos=(x, y), parent=attributes_group, color=self.color)
-                dpg.bind_item_font(dpg_text, font=Default.get_font())
-        _run_when_laid_out(self.spacer_group, _draw)
+        with guiutils.nonexistent_ok():
+            text = f'{str(self.index)[-4::]}.  '
+            render_text_width, render_text_height = get_text_size(text, font=Default.get_font())
+            column = self._fill_marker_slot(marker_width=render_text_width,
+                                            top_padding=(self.text_height - render_text_height) / 2)
+            dpg_text = dpg.add_text(text, parent=column, color=self.color)
+            dpg.bind_item_font(dpg_text, font=Default.get_font())
 
     def unordered_render(self, attributes_group=0):
-        def _draw():
-            with guiutils.nonexistent_ok():
-                text = '0.  '
-                render_text_width, render_text_height = get_text_size(text, font=Default.get_font())
-                x, y = dpg.get_item_pos(self.spacer_group)
+        with guiutils.nonexistent_ok():
+            text = '0.  '
+            render_text_width, render_text_height = get_text_size(text, font=Default.get_font())
+            height = render_text_height / 2.5
+            width = height
+            thickness = height / 7
+            # The bullet is smaller than a digit, so it sits lower in the line than a number would: centred
+            # against the line, then dropped by most of the difference between a digit's height and its own.
+            column = self._fill_marker_slot(marker_width=render_text_width,
+                                            top_padding=((self.text_height - render_text_height) / 2 +
+                                                         (render_text_height - height) * 0.77))
+            # The drawlist is as wide as a number's cell even though the bullet drawn in it is a few pixels
+            # across, so an unordered item's text starts where an ordered one's does. Sizing it to the glyph
+            # instead shortens the whole row, and the two list kinds stop lining up.
+            drawlist = dpg.add_drawlist(width=render_text_width, height=height, parent=column)
 
-                y += (self.text_height - render_text_height) / 2
-                x += (self.get_width() - self.get_task_width()) - render_text_width
-                height = render_text_height / 2.5
-                width = height
-                y += (render_text_height - height) * 0.77
-                thickness = height / 7
-                drawlist_group = dpg.add_group(pos=(x, y), parent=attributes_group)
-                drawlist = dpg.add_drawlist(width=width, height=height, parent=drawlist_group)
-
-                depth = self.depth - self.depth // 4 * 4
-                # The hollow variants take their colour from the outline rather than the fill, so `color`
-                # has to be set on every case while `fill` alternates - a hollow marker left at DPG's
-                # default would be the only white thing in a coloured list.
-                match depth:
-                    case 1:
-                        dpg.draw_circle([height / 2, width / 2],
-                                        width / 2 - thickness / 2,
-                                        parent=drawlist,
-                                        thickness=thickness,
-                                        color=self.color,
-                                        fill=self.color)
-                    case 2:
-                        dpg.draw_circle([height / 2, width / 2],
-                                        width / 2 - thickness / 2,
-                                        parent=drawlist,
-                                        thickness=thickness,
-                                        color=self.color,
-                                        fill=(0, 0, 0, 0))
-                    case 3:
-                        dpg.draw_quad([thickness, thickness], [width - thickness, thickness],
-                                      [width - thickness, height - thickness], [thickness, height - thickness],
-                                      parent=drawlist,
-                                      thickness=thickness,
-                                      color=self.color,
-                                      fill=self.color)
-                    case _:
-                        dpg.draw_quad([thickness, thickness], [width - thickness, thickness],
-                                      [width - thickness, height - thickness], [thickness, height - thickness],
-                                      parent=drawlist,
-                                      thickness=thickness,
-                                      color=self.color,
-                                      fill=(0, 0, 0, 0))
-        _run_when_laid_out(self.spacer_group, _draw)
+            depth = self.depth - self.depth // 4 * 4
+            # The hollow variants take their colour from the outline rather than the fill, so `color`
+            # has to be set on every case while `fill` alternates - a hollow marker left at DPG's
+            # default would be the only white thing in a coloured list.
+            match depth:
+                case 1:
+                    dpg.draw_circle([height / 2, width / 2],
+                                    width / 2 - thickness / 2,
+                                    parent=drawlist,
+                                    thickness=thickness,
+                                    color=self.color,
+                                    fill=self.color)
+                case 2:
+                    dpg.draw_circle([height / 2, width / 2],
+                                    width / 2 - thickness / 2,
+                                    parent=drawlist,
+                                    thickness=thickness,
+                                    color=self.color,
+                                    fill=(0, 0, 0, 0))
+                case 3:
+                    dpg.draw_quad([thickness, thickness], [width - thickness, thickness],
+                                  [width - thickness, height - thickness], [thickness, height - thickness],
+                                  parent=drawlist,
+                                  thickness=thickness,
+                                  color=self.color,
+                                  fill=self.color)
+                case _:
+                    dpg.draw_quad([thickness, thickness], [width - thickness, thickness],
+                                  [width - thickness, height - thickness], [thickness, height - thickness],
+                                  parent=drawlist,
+                                  thickness=thickness,
+                                  color=self.color,
+                                  fill=(0, 0, 0, 0))
