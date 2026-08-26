@@ -342,12 +342,17 @@ with the eGPU attached, so items 1 and 3 below — both filed for the single-GPU
 configuration — buy little there and **stay out of the sprint**. Item 2 went into band 2 as its item 11:
 speech is on whenever the avatar talks, so it is live all evening regardless of what the machine can spare.
 
+**How the rig is budgeted is what makes both of those firm** (Juha, 2026-08-26): the 24 GB card is
+dedicated to the LLM, and everything else — avatar, TTS, and the rest of the server's models — runs on the
+internal dGPU. So the two premises the items were filed on are both absent here. There is no contention
+between the avatar and the LLM to relieve, because they are not on the same card; and the TTS is not on the
+CPU, so there is no first-sentence latency worth overlapping generation to hide.
+
 - **Item 1 remains wanted for the road**, where it was aimed in the first place; it is simply not
   exhibit work.
-- **Item 3's value returns if TTS ends up on the CPU anyway** — which is a question about how the rig is
-  finally budgeted rather than about the rig's size, since the LLM, the avatar and the TTS all want the
-  same cards. Worth asking once when the exhibit machine is configured, and re-ranking then if the answer
-  is CPU.
+- **Item 3 would come back only on a machine that runs TTS on the CPU**, which this one does not. Its
+  measurement stands either way: the first sentence is the whole latency, and everything after it renders
+  faster than it can be spoken.
 
 Their common shape is that each currently acts on the wrong unit of work: the whole turn where it wants the
 sentence, or the streamed text where it wants the spoken text.
