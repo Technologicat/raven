@@ -31,16 +31,16 @@ from . import textfilestore
 # expose to the user). `load` uses these to fill any missing keys from an on-disk state file;
 # `save` uses the keys to validate that the state dict has all required flags. Adding or removing
 # a flag means touching this one mapping — `load`, `save`, and the tests derive from it.
-_DEFAULT_FLAGS = {"internet_enabled": True,
+_DEFAULT_FLAGS = {# Whether a thinking model may reason before it answers. On by default, which is the
+                  # model's own default: a model that reasons was chosen for its reasoning.
+                  "thinking_enabled": True,
+                  "internet_enabled": True,
                   "docs_enabled": True,
                   "avatar_speech_enabled": True,
                   "avatar_subtitles_enabled": True,
-                  # Whether a thinking model's reasoning trace starts open. Off by default: hidden thinking
-                  # is what people now expect from an LLM frontend, and the trace is usually a wall of text
-                  # between the reader and the answer. Deliberately *not* named `thinking_enabled`, which is
-                  # the coming switch for whether the model reasons at all — one changes what is displayed,
-                  # the other changes what is generated, and `show_thinking_enabled` beside `thinking_enabled`
-                  # is how the two would come to be read as the same switch.
+                  # Whether a thinking model's reasoning trace starts open in the GUI. Off by default: a
+                  # hidden trace is what people now expect from an LLM frontend, and it is usually a wall of
+                  # text between the reader and the answer.
                   "show_thinking": False}
 
 # Flags that used to exist, dropped from a state file on load so they do not sit there forever confusing

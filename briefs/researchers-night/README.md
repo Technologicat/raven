@@ -159,7 +159,7 @@ known before band 3 begins.
    item is in, not optional (Juha, 2026-08-26).
 
    **In progress, 2026-08-26.** Built as a sequence, data first so most of it is verifiable without a
-   window. Six of eight steps are done and committed; what remains is below.
+   window. Seven of eight steps are done and committed; what remains is below.
 
    1. ~~The local-tokenizer fallback counted only the answer, never the reasoning.~~ Done.
    2. ~~`invoke` records where the turn's wall time went — `generation_metadata["phases"]`, holding
@@ -171,9 +171,12 @@ known before band 3 begins.
       4.8s, ~428t` counting up while streaming, and a four-column breakdown in a tooltip on the message's
       own line (label / time / tokens / speed, units in the header, blanks where a quantity does not
       apply). The message line's meaning is unchanged, since an old node cannot be recomputed.
-   7. **`Enable thinking`** — `TODO.md`'s "Thinking toggle", pulled into this sprint and much smaller than
-      its July design: `reasoning_effort: "none"`, measured working across Qwen 3.6, 3.8 and Gemma 4. No
-      prefill, no per-family marker table.
+   7. ~~**`Enable thinking`.**~~ Done, and it shipped as *Thinking*, first in the row: a per-call
+      `thinking_enabled` on `invoke` and `ai_turn`, an app-state flag, and one checkbox. The wire mapping
+      is `llmclient.thinking_request_fields`, the single place where Raven's vocabulary becomes the
+      backend's. The live-backend group gained the assertion a mock cannot make — that the field is
+      honoured — with the on-case as its control, so a non-thinking model skips instead of passing
+      vacuously.
    8. **Then the parser can start in `_PS_THINK`** when step 7 says thinking is on and the backend is
       single-channel — which closes `TODO_DEFERRED.md`'s "Streaming thinking shows as gray" live half.
       Headless-testable; end-to-end only against a single-channel backend, i.e. not before ooba.

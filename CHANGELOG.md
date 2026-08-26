@@ -6,8 +6,12 @@
 
 *Raven-librarian*
 
+- **a *Thinking* toggle**, for asking a reasoning model to just answer. On by default. Switch it off and the same model skips the reasoning step: replies arrive sooner and shorter, at the cost of the thinking that was making them good on a hard question. It applies from the next reply onward, and to every round of a tool-using turn.
+  - **Nothing to configure per model.** It is sent as `reasoning_effort: "none"`, which LM Studio serves by rendering the model's *own* non-thinking branch — so a model that spells its thinking differently is covered without Raven knowing how it spells it. Measured across Qwen 3.6, Qwen 3.8 and Gemma 4: reasoning drops to zero tokens and the answer stays correct. Untested on oobabooga.
+  - **Flipping it mid-conversation is free on Qwen and costs a full re-prefill on Gemma** — 1.6 s on a 10k-token chat, and it grows with the conversation. The two families put their thinking marker at opposite ends of the prompt, so only one of them can reuse what the backend already processed.
+
 - **a *Show thinking* toggle**, for when the reasoning is the part you want to read. Off by default, so a thinking model's trace starts collapsed behind its cloud; turn it on and traces arrive open. It takes effect from the next reply onward; the cloud, or Ctrl+T, opens the trace of a reply already on screen.
-  - It says what is **shown**, not what the AI does: the model reasons either way. The toggles are now grouped by that distinction — what the AI may reach for, how the chat log is shown, what the avatar does.
+  - It says what is **shown**; whether the AI reasons at all is the *Thinking* toggle beside it. The row is now grouped by that distinction — what the AI does when it answers, how the chat log is shown, what the avatar does.
 
 - **what the thinking cost is now reported**, where before the single largest consumer of a reasoning turn was the one part of the message with no numbers on it. The thought bubble carries the same three figures the message does — tokens, wall time, speed — for the reasoning alone, and while a reply is being generated the cloud counts up (`Thinking… 12.4s, ~480t`), so a collapsed trace still says how long you have been waiting.
   - **The message's own line is unchanged**, and still covers the whole reply. Hovering it opens the breakdown: prompt processing, thinking, answer, total. Those can differ startlingly — a reply reporting 44 t/s turned out to have generated at 99 t/s, with over half the turn spent processing the prompt.

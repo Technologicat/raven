@@ -646,6 +646,7 @@ def minimal_chat_client(backend_url) -> None:
                                                 docs_enabled=app_state["docs_enabled"],
                                                 docs_query=docs_query,
                                                 docs_num_results=librarian_config.docs_num_results,
+                                                thinking_enabled=app_state["thinking_enabled"],
                                                 markup="ansi",
                                                 on_docs_start=None,
                                                 on_docs_done=None,

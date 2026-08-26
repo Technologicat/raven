@@ -504,6 +504,47 @@ class TestToolNamesFiltersTheRequest:
         assert "tools" not in sent["json"]
 
 
+class TestThinkingPreferenceReachesTheWire:
+    """Asking a reasoning model not to reason, and the asymmetry that "on" is silence.
+
+    There is no value meaning "think": every accepted `reasoning_effort` other than `"none"` was measured
+    indistinguishable from omitting the field, so the on-case sends nothing and the model's own default is
+    what carries it. That makes the two branches easy to conflate — a helper that returned `{}` for both
+    would look right in every on-case test — so each test here is paired against its opposite.
+    """
+
+    def test_thinking_on_sends_nothing(self):
+        assert llmclient.thinking_request_fields(thinking_enabled=True) == {}
+
+    def test_thinking_off_asks_for_no_reasoning_effort(self):
+        assert llmclient.thinking_request_fields(thinking_enabled=False) == {"reasoning_effort": "none"}
+
+    def test_the_field_is_absent_by_default(self, monkeypatch, invoke_settings):
+        sent = _capture_request(monkeypatch, [{"choices": [{"delta": {"content": "ok"}}]}, "[DONE]"])
+        llmclient.invoke(invoke_settings, _history("hi"), tools_enabled=False)
+        assert "reasoning_effort" not in sent["json"]
+
+    def test_the_field_is_present_when_thinking_is_off(self, monkeypatch, invoke_settings):
+        sent = _capture_request(monkeypatch, [{"choices": [{"delta": {"content": "ok"}}]}, "[DONE]"])
+        llmclient.invoke(invoke_settings, _history("hi"), tools_enabled=False, thinking_enabled=False)
+        assert sent["json"]["reasoning_effort"] == "none"
+
+    def test_it_does_not_persist_into_the_shared_settings(self, monkeypatch, invoke_settings):
+        """A per-call parameter that leaked into `settings.request_data` would be a session-wide setting.
+
+        `settings` is shared with every other consumer of the same backend — `perform_throwaway_task` and
+        `agent.turn` route through this same `invoke` — so a leak here would silently apply one chat turn's
+        preference to unrelated calls, and would only ever be noticed as a bill.
+        """
+        sent = _capture_request(monkeypatch, [{"choices": [{"delta": {"content": "ok"}}]}, "[DONE]"])
+        llmclient.invoke(invoke_settings, _history("hi"), tools_enabled=False, thinking_enabled=False)
+        assert sent["json"]["reasoning_effort"] == "none"  # it did reach the wire on the call that asked
+        assert "reasoning_effort" not in invoke_settings.request_data
+
+        llmclient.invoke(invoke_settings, _history("hi"), tools_enabled=False)
+        assert "reasoning_effort" not in sent["json"]  # ...and the next call is unaffected
+
+
 class TestInvokeStreamRobustness:
     def test_done_sentinel_null_content_and_usage(self, monkeypatch, invoke_settings):
         # `content: null` on the priming delta (must not crash io.write), a usage-only final chunk

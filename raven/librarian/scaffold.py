@@ -819,6 +819,7 @@ def ai_turn(llm_settings: env,
             on_tools_done: Callable | None,
             tool_context: env | None = None,
             tools_enabled: bool = True,
+            thinking_enabled: bool = True,
             use_character_card: bool = True) -> str:
     """AI's turn: LLM generation interleaved with tool responses, until there are no tool calls in the LLM's latest reply.
 
@@ -1022,6 +1023,13 @@ def ai_turn(llm_settings: env,
                      were introduced to end. Spelled as `llmclient.invoke`'s parameter of the same name and
                      meaning, which it feeds.
 
+    `thinking_enabled`: Whether a thinking model may reason before it answers. `True` (default) leaves the
+                        model to its own default; `False` asks the backend to switch reasoning off. Spelled
+                        as `llmclient.invoke`'s parameter of the same name and meaning, which it feeds.
+
+                        Applies to every round of the agent loop, so the reasoning a model would otherwise
+                        do between tool calls is switched off along with the rest.
+
     Returns the new HEAD node ID (i.e. the last chat node that was just added).
     """
     # Sanity check
@@ -1136,6 +1144,7 @@ def ai_turn(llm_settings: env,
                                    on_progress=on_llm_progress,  # this handles `action_stop` from `on_llm_progress`
                                    tools_enabled=tools_offered,
                                    tool_names=maybe_tool_names,
+                                   thinking_enabled=thinking_enabled,
                                    continue_=continue_this_message,
                                    datastore=datastore)  # resolve any sidecar: image refs to data: URLs on the wire
         except Exception as exc:  # noqa: BLE001 -- any backend failure becomes a visible, rerollable message rather than a silent crash
@@ -1271,6 +1280,7 @@ def retry_tool_calls(llm_settings: env,
                      docs_enabled: bool,
                      markup: str | None,
                      docs_num_results: int | None,
+                     thinking_enabled: bool = True,
                      on_docs_start: Callable | None = None,
                      on_docs_done: Callable | None = None,
                      on_prompt_ready: Callable | None = None,
@@ -1387,6 +1397,7 @@ def retry_tool_calls(llm_settings: env,
                    docs_query=None,
                    docs_num_results=docs_num_results,
                    markup=markup,
+                   thinking_enabled=thinking_enabled,
                    on_docs_start=on_docs_start,
                    on_docs_done=on_docs_done,
                    on_prompt_ready=on_prompt_ready,

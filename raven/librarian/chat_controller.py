@@ -4443,6 +4443,7 @@ class DPGChatController:
                                                             docs_enabled=self.app_state["docs_enabled"],
                                                             docs_query=docs_query,
                                                             docs_num_results=librarian_config.docs_num_results,
+                                                            thinking_enabled=self.app_state["thinking_enabled"],
                                                             markup="markdown",  # TODO: check if we actually use the `markup` argument for anything but thought blocks - those are in any case emitted as-is (and formatted at render time).
                                                             **common_callbacks)
                     else:
@@ -4454,6 +4455,7 @@ class DPGChatController:
                                                                      docs_enabled=self.app_state["docs_enabled"],
                                                                      markup="markdown",
                                                                      docs_num_results=librarian_config.docs_num_results,
+                                                                     thinking_enabled=self.app_state["thinking_enabled"],
                                                                      **common_callbacks)
                 self.app_state["HEAD"] = new_head_node_id
             finally:

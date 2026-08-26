@@ -37,6 +37,7 @@ llmclient = pytest.importorskip("raven.librarian.llmclient",
 agent = pytest.importorskip("raven.librarian.agent",
                             reason="librarian agent stack not installed")
 
+from raven.librarian import chatutil  # noqa: E402 -- after importorskip by design
 from raven.librarian import config as librarian_config  # noqa: E402 -- after importorskip by design
 
 pytestmark = pytest.mark.llm
@@ -170,3 +171,34 @@ def test_the_model_calls_the_calculator_and_the_arithmetic_comes_back_right(llm_
         plain = plain.replace(separator, "")
     assert str(48273 * 9184) in plain, (f"the tool was called but its answer did not reach the reply: "
                                         f"{record.reply!r}")
+
+
+def test_the_thinking_toggle_actually_switches_reasoning_off(llm_settings):
+    """`reasoning_effort: "none"` is a request the backend has to honour, and only it can say whether it does.
+
+    This is the one thing a mock cannot check about the *Thinking* toggle. `test_llmclient.py` pins that the
+    field reaches the wire; whether the field then does anything is a property of the backend and of the
+    model's chat template, and neither is under our control. A backend that quietly ignores it leaves the
+    toggle looking connected and doing nothing.
+
+    Both directions are asked because the off-case alone proves nothing: a model that never reasons produces
+    zero reasoning tokens whatever is sent. The on-case is the control, and when it comes back empty the
+    backend is serving a non-thinking model — which is not a failure, so it skips.
+
+    Asserted on the reasoning trace's presence, never on its content or the answer's. What the model thinks
+    about 17 times 23 is its own business; that it thought at all, or did not, is ours.
+    """
+    question = [{"role": "user", "content": [chatutil.text_content_part("What is 17 times 23?")]}]
+
+    thought = llmclient.invoke(llm_settings, question, tools_enabled=False)
+    if not (thought.data.get("reasoning_content") or "").strip():
+        pytest.skip("the loaded model did not reason even when allowed to, so there is nothing here to "
+                    "switch off — point these at a thinking model to exercise the toggle")
+
+    straight = llmclient.invoke(llm_settings, question, tools_enabled=False, thinking_enabled=False)
+    assert not (straight.data.get("reasoning_content") or "").strip(), (
+        f"the backend went on reasoning with `reasoning_effort: \"none\"` sent, so the toggle does not "
+        f"reach this backend: {straight.data['reasoning_content']!r}")
+    assert chatutil.content_to_text(straight.data["content"]).strip(), (
+        "reasoning was switched off and the reply came back empty, so the model was silenced rather than "
+        "asked to answer directly")

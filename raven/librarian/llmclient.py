@@ -1697,12 +1697,35 @@ def phase_report(*,
                               "tokens_exact": thinking_tokens_exact}
     return phases
 
+def thinking_request_fields(*, thinking_enabled: bool) -> dict[str, Any]:
+    """Return the request fields that ask a thinking model to reason, or not to.
+
+    `thinking_enabled`: what the user asked for.
+
+    Merge the result into the chat-completion request; it is empty when there is nothing to send.
+
+    This is the one place where Raven's own vocabulary becomes wire vocabulary, so a backend needing a
+    different mechanism is a branch here rather than a change at every call site.
+    """
+    if thinking_enabled:
+        # There is nothing to send, and that is not an omission. Measured 2026-08-26 against LM Studio
+        # 0.4.20 on `qwen3.6-35b-a3b`, `qwen3.8-27b` and `gemma4-26b-a4b`: every accepted `reasoning_effort`
+        # other than "none" was indistinguishable from omitting the field. So no value we can send means
+        # "think", and the model's own default is what "on" has to mean.
+        return {}
+    # LM Studio implements this by rendering the model's *own* non-thinking branch, so it needs no
+    # per-family marker table and works wherever the template has such a branch. We send it to every
+    # backend: it is untested on oobabooga, and a backend that rejects it fails loudly here, which a toggle
+    # quietly doing nothing would not.
+    return {"reasoning_effort": "none"}
+
 def invoke(settings: env,
            history: list[dict],
            on_progress: Callable | None = None,
            on_prompt_ready: Callable | None = None,
            tools_enabled: bool = True,
            tool_names: Collection[str] | None = None,
+           thinking_enabled: bool = True,
            continue_: bool = False,
            max_tokens: int | None = None,
            datastore: chattree.PersistentForest | None = None,
@@ -1772,6 +1795,17 @@ def invoke(settings: env,
                   A restriction that selects nothing removes the `tools` field entirely rather than sending
                   an empty list, which not every backend accepts.
 
+    `thinking_enabled`: Whether a thinking model may reason before it answers. `True` (default) leaves the
+                        model to its own default; `False` asks the backend to switch reasoning off, which
+                        it does by rendering the model's own non-thinking branch, so the model still
+                        answers — it just answers immediately. See `thinking_request_fields`.
+
+                        A per-call parameter rather than a setting, because `settings` is shared: a
+                        throwaway task routed through the same `settings` must not start spending
+                        reasoning tokens because the user enabled thinking in chat.
+
+                        Has no effect on a model that does not reason.
+
     `continue_`: If `False` (default), generate a new AI message. Most of the time, this is what you want.
                  The new message is returned.
 
@@ -1839,6 +1873,8 @@ def invoke(settings: env,
         data["max_tokens"] = max_tokens  # override the configured generation cap (used by `prefill`)
 
     data["messages"] = history
+
+    data.update(thinking_request_fields(thinking_enabled=thinking_enabled))
 
     # Ask for token usage stats to be included in the stream. LM Studio / OpenAI require this opt-in (and send
     # usage in a final, otherwise-empty chunk); ooba sends usage unconditionally and ignores the field.
