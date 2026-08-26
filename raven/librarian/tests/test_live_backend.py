@@ -144,13 +144,13 @@ def test_the_model_calls_the_calculator_and_the_arithmetic_comes_back_right(llm_
 
     `calculate` is the second tool needing nothing outside the process, and it differs from
     `get_current_time` in the way that matters here: the right answer is knowable from this side. So this
-    asserts on the reply's *content*, where the tests above deliberately do not — on a number a model
-    working it out in its head reliably gets wrong and the tool reliably gets right. Five digits times four
-    is past what any current model does dependably unaided, which is the whole reason the tool exists.
+    asserts on the reply's *content*, where the tests above deliberately do not.
 
-    That is still an assertion about the tool loop rather than about the model: a reply carrying the right
-    nine digits got them from the tool, the alternative being a model that multiplied correctly in its head
-    and therefore had no need of any of this.
+    **That is still shape, not wording, because the call is asserted separately.** The tool was called; the
+    digits are how we know its result was carried through to the user rather than dropped between the tool
+    node and the reply. No claim is made about what the model would have answered unaided — it may well
+    multiply five digits by four correctly in its head, and this would pass either way, which is fine: what
+    is under test is the path, not the arithmetic.
 
     Separators are stripped first. Whether a model writes `443339232` or `443,339,232` is presentation, and
     a European writer's `443.339.232` is the same choice made with a different character.
