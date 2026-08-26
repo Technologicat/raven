@@ -353,8 +353,13 @@ CPU, so there is no first-sentence latency worth overlapping generation to hide.
   - **It has never bitten anyone**, and that is a fact about the development environment rather than
     about the item: the eGPU is attached at the desk whenever work happens, so the configuration the
     item is *for* is the one nobody develops in (Juha, 2026-08-26). So it is untried rather than
-    unimportant — and whoever builds it has to manufacture the condition to see it at all, by hiding
+    unimportant, and whoever builds it has to manufacture the condition to see it at all, by hiding
     the eGPU from the process and letting the avatar and the LLM land on one card.
+  - **The occasion it is actually for is the unplanned demo** — *"I have my laptop with me, want to see
+    it?"* — rather than a planned deployment (Juha). That is the likeliest way this configuration is ever
+    run, and the least forgiving: the audience is standing there, the attention lasts about a minute, and
+    a sluggish avatar spends it. Which is also the argument for building it before the road trip rather
+    than during one.
 - **Item 3 would come back only on a machine that runs TTS on the CPU**, which this one does not. Its
   measurement stands either way: the first sentence is the whole latency, and everything after it renders
   faster than it can be spoken.
