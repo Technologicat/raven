@@ -47,7 +47,7 @@ with timer() as tim:
     import pathlib
     import platform
     import sys
-    from typing import Dict, List, Optional
+    from typing import Dict, List, NamedTuple, Optional
 
     from mcpyrate import colorizer
 
@@ -69,6 +69,36 @@ with timer() as tim:
     from . import scaffold
 logger.info(f"Libraries loaded in {tim.dt:0.6g}s.")
 print()
+
+class _FlagCommand(NamedTuple):
+    """One `!`-command that flips a single boolean in the app state."""
+    flag: str  # the `appstate` key it flips
+    subject: str  # how the confirmation names it: "<subject> is now ON."
+    summary: str  # what the help line says it does, before the parenthesis
+    detail: str = ""  # anything more the help line's parenthesis should carry, after the current setting
+
+# Keyed by the command as typed. Three commands with one behavior between them: `!cmd` toggles, `!cmd True`
+# and `!cmd False` set. Each used to be written out separately, which is how `!docs` came to return its
+# "unrecognized argument" value positionally where its siblings named it.
+_FLAG_COMMANDS = {"!thinking": _FlagCommand(flag="thinking_enabled",
+                                          subject="Thinking",
+                                          summary="Model reasoning"),
+                 "!internet": _FlagCommand(flag="internet_enabled",
+                                          subject="Internet access",
+                                          summary="Web search and page fetching"),
+                 "!docs": _FlagCommand(flag="docs_enabled",
+                                      subject="Document database",
+                                      summary="Document database",
+                                      detail=f"; document store at '{librarian_config.llm_docs_dir}'")}
+
+def _flag_command_for(user_message_text: str) -> Optional[_FlagCommand]:
+    """Which flag command `user_message_text` invokes, or `None` if it invokes none.
+
+    Matches the whole first word, so `!docsomething` is an unrecognized command rather than a roundabout
+    spelling of `!docs`.
+    """
+    words = user_message_text.split(maxsplit=1)
+    return _FLAG_COMMANDS.get(words[0]) if words else None
 
 def minimal_chat_client(backend_url) -> None:
     """Minimal LLM chat client, for testing/debugging."""
@@ -216,21 +246,27 @@ def minimal_chat_client(backend_url) -> None:
 
         print(colorizer.colorize("Starting chat.", colorizer.Style.BRIGHT))
         print()
+        def chat_show_flag_command_help(command_name: str) -> None:
+            """Print the help line for one flag command, with the setting it currently holds."""
+            flag_command = _FLAG_COMMANDS[command_name]
+            print(f"        {command_name + ' [True|False]':<24}- {flag_command.summary} on/off/toggle "
+                  f"(currently {app_state[flag_command.flag]}{flag_command.detail})")
         def chat_show_help() -> None:
             print(colorizer.colorize("=" * 80, colorizer.Style.BRIGHT))
             print("    raven.librarian.minichat - Minimal LLM client for testing/debugging.")
             print()
             print("    Special commands (tab-completion available):")
             print("        !clear                  - Start new chat")
-            print(f"        !docs [True|False]      - Document database on/off/toggle (currently {app_state['docs_enabled']}; document store at '{str(librarian_config.llm_docs_dir)}')")
+            chat_show_flag_command_help("!docs")
             print("        !dump                   - See raw contents of chat node datastore")
             print("        !head some-node-id      - Switch to another chat branch (get the node ID from `!dump`)")
             print("        !history                - Print a cleaned-up transcript of the current chat branch")
-            print(f"        !internet [True|False]  - Web search and page fetching on/off/toggle (currently {app_state['internet_enabled']})")
+            chat_show_flag_command_help("!internet")
             print("        !model                  - Show which model is in use")
             print("        !models                 - List all models available at connected backend")
             print("        !reconnect              - Re-probe the LLM backend (after starting it, or loading a model)")
             print("        !reroll                 - Reroll (regenerate) the latest AI response, creating a new sibling.")
+            chat_show_flag_command_help("!thinking")
             print("        !help                   - Show this message again")
             print()
             print("    Press Ctrl+D to exit chat.")
@@ -247,17 +283,17 @@ def minimal_chat_client(backend_url) -> None:
         # get_line_buffer()`) would never be invoked anyway.
         if _has_readline:
             # We prefill the space for commands that take an argument.
-            commands = ["!clear",
-                        "!docs ",
-                        "!dump",
-                        "!head ",
-                        "!help",
-                        "!history",
-                        "!internet ",
-                        "!model",
-                        "!models",
-                        "!reconnect",
-                        "!reroll"]
+            commands = sorted(["!clear",
+                               "!dump",
+                               "!head ",
+                               "!help",
+                               "!history",
+                               "!model",
+                               "!models",
+                               "!reconnect",
+                               "!reroll"]
+                              # A trailing space prefills the separator for a command that takes an argument.
+                              + [f"{command_name} " for command_name in _FLAG_COMMANDS])
             def get_completions(candidates: List[str], text: str) -> List[str]:
                 """Return a list of matching completions for `text`.
 
@@ -286,13 +322,11 @@ def minimal_chat_client(backend_url) -> None:
                 # TODO: fix one more failure mode, e.g. "!help !<tab>"
                 if buffer_content.startswith("!") and text.startswith("!"):  # completing a command?
                     candidates = commands
-                elif buffer_content.startswith("!docs"):  # in `!docs` command, expecting an argument?
+                elif _flag_command_for(buffer_content) is not None:  # in a flag command, expecting an argument?
                     candidates = ["True", "False"]
                 elif buffer_content.startswith("!head"):  # in `!head` command, expecting an argument?
                     with datastore.lock:
                         candidates = list(sorted(datastore.nodes.keys()))
-                elif buffer_content.startswith("!internet"):  # in `!internet` command, expecting an argument?
-                    candidates = ["True", "False"]
                 else:  # anything else -> no completions
                     return None
 
@@ -412,27 +446,21 @@ def minimal_chat_client(backend_url) -> None:
                 print()
                 chat_print_history(datastore.linearize_up(app_state["HEAD"]))
                 return Values(action=action_next_exchange)
-            elif user_message_text.startswith("!docs"):  # TODO: refactor
-                split_command_text = user_message_text.split()
-                nargs = len(split_command_text) - 1
-                if nargs == 0:
-                    app_state["docs_enabled"] = not app_state["docs_enabled"]
-                elif nargs == 1:
-                    arg = split_command_text[-1]
-                    if arg == "True":
-                        app_state["docs_enabled"] = True
-                    elif arg == "False":
-                        app_state["docs_enabled"] = False
-                    else:
-                        print(f"!docs: unrecognized argument '{arg}'; expected 'True' or 'False'.")
-                        print()
-                        return Values(action_next_exchange)
-                else:
-                    print("!docs: wrong number of arguments; expected at most one, 'True' or 'False'.")
+            elif (flag_command := _flag_command_for(user_message_text)) is not None:
+                command_name, *arguments = user_message_text.split()
+                if not arguments:
+                    app_state[flag_command.flag] = not app_state[flag_command.flag]
+                elif len(arguments) > 1:
+                    print(f"{command_name}: wrong number of arguments; expected at most one, 'True' or 'False'.")
                     print()
                     return Values(action=action_next_exchange)
-                docs_enabled_str = "ON" if app_state["docs_enabled"] else "OFF"
-                print(f"Document database is now {docs_enabled_str}.")
+                elif arguments[0] not in ("True", "False"):
+                    print(f"{command_name}: unrecognized argument '{arguments[0]}'; expected 'True' or 'False'.")
+                    print()
+                    return Values(action=action_next_exchange)
+                else:
+                    app_state[flag_command.flag] = (arguments[0] == "True")
+                print(f"{flag_command.subject} is now {'ON' if app_state[flag_command.flag] else 'OFF'}.")
                 print()
                 return Values(action=action_next_exchange)
             elif user_message_text == "!dump":
@@ -501,29 +529,6 @@ def minimal_chat_client(backend_url) -> None:
                 chat_print_history(node_id_history)
                 print()
                 return Values(action=action_proceed, docs_query=scan_history_for_docs_query(node_id_history))
-            elif user_message_text.startswith("!internet"):  # TODO: refactor
-                split_command_text = user_message_text.split()
-                nargs = len(split_command_text) - 1
-                if nargs == 0:
-                    app_state["internet_enabled"] = not app_state["internet_enabled"]
-                elif nargs == 1:
-                    arg = split_command_text[-1]
-                    if arg == "True":
-                        app_state["internet_enabled"] = True
-                    elif arg == "False":
-                        app_state["internet_enabled"] = False
-                    else:
-                        print(f"!internet: unrecognized argument '{arg}'; expected 'True' or 'False'.")
-                        print()
-                        return Values(action=action_next_exchange)
-                else:
-                    print("!internet: wrong number of arguments; expected at most one, 'True' or 'False'.")
-                    print()
-                    return Values(action=action_next_exchange)
-                internet_enabled_str = "ON" if app_state["internet_enabled"] else "OFF"
-                print(f"Internet access is now {internet_enabled_str}.")
-                print()
-                return Values(action=action_next_exchange)
             elif user_message_text.startswith("!") and len(user_message_text.split("\n")) == 1:
                 print(f"Unrecognized command '{user_message_text}'; use `!help` for available commands.")
                 return Values(action=action_next_exchange)
