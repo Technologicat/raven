@@ -350,6 +350,11 @@ CPU, so there is no first-sentence latency worth overlapping generation to hide.
 
 - **Item 1 remains wanted for the road**, where it was aimed in the first place; it is simply not
   exhibit work.
+  - **It has never bitten anyone**, and that is a fact about the development environment rather than
+    about the item: the eGPU is attached at the desk whenever work happens, so the configuration the
+    item is *for* is the one nobody develops in (Juha, 2026-08-26). So it is untried rather than
+    unimportant — and whoever builds it has to manufacture the condition to see it at all, by hiding
+    the eGPU from the process and letting the avatar and the LLM land on one card.
 - **Item 3 would come back only on a machine that runs TTS on the CPU**, which this one does not. Its
   measurement stands either way: the first sentence is the whole latency, and everything after it renders
   faster than it can be spoken.
