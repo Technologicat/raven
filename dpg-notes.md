@@ -1502,6 +1502,33 @@ already there (`thumbnailgrid` draws its cursor into the grid's own canvas), or 
 clipping to a panel (`investigations/dpg-overlays/`). Where the thing to be drawn is a highlight, prefer a
 theme — see "Themes" above, which is the mechanism `keyboardmark` ended up using for exactly this reason.
 
+## Needing `get_item_pos` to place a decoration means it is in the wrong container
+
+The tell is a decoration that has to be told where its text is — a bullet, a rule, a background box. That
+requirement never comes from the *drawing*; it comes from having put the decoration somewhere the text is
+not, so that nothing lays the two out together. Everything unpleasant then follows from it: the position
+only becomes real after a frame, so the work has to be deferred; it is (0, 0) inside a container that has
+never been shown, so the deferral has to wait on *visibility* rather than on a frame count; and the answer
+goes stale the moment anything above the text changes height, stranding the decoration beside whatever
+moved into its place.
+
+Put it in the same row as its text instead, as an ordinary child, and every one of those disappears at
+once — DPG lays it out, later, along with everything else. Nobody computes a coordinate, so no coordinate
+can be early, absent or stale.
+
+**The distinction the wrong version blurs is metrics versus positions.** Font metrics — `get_text_size` for
+a cell's width, a line's height — are available at build time with no frame rendered, and reserving space
+from them is fine. A laid-out *position* is not available then, and wanting one is the signal to change
+containers rather than to wait harder.
+
+Worked example, 2026-08-26: `raven/vendor/DearPyGui_Markdown/line_attributes.py`. List markers and
+blockquote bars each reserved their width with a spacer in the flow and then drew the mark itself into a
+separate `attributes_group` at `dpg.get_item_pos(...)` coordinates. Expanding a chat message's thinking
+trace pushed the text down and left a column of orphaned numbers and bars in the margin. Both now fill a
+slot in their own row; the `CallInNextFrame` deferral and a `_run_when_laid_out` helper (89 lines, one
+item-visible handler registry per marker) were deleted rather than fixed, because nothing was left for them
+to wait for.
+
 ## Never size a drawlist to a scroll extent — it will take the X session down
 
 **Measured 2026-08-13, and it cost a desktop.** A drawlist of 860 × 60800 px inside a scrollable child window

@@ -132,6 +132,13 @@ does the right thing ~99.9% of the time, and it has already answered the hard ha
 survive a rebuild, and `_find_next_or_prev_item` for choosing one. Borrow the shape rather than inventing a
 second one; a chat message and an info panel entry are the same problem wearing different clothes.
 
+**Ctrl+T has the same fault, and wants the same anchor** (Juha, 2026-08-26). Toggling a message's thinking
+trace changes its height, which changes which message is bottommost-with-a-visible-button-row, which is what
+the rule picks — so the mark can move off the message that was just toggled, and the second press acts on a
+different one. Flicking a trace open and shut to glance at it is therefore no more possible than flicking
+between siblings, and for exactly the same reason. Any anchor built for the sibling case should cover this
+one: the set of hotkeys that *repeat* an action on a message is the set that needs it.
+
 Worth settling alongside the stall item below: a rebuild that takes seconds makes a flick feel worse than a
 drift, so the two are noticed together even though they are independent faults.
 
@@ -3080,9 +3087,9 @@ colour is step 5; the `Pre`-box position is the separate stranded-box item below
 
 Discovered during brief 03 §4 live validation, reported by Juha (2026-06-05).
 
-## DearPyGui_Markdown inline-code background boxes are stranded on dynamic reflow
+## DearPyGui_Markdown block constructs need a block container: stranded code boxes, segmented blockquote bars
 
-*Cluster: markdown-renderer · Cost: ? · Gate: ? · Filed: 2026-06-04*
+*Cluster: markdown-renderer · Cost: ? · Gate: ? · Filed: 2026-06-04 · Extended: 2026-08-26*
 
 Inline-code spans (`` `like this` ``) render a grey rounded background box behind the text. The box position is
 correct on first render, but when the layout above the span *reflows* — e.g. expanding/collapsing a message's
@@ -3104,6 +3111,24 @@ from `dpg.get_item_pos`; it now puts a *slot* in the flow and fills it in place 
 which needs no position read, needs no layout to have happened, and reflows for free — window resize and
 message edits as well as the thought-bubble toggle. `Code` wants the same move: the background box becomes a
 sibling of the text in normal flow rather than an absolutely-positioned group.
+
+**The other half, folded in 2026-08-26: a blockquote should have one bar for the whole quote, and today has
+one per line.** Its stranding is fixed — `Blockquote.render` puts the bar in its line's row like the markers
+— but the bars are separate segments with a gap between them, because the renderer is per-line and the gap
+is DPG's vertical item spacing *between sibling rows*. The parent owns that spacing, so nothing inside
+`Blockquote` can close it: a taller drawlist only makes its own row taller and the gap survives below it.
+(The `extra_height` arithmetic that used to stretch each bar up to meet the previous one was attempting
+exactly this, from two more position reads, and was visibly not achieving it.)
+
+**So both halves want the same thing: a block construct needs a block container.** `text_entities.LineEntity.render`
+makes one row group per line, all siblings; it would have to group consecutive lines sharing a construct's
+`attribute_connector` and wrap them. Given that, a blockquote becomes a horizontal pair — one full-height bar
+in a left column, the quoted lines in a right one (Juha's call, 2026-08-26, and the right shape) — and
+`Pre`'s background becomes one box behind that container instead of a floating quad. Doing them separately
+means two hacks where one structural change serves both, which is why they are now one item.
+
+Cost is higher than the marker fix and lands in the core render loop everything draws through, so it wants
+its own live pass. Nested quotes (`depth > 1`) multiply the columns and are the case to check.
 
 One thing the list fix had to get right, which `Code` will meet too: the slot must fill the *whole* width it
 reserved. Sizing the bullet's drawlist to the glyph rather than to a digit's cell shortened every unordered
