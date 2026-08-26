@@ -378,6 +378,11 @@ class Postprocessor:
              The filter name must be a method of `Postprocessor`, taking in an image, and any number of named parameters.
              To use a filter's default parameter values, supply an empty dictionary for the parameters.
 
+             One parameter name is reserved and belongs to the chain rather than to any filter: `enabled`,
+             default `True`. Set it to `False` to skip a filter while keeping its settings in the chain, so
+             that switching it back on does not mean tuning it again. It is consumed here and never passed
+             on to the filter.
+
              The outer `Optional[List[Tuple[...]]]` just formalizes that `chain` may be omitted (to use the built-in
              default chain, for testing), and the top-level format that it's an ordered list of filters. The filters
              are applied in order, first to last.
@@ -578,8 +583,17 @@ class Postprocessor:
         # While I can almost imagine the eventual bug report, I think it's safe to ignore this.
 
         # Apply the current filter chain.
+        #
+        # `enabled` is the engine's, not any filter's: it is consumed here and never reaches the filter
+        # method, which has no such parameter and would raise on one. Absent means enabled, so a chain that
+        # has never heard of the key behaves exactly as before - and that is the common case, which is why
+        # the copy is made only when the key is actually present rather than on every filter every frame.
         with torch.inference_mode():
             for filter_name, settings in chain:
+                if "enabled" in settings:
+                    if not settings["enabled"]:
+                        continue
+                    settings = {k: v for k, v in settings.items() if k != "enabled"}
                 apply_filter = getattr(self, filter_name)
                 apply_filter(image, **settings)
 

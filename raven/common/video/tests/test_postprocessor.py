@@ -1081,3 +1081,78 @@ class TestZoomEffect:
         # The bright region should now be larger
         bright_count = (image[0] > 0.5).sum().item()
         assert bright_count > 4 * 4  # original was 4×4 pixels
+
+
+# ---------------------------------------------------------------------------
+# Tests: the chain's own `enabled` parameter
+# ---------------------------------------------------------------------------
+
+class TestChainEnabledFlag:
+    """`enabled` belongs to the chain rather than to any filter.
+
+    It lets a filter be switched off while its settings stay in the chain, so switching it back on does not
+    mean tuning it again. No filter declares such a parameter, so the engine has to consume it: one that
+    leaked through would raise `TypeError` on every frame.
+    """
+
+    @staticmethod
+    def _spy_on(pp, filter_name):
+        """Replace one filter with a recorder, and return the list its keyword arguments land in.
+
+        An instance attribute shadows the class's method, which is what the chain's `getattr` finds.
+        """
+        calls = []
+        setattr(pp, filter_name, lambda image, **kwargs: calls.append(kwargs))
+        return calls
+
+    def test_a_chain_that_never_heard_of_the_key_is_unaffected(self):
+        """The overwhelmingly common case, and the one a regression here would break everywhere at once."""
+        pp = _make_postprocessor()
+        calls = self._spy_on(pp, "zoom")
+        pp.chain = [["zoom", {"factor": 2.0}]]
+        pp.render_into(_make_image())
+        assert calls == [{"factor": 2.0}]
+
+    def test_an_enabled_filter_runs_and_is_not_handed_the_key(self):
+        pp = _make_postprocessor()
+        calls = self._spy_on(pp, "zoom")
+        pp.chain = [["zoom", {"factor": 2.0, "enabled": True}]]
+        pp.render_into(_make_image())
+        assert calls == [{"factor": 2.0}], "`enabled` reached the filter, which declares no such parameter"
+
+    def test_a_disabled_filter_is_skipped(self):
+        pp = _make_postprocessor()
+        calls = self._spy_on(pp, "zoom")
+        pp.chain = [["zoom", {"factor": 2.0, "enabled": False}]]
+        pp.render_into(_make_image())
+        assert calls == []
+
+    def test_the_chain_entry_is_left_as_it_was(self):
+        """A chain is typically read from a settings file once and then used for every frame thereafter, so
+        stripping the key in place would switch the filter on permanently after the first frame."""
+        pp = _make_postprocessor()
+        self._spy_on(pp, "zoom")
+        chain = [["zoom", {"factor": 2.0, "enabled": True}]]
+        pp.chain = chain
+        pp.render_into(_make_image())
+        assert chain == [["zoom", {"factor": 2.0, "enabled": True}]], f"the chain became {chain}"
+
+    def test_a_disabled_filter_leaves_the_image_untouched(self):
+        """The same thing again through the real filter, which is what catches a leaked `enabled`: the spy
+        above accepts any keyword, and `zoom` does not."""
+        pp = _make_postprocessor()
+        image = _make_colorful_image()
+        original = image.clone()
+
+        pp.chain = [["zoom", {"factor": 2.0, "quality": "low", "enabled": False}]]
+        pp.render_into(image)
+        assert torch.equal(image, original), "a disabled filter changed the image"
+
+        # The negative control. Without it, a fixture in which `zoom` happened to be a no-op — the wrong
+        # factor, an image it cannot magnify — would satisfy the assertion above for the wrong reason, and
+        # go on satisfying it forever.
+        pp.chain = [["zoom", {"factor": 2.0, "quality": "low", "enabled": True}]]
+        pp.render_into(image)
+        assert not torch.equal(image, original), ("this filter does nothing to this image either way, so "
+                                                  "the fixture cannot tell a skipped filter from a "
+                                                  "running one")
