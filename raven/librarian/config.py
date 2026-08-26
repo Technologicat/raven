@@ -543,6 +543,7 @@ gui_config = env(  # ----------------------------------------
                  chat_text_right_margin_w=150,  # 100 would be mostly nice, but the thinking trace toggle button needs some space too.
                  toolbar_inner_h=30,  # Width of the content area of the toolbar below the chat.
                  toolbar_separator_w=12,  # Width of a section separator spacer in the toolbar.
+                 mode_toggle_row_h=22,  # Height of the mode-toggle checkbox row, i.e. how tall its group dividers are drawn.
                  toolbutton_w=30,  # Width of a toolbutton in the toolbar.
                  toolbutton_indent=None,  # The default `None` means "centered" (the value is then computed and stored while setting up the GUI).
                  font_size=20,  # In pixels.

@@ -702,7 +702,13 @@ class DPGChatMessage:
         dpg.add_text("Show/hide thinking trace [Ctrl+T]", parent=think_toggle_tooltip)
 
         self.gui_thought_group = dpg.add_group(parent=row)
-        dpg.hide_item(self.gui_thought_group)
+        # The preference is read here, when the bubble is built, and nowhere else — so flipping it decides
+        # what *arrives* rather than rearranging what is already on screen. Deliberately: opening every
+        # trace in a long chat at once moves every message below the first one, and a reader loses their
+        # place entirely. `Subtitles` takes effect from the next message for the same reason, and Ctrl+T is
+        # how the reply in front of you gets opened.
+        if not self.parent_view.chat_controller.app_state.get("show_thinking", False):
+            dpg.hide_item(self.gui_thought_group)
         return self.gui_thought_group
 
     def _render_text(self) -> None:

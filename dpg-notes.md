@@ -1502,6 +1502,22 @@ already there (`thumbnailgrid` draws its cursor into the grid's own canvas), or 
 clipping to a panel (`investigations/dpg-overlays/`). Where the thing to be drawn is a highlight, prefer a
 theme — see "Themes" above, which is the mechanism `keyboardmark` ended up using for exactly this reason.
 
+## There is no vertical separator, and `add_separator` inside a horizontal group is not one
+
+Measured 2026-08-26, dividing a row of checkboxes into groups. DPG offers `add_separator` and nothing else —
+no `add_vseparator`, no orientation argument — and putting one inside a `dpg.group(horizontal=True)` does
+**not** turn it on its side. It draws its horizontal rule anyway, inside the row, and forces the row's
+height, squeezing everything beside it.
+
+The answer is **`raven.common.gui.utils.add_toolbar_separator`**, which draws the line into a drawlist of
+the orientation you ask for. `horizontal=True` means *a horizontal toolbar*, so the line it draws is
+vertical — the argument names the toolbar, not the line. `toolbar_extent` is the row's cross-axis size (its
+height, here), `size` the gap's width, and `line=False` gives spacing with no rule, which is what every call
+site in Librarian's bottom toolbar and Visualizer's side toolbar actually uses.
+
+Worth knowing before reaching for `add_separator`: this helper predates the question by a long way and
+answers it in both orientations, so a row divider is a call rather than a small drawing job.
+
 ## Needing `get_item_pos` to place a decoration means it is in the wrong container
 
 The tell is a decoration that has to be told where its text is — a bullet, a rule, a background box. That

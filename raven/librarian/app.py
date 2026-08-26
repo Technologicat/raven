@@ -1370,6 +1370,12 @@ with timer() as tim:
                         def toggle_subtitles_enabled():
                             app_state["avatar_subtitles_enabled"] = not app_state["avatar_subtitles_enabled"]
                             avatar_controller.subtitles_enabled = app_state["avatar_subtitles_enabled"]
+                        def toggle_show_thinking():
+                            app_state["show_thinking"] = not app_state["show_thinking"]
+
+                        # Three groups, divided: what the AI may reach for, how the chat log is shown, and
+                        # what the avatar does. They answer different questions of the user, and in a flat
+                        # row the display preference reads as one more thing the AI does.
                         dpg.add_checkbox(label="Internet", default_value=app_state["internet_enabled"], callback=toggle_internet_enabled, tag="internet_enabled_checkbox")
                         dpg.add_tooltip("internet_enabled_checkbox", tag="internet_enabled_tooltip")  # tag
                         dpg.add_text("Let the AI reach the internet: web search, and fetching a page it finds\nor that you link to.\n\nThis is the only switch that lets anything leave this machine on the AI's\ninitiative, so it is the one to turn off when the conversation should stay\nlocal. Your messages still go to whichever LLM backend you configured;\nthat is set in the config file, not here.\n\nWith this off, the AI can still read your document database (see next\ntoggle) and can still ask what time it is.", parent="internet_enabled_tooltip")  # tag
@@ -1377,6 +1383,24 @@ with timer() as tim:
                         dpg.add_checkbox(label="Documents", default_value=app_state["docs_enabled"], callback=toggle_docs_enabled, tag="docs_enabled_checkbox")
                         dpg.add_tooltip("docs_enabled_checkbox", tag="docs_enabled_tooltip")  # tag
                         dpg.add_text("Before responding, search document database for relevant information.\nAlso lets the AI search the database itself; with this off, the document\ntools are not offered at all.\n\nWhile on, the AI is asked to ground claims about your documents in what\nwas actually retrieved, and any reply that got nothing to stand on is\nmarked [no sources retrieved].\n\nThe search always injects its best matches, even when the topic is not\nin the database and those matches are noise. That costs prompt-processing\ntime before each reply, so it is worth switching off while discussing\nsomething the database does not cover.", parent="docs_enabled_tooltip")  # tag
+
+                        # No line, matching the toolbar below the chat, which separates its sections by
+                        # spacing alone at every one of its call sites.
+                        guiutils.add_toolbar_separator(horizontal=True,
+                                                       toolbar_extent=gui_config.mode_toggle_row_h,
+                                                       size=gui_config.toolbar_separator_w,
+                                                       line=False)
+
+                        dpg.add_checkbox(label="Show thinking", default_value=app_state["show_thinking"], callback=toggle_show_thinking, tag="show_thinking_checkbox")
+                        dpg.add_tooltip("show_thinking_checkbox", tag="show_thinking_tooltip")  # tag
+                        dpg.add_text("Start a thinking model's reasoning trace open instead of collapsed.\n\nThis is about what you *see*, not about what the AI does: the reasoning\nhappens either way.\n\nTakes effect from the AI's next chat message onward. For a reply already\non screen, the cloud beside it opens its trace - or press Ctrl+T.", parent="show_thinking_tooltip")  # tag
+
+                        # No line, matching the toolbar below the chat, which separates its sections by
+                        # spacing alone at every one of its call sites.
+                        guiutils.add_toolbar_separator(horizontal=True,
+                                                       toolbar_extent=gui_config.mode_toggle_row_h,
+                                                       size=gui_config.toolbar_separator_w,
+                                                       line=False)
 
                         dpg.add_checkbox(label="Speech", default_value=app_state["avatar_speech_enabled"], callback=toggle_speech_enabled, tag="speech_enabled_checkbox")
                         dpg.add_tooltip("speech_enabled_checkbox", tag="speech_enabled_tooltip")  # tag

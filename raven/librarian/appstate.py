@@ -34,7 +34,14 @@ from . import textfilestore
 _DEFAULT_FLAGS = {"internet_enabled": True,
                   "docs_enabled": True,
                   "avatar_speech_enabled": True,
-                  "avatar_subtitles_enabled": True}
+                  "avatar_subtitles_enabled": True,
+                  # Whether a thinking model's reasoning trace starts open. Off by default: hidden thinking
+                  # is what people now expect from an LLM frontend, and the trace is usually a wall of text
+                  # between the reader and the answer. Deliberately *not* named `thinking_enabled`, which is
+                  # the coming switch for whether the model reasons at all — one changes what is displayed,
+                  # the other changes what is generated, and `show_thinking_enabled` beside `thinking_enabled`
+                  # is how the two would come to be read as the same switch.
+                  "show_thinking": False}
 
 # Flags that used to exist, dropped from a state file on load so they do not sit there forever confusing
 # whoever reads it next. Removable once no state file in the wild still carries them.
