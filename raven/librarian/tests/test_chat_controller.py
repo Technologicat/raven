@@ -64,3 +64,27 @@ class TestSystemPromptNodeIds:
         f, card1, card2, _greeting1, _greeting2, _message = two_card_forest
         f.delete_subtree(card2)
         assert chat_controller._get_all_system_prompt_node_ids(datastore=f) == [card1]
+
+
+class TestFormatGenerationStats:
+    """The chat log's `[900t, 22.0s, 40.9t/s]` line, which two different readouts share."""
+
+    def test_an_exact_count_carries_no_tilde(self):
+        assert chat_controller.format_generation_stats(n_tokens=900, dt=22.0) == "[900t, 22.00s, 40.91t/s]"
+
+    def test_an_estimate_says_so_on_both_derived_figures(self):
+        # The speed is only as exact as the count it comes from, so one `~` on the tokens would understate
+        # how much of the line is a guess.
+        out = chat_controller.format_generation_stats(n_tokens=900, dt=22.0, exact=False)
+        assert out == "[~900t, 22.00s, ~40.91t/s]"
+
+    def test_no_speed_where_there_is_no_time_to_divide_by(self):
+        # A turn that thought and then asked for a tool has no answer phase; its leftover tokens are real
+        # and its duration is not. `0.00t/s` would state a measurement nobody made.
+        out = chat_controller.format_generation_stats(n_tokens=26, dt=0.0)
+        assert out == "[26t, 0.00s]"
+        assert "t/s" not in out
+
+    def test_the_label_goes_inside_the_brackets(self):
+        out = chat_controller.format_generation_stats(n_tokens=759, dt=8.79, label="Thought for")
+        assert out.startswith("[Thought for 759t,")

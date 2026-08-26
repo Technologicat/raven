@@ -235,12 +235,15 @@ def format_chat_message_for_clipboard(message_number: int | None,
     return f"{message_heading}{message_text}"
 
 @memoize
-def format_generation_stats(*, n_tokens: int, dt: float, exact: bool = True) -> str:
+def format_generation_stats(*, n_tokens: int, dt: float, exact: bool = True, label: str | None = None) -> str:
     """Format a token count, a wall time and the speed between them, as the chat log shows them.
 
     `exact`: whether `n_tokens` is a count rather than an estimate. An estimate is marked with a `~`, the
              same way the context-fill readout marks one — a number that only claims to be about right
              should say so, or it will be quoted back as though it were measured.
+    `label`: an optional lead-in *inside* the brackets, e.g. `"Thought for"`. The message's own figures need
+             none — they sit under the message and are obviously about it — but a second set of figures
+             elsewhere on screen has to say what it counts, or the two look alike and mean different things.
 
     One function because the message's own line and its thinking trace's line have to look alike: they are
     the same three quantities over different spans, and a reader compares them at a glance.
@@ -250,9 +253,10 @@ def format_generation_stats(*, n_tokens: int, dt: float, exact: bool = True) -> 
     # and then asked for a tool has no answer phase, and its leftover tokens are the tool call, generated
     # inside a span this split cannot see into. Printing `0.00t/s` for them states a measurement that was
     # never made; showing two figures instead says exactly what is known.
+    lead = "" if label is None else f"{label} "
     if dt < 0.005:
-        return f"[{tilde}{n_tokens}t, {dt:0.2f}s]"
-    return f"[{tilde}{n_tokens}t, {dt:0.2f}s, {tilde}{n_tokens / dt:0.2f}t/s]"
+        return f"[{lead}{tilde}{n_tokens}t, {dt:0.2f}s]"
+    return f"[{lead}{tilde}{n_tokens}t, {dt:0.2f}s, {tilde}{n_tokens / dt:0.2f}t/s]"
 
 # What the phase breakdown says under its table. Held here rather than inline so the two halves of the
 # tooltip are written in one place. Rendered as Markdown, so no hand-wrapping — `wrap` sets the width, and
@@ -803,7 +807,8 @@ class DPGChatMessage:
             return ""
         return format_generation_stats(n_tokens=thinking["n_tokens"],
                                        dt=thinking["dt"],
-                                       exact=thinking.get("tokens_exact", False))
+                                       exact=thinking.get("tokens_exact", False),
+                                       label="Thought for")
 
     def _thought_bubble(self) -> str | int:
         """The container the thinking trace renders into, built on first use. Returns its DPG ID.
