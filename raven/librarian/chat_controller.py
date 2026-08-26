@@ -1065,6 +1065,13 @@ class DPGChatMessage:
                     return
                 # `k` is now how many messages must be popped from the end to reach this one
                 assert k < len(self.parent_view.chat_controller.current_chat_history) - 3  # should have at least the system prompt, the AI's initial greeting, and the user's first message remaining
+
+                # A reroll replaces the reply on screen with a different one - the same swap a sibling
+                # switch performs, except that the alternative is generated rather than already there.
+                # Started before the rewind, so the effect is up while the old message comes down.
+                self.parent_view.chat_controller.avatar_controller.glitch(
+                    config=self.parent_view.chat_controller.avatar_record)
+
                 # Rewind the linearized chat history in the GUI
                 for _ in range(k):
                     old_dpg_chat_message = self.parent_view.chat_controller.current_chat_history.pop(-1)
