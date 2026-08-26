@@ -269,6 +269,13 @@ _PHASE_BREAKDOWN_FOOTNOTE = ("*Prompt processing* is the wait before the model g
                              "the prompt the backend's cache did not already hold. Its speed is not shown, "
                              "because a warm KV cache still reports the whole prompt as its size.")
 
+# On the thinking trace's own figures, beside the cloud. Phrased to hold while a reply is still streaming,
+# where the line is a live count and the message's figures do not exist yet.
+_THINKING_STATS_TOOLTIP = ("The *thinking* alone: tokens, wall time, and the speed between them, for this "
+                           "reply's reasoning.",
+                           "The figures under the finished message cover the whole turn, and break it down "
+                           "when hovered.")
+
 # Added only when the turn ended in a tool call, since it explains a row that is otherwise not there.
 _PHASE_BREAKDOWN_TOOL_CALL_NOTE = ("The tool call's *time* is counted under *Thinking*. A call does not arrive "
                                    "as generated text, so there is no way to see where the reasoning stopped "
@@ -852,6 +859,16 @@ class DPGChatMessage:
         # opens, and a collapsed bubble still says what the thinking cost.
         column = dpg.add_group(parent=row)
         self.gui_thought_stats = dpg.add_text(self._thinking_stats_text(), color=(120, 120, 120), parent=column)
+        # The message's own figures explain themselves when hovered, so these must too — otherwise the two
+        # readouts look alike, sit a few lines apart, and only one of them answers being asked about. No
+        # breakdown here: there is only one phase to describe, and it is the one the reader is pointing at.
+        thought_stats_tooltip = dpg.add_tooltip(self.gui_thought_stats)
+        # A spacer between paragraphs rather than a blank line in the source: the renderer turns a
+        # CommonMark paragraph break into a plain line break, so the two would run together.
+        for paragraph_index, paragraph in enumerate(_THINKING_STATS_TOOLTIP):
+            if paragraph_index > 0:
+                dpg.add_spacer(height=gui_config.margin, parent=thought_stats_tooltip)
+            dpg_markdown.add_text(paragraph, wrap=_PHASE_TOOLTIP_WRAP_W, parent=thought_stats_tooltip)
 
         self.gui_thought_group = dpg.add_group(parent=column)
         # Whether this opens is decided per message, by whoever built it — *not* by reading the

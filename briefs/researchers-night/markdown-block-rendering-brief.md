@@ -206,7 +206,43 @@ this module entirely, while `text_attributes.py` and `font_attributes.py` are fo
 skips one of three sibling modules is the same failure the sweep kept running into — a query that cannot
 succeed returns the same empty result as one that legitimately finds nothing.
 
-### 7. Tables
+### 7. A blank line should be a paragraph gap, and is currently deleted
+
+**Added 2026-08-26.** Measured against the parser rather than inferred from the look of the chat:
+
+```python
+parser.parse("first para\n\nsecond para\nsame para continued")
+→ 'first para\nsecond para\nsame para continued'
+```
+
+The blank line is **discarded**, so the two paragraphs merge into one block, and every single newline
+becomes a hard line break. The renderer is line-oriented where CommonMark is paragraph-oriented, and it does
+the opposite of CommonMark on both counts.
+
+**This belongs to step 3 rather than standing alone, and that is the whole reason to write it down now.**
+Today the renderer's behaviour is not what a reader sees: `_render_text_paragraphs` splits on *every* `\n`
+and hands the renderer one line at a time, so paragraph separation is DPG's uniform item spacing between
+sibling widgets, and a blank line — an empty paragraph, skipped by `_render_text`'s `if text:` — simply
+contributes nothing. Every line is equally far from the next, and there is no paragraph-level gap at all.
+
+Step 3 removes that splitter and hands over whole text parts. At that moment the renderer becomes the only
+thing deciding, and it deletes blank lines — so paragraph separation would go from *absent* to
+*unobtainable*. **Do step 3 and this together, or the chat log gets worse rather than better.**
+
+**The other half is a trap worth naming so nobody "completes" it later.** Making a *single* newline render
+as a space would be CommonMark-correct and wrong here — model output uses single newlines to mean something
+(step-by-step working, list-ish lines), and reflowing those into prose costs readability rather than buying
+it. Keep hard breaks; add paragraph gaps.
+
+Consequence to expect once both land: messages get taller, so anything measuring a message's height —
+scroll anchoring, the follow-the-tail sampling — sees different numbers. Nothing depends on the current
+values, but it changes every chat log at once rather than one spot.
+
+Until it lands, a tooltip or a card that wants two paragraphs adds them as separate
+`dpg_markdown.add_text` calls with a spacer between (the help card's shape, and the thinking-stats tooltip's).
+Writing `\n\n` in the source looks right and does nothing at all.
+
+### 8. Tables
 
 The one real renderer gap. Now optional rather than blocking, and it can slip past the exhibit without
 holding anything else up.
