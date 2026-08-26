@@ -1,65 +1,12 @@
-from typing import Callable
-
 import dearpygui.dearpygui as dpg
 
 from . import get_text_size
-from . import CallInNextFrame
 from .attribute_types import LineAttribute, AttributeConnector
 from .font_attributes import Default
 
 from ...common.gui import utils as guiutils
 
 __all__ = ["Separator", "Blockquote", "List"]
-
-
-def _run_when_laid_out(item: int, thunk: Callable[[], None]) -> None:
-    """Run `thunk` once DPG has laid out `item` (i.e. its geometry is real).
-
-    Inside a hidden container (most commonly a tooltip), DPG reports
-    `get_item_pos() == (0, 0)` and `get_item_rect_size() == (0, 0)` for
-    children, because layout only runs once the container is actually shown.
-    Bullet glyphs and blockquote bars are positioned absolutely from those
-    reads, so if we compute them while the tooltip is still hidden, every
-    line-attribute of a list/blockquote ends up stacked at the top-left of
-    `attributes_group`.
-
-    This helper defers `thunk` until `item` is visible AND has non-zero size.
-    It attaches an `item_visible_handler` that fires each frame the item is
-    visible; the callback is a no-op until the layout has settled (size
-    becomes non-zero), at which point it runs `thunk` and tears itself down.
-    If `item` is already laid out at call time, `thunk` runs immediately.
-    """
-    with guiutils.nonexistent_ok():
-        if not dpg.does_item_exist(item):
-            return
-        if dpg.is_item_visible(item) and dpg.get_item_rect_size(item) != [0, 0]:
-            thunk()
-            return
-
-        # No lock on `state`: DPG dispatches item handler callbacks serially on its
-        # single callback-dispatch thread, so `_on_visible` cannot overlap itself.
-        reg = dpg.add_item_handler_registry()
-        state = {"done": False}
-
-        def _on_visible():
-            if state["done"]:
-                return
-            with guiutils.nonexistent_ok():
-                # The handler may fire on the same frame the container became
-                # visible, with layout still pending; rect_size is then [0, 0].
-                # Returning without touching `state["done"]` leaves the handler
-                # active, so the next frame retries.
-                if dpg.get_item_rect_size(item) == [0, 0]:
-                    return
-                state["done"] = True
-                try:
-                    thunk()
-                finally:
-                    dpg.bind_item_handler_registry(item, 0)
-                    dpg.delete_item(reg)
-
-        dpg.add_item_visible_handler(parent=reg, callback=_on_visible)
-        dpg.bind_item_handler_registry(item, reg)
 
 
 class Separator(LineAttribute):
@@ -83,8 +30,6 @@ class Blockquote(LineAttribute):
     depth: int
     color = [50, 55, 65, 255]
 
-    drawlist_group: int
-
     def __init__(self, depth: int, attribute_connector: AttributeConnector):
         self.depth = depth
         self.attribute_connector = attribute_connector
@@ -96,39 +41,19 @@ class Blockquote(LineAttribute):
         return self.width
 
     def render(self, text_height: int | float, parent=0, attributes_group=0):
-        spacer_group = dpg.add_group(parent=parent)
-        dpg.add_spacer(width=self.get_width(), parent=spacer_group)
-
-        self.self_post_render(text_height, spacer_group, parent=parent, attributes_group=attributes_group)
-
-    @CallInNextFrame
-    def self_post_render(self, text_height: int | float, spacer_group: int, parent=0, attributes_group=0):
-        def _draw():
-            with guiutils.nonexistent_ok():
-                group_width, group_height = dpg.get_item_rect_size(parent)
-                pos = dpg.get_item_pos(spacer_group)
-                x, y = pos
-                local_text_height = text_height
-                y += (group_height - local_text_height) / 2
-                if len(self.attribute_connector) != 0:
-                    last_attribute = self.attribute_connector[-1]
-                    last_drawlist_y = dpg.get_item_pos(last_attribute.drawlist_group)[1]
-                    last_drawlist_y += dpg.get_item_rect_size(last_attribute.drawlist_group)[1]
-                    extra_height = y - last_drawlist_y
-                    y -= extra_height
-                    local_text_height += extra_height
-
-                self.drawlist_group = dpg.add_group(pos=[x, y], parent=attributes_group)
-                drawlist = dpg.add_drawlist(parent=self.drawlist_group, width=self.get_width(), height=local_text_height)
-                thickness = self.line_width
-                x_line = (self.get_width() / 2) - 1
-                y_line = local_text_height
-                dpg.draw_line([x_line, 0],
-                              [x_line, y_line],
-                              parent=drawlist, color=self.color, thickness=thickness)
-
-                self.attribute_connector.append(self)
-        _run_when_laid_out(spacer_group, _draw)
+        # The bar goes into the text flow, in the row of the line it marks, rather than being drawn at
+        # coordinates read off that row once it had been laid out. Same reasoning as `List`: an absolute
+        # position is correct exactly until something above the quote changes height, and then the bar is
+        # left behind beside whatever text has moved into its place.
+        #
+        # It replaces the spacer that used to reserve the bar's width, so the row is laid out as before.
+        with guiutils.nonexistent_ok():
+            group = dpg.add_group(parent=parent)
+            drawlist = dpg.add_drawlist(parent=group, width=self.get_width(), height=text_height)
+            x_line = (self.get_width() / 2) - 1
+            dpg.draw_line([x_line, 0],
+                          [x_line, text_height],
+                          parent=drawlist, color=self.color, thickness=self.line_width)
 
 
 class List(LineAttribute):
@@ -236,8 +161,11 @@ class List(LineAttribute):
             dpg.add_spacer(height=top_padding, parent=column)
         return column
 
-    @CallInNextFrame
     def post_render(self, attributes_group=0):
+        # Not deferred to the next frame, unlike the base-class hook it overrides. That deferral paid for
+        # reading a laid-out position, and nothing here reads one any more — the marker goes into a slot the
+        # row already holds. `LineEntity.render` drains its queue after every line of the block is built, so
+        # "which line is first" is answerable by then without waiting for a frame.
         if self != self.attribute_connector[0]:
             return
         self.attribute_connector.append(self)
