@@ -394,9 +394,23 @@ sentence, or the streamed text where it wants the spoken text.
    That correction is safe today only because the TTS batch is submitted after the whole reply — so
    whatever was mis-shown was never spoken. Hand a sentence over as it completes, and a correction arriving
    afterwards means the avatar has already said a "sentence" that was reasoning, with nothing able to
-   unsay it. Whoever builds this decides what to do about it: hold the first submission until the answer is
-   known to be an answer, or accept it on the grounds that the demo backend does the parsing and never
-   produces the correction at all.
+   unsay it.
+
+   **Decided (Juha, 2026-08-26): hold the first submission until the text is known to be the answer.**
+   Speech is the one output that cannot be taken back, so it is the one that has to wait for certainty.
+
+   **"Known" has an exact meaning here**, and it is worth taking from the parser rather than re-deriving:
+   a retcon fires at most once per stream and only while `StreamParser._may_retcon` is set, which it clears
+   as soon as reasoning has been identified by any other route — a native `reasoning_content` channel, a
+   properly opened block, or a retcon already spent. So the condition is "that flag is clear", and the
+   natural implementation is for the parser to say when the window shuts rather than for a consumer to
+   infer it.
+
+   **The case it costs is worth knowing before building:** a model that does not reason at all, on a
+   backend that does not split the reasoning channel. Nothing ever closes the window there, because nothing
+   ever proves a close tag is not still coming — so that combination gets no speedup. It is also the
+   combination this whole hazard is confined to; on the demo backend the reasoning arrives on its own
+   channel, which shuts the window on the first thinking token and long before any sentence completes.
 
    **The division of concerns is what needs deciding**, and it is the reason this is not simply a smaller
    `send_text_to_tts` call. The batch is currently the unit that `on_start_speaking` / `on_stop_speaking`
