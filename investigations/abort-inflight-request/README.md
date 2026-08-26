@@ -32,7 +32,12 @@ in `iter_lines()`; a second thread applies one closer. Every ceiling is 15 s and
 | `raw.close()` | no | **no** |
 | `raw._fp.fp.close()` | no | **no** |
 | `socket.close()` | no | yes |
+| `_socket.socket.close()` | no | yes |
 | `socket.shutdown(SHUT_RDWR)` | **yes, 0.00 s** | **yes** |
+
+Those are Linux figures. **Windows inverts the last two rows**: `shutdown` does not wake the reader there
+(Winsock cancels pending operations on `closesocket`, not on `shutdown`), and the C-level close does. See
+the section below, and note that `socket.close()` is not the same call as `_socket.socket.close()`.
 
 Two findings, and the second is the one that would have hurt.
 
@@ -46,6 +51,23 @@ callback — which is where a Cancel button lives — that is a minute of frozen
 implementation reaches past the public API to the socket rather than calling the method that looks right.
 
 The aborted reader raises `requests.exceptions.ChunkedEncodingError: Response ended prematurely`.
+
+### Why `close()` does nothing, and why that is not the reason it does not work
+
+Two separate facts, and conflating them cost a CI cycle.
+
+`socket.close()` does not close the socket here. urllib3 reads the response through a `makefile()` wrapper,
+so the socket carries an outstanding io-ref — measured `_io_refs = 1`, `_closed = False` at the moment of
+the abort — and Python's `close` then only marks the object closed, deferring the real `closesocket` until
+that wrapper goes. The wrapper is the reader being interrupted, so it never goes.
+
+That makes `close()` a no-op, and it is tempting to conclude that a *real* close would have worked.
+It would not, on POSIX: `_socket.socket.close()` — the C-level close, which does reach the handle —
+**still leaves the reader blocked**. Closing a descriptor does not interrupt a thread already inside `recv`
+on it. Only `shutdown` does that.
+
+Both halves matter on Windows, where `shutdown` does not cancel a pending operation and `closesocket` does:
+there the deferral is what has to be bypassed, and the C-level close is the call that ends the wait.
 
 ## 2. The expensive wait is after the headers, so there is something to abort
 

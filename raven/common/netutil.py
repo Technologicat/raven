@@ -9,11 +9,13 @@ __all__ = ["multipart_x_mixed_replace_payload_extractor",
 
            "Abort", "Aborted"]
 
+import _socket  # the C-level socket type, for the one close Python's wrapper will not perform; see `Abort.abort`
 import io
 import json
 import logging
 import re
 import socket
+import sys
 import threading
 from collections.abc import Generator, Iterator
 from typing import Any
@@ -117,18 +119,26 @@ class Abort:
         #   - `close` is what Winsock acts on. On Linux it returns promptly but does *not* wake the reader,
         #     so it cannot stand alone either.
         #
-        # Closing the socket object urllib3 itself holds, rather than a dup of it, is what makes this safe
-        # to do under a live reader: `socket.close` is idempotent in Python, so urllib3 closing it again
-        # during its own unwind is a no-op rather than a double close of a descriptor that may by then have
-        # been reused.
         try:
             maybe_sock.shutdown(socket.SHUT_RDWR)
         except OSError:  # already closed, or the peer got there first: either way there is nothing to abandon
             pass
-        try:
-            maybe_sock.close()
-        except OSError:
-            pass
+        if sys.platform == "win32":
+            # `socket.close()` is not the close Winsock needs to see. urllib3 reads the response through a
+            # `makefile()` wrapper, so the socket carries an outstanding io-ref, and Python's `close` then
+            # only marks the object closed and defers the real `closesocket` until that wrapper goes --
+            # which is the reader we are trying to interrupt. Measured 2026-08-26: `_io_refs = 1` at the
+            # moment of the abort. So the wrapper's `close` is a no-op here, and the C-level one is the
+            # call that actually reaches the handle.
+            #
+            # POSIX is deliberately excluded rather than merely not needing it: `shutdown` has already woken
+            # the reader there, and closing the descriptor under a thread that is still unwinding is how a
+            # later reader ends up reading a descriptor that has been reused. On Windows that trade is
+            # forced, because nothing else ends the wait.
+            try:
+                _socket.socket.close(maybe_sock)
+            except OSError:
+                pass
 
 def multipart_x_mixed_replace_payload_extractor(source: Iterator[bytes],
                                                 boundary_prefix: str,

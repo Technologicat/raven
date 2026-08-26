@@ -24,6 +24,7 @@ Usage::
     python probe_closers.py
 """
 
+import _socket
 import http.server
 import socket
 import threading
@@ -64,7 +65,9 @@ CLOSERS = {"response.close()": lambda r: r.close(),
            "raw.close()": lambda r: r.raw.close(),
            "raw._fp.fp.close()": lambda r: r.raw._fp.fp.close(),
            "socket.close()": lambda r: socket_of(r).close(),
-           "socket.shutdown()": lambda r: socket_of(r).shutdown(socket.SHUT_RDWR)}
+           "socket.shutdown()": lambda r: socket_of(r).shutdown(socket.SHUT_RDWR),
+           "_socket.close()": lambda r: _socket.socket.close(socket_of(r)),
+           "io_refs of socket": lambda r: print("  _io_refs =", socket_of(r)._io_refs, "closed =", socket_of(r)._closed, end=" ")}
 
 def run_case(port: int, label: str, path: str, closer_name: str) -> None:
     """Block a reader on `path`, apply `closer_name` from another thread, and report what each thread did."""
