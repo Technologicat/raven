@@ -172,8 +172,10 @@
 
 - **the speculative prompt-reading Raven does while you are idle no longer holds up your next message.**
   After a reply, Raven quietly asks the backend to read the current conversation, so the next turn starts
-  warm. Moving to a different branch made that work useless, but it went on running — up to a minute on a
-  large chat — and a message sent meanwhile waited behind it. It is now abandoned as soon as you move.
+  warm. That reading went on to the end whatever happened next — up to a minute on a large chat — and
+  anything you sent meanwhile waited behind it. It is now dropped the moment it stops being useful: when
+  you send, so your message goes straight out, and when you move to a different branch, which makes the
+  reading pointless anyway since it was warming the branch you left.
 
 - **Send and Reroll now refuse while a reply is in progress**, rather than starting a second one alongside
   it. Two replies writing the same conversation interleaved their results. The Send button says why in its

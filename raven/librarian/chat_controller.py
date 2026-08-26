@@ -4182,6 +4182,8 @@ class DPGChatController:
             # task may have waited in the queue, and it is the branch we are about to *read* that this turn
             # belongs to. Every later comparison is against this, updated as the turn writes (`advance_head`).
             task_env.expected_head = self.app_state["HEAD"]
+            # No widget exists until `on_llm_start` makes one. See `streaming_widget_is_live`.
+            task_env.streaming_widget_live = False
 
             # A live turn supersedes any pending idle-prefill: it warms the KV cache itself and reports its own
             # exact `prompt_tokens`, so a concurrent prefill round-trip would be wasted (and would contend with
@@ -4202,18 +4204,38 @@ class DPGChatController:
                         streaming_chat_message = None
 
                 def turn_owns_the_view() -> bool:
-                    """Whether the chat on screen is still the one this turn is writing into.
+                    """Whether the chat on screen is the branch this turn is writing to.
 
                     A turn is allowed to keep running when the user navigates away — it finishes on its own
-                    branch, and the reply is there when they come back — but everything it does to the
-                    *view* has to stop at that moment. `DPGLinearizedChatView.build` clears the message
-                    container, so a rebuild takes the streaming widget's DPG items with it, and rendering
-                    the next chunk into them is a lookup on a deleted item rather than a cosmetic mistake.
+                    branch, and the reply is there when they come back — but what it does to the *view* has
+                    to stop while they are elsewhere.
 
                     "HEAD has not moved" would be the wrong question, because this turn is itself the thing
                     that moves HEAD. The comparison is against where *this turn* last left it.
+
+                    This one is a plain comparison, so it answers `True` again if the user comes back. That
+                    is right for appending a finished message, and wrong for the streaming widget — see
+                    `streaming_widget_is_live`.
                     """
                     return self.app_state["HEAD"] == task_env.expected_head
+
+                def streaming_widget_is_live() -> bool:
+                    """Whether the widget this turn streams into still exists.
+
+                    Latching, and that is the whole point of it being a second predicate.
+                    `DPGLinearizedChatView.build` clears the message container, so the moment HEAD moves,
+                    the streaming widget's DPG items are gone. Coming back to the same branch — flicking to
+                    a sibling and back, say — makes HEAD compare equal again, but what the user is looking
+                    at is a *rebuilt* view that never contained this turn's in-progress message. Resuming
+                    on the strength of the comparison alone would write the next chunk into deleted items.
+
+                    So ownership, once lost, is not regained by the HEAD matching again. Only `on_llm_start`
+                    restores it, by creating a fresh widget in whatever container is current.
+                    """
+                    if task_env.streaming_widget_live and not turn_owns_the_view():
+                        logger.info("ai_turn.ai_turn_task: HEAD moved off this turn's branch; the streaming widget is gone, so rendering stops here.")
+                        task_env.streaming_widget_live = False
+                    return task_env.streaming_widget_live
 
                 def advance_head(node_id: str) -> None:
                     """Move HEAD to a node this turn has just written, and keep the guard in step with it."""
@@ -4260,11 +4282,14 @@ class DPGChatController:
                     # loop. See `abort_if_nothing_to_lose`.
                     task_env.round_has_streamed = False
 
-                    if not turn_owns_the_view():  # nothing to put a new streaming widget into
+                    if not turn_owns_the_view():  # the user is elsewhere; nothing to put a new widget into
                         return
 
                     if self.gui_updates_safe:
                         nonlocal streaming_chat_message
+                        # A fresh widget in the current container, which is what re-arms the latch: this is
+                        # the only way a turn that lost the view gets to draw again.
+                        task_env.streaming_widget_live = True
 
                         # When continuing, delete the previous completed revision of the message from the GUI
                         if continue_:
@@ -4304,6 +4329,26 @@ class DPGChatController:
                     task_env.emotion_update_calls += 1
 
                 def on_llm_progress(event: dict[str, Any]) -> sym | None:
+                    """Render one streaming event, tolerating the widget disappearing mid-render.
+
+                    `streaming_widget_is_live` is a check-then-act, so it leaves a window: the user can
+                    navigate away between the check and any of the DPG calls below it, and each of those is
+                    a separate opportunity. `nonexistent_ok` closes the window from the other side — the
+                    first call to find its item gone abandons the rest of the render, which is what the
+                    render would have done anyway had it known.
+
+                    A vanished item is also proof the latch should be down, whatever the HEAD comparison
+                    says, so this is the second way it drops.
+                    """
+                    with guiutils.nonexistent_ok() as nok:
+                        action = _render_llm_progress(event)
+                    if nok.errored:
+                        logger.info("ai_turn.ai_turn_task.on_llm_progress: the widget being rendered into is gone; abandoning this render.")
+                        task_env.streaming_widget_live = False
+                        return llmclient.action_ack  # the turn continues; only the drawing stopped
+                    return action
+
+                def _render_llm_progress(event: dict[str, Any]) -> sym | None:
                     # `invoke` is the single parser; this handler is a pure renderer dispatching on the typed
                     # event. No regex-sniffing of the text stream; the event type *is* the state.
 
@@ -4311,12 +4356,12 @@ class DPGChatController:
 
                     # Keep generating — an abandoned reader is not an abandoned turn — but stop drawing. The
                     # widgets this would render into were deleted by the view rebuild that moved HEAD.
-                    if not turn_owns_the_view():
+                    if not streaming_widget_is_live():
                         return llmclient.action_ack
 
                     # If the task is cancelled (`stop_ai_turn` was called), interrupt the LLM, keeping the content received so far.
                     # The scaffold will automatically send the content to `on_llm_done`.
-                    if task_env.cancelled or not self.gui_updates_safe:  # TODO: EAFP to avoid TOCTTOU
+                    if task_env.cancelled or not self.gui_updates_safe:  # the EAFP half is in the caller's `nonexistent_ok`
                         reason = "Cancelled" if task_env.cancelled else "App is shutting down"
                         logger.info(f"ai_turn.ai_turn_task.on_llm_progress: {reason}, stopping text generation.")
                         return llmclient.action_stop

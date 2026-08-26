@@ -12,6 +12,7 @@ import threading
 import time
 
 import pytest  # noqa: F401 -- fixtures and marks below
+import requests
 
 from unpythonic import dyn
 from unpythonic.env import env
@@ -2185,6 +2186,22 @@ class TestAbortingAnInFlightRequest:
         thread = threading.Thread(target=run, daemon=True)
         thread.start()
         return thread, outcome, shutdown
+
+    def test_the_socket_under_a_streaming_response_is_reachable(self, invoke_settings):
+        """The private-attribute path to the socket resolves on this platform and this `requests`.
+
+        Separate from the abort tests because it isolates the half that fails silently. `Abort.abort` no-ops
+        when the socket cannot be found, so "the read was not abandoned" has two possible causes — the path
+        not resolving, or the closers not waking the reader — and they need different fixes. This one says
+        which. (It is also the tripwire for a `requests`/`urllib3` version that moves the internals.)
+        """
+        url, shutdown = self._stall_server()
+        response = requests.post(url, json={"x": 1}, stream=True, timeout=self.CEILING)
+        try:
+            assert netutil._maybe_socket_of(response) is not None
+        finally:
+            response.close()
+            shutdown()
 
     def test_a_blocked_read_is_abandoned_promptly(self, invoke_settings):
         abort = netutil.Abort()

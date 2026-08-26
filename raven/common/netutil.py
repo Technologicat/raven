@@ -102,15 +102,32 @@ class Abort:
         maybe_sock = _maybe_socket_of(maybe_response)
         if maybe_sock is None:
             return
-        # Shutting the socket down, rather than closing the response, and the difference is not cosmetic.
-        # Measured 2026-08-26 (`investigations/abort-inflight-request/`): `Response.close()`, `raw.close()`
-        # and `raw._fp.fp.close()` all leave the reader blocked in `recv` *and* block the thread that called
-        # them until the read timeout expires — 59.86 s against a 60 s timeout, which from a GUI callback is
-        # a minute of frozen app. `socket.close()` returns but does not wake the reader. Only `shutdown` does
-        # both, and it does them at once.
+        # Going at the socket rather than at the response, and the difference is not cosmetic. Measured
+        # 2026-08-26 (`investigations/abort-inflight-request/`): `Response.close()`, `raw.close()` and
+        # `raw._fp.fp.close()` all leave the reader blocked in `recv` *and* block the thread that called them
+        # until the read timeout expires — 59.86 s against a 60 s timeout, which from a GUI callback is a
+        # minute of frozen app.
+        #
+        # Both calls, because the platforms disagree about which one ends a blocked read, and each is
+        # harmless where the other is the effective one:
+        #
+        #   - `shutdown` wakes the reader at once on Linux and macOS. On Windows it does not (Winsock
+        #     cancels pending operations on `closesocket`, not on `shutdown`) — which is a CI failure on
+        #     windows-latest, not a reading of the documentation.
+        #   - `close` is what Winsock acts on. On Linux it returns promptly but does *not* wake the reader,
+        #     so it cannot stand alone either.
+        #
+        # Closing the socket object urllib3 itself holds, rather than a dup of it, is what makes this safe
+        # to do under a live reader: `socket.close` is idempotent in Python, so urllib3 closing it again
+        # during its own unwind is a no-op rather than a double close of a descriptor that may by then have
+        # been reused.
         try:
             maybe_sock.shutdown(socket.SHUT_RDWR)
         except OSError:  # already closed, or the peer got there first: either way there is nothing to abandon
+            pass
+        try:
+            maybe_sock.close()
+        except OSError:
             pass
 
 def multipart_x_mixed_replace_payload_extractor(source: Iterator[bytes],
