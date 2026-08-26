@@ -534,7 +534,9 @@ class TestThinkingPreferenceReachesTheWire:
 
         `settings` is shared with every other consumer of the same backend — `perform_throwaway_task` and
         `agent.turn` route through this same `invoke` — so a leak here would silently apply one chat turn's
-        preference to unrelated calls, and would only ever be noticed as a bill.
+        preference to unrelated calls. Nothing would report it: a keyword extraction that has started
+        reasoning first still returns the right keywords, just slowly, and "the backend feels sluggish
+        today" is where it would surface.
         """
         sent = _capture_request(monkeypatch, [{"choices": [{"delta": {"content": "ok"}}]}, "[DONE]"])
         llmclient.invoke(invoke_settings, _history("hi"), tools_enabled=False, thinking_enabled=False)

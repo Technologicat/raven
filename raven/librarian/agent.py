@@ -232,6 +232,7 @@ def turn(llm_settings: env,
          retriever: "hybridir.HybridIR | None" = None,
          use_character_card: bool = True,
          tools_enabled: bool = True,
+         thinking_enabled: bool = True,
          internet_enabled: bool = False,
          docs_enabled: bool = True,
          on_progress: Callable | None = None,
@@ -382,6 +383,15 @@ def turn(llm_settings: env,
                      The two switches below cannot express it between them, since `get_current_time` answers
                      to neither and is offered even with both off.
 
+    `thinking_enabled`: Whether a thinking model may reason before it answers. **`True` by default**, which
+                        asks for nothing and leaves the model to whatever it does unprompted. `False` asks
+                        the backend to switch reasoning off, and the model answers straight away.
+
+                        Worth switching off for a job the model is not being asked to think about — extract
+                        these keywords, normalize this citation — where the reasoning is pure cost. Leave it
+                        on for anything an agent loop was the right shape for in the first place: a hard
+                        question, a corpus to search, an investigation across several tool rounds.
+
     `internet_enabled`: Whether `websearch` and `webfetch` are offered. **`False` by default**, unlike the
                         apps — a run with tools enabled performs *real* calls, and a probe that reaches the
                         network without having asked to is the more expensive mistake.
@@ -472,6 +482,7 @@ def turn(llm_settings: env,
                                      retriever=retriever,
                                      head_node_id=head_node_id,
                                      tools_enabled=tools_enabled,
+                                     thinking_enabled=thinking_enabled,
                                      use_character_card=use_character_card,
                                      internet_enabled=internet_enabled,
                                      continue_=continue_,
