@@ -132,15 +132,24 @@ known before band 3 begins.
    The remaining steps are band 2. Two things the brief had not foreseen are recorded there: the attribute
    rebuild that `LineEntity.append` performs had to carry the colour explicitly, and the colour parsing is
    now shared with the `<font>` attribute so the two cannot drift.
-2. **Brief 16's step zero** — half an hour, and it is what de-risks band 3. `XDotWidget.set_graph` has no
-   callers and no tests; hand-build a small `Graph`, render it. It either confirms the estimate or changes
-   the plan while there is still time to change it.
-3. **Make `chattree`'s `save` atomic** — temp file, `fsync`, `os.replace`.
-4. **The help card's missing `wrap=`** — the horizontal clipping, nothing else.
+2. ~~**Brief 16's step zero**~~ — **done 2026-08-25.** A hand-built chat-shaped `Graph` goes into
+   `set_graph` and comes out drawn, with no GraphViz and no xdot text in the path, so band 3 can be costed
+   as the brief writes it. Every hook the brief leans on — `pan_to_node`, `set_highlighted_nodes`,
+   `search`, hit-testing — works against a constructed graph. Seven tests, which is the coverage debt the
+   step says is owed regardless of the feature. One measurement carried into the brief: culling is by
+   viewport, so a freshly-set graph is only partly drawn until `zoom_to_fit` establishes the view.
+3. ~~**Make `chattree`'s `save` atomic**~~ — **done 2026-08-25.** Sibling temp file, `fsync`, `os.replace`.
+   The *cadence* half of the autosave item stays open, as planned.
+4. ~~**The help card's missing `wrap=`**~~ — **done 2026-08-25**, on all three cards. Wrapping turned each
+   clipped row into two or three real ones, so Librarian's card grew thirty pixels to hold them — and at
+   1030 against a 1040 viewport it is now out of room. The next addition of any size needs the shape
+   decision rather than more height.
 5. ~~**`--qr`**, the "Get Raven" overlay.~~ **Done 2026-08-25**, in all six GUI apps.
 6. ~~**The calculator tool**~~ — **done 2026-08-25**, and it was as small as claimed.
-7. **The simulated glitch on branch switch** — see below; no new construction, and it is the cheapest of
-   the three impressiveness items.
+7. ~~**The simulated glitch on branch switch**~~ — **done 2026-08-25**, over four discontinuities rather
+   than the one in its name. See below for what it needed and what is left to tune.
+
+**Band 1 is closed as of 2026-08-25**, all seven items. Band 2 is where the work resumes.
 
 **Band 2 — a session each.**
 
@@ -163,22 +172,30 @@ known before band 3 begins.
 
 And the two whose detail belongs with the ordering rather than in it:
 
-- **The simulated glitch on branch switch** (`TODO.md:737`, band 1) — in band 1 because none of it is new
-  construction. The filter exists (`postprocessor.digital_glitches`) and the chain is reconfigurable on the
-  fly, so the job is: read the chain Librarian loads at startup, insert one extra filter, and put the chain
-  back. That is also the whole of what `TODO.md:737` means by "think through interaction with the user's
-  postprocessor config".
-  - **How long it runs is a call to make by looking at it** (Juha, 2026-08-25). "For the duration of the
-    switch" is the starting point, not the spec, and it wants clamping at both ends: a **floor** somewhere
-    in the 300–500 ms range, because a fast switch would otherwise flash something nobody can see, and a
-    **ceiling**, because glitching for too long stops reading as artistic and starts reading as broken.
-    - Which makes the effect's duration its own, merely *triggered* by the switch: the restore runs off a
-      timer rather than off the switch completing.
-  - **Tune from `raven/avatar/assets/settings/glitchyholo.json`**, which runs this filter as a continuous
-    ambient effect. A branch switch wants it *more* prominent than that — and the knob runs backwards:
-    `unboost` is the probability profile, and **higher makes glitches rarer and fewer**
-    (`postprocessor.py:1666`, and the `rand()**unboost` at `:1683`). `glitchyholo` sits at `10.0` against
-    the filter's own default of `4.0`, so the flourish wants a number *below* both, not above.
+- **The simulated glitch on branch switch** (`TODO.md` → *Avatar (Librarian-side)*, band 1) — **landed
+  2026-08-25.** It covers four discontinuities rather than the one it is named for, all of them the
+  conversation on screen being replaced by a different one: switching to a sibling, jumping to where a
+  branch continues, starting a new chat, and rerolling a reply. The reroll's alternative is generated
+  rather than already there, which is the only thing that sets it apart from a sibling switch.
+  - **It was bookkeeping rather than construction, as expected** — the filter exists
+    (`postprocessor.digital_glitches`) and the chain is reconfigurable on the fly, so the job was to
+    overlay one filter and put the chain back. Putting it back is the part that needed building: the server
+    offers no getter for animator settings, so nothing could restore what it had changed. Settings now go
+    out through `DPGAvatarController.load_animator_settings`, which remembers them per instance.
+  - **The duration is the effect's own, merely *triggered* by the switch** (Juha, 2026-08-25): a **floor**,
+    because a switch too fast to see would otherwise flash something nobody registers, and a **ceiling**,
+    because glitching for too long stops reading as artistic and starts reading as broken. The restore runs
+    off a timer, and repeated calls extend rather than restart, so flicking through siblings reads as one
+    glitch instead of a stutter of them.
+  - **What is left is tuning by eye.** The parameters start from
+    `raven/avatar/assets/settings/glitchyholo.json`, which runs this same filter as a continuous ambient
+    effect; a switch wants it *more* prominent than that. The knob runs backwards — `unboost` is the
+    probability profile, and **higher makes glitches rarer and fewer** — so the flourish sits *below* both
+    that file's `10.0` and the filter's own default of `4.0`.
+    - **The ceiling was chosen against a case nobody can currently perform.** It caps a *sustained* run of
+      switches, and sustained switching is exactly what the sibling-flicking item exists to make possible,
+      so it wants re-checking when flicking lands. Recorded on that item in `TODO_DEFERRED.md`, which is
+      where someone will be looking.
 - **`atmospheric-dust`** (band 3, last) — still the slack in the schedule, but **wanted rather than merely
   tolerated** (Juha): a significant wow factor, and self-contained enough to be a safe last item. The 08-05
   ordering behind 16 stands.

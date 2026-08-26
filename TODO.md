@@ -43,9 +43,10 @@ individual items carry a "Researchers' Night" note where they feed it. Working b
 1. **Demo correctness** — the defects a live audience would *see*. The temporary-context-inject package (six
    linked items in `TODO_DEFERRED.md`, listed under its cluster index), the Markdown renderer defects, the
    remaining crash/race items. Not polish: this is whether the demo works.
-2. **Demo impressiveness** — `crt` and `atmospheric_dust` (both briefed), the avatar branch-switch glitch,
-   ~~RAG reranking for better answers on stage~~ (measured and rejected, 2026-08-06 — the shipped
-   improvement is `k=50` instead), citation surfacing, colorblind-safe signalling, lorebook if it fits.
+2. **Demo impressiveness** — `crt` and `atmospheric_dust` (both briefed), ~~the avatar branch-switch
+   glitch~~ (shipped 2026-08-25), ~~RAG reranking for better answers on stage~~ (measured and rejected,
+   2026-08-06 — the shipped improvement is `k=50` instead), citation surfacing, colorblind-safe
+   signalling, lorebook if it fits.
 ### The actual list, as of 2026-07-28 (60 days out)
 
 Phases 1 and 2 above are the framing; this is the concrete list they resolve to after today's work. Kept
@@ -746,7 +747,7 @@ every tier, chosen on measurements rather than reputation.
 
 - **[Medium]** Avatar on/off toggle: auto-off is implemented; add explicit disable so Librarian won't try to load or run the avatar at all (for low-VRAM setups). What to show in the right panel when avatar is off? (Recent chats list, once that exists?)
 
-- **[Medium]** Avatar: digital glitch effect when switching chat branches. Postprocessor filters already exist; this is a scripting/control task. Think through interaction with the user's postprocessor config. Fits Raven's deliberate cyberpunk aesthetic.
+- ~~**[Medium]** Avatar: digital glitch effect when switching chat branches.~~ **Shipped 2026-08-25**, over the four points where the conversation on screen is replaced: a sibling switch, jumping to where a branch continues, starting a new chat, and a reroll. The user's own chain is overlaid rather than replaced, and restored from `DPGAvatarController.load_animator_settings`. What remains is tuning the look by eye; the parameters and the reason the ceiling wants re-checking are in `briefs/researchers-night/README.md`.
 
 - **[Medium]** Avatar: do more to eliminate stutter while receiving LLM response. Happens especially at first avatar speech in a session and while TTS is rendering in the background. Pushing limits of 3070Ti. Investigate audio buffer size (see `raven.client.util`) and rendering smoothness under high system load.
 
