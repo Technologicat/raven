@@ -580,6 +580,109 @@ class TestInvokeStreamRobustness:
 
 
 # ---------------------------------------------------------------------------
+# Where an invocation's wall time went
+# ---------------------------------------------------------------------------
+
+class TestThinkingTokenCount:
+    _COMMON = dict(n_tokens=100, n_chunks=100, n_chunks_at_first_content=80, tokenizer=None, usage=None)
+
+    def test_no_reasoning_means_nothing_to_report(self):
+        assert llmclient.thinking_token_count(**dict(self._COMMON, reasoning_content="")) == (None, False)
+
+    def test_the_backends_own_split_wins(self):
+        usage = {"completion_tokens": 100, "completion_tokens_details": {"reasoning_tokens": 77}}
+        result = llmclient.thinking_token_count(**dict(self._COMMON, reasoning_content="mm", usage=usage,
+                                                       tokenizer=_FakeTokenizer()))
+        assert result == (77, True)  # ...over the tokenizer, which would have said 2
+
+    def test_the_local_tokenizer_is_next(self):
+        result = llmclient.thinking_token_count(**dict(self._COMMON, reasoning_content="0123456789",
+                                                       tokenizer=_FakeTokenizer()))
+        assert result == (10, True)  # one fake token per character
+
+    def test_apportioned_by_chunk_when_neither_is_available(self):
+        # 80 of 100 text-bearing deltas had arrived when the answer began, so 80 of the 100 tokens.
+        assert llmclient.thinking_token_count(**dict(self._COMMON, reasoning_content="mm")) == (80, False)
+
+    def test_an_answer_that_never_began_was_all_thinking(self):
+        # A round that thought and then asked for a tool. Still inexact: the tool call's own tokens are in
+        # `n_tokens` and not in the trace.
+        result = llmclient.thinking_token_count(**dict(self._COMMON, reasoning_content="mm",
+                                                       n_chunks_at_first_content=None))
+        assert result == (100, False)
+
+
+class TestPhaseReport:
+    def test_no_generated_text_reports_nothing(self):
+        assert llmclient.phase_report(dt=2.0, t0=1000.0, t_first_token=None, t_first_content=None,
+                                      maybe_thinking_tokens=None, thinking_tokens_exact=False) is None
+
+    def test_prefill_only_when_the_model_did_not_think(self):
+        phases = llmclient.phase_report(dt=10.0, t0=1000.0, t_first_token=1002.0, t_first_content=1002.0,
+                                        maybe_thinking_tokens=None, thinking_tokens_exact=False)
+        assert phases == {"prefill": {"dt": 2.0}}
+
+    def test_the_phases_never_sum_past_the_whole(self):
+        phases = llmclient.phase_report(dt=10.0, t0=1000.0, t_first_token=1002.0, t_first_content=1007.0,
+                                        maybe_thinking_tokens=300, thinking_tokens_exact=True)
+        assert phases["prefill"]["dt"] == pytest.approx(2.0)
+        assert phases["thinking"] == {"dt": pytest.approx(5.0), "n_tokens": 300, "tokens_exact": True}
+        # The answer is the remainder, and there being one is what says the phases did not eat the turn.
+        assert phases["prefill"]["dt"] + phases["thinking"]["dt"] < 10.0
+
+    def test_a_sample_taken_after_the_timer_stopped_is_pulled_back_in(self):
+        # The parser flushes its buffer at stream end, so the first content event can be timestamped after
+        # `timer` has already recorded `dt`. Without the clamp the phases would sum past the whole.
+        phases = llmclient.phase_report(dt=10.0, t0=1000.0, t_first_token=1002.0, t_first_content=1010.5,
+                                        maybe_thinking_tokens=300, thinking_tokens_exact=True)
+        assert phases["prefill"]["dt"] + phases["thinking"]["dt"] == pytest.approx(10.0)
+
+    def test_thinking_that_never_ended_runs_to_the_end_of_the_call(self):
+        # No content event at all: the model thought, then asked for a tool.
+        phases = llmclient.phase_report(dt=10.0, t0=1000.0, t_first_token=1002.0, t_first_content=None,
+                                        maybe_thinking_tokens=300, thinking_tokens_exact=False)
+        assert phases["thinking"]["dt"] == pytest.approx(8.0)
+
+
+class TestInvokeReportsPhases:
+    def test_a_thinking_reply_splits_into_prefill_thinking_and_answer(self, monkeypatch, invoke_settings):
+        invoke_settings.tokenizer = _FakeTokenizer()  # one 'token' per character, so the split is assertable
+        _fake_stream(monkeypatch, [
+            {"choices": [{"delta": {"role": "assistant", "content": None}}]},
+            {"choices": [{"delta": {"reasoning_content": "let me see"}}]},   # 10 chars
+            {"choices": [{"delta": {"content": "forty-two"}}]},
+        ])
+        out = llmclient.invoke(invoke_settings, _history("hi"), tools_enabled=False)
+        assert out.phases["thinking"]["n_tokens"] == 10
+        assert out.phases["thinking"]["tokens_exact"] is True
+        assert out.phases["prefill"]["dt"] + out.phases["thinking"]["dt"] <= out.dt
+
+    def test_a_reply_with_no_reasoning_reports_no_thinking_phase(self, monkeypatch, invoke_settings):
+        _fake_stream(monkeypatch, [
+            {"choices": [{"delta": {"role": "assistant", "content": None}}]},
+            {"choices": [{"delta": {"content": "forty-two"}}]},
+        ])
+        out = llmclient.invoke(invoke_settings, _history("hi"), tools_enabled=False)
+        assert "thinking" not in out.phases
+        assert "prefill" in out.phases
+
+    def test_a_round_that_only_asks_for_a_tool_reports_nothing(self, monkeypatch, invoke_settings):
+        # The tool-call deltas are not text: nothing was generated on either channel, so there are no
+        # phases to describe — and calling the whole call "prompt processing" would be a wrong answer
+        # rather than a missing one.
+        _fake_stream(monkeypatch, [
+            {"choices": [{"delta": {"role": "assistant", "content": None,
+                                    "tool_calls": [{"index": 0, "id": "call_1", "type": "function",
+                                                    "function": {"name": "get_current_time",
+                                                                 "arguments": "{}"}}]}}]},
+            {"choices": [{"index": 0, "delta": {}, "finish_reason": "tool_calls"}]},
+        ])
+        out = llmclient.invoke(invoke_settings, _history("time?"), tools_enabled=True)
+        assert out.data["tool_calls"]  # the fixture did produce a call, so this is not a vacuous pass
+        assert out.phases is None
+
+
+# ---------------------------------------------------------------------------
 # Backend detection + model identity (brief 02 §0/§3/§4/§5)
 # ---------------------------------------------------------------------------
 

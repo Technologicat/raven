@@ -51,6 +51,7 @@ import pathlib
 import requests
 import sys
 import threading
+import time
 from typing import Any, Callable, Collection, Dict, List, Optional, Tuple
 
 import sseclient  # pip install sseclient-py
@@ -1569,6 +1570,91 @@ def _describe_strict_template_violations(history: List[Dict]) -> List[str]:
         violations.append(f"history has a system message that is not the first message; roles are [{role_sequence}]. Strict chat templates allow only one system message, as the very first one.")
     return violations
 
+# --------------------------------------------------------------------------------
+# Where an invocation's wall time went
+
+def thinking_token_count(*,
+                         reasoning_content: str,
+                         n_tokens: int,
+                         n_chunks: int,
+                         n_chunks_at_first_content: int | None,
+                         tokenizer: Any | None,
+                         usage: dict | None) -> tuple[int | None, bool]:
+    """How many of an invocation's `n_tokens` went into the thinking trace, and whether that is exact.
+
+    `reasoning_content`: the accumulated thinking trace. Empty means the model did not think, which is
+                         reported as `(None, False)` — the one case where the first element is `None`.
+    `n_tokens`: the invocation's total completion token count.
+    `n_chunks`: how many text-bearing deltas arrived in total.
+    `n_chunks_at_first_content`: how many had arrived when the visible answer began, or `None` if it never
+                                 began — a round that thought and then asked for a tool.
+    `tokenizer`: the configured local tokenizer, or `None`.
+    `usage`: the backend's token usage report for this call, or `None`.
+
+    Returns `(tokens_of_thinking, is_exact)`.
+    """
+    if not reasoning_content:
+        return None, False
+
+    # The backend's own split, where it reports one — OpenAI's o-series spelling. Tried rather than relied
+    # on: a local backend may leave it out, and no local one is known to fill it in.
+    details = (usage or {}).get("completion_tokens_details") or {}
+    if details.get("reasoning_tokens") is not None:
+        return details["reasoning_tokens"], True
+
+    # Failing that, count the trace with the model's own vocabulary.
+    if tokenizer is not None:
+        return len(tokenizer.encode(reasoning_content)), True
+
+    # Failing both, apportion the total by where the visible answer began. A streaming backend emits one
+    # text-bearing delta per token, so the ratio is close — but it is a ratio, and the readout says so.
+    if n_chunks_at_first_content is None:  # the answer never began, so everything generated was thinking
+        return n_tokens, False  # inexact even so: a tool call's own tokens are in `n_tokens` and not in the trace
+    return round(n_tokens * n_chunks_at_first_content / n_chunks), False
+
+def phase_report(*,
+                 dt: float,
+                 t0: float,
+                 t_first_token: float | None,
+                 t_first_content: float | None,
+                 maybe_thinking_tokens: int | None,
+                 thinking_tokens_exact: bool) -> dict | None:
+    """Split an invocation's wall time into prompt processing and thinking, in the shape that is stored.
+
+    `dt`: the whole invocation's wall time.
+    `t0`: `perf_counter` at its start — `timer.t0`, so that the phases and the `dt` they are stored beside
+          are measured off one clock and compose exactly.
+    `t_first_token`: when the first generated text arrived on any channel, or `None` if none did.
+    `t_first_content`: when the visible answer began, or `None` if it never did.
+    `maybe_thinking_tokens`: the thinking trace's token count, or `None` if the model did not think.
+    `thinking_tokens_exact`: whether that count is a count rather than an estimate.
+
+    Returns `{"prefill": {"dt": ...}, "thinking": {"dt": ..., "n_tokens": ..., "tokens_exact": ...}}`, with
+    `thinking` absent when the model did not think, or `None` when there is nothing to report at all.
+
+    The answer phase is deliberately not among them: it is whatever remains of `dt`, so there is no third
+    number that could disagree with the other two. Prompt processing is a phase of its own rather than part
+    of thinking because nothing is being generated during it — how long it takes says how much of the prompt
+    the backend's cache did not already hold, which is a different fact about the turn.
+    """
+    if t_first_token is None:  # nothing was generated as text: a round that asked for a tool and said nothing
+        return None
+
+    # An event flushed out of the parser at stream end is timestamped after the timer has already stopped,
+    # so the samples are pulled back into the interval before any subtraction rather than each duration
+    # being repaired afterwards. That way the phases cannot sum past `dt`.
+    end = t0 + dt
+    def clamp(t: float) -> float:
+        return min(max(t, t0), end)
+
+    phases = {"prefill": {"dt": clamp(t_first_token) - t0}}
+    if maybe_thinking_tokens is not None:
+        thinking_ended = clamp(t_first_content) if t_first_content is not None else end
+        phases["thinking"] = {"dt": thinking_ended - clamp(t_first_token),
+                              "n_tokens": maybe_thinking_tokens,
+                              "tokens_exact": thinking_tokens_exact}
+    return phases
+
 def invoke(settings: env,
            history: List[Dict],
            on_progress: Optional[Callable] = None,
@@ -1677,6 +1763,9 @@ def invoke(settings: env,
                                  them (e.g. interrupted before the final chunk). `prompt_tokens` is the exact
                                  size of the whole prompt this turn — useful for the context-fill indicator.
         `dt: float`: Wall time elapsed for this invocation, in seconds.
+        `phases: Optional[dict]`: Where that wall time went — see `phase_report`, whose return value this is.
+                                  `None` when the model generated no text at all (a round that only asked
+                                  for a tool).
         `interrupted: bool`: Whether the invocation was interrupted by the `on_progress` callback.
                              This is provided for convenience.
     """
@@ -1763,15 +1852,29 @@ def invoke(settings: env,
     usage = None  # token usage stats, once the backend reports them (final chunk)
     stop = []  # which stopping strings matched at the break point (assigned inside the loop)
 
+    # Phase boundaries within this call, for `phase_report` below. Sampled off `perf_counter` because that
+    # is the clock `timer` uses, so the phases and the `dt` they are reported beside compose exactly.
+    t_first_token = None            # first generated text on any channel: prompt processing ended here
+    t_first_content = None          # first text of the visible answer: thinking ended here
+    n_chunks_at_first_content = None  # ...and this is how many text-bearing deltas it took to get there
+
     # Streaming tool-call accumulator, keyed by `tool_calls[i].index`. Unifies ooba's whole-object-in-one-delta
     # with LM Studio's / OpenAI's incremental fragments (see `_accumulate_tool_call_delta`).
     tool_call_acc: Dict[int, Dict[str, str]] = {}
 
     def handle_event(parsed_event: Dict) -> sym:
         """Accumulate one typed event into the response, notify `on_progress`, return its action (default ack)."""
+        nonlocal t_first_token, t_first_content, n_chunks_at_first_content
         etype = parsed_event["type"]
+        # A tool call is not text and does not end prompt processing: its deltas arrive through the
+        # structured accumulator, which is also why they are not counted as chunks.
+        if etype in ("content", "reasoning") and t_first_token is None:
+            t_first_token = time.perf_counter()
         if etype == "content":
             llm_output_text.write(parsed_event["text"])
+            if t_first_content is None:
+                t_first_content = time.perf_counter()
+                n_chunks_at_first_content = n_chunks
         elif etype == "reasoning":
             reasoning_output_text.write(parsed_event["text"])
         elif etype == "tool_call":
@@ -1908,6 +2011,19 @@ def invoke(settings: env,
                 if tokenizer_count > usage["prompt_tokens"] * 1.1:
                     logger.warning(f"invoke: local tokenizer counted {tokenizer_count} tokens for the prompt content, exceeding the backend's reported {usage['prompt_tokens']} for the full templated prompt — the configured tokenizer likely does not match the served model; token counts may be wrong.")
 
+    maybe_thinking_tokens, thinking_tokens_exact = thinking_token_count(reasoning_content=reasoning_content,
+                                                                        n_tokens=n_tokens,
+                                                                        n_chunks=n_chunks,
+                                                                        n_chunks_at_first_content=n_chunks_at_first_content,
+                                                                        tokenizer=settings.tokenizer,
+                                                                        usage=usage)
+    phases = phase_report(dt=tim.dt,
+                          t0=tim.t0,
+                          t_first_token=t_first_token,
+                          t_first_content=t_first_content,
+                          maybe_thinking_tokens=maybe_thinking_tokens,
+                          thinking_tokens_exact=thinking_tokens_exact)
+
     message = chatutil.create_chat_message(llm_settings=settings,
                                            role="assistant",
                                            text=llm_output_text,
@@ -1919,6 +2035,7 @@ def invoke(settings: env,
                n_tokens=n_tokens,
                usage=usage,
                dt=tim.dt,
+               phases=phases,
                interrupted=interrupted)
 
 # How far below the local estimate a backend's `prompt_tokens` may sit and still be believable as a count of

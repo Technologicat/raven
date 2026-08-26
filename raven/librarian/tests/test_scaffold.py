@@ -25,14 +25,20 @@ def make_invoke_result(content="Hello from the LLM.",
                        n_tokens=5,
                        dt=0.1,
                        model="test-model",
+                       phases=None,
                        interrupted=False):
-    """Build a fake return value for `llmclient.invoke` — the shape scaffold reads."""
+    """Build a fake return value for `llmclient.invoke` — the shape scaffold reads.
+
+    `phases`: the phase report (see `llmclient.phase_report`). The default `None` is what `invoke` returns
+              when the model generated no text at all; pass a report to exercise the path that stores one.
+    """
     return env(data={"role": "assistant",
                      "content": chatutil.normalize_content(content),  # content-parts list, as invoke returns
                      "tool_calls": tool_calls},
                n_tokens=n_tokens,
                dt=dt,
                model=model,
+               phases=phases,
                interrupted=interrupted)
 
 
@@ -343,6 +349,25 @@ class TestAITurnSimple:
         assert meta["model"] == "my-model"
         assert meta["n_tokens"] == 42
         assert meta["dt"] == 1.5
+        assert "phases" not in meta  # this reply reported none, and absent is how that is stored
+
+    def test_phase_report_is_stored_when_there_is_one(self, monkeypatch, llm_settings, populated_forest):
+        forest, head = populated_forest
+        user_head = scaffold.user_turn(llm_settings=llm_settings,
+                                       datastore=forest,
+                                       head_node_id=head,
+                                       user_message_text="Hello")
+        phases = {"prefill": {"dt": 0.4},
+                  "thinking": {"dt": 9.0, "n_tokens": 380, "tokens_exact": True}}
+        monkeypatch.setattr("raven.librarian.llmclient.invoke",
+                            lambda **kw: make_invoke_result(content="Hi!", n_tokens=420, dt=11.0, phases=phases))
+
+        final_head = run_ai_turn(forest, llm_settings, user_head)
+        meta = forest.get_payload(final_head)["generation_metadata"]
+        assert meta["phases"] == phases
+        # The answer phase is not stored: it is what is left of `dt` once the other two are taken off, so
+        # there is no third number here that could contradict the two that are.
+        assert meta["dt"] - meta["phases"]["prefill"]["dt"] - meta["phases"]["thinking"]["dt"] == pytest.approx(1.6)
 
     def test_llm_callbacks_fire_once_each(self, monkeypatch, llm_settings, populated_forest):
         forest, head = populated_forest

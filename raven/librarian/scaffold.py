@@ -1183,6 +1183,12 @@ def ai_turn(llm_settings: env,
             payload["generation_metadata"] = {"model": out.model,
                                               "n_tokens": out.n_tokens,
                                               "dt": out.dt}
+            # Absent when there is nothing to say about the phases, which is what "the model did not think"
+            # and "it generated no text at all" both look like from here. A reader tests for the key rather
+            # than for a zero, so an old node from before this was recorded reads the same as a reply that
+            # did not think — which is the right answer for both.
+            if out.phases is not None:
+                payload["generation_metadata"]["phases"] = out.phases
             # Record whether this reply had anything to stand on besides the model's own knowledge, so the
             # GUI can say so.
             #
