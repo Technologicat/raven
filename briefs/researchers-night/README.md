@@ -149,7 +149,9 @@ known before band 3 begins.
 7. ~~**The simulated glitch on branch switch**~~ — **done 2026-08-25**, over four discontinuities rather
    than the one in its name. See below for what it needed and what is left to tune.
 
-**Band 1 is closed as of 2026-08-25**, all seven items. Band 2 is where the work resumes.
+**Band 1 is closed as of 2026-08-25**, all seven items. **Band 2's items 8 and 9 closed on 2026-08-26**, so
+the work resumes at item 10 — with the two large builds, 12 and 13, still the ones carrying unknowns. Four
+days in, of four weeks.
 
 **Band 2 — a session each.**
 
@@ -208,7 +210,7 @@ known before band 3 begins.
    Two renderer bugs were found and fixed while verifying step 4, both of which had been stranding
    decorations on any reflow: list markers and blockquote bars. What is left of that is one queued item —
    block constructs need a block container, which is also what gives a quote a single full-height bar.
-9. **The turn-sequencing race with the abortable prefill.** The mechanism the two share is measured in
+9. **The turn-sequencing race with the abortable prefill.** ✅ **Done 2026-08-26.** The mechanism the two share is measured in
    `investigations/abort-inflight-request/` — and it is not the one the deferred items assumed. Closing the
    `requests` response from outside neither wakes the blocked reader nor returns to its caller, so a Cancel
    button wired to it would freeze the GUI for the length of the read timeout; `socket.shutdown` is what
@@ -251,6 +253,20 @@ known before band 3 begins.
    `raven.common.netutil` rather than in Librarian, because abandoning a blocked streaming read is a
    networking problem; `bgtask` grew an `on_cancel` hook so that a task blocked in a library call can be
    cancelled at all, which its co-operative flag could never reach.
+
+   **Returning to a branch acts as if you never left** (Juha's requirement, 2026-08-26, and the second thing
+   this item grew). The first attempt let a rebuilt view drop an in-progress reply until it finished, which
+   was safe and wrong. The text was never lost — it lives in the message's own paragraph records — so the
+   fix is a re-render: `DPGLinearizedChatView.build` puts a reply still being written back on the end of
+   the branch it belongs to. The trigger lives in `build` because every way of arriving at a branch comes
+   through it, so no navigation path has to remember, and the lock a rebuild already holds is what settles
+   the case of a turn finishing mid-rebuild.
+
+   **Verified live 2026-08-26**, against LM Studio with the avatar and TTS running: a view rebuild forced
+   under a streaming reply re-attached it and the reply went on updating, its thinking counter still
+   running; Cancel mid-generation took the co-operative path and kept the partial reply, exactly as the
+   design distinguishes. Zero errors across the session. What the live run did *not* cover is Cancel during
+   prompt processing, which needs a branch heavy enough to have one — worth doing on a real corpus.
 10. **The STT silence level / autostop GUI** — see below for why it is on the path.
 11. **The avatar's expression follows the spoken words rather than the streaming ones** — ranked in on
     2026-08-26, out of the three items raised that day. It is the one of them the exhibit's own hardware
