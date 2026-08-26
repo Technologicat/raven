@@ -618,6 +618,55 @@ avatar_config = env(source_image_size=512,  # THA3 engine hardcoded input image 
                                                  }
                     )
 
+# The discontinuity effect: a brief visual flourish over the avatar whenever the conversation on screen is
+# replaced by a different one - stepping to a sibling branch, jumping to where a branch continues, starting
+# a new chat, or rerolling a reply.
+#
+# A branching chat can swap out everything you are looking at between one message and the next, and the
+# effect is there to mark that seam. The default is a digital glitch; taste in this varies, so both the
+# effect and its parameters are yours.
+#
+# - The effect is a fragment of a postprocessor chain, in exactly the format the avatar's animator settings
+#   use. So the way to design one is to build the look in `raven-avatar-settings-editor`, save, and copy the
+#   entries you want out of the saved JSON's "postprocessor_chain" into the list below.
+#
+# - It is *appended* to whatever chain the avatar is already running, and removed again afterwards. Your own
+#   chain is never modified, and last position means the effect applies to the finished frame - which is what
+#   "the transmission broke up" looks like.
+#
+# - To drop one filter but keep its settings, either comment out its line, or give it "enabled": False - the
+#   same per-entry switch the animefx entries have, and it works in any postprocessor chain, not only here.
+#
+# - To turn the whole thing off, use "avatar_discontinuity_effect_enabled" below.
+#
+# For the available filters and what their parameters do, see `raven-avatar-settings-editor`, which lets you
+# try them live, and `raven.common.video.postprocessor`, which implements them.
+#
+avatar_discontinuity_effect_enabled = True  # on/off switch for the whole effect
+
+# format is [[filter_name0, parameters_dict0], ...]
+#
+# The default is tuned from `raven/avatar/assets/settings/glitchyholo.json`, which runs this same filter as a
+# continuous *ambient* effect. A one-off flourish wants to be more prominent than an ambient one, so the
+# glitches here are larger and much more frequent.
+avatar_discontinuity_effect = [
+    ["digital_glitches", {"strength": 0.02,  # displacement of a glitched scanline band, as a fraction of image width
+                          "unboost": 1.5,  # probability profile; runs *backwards*, in that HIGHER makes glitches rarer and fewer. The filter's own default is 4.0, and `glitchyholo` uses 10.0.
+                          "max_glitches": 8,  # upper bound on how many bands are displaced per glitched frame
+                          "min_glitch_height": 12,  # pixels
+                          "max_glitch_height": 40,  # pixels
+                          "hold_min": 1,  # frames; how long one glitch pattern persists before a new one is drawn
+                          "hold_max": 2}],  # frames
+]
+
+# How long the effect stays up, in seconds.
+#
+# These belong to the effect as a whole rather than to any filter in it - the fragment goes up and comes back
+# down as one overlay - which is why they are here rather than inside the entries above. (This is the one
+# place the animefx precedent does not transfer: those fire independently, so each carries its own duration.)
+avatar_discontinuity_effect_floor = 0.4  # minimum, so that a switch too fast to see still reads as something having happened
+avatar_discontinuity_effect_ceiling = 1.5  # maximum, measured from the first switch in a run; holding a navigation key down must not glitch indefinitely, which stops looking deliberate and starts looking broken
+
 # --------------------------------------------------------------------------------
 # LLM inference settings
 

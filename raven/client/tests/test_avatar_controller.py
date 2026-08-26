@@ -4,11 +4,12 @@ The **data eyes** say "the system is consulting an external source", and more th
 that at once: a turn's tool call runs on the turn's thread while an attachment is read on a background one.
 The calls therefore nest — the effect ends when the last user stops it, not the first.
 
-The **branch-switch glitch** overlays a transient filter on the avatar's own postprocessor chain. What
-matters is the bookkeeping: the chain has to come back exactly as it was, and a run of switches has to read
-as one glitch rather than a stutter of them.
+The **discontinuity effect** overlays a transient postprocessor chain fragment on the avatar's own chain,
+for the moment when the conversation on screen is replaced by a different one. What matters is the
+bookkeeping: the chain has to come back exactly as it was, and a run of switches has to read as one effect
+rather than a stutter of them.
 
-No server and no GUI: the API calls are replaced, and only the bookkeeping is under test. How the glitch
+No server and no GUI: the API calls are replaced, and only the bookkeeping is under test. How the effect
 *looks* is a matter for the eye, and its parameters are tuned by looking rather than asserted here.
 """
 
@@ -104,13 +105,13 @@ def test_the_count_survives_interleaving_from_two_threads(controller_and_config)
 
 
 # --------------------------------------------------------------------------------
-# The branch-switch glitch
+# The discontinuity effect
 #
-# A transient filter overlaid on the avatar's own postprocessor chain. What is worth pinning is the
-# bookkeeping around it: the chain has to come back, and a run of switches has to read as one glitch.
+# A transient chain fragment overlaid on the avatar's own postprocessor chain. What is worth pinning is the
+# bookkeeping around it: the chain has to come back, and a run of switches has to read as one effect.
 
 @pytest.fixture
-def glitch_config(monkeypatch):
+def effect_config(monkeypatch):
     """A controller and an instance with animator settings loaded, with the API recording what it is sent."""
     sent = []
     monkeypatch.setattr(avatar_controller.api, "avatar_load_animator_settings",
@@ -122,8 +123,8 @@ def glitch_config(monkeypatch):
     config = env(avatar_instance_id="test-instance",
                  _animator_settings_lock=threading.RLock(),
                  _animator_settings=None,
-                 _glitch_timer=None,
-                 _glitch_started_at=None)
+                 _effect_timer=None,
+                 _effect_started_at=None)
     controller.load_animator_settings(config, {"postprocessor_chain": [["bloom", {"threshold": 0.5}]]})
     sent.clear()
     return controller, config, sent
@@ -133,63 +134,102 @@ def chain_of(settings):
     return [name for name, _parameters in settings["postprocessor_chain"]]
 
 
-def test_the_glitch_is_added_on_top_of_the_existing_chain(glitch_config):
-    """The chain is the user's; the glitch is a guest on it, and must not displace what is there."""
-    controller, config, sent = glitch_config
-    controller.glitch(config, floor=10.0)  # long, so it does not restore mid-test
+def test_the_effect_is_added_on_top_of_the_existing_chain(effect_config):
+    """The chain is the user's; the effect is a guest on it, and must not displace what is there."""
+    controller, config, sent = effect_config
+    controller.mark_discontinuity(config, floor=10.0)  # long, so it does not restore mid-test
     try:
         assert len(sent) == 1
         assert chain_of(sent[0]) == ["bloom", "digital_glitches"]
     finally:
-        config._glitch_timer.cancel()
+        config._effect_timer.cancel()
 
 
-def test_the_chain_comes_back_when_the_glitch_ends(glitch_config):
-    controller, config, sent = glitch_config
-    controller.glitch(config, floor=0.01)
+def test_a_configured_effect_replaces_the_default_and_keeps_its_order(effect_config):
+    """The effect is the caller's to choose, and it may be several filters rather than one.
+
+    Order within the fragment is the caller's too: postprocessor filters are applied in chain order, so a
+    fragment that arrived reordered would not look like what its author designed.
+    """
+    controller, config, sent = effect_config
+    controller.mark_discontinuity(config,
+                                  effect=[["chromatic_aberration", {"scale": 0.01}],
+                                          ["noise", {"strength": 0.3}]],
+                                  floor=10.0)
+    try:
+        assert chain_of(sent[0]) == ["bloom", "chromatic_aberration", "noise"]
+    finally:
+        config._effect_timer.cancel()
+
+
+def test_an_empty_effect_does_nothing_at_all(effect_config):
+    """How the config switches the whole thing off: nothing is sent, so the avatar never changes."""
+    controller, config, sent = effect_config
+    controller.mark_discontinuity(config, effect=[], floor=10.0)
+    assert sent == []
+    assert config._effect_timer is None, "an effect that was never applied needs no restore timer"
+
+
+def test_the_callers_own_effect_is_not_mutated(effect_config):
+    """The fragment is normally a constant in someone's `config.py`, shared by every call for the life of
+    the process. Handing those same dicts to the chain would let anything downstream edit the user's
+    configuration permanently, and the damage would outlive the effect that caused it."""
+    controller, config, sent = effect_config
+    effect = [["digital_glitches", {"strength": 0.02}]]
+    controller.mark_discontinuity(config, effect=effect, floor=10.0)
+    try:
+        sent[0]["postprocessor_chain"][-1][1]["strength"] = 999.0
+        assert effect == [["digital_glitches", {"strength": 0.02}]], f"the caller's effect became {effect}"
+    finally:
+        config._effect_timer.cancel()
+
+
+def test_the_chain_comes_back_when_the_effect_ends(effect_config):
+    controller, config, sent = effect_config
+    controller.mark_discontinuity(config, floor=0.01)
     time.sleep(0.2)
     assert chain_of(sent[-1]) == ["bloom"], f"the chain was left as {chain_of(sent[-1])}"
-    assert config._glitch_timer is None
+    assert config._effect_timer is None
 
 
-def test_the_users_own_settings_are_not_mutated(glitch_config):
-    """The baseline is what every restore is built from, so a glitch that edited it in place would leave
-    the avatar permanently glitching — and the second switch would stack another filter on the first."""
-    controller, config, sent = glitch_config
-    controller.glitch(config, floor=10.0)
+def test_the_users_own_settings_are_not_mutated(effect_config):
+    """The baseline is what every restore is built from, so an effect that edited it in place would leave
+    the avatar permanently changed — and the second switch would stack another filter on the first."""
+    controller, config, sent = effect_config
+    controller.mark_discontinuity(config, floor=10.0)
     try:
         assert chain_of(config._animator_settings) == ["bloom"]
     finally:
-        config._glitch_timer.cancel()
+        config._effect_timer.cancel()
 
 
-def test_a_second_switch_extends_rather_than_restarting(glitch_config):
-    """Flicking through siblings should read as one continuous glitch, not a stutter of them — so a repeat
+def test_a_second_switch_extends_rather_than_restarting(effect_config):
+    """Flicking through siblings should read as one continuous effect, not a stutter of them — so a repeat
     call must not re-send the chain, which would restart the filter's own animation."""
-    controller, config, sent = glitch_config
-    controller.glitch(config, floor=10.0)
-    controller.glitch(config, floor=10.0)
+    controller, config, sent = effect_config
+    controller.mark_discontinuity(config, floor=10.0)
+    controller.mark_discontinuity(config, floor=10.0)
     try:
         assert len(sent) == 1, f"the chain was sent {len(sent)} times; a repeat should only move the deadline"
     finally:
-        config._glitch_timer.cancel()
+        config._effect_timer.cancel()
 
 
-def test_the_ceiling_caps_a_held_key(glitch_config):
-    """Holding a navigation key would otherwise extend the glitch forever, and a glitch that never stops
+def test_the_ceiling_caps_a_held_key(effect_config):
+    """Holding a navigation key would otherwise extend the effect forever, and an effect that never stops
     reads as a broken avatar rather than as a transition."""
-    controller, config, sent = glitch_config
-    controller.glitch(config, floor=10.0, ceiling=0.05)
+    controller, config, sent = effect_config
+    controller.mark_discontinuity(config, floor=10.0, ceiling=0.05)
     time.sleep(0.02)
-    controller.glitch(config, floor=10.0, ceiling=0.05)  # would push it 10 s out, but the ceiling holds
+    controller.mark_discontinuity(config, floor=10.0, ceiling=0.05)  # would push it 10 s out, but the ceiling holds
     time.sleep(0.3)
-    assert chain_of(sent[-1]) == ["bloom"], "the ceiling did not end the glitch"
+    assert chain_of(sent[-1]) == ["bloom"], "the ceiling did not end the effect"
 
 
-def test_no_settings_loaded_means_no_glitch(glitch_config):
-    """A glitch before startup finished has no chain to overlay and nothing to restore, so it declines."""
-    controller, config, sent = glitch_config
+def test_no_settings_loaded_means_no_effect(effect_config):
+    """A switch before startup finished has no chain to overlay and nothing to restore, so it declines."""
+    controller, config, sent = effect_config
     config._animator_settings = None
-    controller.glitch(config)
+    controller.mark_discontinuity(config)
     assert sent == []
-    assert config._glitch_timer is None
+    assert config._effect_timer is None

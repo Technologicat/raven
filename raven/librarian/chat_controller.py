@@ -1069,8 +1069,7 @@ class DPGChatMessage:
                 # A reroll replaces the reply on screen with a different one - the same swap a sibling
                 # switch performs, except that the alternative is generated rather than already there.
                 # Started before the rewind, so the effect is up while the old message comes down.
-                self.parent_view.chat_controller.avatar_controller.glitch(
-                    config=self.parent_view.chat_controller.avatar_record)
+                self.parent_view.chat_controller.mark_discontinuity()
 
                 # Rewind the linearized chat history in the GUI
                 for _ in range(k):
@@ -1390,10 +1389,7 @@ class DPGChatMessage:
                     self.parent_view.chat_controller.app_state["HEAD"] = head_node_id
                     # Switching branch means the conversation you are looking at was replaced by a different
                     # one, and the avatar reports that the way this app reports everything else - visually.
-                    # Started before the rebuild rather than after: the rebuild is what takes the time, so
-                    # the effect wants to be up while it happens rather than after it has finished.
-                    self.parent_view.chat_controller.avatar_controller.glitch(
-                        config=self.parent_view.chat_controller.avatar_record)
+                    self.parent_view.chat_controller.mark_discontinuity()
                     self.parent_view.build(scroll_target_node_id=node_id)
             return navigate_to_sibling_callback
         def make_show_chat_continuation(message_node_id: str) -> Callable:
@@ -1403,8 +1399,7 @@ class DPGChatMessage:
                     self.parent_view.chat_controller.app_state["HEAD"] = head_node_id
                     # Same rationale as a branch switch and a new chat: the conversation on screen is
                     # replaced by a different one, and the avatar reports the discontinuity.
-                    self.parent_view.chat_controller.avatar_controller.glitch(
-                        config=self.parent_view.chat_controller.avatar_record)
+                    self.parent_view.chat_controller.mark_discontinuity()
                     self.parent_view.build()  # let it scroll to end
             return show_chat_continuation_callback
 
@@ -3207,6 +3202,23 @@ class DPGChatController:
                                                            entrypoint=self._context_prefill_entrypoint,
                                                            running_poll_interval=0.25,
                                                            pending_wait_duration=librarian_config.context_prefill_idle_delay)
+
+    def mark_discontinuity(self) -> None:
+        """Run the configured visual effect over the avatar, to mark that the conversation on screen changed.
+
+        For the four places where what the user is reading is replaced by something else: stepping to a
+        sibling branch, jumping to where a branch continues, starting a new chat, and rerolling a reply.
+
+        Does nothing when `librarian_config.avatar_discontinuity_effect_enabled` is off. Call it before the
+        rebuild rather than after — the rebuild is what takes the time, so the effect wants to be up while
+        it happens.
+        """
+        if not librarian_config.avatar_discontinuity_effect_enabled:
+            return
+        self.avatar_controller.mark_discontinuity(config=self.avatar_record,
+                                                  effect=librarian_config.avatar_discontinuity_effect,
+                                                  floor=librarian_config.avatar_discontinuity_effect_floor,
+                                                  ceiling=librarian_config.avatar_discontinuity_effect_ceiling)
 
     def find_tool_call_origin(self, tool_call_id: str) -> tuple[DPGChatMessage, int] | None:
         """Find the assistant message that made the tool call `tool_call_id`.

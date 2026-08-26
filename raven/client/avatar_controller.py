@@ -23,7 +23,8 @@ repeating every few seconds until an item arrives in the queue. If you want a pe
 end-of-speaking, it is better to use the `on_stop_speaking` event of `dpg_avatar_controller.send_text_to_tts`.
 """
 
-__all__ = ["DPGAvatarController"]
+__all__ = ["DEFAULT_DISCONTINUITY_EFFECT",
+           "DPGAvatarController"]
 
 import logging
 logger = logging.getLogger(__name__)
@@ -95,20 +96,24 @@ def _natlang_analyze(text: str) -> List[List["spacy.tokens.token.Token"]]:  # no
 # --------------------------------------------------------------------------------
 # API
 
-# Starting point for the branch-switch glitch, tuned from `raven/avatar/assets/settings/glitchyholo.json`,
-# which runs this same filter as a continuous ambient effect. A switch wants it more prominent than that,
-# and briefly - so the glitches are larger and much more frequent, and the whole thing lasts under a second.
+# The effect `mark_discontinuity` overlays when its caller names none. A postprocessor chain fragment, in the
+# same format as the animator settings' own `postprocessor_chain`.
 #
-# `unboost` is the probability profile and it runs *backwards*: higher makes glitches rarer and fewer
-# (`postprocessor.digital_glitches` computes `rand()**unboost`). `glitchyholo` sits at 10.0 and the filter's
-# own default is 4.0, so a prominent flourish wants a number below both.
-_GLITCH_DEFAULTS = {"strength": 0.02,
-                    "unboost": 1.5,
-                    "max_glitches": 8,
-                    "min_glitch_height": 12,
-                    "max_glitch_height": 40,
-                    "hold_min": 1,
-                    "hold_max": 2}
+# This is a fallback rather than the policy: the app that calls `mark_discontinuity` is where the choice
+# belongs, since taste in this varies and only the app knows its own users. Raven-librarian configures it in
+# `raven.librarian.config`, which is also where the parameters are documented for someone tuning them.
+#
+# Tuned from `raven/avatar/assets/settings/glitchyholo.json`, which runs this same filter as a continuous
+# ambient effect; a one-off flourish wants to be more prominent than an ambient one. `unboost` runs
+# *backwards*: higher makes glitches rarer and fewer (`postprocessor.digital_glitches` computes
+# `rand()**unboost`). `glitchyholo` sits at 10.0 and the filter's own default is 4.0.
+DEFAULT_DISCONTINUITY_EFFECT = [["digital_glitches", {"strength": 0.02,
+                                                      "unboost": 1.5,
+                                                      "max_glitches": 8,
+                                                      "min_glitch_height": 12,
+                                                      "max_glitch_height": 40,
+                                                      "hold_min": 1,
+                                                      "hold_max": 2}]]
 
 
 class DPGAvatarController:
@@ -318,13 +323,13 @@ class DPGAvatarController:
         # other. See `start_data_eyes`.
         config._data_eyes_lock = threading.RLock()
         config._data_eyes_users = 0
-        # The animator settings currently in force, and the transient glitch overlaid on them. The settings
+        # The animator settings currently in force, and the transient effect overlaid on them. The settings
         # are remembered here because the server offers no getter for them, and restoring the chain after a
-        # temporary filter means knowing what it was.
+        # temporary filter means knowing what it was. See `mark_discontinuity`.
         config._animator_settings_lock = threading.RLock()
         config._animator_settings = None
-        config._glitch_timer = None
-        config._glitch_started_at = None
+        config._effect_timer = None
+        config._effect_started_at = None
         config._avatar_speaking = False  # per-avatar-instance flag, set/reset by start/stop events in `speak_task`
 
         # Reset emotion after a few seconds of idle time (when the TTS is not speaking).
@@ -468,55 +473,68 @@ class DPGAvatarController:
         api.avatar_load_animator_settings(config.avatar_instance_id, animator_settings)
         self.ping(config)
 
-    def glitch(self,
-               config: env,
-               floor: float = 0.4,
-               ceiling: float = 1.5,
-               **filter_parameters) -> None:
-        """Run the digital-glitch effect over the avatar for a moment. Returns immediately.
+    def mark_discontinuity(self,
+                           config: env,
+                           effect: Optional[list] = None,
+                           floor: float = 0.4,
+                           ceiling: float = 1.5) -> None:
+        """Mark a break in continuity by running a visual effect over the avatar. Returns immediately.
 
+        For the moment when what the user is looking at is replaced by something else — in Raven-librarian,
+        switching chat branches or rerolling a reply. Named for the occasion rather than the appearance,
+        because which effect appears is the caller's to choose.
+
+        `effect`: a postprocessor chain fragment, `[[filter_name, parameters_dict], ...]`, in the same
+                  format as the `postprocessor_chain` of the animator settings. `None` uses
+                  `DEFAULT_DISCONTINUITY_EFFECT`; an empty list does nothing at all.
         `floor`: seconds. Minimum time the effect stays up, so that a switch too fast to see still reads as
                  something having happened.
-        `ceiling`: seconds from the *first* call in a run. Glitching for longer than a moment stops looking
-                   deliberate and starts looking broken, and holding a key down should not be able to
-                   exceed this.
-        `filter_parameters`: override any parameter of `postprocessor.digital_glitches`. Mind that
-                             `unboost` runs backwards: **higher makes glitches rarer and fewer.**
+        `ceiling`: seconds from the *first* call in a run. Running the effect for longer than a moment stops
+                   looking deliberate and starts looking broken, and holding a key down should not be able
+                   to exceed this.
 
-        Repeated calls extend the effect rather than restarting it, up to `ceiling` - which is what flicking
-        through siblings does, and it should read as one continuous glitch rather than a stutter of them.
+        Repeated calls extend the effect rather than restarting it, up to `ceiling` — which is what flicking
+        through siblings does, and it should read as one continuous effect rather than a stutter of them.
 
         Does nothing if no animator settings have been loaded through `load_animator_settings`, there being
         no chain to overlay and nothing to restore afterwards.
         """
+        if effect is None:
+            effect = DEFAULT_DISCONTINUITY_EFFECT
+        if not effect:  # configured off, or nothing to add
+            return
+
         with config._animator_settings_lock:
             if config._animator_settings is None:
-                logger.warning("glitch: no animator settings loaded for this instance; skipping.")
+                logger.warning("mark_discontinuity: no animator settings loaded for this instance; skipping.")
                 return
 
             now = time.monotonic()
-            if config._glitch_timer is not None:  # already glitching: extend, do not restart
-                config._glitch_timer.cancel()
+            if config._effect_timer is not None:  # already running: extend, do not restart
+                config._effect_timer.cancel()
             else:
-                config._glitch_started_at = now
+                config._effect_started_at = now
                 settings = copy.deepcopy(config._animator_settings)
                 # Appended rather than inserted at a chosen index: the chain is the user's, and where their
-                # own filters sit relative to each other is their business. Last means the glitch is applied
+                # own filters sit relative to each other is their business. Last means the effect is applied
                 # to the finished frame, which is what "the transmission broke up" looks like.
-                settings.setdefault("postprocessor_chain", []).append(["digital_glitches",
-                                                                       {**_GLITCH_DEFAULTS, **filter_parameters}])
+                #
+                # Deep-copied because the fragment is usually a module-level constant in someone's config,
+                # and handing the same dicts to every call would let one mutation downstream edit the user's
+                # configuration permanently.
+                settings.setdefault("postprocessor_chain", []).extend(copy.deepcopy(effect))
                 api.avatar_load_animator_settings(config.avatar_instance_id, settings)
 
-            remaining = min(floor, max(0.0, config._glitch_started_at + ceiling - now))
-            config._glitch_timer = threading.Timer(remaining, self._end_glitch, args=(config,))
-            config._glitch_timer.daemon = True  # a pending restore must not hold the app open at exit
-            config._glitch_timer.start()
+            remaining = min(floor, max(0.0, config._effect_started_at + ceiling - now))
+            config._effect_timer = threading.Timer(remaining, self._end_discontinuity_effect, args=(config,))
+            config._effect_timer.daemon = True  # a pending restore must not hold the app open at exit
+            config._effect_timer.start()
 
-    def _end_glitch(self, config: env) -> None:
-        """Put the avatar's own settings back. Called from the glitch timer; not part of the public API."""
+    def _end_discontinuity_effect(self, config: env) -> None:
+        """Put the avatar's own settings back. Called from the effect timer; not part of the public API."""
         with config._animator_settings_lock:
-            config._glitch_timer = None
-            config._glitch_started_at = None
+            config._effect_timer = None
+            config._effect_started_at = None
             settings = copy.deepcopy(config._animator_settings) if config._animator_settings is not None else None
         if settings is not None:
             api.avatar_load_animator_settings(config.avatar_instance_id, settings)
