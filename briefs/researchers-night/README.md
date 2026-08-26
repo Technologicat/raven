@@ -177,6 +177,11 @@ known before band 3 begins.
       backend's. The live-backend group gained the assertion a mock cannot make — that the field is
       honoured — with the on-case as its control, so a non-thinking model skips instead of passing
       vacuously.
+      - **The agent loop survives the toggle**, which is the part that matters for the exhibit and was not
+        obvious in advance. With reasoning off, `qwen3.6-35b-a3b` still reached for the calculator when
+        asked for 1234 × 5678 rather than answering from its head (Juha, 2026-08-26). So on this model
+        tool use does not ride on the thinking channel, and switching thinking off buys speed without
+        costing the tools. Recorded here rather than in `TODO.md`, whose items are deleted when done.
    8. **Then the parser can start in `_PS_THINK`** when step 7 says thinking is on and the backend is
       single-channel — which closes `TODO_DEFERRED.md`'s "Streaming thinking shows as gray" live half.
       Headless-testable; end-to-end only against a single-channel backend, i.e. not before ooba.

@@ -73,23 +73,30 @@ print()
 class _FlagCommand(NamedTuple):
     """One `!`-command that flips a single boolean in the app state."""
     flag: str  # the `appstate` key it flips
-    subject: str  # how the confirmation names it: "<subject> is now ON."
+    subject: str  # how it is named where it is already in view: "<subject> is now ON."
+    gloss: str  # what `subject` means, for the startup line that introduces it: "<subject><gloss> is currently ON."
     summary: str  # what the help line says it does, before the parenthesis
     detail: str = ""  # anything more the help line's parenthesis should carry, after the current setting
 
 # Keyed by the command as typed. Three commands with one behavior between them: `!cmd` toggles, `!cmd True`
 # and `!cmd False` set. Each used to be written out separately, which is how `!docs` came to return its
 # "unrecognized argument" value positionally where its siblings named it.
+#
+# In the order the GUI shows the same three checkboxes, which is also the order they are announced at
+# startup. The help listing is alphabetical for its own reasons and does not follow this.
 _FLAG_COMMANDS = {"!thinking": _FlagCommand(flag="thinking_enabled",
-                                          subject="Thinking",
-                                          summary="Model reasoning"),
-                 "!internet": _FlagCommand(flag="internet_enabled",
-                                          subject="Internet access",
-                                          summary="Web search and page fetching"),
-                 "!docs": _FlagCommand(flag="docs_enabled",
-                                      subject="Document database",
-                                      summary="Document database",
-                                      detail=f"; document store at '{librarian_config.llm_docs_dir}'")}
+                                            subject="Thinking",
+                                            gloss=" (the model reasons before it answers)",
+                                            summary="Model reasoning"),
+                  "!internet": _FlagCommand(flag="internet_enabled",
+                                            subject="Internet access",
+                                            gloss=" (web search and page fetching)",
+                                            summary="Web search and page fetching"),
+                  "!docs": _FlagCommand(flag="docs_enabled",
+                                        subject="Document database",
+                                        gloss=" (retrieval-augmented generation, RAG)",
+                                        summary="Document database",
+                                        detail=f"; document store at '{librarian_config.llm_docs_dir}'")}
 
 def _flag_command_for(user_message_text: str) -> Optional[_FlagCommand]:
     """Which flag command `user_message_text` invokes, or `None` if it invokes none.
@@ -159,11 +166,25 @@ def minimal_chat_client(backend_url) -> None:
         datastore, app_state = appstate.load(llm_settings, datastore_file, state_file)
         print()
 
-        # Inform user whether the AI may reach the network
-        internet_enabled_str = "ON" if app_state["internet_enabled"] else "OFF"
-        colorful_internet_status = colorizer.colorize(f"Internet access (web search and page fetching) is currently {internet_enabled_str}.",
-                                                      colorizer.Style.BRIGHT)
-        print(f"{colorful_internet_status} Toggle with the `!internet` command.")
+        # The two ways a flag command's setting is shown to the user: introduced at startup, and listed in
+        # `!help`. Both read `app_state`, so they live here, below the load that creates it.
+        def chat_show_flag_status(command_name: str) -> None:
+            """Introduce one flag command at startup, saying what it governs and where it currently stands."""
+            flag_command = _FLAG_COMMANDS[command_name]
+            on_off = "ON" if app_state[flag_command.flag] else "OFF"
+            colorful_status = colorizer.colorize(f"{flag_command.subject}{flag_command.gloss} is currently {on_off}.",
+                                                 colorizer.Style.BRIGHT)
+            print(f"{colorful_status} Toggle with the `{command_name}` command.")
+        def chat_show_flag_command_help(command_name: str) -> None:
+            """Print the help line for one flag command, with the setting it currently holds."""
+            flag_command = _FLAG_COMMANDS[command_name]
+            print(f"        {command_name + ' [True|False]':<24}- {flag_command.summary} on/off/toggle "
+                  f"(currently {app_state[flag_command.flag]}{flag_command.detail})")
+
+        # Introduce the flags the AI's next reply depends on. The document database has a setup step of its
+        # own and is introduced after it, below, where its corpus can be reported in the same breath.
+        chat_show_flag_status("!thinking")
+        chat_show_flag_status("!internet")
 
         # Load RAG database (it will auto-persist at app exit).
         retriever, _unused_scanner = hybridir.setup(docs_dir=docs_dir,
@@ -172,10 +193,7 @@ def minimal_chat_client(backend_url) -> None:
                                                     extractor=docextract.ALL_FORMATS.restricted_to(librarian_config.llm_docs_exts),
                                                     embedding_model_name=librarian_config.qa_embedding_model,
                                                     local_model_loader_fallback=False)  # Minichat requires Raven-server for other reasons, too
-        docs_enabled_str = "ON" if app_state["docs_enabled"] else "OFF"
-        colorful_rag_status = colorizer.colorize(f"Document database (retrieval-augmented generation, RAG) is currently {docs_enabled_str}.",
-                                                 colorizer.Style.BRIGHT)
-        print(f"{colorful_rag_status} Toggle with the `!docs` command.")
+        chat_show_flag_status("!docs")
         print(f"    Its document store is at '{str(librarian_config.llm_docs_dir)}' (put your text or PDF documents here).")
         # The retriever's `documents` attribute must be locked before accessing.
         with retriever.datastore_lock:
@@ -246,11 +264,6 @@ def minimal_chat_client(backend_url) -> None:
 
         print(colorizer.colorize("Starting chat.", colorizer.Style.BRIGHT))
         print()
-        def chat_show_flag_command_help(command_name: str) -> None:
-            """Print the help line for one flag command, with the setting it currently holds."""
-            flag_command = _FLAG_COMMANDS[command_name]
-            print(f"        {command_name + ' [True|False]':<24}- {flag_command.summary} on/off/toggle "
-                  f"(currently {app_state[flag_command.flag]}{flag_command.detail})")
         def chat_show_help() -> None:
             print(colorizer.colorize("=" * 80, colorizer.Style.BRIGHT))
             print("    raven.librarian.minichat - Minimal LLM client for testing/debugging.")
